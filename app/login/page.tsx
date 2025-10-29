@@ -21,7 +21,10 @@ export default function Login() {
     await new Promise(resolve => setTimeout(resolve, 500));
 
     // Check credentials
-    if (email === 'admin@example.com' && password === 'changeme') {
+    const validEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@example.com';
+    const validPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'changeme';
+    
+    if (email === validEmail && password === validPassword) {
       // Store login state
       localStorage.setItem('isAuthenticated', 'true');
       localStorage.setItem('userEmail', email);

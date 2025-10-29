@@ -135,8 +135,10 @@ Az adatbázis létrejöttét követően telepítenie kell a sémát.
 
 1. Nyissa meg a Render által biztosított URL-t
 2. Tesztelje a bejelentkezést:
-   - **Email**: `admin@example.com`
-   - **Password**: `changeme`
+   - **Email**: (A `NEXT_PUBLIC_ADMIN_EMAIL` környezeti változóból, vagy alapértelmezett)
+   - **Password**: (A `NEXT_PUBLIC_ADMIN_PASSWORD` környezeti változóból, vagy alapértelmezett)
+   
+   **Fontos**: Állítsa be a `NEXT_PUBLIC_ADMIN_EMAIL` és `NEXT_PUBLIC_ADMIN_PASSWORD` környezeti változókat a Render Dashboard-on a biztonság érdekében!
 3. Próbáljon ki:
    - Új beteg hozzáadását
    - Keresést
@@ -151,6 +153,13 @@ A következő környezeti változókat kell beállítani a Render-en:
 
 - **NODE_ENV**: `production`
 - **DATABASE_URL**: PostgreSQL connection string (Render automatikusan generálja)
+
+### Ajánlott (Biztonság)
+
+- **NEXT_PUBLIC_ADMIN_EMAIL**: Admin felhasználó email címe a bejelentkezéshez
+- **NEXT_PUBLIC_ADMIN_PASSWORD**: Admin felhasználó jelszava a bejelentkezéshez
+
+**Fontos**: Ha ezeket nem állítja be, az alapértelmezett értékek lesznek (`admin@example.com` / `changeme`), ami **nem biztonságos production környezetben!**
 
 ### Opcionális
 
