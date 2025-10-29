@@ -31,28 +31,41 @@ export default function Home() {
   }, [router]);
 
   useEffect(() => {
-    if (searchQuery.trim()) {
-      setFilteredPatients(searchPatients(searchQuery));
-    } else {
-      setFilteredPatients(patients);
-    }
+    // Keresés async módon
+    const performSearch = async () => {
+      if (searchQuery.trim()) {
+        const results = await searchPatients(searchQuery);
+        setFilteredPatients(results);
+      } else {
+        setFilteredPatients(patients);
+      }
+    };
+    
+    performSearch();
   }, [searchQuery, patients]);
 
-  const loadPatients = () => {
-    setPatients(getAllPatients());
+  const loadPatients = async () => {
+    try {
+      const data = await getAllPatients();
+      setPatients(data);
+    } catch (error) {
+      console.error('Hiba a betegek betöltésekor:', error);
+      alert('Hiba történt a betegek betöltésekor. Kérjük, próbálja újra.');
+    }
   };
 
-  const handleSavePatient = (patientData: Patient) => {
+  const handleSavePatient = async (patientData: Patient) => {
     try {
       const validatedPatient = patientSchema.parse(patientData);
-      savePatient(validatedPatient); // Ez automatikusan menti CSV-be és letölti
-      loadPatients();
+      await savePatient(validatedPatient);
+      await loadPatients();
       setShowForm(false);
       setEditingPatient(null);
-      alert('Betegadat sikeresen mentve és CSV fájl letöltve!');
-    } catch (error) {
-      console.error('Validation error:', error);
-      alert('Kérjük, ellenőrizze az összes kötelező mezőt és próbálja újra.');
+      alert('Betegadat sikeresen mentve az adatbázisba!');
+    } catch (error: any) {
+      console.error('Hiba a beteg mentésekor:', error);
+      const errorMessage = error.message || 'Kérjük, ellenőrizze az összes kötelező mezőt és próbálja újra.';
+      alert(`Hiba a mentés során: ${errorMessage}`);
     }
   };
 

@@ -1,6 +1,6 @@
 import { Patient } from './types';
 
-// CSV fejléc mezők sorrendje
+// CSV fejléc mezők sorrendje (CSV export/import funkcióhoz)
 const CSV_HEADERS = [
   'id',
   'nev',
@@ -45,100 +45,106 @@ const CSV_HEADERS = [
   'updatedAt'
 ];
 
-const STORAGE_KEY = 'maxillofacial_patients_csv';
+const API_BASE_URL = '/api/patients';
 
-export const savePatient = (patient: Patient): Patient => {
-  const now = new Date().toISOString();
-  
-  const patientToSave = {
-    ...patient,
-    id: patient.id || generateId(),
-    createdAt: patient.createdAt || now,
-    updatedAt: now,
-  };
-  
-  // Automatikusan menti CSV fájlba és letölti
-  saveAndDownloadCSV(patientToSave);
-  
-  return patientToSave;
-};
+// API hívás hibakezelő
+async function handleApiResponse<T>(response: Response): Promise<T> {
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Ismeretlen hiba' }));
+    throw new Error(errorData.error || `HTTP hiba: ${response.status}`);
+  }
+  return response.json();
+}
 
-export const getAllPatients = (): Patient[] => {
-  if (typeof window === 'undefined') return [];
-  
+// Beteg mentése (új vagy frissítés)
+export async function savePatient(patient: Patient): Promise<Patient> {
   try {
-    const csvData = localStorage.getItem(STORAGE_KEY);
-    if (!csvData) return [];
+    const isUpdate = patient.id;
+    const url = isUpdate 
+      ? `${API_BASE_URL}/${patient.id}`
+      : API_BASE_URL;
     
-    return parseCSVToPatients(csvData);
+    const method = isUpdate ? 'PUT' : 'POST';
+    
+    const response = await fetch(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(patient),
+    });
+
+    const data = await handleApiResponse<{ patient: Patient }>(response);
+    return data.patient;
   } catch (error) {
-    console.error('Error loading patients:', error);
+    console.error('Hiba a beteg mentésekor:', error);
+    throw error;
+  }
+}
+
+// Összes beteg lekérdezése
+export async function getAllPatients(): Promise<Patient[]> {
+  try {
+    const response = await fetch(API_BASE_URL);
+    const data = await handleApiResponse<{ patients: Patient[] }>(response);
+    return data.patients;
+  } catch (error) {
+    console.error('Hiba a betegek lekérdezésekor:', error);
     return [];
   }
-};
+}
 
-export const searchPatients = (query: string): Patient[] => {
-  const patients = getAllPatients();
-  const lowercaseQuery = query.toLowerCase();
-  
-  return patients.filter(patient => 
-    patient.nev?.toLowerCase().includes(lowercaseQuery) ||
-    patient.taj?.toLowerCase().includes(lowercaseQuery) ||
-    patient.telefonszam?.includes(query) ||
-    patient.email?.toLowerCase().includes(lowercaseQuery) ||
-    patient.beutaloIntezmeny?.toLowerCase().includes(lowercaseQuery) ||
-    patient.beutaloOrvos?.toLowerCase().includes(lowercaseQuery) ||
-    patient.kezeleoorvos?.toLowerCase().includes(lowercaseQuery)
-  );
-};
+// Beteg keresése
+export async function searchPatients(query: string): Promise<Patient[]> {
+  try {
+    if (!query.trim()) {
+      return getAllPatients();
+    }
+    
+    const response = await fetch(`${API_BASE_URL}?q=${encodeURIComponent(query)}`);
+    const data = await handleApiResponse<{ patients: Patient[] }>(response);
+    return data.patients;
+  } catch (error) {
+    console.error('Hiba a kereséskor:', error);
+    return [];
+  }
+}
+
+// Beteg törlése
+export async function deletePatient(id: string): Promise<void> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/${id}`, {
+      method: 'DELETE',
+    });
+    await handleApiResponse(response);
+  } catch (error) {
+    console.error('Hiba a beteg törlésekor:', error);
+    throw error;
+  }
+}
 
 // CSV export funkció - teljes adatbázis
-export const exportAllPatientsToCSV = (): string => {
-  const patients = getAllPatients();
+export async function exportAllPatientsToCSV(): Promise<string> {
+  const patients = await getAllPatients();
   return convertPatientsToCSV(patients);
-};
+}
 
-// CSV import funkció
-export const importPatientsFromCSV = (csvContent: string): boolean => {
+// CSV import funkció (batch mentés)
+export async function importPatientsFromCSV(csvContent: string): Promise<boolean> {
   try {
     const patients = parseCSVToPatients(csvContent);
-    savePatientsToCSV(patients);
+    
+    // Mentjük az összes beteget az adatbázisba
+    for (const patient of patients) {
+      await savePatient(patient);
+    }
+    
     return true;
   } catch (error) {
-    console.error('Error importing CSV:', error);
+    console.error('Hiba a CSV importálásakor:', error);
     return false;
   }
-};
-
-// Segédfüggvények
-const saveAndDownloadCSV = (newPatient: Patient): void => {
-  // Betölti a meglévő adatokat
-  const existingPatients = getAllPatients();
-  
-  // Ellenőrzi, hogy ez egy új beteg-e vagy frissítés
-  const existingIndex = existingPatients.findIndex(p => p.id === newPatient.id);
-  
-  let updatedPatients: Patient[];
-  if (existingIndex >= 0) {
-    // Frissítés
-    updatedPatients = [...existingPatients];
-    updatedPatients[existingIndex] = newPatient;
-  } else {
-    // Új beteg hozzáadása
-    updatedPatients = [...existingPatients, newPatient];
-  }
-  
-  // Mentés localStorage-ba
-  savePatientsToCSV(updatedPatients);
-  
-  // Automatikus CSV letöltés
-  downloadCSVFile(updatedPatients);
-};
-
-const savePatientsToCSV = (patients: Patient[]): void => {
-  const csvContent = convertPatientsToCSV(patients);
-  localStorage.setItem(STORAGE_KEY, csvContent);
-};
+}
 
 const downloadCSVFile = (patients: Patient[]): void => {
   const csvContent = convertPatientsToCSV(patients);
