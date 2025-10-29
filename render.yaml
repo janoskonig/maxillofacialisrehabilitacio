@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: maxillofacial-rehab
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: maxillofacial-rehab-db
+          property: connectionString
+
+databases:
+  - name: maxillofacial-rehab-db
+    databaseName: maxillofacial_rehab
+    user: maxillofacial_rehab_user
+    plan: free
+

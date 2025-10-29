@@ -12,14 +12,21 @@ export function getDbPool(): Pool {
       throw new Error('DATABASE_URL környezeti változó nincs beállítva! Kérjük, adja meg a .env fájlban.');
     }
 
+    // SSL beállítások detection - Render és más cloud provider-ek esetében
+    const requiresSSL = 
+      connectionString.includes('sslmode=require') ||
+      connectionString.includes('render.com') ||
+      connectionString.includes('amazonaws.com') ||
+      process.env.NODE_ENV === 'production';
+
     pool = new Pool({
       connectionString,
       // Kapcsolat timeout (ms)
       connectionTimeoutMillis: 5000,
       // Maximális kapcsolatok száma a pool-ban
       max: 20,
-      // SSL beállítások (ha cloud adatbázist használ)
-      ssl: connectionString.includes('sslmode=require') 
+      // SSL beállítások (cloud adatbázisok esetében szükséges)
+      ssl: requiresSSL 
         ? { rejectUnauthorized: false } 
         : false,
     });
