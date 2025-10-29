@@ -20,3 +20,4 @@ export const login = (email: string): void => {
   localStorage.setItem('isAuthenticated', 'true');
   localStorage.setItem('userEmail', email);
 };
+
