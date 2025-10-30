@@ -6,8 +6,9 @@ import { Patient, patientSchema } from '@/lib/types';
 import { getAllPatients, savePatient, searchPatients } from '@/lib/storage';
 import { PatientForm } from '@/components/PatientForm';
 import { PatientList } from '@/components/PatientList';
-import { Plus, Search, Users, LogOut } from 'lucide-react';
+import { Plus, Search, Users, LogOut, Shield } from 'lucide-react';
 import { isAuthenticated, getUserEmail, logout } from '@/lib/auth';
+import { getUserRole } from '@/lib/roles';
 
 export default function Home() {
   const router = useRouter();
@@ -18,6 +19,7 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredPatients, setFilteredPatients] = useState<Patient[]>([]);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<'admin' | 'editor' | 'viewer'>('viewer');
 
   useEffect(() => {
     // Check authentication
@@ -26,8 +28,26 @@ export default function Home() {
       return;
     }
     
-    setUserEmail(getUserEmail());
+    const email = getUserEmail();
+    setUserEmail(email);
+    setUserRole(getUserRole(email));
     loadPatients();
+
+    // Send heartbeat only once per session
+    try {
+      const heartbeatKey = 'activityHeartbeatSent';
+      if (!sessionStorage.getItem(heartbeatKey) && email) {
+        fetch('/api/activity', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-email': email
+          },
+          body: JSON.stringify({ action: 'heartbeat', detail: 'home' })
+        }).catch(() => {});
+        sessionStorage.setItem(heartbeatKey, 'true');
+      }
+    } catch {}
   }, [router]);
 
   useEffect(() => {
@@ -130,6 +150,15 @@ export default function Home() {
           )}
         </div>
         <div className="flex gap-2">
+          {userRole === 'admin' && (
+            <button
+              onClick={() => router.push('/admin')}
+              className="btn-secondary flex items-center gap-2"
+            >
+              <Shield className="w-4 h-4" />
+              Admin
+            </button>
+          )}
           <button
             onClick={handleLogout}
             className="btn-secondary flex items-center gap-2"
@@ -202,7 +231,7 @@ export default function Home() {
         patients={filteredPatients}
         onView={handleViewPatient}
         onEdit={handleEditPatient}
-        canEdit={Boolean(userEmail)}
+        canEdit={userRole === 'admin' || userRole === 'editor'}
       />
 
       {/* Patient Form Modal */}

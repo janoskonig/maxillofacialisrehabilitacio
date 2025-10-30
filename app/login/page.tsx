@@ -47,6 +47,15 @@ export default function Login() {
       // Store login state
       localStorage.setItem('isAuthenticated', 'true');
       localStorage.setItem('userEmail', email);
+      // Fire-and-forget activity log for successful login
+      fetch('/api/activity', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-email': email
+        },
+        body: JSON.stringify({ action: 'login', detail: 'success' })
+      }).catch(() => {});
       router.push('/');
     } else {
       setError('Hibás email cím vagy jelszó');
