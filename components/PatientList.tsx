@@ -94,11 +94,11 @@ export function PatientList({ patients, onView }: PatientListProps) {
                 </td>
                 <td className="px-6 py-4">
                   <div className="text-sm text-gray-900 max-w-xs truncate">
-                    {patient.mutetTipusa || '-'}
+                    {patient.mutetRovidLeirasa || '-'}
                   </div>
-                  {patient.esetTipusa && (
+                  {patient.szovettaniDiagnozis && (
                     <div className="text-sm text-gray-500 mt-1">
-                      Eset típusa: {patient.esetTipusa}
+                      Szövettani diagnózis: {patient.szovettaniDiagnozis}
                     </div>
                   )}
                 </td>
