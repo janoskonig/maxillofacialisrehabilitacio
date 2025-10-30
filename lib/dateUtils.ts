@@ -1,5 +1,5 @@
 // Dátum helper függvények
-export const formatDateForDisplay = (dateString: string | undefined): string => {
+export const formatDateForDisplay = (dateString: string | null | undefined): string => {
   if (!dateString) return '';
   try {
     const date = new Date(dateString);
@@ -13,7 +13,7 @@ export const formatDateForDisplay = (dateString: string | undefined): string => 
   }
 };
 
-export const formatDateForInput = (dateString: string | undefined): string => {
+export const formatDateForInput = (dateString: string | null | undefined): string => {
   if (!dateString) return '';
   // Ha már YYYY-MM-DD formátumban van, visszaadjuk
   if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return dateString;
