@@ -12,6 +12,26 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
+  // Engedélyezett felhasználók beolvasása .env változóból
+  // Formátum: NEXT_PUBLIC_ALLOWED_USERS="user1:pass1,user2:pass2"
+  const parseAllowedUsers = (envValue?: string): Record<string, string> => {
+    const map: Record<string, string> = {};
+    if (!envValue) return map;
+    envValue
+      .split(',')
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .forEach((pair) => {
+        const [user, pass] = pair.split(':');
+        if (user && pass) {
+          map[user.trim()] = pass.trim();
+        }
+      });
+    return map;
+  };
+
+  const allowedUsers = parseAllowedUsers(process.env.NEXT_PUBLIC_ALLOWED_USERS);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -20,11 +40,10 @@ export default function Login() {
     // Simulate login delay
     await new Promise(resolve => setTimeout(resolve, 500));
 
-    // Check credentials
-    const validEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@example.com';
-    const validPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'changeme';
+    // Check credentials több felhasználóval
+    const isValid = Boolean(allowedUsers[email] && allowedUsers[email] === password);
     
-    if (email === validEmail && password === validPassword) {
+    if (isValid) {
       // Store login state
       localStorage.setItem('isAuthenticated', 'true');
       localStorage.setItem('userEmail', email);
@@ -69,7 +88,7 @@ export default function Login() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="form-input pl-10"
-                  placeholder="admin@example.com"
+                  placeholder="felhasznalonev (pl. konig.janos)"
                 />
                 <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               </div>
