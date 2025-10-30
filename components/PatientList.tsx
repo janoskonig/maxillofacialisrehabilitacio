@@ -64,7 +64,11 @@ export function PatientList({ patients, onView }: PatientListProps) {
                       </div>
                     </div>
                     <div className="ml-4">
-                      <div className="text-sm font-medium text-gray-900">
+                      <div
+                        className="text-sm font-medium text-gray-900 cursor-pointer text-medical-primary hover:underline"
+                        onClick={() => onView(patient)}
+                        title="Beteg megtekintése"
+                      >
                         {patient.nev}
                       </div>
                       <div className="text-sm text-gray-500">

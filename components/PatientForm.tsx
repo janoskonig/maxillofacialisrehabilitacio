@@ -65,10 +65,13 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       mutetIdeje: formatDateForInput(patient.mutetIdeje),
       felvetelDatuma: formatDateForInput(patient.felvetelDatuma),
     } : {
-      nem: 'ferfi',
       radioterapia: false,
       chemoterapia: false,
       nemIsmertPoziciokbanImplantatum: false,
+      felsoFogpotlasVan: false,
+      felsoFogpotlasElegedett: true,
+      alsoFogpotlasVan: false,
+      alsoFogpotlasElegedett: true,
     },
   });
 
@@ -76,7 +79,12 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
   const chemoterapia = watch('chemoterapia');
   const kezeleoorvos = watch('kezeleoorvos');
   const nemIsmertPoziciokbanImplantatum = watch('nemIsmertPoziciokbanImplantatum');
+  const felsoFogpotlasVan = watch('felsoFogpotlasVan');
+  const felsoFogpotlasElegedett = watch('felsoFogpotlasElegedett');
+  const alsoFogpotlasVan = watch('alsoFogpotlasVan');
+  const alsoFogpotlasElegedett = watch('alsoFogpotlasElegedett');
   const [implantatumok, setImplantatumok] = useState<Record<string, string>>(patient?.meglevoImplantatumok || {});
+  const [fogak, setFogak] = useState<Record<string, string>>(patient?.meglevoFogak || {});
 
   // Implantátumok frissítése amikor patient változik
   useEffect(() => {
@@ -84,6 +92,11 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       setImplantatumok(patient.meglevoImplantatumok);
     } else {
       setImplantatumok({});
+    }
+    if (patient?.meglevoFogak) {
+      setFogak(patient.meglevoFogak);
+    } else {
+      setFogak({});
     }
   }, [patient]);
 
@@ -103,6 +116,11 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
   useEffect(() => {
     setValue('meglevoImplantatumok', implantatumok);
   }, [implantatumok, setValue]);
+
+  // Fogazati státusz frissítése a form-ban
+  useEffect(() => {
+    setValue('meglevoFogak', fogak);
+  }, [fogak, setValue]);
 
   const handleToothToggle = (toothNumber: string) => {
     if (isViewOnly) return;
@@ -124,6 +142,25 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
   const handleImplantatumDetailsChange = (toothNumber: string, details: string) => {
     if (isViewOnly) return;
     setImplantatumok(prev => ({ ...prev, [toothNumber]: details }));
+  };
+
+  const handleToothStatusToggle = (toothNumber: string) => {
+    if (isViewOnly) return;
+    setFogak(prev => {
+      const current = prev[toothNumber];
+      if (current !== undefined && current !== null) {
+        const newState = { ...prev };
+        delete newState[toothNumber];
+        return newState; // Pipából kivéve: hiányzik
+      } else {
+        return { ...prev, [toothNumber]: '' }; // Pipálva: jelen van, részletek opcionálisak
+      }
+    });
+  };
+
+  const handleToothStatusDetailsChange = (toothNumber: string, details: string) => {
+    if (isViewOnly) return;
+    setFogak(prev => ({ ...prev, [toothNumber]: details }));
   };
 
   const onSubmit = (data: Patient) => {
@@ -377,14 +414,13 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           </div>
         </div>
 
-        {/* ANAMNÉZIS ÉS BETEGVIZSGÁLAT */}
+        {/* ANAMNÉZIS */}
         <div className="card">
           <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <Calendar className="w-5 h-5 mr-2 text-medical-primary" />
-            ANAMNÉZIS ÉS BETEGVIZSGÁLAT
+            ANAMNÉZIS
           </h4>
           <div className="space-y-4">
-            {/* Alap kérdések */}
             <div>
               <label className="form-label">Alkoholfogyasztás</label>
               <textarea
@@ -404,7 +440,260 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                 readOnly={isViewOnly}
               />
             </div>
+            <div>
+              <label className="form-label">Kezelésre érkezés indoka</label>
+              <select {...register('kezelesreErkezesIndoka')} className="form-input" disabled={isViewOnly}>
+                <option value="">Válasszon...</option>
+                <option value="traumás sérülés">traumás sérülés</option>
+                <option value="veleszületett rendellenesség">veleszületett rendellenesség</option>
+                <option value="onkológiai kezelés utáni állapot">onkológiai kezelés utáni állapot</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* BETEGVIZSGÁLAT */}
+        <div className="card">
+          <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+            <Calendar className="w-5 h-5 mr-2 text-medical-primary" />
+            BETEGVIZSGÁLAT
+          </h4>
+          <div className="space-y-4">
             
+            {/* Fogpótlások – felső és alsó állcsont külön */}
+            <div className="border-t pt-4 mt-4">
+              <h5 className="text-md font-semibold text-gray-900 mb-3">Fogpótlások</h5>
+              {/* Felső állcsont */}
+              <div className="mb-6">
+                <div className="flex items-center mb-2">
+                  <input
+                    {...register('felsoFogpotlasVan')}
+                    type="checkbox"
+                    className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
+                    disabled={isViewOnly}
+                  />
+                  <label className="ml-2 text-sm text-gray-700">Felső állcsont: van-e fogpótlása?</label>
+                </div>
+                {felsoFogpotlasVan && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-6 mt-2">
+                    <div>
+                      <label className="form-label">Mikor készült?</label>
+                      <input
+                        {...register('felsoFogpotlasMikor')}
+                        className="form-input"
+                        placeholder="pl. 2023 tavasz / 2023-05-10"
+                        readOnly={isViewOnly}
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Ki készítette / hol készült?</label>
+                      <input
+                        {...register('felsoFogpotlasKeszito')}
+                        className="form-input"
+                        placeholder="pl. Klinika / magánrendelő, orvos/technikus neve"
+                        readOnly={isViewOnly}
+                      />
+                    </div>
+                    <div className="flex items-center md:col-span-2">
+                      <input
+                        {...register('felsoFogpotlasElegedett')}
+                        type="checkbox"
+                        className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
+                        disabled={isViewOnly}
+                      />
+                      <label className="ml-2 text-sm text-gray-700">Elégedett-e velük?</label>
+                    </div>
+                    {!felsoFogpotlasElegedett && (
+                      <div className="md:col-span-2">
+                        <label className="form-label">Ha nem, mi velük a baj?</label>
+                        <textarea
+                          {...register('felsoFogpotlasProblema')}
+                          rows={2}
+                          className="form-input"
+                          placeholder="Rövid leírás a problémákról"
+                          readOnly={isViewOnly}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Alsó állcsont */}
+              <div>
+                <div className="flex items-center mb-2">
+                  <input
+                    {...register('alsoFogpotlasVan')}
+                    type="checkbox"
+                    className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
+                    disabled={isViewOnly}
+                  />
+                  <label className="ml-2 text-sm text-gray-700">Alsó állcsont: van-e fogpótlása?</label>
+                </div>
+                {alsoFogpotlasVan && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-6 mt-2">
+                    <div>
+                      <label className="form-label">Mikor készült?</label>
+                      <input
+                        {...register('alsoFogpotlasMikor')}
+                        className="form-input"
+                        placeholder="pl. 2022 ősz / 2022-11-20"
+                        readOnly={isViewOnly}
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Ki készítette / hol készült?</label>
+                      <input
+                        {...register('alsoFogpotlasKeszito')}
+                        className="form-input"
+                        placeholder="pl. Klinika / magánrendelő, orvos/technikus neve"
+                        readOnly={isViewOnly}
+                      />
+                    </div>
+                    <div className="flex items-center md:col-span-2">
+                      <input
+                        {...register('alsoFogpotlasElegedett')}
+                        type="checkbox"
+                        className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
+                        disabled={isViewOnly}
+                      />
+                      <label className="ml-2 text-sm text-gray-700">Elégedett-e velük?</label>
+                    </div>
+                    {!alsoFogpotlasElegedett && (
+                      <div className="md:col-span-2">
+                        <label className="form-label">Ha nem, mi velük a baj?</label>
+                        <textarea
+                          {...register('alsoFogpotlasProblema')}
+                          rows={2}
+                          className="form-input"
+                          placeholder="Rövid leírás a problémákról"
+                          readOnly={isViewOnly}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Fogazati státusz */}
+            <div className="border-t pt-4 mt-4">
+              <h5 className="text-md font-semibold text-gray-900 mb-3">Fogazati státusz (Zsigmondy)</h5>
+              <p className="text-sm text-gray-600 mb-3">Nem pipálva: hiányzik. Pipálva: jelen van (állapot lent rögzíthető).</p>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                {/* Felső sor */}
+                <div className="flex justify-between mb-2">
+                  <div className="flex gap-1">
+                    {[18, 17, 16, 15, 14, 13, 12, 11].map(tooth => {
+                      const toothStr = tooth.toString();
+                      return (
+                        <ToothCheckbox
+                          key={tooth}
+                          toothNumber={toothStr}
+                          checked={toothStr in fogak}
+                          onChange={() => handleToothStatusToggle(toothStr)}
+                          disabled={isViewOnly}
+                        />
+                      );
+                    })}
+                  </div>
+                  <div className="flex gap-1">
+                    {[21, 22, 23, 24, 25, 26, 27, 28].map(tooth => {
+                      const toothStr = tooth.toString();
+                      return (
+                        <ToothCheckbox
+                          key={tooth}
+                          toothNumber={toothStr}
+                          checked={toothStr in fogak}
+                          onChange={() => handleToothStatusToggle(toothStr)}
+                          disabled={isViewOnly}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+                {/* Alsó sor */}
+                <div className="flex justify-between">
+                  <div className="flex gap-1">
+                    {[48, 47, 46, 45, 44, 43, 42, 41].map(tooth => {
+                      const toothStr = tooth.toString();
+                      return (
+                        <ToothCheckbox
+                          key={tooth}
+                          toothNumber={toothStr}
+                          checked={toothStr in fogak}
+                          onChange={() => handleToothStatusToggle(toothStr)}
+                          disabled={isViewOnly}
+                        />
+                      );
+                    })}
+                  </div>
+                  <div className="flex gap-1">
+                    {[31, 32, 33, 34, 35, 36, 37, 38].map(tooth => {
+                      const toothStr = tooth.toString();
+                      return (
+                        <ToothCheckbox
+                          key={tooth}
+                          toothNumber={toothStr}
+                          checked={toothStr in fogak}
+                          onChange={() => handleToothStatusToggle(toothStr)}
+                          disabled={isViewOnly}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Fog státusz részletek */}
+              {Object.keys(fogak).length > 0 && (
+                <div className="space-y-4 mt-4">
+                  <h6 className="font-medium text-gray-700">Fogak állapota</h6>
+                  {Object.keys(fogak).sort().map(toothNumber => (
+                    <div key={toothNumber} className="border border-gray-200 rounded-md p-4">
+                      <label className="form-label font-medium">{toothNumber}. fog – állapot</label>
+                      <textarea
+                        value={fogak[toothNumber] || ''}
+                        onChange={(e) => handleToothStatusDetailsChange(toothNumber, e.target.value)}
+                        rows={2}
+                        className="form-input"
+                        placeholder="Pl. szuvas, tömött, koronával ellátott"
+                        readOnly={isViewOnly}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+            {/* Meglévő fogpótlás típusa */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                <div>
+                  <label className="form-label">Meglévő fogpótlás típusa – felső</label>
+                  <select {...register('felsoFogpotlasTipus')} className="form-input" disabled={isViewOnly}>
+                    <option value="">Válasszon...</option>
+                    <option value="teljes akrilátlemezes fogpótlás">teljes akrilátlemezes fogpótlás</option>
+                    <option value="részleges akrilátlemezes fogpótlás">részleges akrilátlemezes fogpótlás</option>
+                    <option value="részleges fémlemezes fogpótlás kapocselhorgonyzással">részleges fémlemezes fogpótlás kapocselhorgonyzással</option>
+                    <option value="kombinált fogpótlás kapocselhorgonyzással">kombinált fogpótlás kapocselhorgonyzással</option>
+                    <option value="kombinált fogpótlás rejtett elhorgonyzási eszköz(ök)kel">kombinált fogpótlás rejtett elhorgonyzási eszköz(ök)kel</option>
+                    <option value="fedőlemezes fogpótlás">fedőlemezes fogpótlás</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label">Meglévő fogpótlás típusa – alsó</label>
+                  <select {...register('alsoFogpotlasTipus')} className="form-input" disabled={isViewOnly}>
+                    <option value="">Válasszon...</option>
+                    <option value="teljes akrilátlemezes fogpótlás">teljes akrilátlemezes fogpótlás</option>
+                    <option value="részleges akrilátlemezes fogpótlás">részleges akrilátlemezes fogpótlás</option>
+                    <option value="részleges fémlemezes fogpótlás kapocselhorgonyzással">részleges fémlemezes fogpótlás kapocselhorgonyzással</option>
+                    <option value="kombinált fogpótlás kapocselhorgonyzással">kombinált fogpótlás kapocselhorgonyzással</option>
+                    <option value="kombinált fogpótlás rejtett elhorgonyzási eszköz(ök)kel">kombinált fogpótlás rejtett elhorgonyzási eszköz(ök)kel</option>
+                    <option value="fedőlemezes fogpótlás">fedőlemezes fogpótlás</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
             {/* Maxilladefektus */}
             <div>
               <div className="flex items-center mb-2">
@@ -495,8 +784,17 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
               </select>
             </div>
             <div>
-              <label className="form-label">Fábián- és Fejérdy-féle protetikai osztály (a defektustól eltekintve)</label>
-              <select {...register('fabianFejerdyProtetikaiOsztaly')} className="form-input" disabled={isViewOnly}>
+              <label className="form-label">Fábián–Fejérdy osztály (felső állcsont)</label>
+              <select {...register('fabianFejerdyProtetikaiOsztalyFelso')} className="form-input" disabled={isViewOnly}>
+                <option value="">Válasszon...</option>
+                {fabianFejerdyProtetikaiOsztalyOptions.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="form-label">Fábián–Fejérdy osztály (alsó állcsont)</label>
+              <select {...register('fabianFejerdyProtetikaiOsztalyAlso')} className="form-input" disabled={isViewOnly}>
                 <option value="">Válasszon...</option>
                 {fabianFejerdyProtetikaiOsztalyOptions.map((option) => (
                   <option key={option} value={option}>{option}</option>

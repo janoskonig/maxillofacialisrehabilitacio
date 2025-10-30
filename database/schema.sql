@@ -77,6 +77,7 @@ CREATE TABLE IF NOT EXISTS patients (
     -- REHABILITÁCIÓS ADATOK - ANAMNÉZIS ÉS BETEGVIZSGÁLAT
     alkoholfogyasztas TEXT,                                    -- Alkoholfogyasztás
     dohanyzas_szam VARCHAR(50),                                -- Dohányzás (n szál/nap)
+    kezelesre_erkezes_indoka VARCHAR(100) CHECK (kezelesre_erkezes_indoka IN ('traumás sérülés', 'veleszületett rendellenesség', 'onkológiai kezelés utáni állapot')),
     maxilladefektus_van BOOLEAN DEFAULT false,                 -- Maxilladefektus van
     brown_fuggoleges_osztaly VARCHAR(1) CHECK (brown_fuggoleges_osztaly IN ('1', '2', '3', '4')),  -- Brown-féle klasszifikáció - függőleges komponens
     brown_vizszintes_komponens VARCHAR(1) CHECK (brown_vizszintes_komponens IN ('a', 'b', 'c')),    -- Brown - vízszintes/palatinalis komponens
@@ -85,10 +86,26 @@ CREATE TABLE IF NOT EXISTS patients (
     nyelvmozgasok_akadalyozottak BOOLEAN DEFAULT false,        -- Nyelvmozgások akadályozottak
     gombocos_beszed BOOLEAN DEFAULT false,                     -- Gombócos beszéd
     nyalmirigy_allapot VARCHAR(20) CHECK (nyalmirigy_allapot IN ('hiposzaliváció', 'hiperszaliváció')),  -- Nyálmirigy állapot
+    -- Fábián–Fejérdy-féle protetikai osztály (felső és alsó külön)
+    fabian_fejerdy_protetikai_osztaly_felso VARCHAR(10) CHECK (fabian_fejerdy_protetikai_osztaly_felso IN ('0', '1A', '1B', '2A', '2A/1', '2B', '3')),
+    fabian_fejerdy_protetikai_osztaly_also VARCHAR(10) CHECK (fabian_fejerdy_protetikai_osztaly_also IN ('0', '1A', '1B', '2A', '2A/1', '2B', '3')),
+    -- (Régi, összesített mező a kompatibilitásért – nem használt új űrlapban)
     fabian_fejerdy_protetikai_osztaly VARCHAR(10) CHECK (fabian_fejerdy_protetikai_osztaly IN ('0', '1A', '1B', '2A', '2A/1', '2B', '3')),  -- Fábián- és Fejérdy-féle protetikai osztály
     kezeleoorvos VARCHAR(100),                                  -- Kezelőorvos
     kezeleoorvos_intezete VARCHAR(255),                        -- Kezelőorvos intézete
     felvetel_datuma DATE,                                       -- Felvétel dátuma
+    
+    -- PROTÉZIS – FELSŐ/ALSÓ ÁLLCSONT
+    felso_fogpotlas_van BOOLEAN DEFAULT false,                 -- Felső állcsont: van-e fogpótlás
+    felso_fogpotlas_mikor VARCHAR(100),                        -- Felső: mikor készült
+    felso_fogpotlas_keszito TEXT,                              -- Felső: ki/hol készült
+    felso_fogpotlas_elegedett BOOLEAN DEFAULT true,            -- Felső: elégedett-e
+    felso_fogpotlas_problema TEXT,                             -- Felső: ha nem elégedett, mi a baj
+    also_fogpotlas_van BOOLEAN DEFAULT false,                  -- Alsó állcsont: van-e fogpótlás
+    also_fogpotlas_mikor VARCHAR(100),                         -- Alsó: mikor készült
+    also_fogpotlas_keszito TEXT,                               -- Alsó: ki/hol készült
+    also_fogpotlas_elegedett BOOLEAN DEFAULT true,             -- Alsó: elégedett-e
+    also_fogpotlas_problema TEXT,                              -- Alsó: ha nem elégedett, mi a baj
     
     -- IMPLANTÁTUMOK
     -- Meglévő implantátumok JSON formátumban (fog szám -> részletek)
@@ -96,6 +113,27 @@ CREATE TABLE IF NOT EXISTS patients (
     meglevo_implantatumok JSONB DEFAULT '{}'::jsonb,           -- Meglévő implantátumok
     nem_ismert_poziciokban_implantatum BOOLEAN DEFAULT false,  -- Nem ismert pozíciókban implantátum
     nem_ismert_poziciokban_implantatum_reszletek TEXT,         -- Nem ismert pozíciókban implantátum részletek
+
+    -- FOGAZATI STÁTUSZ
+    -- Zsigmondy: a jelenlévő fogakat JSONB tárolja (kulcs: fogszám, érték: állapot megjegyzés)
+    meglevo_fogak JSONB DEFAULT '{}'::jsonb,
+    -- Meglévő fogpótlás típusa (felső/alsó)
+    felso_fogpotlas_tipus VARCHAR(100) CHECK (felso_fogpotlas_tipus IN (
+        'teljes akrilátlemezes fogpótlás',
+        'részleges akrilátlemezes fogpótlás',
+        'részleges fémlemezes fogpótlás kapocselhorgonyzással',
+        'kombinált fogpótlás kapocselhorgonyzással',
+        'kombinált fogpótlás rejtett elhorgonyzási eszköz(ök)kel',
+        'fedőlemezes fogpótlás'
+    )),
+    also_fogpotlas_tipus VARCHAR(100) CHECK (also_fogpotlas_tipus IN (
+        'teljes akrilátlemezes fogpótlás',
+        'részleges akrilátlemezes fogpótlás',
+        'részleges fémlemezes fogpótlás kapocselhorgonyzással',
+        'kombinált fogpótlás kapocselhorgonyzással',
+        'kombinált fogpótlás rejtett elhorgonyzási eszköz(ök)kel',
+        'fedőlemezes fogpótlás'
+    )),
     
     -- TIMESTAMPS
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,  -- Létrehozás dátuma

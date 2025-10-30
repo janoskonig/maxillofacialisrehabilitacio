@@ -34,6 +34,7 @@ export const patientSchema = z.object({
   // ANAMNÉZIS ÉS BETEGVIZSGÁLAT – új kezdeti mezők
   alkoholfogyasztas: z.string().optional(),
   dohanyzasSzam: z.string().optional(), // n szál/nap formátumban
+  kezelesreErkezesIndoka: z.enum(['traumás sérülés', 'veleszületett rendellenesség', 'onkológiai kezelés utáni állapot']).optional(),
   maxilladefektusVan: z.boolean().default(false),
   brownFuggolegesOsztaly: z.enum(['1', '2', '3', '4']).optional(),
   brownVizszintesKomponens: z.enum(['a', 'b', 'c']).optional(),
@@ -43,6 +44,41 @@ export const patientSchema = z.object({
   gombocosBeszed: z.boolean().default(false),
   nyalmirigyAllapot: z.enum(['hiposzaliváció', 'hiperszaliváció']).optional(),
 
+  // PROTÉZIS – FELSŐ/ALSÓ ÁLLCSONT
+  felsoFogpotlasVan: z.boolean().default(false),
+  felsoFogpotlasMikor: z.string().optional(),
+  felsoFogpotlasKeszito: z.string().optional(),
+  felsoFogpotlasElegedett: z.boolean().default(true),
+  felsoFogpotlasProblema: z.string().optional(),
+
+  alsoFogpotlasVan: z.boolean().default(false),
+  alsoFogpotlasMikor: z.string().optional(),
+  alsoFogpotlasKeszito: z.string().optional(),
+  alsoFogpotlasElegedett: z.boolean().default(true),
+  alsoFogpotlasProblema: z.string().optional(),
+
+  // FOGAZATI STÁTUSZ
+  meglevoFogak: z.record(z.string()).optional(), // fog szám -> részletek (szuvas, tömött, korona, stb.)
+  felsoFogpotlasTipus: z.enum([
+    'teljes akrilátlemezes fogpótlás',
+    'részleges akrilátlemezes fogpótlás',
+    'részleges fémlemezes fogpótlás kapocselhorgonyzással',
+    'kombinált fogpótlás kapocselhorgonyzással',
+    'kombinált fogpótlás rejtett elhorgonyzási eszköz(ök)kel',
+    'fedőlemezes fogpótlás'
+  ]).optional(),
+  alsoFogpotlasTipus: z.enum([
+    'teljes akrilátlemezes fogpótlás',
+    'részleges akrilátlemezes fogpótlás',
+    'részleges fémlemezes fogpótlás kapocselhorgonyzással',
+    'kombinált fogpótlás kapocselhorgonyzással',
+    'kombinált fogpótlás rejtett elhorgonyzási eszköz(ök)kel',
+    'fedőlemezes fogpótlás'
+  ]).optional(),
+  // Fábián–Fejérdy-féle protetikai osztály: felső és alsó külön
+  fabianFejerdyProtetikaiOsztalyFelso: z.enum(['0', '1A', '1B', '2A', '2A/1', '2B', '3']).optional(),
+  fabianFejerdyProtetikaiOsztalyAlso: z.enum(['0', '1A', '1B', '2A', '2A/1', '2B', '3']).optional(),
+  // (Visszafelé kompatibilitás kedvéért meghagyjuk, de nem kötelező használni)
   fabianFejerdyProtetikaiOsztaly: z.enum(['0', '1A', '1B', '2A', '2A/1', '2B', '3']).optional(),
   kezeleoorvos: z.string().optional(),
   kezeleoorvosIntezete: z.string().optional(),
