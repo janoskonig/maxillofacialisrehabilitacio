@@ -42,7 +42,8 @@ export const patientSchema = z.object({
   kovacsDobakOsztaly: z.enum(['1', '2', '3', '4', '5']).optional(),
   nyelvmozgásokAkadályozottak: z.boolean().default(false),
   gombocosBeszed: z.boolean().default(false),
-  nyalmirigyAllapot: z.enum(['hiposzaliváció', 'hiperszaliváció']).optional(),
+  nyalmirigyAllapot: z.enum(['hiposzaliváció', 'hiperszaliváció', 'Nem számol be eltérésről']).optional(),
+  tnmStaging: z.string().optional(),
 
   // PROTÉZIS – FELSŐ/ALSÓ ÁLLCSONT
   felsoFogpotlasVan: z.boolean().default(false),
@@ -65,7 +66,8 @@ export const patientSchema = z.object({
     'részleges fémlemezes fogpótlás kapocselhorgonyzással',
     'kombinált fogpótlás kapocselhorgonyzással',
     'kombinált fogpótlás rejtett elhorgonyzási eszköz(ök)kel',
-    'fedőlemezes fogpótlás'
+    'fedőlemezes fogpótlás',
+    'rögzített fogpótlás'
   ]).optional(),
   alsoFogpotlasTipus: z.enum([
     'teljes akrilátlemezes fogpótlás',
@@ -73,7 +75,8 @@ export const patientSchema = z.object({
     'részleges fémlemezes fogpótlás kapocselhorgonyzással',
     'kombinált fogpótlás kapocselhorgonyzással',
     'kombinált fogpótlás rejtett elhorgonyzási eszköz(ök)kel',
-    'fedőlemezes fogpótlás'
+    'fedőlemezes fogpótlás',
+    'rögzített fogpótlás'
   ]).optional(),
   // Fábián–Fejérdy-féle protetikai osztály: felső és alsó külön
   fabianFejerdyProtetikaiOsztalyFelso: z.enum(['0', '1A', '1B', '2A', '2A/1', '2B', '3']).optional(),
@@ -90,6 +93,26 @@ export const patientSchema = z.object({
   // TIMESTAMPS
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
+
+  // ANAMNÉZIS – csoportosított feltételes kérdések
+  // Trauma esetén
+  balesetIdopont: z.string().optional(), // date (trauma esetén)
+  balesetEtiologiaja: z.string().optional(),
+  balesetEgyeb: z.string().optional(),
+
+  // Onkológia esetén
+  primerMutetLeirasa: z.string().optional(),
+  // szovettaniDiagnozis (már létezik)
+  // adjuváns terápiák (már léteznek)
+
+  // Veleszületett rendellenesség esetén
+  veleszuletettRendellenessegek: z.array(z.enum([
+    'kemény szájpadhasadék',
+    'lágyszájpad inszufficiencia',
+    'állcsonthasadék',
+    'ajakhasadék',
+  ])).optional(),
+  veleszuletettMutetekLeirasa: z.string().optional(),
 });
 
 export type Patient = z.infer<typeof patientSchema>;

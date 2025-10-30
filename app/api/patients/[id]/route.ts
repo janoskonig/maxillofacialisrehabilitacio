@@ -65,6 +65,7 @@ export async function GET(
         meglevo_implantatumok as "meglevoImplantatumok",
         nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
         nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
+        tnm_staging as "tnmStaging",
         created_at as "createdAt",
         updated_at as "updatedAt"
       FROM patients
@@ -155,6 +156,7 @@ export async function PUT(
         meglevo_implantatumok = $52,
         nem_ismert_poziciokban_implantatum = $53,
         nem_ismert_poziciokban_implantatum_reszletek = $54,
+        tnm_staging = $55,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $1
       RETURNING 
@@ -194,6 +196,7 @@ export async function PUT(
         meglevo_implantatumok as "meglevoImplantatumok",
         nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
         nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
+        tnm_staging as "tnmStaging",
         created_at as "createdAt", updated_at as "updatedAt"`,
       [
         params.id,
@@ -254,6 +257,7 @@ export async function PUT(
           : {},
         validatedPatient.nemIsmertPoziciokbanImplantatum || false,
         validatedPatient.nemIsmertPoziciokbanImplantatumRészletek || null,
+        validatedPatient.tnmStaging || null,
       ]
     );
 

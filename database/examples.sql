@@ -236,3 +236,4 @@ FROM implants
 GROUP BY fog_szama
 ORDER BY hasznalat_szama DESC;
 
+

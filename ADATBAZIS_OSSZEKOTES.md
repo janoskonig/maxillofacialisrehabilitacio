@@ -90,3 +90,4 @@ psql -d maxillofacial_rehab -f database/schema.sql
 - SQL példák: `database/examples.sql`
 - Adatbázis séma: `database/schema.sql`
 
+

@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS patients (
     kovacs_dobak_osztaly VARCHAR(1) CHECK (kovacs_dobak_osztaly IN ('1', '2', '3', '4', '5')),    -- Kovács-Dobák osztályozás
     nyelvmozgasok_akadalyozottak BOOLEAN DEFAULT false,        -- Nyelvmozgások akadályozottak
     gombocos_beszed BOOLEAN DEFAULT false,                     -- Gombócos beszéd
-    nyalmirigy_allapot VARCHAR(20) CHECK (nyalmirigy_allapot IN ('hiposzaliváció', 'hiperszaliváció')),  -- Nyálmirigy állapot
+    nyalmirigy_allapot VARCHAR(30) CHECK (nyalmirigy_allapot IN ('hiposzaliváció', 'hiperszaliváció', 'Nem számol be eltérésről')),  -- Nyálmirigy állapot
     -- Fábián–Fejérdy-féle protetikai osztály (felső és alsó külön)
     fabian_fejerdy_protetikai_osztaly_felso VARCHAR(10) CHECK (fabian_fejerdy_protetikai_osztaly_felso IN ('0', '1A', '1B', '2A', '2A/1', '2B', '3')),
     fabian_fejerdy_protetikai_osztaly_also VARCHAR(10) CHECK (fabian_fejerdy_protetikai_osztaly_also IN ('0', '1A', '1B', '2A', '2A/1', '2B', '3')),
@@ -124,7 +124,8 @@ CREATE TABLE IF NOT EXISTS patients (
         'részleges fémlemezes fogpótlás kapocselhorgonyzással',
         'kombinált fogpótlás kapocselhorgonyzással',
         'kombinált fogpótlás rejtett elhorgonyzási eszköz(ök)kel',
-        'fedőlemezes fogpótlás'
+        'fedőlemezes fogpótlás',
+        'rögzített fogpótlás'
     )),
     also_fogpotlas_tipus VARCHAR(100) CHECK (also_fogpotlas_tipus IN (
         'teljes akrilátlemezes fogpótlás',
@@ -132,7 +133,8 @@ CREATE TABLE IF NOT EXISTS patients (
         'részleges fémlemezes fogpótlás kapocselhorgonyzással',
         'kombinált fogpótlás kapocselhorgonyzással',
         'kombinált fogpótlás rejtett elhorgonyzási eszköz(ök)kel',
-        'fedőlemezes fogpótlás'
+        'fedőlemezes fogpótlás',
+        'rögzített fogpótlás'
     )),
     
     -- TIMESTAMPS

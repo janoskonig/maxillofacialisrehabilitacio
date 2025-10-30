@@ -120,3 +120,4 @@ Production környezetben:
 - Használjon környezeti változókat (pl. Vercel, Railway, stb.)
 - Készítsen rendszeres backupokat
 
+

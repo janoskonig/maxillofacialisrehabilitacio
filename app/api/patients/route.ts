@@ -69,6 +69,7 @@ export async function GET(request: NextRequest) {
           meglevo_implantatumok as "meglevoImplantatumok",
           nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
           nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
+          tnm_staging as "tnmStaging",
           created_at as "createdAt",
           updated_at as "updatedAt"
         FROM patients
@@ -141,6 +142,7 @@ export async function GET(request: NextRequest) {
           meglevo_implantatumok as "meglevoImplantatumok",
           nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
           nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
+          tnm_staging as "tnmStaging",
           created_at as "createdAt",
           updated_at as "updatedAt"
         FROM patients
@@ -243,6 +245,7 @@ export async function POST(request: NextRequest) {
         : {},
       validatedPatient.nemIsmertPoziciokbanImplantatum || false,
       validatedPatient.nemIsmertPoziciokbanImplantatumRészletek || null,
+      validatedPatient.tnmStaging || null,
     );
     
     // SQL query építése
@@ -266,7 +269,8 @@ export async function POST(request: NextRequest) {
         also_fogpotlas_van, also_fogpotlas_mikor, also_fogpotlas_keszito, also_fogpotlas_elegedett, also_fogpotlas_problema,
         meglevo_fogak, felso_fogpotlas_tipus, also_fogpotlas_tipus,
         meglevo_implantatumok, nem_ismert_poziciokban_implantatum,
-        nem_ismert_poziciokban_implantatum_reszletek
+        nem_ismert_poziciokban_implantatum_reszletek,
+        tnm_staging
       ) VALUES (
         ${paramPlaceholders}
       )
@@ -307,6 +311,7 @@ export async function POST(request: NextRequest) {
         meglevo_implantatumok as "meglevoImplantatumok",
         nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
         nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
+        tnm_staging as "tnmStaging",
         created_at as "createdAt", updated_at as "updatedAt"`,
       values
     );

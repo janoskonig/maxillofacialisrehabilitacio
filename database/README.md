@@ -130,3 +130,4 @@ npx prisma init
 - [ ] Biztonsági mentés automatizálása
 - [ ] Adatbázis migrációs scriptek
 
+
