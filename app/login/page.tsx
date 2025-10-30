@@ -67,7 +67,7 @@ export default function Login() {
           Maxillofaciális Rehabilitáció
         </h2>
         <p className="mt-2 text-center text-sm text-gray-600">
-          Betegadat Gyűjtő Rendszer
+          BETEGREGISZTER
         </p>
       </div>
 
@@ -76,19 +76,19 @@ export default function Login() {
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email cím
+                Felhasználónév
               </label>
               <div className="mt-1 relative">
                 <input
                   id="email"
                   name="email"
-                  type="email"
-                  autoComplete="email"
+                  type="text"
+                  autoComplete="username"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="form-input pl-10"
-                  placeholder="felhasznalonev (pl. konig.janos)"
+                  placeholder="vezeteknev.keresztnev"
                 />
                 <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               </div>
@@ -145,14 +145,7 @@ export default function Login() {
             </div>
           </form>
 
-          <div className="mt-6">
-            <div className="text-center text-sm text-gray-600">
-              <p>Csak engedélyezett személyek számára</p>
-              <p className="mt-1 text-xs text-gray-500">
-                Maxillofaciális rehabilitációs rendszer
-              </p>
-            </div>
-          </div>
+          
         </div>
       </div>
     </div>

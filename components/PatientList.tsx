@@ -14,7 +14,7 @@ export function PatientList({ patients, onView }: PatientListProps) {
     return (
       <div className="card text-center py-12">
         <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-gray-900 mb-2">Nincs beteg találva</h3>
+        <h3 className="text-lg font-medium text-gray-900 mb-2">Nincs találat</h3>
         <p className="text-gray-500">
           {patients.length === 0 
             ? "Kezdje az első betegadat hozzáadásával."

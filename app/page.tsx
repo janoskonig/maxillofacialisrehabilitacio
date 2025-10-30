@@ -103,7 +103,7 @@ export default function Home() {
               </h1>
             </div>
             <div className="text-sm text-gray-600">
-              Betegadat Gyűjtő Rendszer
+              BETEGREGISZTER
             </div>
           </div>
         </div>
