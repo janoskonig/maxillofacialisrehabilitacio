@@ -1,15 +1,17 @@
 'use client';
 
 import { Patient } from '@/lib/types';
-import { Phone, Mail, Calendar, FileText, Eye } from 'lucide-react';
+import { Phone, Mail, Calendar, FileText, Eye, Pencil } from 'lucide-react';
 import { formatDateForDisplay } from '@/lib/dateUtils';
 
 interface PatientListProps {
   patients: Patient[];
   onView: (patient: Patient) => void;
+  onEdit?: (patient: Patient) => void;
+  canEdit?: boolean;
 }
 
-export function PatientList({ patients, onView }: PatientListProps) {
+export function PatientList({ patients, onView, onEdit, canEdit = false }: PatientListProps) {
   if (patients.length === 0) {
     return (
       <div className="card text-center py-12">
@@ -39,9 +41,6 @@ export function PatientList({ patients, onView }: PatientListProps) {
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Kapcsolat
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Műtét típusa
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Létrehozva
@@ -80,9 +79,6 @@ export function PatientList({ patients, onView }: PatientListProps) {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm text-gray-900">{patient.taj || '-'}</div>
-                  {patient.beutaloIntezmeny && (
-                    <div className="text-sm text-gray-500">{patient.beutaloIntezmeny}</div>
-                  )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center text-sm text-gray-900">
@@ -93,16 +89,6 @@ export function PatientList({ patients, onView }: PatientListProps) {
                     <div className="flex items-center text-sm text-gray-500 mt-1">
                       <Mail className="w-4 h-4 mr-1 text-gray-400" />
                       {patient.email}
-                    </div>
-                  )}
-                </td>
-                <td className="px-6 py-4">
-                  <div className="text-sm text-gray-900 max-w-xs truncate">
-                    {patient.mutetRovidLeirasa || '-'}
-                  </div>
-                  {patient.szovettaniDiagnozis && (
-                    <div className="text-sm text-gray-500 mt-1">
-                      Szövettani diagnózis: {patient.szovettaniDiagnozis}
                     </div>
                   )}
                 </td>
@@ -121,6 +107,15 @@ export function PatientList({ patients, onView }: PatientListProps) {
                     >
                       <Eye className="w-4 h-4" />
                     </button>
+                    {canEdit && onEdit && (
+                      <button
+                        onClick={() => onEdit(patient)}
+                        className="text-medical-accent hover:text-amber-600"
+                        title="Beteg szerkesztése"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>

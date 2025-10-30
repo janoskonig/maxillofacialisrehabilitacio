@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS patients (
     id UUID PRIMARY KEY DEFAULT generate_uuid(),
     
     -- ALAPADATOK
-    nev VARCHAR(255) NOT NULL,  -- Név (kötelező)
+    nev VARCHAR(255),  -- Név (opcionális)
     taj VARCHAR(20),            -- TAJ szám
     telefonszam VARCHAR(50),    -- Telefonszám
     
@@ -87,10 +87,10 @@ CREATE TABLE IF NOT EXISTS patients (
     gombocos_beszed BOOLEAN DEFAULT false,                     -- Gombócos beszéd
     nyalmirigy_allapot VARCHAR(30) CHECK (nyalmirigy_allapot IN ('hiposzaliváció', 'hiperszaliváció', 'Nem számol be eltérésről')),  -- Nyálmirigy állapot
     -- Fábián–Fejérdy-féle protetikai osztály (felső és alsó külön)
-    fabian_fejerdy_protetikai_osztaly_felso VARCHAR(10) CHECK (fabian_fejerdy_protetikai_osztaly_felso IN ('0', '1A', '1B', '2A', '2A/1', '2B', '3')),
-    fabian_fejerdy_protetikai_osztaly_also VARCHAR(10) CHECK (fabian_fejerdy_protetikai_osztaly_also IN ('0', '1A', '1B', '2A', '2A/1', '2B', '3')),
+    fabian_fejerdy_protetikai_osztaly_felso VARCHAR(10) CHECK (fabian_fejerdy_protetikai_osztaly_felso IN ('0', '1A', '1B', '2A', '2A/1', '2B', '3', 'T')),
+    fabian_fejerdy_protetikai_osztaly_also VARCHAR(10) CHECK (fabian_fejerdy_protetikai_osztaly_also IN ('0', '1A', '1B', '2A', '2A/1', '2B', '3', 'T')),
     -- (Régi, összesített mező a kompatibilitásért – nem használt új űrlapban)
-    fabian_fejerdy_protetikai_osztaly VARCHAR(10) CHECK (fabian_fejerdy_protetikai_osztaly IN ('0', '1A', '1B', '2A', '2A/1', '2B', '3')),  -- Fábián- és Fejérdy-féle protetikai osztály
+    fabian_fejerdy_protetikai_osztaly VARCHAR(10) CHECK (fabian_fejerdy_protetikai_osztaly IN ('0', '1A', '1B', '2A', '2A/1', '2B', '3', 'T')),  -- Fábián- és Fejérdy-féle protetikai osztály
     kezeleoorvos VARCHAR(100),                                  -- Kezelőorvos
     kezeleoorvos_intezete VARCHAR(255),                        -- Kezelőorvos intézete
     felvetel_datuma DATE,                                       -- Felvétel dátuma
@@ -139,7 +139,11 @@ CREATE TABLE IF NOT EXISTS patients (
     
     -- TIMESTAMPS
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,  -- Létrehozás dátuma
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP   -- Frissítés dátuma
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,   -- Frissítés dátuma
+
+    -- AUDIT: ki rögzítette/módosította
+    created_by VARCHAR(255),
+    updated_by VARCHAR(255)
 );
 
 -- Indexek a gyors kereséshez
@@ -152,6 +156,7 @@ CREATE INDEX IF NOT EXISTS idx_patients_beutalo_intezmeny ON patients(beutalo_in
 CREATE INDEX IF NOT EXISTS idx_patients_kezeleoorvos ON patients(kezeleoorvos);
 CREATE INDEX IF NOT EXISTS idx_patients_created_at ON patients(created_at);
 CREATE INDEX IF NOT EXISTS idx_patients_felvetel_datuma ON patients(felvetel_datuma);
+CREATE INDEX IF NOT EXISTS idx_patients_created_by ON patients(created_by);
 
 -- GIN index az implantátumok JSON mezőhöz (a gyors JSON kereséshez)
 CREATE INDEX IF NOT EXISTS idx_patients_implantatumok_gin ON patients USING GIN (meglevo_implantatumok);
@@ -177,4 +182,6 @@ COMMENT ON COLUMN patients.taj IS 'TAJ szám';
 COMMENT ON COLUMN patients.meglevo_implantatumok IS 'Meglévő implantátumok JSON formátumban: {"fog_szám": "részletek"}';
 COMMENT ON COLUMN patients.created_at IS 'Rekord létrehozásának időpontja';
 COMMENT ON COLUMN patients.updated_at IS 'Rekord utolsó frissítésének időpontja';
+COMMENT ON COLUMN patients.created_by IS 'A felhasználó email címe, aki a rekordot létrehozta';
+COMMENT ON COLUMN patients.updated_by IS 'A felhasználó email címe, aki utoljára módosította';
 

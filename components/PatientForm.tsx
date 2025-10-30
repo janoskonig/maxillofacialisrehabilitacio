@@ -196,7 +196,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           </h4>
           <div className="space-y-4">
             <div>
-              <label className="form-label">NÉV *</label>
+              <label className="form-label">NÉV</label>
               <input
                 {...register('nev')}
                 className="form-input"
@@ -245,6 +245,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
             <div>
               <label className="form-label">Nem</label>
               <select {...register('nem')} className="form-input">
+                <option value="">Válasszon...</option>
                 <option value="ferfi">Férfi</option>
                 <option value="no">Nő</option>
                 <option value="egyeb">Egyéb</option>
@@ -381,7 +382,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           <div className="space-y-4">
             <div>
               <label className="form-label">Kezelésre érkezés indoka</label>
-              <select {...register('kezelesreErkezesIndoka')} className="form-input" disabled={isViewOnly} required>
+              <select {...register('kezelesreErkezesIndoka')} className="form-input" disabled={isViewOnly}>
                 <option value="">Válasszon...</option>
                 <option value="traumás sérülés">traumás sérülés</option>
                 <option value="veleszületett rendellenesség">veleszületett rendellenesség</option>

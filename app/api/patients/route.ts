@@ -71,7 +71,9 @@ export async function GET(request: NextRequest) {
           nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
           tnm_staging as "tnmStaging",
           created_at as "createdAt",
-          updated_at as "updatedAt"
+          updated_at as "updatedAt",
+          created_by as "createdBy",
+          updated_by as "updatedBy"
         FROM patients
         WHERE 
           nev ILIKE $1 OR
@@ -144,7 +146,9 @@ export async function GET(request: NextRequest) {
           nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
           tnm_staging as "tnmStaging",
           created_at as "createdAt",
-          updated_at as "updatedAt"
+          updated_at as "updatedAt",
+          created_by as "createdBy",
+          updated_by as "updatedBy"
         FROM patients
         ORDER BY created_at DESC`
       );
@@ -171,6 +175,7 @@ export async function POST(request: NextRequest) {
     console.log('Validált adatok:', JSON.stringify(validatedPatient, null, 2));
     
     const pool = getDbPool();
+    const userEmail = request.headers.get('x-user-email') || null;
     
     // Új betegnél ne generáljunk ID-t, hagyjuk az adatbázisnak generálni (DEFAULT generate_uuid())
     // Csak import esetén használjuk a megadott ID-t
@@ -187,7 +192,7 @@ export async function POST(request: NextRequest) {
     
     // Összes többi mező
     values.push(
-      validatedPatient.nev,
+      validatedPatient.nev || null,
       validatedPatient.taj || null,
       validatedPatient.telefonszam || null,
       validatedPatient.szuletesiDatum || null,
@@ -246,6 +251,7 @@ export async function POST(request: NextRequest) {
       validatedPatient.nemIsmertPoziciokbanImplantatum || false,
       validatedPatient.nemIsmertPoziciokbanImplantatumRészletek || null,
       validatedPatient.tnmStaging || null,
+      userEmail
     );
     
     // SQL query építése
@@ -270,7 +276,8 @@ export async function POST(request: NextRequest) {
         meglevo_fogak, felso_fogpotlas_tipus, also_fogpotlas_tipus,
         meglevo_implantatumok, nem_ismert_poziciokban_implantatum,
         nem_ismert_poziciokban_implantatum_reszletek,
-        tnm_staging
+        tnm_staging,
+        created_by
       ) VALUES (
         ${paramPlaceholders}
       )
@@ -312,7 +319,8 @@ export async function POST(request: NextRequest) {
         nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
         nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
         tnm_staging as "tnmStaging",
-        created_at as "createdAt", updated_at as "updatedAt"`,
+        created_at as "createdAt", updated_at as "updatedAt",
+        created_by as "createdBy", updated_by as "updatedBy"`,
       values
     );
 

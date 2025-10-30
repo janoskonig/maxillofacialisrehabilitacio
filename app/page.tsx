@@ -81,6 +81,12 @@ export default function Home() {
     setShowForm(true);
   };
 
+  const handleEditPatient = (patient: Patient) => {
+    setEditingPatient(patient);
+    setIsViewMode(false);
+    setShowForm(true);
+  };
+
   const handleCloseForm = () => {
     setShowForm(false);
     setEditingPatient(null);
@@ -195,6 +201,8 @@ export default function Home() {
       <PatientList
         patients={filteredPatients}
         onView={handleViewPatient}
+        onEdit={handleEditPatient}
+        canEdit={Boolean(userEmail)}
       />
 
       {/* Patient Form Modal */}

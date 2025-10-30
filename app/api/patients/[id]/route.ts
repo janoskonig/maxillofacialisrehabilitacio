@@ -67,7 +67,9 @@ export async function GET(
         nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
         tnm_staging as "tnmStaging",
         created_at as "createdAt",
-        updated_at as "updatedAt"
+        updated_at as "updatedAt",
+        created_by as "createdBy",
+        updated_by as "updatedBy"
       FROM patients
       WHERE id = $1`,
       [params.id]
@@ -96,10 +98,20 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
+    // Authorization: require authenticated user (any allowed login)
+    const requester = request.headers.get('x-user-email') || '';
+    if (!requester) {
+      return NextResponse.json(
+        { error: 'Bejelentkezés szükséges a módosításhoz' },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const validatedPatient = patientSchema.parse(body);
     
     const pool = getDbPool();
+    const userEmail = request.headers.get('x-user-email') || null;
     
     const result = await pool.query(
       `UPDATE patients SET
@@ -157,7 +169,8 @@ export async function PUT(
         nem_ismert_poziciokban_implantatum = $53,
         nem_ismert_poziciokban_implantatum_reszletek = $54,
         tnm_staging = $55,
-        updated_at = CURRENT_TIMESTAMP
+        updated_at = CURRENT_TIMESTAMP,
+        updated_by = $56
       WHERE id = $1
       RETURNING 
         id, nev, taj, telefonszam, szuletesi_datum as "szuletesiDatum", nem,
@@ -197,7 +210,8 @@ export async function PUT(
         nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
         nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
         tnm_staging as "tnmStaging",
-        created_at as "createdAt", updated_at as "updatedAt"`,
+        created_at as "createdAt", updated_at as "updatedAt",
+        created_by as "createdBy", updated_by as "updatedBy"`,
       [
         params.id,
         validatedPatient.nev,
@@ -258,6 +272,7 @@ export async function PUT(
         validatedPatient.nemIsmertPoziciokbanImplantatum || false,
         validatedPatient.nemIsmertPoziciokbanImplantatumRészletek || null,
         validatedPatient.tnmStaging || null,
+        userEmail
       ]
     );
 
@@ -292,6 +307,15 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    // Authorization: require authenticated user (any allowed login)
+    const requester = request.headers.get('x-user-email') || '';
+    if (!requester) {
+      return NextResponse.json(
+        { error: 'Bejelentkezés szükséges a törléshez' },
+        { status: 401 }
+      );
+    }
+
     const pool = getDbPool();
     const result = await pool.query(
       'DELETE FROM patients WHERE id = $1 RETURNING id',

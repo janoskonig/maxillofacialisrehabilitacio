@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS patients (
     id UUID PRIMARY KEY DEFAULT generate_uuid(),
     
     -- ALAPADATOK
-    nev VARCHAR(255) NOT NULL,  -- Név (kötelező)
+    nev VARCHAR(255),  -- Név (opcionális)
     taj VARCHAR(20),            -- TAJ szám
     telefonszam VARCHAR(50),    -- Telefonszám
     
@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS patients (
     nyelvmozgasok_akadalyozottak BOOLEAN DEFAULT false,        -- Nyelvmozgások akadályozottak
     gombocos_beszed BOOLEAN DEFAULT false,                     -- Gombócos beszéd
     nyalmirigy_allapot VARCHAR(20) CHECK (nyalmirigy_allapot IN ('hiposzaliváció', 'hiperszaliváció')),  -- Nyálmirigy állapot
-    fabian_fejerdy_protetikai_osztaly VARCHAR(10) CHECK (fabian_fejerdy_protetikai_osztaly IN ('0', '1A', '1B', '2A', '2A/1', '2B', '3')),  -- Fábián- és Fejérdy-féle protetikai osztály
+    fabian_fejerdy_protetikai_osztaly VARCHAR(10) CHECK (fabian_fejerdy_protetikai_osztaly IN ('0', '1A', '1B', '2A', '2A/1', '2B', '3', 'T')),  -- Fábián- és Fejérdy-féle protetikai osztály
     kezeleoorvos VARCHAR(100),                                  -- Kezelőorvos
     kezeleoorvos_intezete VARCHAR(255),                        -- Kezelőorvos intézete
     felvetel_datuma DATE,                                       -- Felvétel dátuma

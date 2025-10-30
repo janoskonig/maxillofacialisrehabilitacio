@@ -1,4 +1,5 @@
 import { Patient } from './types';
+import { getUserEmail } from './auth';
 
 // CSV fejléc mezők sorrendje (CSV export/import funkcióhoz)
 const CSV_HEADERS = [
@@ -70,6 +71,7 @@ export async function savePatient(patient: Patient): Promise<Patient> {
       method,
       headers: {
         'Content-Type': 'application/json',
+        'x-user-email': getUserEmail() || ''
       },
       body: JSON.stringify(patient),
     });
@@ -115,6 +117,9 @@ export async function deletePatient(id: string): Promise<void> {
   try {
     const response = await fetch(`${API_BASE_URL}/${id}`, {
       method: 'DELETE',
+      headers: {
+        'x-user-email': getUserEmail() || ''
+      }
     });
     await handleApiResponse(response);
   } catch (error) {
