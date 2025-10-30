@@ -205,7 +205,7 @@ const parseCSVToPatients = (csvContent: string): Patient[] => {
       const patient: any = {};
       
       headers.forEach((header, index) => {
-        let value = values[index] || '';
+        let value: any = values[index] || '';
         
         // Parse JSON strings back to objects
         if (header === 'meglevoImplantatumok' && value) {
