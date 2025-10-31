@@ -43,6 +43,9 @@ export function PatientList({ patients, onView, onEdit, canEdit = false }: Patie
                 Kapcsolat
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Kezelőorvos
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Létrehozva
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -91,6 +94,17 @@ export function PatientList({ patients, onView, onEdit, canEdit = false }: Patie
                       {patient.email}
                     </div>
                   )}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex items-center text-sm text-gray-900">
+                    <svg className="w-4 h-4 mr-1 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2C12 2 8 4 8 8C8 10 10 12 12 14C14 12 16 10 16 8C16 4 12 2 12 2Z" />
+                      <path d="M12 14V22" />
+                      <path d="M8 16C8 16 6 18 6 20" />
+                      <path d="M16 16C16 16 18 18 18 20" />
+                    </svg>
+                    {patient.kezeleoorvos || '-'}
+                  </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center text-sm text-gray-500">
