@@ -134,9 +134,13 @@ export function PatientList({ patients, onView, onEdit, canEdit = false }: Patie
                             )}
                             <div className="mt-1">
                               {terv.elkeszult ? (
-                                <CheckCircle2 className="w-3 h-3 text-green-600 inline" title="Elkészült" />
+                                <span className="inline" title="Elkészült">
+                                  <CheckCircle2 className="w-3 h-3 text-green-600" />
+                                </span>
                               ) : (
-                                <XCircle className="w-3 h-3 text-gray-400 inline" title="Nincs elkészítve" />
+                                <span className="inline" title="Nincs elkészítve">
+                                  <XCircle className="w-3 h-3 text-gray-400" />
+                                </span>
                               )}
                             </div>
                           </div>
@@ -160,9 +164,13 @@ export function PatientList({ patients, onView, onEdit, canEdit = false }: Patie
                             )}
                             <div className="mt-1">
                               {terv.elkeszult ? (
-                                <CheckCircle2 className="w-3 h-3 text-green-600 inline" title="Elkészült" />
+                                <span className="inline" title="Elkészült">
+                                  <CheckCircle2 className="w-3 h-3 text-green-600" />
+                                </span>
                               ) : (
-                                <XCircle className="w-3 h-3 text-gray-400 inline" title="Nincs elkészítve" />
+                                <span className="inline" title="Nincs elkészítve">
+                                  <XCircle className="w-3 h-3 text-gray-400" />
+                                </span>
                               )}
                             </div>
                           </div>
