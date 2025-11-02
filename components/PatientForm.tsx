@@ -3,9 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Patient, patientSchema, beutaloIntezmenyOptions, nyakiBlokkdisszekcioOptions, fabianFejerdyProtetikaiOsztalyOptions, kezeleoorvosOptions } from '@/lib/types';
+import { Patient, patientSchema, beutaloIntezmenyOptions, nyakiBlokkdisszekcioOptions, fabianFejerdyProtetikaiOsztalyOptions, kezeleoorvosOptions, kezelesiTervOptions } from '@/lib/types';
 import { formatDateForInput } from '@/lib/dateUtils';
-import { X, Calendar, User, Phone, Mail, MapPin, FileText, AlertTriangle } from 'lucide-react';
+import { X, Calendar, User, Phone, Mail, MapPin, FileText, AlertTriangle, Plus, Trash2 } from 'lucide-react';
 
 // ToothCheckbox komponens
 interface ToothCheckboxProps {
@@ -64,6 +64,14 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       szuletesiDatum: formatDateForInput(patient.szuletesiDatum),
       mutetIdeje: formatDateForInput(patient.mutetIdeje),
       felvetelDatuma: formatDateForInput(patient.felvetelDatuma),
+      kezelesiTervFelso: patient.kezelesiTervFelso?.map(item => ({
+        ...item,
+        tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+      })) || [],
+      kezelesiTervAlso: patient.kezelesiTervAlso?.map(item => ({
+        ...item,
+        tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+      })) || [],
     } : {
       radioterapia: false,
       chemoterapia: false,
@@ -72,6 +80,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       felsoFogpotlasElegedett: true,
       alsoFogpotlasVan: false,
       alsoFogpotlasElegedett: true,
+      kezelesiTervFelso: [],
+      kezelesiTervAlso: [],
     },
   });
 
@@ -85,6 +95,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
   const alsoFogpotlasElegedett = watch('alsoFogpotlasElegedett');
   const [implantatumok, setImplantatumok] = useState<Record<string, string>>(patient?.meglevoImplantatumok || {});
   const [fogak, setFogak] = useState<Record<string, string>>(patient?.meglevoFogak || {});
+  const kezelesiTervFelso = watch('kezelesiTervFelso') || [];
+  const kezelesiTervAlso = watch('kezelesiTervAlso') || [];
   // State for "vanBeutalo" toggle (default true if bármely beutaló-adat van)
   const initialVanBeutalo = !!(patient?.beutaloOrvos || patient?.beutaloIntezmeny || patient?.kezelesreErkezesIndoka);
   const [vanBeutalo, setVanBeutalo] = useState(initialVanBeutalo);
@@ -106,7 +118,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
   // Automatikus intézet beállítás a kezelőorvos alapján
   useEffect(() => {
     if (kezeleoorvos && !isViewOnly) {
-      const fogpotlastaniKlinikaOrvosok = ['Dr. Kádár', 'Dr. König', 'Dr. Takács', 'Dr. Körmendi', 'Dr. Tasi'];
+      const fogpotlastaniKlinikaOrvosok = ['Dr. Jász', 'Dr. Kádár', 'Dr. König', 'Dr. Takács', 'Dr. Körmendi', 'Dr. Tasi', 'Dr. Vánkos'];
       if (fogpotlastaniKlinikaOrvosok.includes(kezeleoorvos)) {
         setValue('kezeleoorvosIntezete', 'Fogpótlástani Klinika');
       } else {
@@ -124,6 +136,53 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
   useEffect(() => {
     setValue('meglevoFogak', fogak);
   }, [fogak, setValue]);
+
+  // KEZELÉSI TERV listák kezelése
+  const addKezelesiTervFelso = () => {
+    if (isViewOnly) return;
+    const current = kezelesiTervFelso || [];
+    setValue('kezelesiTervFelso', [
+      ...current,
+      { tipus: 'zárólemez', tervezettAtadasDatuma: null, elkeszult: false }
+    ]);
+  };
+
+  const removeKezelesiTervFelso = (index: number) => {
+    if (isViewOnly) return;
+    const current = kezelesiTervFelso || [];
+    setValue('kezelesiTervFelso', current.filter((_, i) => i !== index));
+  };
+
+  const updateKezelesiTervFelso = (index: number, field: 'tipus' | 'tervezettAtadasDatuma' | 'elkeszult', value: any) => {
+    if (isViewOnly) return;
+    const current = kezelesiTervFelso || [];
+    const updated = [...current];
+    updated[index] = { ...updated[index], [field]: value };
+    setValue('kezelesiTervFelso', updated);
+  };
+
+  const addKezelesiTervAlso = () => {
+    if (isViewOnly) return;
+    const current = kezelesiTervAlso || [];
+    setValue('kezelesiTervAlso', [
+      ...current,
+      { tipus: 'zárólemez', tervezettAtadasDatuma: null, elkeszult: false }
+    ]);
+  };
+
+  const removeKezelesiTervAlso = (index: number) => {
+    if (isViewOnly) return;
+    const current = kezelesiTervAlso || [];
+    setValue('kezelesiTervAlso', current.filter((_, i) => i !== index));
+  };
+
+  const updateKezelesiTervAlso = (index: number, field: 'tipus' | 'tervezettAtadasDatuma' | 'elkeszult', value: any) => {
+    if (isViewOnly) return;
+    const current = kezelesiTervAlso || [];
+    const updated = [...current];
+    updated[index] = { ...updated[index], [field]: value };
+    setValue('kezelesiTervAlso', updated);
+  };
 
   const handleToothToggle = (toothNumber: string) => {
     if (isViewOnly) return;
@@ -170,6 +229,79 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     onSave(data);
   };
 
+  // Format TAJ number as XXX-XXX-XXX
+  const formatTAJ = (value: string): string => {
+    // Remove all non-digits
+    const digits = value.replace(/\D/g, '');
+    // Limit to 9 digits
+    const limited = digits.slice(0, 9);
+    // Format as XXX-XXX-XXX
+    if (limited.length <= 3) {
+      return limited;
+    } else if (limited.length <= 6) {
+      return `${limited.slice(0, 3)}-${limited.slice(3)}`;
+    } else {
+      return `${limited.slice(0, 3)}-${limited.slice(3, 6)}-${limited.slice(6)}`;
+    }
+  };
+
+  // Format phone number: ensure it starts with +36 and limit to 11 digits after
+  const formatPhoneNumber = (value: string): string => {
+    // If empty, return empty
+    if (!value || value.trim() === '') return '';
+    
+    // Extract all digits from the input
+    const digits = value.replace(/\D/g, '');
+    
+    // If no digits, but user typed something (like +), show +36
+    if (digits.length === 0 && value.includes('+')) {
+      return '+36';
+    }
+    
+    // If we have digits but doesn't start with +36, add it
+    if (digits.length > 0 && !value.startsWith('+36')) {
+      // Limit to 11 digits after +36
+      const limited = digits.slice(0, 11);
+      return `+36${limited}`;
+    }
+    
+    // Already starts with +36
+    if (value.startsWith('+36')) {
+      // Extract digits after +36
+      const afterPrefix = value.substring(3);
+      const digitsAfter = afterPrefix.replace(/\D/g, '');
+      // Limit to 11 digits
+      const limited = digitsAfter.slice(0, 11);
+      // If user is deleting and we're left with just +36, allow it
+      if (limited.length === 0 && value === '+36') {
+        return '+36';
+      }
+      return limited.length > 0 ? `+36${limited}` : '';
+    }
+    
+    // Fallback: if we somehow have digits but no +36 prefix, add it
+    if (digits.length > 0) {
+      const limited = digits.slice(0, 11);
+      return `+36${limited}`;
+    }
+    
+    return '';
+  };
+
+  // Handle TAJ input change
+  const handleTAJChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isViewOnly) return;
+    const formatted = formatTAJ(e.target.value);
+    setValue('taj', formatted, { shouldValidate: true });
+  };
+
+  // Handle phone number input change
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isViewOnly) return;
+    const formatted = formatPhoneNumber(e.target.value);
+    setValue('telefonszam', formatted, { shouldValidate: true });
+  };
+
   // Watch kezelésre érkezés indoka for conditional logic
   const selectedIndok = watch('kezelesreErkezesIndoka');
 
@@ -211,18 +343,27 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
               <label className="form-label">TAJ</label>
               <input
                 {...register('taj')}
+                onChange={handleTAJChange}
                 className="form-input"
-                placeholder="TAJ szám"
+                placeholder="000-000-000"
+                readOnly={isViewOnly}
               />
+              {errors.taj && (
+                <p className="text-red-500 text-sm mt-1">{errors.taj.message}</p>
+              )}
             </div>
             <div>
               <label className="form-label">TELEFONSZÁM</label>
               <input
                 {...register('telefonszam')}
+                onChange={handlePhoneChange}
                 className="form-input"
-                placeholder="Telefonszám"
+                placeholder="+36..."
                 readOnly={isViewOnly}
               />
+              {errors.telefonszam && (
+                <p className="text-red-500 text-sm mt-1">{errors.telefonszam.message}</p>
+              )}
             </div>
           </div>
         </div>
@@ -248,7 +389,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                 <option value="">Válasszon...</option>
                 <option value="ferfi">Férfi</option>
                 <option value="no">Nő</option>
-                <option value="egyeb">Egyéb</option>
+                <option value="nem_ismert">Nem ismert</option>
               </select>
             </div>
             <div>
@@ -954,6 +1095,171 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
               </select>
             </div>
             {/* Felvétel dátuma már nem itt, hanem alapadatokban */}
+          </div>
+        </div>
+
+        {/* KEZELÉSI TERV */}
+        <div className="card">
+          <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+            <FileText className="w-5 h-5 mr-2 text-medical-primary" />
+            KEZELÉSI TERV
+          </h4>
+          <div className="space-y-6">
+            {/* Felső állcsont */}
+            <div className="border-t pt-4">
+              <div className="flex justify-between items-center mb-3">
+                <h5 className="text-md font-semibold text-gray-900">Felső állcsont</h5>
+                {!isViewOnly && (
+                  <button
+                    type="button"
+                    onClick={addKezelesiTervFelso}
+                    className="btn-secondary flex items-center gap-2 text-sm py-1 px-3"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Új tervezet hozzáadása
+                  </button>
+                )}
+              </div>
+              <div className="space-y-4">
+                {kezelesiTervFelso.length === 0 ? (
+                  <p className="text-sm text-gray-500 italic">Még nincs tervezet hozzáadva</p>
+                ) : (
+                  kezelesiTervFelso.map((terv, index) => (
+                    <div key={index} className="border border-gray-200 rounded-md p-4 bg-gray-50">
+                      <div className="flex justify-between items-start mb-3">
+                        <span className="text-sm font-medium text-gray-700">Tervezet #{index + 1}</span>
+                        {!isViewOnly && (
+                          <button
+                            type="button"
+                            onClick={() => removeKezelesiTervFelso(index)}
+                            className="text-red-600 hover:text-red-800"
+                            title="Törlés"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="form-label">Tervezett fogpótlás típusa</label>
+                          <select
+                            value={terv.tipus || ''}
+                            onChange={(e) => updateKezelesiTervFelso(index, 'tipus', e.target.value)}
+                            className="form-input"
+                            disabled={isViewOnly}
+                          >
+                            <option value="">Válasszon...</option>
+                            {kezelesiTervOptions.map((option) => (
+                              <option key={option} value={option}>{option}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="form-label">Tervezett átadás dátuma</label>
+                            <input
+                              type="date"
+                              value={terv.tervezettAtadasDatuma || ''}
+                              onChange={(e) => updateKezelesiTervFelso(index, 'tervezettAtadasDatuma', e.target.value)}
+                              className="form-input"
+                              readOnly={isViewOnly}
+                            />
+                          </div>
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={terv.elkeszult || false}
+                              onChange={(e) => updateKezelesiTervFelso(index, 'elkeszult', e.target.checked)}
+                              className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
+                              disabled={isViewOnly}
+                            />
+                            <label className="ml-2 text-sm text-gray-700">Elkészült a fogpótlás</label>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+            
+            {/* Alsó állcsont */}
+            <div className="border-t pt-4">
+              <div className="flex justify-between items-center mb-3">
+                <h5 className="text-md font-semibold text-gray-900">Alsó állcsont</h5>
+                {!isViewOnly && (
+                  <button
+                    type="button"
+                    onClick={addKezelesiTervAlso}
+                    className="btn-secondary flex items-center gap-2 text-sm py-1 px-3"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Új tervezet hozzáadása
+                  </button>
+                )}
+              </div>
+              <div className="space-y-4">
+                {kezelesiTervAlso.length === 0 ? (
+                  <p className="text-sm text-gray-500 italic">Még nincs tervezet hozzáadva</p>
+                ) : (
+                  kezelesiTervAlso.map((terv, index) => (
+                    <div key={index} className="border border-gray-200 rounded-md p-4 bg-gray-50">
+                      <div className="flex justify-between items-start mb-3">
+                        <span className="text-sm font-medium text-gray-700">Tervezet #{index + 1}</span>
+                        {!isViewOnly && (
+                          <button
+                            type="button"
+                            onClick={() => removeKezelesiTervAlso(index)}
+                            className="text-red-600 hover:text-red-800"
+                            title="Törlés"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="form-label">Tervezett fogpótlás típusa</label>
+                          <select
+                            value={terv.tipus || ''}
+                            onChange={(e) => updateKezelesiTervAlso(index, 'tipus', e.target.value)}
+                            className="form-input"
+                            disabled={isViewOnly}
+                          >
+                            <option value="">Válasszon...</option>
+                            {kezelesiTervOptions.map((option) => (
+                              <option key={option} value={option}>{option}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="form-label">Tervezett átadás dátuma</label>
+                            <input
+                              type="date"
+                              value={terv.tervezettAtadasDatuma || ''}
+                              onChange={(e) => updateKezelesiTervAlso(index, 'tervezettAtadasDatuma', e.target.value)}
+                              className="form-input"
+                              readOnly={isViewOnly}
+                            />
+                          </div>
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={terv.elkeszult || false}
+                              onChange={(e) => updateKezelesiTervAlso(index, 'elkeszult', e.target.checked)}
+                              className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
+                              disabled={isViewOnly}
+                            />
+                            <label className="ml-2 text-sm text-gray-700">Elkészült a fogpótlás</label>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
         </div>
 

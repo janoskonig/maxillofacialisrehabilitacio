@@ -87,7 +87,11 @@ export async function savePatient(patient: Patient): Promise<Patient> {
 // Összes beteg lekérdezése
 export async function getAllPatients(): Promise<Patient[]> {
   try {
-    const response = await fetch(API_BASE_URL);
+    const response = await fetch(API_BASE_URL, {
+      headers: {
+        'x-user-email': getUserEmail() || ''
+      }
+    });
     const data = await handleApiResponse<{ patients: Patient[] }>(response);
     return data.patients;
   } catch (error) {
@@ -103,7 +107,11 @@ export async function searchPatients(query: string): Promise<Patient[]> {
       return getAllPatients();
     }
     
-    const response = await fetch(`${API_BASE_URL}?q=${encodeURIComponent(query)}`);
+    const response = await fetch(`${API_BASE_URL}?q=${encodeURIComponent(query)}`, {
+      headers: {
+        'x-user-email': getUserEmail() || ''
+      }
+    });
     const data = await handleApiResponse<{ patients: Patient[] }>(response);
     return data.patients;
   } catch (error) {

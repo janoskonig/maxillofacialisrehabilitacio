@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS patients (
     
     -- SZEMÉLYES ADATOK
     szuletesi_datum DATE,       -- Születési dátum
-    nem VARCHAR(10) CHECK (nem IN ('ferfi', 'no', 'egyeb')),  -- Nem
+    nem VARCHAR(10) CHECK (nem IN ('ferfi', 'no', 'nem_ismert')),  -- Nem
     email VARCHAR(255),         -- Email cím
     cim TEXT,                   -- Cím
     varos VARCHAR(100),         -- Város

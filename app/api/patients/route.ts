@@ -70,6 +70,8 @@ export async function GET(request: NextRequest) {
           nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
           nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
           tnm_staging as "tnmStaging",
+          kezelesi_terv_felso as "kezelesiTervFelso",
+          kezelesi_terv_also as "kezelesiTervAlso",
           created_at as "createdAt",
           updated_at as "updatedAt",
           created_by as "createdBy",
@@ -145,6 +147,8 @@ export async function GET(request: NextRequest) {
           nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
           nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
           tnm_staging as "tnmStaging",
+          kezelesi_terv_felso as "kezelesiTervFelso",
+          kezelesi_terv_also as "kezelesiTervAlso",
           created_at as "createdAt",
           updated_at as "updatedAt",
           created_by as "createdBy",
@@ -152,6 +156,27 @@ export async function GET(request: NextRequest) {
         FROM patients
         ORDER BY created_at DESC`
       );
+    }
+
+    // Activity logging: patients list viewed or searched
+    try {
+      const userEmail = request.headers.get('x-user-email') || null;
+      const ipHeader = request.headers.get('x-forwarded-for') || '';
+      const ipAddress = ipHeader.split(',')[0]?.trim() || null;
+      const searchQuery = request.nextUrl.searchParams.get('q');
+      const action = searchQuery ? 'patient_search' : 'patients_list_viewed';
+      const detail = searchQuery 
+        ? `Search query: "${searchQuery}", Results: ${result.rows.length}`
+        : `Total patients: ${result.rows.length}`;
+      
+      await pool.query(
+        `INSERT INTO activity_logs (user_email, action, detail, ip_address)
+         VALUES ($1, $2, $3, $4)`,
+        [userEmail, action, detail, ipAddress]
+      );
+    } catch (logError) {
+      console.error('Failed to log activity:', logError);
+      // Don't fail the request if logging fails
     }
 
     return NextResponse.json({ patients: result.rows }, { status: 200 });
@@ -251,6 +276,12 @@ export async function POST(request: NextRequest) {
       validatedPatient.nemIsmertPoziciokbanImplantatum || false,
       validatedPatient.nemIsmertPoziciokbanImplantatumRészletek || null,
       validatedPatient.tnmStaging || null,
+      validatedPatient.kezelesiTervFelso && Array.isArray(validatedPatient.kezelesiTervFelso)
+        ? JSON.stringify(validatedPatient.kezelesiTervFelso)
+        : '[]',
+      validatedPatient.kezelesiTervAlso && Array.isArray(validatedPatient.kezelesiTervAlso)
+        ? JSON.stringify(validatedPatient.kezelesiTervAlso)
+        : '[]',
       userEmail
     );
     
@@ -277,6 +308,7 @@ export async function POST(request: NextRequest) {
         meglevo_implantatumok, nem_ismert_poziciokban_implantatum,
         nem_ismert_poziciokban_implantatum_reszletek,
         tnm_staging,
+        kezelesi_terv_felso, kezelesi_terv_also,
         created_by
       ) VALUES (
         ${paramPlaceholders}
@@ -319,12 +351,29 @@ export async function POST(request: NextRequest) {
         nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
         nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
         tnm_staging as "tnmStaging",
+        kezelesi_terv_felso as "kezelesiTervFelso",
+        kezelesi_terv_also as "kezelesiTervAlso",
         created_at as "createdAt", updated_at as "updatedAt",
         created_by as "createdBy", updated_by as "updatedBy"`,
       values
     );
 
     console.log('Beteg sikeresen mentve, ID:', result.rows[0].id);
+    
+    // Activity logging: patient created
+    try {
+      const ipHeader = request.headers.get('x-forwarded-for') || '';
+      const ipAddress = ipHeader.split(',')[0]?.trim() || null;
+      await pool.query(
+        `INSERT INTO activity_logs (user_email, action, detail, ip_address)
+         VALUES ($1, $2, $3, $4)`,
+        [userEmail, 'patient_created', `Patient ID: ${result.rows[0].id}, Name: ${result.rows[0].nev || 'N/A'}`, ipAddress]
+      );
+    } catch (logError) {
+      console.error('Failed to log activity:', logError);
+      // Don't fail the request if logging fails
+    }
+    
     return NextResponse.json({ patient: result.rows[0] }, { status: 201 });
   } catch (error: any) {
     console.error('Hiba a beteg mentésekor:', error);

@@ -90,7 +90,7 @@ INSERT INTO patients (
     
     -- nem: Enum ellenőrzéssel
     CASE 
-        WHEN 'CSV_NEM' IN ('ferfi', 'no', 'egyeb') THEN 'CSV_NEM'
+        WHEN 'CSV_NEM' IN ('ferfi', 'no', 'nem_ismert') THEN 'CSV_NEM'
         ELSE NULL
     END,
     

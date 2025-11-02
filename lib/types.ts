@@ -4,12 +4,39 @@ export const patientSchema = z.object({
   // ALAPADATOK
   id: z.string().optional(),
   nev: z.string().optional().nullable().or(z.literal('')),
-  taj: z.string().optional().nullable(),
-  telefonszam: z.string().optional().nullable(),
+  taj: z.string()
+    .optional()
+    .nullable()
+    .refine((val) => {
+      if (!val || val === '') return true; // Optional field
+      // Remove dashes for validation
+      const cleaned = val.replace(/-/g, '');
+      // Should be exactly 9 digits
+      return /^\d{9}$/.test(cleaned);
+    }, {
+      message: 'A TAJ szám formátuma: XXX-XXX-XXX (9 számjegy)'
+    })
+    .or(z.literal('')),
+  telefonszam: z.string()
+    .optional()
+    .nullable()
+    .refine((val) => {
+      if (!val || val === '') return true; // Optional field
+      // Should start with +36
+      if (!val.startsWith('+36')) return false;
+      // After +36, should have maximum 11 digits
+      const afterPrefix = val.substring(3);
+      // Remove spaces, dashes, and other formatting characters
+      const digitsOnly = afterPrefix.replace(/\D/g, '');
+      return digitsOnly.length <= 11 && digitsOnly.length > 0;
+    }, {
+      message: 'A telefonszám +36-tal kezdődik és maximum 11 számjegyet tartalmaz'
+    })
+    .or(z.literal('')),
   
   // SZEMÉLYES ADATOK
   szuletesiDatum: z.string().optional().nullable(),
-  nem: z.enum(['ferfi', 'no', 'egyeb']).optional().nullable().or(z.literal('')),
+  nem: z.enum(['ferfi', 'no', 'nem_ismert']).optional().nullable().or(z.literal('')),
   email: z.string().email('Érvénytelen email cím').optional().nullable().or(z.literal('')),
   cim: z.string().optional().nullable(),
   varos: z.string().optional().nullable(),
@@ -90,6 +117,42 @@ export const patientSchema = z.object({
   nemIsmertPoziciokbanImplantatum: z.boolean().default(false),
   nemIsmertPoziciokbanImplantatumRészletek: z.string().optional().nullable(),
   
+  // KEZELÉSI TERV - FELSŐ ÁLLCSONT (tömb, mert több tervezet lehet)
+  kezelesiTervFelso: z.array(z.object({
+    tipus: z.enum([
+      'zárólemez',
+      'részleges akrilátlemezes fogpótlás',
+      'teljes lemezes fogpótlás',
+      'fedőlemezes fogpótlás',
+      'kapocselhorgonyzású részleges fémlemezes fogpótlás',
+      'kombinált fogpótlás kapocselhorgonyzással',
+      'kombinált fogpótlás rejtett elhorgonyzási eszközzel',
+      'rögzített fogpótlás fogakon elhorgonyozva',
+      'cementezett rögzítésű implantációs korona/híd',
+      'csavarozott rögzítésű implantációs korona/híd'
+    ]),
+    tervezettAtadasDatuma: z.string().optional().nullable(),
+    elkeszult: z.boolean().default(false)
+  })).optional().nullable().default([]),
+  
+  // KEZELÉSI TERV - ALSÓ ÁLLCSONT (tömb, mert több tervezet lehet)
+  kezelesiTervAlso: z.array(z.object({
+    tipus: z.enum([
+      'zárólemez',
+      'részleges akrilátlemezes fogpótlás',
+      'teljes lemezes fogpótlás',
+      'fedőlemezes fogpótlás',
+      'kapocselhorgonyzású részleges fémlemezes fogpótlás',
+      'kombinált fogpótlás kapocselhorgonyzással',
+      'kombinált fogpótlás rejtett elhorgonyzási eszközzel',
+      'rögzített fogpótlás fogakon elhorgonyozva',
+      'cementezett rögzítésű implantációs korona/híd',
+      'csavarozott rögzítésű implantációs korona/híd'
+    ]),
+    tervezettAtadasDatuma: z.string().optional().nullable(),
+    elkeszult: z.boolean().default(false)
+  })).optional().nullable().default([]),
+
   // TIMESTAMPS
   createdAt: z.string().optional().nullable(),
   updatedAt: z.string().optional().nullable(),
@@ -144,6 +207,7 @@ export const fabianFejerdyProtetikaiOsztalyOptions = [
 
 export const kezeleoorvosOptions = [
   'Dr. Herczeg',
+  'Dr. Jász',
   'Dr. Kádár',
   'Dr. Kaposi',
   'Dr. Karsai',
@@ -152,5 +216,19 @@ export const kezeleoorvosOptions = [
   'Dr. Kivovics',
   'Dr. Orsós',
   'Dr. Takács',
-  'Dr. Tasi'
+  'Dr. Tasi',
+  'Dr. Vánkos'
+];
+
+export const kezelesiTervOptions = [
+  'zárólemez',
+  'részleges akrilátlemezes fogpótlás',
+  'teljes lemezes fogpótlás',
+  'fedőlemezes fogpótlás',
+  'kapocselhorgonyzású részleges fémlemezes fogpótlás',
+  'kombinált fogpótlás kapocselhorgonyzással',
+  'kombinált fogpótlás rejtett elhorgonyzási eszközzel',
+  'rögzített fogpótlás fogakon elhorgonyozva',
+  'cementezett rögzítésű implantációs korona/híd',
+  'csavarozott rögzítésű implantációs korona/híd'
 ];

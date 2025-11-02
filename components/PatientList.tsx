@@ -1,7 +1,7 @@
 'use client';
 
 import { Patient } from '@/lib/types';
-import { Phone, Mail, Calendar, FileText, Eye, Pencil } from 'lucide-react';
+import { Phone, Mail, Calendar, FileText, Eye, Pencil, CheckCircle2, XCircle } from 'lucide-react';
 import { formatDateForDisplay } from '@/lib/dateUtils';
 
 interface PatientListProps {
@@ -46,6 +46,12 @@ export function PatientList({ patients, onView, onEdit, canEdit = false }: Patie
                 Kezelőorvos
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Tervezett fogpótlás (felső)
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Tervezett fogpótlás (alsó)
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Létrehozva
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -68,13 +74,20 @@ export function PatientList({ patients, onView, onEdit, canEdit = false }: Patie
                     <div className="ml-4">
                       <div
                         className="text-sm font-medium text-gray-900 cursor-pointer text-medical-primary hover:underline"
-                        onClick={() => onView(patient)}
-                        title="Beteg megtekintése"
+                        onClick={() => {
+                          // Ha van szerkesztési jogosultság, akkor szerkesztés, különben csak megtekintés
+                          if (canEdit && onEdit) {
+                            onEdit(patient);
+                          } else {
+                            onView(patient);
+                          }
+                        }}
+                        title={canEdit && onEdit ? "Beteg szerkesztése" : "Beteg megtekintése"}
                       >
                         {patient.nev}
                       </div>
                       <div className="text-sm text-gray-500">
-                        {patient.nem === 'ferfi' ? 'Férfi' : patient.nem === 'no' ? 'Nő' : 'Egyéb'} • 
+                        {patient.nem === 'ferfi' ? 'Férfi' : patient.nem === 'no' ? 'Nő' : patient.nem === 'nem_ismert' ? 'Nem ismert' : ''} • 
                         {patient.szuletesiDatum && ` Született: ${formatDateForDisplay(patient.szuletesiDatum)}`}
                       </div>
                     </div>
@@ -104,6 +117,58 @@ export function PatientList({ patients, onView, onEdit, canEdit = false }: Patie
                       <path d="M16 16C16 16 18 18 18 20" />
                     </svg>
                     {patient.kezeleoorvos || '-'}
+                  </div>
+                </td>
+                <td className="px-6 py-4">
+                  <div className="text-sm text-gray-900">
+                    {patient.kezelesiTervFelso && Array.isArray(patient.kezelesiTervFelso) && patient.kezelesiTervFelso.length > 0 ? (
+                      <div className="space-y-2">
+                        {patient.kezelesiTervFelso.map((terv: any, idx: number) => (
+                          <div key={idx} className="border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                            <div className="font-medium text-xs">{terv.tipus || '-'}</div>
+                            {terv.tervezettAtadasDatuma && (
+                              <div className="text-xs text-gray-500 flex items-center mt-1">
+                                <Calendar className="w-3 h-3 mr-1" />
+                                {formatDateForDisplay(terv.tervezettAtadasDatuma)}
+                              </div>
+                            )}
+                            <div className="mt-1">
+                              {terv.elkeszult ? (
+                                <CheckCircle2 className="w-3 h-3 text-green-600 inline" title="Elkészült" />
+                              ) : (
+                                <XCircle className="w-3 h-3 text-gray-400 inline" title="Nincs elkészítve" />
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : '-'}
+                  </div>
+                </td>
+                <td className="px-6 py-4">
+                  <div className="text-sm text-gray-900">
+                    {patient.kezelesiTervAlso && Array.isArray(patient.kezelesiTervAlso) && patient.kezelesiTervAlso.length > 0 ? (
+                      <div className="space-y-2">
+                        {patient.kezelesiTervAlso.map((terv: any, idx: number) => (
+                          <div key={idx} className="border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                            <div className="font-medium text-xs">{terv.tipus || '-'}</div>
+                            {terv.tervezettAtadasDatuma && (
+                              <div className="text-xs text-gray-500 flex items-center mt-1">
+                                <Calendar className="w-3 h-3 mr-1" />
+                                {formatDateForDisplay(terv.tervezettAtadasDatuma)}
+                              </div>
+                            )}
+                            <div className="mt-1">
+                              {terv.elkeszult ? (
+                                <CheckCircle2 className="w-3 h-3 text-green-600 inline" title="Elkészült" />
+                              ) : (
+                                <XCircle className="w-3 h-3 text-gray-400 inline" title="Nincs elkészítve" />
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : '-'}
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">

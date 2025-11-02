@@ -66,6 +66,8 @@ export async function GET(
         nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
         nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
         tnm_staging as "tnmStaging",
+        kezelesi_terv_felso as "kezelesiTervFelso",
+        kezelesi_terv_also as "kezelesiTervAlso",
         created_at as "createdAt",
         updated_at as "updatedAt",
         created_by as "createdBy",
@@ -80,6 +82,21 @@ export async function GET(
         { error: 'Beteg nem található' },
         { status: 404 }
       );
+    }
+
+    // Activity logging: patient viewed
+    try {
+      const userEmail = request.headers.get('x-user-email') || null;
+      const ipHeader = request.headers.get('x-forwarded-for') || '';
+      const ipAddress = ipHeader.split(',')[0]?.trim() || null;
+      await pool.query(
+        `INSERT INTO activity_logs (user_email, action, detail, ip_address)
+         VALUES ($1, $2, $3, $4)`,
+        [userEmail, 'patient_viewed', `Patient ID: ${params.id}, Name: ${result.rows[0].nev || 'N/A'}`, ipAddress]
+      );
+    } catch (logError) {
+      console.error('Failed to log activity:', logError);
+      // Don't fail the request if logging fails
     }
 
     return NextResponse.json({ patient: result.rows[0] }, { status: 200 });
@@ -112,6 +129,21 @@ export async function PUT(
     
     const pool = getDbPool();
     const userEmail = request.headers.get('x-user-email') || null;
+    
+    // Get old patient data for comparison
+    const oldPatientResult = await pool.query(
+      `SELECT * FROM patients WHERE id = $1`,
+      [params.id]
+    );
+    
+    if (oldPatientResult.rows.length === 0) {
+      return NextResponse.json(
+        { error: 'Beteg nem található' },
+        { status: 404 }
+      );
+    }
+    
+    const oldPatient = oldPatientResult.rows[0];
     
     const result = await pool.query(
       `UPDATE patients SET
@@ -169,8 +201,10 @@ export async function PUT(
         nem_ismert_poziciokban_implantatum = $53,
         nem_ismert_poziciokban_implantatum_reszletek = $54,
         tnm_staging = $55,
+        kezelesi_terv_felso = $56::jsonb,
+        kezelesi_terv_also = $57::jsonb,
         updated_at = CURRENT_TIMESTAMP,
-        updated_by = $56
+        updated_by = $58
       WHERE id = $1
       RETURNING 
         id, nev, taj, telefonszam, szuletesi_datum as "szuletesiDatum", nem,
@@ -210,6 +244,8 @@ export async function PUT(
         nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
         nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
         tnm_staging as "tnmStaging",
+        kezelesi_terv_felso as "kezelesiTervFelso",
+        kezelesi_terv_also as "kezelesiTervAlso",
         created_at as "createdAt", updated_at as "updatedAt",
         created_by as "createdBy", updated_by as "updatedBy"`,
       [
@@ -272,6 +308,12 @@ export async function PUT(
         validatedPatient.nemIsmertPoziciokbanImplantatum || false,
         validatedPatient.nemIsmertPoziciokbanImplantatumRészletek || null,
         validatedPatient.tnmStaging || null,
+        validatedPatient.kezelesiTervFelso && Array.isArray(validatedPatient.kezelesiTervFelso)
+          ? JSON.stringify(validatedPatient.kezelesiTervFelso)
+          : '[]',
+        validatedPatient.kezelesiTervAlso && Array.isArray(validatedPatient.kezelesiTervAlso)
+          ? JSON.stringify(validatedPatient.kezelesiTervAlso)
+          : '[]',
         userEmail
       ]
     );
@@ -281,6 +323,168 @@ export async function PUT(
         { error: 'Beteg nem található' },
         { status: 404 }
       );
+    }
+
+    // Activity logging: patient updated with detailed changes
+    try {
+      const ipHeader = request.headers.get('x-forwarded-for') || '';
+      const ipAddress = ipHeader.split(',')[0]?.trim() || null;
+      
+      // Compare old and new values to detect changes
+      const changes: string[] = [];
+      const newPatient = result.rows[0];
+      
+      // Helper function to normalize values for comparison
+      const normalize = (val: any): string => {
+        if (val === null || val === undefined) return '';
+        if (typeof val === 'boolean') return val ? 'true' : 'false';
+        if (typeof val === 'object') return JSON.stringify(val);
+        return String(val).trim();
+      };
+      
+      // Field mapping: database field -> display name
+      const fieldNames: Record<string, string> = {
+        nev: 'Név',
+        taj: 'TAJ szám',
+        telefonszam: 'Telefonszám',
+        szuletesi_datum: 'Születési dátum',
+        nem: 'Nem',
+        email: 'Email',
+        cim: 'Cím',
+        varos: 'Város',
+        iranyitoszam: 'Irányítószám',
+        beutalo_orvos: 'Beutaló orvos',
+        beutalo_intezmeny: 'Beutaló intézmény',
+        mutet_rovid_leirasa: 'Műtét rövid leírása',
+        mutet_ideje: 'Műtét ideje',
+        szovettani_diagnozis: 'Szövettani diagnózis',
+        nyaki_blokkdisszekcio: 'Nyaki blokkdisszekció',
+        alkoholfogyasztas: 'Alkoholfogyasztás',
+        dohanyzas_szam: 'Dohányzás',
+        kezelesre_erkezes_indoka: 'Kezelésre érkezés indoka',
+        maxilladefektus_van: 'Maxilladefektus',
+        brown_fuggoleges_osztaly: 'Brown függőleges osztály',
+        brown_vizszintes_komponens: 'Brown vízszintes komponens',
+        mandibuladefektus_van: 'Mandibuladefektus',
+        kovacs_dobak_osztaly: 'Kovács-Dobák osztály',
+        nyelvmozgasok_akadalyozottak: 'Nyelvmozgások akadályozottak',
+        gombocos_beszed: 'Gombócos beszéd',
+        nyalmirigy_allapot: 'Nyálmirigy állapot',
+        fabian_fejerdy_protetikai_osztaly_felso: 'Fábián-Fejérdy osztály (felső)',
+        fabian_fejerdy_protetikai_osztaly_also: 'Fábián-Fejérdy osztály (alsó)',
+        radioterapia: 'Radioterápia',
+        radioterapia_dozis: 'Radioterápia dózis',
+        radioterapia_datum_intervallum: 'Radioterápia dátumintervallum',
+        chemoterapia: 'Kemoterápia',
+        chemoterapia_leiras: 'Kemoterápia leírás',
+        fabian_fejerdy_protetikai_osztaly: 'Fábián-Fejérdy protetikai osztály',
+        kezeleoorvos: 'Kezelőorvos',
+        kezeleoorvos_intezete: 'Kezelőorvos intézete',
+        felvetel_datuma: 'Felvétel dátuma',
+        felso_fogpotlas_van: 'Felső fogpótlás van',
+        felso_fogpotlas_mikor: 'Felső fogpótlás mikor',
+        felso_fogpotlas_keszito: 'Felső fogpótlás készítő',
+        felso_fogpotlas_elegedett: 'Felső fogpótlás elégedett',
+        felso_fogpotlas_problema: 'Felső fogpótlás probléma',
+        also_fogpotlas_van: 'Alsó fogpótlás van',
+        also_fogpotlas_mikor: 'Alsó fogpótlás mikor',
+        also_fogpotlas_keszito: 'Alsó fogpótlás készítő',
+        also_fogpotlas_elegedett: 'Alsó fogpótlás elégedett',
+        also_fogpotlas_problema: 'Alsó fogpótlás probléma',
+        felso_fogpotlas_tipus: 'Felső fogpótlás típus',
+        also_fogpotlas_tipus: 'Alsó fogpótlás típus',
+        tnm_staging: 'TNM staging',
+        kezelesi_terv_felso: 'Kezelési terv (felső)',
+        kezelesi_terv_also: 'Kezelési terv (alsó)',
+      };
+      
+      // Check all fields for changes
+      for (const [dbField, displayName] of Object.entries(fieldNames)) {
+        const oldVal = normalize(oldPatient[dbField]);
+        let newVal: string;
+        
+        // Map validated patient fields back to database field names
+        if (dbField === 'szuletesi_datum') newVal = normalize(validatedPatient.szuletesiDatum);
+        else if (dbField === 'beutalo_orvos') newVal = normalize(validatedPatient.beutaloOrvos);
+        else if (dbField === 'beutalo_intezmeny') newVal = normalize(validatedPatient.beutaloIntezmeny);
+        else if (dbField === 'mutet_rovid_leirasa') newVal = normalize(validatedPatient.mutetRovidLeirasa);
+        else if (dbField === 'mutet_ideje') newVal = normalize(validatedPatient.mutetIdeje);
+        else if (dbField === 'szovettani_diagnozis') newVal = normalize(validatedPatient.szovettaniDiagnozis);
+        else if (dbField === 'nyaki_blokkdisszekcio') newVal = normalize(validatedPatient.nyakiBlokkdisszekcio);
+        else if (dbField === 'dohanyzas_szam') newVal = normalize(validatedPatient.dohanyzasSzam);
+        else if (dbField === 'kezelesre_erkezes_indoka') newVal = normalize(validatedPatient.kezelesreErkezesIndoka);
+        else if (dbField === 'maxilladefektus_van') newVal = normalize(validatedPatient.maxilladefektusVan);
+        else if (dbField === 'brown_fuggoleges_osztaly') newVal = normalize(validatedPatient.brownFuggolegesOsztaly);
+        else if (dbField === 'brown_vizszintes_komponens') newVal = normalize(validatedPatient.brownVizszintesKomponens);
+        else if (dbField === 'mandibuladefektus_van') newVal = normalize(validatedPatient.mandibuladefektusVan);
+        else if (dbField === 'kovacs_dobak_osztaly') newVal = normalize(validatedPatient.kovacsDobakOsztaly);
+        else if (dbField === 'nyelvmozgasok_akadalyozottak') newVal = normalize(validatedPatient.nyelvmozgásokAkadályozottak);
+        else if (dbField === 'gombocos_beszed') newVal = normalize(validatedPatient.gombocosBeszed);
+        else if (dbField === 'nyalmirigy_allapot') newVal = normalize(validatedPatient.nyalmirigyAllapot);
+        else if (dbField === 'fabian_fejerdy_protetikai_osztaly_felso') newVal = normalize(validatedPatient.fabianFejerdyProtetikaiOsztalyFelso);
+        else if (dbField === 'fabian_fejerdy_protetikai_osztaly_also') newVal = normalize(validatedPatient.fabianFejerdyProtetikaiOsztalyAlso);
+        else if (dbField === 'radioterapia_dozis') newVal = normalize(validatedPatient.radioterapiaDozis);
+        else if (dbField === 'radioterapia_datum_intervallum') newVal = normalize(validatedPatient.radioterapiaDatumIntervallum);
+        else if (dbField === 'chemoterapia_leiras') newVal = normalize(validatedPatient.chemoterapiaLeiras);
+        else if (dbField === 'fabian_fejerdy_protetikai_osztaly') newVal = normalize(validatedPatient.fabianFejerdyProtetikaiOsztaly);
+        else if (dbField === 'kezeleoorvos_intezete') newVal = normalize(validatedPatient.kezeleoorvosIntezete);
+        else if (dbField === 'felvetel_datuma') newVal = normalize(validatedPatient.felvetelDatuma);
+        else if (dbField === 'felso_fogpotlas_van') newVal = normalize(validatedPatient.felsoFogpotlasVan);
+        else if (dbField === 'felso_fogpotlas_mikor') newVal = normalize(validatedPatient.felsoFogpotlasMikor);
+        else if (dbField === 'felso_fogpotlas_keszito') newVal = normalize(validatedPatient.felsoFogpotlasKeszito);
+        else if (dbField === 'felso_fogpotlas_elegedett') newVal = normalize(validatedPatient.felsoFogpotlasElegedett);
+        else if (dbField === 'felso_fogpotlas_problema') newVal = normalize(validatedPatient.felsoFogpotlasProblema);
+        else if (dbField === 'also_fogpotlas_van') newVal = normalize(validatedPatient.alsoFogpotlasVan);
+        else if (dbField === 'also_fogpotlas_mikor') newVal = normalize(validatedPatient.alsoFogpotlasMikor);
+        else if (dbField === 'also_fogpotlas_keszito') newVal = normalize(validatedPatient.alsoFogpotlasKeszito);
+        else if (dbField === 'also_fogpotlas_elegedett') newVal = normalize(validatedPatient.alsoFogpotlasElegedett);
+        else if (dbField === 'also_fogpotlas_problema') newVal = normalize(validatedPatient.alsoFogpotlasProblema);
+        else if (dbField === 'felso_fogpotlas_tipus') newVal = normalize(validatedPatient.felsoFogpotlasTipus);
+        else if (dbField === 'also_fogpotlas_tipus') newVal = normalize(validatedPatient.alsoFogpotlasTipus);
+        else if (dbField === 'tnm_staging') newVal = normalize(validatedPatient.tnmStaging);
+        else if (dbField === 'kezelesi_terv_felso') newVal = normalize(validatedPatient.kezelesiTervFelso);
+        else if (dbField === 'kezelesi_terv_also') newVal = normalize(validatedPatient.kezelesiTervAlso);
+        else {
+          // Direct field name mapping (camelCase to snake_case handled above)
+          const camelField = dbField.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+          newVal = normalize((validatedPatient as any)[camelField] ?? (validatedPatient as any)[dbField]);
+        }
+        
+        if (oldVal !== newVal) {
+          const oldDisplay = oldVal || '(üres)';
+          const newDisplay = newVal || '(üres)';
+          changes.push(`${displayName}: "${oldDisplay}" → "${newDisplay}"`);
+        }
+      }
+      
+      // Special handling for JSONB fields
+      const jsonbFields = [
+        { db: 'meglevo_fogak', patient: 'meglevoFogak', name: 'Meglévő fogak' },
+        { db: 'meglevo_implantatumok', patient: 'meglevoImplantatumok', name: 'Meglévő implantátumok' },
+      ];
+      
+      for (const { db, patient, name } of jsonbFields) {
+        const oldJson = oldPatient[db] ? JSON.stringify(oldPatient[db]) : '{}';
+        const newJson = (validatedPatient as any)[patient] 
+          ? JSON.stringify((validatedPatient as any)[patient]) 
+          : '{}';
+        if (oldJson !== newJson) {
+          changes.push(`${name}: módosítva`);
+        }
+      }
+      
+      const detailText = changes.length > 0 
+        ? `Patient ID: ${params.id}, Name: ${newPatient.nev || 'N/A'}; Módosítások: ${changes.join('; ')}`
+        : `Patient ID: ${params.id}, Name: ${newPatient.nev || 'N/A'}; Nincs változás`;
+      
+      await pool.query(
+        `INSERT INTO activity_logs (user_email, action, detail, ip_address)
+         VALUES ($1, $2, $3, $4)`,
+        [userEmail, 'patient_updated', detailText, ipAddress]
+      );
+    } catch (logError) {
+      console.error('Failed to log activity:', logError);
+      // Don't fail the request if logging fails
     }
 
     return NextResponse.json({ patient: result.rows[0] }, { status: 200 });
@@ -327,6 +531,21 @@ export async function DELETE(
         { error: 'Beteg nem található' },
         { status: 404 }
       );
+    }
+
+    // Activity logging: patient deleted
+    try {
+      const userEmail = request.headers.get('x-user-email') || null;
+      const ipHeader = request.headers.get('x-forwarded-for') || '';
+      const ipAddress = ipHeader.split(',')[0]?.trim() || null;
+      await pool.query(
+        `INSERT INTO activity_logs (user_email, action, detail, ip_address)
+         VALUES ($1, $2, $3, $4)`,
+        [userEmail, 'patient_deleted', `Patient ID: ${params.id}`, ipAddress]
+      );
+    } catch (logError) {
+      console.error('Failed to log activity:', logError);
+      // Don't fail the request if logging fails
     }
 
     return NextResponse.json(
