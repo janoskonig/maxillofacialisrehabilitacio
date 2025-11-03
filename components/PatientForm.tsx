@@ -302,6 +302,13 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     setValue('telefonszam', formatted, { shouldValidate: true });
   };
 
+  // Handle date input change - format to YYYY-MM-DD
+  const handleDateChange = (fieldName: 'szuletesiDatum' | 'mutetIdeje' | 'balesetIdopont', e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isViewOnly) return;
+    const formatted = formatDateForInput(e.target.value);
+    setValue(fieldName, formatted, { shouldValidate: true });
+  };
+
   // Watch kezelésre érkezés indoka for conditional logic
   const selectedIndok = watch('kezelesreErkezesIndoka');
 
@@ -379,8 +386,11 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
               <label className="form-label">Születési dátum</label>
               <input
                 {...register('szuletesiDatum')}
-                type="date"
+                type="text"
+                pattern="\d{4}-\d{2}-\d{2}"
+                placeholder="YYYY-MM-DD"
                 className="form-input"
+                onChange={(e) => handleDateChange('szuletesiDatum', e)}
               />
             </div>
             <div>
@@ -558,9 +568,12 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                   <label className="form-label">Baleset időpontja</label>
                   <input
                     {...register('balesetIdopont')}
-                    type="date"
+                    type="text"
+                    pattern="\d{4}-\d{2}-\d{2}"
+                    placeholder="YYYY-MM-DD"
                     className="form-input"
                     readOnly={isViewOnly}
+                    onChange={(e) => handleDateChange('balesetIdopont', e)}
                   />
                 </div>
                 <div>
@@ -613,9 +626,12 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                   <label className="form-label">Műtét ideje</label>
                   <input
                     {...register('mutetIdeje')}
-                    type="date"
+                    type="text"
+                    pattern="\d{4}-\d{2}-\d{2}"
+                    placeholder="YYYY-MM-DD"
                     className="form-input"
                     readOnly={isViewOnly}
+                    onChange={(e) => handleDateChange('mutetIdeje', e)}
                   />
                 </div>
                 {/* Primer műtét leírása */}
@@ -1285,9 +1301,11 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                           <div>
                             <label className="form-label">Tervezett átadás dátuma</label>
                             <input
-                              type="date"
+                              type="text"
+                              pattern="\d{4}-\d{2}-\d{2}"
+                              placeholder="YYYY-MM-DD"
                               value={terv.tervezettAtadasDatuma || ''}
-                              onChange={(e) => updateKezelesiTervFelso(index, 'tervezettAtadasDatuma', e.target.value)}
+                              onChange={(e) => updateKezelesiTervFelso(index, 'tervezettAtadasDatuma', formatDateForInput(e.target.value))}
                               className="form-input"
                               readOnly={isViewOnly}
                             />
@@ -1363,9 +1381,11 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                           <div>
                             <label className="form-label">Tervezett átadás dátuma</label>
                             <input
-                              type="date"
+                              type="text"
+                              pattern="\d{4}-\d{2}-\d{2}"
+                              placeholder="YYYY-MM-DD"
                               value={terv.tervezettAtadasDatuma || ''}
-                              onChange={(e) => updateKezelesiTervAlso(index, 'tervezettAtadasDatuma', e.target.value)}
+                              onChange={(e) => updateKezelesiTervAlso(index, 'tervezettAtadasDatuma', formatDateForInput(e.target.value))}
                               className="form-input"
                               readOnly={isViewOnly}
                             />
