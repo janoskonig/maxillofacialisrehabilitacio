@@ -1098,6 +1098,133 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           </div>
         </div>
 
+        {/* MEGLÉVŐ IMPLANTÁTUMOK */}
+        <div className="card">
+          <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+            <AlertTriangle className="w-5 h-5 mr-2 text-medical-primary" />
+            Meglévő implantátumok, ha vannak
+          </h4>
+          
+          {/* Zsigmondy-kereszt */}
+          <div className="mb-6">
+            <div className="bg-gray-50 p-4 rounded-lg">
+              {/* Felső sor - 1. kvadráns (bal felső) és 2. kvadráns (jobb felső) */}
+              <div className="flex justify-between mb-2">
+                <div className="flex gap-1">
+                  {[18, 17, 16, 15, 14, 13, 12, 11].map(tooth => {
+                    const toothStr = tooth.toString();
+                    return (
+                      <ToothCheckbox
+                        key={tooth}
+                        toothNumber={toothStr}
+                        checked={toothStr in implantatumok}
+                        onChange={() => handleToothToggle(toothStr)}
+                        disabled={isViewOnly}
+                      />
+                    );
+                  })}
+                </div>
+                <div className="flex gap-1">
+                  {[21, 22, 23, 24, 25, 26, 27, 28].map(tooth => {
+                    const toothStr = tooth.toString();
+                    return (
+                      <ToothCheckbox
+                        key={tooth}
+                        toothNumber={toothStr}
+                        checked={toothStr in implantatumok}
+                        onChange={() => handleToothToggle(toothStr)}
+                        disabled={isViewOnly}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+              
+              {/* Alsó sor - 4. kvadráns (bal alsó) és 3. kvadráns (jobb alsó) */}
+              <div className="flex justify-between">
+                <div className="flex gap-1">
+                  {[48, 47, 46, 45, 44, 43, 42, 41].map(tooth => {
+                    const toothStr = tooth.toString();
+                    return (
+                      <ToothCheckbox
+                        key={tooth}
+                        toothNumber={toothStr}
+                        checked={toothStr in implantatumok}
+                        onChange={() => handleToothToggle(toothStr)}
+                        disabled={isViewOnly}
+                      />
+                    );
+                  })}
+                </div>
+                <div className="flex gap-1">
+                  {[31, 32, 33, 34, 35, 36, 37, 38].map(tooth => {
+                    const toothStr = tooth.toString();
+                    return (
+                      <ToothCheckbox
+                        key={tooth}
+                        toothNumber={toothStr}
+                        checked={toothStr in implantatumok}
+                        onChange={() => handleToothToggle(toothStr)}
+                        disabled={isViewOnly}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Implantátum részletek */}
+          {Object.keys(implantatumok).length > 0 && (
+            <div className="space-y-4 mb-4">
+              <h5 className="font-medium text-gray-700 mb-3">Implantátum részletek</h5>
+              {Object.keys(implantatumok).sort().map(toothNumber => (
+                <div key={toothNumber} className="border border-gray-200 rounded-md p-4">
+                  <label className="form-label font-medium">
+                    {toothNumber}. fog - Implantátum típusa, gyári száma, stb.
+                  </label>
+                  <textarea
+                    value={implantatumok[toothNumber] || ''}
+                    onChange={(e) => handleImplantatumDetailsChange(toothNumber, e.target.value)}
+                    rows={2}
+                    className="form-input"
+                    placeholder="Pl. Straumann BLT 4.1x10mm, Gyári szám: 028.015, Dátum: 2023.05.15"
+                    readOnly={isViewOnly}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Nem ismert pozíciókban implantátum */}
+          <div className="border-t pt-4 mt-4">
+            <div className="flex items-center mb-3">
+              <input
+                {...register('nemIsmertPoziciokbanImplantatum')}
+                type="checkbox"
+                className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
+                disabled={isViewOnly}
+              />
+              <label className="ml-2 text-sm font-medium text-gray-700">
+                Nem ismert pozíciókban
+              </label>
+            </div>
+            
+            {nemIsmertPoziciokbanImplantatum && (
+              <div className="ml-6">
+                <label className="form-label">Részletek (típus, mennyiség, stb.)</label>
+                <textarea
+                  {...register('nemIsmertPoziciokbanImplantatumRészletek')}
+                  rows={3}
+                  className="form-input"
+                  placeholder="Pl. Straumann implantátumok, pontos pozíció nem ismert, mennyiség: 3 db"
+                  readOnly={isViewOnly}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* KEZELÉSI TERV */}
         <div className="card">
           <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
@@ -1260,133 +1387,6 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                 )}
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* MEGLÉVŐ IMPLANTÁTUMOK */}
-        <div className="card">
-          <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <AlertTriangle className="w-5 h-5 mr-2 text-medical-primary" />
-            Meglévő implantátumok, ha vannak
-          </h4>
-          
-          {/* Zsigmondy-kereszt */}
-          <div className="mb-6">
-            <div className="bg-gray-50 p-4 rounded-lg">
-              {/* Felső sor - 1. kvadráns (bal felső) és 2. kvadráns (jobb felső) */}
-              <div className="flex justify-between mb-2">
-                <div className="flex gap-1">
-                  {[18, 17, 16, 15, 14, 13, 12, 11].map(tooth => {
-                    const toothStr = tooth.toString();
-                    return (
-                      <ToothCheckbox
-                        key={tooth}
-                        toothNumber={toothStr}
-                        checked={toothStr in implantatumok}
-                        onChange={() => handleToothToggle(toothStr)}
-                        disabled={isViewOnly}
-                      />
-                    );
-                  })}
-                </div>
-                <div className="flex gap-1">
-                  {[21, 22, 23, 24, 25, 26, 27, 28].map(tooth => {
-                    const toothStr = tooth.toString();
-                    return (
-                      <ToothCheckbox
-                        key={tooth}
-                        toothNumber={toothStr}
-                        checked={toothStr in implantatumok}
-                        onChange={() => handleToothToggle(toothStr)}
-                        disabled={isViewOnly}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-              
-              {/* Alsó sor - 4. kvadráns (bal alsó) és 3. kvadráns (jobb alsó) */}
-              <div className="flex justify-between">
-                <div className="flex gap-1">
-                  {[48, 47, 46, 45, 44, 43, 42, 41].map(tooth => {
-                    const toothStr = tooth.toString();
-                    return (
-                      <ToothCheckbox
-                        key={tooth}
-                        toothNumber={toothStr}
-                        checked={toothStr in implantatumok}
-                        onChange={() => handleToothToggle(toothStr)}
-                        disabled={isViewOnly}
-                      />
-                    );
-                  })}
-                </div>
-                <div className="flex gap-1">
-                  {[31, 32, 33, 34, 35, 36, 37, 38].map(tooth => {
-                    const toothStr = tooth.toString();
-                    return (
-                      <ToothCheckbox
-                        key={tooth}
-                        toothNumber={toothStr}
-                        checked={toothStr in implantatumok}
-                        onChange={() => handleToothToggle(toothStr)}
-                        disabled={isViewOnly}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Implantátum részletek */}
-          {Object.keys(implantatumok).length > 0 && (
-            <div className="space-y-4 mb-4">
-              <h5 className="font-medium text-gray-700 mb-3">Implantátum részletek</h5>
-              {Object.keys(implantatumok).sort().map(toothNumber => (
-                <div key={toothNumber} className="border border-gray-200 rounded-md p-4">
-                  <label className="form-label font-medium">
-                    {toothNumber}. fog - Implantátum típusa, gyári száma, stb.
-                  </label>
-                  <textarea
-                    value={implantatumok[toothNumber] || ''}
-                    onChange={(e) => handleImplantatumDetailsChange(toothNumber, e.target.value)}
-                    rows={2}
-                    className="form-input"
-                    placeholder="Pl. Straumann BLT 4.1x10mm, Gyári szám: 028.015, Dátum: 2023.05.15"
-                    readOnly={isViewOnly}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Nem ismert pozíciókban implantátum */}
-          <div className="border-t pt-4 mt-4">
-            <div className="flex items-center mb-3">
-              <input
-                {...register('nemIsmertPoziciokbanImplantatum')}
-                type="checkbox"
-                className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
-                disabled={isViewOnly}
-              />
-              <label className="ml-2 text-sm font-medium text-gray-700">
-                Nem ismert pozíciókban
-              </label>
-            </div>
-            
-            {nemIsmertPoziciokbanImplantatum && (
-              <div className="ml-6">
-                <label className="form-label">Részletek (típus, mennyiség, stb.)</label>
-                <textarea
-                  {...register('nemIsmertPoziciokbanImplantatumRészletek')}
-                  rows={3}
-                  className="form-input"
-                  placeholder="Pl. Straumann implantátumok, pontos pozíció nem ismert, mennyiség: 3 db"
-                  readOnly={isViewOnly}
-                />
-              </div>
-            )}
           </div>
         </div>
 
