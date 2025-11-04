@@ -89,13 +89,13 @@ export async function GET(
     try {
       const auth = await verifyAuth(request);
       if (auth) {
-        const ipHeader = request.headers.get('x-forwarded-for') || '';
-        const ipAddress = ipHeader.split(',')[0]?.trim() || null;
-        await pool.query(
-          `INSERT INTO activity_logs (user_email, action, detail, ip_address)
-           VALUES ($1, $2, $3, $4)`,
+      const ipHeader = request.headers.get('x-forwarded-for') || '';
+      const ipAddress = ipHeader.split(',')[0]?.trim() || null;
+      await pool.query(
+        `INSERT INTO activity_logs (user_email, action, detail, ip_address)
+         VALUES ($1, $2, $3, $4)`,
           [auth.email, 'patient_viewed', `Patient ID: ${params.id}, Name: ${result.rows[0].nev || 'N/A'}`, ipAddress]
-        );
+      );
       }
     } catch (logError) {
       console.error('Failed to log activity:', logError);

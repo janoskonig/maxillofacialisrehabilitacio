@@ -41,7 +41,7 @@ export default function Login() {
     } catch (err) {
       console.error('Login error:', err);
       setError('Bejelentkezési hiba történt');
-      setIsLoading(false);
+    setIsLoading(false);
     }
   };
 

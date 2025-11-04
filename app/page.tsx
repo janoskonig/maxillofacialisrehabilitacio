@@ -25,31 +25,31 @@ export default function Home() {
     const checkAuth = async () => {
       const user = await getCurrentUser();
       if (!user) {
-        router.push('/login');
-        return;
-      }
-      
+      router.push('/login');
+      return;
+    }
+    
       const email = user.email;
       const role = user.role;
-      setUserEmail(email);
+    setUserEmail(email);
       setUserRole(role);
-      loadPatients();
+    loadPatients();
 
-      // Send heartbeat only once per session
-      try {
-        const heartbeatKey = 'activityHeartbeatSent';
-        if (!sessionStorage.getItem(heartbeatKey) && email) {
-          fetch('/api/activity', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
+    // Send heartbeat only once per session
+    try {
+      const heartbeatKey = 'activityHeartbeatSent';
+      if (!sessionStorage.getItem(heartbeatKey) && email) {
+        fetch('/api/activity', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
             credentials: 'include',
-            body: JSON.stringify({ action: 'heartbeat', detail: 'home' })
-          }).catch(() => {});
-          sessionStorage.setItem(heartbeatKey, 'true');
-        }
-      } catch {}
+          body: JSON.stringify({ action: 'heartbeat', detail: 'home' })
+        }).catch(() => {});
+        sessionStorage.setItem(heartbeatKey, 'true');
+      }
+    } catch {}
     };
     checkAuth();
   }, [router]);

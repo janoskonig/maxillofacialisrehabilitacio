@@ -163,19 +163,19 @@ export async function GET(request: NextRequest) {
     try {
       const auth = await verifyAuth(request);
       if (auth) {
-        const ipHeader = request.headers.get('x-forwarded-for') || '';
-        const ipAddress = ipHeader.split(',')[0]?.trim() || null;
-        const searchQuery = request.nextUrl.searchParams.get('q');
-        const action = searchQuery ? 'patient_search' : 'patients_list_viewed';
-        const detail = searchQuery
-          ? `Search query: "${searchQuery}", Results: ${result.rows.length}`
-          : `Total patients: ${result.rows.length}`;
+      const ipHeader = request.headers.get('x-forwarded-for') || '';
+      const ipAddress = ipHeader.split(',')[0]?.trim() || null;
+      const searchQuery = request.nextUrl.searchParams.get('q');
+      const action = searchQuery ? 'patient_search' : 'patients_list_viewed';
+      const detail = searchQuery 
+        ? `Search query: "${searchQuery}", Results: ${result.rows.length}`
+        : `Total patients: ${result.rows.length}`;
       
-        await pool.query(
-          `INSERT INTO activity_logs (user_email, action, detail, ip_address)
-           VALUES ($1, $2, $3, $4)`,
+      await pool.query(
+        `INSERT INTO activity_logs (user_email, action, detail, ip_address)
+         VALUES ($1, $2, $3, $4)`,
           [auth.email, action, detail, ipAddress]
-        );
+      );
       }
     } catch (logError) {
       console.error('Failed to log activity:', logError);

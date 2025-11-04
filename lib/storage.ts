@@ -1,5 +1,4 @@
 import { Patient } from './types';
-import { getUserEmail } from './auth';
 
 // CSV fejléc mezők sorrendje (CSV export/import funkcióhoz)
 const CSV_HEADERS = [
@@ -71,8 +70,8 @@ export async function savePatient(patient: Patient): Promise<Patient> {
       method,
       headers: {
         'Content-Type': 'application/json',
-        'x-user-email': getUserEmail() || ''
       },
+      credentials: 'include',
       body: JSON.stringify(patient),
     });
 
@@ -88,9 +87,7 @@ export async function savePatient(patient: Patient): Promise<Patient> {
 export async function getAllPatients(): Promise<Patient[]> {
   try {
     const response = await fetch(API_BASE_URL, {
-      headers: {
-        'x-user-email': getUserEmail() || ''
-      }
+      credentials: 'include',
     });
     const data = await handleApiResponse<{ patients: Patient[] }>(response);
     return data.patients;
@@ -108,9 +105,7 @@ export async function searchPatients(query: string): Promise<Patient[]> {
     }
     
     const response = await fetch(`${API_BASE_URL}?q=${encodeURIComponent(query)}`, {
-      headers: {
-        'x-user-email': getUserEmail() || ''
-      }
+      credentials: 'include',
     });
     const data = await handleApiResponse<{ patients: Patient[] }>(response);
     return data.patients;
@@ -125,9 +120,7 @@ export async function deletePatient(id: string): Promise<void> {
   try {
     const response = await fetch(`${API_BASE_URL}/${id}`, {
       method: 'DELETE',
-      headers: {
-        'x-user-email': getUserEmail() || ''
-      }
+      credentials: 'include',
     });
     await handleApiResponse(response);
   } catch (error) {

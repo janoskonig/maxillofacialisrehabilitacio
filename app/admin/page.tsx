@@ -30,9 +30,9 @@ export default function AdminPage() {
     const checkAuth = async () => {
       const user = await getCurrentUser();
       if (!user) {
-        router.push('/login');
-        return;
-      }
+      router.push('/login');
+      return;
+    }
       setCurrentUser(user);
       setAuthorized(user.role === 'admin');
       setLoading(false);
@@ -267,17 +267,17 @@ export default function AdminPage() {
                     .map((user) => (
                       <tr key={user.id}>
                         <td className="px-4 py-3 text-sm text-gray-900">{user.email}</td>
-                        <td className="px-4 py-3">
-                          <select
-                            className="form-input"
+                      <td className="px-4 py-3">
+                        <select
+                          className="form-input"
                             value={user.role}
                             onChange={(e) => updateRole(user.id, e.target.value as UserRole)}
-                          >
-                            <option value="admin">admin</option>
-                            <option value="editor">editor</option>
-                            <option value="viewer">viewer</option>
-                          </select>
-                        </td>
+                        >
+                          <option value="admin">admin</option>
+                          <option value="editor">editor</option>
+                          <option value="viewer">viewer</option>
+                        </select>
+                      </td>
                         <td className="px-4 py-3 text-sm">
                           {user.active ? (
                             <span className="text-green-600">Aktív</span>
@@ -288,8 +288,8 @@ export default function AdminPage() {
                         <td className="px-4 py-3 text-sm text-gray-700">
                           {user.last_login ? new Date(user.last_login).toLocaleString('hu-HU') : '-'}
                         </td>
-                      </tr>
-                    ))}
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
