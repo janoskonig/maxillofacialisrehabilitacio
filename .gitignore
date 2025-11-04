@@ -55,3 +55,6 @@ logs
 # Cache
 .cache/
 .turbo/
+
+# Bármi, ami markdown
+*.md

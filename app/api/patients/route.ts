@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { Patient, patientSchema } from '@/lib/types';
+import { verifyAuth } from '@/lib/auth-server';
 
 // Összes beteg lekérdezése
 export async function GET(request: NextRequest) {
@@ -158,22 +159,24 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Activity logging: patients list viewed or searched
+    // Activity logging: patients list viewed or searched (csak ha be van jelentkezve)
     try {
-      const userEmail = request.headers.get('x-user-email') || null;
-      const ipHeader = request.headers.get('x-forwarded-for') || '';
-      const ipAddress = ipHeader.split(',')[0]?.trim() || null;
-      const searchQuery = request.nextUrl.searchParams.get('q');
-      const action = searchQuery ? 'patient_search' : 'patients_list_viewed';
-      const detail = searchQuery 
-        ? `Search query: "${searchQuery}", Results: ${result.rows.length}`
-        : `Total patients: ${result.rows.length}`;
+      const auth = await verifyAuth(request);
+      if (auth) {
+        const ipHeader = request.headers.get('x-forwarded-for') || '';
+        const ipAddress = ipHeader.split(',')[0]?.trim() || null;
+        const searchQuery = request.nextUrl.searchParams.get('q');
+        const action = searchQuery ? 'patient_search' : 'patients_list_viewed';
+        const detail = searchQuery
+          ? `Search query: "${searchQuery}", Results: ${result.rows.length}`
+          : `Total patients: ${result.rows.length}`;
       
-      await pool.query(
-        `INSERT INTO activity_logs (user_email, action, detail, ip_address)
-         VALUES ($1, $2, $3, $4)`,
-        [userEmail, action, detail, ipAddress]
-      );
+        await pool.query(
+          `INSERT INTO activity_logs (user_email, action, detail, ip_address)
+           VALUES ($1, $2, $3, $4)`,
+          [auth.email, action, detail, ipAddress]
+        );
+      }
     } catch (logError) {
       console.error('Failed to log activity:', logError);
       // Don't fail the request if logging fails
@@ -192,6 +195,15 @@ export async function GET(request: NextRequest) {
 // Új beteg létrehozása
 export async function POST(request: NextRequest) {
   try {
+    // Hitelesítés ellenőrzése
+    const auth = await verifyAuth(request);
+    if (!auth) {
+      return NextResponse.json(
+        { error: 'Bejelentkezés szükséges' },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     console.log('POST /api/patients - Fogadott adatok:', JSON.stringify(body, null, 2));
     
@@ -200,7 +212,7 @@ export async function POST(request: NextRequest) {
     console.log('Validált adatok:', JSON.stringify(validatedPatient, null, 2));
     
     const pool = getDbPool();
-    const userEmail = request.headers.get('x-user-email') || null;
+    const userEmail = auth.email;
     
     // Új betegnél ne generáljunk ID-t, hagyjuk az adatbázisnak generálni (DEFAULT generate_uuid())
     // Csak import esetén használjuk a megadott ID-t

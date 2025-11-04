@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { patientSchema } from '@/lib/types';
+import { verifyAuth } from '@/lib/auth-server';
 
 // Egy beteg lekérdezése ID alapján
 export async function GET(
@@ -84,16 +85,18 @@ export async function GET(
       );
     }
 
-    // Activity logging: patient viewed
+    // Activity logging: patient viewed (csak ha be van jelentkezve)
     try {
-      const userEmail = request.headers.get('x-user-email') || null;
-      const ipHeader = request.headers.get('x-forwarded-for') || '';
-      const ipAddress = ipHeader.split(',')[0]?.trim() || null;
-      await pool.query(
-        `INSERT INTO activity_logs (user_email, action, detail, ip_address)
-         VALUES ($1, $2, $3, $4)`,
-        [userEmail, 'patient_viewed', `Patient ID: ${params.id}, Name: ${result.rows[0].nev || 'N/A'}`, ipAddress]
-      );
+      const auth = await verifyAuth(request);
+      if (auth) {
+        const ipHeader = request.headers.get('x-forwarded-for') || '';
+        const ipAddress = ipHeader.split(',')[0]?.trim() || null;
+        await pool.query(
+          `INSERT INTO activity_logs (user_email, action, detail, ip_address)
+           VALUES ($1, $2, $3, $4)`,
+          [auth.email, 'patient_viewed', `Patient ID: ${params.id}, Name: ${result.rows[0].nev || 'N/A'}`, ipAddress]
+        );
+      }
     } catch (logError) {
       console.error('Failed to log activity:', logError);
       // Don't fail the request if logging fails
@@ -115,9 +118,9 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    // Authorization: require authenticated user (any allowed login)
-    const requester = request.headers.get('x-user-email') || '';
-    if (!requester) {
+    // Authorization: require authenticated user
+    const auth = await verifyAuth(request);
+    if (!auth) {
       return NextResponse.json(
         { error: 'Bejelentkezés szükséges a módosításhoz' },
         { status: 401 }
@@ -128,7 +131,7 @@ export async function PUT(
     const validatedPatient = patientSchema.parse(body);
     
     const pool = getDbPool();
-    const userEmail = request.headers.get('x-user-email') || null;
+    const userEmail = auth.email;
     
     // Get old patient data for comparison
     const oldPatientResult = await pool.query(
@@ -511,9 +514,9 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    // Authorization: require authenticated user (any allowed login)
-    const requester = request.headers.get('x-user-email') || '';
-    if (!requester) {
+    // Authorization: require authenticated user
+    const auth = await verifyAuth(request);
+    if (!auth) {
       return NextResponse.json(
         { error: 'Bejelentkezés szükséges a törléshez' },
         { status: 401 }
@@ -535,7 +538,7 @@ export async function DELETE(
 
     // Activity logging: patient deleted
     try {
-      const userEmail = request.headers.get('x-user-email') || null;
+      const userEmail = auth.email;
       const ipHeader = request.headers.get('x-forwarded-for') || '';
       const ipAddress = ipHeader.split(',')[0]?.trim() || null;
       await pool.query(

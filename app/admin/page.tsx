@@ -1,76 +1,152 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { isAuthenticated, getUserEmail } from '@/lib/auth';
-import { getUserRole, setUserRole, UserRole } from '@/lib/roles';
+import { getCurrentUser, type AuthUser } from '@/lib/auth';
 
-type UsersMap = Record<string, string>;
+type UserRole = 'admin' | 'editor' | 'viewer';
+
+type User = {
+  id: string;
+  email: string;
+  role: UserRole;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+  last_login: string | null;
+};
 
 export default function AdminPage() {
   const router = useRouter();
-  const [currentEmail, setCurrentEmail] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [authorized, setAuthorized] = useState(false);
-  const [roles, setRoles] = useState<Record<string, UserRole>>({});
+  const [loading, setLoading] = useState(true);
+  const [users, setUsers] = useState<User[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
   const [usage, setUsage] = useState<Array<{ user_email: string; last_seen: string | null; last_7d: number; last_30d: number; last_90d: number }>>([]);
   const [usageLoading, setUsageLoading] = useState(false);
 
-  const parseAllowedUsers = (envValue?: string): UsersMap => {
-    const map: UsersMap = {};
-    if (!envValue) return map;
-    envValue
-      .split(',')
-      .map((p) => p.trim())
-      .filter(Boolean)
-      .forEach((pair) => {
-        const [user, pass] = pair.split(':');
-        if (user && pass) {
-          map[user.trim()] = pass.trim();
-        }
-      });
-    return map;
-  };
-
-  const allowedUsers = useMemo(
-    () => parseAllowedUsers(process.env.NEXT_PUBLIC_ALLOWED_USERS),
-    []
-  );
-
-  const userList = Object.keys(allowedUsers);
-
   useEffect(() => {
-    if (!isAuthenticated()) {
-      router.push('/login');
-      return;
-    }
-    const email = getUserEmail();
-    setCurrentEmail(email);
-    const role = getUserRole(email);
-    // Restrict strictly to konig.janos or anyone with admin role
-    setAuthorized(email === 'konig.janos' || role === 'admin');
+    const checkAuth = async () => {
+      const user = await getCurrentUser();
+      if (!user) {
+        router.push('/login');
+        return;
+      }
+      setCurrentUser(user);
+      setAuthorized(user.role === 'admin');
+      setLoading(false);
+    };
+    checkAuth();
   }, [router]);
 
   useEffect(() => {
-    // Initialize local role state from storage for existing users
-    const map: Record<string, UserRole> = {};
-    userList.forEach((email) => {
-      map[email] = getUserRole(email);
-    });
-    setRoles(map);
-  }, [userList.length]);
+    const loadUsers = async () => {
+      if (!authorized) return;
+      setUsersLoading(true);
+      try {
+        const res = await fetch('/api/users', {
+          credentials: 'include',
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setUsers(data.users || []);
+        }
+      } catch (e) {
+        console.error('Error loading users:', e);
+      } finally {
+        setUsersLoading(false);
+      }
+    };
+    loadUsers();
+  }, [authorized]);
 
-  const updateRole = (email: string, role: UserRole) => {
-    setUserRole(email, role);
-    setRoles((prev) => ({ ...prev, [email]: role }));
+  const updateRole = async (userId: string, role: UserRole) => {
+    try {
+      const res = await fetch(`/api/users/${userId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ role }),
+      });
+      if (res.ok) {
+        // Frissítjük a lokális state-et
+        setUsers((prev) =>
+          prev.map((u) => (u.id === userId ? { ...u, role } : u))
+        );
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Hiba történt a szerepkör frissítésekor');
+      }
+    } catch (e) {
+      console.error('Error updating role:', e);
+      alert('Hiba történt a szerepkör frissítésekor');
+    }
+  };
+
+  const approveUser = async (userId: string) => {
+    try {
+      const res = await fetch(`/api/users/${userId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ active: true }),
+      });
+      if (res.ok) {
+        // Frissítjük a lokális state-et
+        setUsers((prev) =>
+          prev.map((u) => (u.id === userId ? { ...u, active: true } : u))
+        );
+        // Újratöltjük a listát
+        const res2 = await fetch('/api/users', { credentials: 'include' });
+        if (res2.ok) {
+          const data = await res2.json();
+          setUsers(data.users || []);
+        }
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Hiba történt a jóváhagyáskor');
+      }
+    } catch (e) {
+      console.error('Error approving user:', e);
+      alert('Hiba történt a jóváhagyáskor');
+    }
+  };
+
+  const rejectUser = async (userId: string) => {
+    if (!confirm('Biztosan törölni szeretné ezt a felhasználót?')) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/users/${userId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (res.ok) {
+        // Eltávolítjuk a listából
+        setUsers((prev) => prev.filter((u) => u.id !== userId));
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Hiba történt a törléskor');
+      }
+    } catch (e) {
+      console.error('Error rejecting user:', e);
+      alert('Hiba történt a törléskor');
+    }
   };
 
   useEffect(() => {
-    // Load usage summary for admin
-    const load = async () => {
+    const loadUsage = async () => {
       if (!authorized) return;
       setUsageLoading(true);
       try {
-        const res = await fetch('/api/activity');
+        const res = await fetch('/api/activity', {
+          credentials: 'include',
+        });
         const data = await res.json();
         setUsage(data.summary || []);
       } catch (e) {
@@ -79,8 +155,16 @@ export default function AdminPage() {
         setUsageLoading(false);
       }
     };
-    load();
+    loadUsage();
   }, [authorized]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-gray-600">Betöltés...</p>
+      </div>
+    );
+  }
 
   if (!authorized) {
     return (
@@ -104,44 +188,108 @@ export default function AdminPage() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <h1 className="text-2xl font-bold text-medical-primary">Admin felület</h1>
-            {currentEmail && (
-              <p className="text-sm text-gray-500">Bejelentkezve: {currentEmail}</p>
+            {currentUser && (
+              <p className="text-sm text-gray-500">Bejelentkezve: {currentUser.email} ({currentUser.role})</p>
             )}
           </div>
         </div>
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Jóváhagyásra váró felhasználók */}
+        {users.filter(u => !u.active).length > 0 && (
+          <div className="card mb-6 border-l-4 border-yellow-400">
+            <h2 className="text-xl font-semibold mb-4 text-yellow-800">
+              Jóváhagyásra váró felhasználók ({users.filter(u => !u.active).length})
+            </h2>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Regisztráció ideje</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Műveletek</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {users
+                    .filter((u) => !u.active)
+                    .map((user) => (
+                      <tr key={user.id} className="bg-yellow-50">
+                        <td className="px-4 py-3 text-sm text-gray-900">{user.email}</td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {user.created_at ? new Date(user.created_at).toLocaleString('hu-HU') : '-'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => approveUser(user.id)}
+                              className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
+                            >
+                              Jóváhagyás
+                            </button>
+                            <button
+                              onClick={() => rejectUser(user.id)}
+                              className="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700"
+                            >
+                              Elutasítás
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         <div className="card">
-          <h2 className="text-xl font-semibold mb-4">Felhasználói jogosultságok</h2>
-          {userList.length === 0 ? (
-            <p className="text-gray-600">Nincsenek konfigurált felhasználók a .env fájlban.</p>
+          <h2 className="text-xl font-semibold mb-4">Felhasználók kezelése</h2>
+          {usersLoading ? (
+            <p className="text-gray-600">Betöltés...</p>
+          ) : users.length === 0 ? (
+            <p className="text-gray-600">Nincsenek felhasználók az adatbázisban.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Felhasználó</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Szerepkör</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Állapot</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Utolsó bejelentkezés</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {userList.map((email) => (
-                    <tr key={email}>
-                      <td className="px-4 py-3 text-sm text-gray-900">{email}</td>
-                      <td className="px-4 py-3">
-                        <select
-                          className="form-input"
-                          value={roles[email] || 'editor'}
-                          onChange={(e) => updateRole(email, e.target.value as UserRole)}
-                        >
-                          <option value="admin">admin</option>
-                          <option value="editor">editor</option>
-                          <option value="viewer">viewer</option>
-                        </select>
-                      </td>
-                    </tr>
-                  ))}
+                  {users
+                    .filter((u) => u.active)
+                    .map((user) => (
+                      <tr key={user.id}>
+                        <td className="px-4 py-3 text-sm text-gray-900">{user.email}</td>
+                        <td className="px-4 py-3">
+                          <select
+                            className="form-input"
+                            value={user.role}
+                            onChange={(e) => updateRole(user.id, e.target.value as UserRole)}
+                          >
+                            <option value="admin">admin</option>
+                            <option value="editor">editor</option>
+                            <option value="viewer">viewer</option>
+                          </select>
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          {user.active ? (
+                            <span className="text-green-600">Aktív</span>
+                          ) : (
+                            <span className="text-red-600">Inaktív</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {user.last_login ? new Date(user.last_login).toLocaleString('hu-HU') : '-'}
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>

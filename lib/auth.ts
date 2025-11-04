@@ -1,23 +1,64 @@
-// Auth utilities
-export const isAuthenticated = (): boolean => {
-  if (typeof window === 'undefined') return false;
-  return localStorage.getItem('isAuthenticated') === 'true';
+// Auth utilities - szerver oldali cookie alapú hitelesítés
+
+export type AuthUser = {
+  email: string;
+  role: 'admin' | 'editor' | 'viewer';
 };
 
-export const getUserEmail = (): string | null => {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('userEmail');
+let cachedUser: AuthUser | null = null;
+
+// Felhasználó adatok lekérdezése szerverről
+export async function getCurrentUser(): Promise<AuthUser | null> {
+  try {
+    const response = await fetch('/api/auth/me', {
+      credentials: 'include',
+    });
+    
+    if (!response.ok) {
+      cachedUser = null;
+      return null;
+    }
+    
+    const data = await response.json();
+    cachedUser = data.user;
+    return data.user;
+  } catch (error) {
+    console.error('Auth check error:', error);
+    cachedUser = null;
+    return null;
+  }
+}
+
+// Kliens oldali cache használata (gyors ellenőrzéshez)
+export const isAuthenticated = async (): Promise<boolean> => {
+  const user = await getCurrentUser();
+  return user !== null;
 };
 
-export const logout = (): void => {
-  if (typeof window === 'undefined') return;
-  localStorage.removeItem('isAuthenticated');
-  localStorage.removeItem('userEmail');
+export const getUserEmail = async (): Promise<string | null> => {
+  const user = await getCurrentUser();
+  return user?.email || null;
 };
 
-export const login = (email: string): void => {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem('isAuthenticated', 'true');
-  localStorage.setItem('userEmail', email);
+export const getUserRole = async (): Promise<'admin' | 'editor' | 'viewer' | null> => {
+  const user = await getCurrentUser();
+  return user?.role || null;
+};
+
+export const logout = async (): Promise<void> => {
+  try {
+    await fetch('/api/auth/logout', {
+      method: 'POST',
+      credentials: 'include',
+    });
+  } catch (error) {
+    console.error('Logout error:', error);
+  }
+  cachedUser = null;
+};
+
+// Synchronous getter (kliens oldali cache-ből, ha van)
+export const getCachedUser = (): AuthUser | null => {
+  return cachedUser;
 };
 

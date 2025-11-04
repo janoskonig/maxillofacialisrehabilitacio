@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
+import { verifyAuth } from '@/lib/auth-server';
 
 type ActivityBody = {
   action: string;
@@ -8,10 +9,15 @@ type ActivityBody = {
 
 export async function POST(request: NextRequest) {
   try {
+    // Hitelesítés ellenőrzése
+    const auth = await verifyAuth(request);
+    if (!auth) {
+      return NextResponse.json({ error: 'Bejelentkezés szükséges' }, { status: 401 });
+    }
+
     const body = (await request.json().catch(() => ({}))) as Partial<ActivityBody>;
     const action = (body.action || '').trim();
     const detail = (body.detail || '').toString();
-    const userEmail = request.headers.get('x-user-email') || null;
     const ipHeader = request.headers.get('x-forwarded-for') || '';
     const ipAddress = ipHeader.split(',')[0]?.trim() || null;
 
@@ -23,7 +29,7 @@ export async function POST(request: NextRequest) {
     await pool.query(
       `INSERT INTO activity_logs (user_email, action, detail, ip_address)
        VALUES ($1, $2, $3, $4)`,
-      [userEmail, action, detail, ipAddress]
+      [auth.email, action, detail, ipAddress]
     );
 
     return NextResponse.json({ ok: true });
