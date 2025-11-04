@@ -302,11 +302,32 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     setValue('telefonszam', formatted, { shouldValidate: true });
   };
 
-  // Handle date input change - format to YYYY-MM-DD
-  const handleDateChange = (fieldName: 'szuletesiDatum' | 'mutetIdeje' | 'balesetIdopont', e: React.ChangeEvent<HTMLInputElement>) => {
-    if (isViewOnly) return;
-    const formatted = formatDateForInput(e.target.value);
-    setValue(fieldName, formatted, { shouldValidate: true });
+  // Handle date input change - allow typing, only format on blur
+  const handleDateChange = (fieldName: 'szuletesiDatum' | 'mutetIdeje' | 'balesetIdopont', registerOnChange?: (e: React.ChangeEvent<HTMLInputElement>) => void) => {
+    return (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (isViewOnly) return;
+      // Call register's onChange first if provided
+      if (registerOnChange) {
+        registerOnChange(e);
+      }
+      // Allow typing freely, just update the value
+      setValue(fieldName, e.target.value, { shouldValidate: false });
+    };
+  };
+
+  // Handle date blur - format to YYYY-MM-DD when user leaves the field
+  const handleDateBlur = (fieldName: 'szuletesiDatum' | 'mutetIdeje' | 'balesetIdopont', registerOnBlur?: (e: React.FocusEvent<HTMLInputElement>) => void) => {
+    return (e: React.FocusEvent<HTMLInputElement>) => {
+      if (isViewOnly) return;
+      // Call register's onBlur first if provided
+      if (registerOnBlur) {
+        registerOnBlur(e);
+      }
+      const formatted = formatDateForInput(e.target.value);
+      if (formatted) {
+        setValue(fieldName, formatted, { shouldValidate: true });
+      }
+    };
   };
 
   // Watch kezelésre érkezés indoka for conditional logic
@@ -385,12 +406,21 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
             <div>
               <label className="form-label">Születési dátum</label>
               <input
-                {...register('szuletesiDatum')}
+                {...register('szuletesiDatum', {
+                  onChange: (e) => {
+                    setValue('szuletesiDatum', e.target.value, { shouldValidate: false });
+                  }
+                })}
                 type="text"
                 pattern="\d{4}-\d{2}-\d{2}"
                 placeholder="YYYY-MM-DD"
                 className="form-input"
-                onChange={(e) => handleDateChange('szuletesiDatum', e)}
+                onBlur={(e) => {
+                  const formatted = formatDateForInput(e.target.value);
+                  if (formatted) {
+                    setValue('szuletesiDatum', formatted, { shouldValidate: true });
+                  }
+                }}
               />
             </div>
             <div>
@@ -567,13 +597,22 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                 <div>
                   <label className="form-label">Baleset időpontja</label>
                   <input
-                    {...register('balesetIdopont')}
+                    {...register('balesetIdopont', {
+                      onChange: (e) => {
+                        setValue('balesetIdopont', e.target.value, { shouldValidate: false });
+                      }
+                    })}
                     type="text"
                     pattern="\d{4}-\d{2}-\d{2}"
                     placeholder="YYYY-MM-DD"
                     className="form-input"
                     readOnly={isViewOnly}
-                    onChange={(e) => handleDateChange('balesetIdopont', e)}
+                    onBlur={(e) => {
+                      const formatted = formatDateForInput(e.target.value);
+                      if (formatted) {
+                        setValue('balesetIdopont', formatted, { shouldValidate: true });
+                      }
+                    }}
                   />
                 </div>
                 <div>
@@ -625,13 +664,22 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                 <div>
                   <label className="form-label">Műtét ideje</label>
                   <input
-                    {...register('mutetIdeje')}
+                    {...register('mutetIdeje', {
+                      onChange: (e) => {
+                        setValue('mutetIdeje', e.target.value, { shouldValidate: false });
+                      }
+                    })}
                     type="text"
                     pattern="\d{4}-\d{2}-\d{2}"
                     placeholder="YYYY-MM-DD"
                     className="form-input"
                     readOnly={isViewOnly}
-                    onChange={(e) => handleDateChange('mutetIdeje', e)}
+                    onBlur={(e) => {
+                      const formatted = formatDateForInput(e.target.value);
+                      if (formatted) {
+                        setValue('mutetIdeje', formatted, { shouldValidate: true });
+                      }
+                    }}
                   />
                 </div>
                 {/* Primer műtét leírása */}
