@@ -1353,7 +1353,20 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                               pattern="\d{4}-\d{2}-\d{2}"
                               placeholder="YYYY-MM-DD"
                               value={terv.tervezettAtadasDatuma || ''}
-                              onChange={(e) => updateKezelesiTervFelso(index, 'tervezettAtadasDatuma', formatDateForInput(e.target.value))}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                updateKezelesiTervFelso(index, 'tervezettAtadasDatuma', value);
+                              }}
+                              onBlur={(e) => {
+                                const value = e.target.value.trim();
+                                if (value) {
+                                  const formatted = formatDateForInput(value);
+                                  // Csak akkor frissítjük, ha a formázás sikeres volt és nem üres
+                                  if (formatted && formatted !== '') {
+                                    updateKezelesiTervFelso(index, 'tervezettAtadasDatuma', formatted);
+                                  }
+                                }
+                              }}
                               className="form-input"
                               readOnly={isViewOnly}
                             />
@@ -1433,7 +1446,20 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                               pattern="\d{4}-\d{2}-\d{2}"
                               placeholder="YYYY-MM-DD"
                               value={terv.tervezettAtadasDatuma || ''}
-                              onChange={(e) => updateKezelesiTervAlso(index, 'tervezettAtadasDatuma', formatDateForInput(e.target.value))}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                updateKezelesiTervAlso(index, 'tervezettAtadasDatuma', value);
+                              }}
+                              onBlur={(e) => {
+                                const value = e.target.value.trim();
+                                if (value) {
+                                  const formatted = formatDateForInput(value);
+                                  // Csak akkor frissítjük, ha a formázás sikeres volt és nem üres
+                                  if (formatted && formatted !== '') {
+                                    updateKezelesiTervAlso(index, 'tervezettAtadasDatuma', formatted);
+                                  }
+                                }
+                              }}
                               className="form-input"
                               readOnly={isViewOnly}
                             />
