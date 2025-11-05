@@ -88,7 +88,21 @@ export default function Home() {
       alert('Betegadat sikeresen mentve az adatbázisba!');
     } catch (error: any) {
       console.error('Hiba a beteg mentésekor:', error);
-      const errorMessage = error.message || 'Kérjük, ellenőrizze az összes kötelező mezőt és próbálja újra.';
+      let errorMessage = 'Kérjük, ellenőrizze az összes kötelező mezőt és próbálja újra.';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      
+      // További információ a hálózati hibákról
+      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('Load failed') || errorMessage.includes('csatlakozni')) {
+        errorMessage = 'Nem sikerült csatlakozni a szerverhez. Ellenőrizze az internetkapcsolatot és próbálja újra.';
+      } else if (errorMessage.includes('túl hosszú')) {
+        errorMessage = 'A kérés túl hosszú ideig tartott. Lehet, hogy az adatok túl nagyok. Próbálja újra.';
+      }
+      
       alert(`Hiba a mentés során: ${errorMessage}`);
     }
   };
