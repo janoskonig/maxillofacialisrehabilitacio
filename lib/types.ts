@@ -36,7 +36,7 @@ export const patientSchema = z.object({
   
   // SZEMÉLYES ADATOK
   szuletesiDatum: z.string().optional().nullable(),
-  nem: z.enum(['ferfi', 'no', 'nem_ismert']).optional().nullable().or(z.literal('')),
+  nem: z.enum(['ferfi', 'no']).optional().nullable().or(z.literal('')),
   email: z.string().email('Érvénytelen email cím').optional().nullable().or(z.literal('')),
   cim: z.string().optional().nullable(),
   varos: z.string().optional().nullable(),

@@ -87,10 +87,10 @@ export function PatientList({ patients, onView, onEdit, canEdit = false }: Patie
                         {patient.nev}
                       </div>
                       <div className="text-sm text-gray-500">
-                        {patient.nem === 'ferfi' ? 'Férfi' : patient.nem === 'no' ? 'Nő' : patient.nem === 'nem_ismert' ? 'Nem ismert' : ''} • 
-                        {(() => {
+                        {patient.nem === 'ferfi' ? 'Férfi' : patient.nem === 'no' ? 'Nő' : ''} 
+                        {patient.nem && (() => {
                           const age = calculateAge(patient.szuletesiDatum);
-                          return age !== null ? ` ${age} éves` : '';
+                          return age !== null ? ` • ${age} éves` : '';
                         })()}
                       </div>
                     </div>

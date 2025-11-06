@@ -126,6 +126,7 @@ export default function Home() {
   };
 
   const handleCloseForm = () => {
+    // This will be called by PatientForm's handleCancel after checking for unsaved changes
     setShowForm(false);
     setEditingPatient(null);
     setIsViewMode(false);
@@ -263,7 +264,20 @@ export default function Home() {
       {showForm && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
-          onClick={handleCloseForm}
+          onClick={(e) => {
+            // Only close if clicking directly on the background (not on the form)
+            if (e.target === e.currentTarget) {
+              // Trigger the cancel button click, which will call handleCancel
+              // and check for unsaved changes
+              const cancelButton = document.querySelector('[data-patient-form-cancel]') as HTMLButtonElement;
+              if (cancelButton) {
+                cancelButton.click();
+              } else {
+                // Fallback: direct close
+                handleCloseForm();
+              }
+            }
+          }}
         >
           <div 
             className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto"

@@ -1,11 +1,23 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Patient, patientSchema, beutaloIntezmenyOptions, nyakiBlokkdisszekcioOptions, fabianFejerdyProtetikaiOsztalyOptions, kezeleoorvosOptions, kezelesiTervOptions } from '@/lib/types';
 import { formatDateForInput } from '@/lib/dateUtils';
 import { X, Calendar, User, Phone, Mail, MapPin, FileText, AlertTriangle, Plus, Trash2 } from 'lucide-react';
+
+const DRAFT_STORAGE_KEY_PREFIX = 'patientFormDraft_';
+const DRAFT_TIMESTAMP_KEY_PREFIX = 'patientFormDraftTimestamp_';
+
+// Helper to get storage keys based on patient ID
+const getDraftStorageKey = (patientId: string | undefined | null): string => {
+  return patientId ? `${DRAFT_STORAGE_KEY_PREFIX}${patientId}` : `${DRAFT_STORAGE_KEY_PREFIX}new`;
+};
+
+const getDraftTimestampKey = (patientId: string | undefined | null): string => {
+  return patientId ? `${DRAFT_TIMESTAMP_KEY_PREFIX}${patientId}` : `${DRAFT_TIMESTAMP_KEY_PREFIX}new`;
+};
 
 // ToothCheckbox komponens
 interface ToothCheckboxProps {
@@ -51,10 +63,54 @@ interface PatientFormProps {
 }
 
 export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: PatientFormProps) {
+  const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isNewPatient = !patient && !isViewOnly;
+  const patientId = patient?.id || null;
+
+  // Helper function to load draft from localStorage
+  const loadDraft = useCallback((): Patient | null => {
+    try {
+      const storageKey = getDraftStorageKey(patientId);
+      const draftData = localStorage.getItem(storageKey);
+      if (!draftData) return null;
+      
+      const parsed = JSON.parse(draftData);
+      return parsed as Patient;
+    } catch (error) {
+      console.error('Hiba a piszkozat betöltésekor:', error);
+      return null;
+    }
+  }, [patientId]);
+
+  // Helper function to save draft to localStorage
+  const saveDraft = useCallback((formData: Partial<Patient>) => {
+    try {
+      const storageKey = getDraftStorageKey(patientId);
+      const timestampKey = getDraftTimestampKey(patientId);
+      localStorage.setItem(storageKey, JSON.stringify(formData));
+      localStorage.setItem(timestampKey, new Date().toISOString());
+    } catch (error) {
+      console.error('Hiba a piszkozat mentésekor:', error);
+    }
+  }, [patientId]);
+
+  // Helper function to clear draft from localStorage
+  const clearDraft = useCallback(() => {
+    try {
+      const storageKey = getDraftStorageKey(patientId);
+      const timestampKey = getDraftTimestampKey(patientId);
+      localStorage.removeItem(storageKey);
+      localStorage.removeItem(timestampKey);
+    } catch (error) {
+      console.error('Hiba a piszkozat törlésekor:', error);
+    }
+  }, [patientId]);
+
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isDirty },
     setValue,
     watch,
   } = useForm<Patient>({
@@ -101,6 +157,64 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
   const initialVanBeutalo = !!(patient?.beutaloOrvos || patient?.beutaloIntezmeny || patient?.kezelesreErkezesIndoka);
   const [vanBeutalo, setVanBeutalo] = useState(initialVanBeutalo);
 
+  // Watch all form values for auto-save
+  const formValues = watch();
+
+  // Load draft when opening patient form (after form is initialized)
+  useEffect(() => {
+    if (!isViewOnly && !hasRestoredDraft) {
+      const draft = loadDraft();
+      if (draft) {
+        const timestampKey = getDraftTimestampKey(patientId);
+        const timestamp = localStorage.getItem(timestampKey);
+        const draftDate = timestamp ? new Date(timestamp) : null;
+        const now = new Date();
+        const hoursSinceDraft = draftDate ? (now.getTime() - draftDate.getTime()) / (1000 * 60 * 60) : 0;
+        
+        // Only show restore prompt if draft is less than 7 days old
+        if (hoursSinceDraft < 168) {
+          // For existing patients, always restore silently (no prompt)
+          // For new patients, ask for confirmation
+          const shouldRestore = isNewPatient 
+            ? window.confirm(
+                `Van egy mentett piszkozat az űrlapból (${draftDate ? draftDate.toLocaleString('hu-HU') : 'korábban'}). Szeretné visszatölteni?`
+              )
+            : true; // Always restore for existing patients
+          
+          if (shouldRestore) {
+            // Restore draft data
+            Object.keys(draft).forEach((key) => {
+              const value = draft[key as keyof Patient];
+              if (value !== undefined && value !== null) {
+                setValue(key as keyof Patient, value as any, { shouldValidate: false });
+              }
+            });
+            
+            // Restore implantatumok and fogak if they exist
+            if (draft.meglevoImplantatumok) {
+              setImplantatumok(draft.meglevoImplantatumok);
+            }
+            if (draft.meglevoFogak) {
+              setFogak(draft.meglevoFogak);
+            }
+            if (draft.beutaloOrvos || draft.beutaloIntezmeny || draft.mutetRovidLeirasa) {
+              setVanBeutalo(true);
+            }
+          } else {
+            // User chose not to restore, clear the draft
+            clearDraft();
+          }
+        } else {
+          // Draft is too old, clear it
+          clearDraft();
+        }
+        setHasRestoredDraft(true);
+      } else {
+        setHasRestoredDraft(true);
+      }
+    }
+  }, [isViewOnly, hasRestoredDraft, isNewPatient, patientId, loadDraft, clearDraft, setValue, setImplantatumok, setFogak, setVanBeutalo]);
+
   // Implantátumok frissítése amikor patient változik
   useEffect(() => {
     if (patient?.meglevoImplantatumok) {
@@ -114,6 +228,48 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       setFogak({});
     }
   }, [patient]);
+
+  // Auto-save draft to localStorage (for both new and existing patients, not in view mode)
+  useEffect(() => {
+    if (isViewOnly || !hasRestoredDraft) {
+      return;
+    }
+
+    // Clear previous timeout
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    // Debounce: save after 500ms of inactivity
+    saveTimeoutRef.current = setTimeout(() => {
+      const formData: Partial<Patient> = {
+        ...formValues,
+        meglevoImplantatumok: implantatumok,
+        meglevoFogak: fogak,
+      };
+      
+      // Only save if there's at least some data filled in
+      const hasData = Object.values(formData).some(value => {
+        if (value === null || value === undefined || value === '') return false;
+        if (typeof value === 'object' && Object.keys(value).length === 0) return false;
+        if (Array.isArray(value) && value.length === 0) return false;
+        return true;
+      });
+
+      if (hasData) {
+        saveDraft(formData);
+      } else {
+        clearDraft();
+      }
+    }, 500);
+
+    // Cleanup timeout on unmount
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [formValues, implantatumok, fogak, isViewOnly, hasRestoredDraft, saveDraft, clearDraft]);
 
   // Automatikus intézet beállítás a kezelőorvos alapján
   useEffect(() => {
@@ -226,7 +382,71 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
   };
 
   const onSubmit = (data: Patient) => {
+    // Clear draft on successful save (for both new and existing patients)
+    clearDraft();
     onSave(data);
+  };
+
+  // Check if form has unsaved changes
+  const hasUnsavedChanges = useCallback(() => {
+    if (isViewOnly) return false;
+    
+    // Check if form is dirty
+    if (isDirty) return true;
+    
+    // Check if implantatumok or fogak have changed
+    const originalImplantatumok = patient?.meglevoImplantatumok || {};
+    const originalFogak = patient?.meglevoFogak || {};
+    
+    const implantatumokChanged = JSON.stringify(implantatumok) !== JSON.stringify(originalImplantatumok);
+    const fogakChanged = JSON.stringify(fogak) !== JSON.stringify(originalFogak);
+    
+    if (implantatumokChanged || fogakChanged) return true;
+    
+    // Check if any form field has value (for new patients)
+    if (isNewPatient) {
+      const hasAnyValue = Object.values(formValues).some(value => {
+        if (value === null || value === undefined || value === '') return false;
+        if (typeof value === 'object' && Object.keys(value).length === 0) return false;
+        if (Array.isArray(value) && value.length === 0) return false;
+        if (typeof value === 'boolean' && value === false) return false;
+        return true;
+      });
+      if (hasAnyValue || Object.keys(implantatumok).length > 0 || Object.keys(fogak).length > 0) {
+        return true;
+      }
+    }
+    
+    return false;
+  }, [isViewOnly, isDirty, patient, implantatumok, fogak, isNewPatient, formValues]);
+
+  // Handle form cancellation - check for unsaved changes
+  const handleCancel = () => {
+    if (isViewOnly) {
+      onCancel();
+      return;
+    }
+    
+    if (hasUnsavedChanges()) {
+      const shouldSave = window.confirm(
+        'Van nem mentett változás az űrlapban. Szeretné menteni az eddig beírt adatokat piszkozatként? (A piszkozat később visszatölthető, de az adatok csak a "Beteg mentése" gombbal kerülnek az adatbázisba.)'
+      );
+      
+      if (shouldSave) {
+        // Save draft before closing
+        const formData: Partial<Patient> = {
+          ...formValues,
+          meglevoImplantatumok: implantatumok,
+          meglevoFogak: fogak,
+        };
+        saveDraft(formData);
+      } else {
+        // User chose not to save, clear draft
+        clearDraft();
+      }
+    }
+    
+    onCancel();
   };
 
   // Format TAJ number as XXX-XXX-XXX
@@ -340,8 +560,9 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           {isViewOnly ? 'Beteg megtekintése' : patient ? 'Beteg szerkesztése' : 'Új beteg'}
         </h3>
         <button
-          onClick={onCancel}
+          onClick={handleCancel}
           className="text-gray-400 hover:text-gray-600"
+          data-patient-form-cancel
         >
           <X className="w-6 h-6" />
         </button>
@@ -429,7 +650,6 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                 <option value="">Válasszon...</option>
                 <option value="ferfi">Férfi</option>
                 <option value="no">Nő</option>
-                <option value="nem_ismert">Nem ismert</option>
               </select>
             </div>
             <div>
@@ -1485,22 +1705,41 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         </div>
 
         {/* Form Actions */}
-        <div className="flex justify-end space-x-4 pt-6 border-t">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="btn-secondary"
-          >
-            {isViewOnly ? 'Bezárás' : 'Mégse'}
-          </button>
+        <div className="pt-6 border-t space-y-4">
           {!isViewOnly && (
-            <button
-              type="submit"
-              className="btn-primary"
-            >
-              {patient ? 'Beteg frissítése' : 'Beteg mentése'}
-            </button>
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-md">
+              <div className="flex items-start">
+                <AlertTriangle className="w-5 h-5 text-yellow-600 mr-3 mt-0.5 flex-shrink-0" />
+                <div>
+                  <h4 className="text-sm font-semibold text-yellow-800 mb-1">
+                    ⚠️ FONTOS: Ne felejtse el menteni!
+                  </h4>
+                  <p className="text-sm text-yellow-700">
+                    Az adatok csak akkor kerülnek az adatbázisba, ha az <strong>"{patient ? 'Beteg frissítése' : 'Beteg mentése'}"</strong> gombbal menti el az űrlapot. 
+                    A piszkozat csak ideiglenes tárolás, és nem menti az adatokat véglegesen.
+                  </p>
+                </div>
+              </div>
+            </div>
           )}
+          <div className="flex justify-end space-x-4">
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="btn-secondary"
+              data-patient-form-cancel
+            >
+              {isViewOnly ? 'Bezárás' : 'Mégse'}
+            </button>
+            {!isViewOnly && (
+              <button
+                type="submit"
+                className="btn-primary"
+              >
+                {patient ? 'Beteg frissítése' : 'Beteg mentése'}
+              </button>
+            )}
+          </div>
         </div>
       </form>
     </div>
