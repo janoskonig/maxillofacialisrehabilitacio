@@ -34,3 +34,24 @@ export const formatDateForInput = (dateString: string | null | undefined): strin
   }
 };
 
+export const calculateAge = (dateString: string | null | undefined): number | null => {
+  if (!dateString) return null;
+  try {
+    const birthDate = new Date(dateString);
+    if (isNaN(birthDate.getTime())) return null;
+    
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    
+    // Ha még nem volt a születésnapja idén, akkor csökkentjük a kort
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    
+    return age;
+  } catch {
+    return null;
+  }
+};
+

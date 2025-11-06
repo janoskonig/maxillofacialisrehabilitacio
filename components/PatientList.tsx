@@ -2,7 +2,7 @@
 
 import { Patient } from '@/lib/types';
 import { Phone, Mail, Calendar, FileText, Eye, Pencil, CheckCircle2, XCircle } from 'lucide-react';
-import { formatDateForDisplay } from '@/lib/dateUtils';
+import { formatDateForDisplay, calculateAge } from '@/lib/dateUtils';
 
 interface PatientListProps {
   patients: Patient[];
@@ -88,7 +88,10 @@ export function PatientList({ patients, onView, onEdit, canEdit = false }: Patie
                       </div>
                       <div className="text-sm text-gray-500">
                         {patient.nem === 'ferfi' ? 'Férfi' : patient.nem === 'no' ? 'Nő' : patient.nem === 'nem_ismert' ? 'Nem ismert' : ''} • 
-                        {patient.szuletesiDatum && ` Született: ${formatDateForDisplay(patient.szuletesiDatum)}`}
+                        {(() => {
+                          const age = calculateAge(patient.szuletesiDatum);
+                          return age !== null ? ` ${age} éves` : '';
+                        })()}
                       </div>
                     </div>
                   </div>
