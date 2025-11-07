@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!['admin', 'editor', 'viewer', 'fogpótlástanász', 'epitéziskészítő', 'sebészorvos'].includes(role)) {
+    if (!['admin', 'editor', 'viewer', 'fogpótlástanász', 'technikus', 'sebészorvos'].includes(role)) {
       return NextResponse.json(
         { error: 'Érvénytelen szerepkör' },
         { status: 400 }

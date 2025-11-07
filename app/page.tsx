@@ -19,7 +19,7 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredPatients, setFilteredPatients] = useState<Patient[]>([]);
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState<'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'epitéziskészítő' | 'sebészorvos'>('viewer');
+  const [userRole, setUserRole] = useState<'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos'>('viewer');
 
   useEffect(() => {
     // Check authentication

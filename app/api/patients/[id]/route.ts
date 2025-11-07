@@ -96,8 +96,8 @@ export async function GET(
     const patient = result.rows[0];
     
     // Szerepkör alapú jogosultság ellenőrzés
-    if (role === 'epitéziskészítő') {
-      // Epitéziskészítő: csak azokat a betegeket látja, akikhez epitézist rendeltek
+    if (role === 'technikus') {
+      // Technikus: csak azokat a betegeket látja, akikhez epitézist rendeltek
       const hasEpitesis = patient.kezelesiTervArcotErinto && 
                           Array.isArray(patient.kezelesiTervArcotErinto) && 
                           patient.kezelesiTervArcotErinto.length > 0;
@@ -203,8 +203,8 @@ export async function PUT(
       if (!validatedPatient.beutaloOrvos) {
         validatedPatient.beutaloOrvos = userEmail;
       }
-    } else if (role === 'epitéziskészítő') {
-      // Epitéziskészítő: csak azokat a betegeket szerkesztheti, akikhez epitézist rendeltek
+    } else if (role === 'technikus') {
+      // Technikus: csak azokat a betegeket szerkesztheti, akikhez epitézist rendeltek
       const hasEpitesis = oldPatient.kezelesi_terv_arcot_erinto && 
                           Array.isArray(oldPatient.kezelesi_terv_arcot_erinto) && 
                           oldPatient.kezelesi_terv_arcot_erinto.length > 0;
@@ -654,8 +654,8 @@ export async function DELETE(
           { status: 403 }
         );
       }
-    } else if (role === 'epitéziskészítő') {
-      // Epitéziskészítő: nem törölhet betegeket
+    } else if (role === 'technikus') {
+      // Technikus: nem törölhet betegeket
       return NextResponse.json(
         { error: 'Nincs jogosultsága betegek törléséhez' },
         { status: 403 }

@@ -20,8 +20,8 @@ export async function GET(request: NextRequest) {
     let queryParams: any[] = [];
     let paramIndex = 1;
     
-    if (role === 'epitéziskészítő') {
-      // Epitéziskészítő: csak azokat a betegeket látja, akikhez epitézist rendeltek
+    if (role === 'technikus') {
+      // Technikus: csak azokat a betegeket látja, akikhez epitézist rendeltek
       whereConditions.push('kezelesi_terv_arcot_erinto IS NOT NULL AND jsonb_array_length(kezelesi_terv_arcot_erinto) > 0');
     } else if (role === 'sebészorvos') {
       // Sebészorvos: csak azokat a betegeket látja, akiket ő utalt be

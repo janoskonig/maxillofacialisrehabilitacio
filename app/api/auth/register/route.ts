@@ -23,15 +23,32 @@ function isValidPassword(password: string): { valid: boolean; error?: string } {
   return { valid: true };
 }
 
+// Szerepkör leképezés a felhasználóbarát nevekről az adatbázis szerepkörökre
+function mapRoleToDatabaseRole(role: string): string | null {
+  const roleMap: Record<string, string> = {
+    'sebész': 'sebészorvos',
+    'fogpótos': 'fogpótlástanász',
+    'technikus': 'technikus',
+  };
+  return roleMap[role] || null;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, password, confirmPassword } = body;
+    const { email, password, confirmPassword, role } = body;
 
     // Alapvető validációk
     if (!email || !password) {
       return NextResponse.json(
         { error: 'Email cím és jelszó megadása kötelező' },
+        { status: 400 }
+      );
+    }
+
+    if (!role) {
+      return NextResponse.json(
+        { error: 'Szerepkör megadása kötelező' },
         { status: 400 }
       );
     }
@@ -79,15 +96,21 @@ export async function POST(request: NextRequest) {
     // Jelszó hash-elése
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // Alapértelmezett szerepkör: editor (módosítható)
-    const defaultRole = 'editor';
+    // Szerepkör leképezése az adatbázis szerepkörre
+    const databaseRole = mapRoleToDatabaseRole(role);
+    if (!databaseRole) {
+      return NextResponse.json(
+        { error: 'Érvénytelen szerepkör' },
+        { status: 400 }
+      );
+    }
 
     // Felhasználó létrehozása (inaktív, admin jóváhagyásra vár)
     const result = await pool.query(
       `INSERT INTO users (email, password_hash, role, active)
        VALUES ($1, $2, $3, false)
        RETURNING id, email, role, active`,
-      [normalizedEmail, passwordHash, defaultRole]
+      [normalizedEmail, passwordHash, databaseRole]
     );
 
     const user = result.rows[0];

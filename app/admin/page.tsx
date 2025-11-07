@@ -6,7 +6,7 @@ import { getCurrentUser, type AuthUser } from '@/lib/auth';
 import { MessageCircle, ChevronDown, ChevronUp, AlertCircle, Bug, Lightbulb } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 
-type UserRole = 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'epitéziskészítő' | 'sebészorvos';
+type UserRole = 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
 
 type User = {
   id: string;
@@ -391,7 +391,7 @@ export default function AdminPage() {
                         >
                           <option value="admin">admin</option>
                           <option value="fogpótlástanász">fogpótlástanász</option>
-                          <option value="epitéziskészítő">epitéziskészítő</option>
+                          <option value="technikus">technikus</option>
                           <option value="sebészorvos">sebészorvos</option>
                         </select>
                       </td>

@@ -6,10 +6,13 @@ import { User, Lock, Eye, EyeOff, Mail } from 'lucide-react';
 import Link from 'next/link';
 import { Logo } from '@/components/Logo';
 
+type RegistrationRole = 'sebész' | 'fogpótos' | 'technikus';
+
 export default function Register() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [role, setRole] = useState<RegistrationRole | ''>('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
@@ -22,6 +25,12 @@ export default function Register() {
     setError('');
 
     // Kliens oldali validáció
+    if (!role) {
+      setError('Kérjük, válasszon szerepkört');
+      setIsLoading(false);
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError('A jelszavak nem egyeznek meg');
       setIsLoading(false);
@@ -41,7 +50,7 @@ export default function Register() {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify({ email, password, confirmPassword }),
+        body: JSON.stringify({ email, password, confirmPassword, role }),
       });
 
       const data = await response.json();
@@ -159,6 +168,28 @@ export default function Register() {
                   {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+            </div>
+
+            <div>
+              <label htmlFor="role" className="block text-sm font-medium text-gray-700">
+                Szerepkör
+              </label>
+              <div className="mt-1">
+                <select
+                  id="role"
+                  name="role"
+                  required
+                  value={role}
+                  onChange={(e) => setRole(e.target.value as RegistrationRole)}
+                  className="form-input w-full"
+                >
+                  <option value="">-- Válasszon szerepkört --</option>
+                  <option value="sebész">Sebész</option>
+                  <option value="fogpótos">Fogpótos</option>
+                  <option value="technikus">Technikus</option>
+                </select>
+              </div>
+              <p className="mt-1 text-xs text-gray-500">Kérjük, válassza ki, milyen szerepkörben szeretne regisztrálni</p>
             </div>
 
             {error && (

@@ -2,7 +2,7 @@
 
 export type AuthUser = {
   email: string;
-  role: 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'epitéziskészítő' | 'sebészorvos';
+  role: 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
 };
 
 let cachedUser: AuthUser | null = null;
@@ -40,7 +40,7 @@ export const getUserEmail = async (): Promise<string | null> => {
   return user?.email || null;
 };
 
-export const getUserRole = async (): Promise<'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'epitéziskészítő' | 'sebészorvos' | null> => {
+export const getUserRole = async (): Promise<'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos' | null> => {
   const user = await getCurrentUser();
   return user?.role || null;
 };
