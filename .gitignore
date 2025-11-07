@@ -58,3 +58,5 @@ logs
 
 # Bármi, ami markdown
 *.md
+ADATBAZIS_OSSZEKOTES.md
+DATABASE_SETUP.md
