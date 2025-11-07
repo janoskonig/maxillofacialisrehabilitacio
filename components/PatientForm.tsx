@@ -1005,6 +1005,26 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
             {/* ONKOLOGIA kérdések */}
             {selectedIndok === 'onkológiai kezelés utáni állapot' && (
               <>
+                {/* BNO mező */}
+                <div>
+                  <label className="form-label">BNO</label>
+                  <input
+                    {...register('bno')}
+                    className="form-input"
+                    placeholder="BNO"
+                    readOnly={isViewOnly}
+                  />
+                </div>
+                {/* Diagnózis mező */}
+                <div>
+                  <label className="form-label">Diagnózis</label>
+                  <input
+                    {...register('diagnozis')}
+                    className="form-input"
+                    placeholder="Diagnózis"
+                    readOnly={isViewOnly}
+                  />
+                </div>
                 <div>
                   <label className="form-label">Tumor szövettani típusa</label>
                   <input
@@ -1465,6 +1485,15 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                         readOnly={isViewOnly}
                       />
                     </div>
+                    <div className="md:col-span-2">
+                      <label className="form-label">Meglévő fogpótlás típusa</label>
+                      <select {...register('felsoFogpotlasTipus')} className="form-input" disabled={isViewOnly}>
+                        <option value="">Válasszon...</option>
+                        {kezelesiTervOptions.filter(option => option !== 'sebészi sablon készítése').map((option) => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    </div>
                     <div className="flex items-center md:col-span-2">
                       <input
                         {...register('felsoFogpotlasElegedett')}
@@ -1521,6 +1550,15 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                         readOnly={isViewOnly}
                       />
                     </div>
+                    <div className="md:col-span-2">
+                      <label className="form-label">Meglévő fogpótlás típusa</label>
+                      <select {...register('alsoFogpotlasTipus')} className="form-input" disabled={isViewOnly}>
+                        <option value="">Válasszon...</option>
+                        {kezelesiTervOptions.filter(option => option !== 'sebészi sablon készítése').map((option) => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    </div>
                     <div className="flex items-center md:col-span-2">
                       <input
                         {...register('alsoFogpotlasElegedett')}
@@ -1542,40 +1580,6 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                         />
                       </div>
                     )}
-                  </div>
-                )}
-              </div>
-
-              {/* Meglévő fogpótlás típusa */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-                {felsoFogpotlasVan && (
-                  <div>
-                    <label className="form-label">Meglévő fogpótlás típusa – felső</label>
-                    <select {...register('felsoFogpotlasTipus')} className="form-input" disabled={isViewOnly}>
-                      <option value="">Válasszon...</option>
-                      <option value="teljes akrilátlemezes fogpótlás">teljes akrilátlemezes fogpótlás</option>
-                      <option value="részleges akrilátlemezes fogpótlás">részleges akrilátlemezes fogpótlás</option>
-                      <option value="részleges fémlemezes fogpótlás kapocselhorgonyzással">részleges fémlemezes fogpótlás kapocselhorgonyzással</option>
-                      <option value="kombinált fogpótlás kapocselhorgonyzással">kombinált fogpótlás kapocselhorgonyzással</option>
-                      <option value="kombinált fogpótlás rejtett elhorgonyzási eszköz(ök)kel">kombinált fogpótlás rejtett elhorgonyzási eszköz(ök)kel</option>
-                      <option value="fedőlemezes fogpótlás">fedőlemezes fogpótlás</option>
-                      <option value="rögzített fogpótlás">rögzített fogpótlás</option>
-                    </select>
-                  </div>
-                )}
-                {alsoFogpotlasVan && (
-                  <div>
-                    <label className="form-label">Meglévő fogpótlás típusa – alsó</label>
-                    <select {...register('alsoFogpotlasTipus')} className="form-input" disabled={isViewOnly}>
-                      <option value="">Válasszon...</option>
-                      <option value="teljes akrilátlemezes fogpótlás">teljes akrilátlemezes fogpótlás</option>
-                      <option value="részleges akrilátlemezes fogpótlás">részleges akrilátlemezes fogpótlás</option>
-                      <option value="részleges fémlemezes fogpótlás kapocselhorgonyzással">részleges fémlemezes fogpótlás kapocselhorgonyzással</option>
-                      <option value="kombinált fogpótlás kapocselhorgonyzással">kombinált fogpótlás kapocselhorgonyzással</option>
-                      <option value="kombinált fogpótlás rejtett elhorgonyzási eszköz(ök)kel">kombinált fogpótlás rejtett elhorgonyzási eszköz(ök)kel</option>
-                      <option value="fedőlemezes fogpótlás">fedőlemezes fogpótlás</option>
-                      <option value="rögzített fogpótlás">rögzített fogpótlás</option>
-                    </select>
                   </div>
                 )}
               </div>

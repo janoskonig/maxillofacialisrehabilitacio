@@ -106,6 +106,7 @@ export async function GET(request: NextRequest) {
           nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
           nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
           tnm_staging as "tnmStaging",
+          bno, diagnozis, primer_mutet_leirasa as "primerMutetLeirasa",
           kezelesi_terv_felso as "kezelesiTervFelso",
           kezelesi_terv_also as "kezelesiTervAlso",
           kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
@@ -179,17 +180,18 @@ export async function GET(request: NextRequest) {
           also_fogpotlas_tipus as "alsoFogpotlasTipus",
           meglevo_implantatumok as "meglevoImplantatumok",
           nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
-          nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
-          tnm_staging as "tnmStaging",
-          kezelesi_terv_felso as "kezelesiTervFelso",
-          kezelesi_terv_also as "kezelesiTervAlso",
-          kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
-          created_at as "createdAt",
-          updated_at as "updatedAt",
-          created_by as "createdBy",
-          updated_by as "updatedBy"
-        FROM patients
-        ${whereClause}
+        nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
+        tnm_staging as "tnmStaging",
+        bno, diagnozis, primer_mutet_leirasa as "primerMutetLeirasa",
+        kezelesi_terv_felso as "kezelesiTervFelso",
+        kezelesi_terv_also as "kezelesiTervAlso",
+        kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
+        created_at as "createdAt",
+        updated_at as "updatedAt",
+        created_by as "createdBy",
+        updated_by as "updatedBy"
+      FROM patients
+      ${whereClause}
         ORDER BY created_at DESC`,
         whereConditions.length > 0 ? queryParams : []
       );
@@ -354,6 +356,9 @@ export async function POST(request: NextRequest) {
       validatedPatient.nemIsmertPoziciokbanImplantatum || false,
       validatedPatient.nemIsmertPoziciokbanImplantatumRészletek || null,
       validatedPatient.tnmStaging || null,
+      validatedPatient.bno || null,
+      validatedPatient.diagnozis || null,
+      validatedPatient.primerMutetLeirasa || null,
       validatedPatient.kezelesiTervFelso && Array.isArray(validatedPatient.kezelesiTervFelso)
         ? JSON.stringify(validatedPatient.kezelesiTervFelso)
         : '[]',
@@ -388,7 +393,7 @@ export async function POST(request: NextRequest) {
         meglevo_fogak, felso_fogpotlas_tipus, also_fogpotlas_tipus,
         meglevo_implantatumok, nem_ismert_poziciokban_implantatum,
         nem_ismert_poziciokban_implantatum_reszletek,
-        tnm_staging,
+        tnm_staging, bno, diagnozis, primer_mutet_leirasa,
         kezelesi_terv_felso, kezelesi_terv_also, kezelesi_terv_arcot_erinto,
         created_by
       ) VALUES (
@@ -432,6 +437,7 @@ export async function POST(request: NextRequest) {
         nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
         nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
         tnm_staging as "tnmStaging",
+        bno, diagnozis, primer_mutet_leirasa as "primerMutetLeirasa",
         kezelesi_terv_felso as "kezelesiTervFelso",
         kezelesi_terv_also as "kezelesiTervAlso",
         kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",

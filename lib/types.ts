@@ -97,22 +97,30 @@ export const patientSchema = z.object({
     ])
   ).optional(), // fog szám -> állapot objektum vagy string
   felsoFogpotlasTipus: z.enum([
-    'teljes akrilátlemezes fogpótlás',
+    'zárólemez',
     'részleges akrilátlemezes fogpótlás',
-    'részleges fémlemezes fogpótlás kapocselhorgonyzással',
-    'kombinált fogpótlás kapocselhorgonyzással',
-    'kombinált fogpótlás rejtett elhorgonyzási eszköz(ök)kel',
+    'teljes lemezes fogpótlás',
     'fedőlemezes fogpótlás',
-    'rögzített fogpótlás'
+    'kapocselhorgonyzású részleges fémlemezes fogpótlás',
+    'kombinált fogpótlás kapocselhorgonyzással',
+    'kombinált fogpótlás rejtett elhorgonyzási eszközzel',
+    'rögzített fogpótlás fogakon elhorgonyozva',
+    'cementezett rögzítésű implantációs korona/híd',
+    'csavarozott rögzítésű implantációs korona/híd',
+    'sebészi sablon készítése'
   ]).optional().nullable().or(z.literal('')),
   alsoFogpotlasTipus: z.enum([
-    'teljes akrilátlemezes fogpótlás',
+    'zárólemez',
     'részleges akrilátlemezes fogpótlás',
-    'részleges fémlemezes fogpótlás kapocselhorgonyzással',
-    'kombinált fogpótlás kapocselhorgonyzással',
-    'kombinált fogpótlás rejtett elhorgonyzási eszköz(ök)kel',
+    'teljes lemezes fogpótlás',
     'fedőlemezes fogpótlás',
-    'rögzített fogpótlás'
+    'kapocselhorgonyzású részleges fémlemezes fogpótlás',
+    'kombinált fogpótlás kapocselhorgonyzással',
+    'kombinált fogpótlás rejtett elhorgonyzási eszközzel',
+    'rögzített fogpótlás fogakon elhorgonyozva',
+    'cementezett rögzítésű implantációs korona/híd',
+    'csavarozott rögzítésű implantációs korona/híd',
+    'sebészi sablon készítése'
   ]).optional().nullable().or(z.literal('')),
   // Fábián–Fejérdy-féle protetikai osztály: felső és alsó külön
   fabianFejerdyProtetikaiOsztalyFelso: z.enum(['0', '1A', '1B', '2A', '2A/1', '2B', '3', 'T']).optional().nullable().or(z.literal('')),
@@ -196,6 +204,8 @@ export const patientSchema = z.object({
 
   // Onkológia esetén
   primerMutetLeirasa: z.string().optional().nullable(),
+  bno: z.string().optional().nullable(),
+  diagnozis: z.string().optional().nullable(),
   // szovettaniDiagnozis (már létezik)
   // adjuváns terápiák (már léteznek)
 
