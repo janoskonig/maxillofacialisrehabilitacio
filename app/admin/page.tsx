@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { getCurrentUser, type AuthUser } from '@/lib/auth';
 import { MessageCircle, ChevronDown, ChevronUp, AlertCircle, Bug, Lightbulb } from 'lucide-react';
 
-type UserRole = 'admin' | 'editor' | 'viewer';
+type UserRole = 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'epitéziskészítő' | 'sebészorvos';
 
 type User = {
   id: string;
@@ -107,30 +107,6 @@ export default function AdminPage() {
     }
   };
 
-  const updateRestrictedView = async (userId: string, restrictedView: boolean) => {
-    try {
-      const res = await fetch(`/api/users/${userId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({ restricted_view: restrictedView }),
-      });
-      if (res.ok) {
-        // Frissítjük a lokális state-et
-        setUsers((prev) =>
-          prev.map((u) => (u.id === userId ? { ...u, restricted_view: restrictedView } : u))
-        );
-      } else {
-        const data = await res.json();
-        alert(data.error || 'Hiba történt a korlátozott nézet frissítésekor');
-      }
-    } catch (e) {
-      console.error('Error updating restricted view:', e);
-      alert('Hiba történt a korlátozott nézet frissítésekor');
-    }
-  };
 
   const approveUser = async (userId: string) => {
     try {
@@ -393,7 +369,6 @@ export default function AdminPage() {
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Szerepkör</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Korlátozott nézet</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Állapot</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Utolsó bejelentkezés</th>
                   </tr>
@@ -411,22 +386,10 @@ export default function AdminPage() {
                             onChange={(e) => updateRole(user.id, e.target.value as UserRole)}
                         >
                           <option value="admin">admin</option>
-                          <option value="editor">editor</option>
-                          <option value="viewer">viewer</option>
+                          <option value="fogpótlástanász">fogpótlástanász</option>
+                          <option value="epitéziskészítő">epitéziskészítő</option>
+                          <option value="sebészorvos">sebészorvos</option>
                         </select>
-                      </td>
-                      <td className="px-4 py-3">
-                        <label className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={user.restricted_view || false}
-                            onChange={(e) => updateRestrictedView(user.id, e.target.checked)}
-                            className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
-                          />
-                          <span className="ml-2 text-sm text-gray-700">
-                            Csak arcot érintő rehabilitációval
-                          </span>
-                        </label>
                       </td>
                         <td className="px-4 py-3 text-sm">
                           {user.active ? (

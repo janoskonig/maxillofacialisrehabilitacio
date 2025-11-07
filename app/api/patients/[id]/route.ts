@@ -10,6 +10,13 @@ export async function GET(
 ) {
   try {
     const pool = getDbPool();
+    
+    // Ellenőrizzük a felhasználó szerepkörét és jogosultságait
+    const auth = await verifyAuth(request);
+    const role = auth?.role || null;
+    const userEmail = auth?.email || null;
+    
+    // Először lekérdezzük a beteget
     const result = await pool.query(
       `SELECT 
         id,
@@ -85,6 +92,32 @@ export async function GET(
         { status: 404 }
       );
     }
+    
+    const patient = result.rows[0];
+    
+    // Szerepkör alapú jogosultság ellenőrzés
+    if (role === 'epitéziskészítő') {
+      // Epitéziskészítő: csak azokat a betegeket látja, akikhez epitézist rendeltek
+      const hasEpitesis = patient.kezelesiTervArcotErinto && 
+                          Array.isArray(patient.kezelesiTervArcotErinto) && 
+                          patient.kezelesiTervArcotErinto.length > 0;
+      if (!hasEpitesis) {
+        return NextResponse.json(
+          { error: 'Nincs jogosultsága ehhez a beteghez' },
+          { status: 403 }
+        );
+      }
+    } else if (role === 'sebészorvos') {
+      // Sebészorvos: csak azokat a betegeket látja, akiket ő utalt be
+      // Pontos egyezés: a beutalo_orvos mező pontosan egyezzen az email címmel
+      if (!userEmail || patient.beutaloOrvos !== userEmail) {
+        return NextResponse.json(
+          { error: 'Nincs jogosultsága ehhez a beteghez' },
+          { status: 403 }
+        );
+      }
+    }
+    // fogpótlástanász, admin, editor, viewer: mindent látnak (nincs szűrés)
 
     // Activity logging: patient viewed (csak ha be van jelentkezve)
     try {
@@ -133,6 +166,7 @@ export async function PUT(
     
     const pool = getDbPool();
     const userEmail = auth.email;
+    const role = auth.role;
     
     // Get old patient data for comparison
     const oldPatientResult = await pool.query(
@@ -148,6 +182,39 @@ export async function PUT(
     }
     
     const oldPatient = oldPatientResult.rows[0];
+    
+    // Szerepkör alapú jogosultság ellenőrzés szerkesztéshez
+    if (role === 'sebészorvos') {
+      // Sebészorvos: csak azokat a betegeket szerkesztheti, akiket ő utalt be
+      if (!userEmail || oldPatient.beutalo_orvos !== userEmail) {
+        return NextResponse.json(
+          { error: 'Nincs jogosultsága ehhez a beteg szerkesztéséhez' },
+          { status: 403 }
+        );
+      }
+      // Sebészorvos esetén biztosítjuk, hogy a beutalo_orvos mező ne változzon meg
+      if (validatedPatient.beutaloOrvos && validatedPatient.beutaloOrvos !== userEmail) {
+        return NextResponse.json(
+          { error: 'Nem módosíthatja a beutaló orvos mezőt' },
+          { status: 403 }
+        );
+      }
+      // Ha nincs beállítva, automatikusan beállítjuk
+      if (!validatedPatient.beutaloOrvos) {
+        validatedPatient.beutaloOrvos = userEmail;
+      }
+    } else if (role === 'epitéziskészítő') {
+      // Epitéziskészítő: csak azokat a betegeket szerkesztheti, akikhez epitézist rendeltek
+      const hasEpitesis = oldPatient.kezelesi_terv_arcot_erinto && 
+                          Array.isArray(oldPatient.kezelesi_terv_arcot_erinto) && 
+                          oldPatient.kezelesi_terv_arcot_erinto.length > 0;
+      if (!hasEpitesis) {
+        return NextResponse.json(
+          { error: 'Nincs jogosultsága ehhez a beteg szerkesztéséhez' },
+          { status: 403 }
+        );
+      }
+    }
     
     // TAJ-szám egyediség ellenőrzése (ha változott)
     if (validatedPatient.taj && validatedPatient.taj.trim() !== '') {
@@ -560,17 +627,45 @@ export async function DELETE(
     }
 
     const pool = getDbPool();
-    const result = await pool.query(
-      'DELETE FROM patients WHERE id = $1 RETURNING id',
+    const role = auth.role;
+    const userEmail = auth.email;
+    
+    // Először lekérdezzük a beteget, hogy ellenőrizhessük a jogosultságot
+    const patientResult = await pool.query(
+      'SELECT id, beutalo_orvos FROM patients WHERE id = $1',
       [params.id]
     );
 
-    if (result.rows.length === 0) {
+    if (patientResult.rows.length === 0) {
       return NextResponse.json(
         { error: 'Beteg nem található' },
         { status: 404 }
       );
     }
+    
+    const patient = patientResult.rows[0];
+    
+    // Szerepkör alapú jogosultság ellenőrzés törléshez
+    if (role === 'sebészorvos') {
+      // Sebészorvos: csak azokat a betegeket törölheti, akiket ő utalt be
+      if (!userEmail || patient.beutalo_orvos !== userEmail) {
+        return NextResponse.json(
+          { error: 'Nincs jogosultsága ehhez a beteg törléséhez' },
+          { status: 403 }
+        );
+      }
+    } else if (role === 'epitéziskészítő') {
+      // Epitéziskészítő: nem törölhet betegeket
+      return NextResponse.json(
+        { error: 'Nincs jogosultsága betegek törléséhez' },
+        { status: 403 }
+      );
+    }
+    
+    const result = await pool.query(
+      'DELETE FROM patients WHERE id = $1 RETURNING id',
+      [params.id]
+    );
 
     // Activity logging: patient deleted
     try {

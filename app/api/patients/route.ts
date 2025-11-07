@@ -10,17 +10,44 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const query = searchParams.get('q');
 
-    // Ellenőrizzük a felhasználó restricted_view beállítását
+    // Ellenőrizzük a felhasználó szerepkörét és jogosultságait
     const auth = await verifyAuth(request);
-    const restrictedView = auth?.restrictedView || false;
-
+    const role = auth?.role || null;
+    const userEmail = auth?.email || null;
+    
+    // Szerepkör alapú szűrés meghatározása
+    let whereConditions: string[] = [];
+    let queryParams: any[] = [];
+    let paramIndex = 1;
+    
+    if (role === 'epitéziskészítő') {
+      // Epitéziskészítő: csak azokat a betegeket látja, akikhez epitézist rendeltek
+      whereConditions.push('kezelesi_terv_arcot_erinto IS NOT NULL AND jsonb_array_length(kezelesi_terv_arcot_erinto) > 0');
+    } else if (role === 'sebészorvos') {
+      // Sebészorvos: csak azokat a betegeket látja, akiket ő utalt be
+      // Pontos egyezés: a beutalo_orvos mező pontosan egyezzen az email címmel
+      if (userEmail) {
+        whereConditions.push(`beutalo_orvos = $${paramIndex}`);
+        queryParams.push(userEmail);
+        paramIndex += 1;
+      } else {
+        // Ha nincs email, nem lát semmit
+        whereConditions.push('1 = 0');
+      }
+    }
+    // fogpótlástanász, admin, editor, viewer: mindent látnak (nincs szűrés)
+    
     let result;
     
     if (query) {
       // Keresés
-      const searchCondition = restrictedView
-        ? `(nev ILIKE $1 OR taj ILIKE $1 OR telefonszam ILIKE $1 OR email ILIKE $1 OR beutalo_orvos ILIKE $1 OR beutalo_intezmeny ILIKE $1 OR kezeleoorvos ILIKE $1) AND kezelesi_terv_arcot_erinto IS NOT NULL AND jsonb_array_length(kezelesi_terv_arcot_erinto) > 0`
-        : `(nev ILIKE $1 OR taj ILIKE $1 OR telefonszam ILIKE $1 OR email ILIKE $1 OR beutalo_orvos ILIKE $1 OR beutalo_intezmeny ILIKE $1 OR kezeleoorvos ILIKE $1)`;
+      const searchBase = `(nev ILIKE $${paramIndex} OR taj ILIKE $${paramIndex} OR telefonszam ILIKE $${paramIndex} OR email ILIKE $${paramIndex} OR beutalo_orvos ILIKE $${paramIndex} OR beutalo_intezmeny ILIKE $${paramIndex} OR kezeleoorvos ILIKE $${paramIndex})`;
+      queryParams.push(`%${query}%`);
+      paramIndex++;
+      
+      const searchCondition = whereConditions.length > 0
+        ? `${searchBase} AND ${whereConditions.join(' AND ')}`
+        : searchBase;
       
       result = await pool.query(
         `SELECT 
@@ -89,12 +116,12 @@ export async function GET(request: NextRequest) {
         FROM patients
         WHERE ${searchCondition}
         ORDER BY created_at DESC`,
-        [`%${query}%`]
+        queryParams
       );
     } else {
       // Összes beteg
-      const whereClause = restrictedView
-        ? 'WHERE kezelesi_terv_arcot_erinto IS NOT NULL AND jsonb_array_length(kezelesi_terv_arcot_erinto) > 0'
+      const whereClause = whereConditions.length > 0
+        ? `WHERE ${whereConditions.join(' AND ')}`
         : '';
       
       result = await pool.query(
@@ -163,7 +190,8 @@ export async function GET(request: NextRequest) {
           updated_by as "updatedBy"
         FROM patients
         ${whereClause}
-        ORDER BY created_at DESC`
+        ORDER BY created_at DESC`,
+        whereConditions.length > 0 ? queryParams : []
       );
     }
 
@@ -221,6 +249,12 @@ export async function POST(request: NextRequest) {
     
     const pool = getDbPool();
     const userEmail = auth.email;
+    const role = auth.role;
+    
+    // Sebészorvos esetén automatikusan beállítjuk a beutalo_orvos mezőt
+    if (role === 'sebészorvos' && !validatedPatient.beutaloOrvos) {
+      validatedPatient.beutaloOrvos = userEmail;
+    }
     
     // TAJ-szám egyediség ellenőrzése
     if (validatedPatient.taj && validatedPatient.taj.trim() !== '') {

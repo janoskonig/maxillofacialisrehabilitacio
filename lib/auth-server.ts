@@ -8,7 +8,7 @@ const JWT_SECRET = new TextEncoder().encode(
 export type AuthPayload = {
   userId: string;
   email: string;
-  role: 'admin' | 'editor' | 'viewer';
+  role: 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'epitéziskészítő' | 'sebészorvos';
   restrictedView?: boolean;
 };
 
@@ -25,7 +25,7 @@ export async function verifyAuth(request: NextRequest): Promise<AuthPayload | nu
     return {
       userId: payload.userId as string,
       email: payload.email as string,
-      role: payload.role as 'admin' | 'editor' | 'viewer',
+      role: payload.role as 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'epitéziskészítő' | 'sebészorvos',
       restrictedView: payload.restrictedView as boolean | undefined,
     };
   } catch {

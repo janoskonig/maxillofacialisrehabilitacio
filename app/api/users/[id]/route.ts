@@ -99,7 +99,7 @@ export async function PUT(
           { status: 403 }
         );
       }
-      if (!['admin', 'editor', 'viewer'].includes(role)) {
+      if (!['admin', 'editor', 'viewer', 'fogpótlástanász', 'epitéziskészítő', 'sebészorvos'].includes(role)) {
         return NextResponse.json(
           { error: 'Érvénytelen szerepkör' },
           { status: 400 }
