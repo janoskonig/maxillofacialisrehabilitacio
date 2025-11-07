@@ -86,7 +86,16 @@ export const patientSchema = z.object({
   alsoFogpotlasProblema: z.string().optional().nullable(),
 
   // FOGAZATI STÁTUSZ
-  meglevoFogak: z.record(z.string()).optional(), // fog szám -> részletek (szuvas, tömött, korona, stb.)
+  // Visszafelé kompatibilitás: elfogad string-et (régi formátum) vagy objektumot (új formátum)
+  meglevoFogak: z.record(
+    z.union([
+      z.string(), // régi formátum: "szuvas, korona"
+      z.object({
+        status: z.enum(['D', 'F', 'M']).optional(), // D=szuvas, F=tömött, M=hiányzik
+        description: z.string().optional() // szabadszavas leírás
+      })
+    ])
+  ).optional(), // fog szám -> állapot objektum vagy string
   felsoFogpotlasTipus: z.enum([
     'teljes akrilátlemezes fogpótlás',
     'részleges akrilátlemezes fogpótlás',
