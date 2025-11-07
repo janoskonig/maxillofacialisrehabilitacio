@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { getCurrentUser, type AuthUser } from '@/lib/auth';
 import { Lock, Eye, EyeOff, User, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
+import { Logo } from '@/components/Logo';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -112,6 +113,7 @@ export default function SettingsPage() {
               >
                 <ArrowLeft className="w-5 h-5" />
               </Link>
+              <Logo width={60} height={69} />
               <h1 className="text-2xl font-bold text-medical-primary">Beállítások</h1>
             </div>
             {user && (

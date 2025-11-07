@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser, type AuthUser } from '@/lib/auth';
 import { MessageCircle, ChevronDown, ChevronUp, AlertCircle, Bug, Lightbulb } from 'lucide-react';
+import { Logo } from '@/components/Logo';
 
 type UserRole = 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'epitéziskészítő' | 'sebészorvos';
 
@@ -299,7 +300,10 @@ export default function AdminPage() {
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
-            <h1 className="text-2xl font-bold text-medical-primary">Admin felület</h1>
+            <div className="flex items-center gap-4">
+              <Logo width={60} height={69} />
+              <h1 className="text-2xl font-bold text-medical-primary">Admin felület</h1>
+            </div>
             {currentUser && (
               <p className="text-sm text-gray-500">Bejelentkezve: {currentUser.email} ({currentUser.role})</p>
             )}

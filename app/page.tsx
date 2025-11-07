@@ -8,6 +8,7 @@ import { PatientForm } from '@/components/PatientForm';
 import { PatientList } from '@/components/PatientList';
 import { Plus, Search, Users, LogOut, Shield, Settings } from 'lucide-react';
 import { getCurrentUser, getUserEmail, getUserRole, logout } from '@/lib/auth';
+import { Logo } from '@/components/Logo';
 
 export default function Home() {
   const router = useRouter();
@@ -142,13 +143,16 @@ export default function Home() {
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
-            <div className="flex items-center">
-              <h1 className="text-2xl font-bold text-medical-primary">
-                Maxillofaciális Rehabilitáció
-              </h1>
-            </div>
-            <div className="text-sm text-gray-600">
-              BETEGREGISZTER
+            <div className="flex items-center gap-4">
+              <Logo width={80} height={92} />
+              <div>
+                <h1 className="text-2xl font-bold text-medical-primary">
+                  Maxillofaciális Rehabilitáció
+                </h1>
+                <p className="text-sm text-gray-600 mt-1">
+                  BETEGREGISZTER
+                </p>
+              </div>
             </div>
           </div>
         </div>
