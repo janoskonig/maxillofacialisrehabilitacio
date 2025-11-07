@@ -42,6 +42,7 @@ export async function GET(request: NextRequest) {
         email,
         role,
         active,
+        restricted_view,
         created_at,
         updated_at,
         last_login

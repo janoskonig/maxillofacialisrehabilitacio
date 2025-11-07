@@ -56,7 +56,11 @@ async function handleApiResponse<T>(response: Response): Promise<T> {
     } catch {
       errorData = { error: `HTTP hiba: ${response.status} ${response.statusText}` };
     }
-    throw new Error(errorData.error || `HTTP hiba: ${response.status}`);
+    // Ha van details mező, azt is hozzáadjuk a hibaüzenethez
+    const errorMessage = errorData.details 
+      ? `${errorData.error || `HTTP hiba: ${response.status}`}\n${errorData.details}`
+      : errorData.error || `HTTP hiba: ${response.status}`;
+    throw new Error(errorMessage);
   }
   try {
     return await response.json();

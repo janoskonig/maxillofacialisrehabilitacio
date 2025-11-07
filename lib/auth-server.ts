@@ -9,6 +9,7 @@ export type AuthPayload = {
   userId: string;
   email: string;
   role: 'admin' | 'editor' | 'viewer';
+  restrictedView?: boolean;
 };
 
 /**
@@ -25,6 +26,7 @@ export async function verifyAuth(request: NextRequest): Promise<AuthPayload | nu
       userId: payload.userId as string,
       email: payload.email as string,
       role: payload.role as 'admin' | 'editor' | 'viewer',
+      restrictedView: payload.restrictedView as boolean | undefined,
     };
   } catch {
     return null;

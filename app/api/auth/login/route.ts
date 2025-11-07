@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     
     // Felhasználó keresése email alapján
     const userResult = await pool.query(
-      'SELECT id, email, password_hash, role, active FROM users WHERE email = $1',
+      'SELECT id, email, password_hash, role, active, restricted_view FROM users WHERE email = $1',
       [email.toLowerCase().trim()]
     );
 
@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
       userId: user.id,
       email: user.email,
       role: user.role,
+      restrictedView: user.restricted_view || false,
     })
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()

@@ -60,8 +60,13 @@ export function PatientList({ patients, onView, onEdit, canEdit = false }: Patie
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {patients.map((patient) => (
-              <tr key={patient.id} className="hover:bg-gray-50">
+            {patients.map((patient) => {
+              const hasNoDoctor = !patient.kezeleoorvos;
+              return (
+              <tr 
+                key={patient.id} 
+                className={hasNoDoctor ? "bg-red-50 hover:bg-red-100" : "hover:bg-gray-50"}
+              >
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
                     <div className="flex-shrink-0 h-10 w-10">
@@ -119,7 +124,7 @@ export function PatientList({ patients, onView, onEdit, canEdit = false }: Patie
                       <path d="M8 16C8 16 6 18 6 20" />
                       <path d="M16 16C16 16 18 18 18 20" />
                     </svg>
-                    {patient.kezeleoorvos || '-'}
+                    {patient.kezeleoorvos || 'Kezelőorvosra vár'}
                   </div>
                 </td>
                 <td className="px-6 py-4">
@@ -209,7 +214,8 @@ export function PatientList({ patients, onView, onEdit, canEdit = false }: Patie
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

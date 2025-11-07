@@ -129,7 +129,8 @@ export const patientSchema = z.object({
       'kombinált fogpótlás rejtett elhorgonyzási eszközzel',
       'rögzített fogpótlás fogakon elhorgonyozva',
       'cementezett rögzítésű implantációs korona/híd',
-      'csavarozott rögzítésű implantációs korona/híd'
+      'csavarozott rögzítésű implantációs korona/híd',
+      'sebészi sablon készítése'
     ]),
     tervezettAtadasDatuma: z.string().optional().nullable(),
     elkeszult: z.boolean().default(false)
@@ -147,8 +148,27 @@ export const patientSchema = z.object({
       'kombinált fogpótlás rejtett elhorgonyzási eszközzel',
       'rögzített fogpótlás fogakon elhorgonyozva',
       'cementezett rögzítésű implantációs korona/híd',
-      'csavarozott rögzítésű implantációs korona/híd'
+      'csavarozott rögzítésű implantációs korona/híd',
+      'sebészi sablon készítése'
     ]),
+    tervezettAtadasDatuma: z.string().optional().nullable(),
+    elkeszult: z.boolean().default(false)
+  })).optional().nullable().default([]),
+  
+  // KEZELÉSI TERV - ARCOT ÉRINTŐ REHABILITÁCIÓ (tömb, mert több tervezet lehet)
+  kezelesiTervArcotErinto: z.array(z.object({
+    tipus: z.enum([
+      'orrepitézis',
+      'fülepitézis',
+      'orbitaepitézis',
+      'középarcepitézis'
+    ]),
+    elhorgonyzasEszkoze: z.enum([
+      'bőrragasztó',
+      'mágnes',
+      'rúd-lovas rendszer',
+      'gömbretenció'
+    ]).optional().nullable(),
     tervezettAtadasDatuma: z.string().optional().nullable(),
     elkeszult: z.boolean().default(false)
   })).optional().nullable().default([]),
@@ -230,5 +250,20 @@ export const kezelesiTervOptions = [
   'kombinált fogpótlás rejtett elhorgonyzási eszközzel',
   'rögzített fogpótlás fogakon elhorgonyozva',
   'cementezett rögzítésű implantációs korona/híd',
-  'csavarozott rögzítésű implantációs korona/híd'
+  'csavarozott rögzítésű implantációs korona/híd',
+  'sebészi sablon készítése'
+];
+
+export const kezelesiTervArcotErintoTipusOptions = [
+  'orrepitézis',
+  'fülepitézis',
+  'orbitaepitézis',
+  'középarcepitézis'
+];
+
+export const kezelesiTervArcotErintoElhorgonyzasOptions = [
+  'bőrragasztó',
+  'mágnes',
+  'rúd-lovas rendszer',
+  'gömbretenció'
 ];

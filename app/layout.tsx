@@ -1,6 +1,9 @@
 import './globals.css'
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
+import GlobalErrorHandler from '@/components/GlobalErrorHandler'
+import FeedbackButton from '@/components/FeedbackButton'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -17,7 +20,11 @@ export default function RootLayout({
   return (
     <html lang="hu">
       <body className={inter.className}>
-        {children}
+        <ErrorBoundary>
+          <GlobalErrorHandler />
+          {children}
+          <FeedbackButton />
+        </ErrorBoundary>
       </body>
     </html>
   )

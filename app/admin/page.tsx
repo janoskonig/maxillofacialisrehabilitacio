@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser, type AuthUser } from '@/lib/auth';
+import { MessageCircle, ChevronDown, ChevronUp, AlertCircle, Bug, Lightbulb } from 'lucide-react';
 
 type UserRole = 'admin' | 'editor' | 'viewer';
 
@@ -11,9 +12,25 @@ type User = {
   email: string;
   role: UserRole;
   active: boolean;
+  restricted_view: boolean;
   created_at: string;
   updated_at: string;
   last_login: string | null;
+};
+
+type Feedback = {
+  id: string;
+  user_email: string | null;
+  type: 'bug' | 'error' | 'crash' | 'suggestion' | 'other';
+  title: string | null;
+  description: string;
+  error_log: string | null;
+  error_stack: string | null;
+  user_agent: string | null;
+  url: string | null;
+  status: 'open' | 'in_progress' | 'resolved' | 'closed';
+  created_at: string;
+  updated_at: string;
 };
 
 export default function AdminPage() {
@@ -25,6 +42,10 @@ export default function AdminPage() {
   const [usersLoading, setUsersLoading] = useState(false);
   const [usage, setUsage] = useState<Array<{ user_email: string; last_seen: string | null; last_7d: number; last_30d: number; last_90d: number }>>([]);
   const [usageLoading, setUsageLoading] = useState(false);
+  const [feedback, setFeedback] = useState<Feedback[]>([]);
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const [feedbackStatusFilter, setFeedbackStatusFilter] = useState<string>('');
+  const [expandedFeedback, setExpandedFeedback] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -83,6 +104,31 @@ export default function AdminPage() {
     } catch (e) {
       console.error('Error updating role:', e);
       alert('Hiba történt a szerepkör frissítésekor');
+    }
+  };
+
+  const updateRestrictedView = async (userId: string, restrictedView: boolean) => {
+    try {
+      const res = await fetch(`/api/users/${userId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ restricted_view: restrictedView }),
+      });
+      if (res.ok) {
+        // Frissítjük a lokális state-et
+        setUsers((prev) =>
+          prev.map((u) => (u.id === userId ? { ...u, restricted_view: restrictedView } : u))
+        );
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Hiba történt a korlátozott nézet frissítésekor');
+      }
+    } catch (e) {
+      console.error('Error updating restricted view:', e);
+      alert('Hiba történt a korlátozott nézet frissítésekor');
     }
   };
 
@@ -157,6 +203,96 @@ export default function AdminPage() {
     };
     loadUsage();
   }, [authorized]);
+
+  useEffect(() => {
+    const loadFeedback = async () => {
+      if (!authorized) return;
+      setFeedbackLoading(true);
+      try {
+        const url = feedbackStatusFilter 
+          ? `/api/feedback?status=${feedbackStatusFilter}`
+          : '/api/feedback';
+        const res = await fetch(url, {
+          credentials: 'include',
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setFeedback(data.feedback || []);
+        }
+      } catch (e) {
+        console.error('Error loading feedback:', e);
+        setFeedback([]);
+      } finally {
+        setFeedbackLoading(false);
+      }
+    };
+    loadFeedback();
+  }, [authorized, feedbackStatusFilter]);
+
+  const updateFeedbackStatus = async (feedbackId: string, newStatus: string) => {
+    try {
+      const res = await fetch(`/api/feedback/${feedbackId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (res.ok) {
+        setFeedback((prev) =>
+          prev.map((f) => (f.id === feedbackId ? { ...f, status: newStatus as any, updated_at: new Date().toISOString() } : f))
+        );
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Hiba történt a status frissítésekor');
+      }
+    } catch (e) {
+      console.error('Error updating feedback status:', e);
+      alert('Hiba történt a status frissítésekor');
+    }
+  };
+
+  const toggleFeedbackExpanded = (feedbackId: string) => {
+    setExpandedFeedback((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(feedbackId)) {
+        newSet.delete(feedbackId);
+      } else {
+        newSet.add(feedbackId);
+      }
+      return newSet;
+    });
+  };
+
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case 'bug':
+        return <Bug className="w-4 h-4" />;
+      case 'error':
+      case 'crash':
+        return <AlertCircle className="w-4 h-4" />;
+      case 'suggestion':
+        return <Lightbulb className="w-4 h-4" />;
+      default:
+        return <MessageCircle className="w-4 h-4" />;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'open':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'in_progress':
+        return 'bg-blue-100 text-blue-800';
+      case 'resolved':
+        return 'bg-green-100 text-green-800';
+      case 'closed':
+        return 'bg-gray-100 text-gray-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
 
   if (loading) {
     return (
@@ -257,6 +393,7 @@ export default function AdminPage() {
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Szerepkör</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Korlátozott nézet</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Állapot</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Utolsó bejelentkezés</th>
                   </tr>
@@ -277,6 +414,19 @@ export default function AdminPage() {
                           <option value="editor">editor</option>
                           <option value="viewer">viewer</option>
                         </select>
+                      </td>
+                      <td className="px-4 py-3">
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={user.restricted_view || false}
+                            onChange={(e) => updateRestrictedView(user.id, e.target.checked)}
+                            className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
+                          />
+                          <span className="ml-2 text-sm text-gray-700">
+                            Csak arcot érintő rehabilitációval
+                          </span>
+                        </label>
                       </td>
                         <td className="px-4 py-3 text-sm">
                           {user.active ? (
@@ -329,6 +479,140 @@ export default function AdminPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+        </div>
+
+        <div className="card mt-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold">Visszajelzések napló</h2>
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-600">Szűrés:</label>
+              <select
+                value={feedbackStatusFilter}
+                onChange={(e) => setFeedbackStatusFilter(e.target.value)}
+                className="form-input text-sm"
+              >
+                <option value="">Összes</option>
+                <option value="open">Nyitott</option>
+                <option value="in_progress">Folyamatban</option>
+                <option value="resolved">Megoldva</option>
+                <option value="closed">Lezárva</option>
+              </select>
+            </div>
+          </div>
+          {feedbackLoading ? (
+            <p className="text-gray-600">Betöltés...</p>
+          ) : feedback.length === 0 ? (
+            <p className="text-gray-600">Nincsenek visszajelzések.</p>
+          ) : (
+            <div className="space-y-3">
+              {feedback.map((item) => {
+                const isExpanded = expandedFeedback.has(item.id);
+                return (
+                  <div
+                    key={item.id}
+                    className="border border-gray-200 rounded-lg overflow-hidden"
+                  >
+                    <div
+                      className="bg-gray-50 p-4 cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => toggleFeedbackExpanded(item.id)}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-3 flex-1">
+                          <div className="mt-1">
+                            {getTypeIcon(item.type)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-medium text-gray-900">
+                                {item.title || `${item.type} jelentés`}
+                              </span>
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(item.status)}`}>
+                                {item.status === 'open' && 'Nyitott'}
+                                {item.status === 'in_progress' && 'Folyamatban'}
+                                {item.status === 'resolved' && 'Megoldva'}
+                                {item.status === 'closed' && 'Lezárva'}
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-600 line-clamp-2">
+                              {item.description}
+                            </p>
+                            <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                              <span>{item.user_email || 'Névtelen'}</span>
+                              <span>•</span>
+                              <span>{new Date(item.created_at).toLocaleString('hu-HU')}</span>
+                              {item.type === 'error' || item.type === 'crash' ? (
+                                <>
+                                  <span>•</span>
+                                  <span className="text-red-600 font-medium">Hiba log elérhető</span>
+                                </>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 ml-4">
+                          <select
+                            value={item.status}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              updateFeedbackStatus(item.id, e.target.value);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="form-input text-xs"
+                          >
+                            <option value="open">Nyitott</option>
+                            <option value="in_progress">Folyamatban</option>
+                            <option value="resolved">Megoldva</option>
+                            <option value="closed">Lezárva</option>
+                          </select>
+                          {isExpanded ? (
+                            <ChevronUp className="w-5 h-5 text-gray-400" />
+                          ) : (
+                            <ChevronDown className="w-5 h-5 text-gray-400" />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    {isExpanded && (
+                      <div className="p-4 bg-white border-t border-gray-200">
+                        <div className="space-y-4">
+                          <div>
+                            <h4 className="text-sm font-medium text-gray-700 mb-1">Leírás</h4>
+                            <p className="text-sm text-gray-900 whitespace-pre-wrap">{item.description}</p>
+                          </div>
+                          {(item.error_log || item.error_stack) && (
+                            <div>
+                              <h4 className="text-sm font-medium text-gray-700 mb-1">Error log</h4>
+                              <pre className="text-xs bg-gray-100 p-3 rounded overflow-auto max-h-64">
+                                {item.error_log || item.error_stack}
+                              </pre>
+                            </div>
+                          )}
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <span className="font-medium text-gray-700">URL:</span>
+                              <span className="ml-2 text-gray-600">{item.url || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-700">User Agent:</span>
+                              <span className="ml-2 text-gray-600 text-xs">{item.user_agent || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-700">Létrehozva:</span>
+                              <span className="ml-2 text-gray-600">{new Date(item.created_at).toLocaleString('hu-HU')}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-700">Frissítve:</span>
+                              <span className="ml-2 text-gray-600">{new Date(item.updated_at).toLocaleString('hu-HU')}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

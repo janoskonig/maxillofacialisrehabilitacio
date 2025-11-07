@@ -38,7 +38,7 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { email, password, role, active } = body;
+    const { email, password, role, active, restricted_view } = body;
 
     const pool = getDbPool();
 
@@ -57,6 +57,7 @@ export async function PUT(
     const isOwnProfile = auth.userId === params.id;
     const canModifyRole = auth.role === 'admin';
     const canModifyActive = auth.role === 'admin';
+    const canModifyRestrictedView = auth.role === 'admin';
 
     if (!isOwnProfile && !canModifyRole) {
       return NextResponse.json(
@@ -121,6 +122,18 @@ export async function PUT(
       paramIndex++;
     }
 
+    if (restricted_view !== undefined) {
+      if (!canModifyRestrictedView) {
+        return NextResponse.json(
+          { error: 'Nincs jogosultsága a korlátozott nézet beállításához' },
+          { status: 403 }
+        );
+      }
+      updates.push(`restricted_view = $${paramIndex}`);
+      values.push(restricted_view);
+      paramIndex++;
+    }
+
     if (updates.length === 0) {
       return NextResponse.json(
         { error: 'Nincs módosítandó mező' },
@@ -129,7 +142,7 @@ export async function PUT(
     }
 
     values.push(params.id);
-    const query = `UPDATE users SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramIndex} RETURNING id, email, role, active, updated_at`;
+    const query = `UPDATE users SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramIndex} RETURNING id, email, role, active, restricted_view, updated_at`;
 
     const result = await pool.query(query, values);
 

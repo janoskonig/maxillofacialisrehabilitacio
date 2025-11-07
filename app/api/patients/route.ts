@@ -10,10 +10,18 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const query = searchParams.get('q');
 
+    // Ellenőrizzük a felhasználó restricted_view beállítását
+    const auth = await verifyAuth(request);
+    const restrictedView = auth?.restrictedView || false;
+
     let result;
     
     if (query) {
       // Keresés
+      const searchCondition = restrictedView
+        ? `(nev ILIKE $1 OR taj ILIKE $1 OR telefonszam ILIKE $1 OR email ILIKE $1 OR beutalo_orvos ILIKE $1 OR beutalo_intezmeny ILIKE $1 OR kezeleoorvos ILIKE $1) AND kezelesi_terv_arcot_erinto IS NOT NULL AND jsonb_array_length(kezelesi_terv_arcot_erinto) > 0`
+        : `(nev ILIKE $1 OR taj ILIKE $1 OR telefonszam ILIKE $1 OR email ILIKE $1 OR beutalo_orvos ILIKE $1 OR beutalo_intezmeny ILIKE $1 OR kezeleoorvos ILIKE $1)`;
+      
       result = await pool.query(
         `SELECT 
           id,
@@ -73,24 +81,22 @@ export async function GET(request: NextRequest) {
           tnm_staging as "tnmStaging",
           kezelesi_terv_felso as "kezelesiTervFelso",
           kezelesi_terv_also as "kezelesiTervAlso",
+          kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
           created_at as "createdAt",
           updated_at as "updatedAt",
           created_by as "createdBy",
           updated_by as "updatedBy"
         FROM patients
-        WHERE 
-          nev ILIKE $1 OR
-          taj ILIKE $1 OR
-          telefonszam ILIKE $1 OR
-          email ILIKE $1 OR
-          beutalo_orvos ILIKE $1 OR
-          beutalo_intezmeny ILIKE $1 OR
-          kezeleoorvos ILIKE $1
+        WHERE ${searchCondition}
         ORDER BY created_at DESC`,
         [`%${query}%`]
       );
     } else {
       // Összes beteg
+      const whereClause = restrictedView
+        ? 'WHERE kezelesi_terv_arcot_erinto IS NOT NULL AND jsonb_array_length(kezelesi_terv_arcot_erinto) > 0'
+        : '';
+      
       result = await pool.query(
         `SELECT 
           id,
@@ -150,11 +156,13 @@ export async function GET(request: NextRequest) {
           tnm_staging as "tnmStaging",
           kezelesi_terv_felso as "kezelesiTervFelso",
           kezelesi_terv_also as "kezelesiTervAlso",
+          kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
           created_at as "createdAt",
           updated_at as "updatedAt",
           created_by as "createdBy",
           updated_by as "updatedBy"
         FROM patients
+        ${whereClause}
         ORDER BY created_at DESC`
       );
     }
@@ -213,6 +221,30 @@ export async function POST(request: NextRequest) {
     
     const pool = getDbPool();
     const userEmail = auth.email;
+    
+    // TAJ-szám egyediség ellenőrzése
+    if (validatedPatient.taj && validatedPatient.taj.trim() !== '') {
+      // Normalizáljuk a TAJ-számot (eltávolítjuk a kötőjeleket)
+      const normalizedTAJ = validatedPatient.taj.replace(/-/g, '');
+      
+      // Ellenőrizzük, hogy létezik-e már beteg ezzel a TAJ-számmal
+      const existingPatient = await pool.query(
+        `SELECT id, nev, taj FROM patients 
+         WHERE REPLACE(taj, '-', '') = $1`,
+        [normalizedTAJ]
+      );
+      
+      if (existingPatient.rows.length > 0) {
+        const existing = existingPatient.rows[0];
+        return NextResponse.json(
+          { 
+            error: 'Már létezik beteg ezzel a TAJ-számmal',
+            details: `A TAJ-szám (${validatedPatient.taj}) már használatban van. Beteg: ${existing.nev || 'Név nélküli'} (ID: ${existing.id})`
+          },
+          { status: 409 }
+        );
+      }
+    }
     
     // Új betegnél ne generáljunk ID-t, hagyjuk az adatbázisnak generálni (DEFAULT generate_uuid())
     // Csak import esetén használjuk a megadott ID-t
@@ -294,6 +326,9 @@ export async function POST(request: NextRequest) {
       validatedPatient.kezelesiTervAlso && Array.isArray(validatedPatient.kezelesiTervAlso)
         ? JSON.stringify(validatedPatient.kezelesiTervAlso)
         : '[]',
+      validatedPatient.kezelesiTervArcotErinto && Array.isArray(validatedPatient.kezelesiTervArcotErinto)
+        ? JSON.stringify(validatedPatient.kezelesiTervArcotErinto)
+        : '[]',
       userEmail
     );
     
@@ -320,7 +355,7 @@ export async function POST(request: NextRequest) {
         meglevo_implantatumok, nem_ismert_poziciokban_implantatum,
         nem_ismert_poziciokban_implantatum_reszletek,
         tnm_staging,
-        kezelesi_terv_felso, kezelesi_terv_also,
+        kezelesi_terv_felso, kezelesi_terv_also, kezelesi_terv_arcot_erinto,
         created_by
       ) VALUES (
         ${paramPlaceholders}
@@ -365,6 +400,7 @@ export async function POST(request: NextRequest) {
         tnm_staging as "tnmStaging",
         kezelesi_terv_felso as "kezelesiTervFelso",
         kezelesi_terv_also as "kezelesiTervAlso",
+        kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
         created_at as "createdAt", updated_at as "updatedAt",
         created_by as "createdBy", updated_by as "updatedBy"`,
       values

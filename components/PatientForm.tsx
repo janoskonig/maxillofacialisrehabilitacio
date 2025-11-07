@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Patient, patientSchema, beutaloIntezmenyOptions, nyakiBlokkdisszekcioOptions, fabianFejerdyProtetikaiOsztalyOptions, kezeleoorvosOptions, kezelesiTervOptions } from '@/lib/types';
+import { Patient, patientSchema, beutaloIntezmenyOptions, nyakiBlokkdisszekcioOptions, fabianFejerdyProtetikaiOsztalyOptions, kezeleoorvosOptions, kezelesiTervOptions, kezelesiTervArcotErintoTipusOptions, kezelesiTervArcotErintoElhorgonyzasOptions } from '@/lib/types';
 import { formatDateForInput } from '@/lib/dateUtils';
 import { X, Calendar, User, Phone, Mail, MapPin, FileText, AlertTriangle, Plus, Trash2 } from 'lucide-react';
 
@@ -128,6 +128,10 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         ...item,
         tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
       })) || [],
+      kezelesiTervArcotErinto: patient.kezelesiTervArcotErinto?.map(item => ({
+        ...item,
+        tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+      })) || [],
     } : {
       radioterapia: false,
       chemoterapia: false,
@@ -138,6 +142,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       alsoFogpotlasElegedett: true,
       kezelesiTervFelso: [],
       kezelesiTervAlso: [],
+      kezelesiTervArcotErinto: [],
     },
   });
 
@@ -153,6 +158,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
   const [fogak, setFogak] = useState<Record<string, string>>(patient?.meglevoFogak || {});
   const kezelesiTervFelso = watch('kezelesiTervFelso') || [];
   const kezelesiTervAlso = watch('kezelesiTervAlso') || [];
+  const kezelesiTervArcotErinto = watch('kezelesiTervArcotErinto') || [];
   // State for "vanBeutalo" toggle (default true if bármely beutaló-adat van)
   const initialVanBeutalo = !!(patient?.beutaloOrvos || patient?.beutaloIntezmeny || patient?.kezelesreErkezesIndoka);
   const [vanBeutalo, setVanBeutalo] = useState(initialVanBeutalo);
@@ -338,6 +344,29 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     const updated = [...current];
     updated[index] = { ...updated[index], [field]: value };
     setValue('kezelesiTervAlso', updated);
+  };
+
+  const addKezelesiTervArcotErinto = () => {
+    if (isViewOnly) return;
+    const current = kezelesiTervArcotErinto || [];
+    setValue('kezelesiTervArcotErinto', [
+      ...current,
+      { tipus: 'orrepitézis', elhorgonyzasEszkoze: null, tervezettAtadasDatuma: null, elkeszult: false }
+    ]);
+  };
+
+  const removeKezelesiTervArcotErinto = (index: number) => {
+    if (isViewOnly) return;
+    const current = kezelesiTervArcotErinto || [];
+    setValue('kezelesiTervArcotErinto', current.filter((_, i) => i !== index));
+  };
+
+  const updateKezelesiTervArcotErinto = (index: number, field: 'tipus' | 'elhorgonyzasEszkoze' | 'tervezettAtadasDatuma' | 'elkeszult', value: any) => {
+    if (isViewOnly) return;
+    const current = kezelesiTervArcotErinto || [];
+    const updated = [...current];
+    updated[index] = { ...updated[index], [field]: value };
+    setValue('kezelesiTervArcotErinto', updated);
   };
 
   const handleToothToggle = (toothNumber: string) => {
@@ -724,12 +753,19 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
               </div>
               <div>
                 <label className="form-label">Beutaló intézmény</label>
-                <select {...register('beutaloIntezmeny')} className="form-input" disabled={isViewOnly || !vanBeutalo}>
-                  <option value="">Válasszon...</option>
+                <input
+                  {...register('beutaloIntezmeny')}
+                  list="beutalo-intezmeny-options"
+                  className="form-input"
+                  placeholder="Beutaló intézmény neve"
+                  readOnly={isViewOnly}
+                  disabled={!vanBeutalo}
+                />
+                <datalist id="beutalo-intezmeny-options">
                   {beutaloIntezmenyOptions.map((option) => (
-                    <option key={option} value={option}>{option}</option>
+                    <option key={option} value={option} />
                   ))}
-                </select>
+                </datalist>
               </div>
               <div className="md:col-span-2">
                 <label className="form-label">Indokolás</label>
@@ -1693,6 +1729,113 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                               disabled={isViewOnly}
                             />
                             <label className="ml-2 text-sm text-gray-700">Elkészült a fogpótlás</label>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+            
+            {/* Arcot érintő rehabilitáció */}
+            <div className="border-t pt-4">
+              <div className="flex justify-between items-center mb-3">
+                <h5 className="text-md font-semibold text-gray-900">Arcot érintő rehabilitáció</h5>
+                {!isViewOnly && (
+                  <button
+                    type="button"
+                    onClick={addKezelesiTervArcotErinto}
+                    className="btn-secondary flex items-center gap-2 text-sm py-1 px-3"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Új tervezet hozzáadása
+                  </button>
+                )}
+              </div>
+              <div className="space-y-4">
+                {kezelesiTervArcotErinto.length === 0 ? (
+                  <p className="text-sm text-gray-500 italic">Még nincs tervezet hozzáadva</p>
+                ) : (
+                  kezelesiTervArcotErinto.map((terv, index) => (
+                    <div key={index} className="border border-gray-200 rounded-md p-4 bg-gray-50">
+                      <div className="flex justify-between items-start mb-3">
+                        <span className="text-sm font-medium text-gray-700">Tervezet #{index + 1}</span>
+                        {!isViewOnly && (
+                          <button
+                            type="button"
+                            onClick={() => removeKezelesiTervArcotErinto(index)}
+                            className="text-red-600 hover:text-red-800"
+                            title="Törlés"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="form-label">Típus</label>
+                          <select
+                            value={terv.tipus || ''}
+                            onChange={(e) => updateKezelesiTervArcotErinto(index, 'tipus', e.target.value)}
+                            className="form-input"
+                            disabled={isViewOnly}
+                          >
+                            <option value="">Válasszon...</option>
+                            {kezelesiTervArcotErintoTipusOptions.map((option) => (
+                              <option key={option} value={option}>{option}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="form-label">Elhorgonyzás eszköze</label>
+                          <select
+                            value={terv.elhorgonyzasEszkoze || ''}
+                            onChange={(e) => updateKezelesiTervArcotErinto(index, 'elhorgonyzasEszkoze', e.target.value || null)}
+                            className="form-input"
+                            disabled={isViewOnly}
+                          >
+                            <option value="">Válasszon...</option>
+                            {kezelesiTervArcotErintoElhorgonyzasOptions.map((option) => (
+                              <option key={option} value={option}>{option}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="form-label">Tervezett átadás dátuma</label>
+                            <input
+                              type="text"
+                              pattern="\d{4}-\d{2}-\d{2}"
+                              placeholder="YYYY-MM-DD"
+                              value={terv.tervezettAtadasDatuma || ''}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                updateKezelesiTervArcotErinto(index, 'tervezettAtadasDatuma', value);
+                              }}
+                              onBlur={(e) => {
+                                const value = e.target.value.trim();
+                                if (value) {
+                                  const formatted = formatDateForInput(value);
+                                  // Csak akkor frissítjük, ha a formázás sikeres volt és nem üres
+                                  if (formatted && formatted !== '') {
+                                    updateKezelesiTervArcotErinto(index, 'tervezettAtadasDatuma', formatted);
+                                  }
+                                }
+                              }}
+                              className="form-input"
+                              readOnly={isViewOnly}
+                            />
+                          </div>
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={terv.elkeszult || false}
+                              onChange={(e) => updateKezelesiTervArcotErinto(index, 'elkeszult', e.target.checked)}
+                              className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
+                              disabled={isViewOnly}
+                            />
+                            <label className="ml-2 text-sm text-gray-700">Elkészült</label>
                           </div>
                         </div>
                       </div>

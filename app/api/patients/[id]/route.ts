@@ -69,6 +69,7 @@ export async function GET(
         tnm_staging as "tnmStaging",
         kezelesi_terv_felso as "kezelesiTervFelso",
         kezelesi_terv_also as "kezelesiTervAlso",
+        kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
         created_at as "createdAt",
         updated_at as "updatedAt",
         created_by as "createdBy",
@@ -148,6 +149,34 @@ export async function PUT(
     
     const oldPatient = oldPatientResult.rows[0];
     
+    // TAJ-szám egyediség ellenőrzése (ha változott)
+    if (validatedPatient.taj && validatedPatient.taj.trim() !== '') {
+      // Normalizáljuk a TAJ-számot (eltávolítjuk a kötőjeleket)
+      const normalizedTAJ = validatedPatient.taj.replace(/-/g, '');
+      const oldNormalizedTAJ = oldPatient.taj ? oldPatient.taj.replace(/-/g, '') : '';
+      
+      // Csak akkor ellenőrizzük, ha a TAJ-szám változott
+      if (normalizedTAJ !== oldNormalizedTAJ) {
+        // Ellenőrizzük, hogy létezik-e már másik beteg ezzel a TAJ-számmal
+        const existingPatient = await pool.query(
+          `SELECT id, nev, taj FROM patients 
+           WHERE REPLACE(taj, '-', '') = $1 AND id != $2`,
+          [normalizedTAJ, params.id]
+        );
+        
+        if (existingPatient.rows.length > 0) {
+          const existing = existingPatient.rows[0];
+          return NextResponse.json(
+            { 
+              error: 'Már létezik beteg ezzel a TAJ-számmal',
+              details: `A TAJ-szám (${validatedPatient.taj}) már használatban van. Beteg: ${existing.nev || 'Név nélküli'} (ID: ${existing.id})`
+            },
+            { status: 409 }
+          );
+        }
+      }
+    }
+    
     const result = await pool.query(
       `UPDATE patients SET
         nev = $2,
@@ -206,8 +235,9 @@ export async function PUT(
         tnm_staging = $55,
         kezelesi_terv_felso = $56::jsonb,
         kezelesi_terv_also = $57::jsonb,
+        kezelesi_terv_arcot_erinto = $58::jsonb,
         updated_at = CURRENT_TIMESTAMP,
-        updated_by = $58
+        updated_by = $59
       WHERE id = $1
       RETURNING 
         id, nev, taj, telefonszam, szuletesi_datum as "szuletesiDatum", nem,
@@ -249,6 +279,7 @@ export async function PUT(
         tnm_staging as "tnmStaging",
         kezelesi_terv_felso as "kezelesiTervFelso",
         kezelesi_terv_also as "kezelesiTervAlso",
+        kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
         created_at as "createdAt", updated_at as "updatedAt",
         created_by as "createdBy", updated_by as "updatedBy"`,
       [
@@ -316,6 +347,9 @@ export async function PUT(
           : '[]',
         validatedPatient.kezelesiTervAlso && Array.isArray(validatedPatient.kezelesiTervAlso)
           ? JSON.stringify(validatedPatient.kezelesiTervAlso)
+          : '[]',
+        validatedPatient.kezelesiTervArcotErinto && Array.isArray(validatedPatient.kezelesiTervArcotErinto)
+          ? JSON.stringify(validatedPatient.kezelesiTervArcotErinto)
           : '[]',
         userEmail
       ]
@@ -399,6 +433,7 @@ export async function PUT(
         tnm_staging: 'TNM staging',
         kezelesi_terv_felso: 'Kezelési terv (felső)',
         kezelesi_terv_also: 'Kezelési terv (alsó)',
+        kezelesi_terv_arcot_erinto: 'Kezelési terv (arcot érintő rehabilitáció)',
       };
       
       // Check all fields for changes
@@ -447,6 +482,7 @@ export async function PUT(
         else if (dbField === 'tnm_staging') newVal = normalize(validatedPatient.tnmStaging);
         else if (dbField === 'kezelesi_terv_felso') newVal = normalize(validatedPatient.kezelesiTervFelso);
         else if (dbField === 'kezelesi_terv_also') newVal = normalize(validatedPatient.kezelesiTervAlso);
+        else if (dbField === 'kezelesi_terv_arcot_erinto') newVal = normalize(validatedPatient.kezelesiTervArcotErinto);
         else {
           // Direct field name mapping (camelCase to snake_case handled above)
           const camelField = dbField.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
