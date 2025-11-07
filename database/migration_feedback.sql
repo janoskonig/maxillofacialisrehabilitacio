@@ -44,3 +44,4 @@ COMMENT ON COLUMN feedback.type IS 'Visszajelzés típusa: bug, error, crash, su
 COMMENT ON COLUMN feedback.error_log IS 'Teljes error log crash/error esetén';
 COMMENT ON COLUMN feedback.error_stack IS 'Stack trace ha elérhető';
 
+

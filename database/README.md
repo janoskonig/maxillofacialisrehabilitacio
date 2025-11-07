@@ -131,3 +131,4 @@ npx prisma init
 - [ ] Adatbázis migrációs scriptek
 
 
+
