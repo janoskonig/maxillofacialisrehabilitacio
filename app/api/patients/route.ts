@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { Patient, patientSchema } from '@/lib/types';
 import { verifyAuth } from '@/lib/auth-server';
+import { sendPatientCreationNotification } from '@/lib/email';
 
 // Összes beteg lekérdezése
 export async function GET(request: NextRequest) {
@@ -23,19 +24,8 @@ export async function GET(request: NextRequest) {
     if (role === 'technikus') {
       // Technikus: csak azokat a betegeket látja, akikhez epitézist rendeltek
       whereConditions.push('kezelesi_terv_arcot_erinto IS NOT NULL AND jsonb_array_length(kezelesi_terv_arcot_erinto) > 0');
-    } else if (role === 'sebészorvos') {
-      // Sebészorvos: csak azokat a betegeket látja, akiket ő utalt be
-      // Pontos egyezés: a beutalo_orvos mező pontosan egyezzen az email címmel
-      if (userEmail) {
-        whereConditions.push(`beutalo_orvos = $${paramIndex}`);
-        queryParams.push(userEmail);
-        paramIndex += 1;
-      } else {
-        // Ha nincs email, nem lát semmit
-        whereConditions.push('1 = 0');
-      }
     }
-    // fogpótlástanász, admin, editor, viewer: mindent látnak (nincs szűrés)
+    // sebészorvos, fogpótlástanász, admin, editor, viewer: mindent látnak (nincs szűrés)
     
     let result;
     
@@ -459,6 +449,29 @@ export async function POST(request: NextRequest) {
     } catch (logError) {
       console.error('Failed to log activity:', logError);
       // Don't fail the request if logging fails
+    }
+
+    // Send email notification to admins if surgeon created the patient
+    if (role === 'sebészorvos') {
+      try {
+        const adminResult = await pool.query(
+          `SELECT email FROM users WHERE role = 'admin' AND active = true`
+        );
+        const adminEmails = adminResult.rows.map((row: any) => row.email);
+        
+        if (adminEmails.length > 0) {
+          await sendPatientCreationNotification(
+            adminEmails,
+            result.rows[0].nev,
+            result.rows[0].taj,
+            userEmail,
+            result.rows[0].createdAt || new Date().toISOString()
+          );
+        }
+      } catch (emailError) {
+        console.error('Failed to send patient creation notification email:', emailError);
+        // Don't fail the request if email fails
+      }
     }
     
     return NextResponse.json({ patient: result.rows[0] }, { status: 201 });

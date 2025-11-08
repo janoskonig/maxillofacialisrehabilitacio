@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Patient, patientSchema, beutaloIntezmenyOptions, nyakiBlokkdisszekcioOptions, fabianFejerdyProtetikaiOsztalyOptions, kezeleoorvosOptions, kezelesiTervOptions, kezelesiTervArcotErintoTipusOptions, kezelesiTervArcotErintoElhorgonyzasOptions } from '@/lib/types';
 import { formatDateForInput } from '@/lib/dateUtils';
 import { X, Calendar, User, Phone, Mail, MapPin, FileText, AlertTriangle, Plus, Trash2 } from 'lucide-react';
+import { AppointmentBookingSection } from './AppointmentBookingSection';
 
 const DRAFT_STORAGE_KEY_PREFIX = 'patientFormDraft_';
 const DRAFT_TIMESTAMP_KEY_PREFIX = 'patientFormDraftTimestamp_';
@@ -2137,6 +2138,9 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
             </div>
           </div>
         </div>
+
+        {/* Appointment Booking Section */}
+        <AppointmentBookingSection patientId={patientId} isViewOnly={isViewOnly} />
 
         {/* Form Actions */}
         <div className="pt-6 border-t space-y-4">

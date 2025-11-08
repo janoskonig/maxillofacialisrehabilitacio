@@ -6,7 +6,7 @@ import { Patient, patientSchema } from '@/lib/types';
 import { getAllPatients, savePatient, searchPatients } from '@/lib/storage';
 import { PatientForm } from '@/components/PatientForm';
 import { PatientList } from '@/components/PatientList';
-import { Plus, Search, Users, LogOut, Shield, Settings } from 'lucide-react';
+import { Plus, Search, Users, LogOut, Shield, Settings, Calendar } from 'lucide-react';
 import { getCurrentUser, getUserEmail, getUserRole, logout } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
 
@@ -159,6 +159,27 @@ export default function Home() {
       </header>
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="space-y-6">
+          {/* Link to time slots management page for fogpótlástanász and admin */}
+          {(userRole === 'fogpótlástanász' || userRole === 'admin') && (
+            <div className="card p-4">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Időpontkezelés</h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Hozzon létre és kezeljen szabad időpontokat
+                  </p>
+                </div>
+                <button
+                  onClick={() => router.push('/time-slots')}
+                  className="btn-primary flex items-center gap-2"
+                >
+                  <Calendar className="w-4 h-4" />
+                  Időpontok kezelése
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Header */}
           <div className="flex justify-between items-center">
         <div>
@@ -196,73 +217,79 @@ export default function Home() {
             <LogOut className="w-4 h-4" />
             Kijelentkezés
           </button>
-          <button
-            onClick={handleNewPatient}
-            className="btn-primary flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Új beteg
-          </button>
+          {(userRole === 'admin' || userRole === 'editor' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos') && (
+            <button
+              onClick={handleNewPatient}
+              className="btn-primary flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Új beteg
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-        <input
-          type="text"
-          placeholder="Keresés név, TAJ szám vagy telefon alapján..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="form-input pl-10"
-        />
-      </div>
+          {/* Patient Management Section - shown for all roles */}
+          <>
+              {/* Search */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
+                  placeholder="Keresés név, TAJ szám vagy telefon alapján..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="form-input pl-10"
+                />
+              </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="card">
-          <div className="flex items-center">
-            <Users className="w-8 h-8 text-medical-primary" />
-            <div className="ml-3">
-              <p className="text-sm font-medium text-gray-500">Összes beteg</p>
-              <p className="text-2xl font-bold text-gray-900">{patients.length}</p>
-            </div>
-          </div>
-        </div>
-        <div className="card">
-          <div className="flex items-center">
-            <Search className="w-8 h-8 text-medical-accent" />
-            <div className="ml-3">
-              <p className="text-sm font-medium text-gray-500">Keresési eredmények</p>
-              <p className="text-2xl font-bold text-gray-900">{filteredPatients.length}</p>
-            </div>
-          </div>
-        </div>
-        <div className="card">
-          <div className="flex items-center">
-            <Plus className="w-8 h-8 text-medical-success" />
-            <div className="ml-3">
-              <p className="text-sm font-medium text-gray-500">Új ebben a hónapban</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {patients.filter(p => {
-                  const created = new Date(p.createdAt || '');
-                  const now = new Date();
-                  return created.getMonth() === now.getMonth() && 
-                         created.getFullYear() === now.getFullYear();
-                }).length}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+              {/* Stats */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="card">
+                  <div className="flex items-center">
+                    <Users className="w-8 h-8 text-medical-primary" />
+                    <div className="ml-3">
+                      <p className="text-sm font-medium text-gray-500">Összes beteg</p>
+                      <p className="text-2xl font-bold text-gray-900">{patients.length}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="card">
+                  <div className="flex items-center">
+                    <Search className="w-8 h-8 text-medical-accent" />
+                    <div className="ml-3">
+                      <p className="text-sm font-medium text-gray-500">Keresési eredmények</p>
+                      <p className="text-2xl font-bold text-gray-900">{filteredPatients.length}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="card">
+                  <div className="flex items-center">
+                    <Plus className="w-8 h-8 text-medical-success" />
+                    <div className="ml-3">
+                      <p className="text-sm font-medium text-gray-500">Új ebben a hónapban</p>
+                      <p className="text-2xl font-bold text-gray-900">
+                        {patients.filter(p => {
+                          const created = new Date(p.createdAt || '');
+                          const now = new Date();
+                          return created.getMonth() === now.getMonth() && 
+                                 created.getFullYear() === now.getFullYear();
+                        }).length}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-      {/* Patient List */}
-      <PatientList
-        patients={filteredPatients}
-        onView={handleViewPatient}
-        onEdit={handleEditPatient}
-        canEdit={userRole === 'admin' || userRole === 'editor' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos'}
-      />
+              {/* Patient List */}
+              <PatientList
+                patients={filteredPatients}
+                onView={handleViewPatient}
+                onEdit={handleEditPatient}
+                canEdit={userRole === 'admin' || userRole === 'editor' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos'}
+              />
+            </>
+          )}
 
       {/* Patient Form Modal */}
       {showForm && (

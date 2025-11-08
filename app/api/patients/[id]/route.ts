@@ -185,10 +185,10 @@ export async function PUT(
     
     // Szerepkör alapú jogosultság ellenőrzés szerkesztéshez
     if (role === 'sebészorvos') {
-      // Sebészorvos: csak azokat a betegeket szerkesztheti, akiket ő utalt be
-      if (!userEmail || oldPatient.beutalo_orvos !== userEmail) {
+      // Sebészorvos: csak azokat a betegeket szerkesztheti, akiket ő hozott létre (created_by)
+      if (!userEmail || oldPatient.created_by !== userEmail) {
         return NextResponse.json(
-          { error: 'Nincs jogosultsága ehhez a beteg szerkesztéséhez' },
+          { error: 'Nincs jogosultsága ehhez a beteg szerkesztéséhez. Csak az általuk létrehozott betegeket szerkeszthetik.' },
           { status: 403 }
         );
       }
