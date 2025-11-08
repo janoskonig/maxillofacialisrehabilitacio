@@ -1,7 +1,8 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { Patient } from '@/lib/types';
-import { Phone, Mail, Calendar, FileText, Eye, Pencil, CheckCircle2, XCircle } from 'lucide-react';
+import { Phone, Mail, Calendar, FileText, Eye, Pencil, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import { formatDateForDisplay, calculateAge } from '@/lib/dateUtils';
 
 interface PatientListProps {
@@ -9,9 +10,50 @@ interface PatientListProps {
   onView: (patient: Patient) => void;
   onEdit?: (patient: Patient) => void;
   canEdit?: boolean;
+  userRole?: 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
 }
 
-export function PatientList({ patients, onView, onEdit, canEdit = false }: PatientListProps) {
+interface AppointmentInfo {
+  id: string;
+  startTime: string;
+  dentistEmail: string | null;
+}
+
+export function PatientList({ patients, onView, onEdit, canEdit = false, userRole }: PatientListProps) {
+  const [appointments, setAppointments] = useState<Record<string, AppointmentInfo>>({});
+  const [loadingAppointments, setLoadingAppointments] = useState(false);
+
+  // Load appointments if surgeon role
+  useEffect(() => {
+    if (userRole === 'sebészorvos') {
+      loadAppointments();
+    }
+  }, [userRole, patients]);
+
+  const loadAppointments = async () => {
+    try {
+      setLoadingAppointments(true);
+      const response = await fetch('/api/appointments', {
+        credentials: 'include',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const appointmentsMap: Record<string, AppointmentInfo> = {};
+        (data.appointments || []).forEach((apt: any) => {
+          appointmentsMap[apt.patientId] = {
+            id: apt.id,
+            startTime: apt.startTime,
+            dentistEmail: apt.dentistEmail,
+          };
+        });
+        setAppointments(appointmentsMap);
+      }
+    } catch (error) {
+      console.error('Error loading appointments:', error);
+    } finally {
+      setLoadingAppointments(false);
+    }
+  };
   if (patients.length === 0) {
     return (
       <div className="card text-center py-12">
@@ -45,12 +87,22 @@ export function PatientList({ patients, onView, onEdit, canEdit = false }: Patie
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Kezelőorvos
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Tervezett fogpótlás (felső)
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Tervezett fogpótlás (alsó)
-              </th>
+              {userRole === 'sebészorvos' ? (
+                <>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Időpont
+                  </th>
+                </>
+              ) : (
+                <>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Tervezett fogpótlás (felső)
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Tervezett fogpótlás (alsó)
+                  </th>
+                </>
+              )}
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Létrehozva
               </th>
@@ -127,66 +179,92 @@ export function PatientList({ patients, onView, onEdit, canEdit = false }: Patie
                     {patient.kezeleoorvos || 'Kezelőorvosra vár'}
                   </div>
                 </td>
-                <td className="px-6 py-4">
-                  <div className="text-sm text-gray-900">
-                    {patient.kezelesiTervFelso && Array.isArray(patient.kezelesiTervFelso) && patient.kezelesiTervFelso.length > 0 ? (
-                      <div className="space-y-2">
-                        {patient.kezelesiTervFelso.map((terv: any, idx: number) => (
-                          <div key={idx} className="border-b border-gray-100 pb-2 last:border-0 last:pb-0">
-                            <div className="font-medium text-xs">{terv.tipus || '-'}</div>
-                            {terv.tervezettAtadasDatuma && (
-                              <div className="text-xs text-gray-500 flex items-center mt-1">
-                                <Calendar className="w-3 h-3 mr-1" />
-                                {formatDateForDisplay(terv.tervezettAtadasDatuma)}
-                              </div>
-                            )}
-                            <div className="mt-1">
-                              {terv.elkeszult ? (
-                                <span className="inline" title="Elkészült">
-                                  <CheckCircle2 className="w-3 h-3 text-green-600" />
-                                </span>
-                              ) : (
-                                <span className="inline" title="Nincs elkészítve">
-                                  <XCircle className="w-3 h-3 text-gray-400" />
-                                </span>
-                              )}
-                            </div>
+                {userRole === 'sebészorvos' ? (
+                  <td className="px-6 py-4">
+                    {loadingAppointments ? (
+                      <div className="text-sm text-gray-500">Betöltés...</div>
+                    ) : appointments[patient.id || ''] ? (
+                      <div className="text-sm">
+                        <div className="flex items-center text-gray-900">
+                          <Clock className="w-4 h-4 mr-1 text-medical-primary" />
+                          <span className="font-medium">
+                            {formatDateForDisplay(appointments[patient.id || ''].startTime)}
+                          </span>
+                        </div>
+                        {appointments[patient.id || ''].dentistEmail && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            Fogpótlástanász: {appointments[patient.id || ''].dentistEmail}
                           </div>
-                        ))}
+                        )}
                       </div>
-                    ) : '-'}
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="text-sm text-gray-900">
-                    {patient.kezelesiTervAlso && Array.isArray(patient.kezelesiTervAlso) && patient.kezelesiTervAlso.length > 0 ? (
-                      <div className="space-y-2">
-                        {patient.kezelesiTervAlso.map((terv: any, idx: number) => (
-                          <div key={idx} className="border-b border-gray-100 pb-2 last:border-0 last:pb-0">
-                            <div className="font-medium text-xs">{terv.tipus || '-'}</div>
-                            {terv.tervezettAtadasDatuma && (
-                              <div className="text-xs text-gray-500 flex items-center mt-1">
-                                <Calendar className="w-3 h-3 mr-1" />
-                                {formatDateForDisplay(terv.tervezettAtadasDatuma)}
+                    ) : (
+                      <div className="text-sm text-gray-400">Nincs időpont</div>
+                    )}
+                  </td>
+                ) : (
+                  <>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-gray-900">
+                        {patient.kezelesiTervFelso && Array.isArray(patient.kezelesiTervFelso) && patient.kezelesiTervFelso.length > 0 ? (
+                          <div className="space-y-2">
+                            {patient.kezelesiTervFelso.map((terv: any, idx: number) => (
+                              <div key={idx} className="border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                                <div className="font-medium text-xs">{terv.tipus || '-'}</div>
+                                {terv.tervezettAtadasDatuma && (
+                                  <div className="text-xs text-gray-500 flex items-center mt-1">
+                                    <Calendar className="w-3 h-3 mr-1" />
+                                    {formatDateForDisplay(terv.tervezettAtadasDatuma)}
+                                  </div>
+                                )}
+                                <div className="mt-1">
+                                  {terv.elkeszult ? (
+                                    <span className="inline" title="Elkészült">
+                                      <CheckCircle2 className="w-3 h-3 text-green-600" />
+                                    </span>
+                                  ) : (
+                                    <span className="inline" title="Nincs elkészítve">
+                                      <XCircle className="w-3 h-3 text-gray-400" />
+                                    </span>
+                                  )}
+                                </div>
                               </div>
-                            )}
-                            <div className="mt-1">
-                              {terv.elkeszult ? (
-                                <span className="inline" title="Elkészült">
-                                  <CheckCircle2 className="w-3 h-3 text-green-600" />
-                                </span>
-                              ) : (
-                                <span className="inline" title="Nincs elkészítve">
-                                  <XCircle className="w-3 h-3 text-gray-400" />
-                                </span>
-                              )}
-                            </div>
+                            ))}
                           </div>
-                        ))}
+                        ) : '-'}
                       </div>
-                    ) : '-'}
-                  </div>
-                </td>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-gray-900">
+                        {patient.kezelesiTervAlso && Array.isArray(patient.kezelesiTervAlso) && patient.kezelesiTervAlso.length > 0 ? (
+                          <div className="space-y-2">
+                            {patient.kezelesiTervAlso.map((terv: any, idx: number) => (
+                              <div key={idx} className="border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                                <div className="font-medium text-xs">{terv.tipus || '-'}</div>
+                                {terv.tervezettAtadasDatuma && (
+                                  <div className="text-xs text-gray-500 flex items-center mt-1">
+                                    <Calendar className="w-3 h-3 mr-1" />
+                                    {formatDateForDisplay(terv.tervezettAtadasDatuma)}
+                                  </div>
+                                )}
+                                <div className="mt-1">
+                                  {terv.elkeszult ? (
+                                    <span className="inline" title="Elkészült">
+                                      <CheckCircle2 className="w-3 h-3 text-green-600" />
+                                    </span>
+                                  ) : (
+                                    <span className="inline" title="Nincs elkészítve">
+                                      <XCircle className="w-3 h-3 text-gray-400" />
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : '-'}
+                      </div>
+                    </td>
+                  </>
+                )}
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center text-sm text-gray-500">
                     <Calendar className="w-4 h-4 mr-1 text-gray-400" />

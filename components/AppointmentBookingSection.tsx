@@ -30,33 +30,7 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
   const [loading, setLoading] = useState(true);
   const [selectedSlot, setSelectedSlot] = useState<string>('');
   const [userRole, setUserRole] = useState<string>('');
-
-  useEffect(() => {
-    const checkRole = async () => {
-      const user = await getCurrentUser();
-      if (user) {
-        setUserRole(user.role);
-      }
-    };
-    checkRole();
-    if (patientId) {
-      loadData();
-    }
-  }, [patientId]);
-
-  const loadData = async () => {
-    if (!patientId) return;
-    
-    try {
-      setLoading(true);
-      await Promise.all([
-        loadAvailableSlots(),
-        loadAppointments(),
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [roleLoaded, setRoleLoaded] = useState(false);
 
   const loadAvailableSlots = async () => {
     try {
@@ -91,6 +65,47 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
       console.error('Error loading appointments:', error);
     }
   };
+
+  const loadData = async () => {
+    if (!patientId) return;
+    
+    try {
+      setLoading(true);
+      await Promise.all([
+        loadAvailableSlots(),
+        loadAppointments(),
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const initialize = async () => {
+      setLoading(true);
+      
+      // Check role
+      const user = await getCurrentUser();
+      if (user) {
+        setUserRole(user.role);
+        setRoleLoaded(true);
+      } else {
+        setRoleLoaded(true);
+      }
+      
+      // Load time slots even if patientId is not available (for new patients)
+      await loadAvailableSlots();
+      
+      // Load appointments if patientId exists
+      if (patientId) {
+        await loadAppointments();
+      }
+      
+      setLoading(false);
+    };
+    
+    initialize();
+  }, [patientId]);
 
   const handleBookAppointment = async () => {
     if (!patientId || !selectedSlot) {
@@ -164,11 +179,18 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
     });
   };
 
-  // Only show for surgeons and admins, and only if patient exists (has ID)
-  if (!patientId || (userRole !== 'sebészorvos' && userRole !== 'admin')) {
+  // Only show for surgeons and admins
+  // Wait for role to load before making decision
+  if (!roleLoaded) {
+    // Still loading role, show nothing for now
     return null;
   }
-
+  
+  // Role is loaded, check if user is surgeon or admin
+  if (userRole !== 'sebészorvos' && userRole !== 'admin') {
+    return null;
+  }
+  
   const availableSlotsOnly = availableSlots.filter(slot => slot.status === 'available');
 
   if (loading) {
@@ -228,33 +250,39 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Szabad időpont kiválasztása
             </label>
-            <select
-              value={selectedSlot}
-              onChange={(e) => setSelectedSlot(e.target.value)}
-              className="form-input w-full"
-              disabled={isViewOnly}
-            >
-              <option value="">Válasszon időpontot...</option>
-              {availableSlotsOnly.map((slot) => (
-                <option key={slot.id} value={slot.id}>
-                  {formatDateTime(slot.startTime)}
-                </option>
-              ))}
-            </select>
-            {availableSlotsOnly.length === 0 && (
-              <p className="text-sm text-gray-500 mt-2">
-                Jelenleg nincs elérhető szabad időpont.
-              </p>
+            {availableSlotsOnly.length > 0 ? (
+              <select
+                value={selectedSlot}
+                onChange={(e) => setSelectedSlot(e.target.value)}
+                className="form-input w-full"
+                disabled={isViewOnly}
+              >
+                <option value="">Válasszon időpontot...</option>
+                {availableSlotsOnly.map((slot) => (
+                  <option key={slot.id} value={slot.id}>
+                    {formatDateTime(slot.startTime)}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
+                <p className="text-sm text-gray-600 flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-gray-400" />
+                  Jelenleg nincs elérhető szabad időpont.
+                </p>
+              </div>
             )}
           </div>
-          <button
-            onClick={handleBookAppointment}
-            disabled={!selectedSlot || isViewOnly}
-            className="btn-primary w-full flex items-center justify-center gap-2"
-          >
-            <Clock className="w-4 h-4" />
-            Időpont foglalása
-          </button>
+          {availableSlotsOnly.length > 0 && (
+            <button
+              onClick={handleBookAppointment}
+              disabled={!selectedSlot || isViewOnly}
+              className="btn-primary w-full flex items-center justify-center gap-2"
+            >
+              <Clock className="w-4 h-4" />
+              Időpont foglalása
+            </button>
+          )}
         </div>
       )}
     </div>

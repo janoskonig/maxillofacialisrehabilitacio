@@ -109,9 +109,117 @@ export default function Home() {
   };
 
   const handleNewPatient = () => {
-    setEditingPatient(null);
-    setIsViewMode(false);
-    setShowForm(true);
+    // Check for saved drafts - only check for "new" drafts (not existing patient drafts)
+    const drafts: Array<{ key: string; name: string; timestamp: string }> = [];
+    
+    // Only check for "new" draft (new patient drafts, not existing patient modification drafts)
+    const newDraftKey = 'patientFormDraft_new';
+    const newDraftData = localStorage.getItem(newDraftKey);
+    if (newDraftData) {
+      try {
+        const draft = JSON.parse(newDraftData);
+        const timestampKey = 'patientFormDraftTimestamp_new';
+        const timestamp = localStorage.getItem(timestampKey) || '';
+        const patientName = draft.nev || 'Névtelen beteg';
+        drafts.push({
+          key: newDraftKey,
+          name: patientName,
+          timestamp: timestamp
+        });
+      } catch (error) {
+        console.error('Error parsing draft:', error);
+      }
+    }
+    
+    if (drafts.length > 0) {
+      // If there's only one draft, ask directly
+      if (drafts.length === 1) {
+        const draft = drafts[0];
+        const shouldContinue = window.confirm(
+          `Van egy elmentett piszkozat: "${draft.name}". Szeretné folytatni ezt a piszkozatot?\n\n` +
+          `Ha "OK"-t választ, ezt a piszkozatot folytatja.\n` +
+          `Ha "Mégse"-t választ, minden piszkozat törlődik.`
+        );
+        
+        if (shouldContinue) {
+          // Continue with this draft - delete all other drafts
+          drafts.forEach(d => {
+            if (d.key !== draft.key) {
+              const timestampKey = d.key.replace('patientFormDraft_', 'patientFormDraftTimestamp_');
+              localStorage.removeItem(d.key);
+              localStorage.removeItem(timestampKey);
+            }
+          });
+          setEditingPatient(null);
+          setIsViewMode(false);
+          setShowForm(true);
+        } else {
+          // Delete all drafts
+          drafts.forEach(d => {
+            const timestampKey = d.key.replace('patientFormDraft_', 'patientFormDraftTimestamp_');
+            localStorage.removeItem(d.key);
+            localStorage.removeItem(timestampKey);
+          });
+          setEditingPatient(null);
+          setIsViewMode(false);
+          setShowForm(true);
+        }
+      } else {
+        // Multiple drafts - let user choose
+        const draftList = drafts.map((d, index) => {
+          const date = d.timestamp ? new Date(d.timestamp).toLocaleString('hu-HU') : 'Ismeretlen dátum';
+          return `${index + 1}. ${d.name} (${date})`;
+        }).join('\n');
+        
+        const choice = window.prompt(
+          `Több elmentett piszkozat található:\n\n${draftList}\n\n` +
+          `Adja meg a folytatni kívánt piszkozat sorszámát (1-${drafts.length}), vagy nyomjon "Mégse"-t az összes törléséhez:`
+        );
+        
+        if (choice && !isNaN(parseInt(choice))) {
+          const selectedIndex = parseInt(choice) - 1;
+          if (selectedIndex >= 0 && selectedIndex < drafts.length) {
+            const selectedDraft = drafts[selectedIndex];
+            // Delete all other drafts
+            drafts.forEach(d => {
+              if (d.key !== selectedDraft.key) {
+                const timestampKey = d.key.replace('patientFormDraft_', 'patientFormDraftTimestamp_');
+                localStorage.removeItem(d.key);
+                localStorage.removeItem(timestampKey);
+              }
+            });
+            setEditingPatient(null);
+            setIsViewMode(false);
+            setShowForm(true);
+          } else {
+            // Invalid choice - delete all
+            drafts.forEach(d => {
+              const timestampKey = d.key.replace('patientFormDraft_', 'patientFormDraftTimestamp_');
+              localStorage.removeItem(d.key);
+              localStorage.removeItem(timestampKey);
+            });
+            setEditingPatient(null);
+            setIsViewMode(false);
+            setShowForm(true);
+          }
+        } else {
+          // User cancelled or invalid input - delete all drafts
+          drafts.forEach(d => {
+            const timestampKey = d.key.replace('patientFormDraft_', 'patientFormDraftTimestamp_');
+            localStorage.removeItem(d.key);
+            localStorage.removeItem(timestampKey);
+          });
+          setEditingPatient(null);
+          setIsViewMode(false);
+          setShowForm(true);
+        }
+      }
+    } else {
+      // No draft, just open new patient form
+      setEditingPatient(null);
+      setIsViewMode(false);
+      setShowForm(true);
+    }
   };
 
   const handleViewPatient = (patient: Patient) => {
@@ -287,6 +395,7 @@ export default function Home() {
                 onView={handleViewPatient}
                 onEdit={handleEditPatient}
                 canEdit={userRole === 'admin' || userRole === 'editor' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos'}
+                userRole={userRole}
               />
             </>
           )}

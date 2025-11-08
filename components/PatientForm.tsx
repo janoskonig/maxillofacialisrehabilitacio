@@ -7,6 +7,7 @@ import { Patient, patientSchema, beutaloIntezmenyOptions, nyakiBlokkdisszekcioOp
 import { formatDateForInput } from '@/lib/dateUtils';
 import { X, Calendar, User, Phone, Mail, MapPin, FileText, AlertTriangle, Plus, Trash2 } from 'lucide-react';
 import { AppointmentBookingSection } from './AppointmentBookingSection';
+import { getCurrentUser } from '@/lib/auth';
 
 const DRAFT_STORAGE_KEY_PREFIX = 'patientFormDraft_';
 const DRAFT_TIMESTAMP_KEY_PREFIX = 'patientFormDraftTimestamp_';
@@ -108,9 +109,30 @@ interface PatientFormProps {
 
 export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: PatientFormProps) {
   const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
+  const [userRole, setUserRole] = useState<string>('');
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isNewPatient = !patient && !isViewOnly;
   const patientId = patient?.id || null;
+
+  // State for "vanBeutalo" toggle (default true if bármely beutaló-adat van, or always true for new patients if surgeon role)
+  // Note: userRole might not be loaded yet, so we'll update it in useEffect
+  const initialVanBeutalo = !!(patient?.beutaloOrvos || patient?.beutaloIntezmeny || patient?.kezelesreErkezesIndoka);
+  const [vanBeutalo, setVanBeutalo] = useState(initialVanBeutalo);
+
+  // Get user role
+  useEffect(() => {
+    const checkRole = async () => {
+      const user = await getCurrentUser();
+      if (user) {
+        setUserRole(user.role);
+        // If surgeon role and new patient, set vanBeutalo to true
+        if (user.role === 'sebészorvos' && isNewPatient && !initialVanBeutalo) {
+          setVanBeutalo(true);
+        }
+      }
+    };
+    checkRole();
+  }, [isNewPatient, initialVanBeutalo]);
 
   // Helper function to load draft from localStorage
   const loadDraft = useCallback((): Patient | null => {
@@ -157,6 +179,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     formState: { errors, isDirty },
     setValue,
     watch,
+    reset,
   } = useForm<Patient>({
     resolver: zodResolver(patientSchema),
     defaultValues: patient ? {
@@ -190,6 +213,31 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     },
   });
 
+  // Reset form to mark as not dirty after initial load for existing patients
+  useEffect(() => {
+    if (patient && !isViewOnly) {
+      // Reset form with current values to clear dirty state
+      reset(patient ? {
+        ...patient,
+        szuletesiDatum: formatDateForInput(patient.szuletesiDatum),
+        mutetIdeje: formatDateForInput(patient.mutetIdeje),
+        felvetelDatuma: formatDateForInput(patient.felvetelDatuma),
+        kezelesiTervFelso: patient.kezelesiTervFelso?.map(item => ({
+          ...item,
+          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+        })) || [],
+        kezelesiTervAlso: patient.kezelesiTervAlso?.map(item => ({
+          ...item,
+          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+        })) || [],
+        kezelesiTervArcotErinto: patient.kezelesiTervArcotErinto?.map(item => ({
+          ...item,
+          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+        })) || [],
+      } : undefined, { keepDefaultValues: true });
+    }
+  }, [patient?.id]); // Only reset when patient ID changes (when opening a different patient)
+
   const radioterapia = watch('radioterapia');
   const chemoterapia = watch('chemoterapia');
   const kezeleoorvos = watch('kezeleoorvos');
@@ -207,9 +255,6 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
   const kezelesiTervFelso = watch('kezelesiTervFelso') || [];
   const kezelesiTervAlso = watch('kezelesiTervAlso') || [];
   const kezelesiTervArcotErinto = watch('kezelesiTervArcotErinto') || [];
-  // State for "vanBeutalo" toggle (default true if bármely beutaló-adat van)
-  const initialVanBeutalo = !!(patient?.beutaloOrvos || patient?.beutaloIntezmeny || patient?.kezelesreErkezesIndoka);
-  const [vanBeutalo, setVanBeutalo] = useState(initialVanBeutalo);
 
   // Watch all form values for auto-save
   const formValues = watch();
@@ -284,9 +329,16 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     }
   }, [patient]);
 
-  // Auto-save draft to localStorage (for both new and existing patients, not in view mode)
+  // Auto-save draft to localStorage (only for new patients, not for existing patients without changes)
   useEffect(() => {
     if (isViewOnly || !hasRestoredDraft) {
+      return;
+    }
+
+    // For existing patients, only save draft if form is dirty (has changes)
+    if (!isNewPatient && !isDirty) {
+      // No changes for existing patient, clear any existing draft
+      clearDraft();
       return;
     }
 
@@ -333,7 +385,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [formValues, implantatumok, fogak, isViewOnly, hasRestoredDraft, saveDraft, clearDraft]);
+  }, [formValues, implantatumok, fogak, isViewOnly, hasRestoredDraft, isNewPatient, isDirty, saveDraft, clearDraft]);
 
   // Automatikus intézet beállítás a kezelőorvos alapján
   useEffect(() => {
@@ -556,30 +608,69 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       return;
     }
     
-    if (hasUnsavedChanges()) {
-      const shouldSave = window.confirm(
-        'Van nem mentett változás az űrlapban. Szeretné menteni az eddig beírt adatokat piszkozatként? (A piszkozat később visszatölthető, de az adatok csak a "Beteg mentése" gombbal kerülnek az adatbázisba.)'
-      );
-      
-      if (shouldSave) {
-        // Save draft before closing
-        // Normalizáljuk a fogak adatokat mentés előtt
-        const normalizedFogak: Record<string, { status?: 'D' | 'F' | 'M'; description?: string }> = {};
-        Object.entries(fogak).forEach(([toothNumber, value]) => {
-          const normalizedValue = normalizeToothData(value);
-          if (normalizedValue) {
-            normalizedFogak[toothNumber] = normalizedValue;
-          }
-        });
+    // For existing patients: only prompt if form is dirty (has actual changes)
+    // For new patients: check if there's any data entered
+    if (isNewPatient) {
+      // New patient: check if there's any data
+      if (hasUnsavedChanges()) {
+        const shouldSave = window.confirm(
+          'Van nem mentett változás az űrlapban. Szeretné menteni az eddig beírt adatokat piszkozatként? (A piszkozat később visszatölthető, de az adatok csak a "Beteg mentése" gombbal kerülnek az adatbázisba.)'
+        );
         
-        const formData: Partial<Patient> = {
-          ...formValues,
-          meglevoImplantatumok: implantatumok,
-          meglevoFogak: normalizedFogak,
-        };
-        saveDraft(formData);
+        if (shouldSave) {
+          // Save draft before closing
+          // Normalizáljuk a fogak adatokat mentés előtt
+          const normalizedFogak: Record<string, { status?: 'D' | 'F' | 'M'; description?: string }> = {};
+          Object.entries(fogak).forEach(([toothNumber, value]) => {
+            const normalizedValue = normalizeToothData(value);
+            if (normalizedValue) {
+              normalizedFogak[toothNumber] = normalizedValue;
+            }
+          });
+          
+          const formData: Partial<Patient> = {
+            ...formValues,
+            meglevoImplantatumok: implantatumok,
+            meglevoFogak: normalizedFogak,
+          };
+          saveDraft(formData);
+        } else {
+          // User chose not to save, clear draft
+          clearDraft();
+        }
+      }
+    } else {
+      // Existing patient: only prompt if form is dirty (has actual changes)
+      // The isDirty flag should catch all changes including implantatumok and fogak
+      // since we use setValue to update the form when these change
+      if (isDirty) {
+        const shouldSave = window.confirm(
+          'Van nem mentett változás az űrlapban. Szeretné menteni az eddig beírt adatokat piszkozatként? (A piszkozat később visszatölthető, de az adatok csak a "Beteg mentése" gombbal kerülnek az adatbázisba.)'
+        );
+        
+        if (shouldSave) {
+          // Save draft before closing
+          // Normalizáljuk a fogak adatokat mentés előtt
+          const normalizedFogak: Record<string, { status?: 'D' | 'F' | 'M'; description?: string }> = {};
+          Object.entries(fogak).forEach(([toothNumber, value]) => {
+            const normalizedValue = normalizeToothData(value);
+            if (normalizedValue) {
+              normalizedFogak[toothNumber] = normalizedValue;
+            }
+          });
+          
+          const formData: Partial<Patient> = {
+            ...formValues,
+            meglevoImplantatumok: implantatumok,
+            meglevoFogak: normalizedFogak,
+          };
+          saveDraft(formData);
+        } else {
+          // User chose not to save, clear draft
+          clearDraft();
+        }
       } else {
-        // User chose not to save, clear draft
+        // No changes for existing patient, clear any existing draft
         clearDraft();
       }
     }
@@ -892,6 +983,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         </div>
 
         {/* KEZELŐORVOS */}
+        {userRole !== 'sebészorvos' && (
         <div className="card">
           <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <User className="w-5 h-5 mr-2 text-medical-primary" />
@@ -918,8 +1010,10 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
             </div>
           </div>
         </div>
+        )}
 
         {/* ANAMNÉZIS */}
+        {userRole !== 'sebészorvos' && (
         <div className="card">
           <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <Calendar className="w-5 h-5 mr-2 text-medical-primary" />
@@ -1187,8 +1281,10 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
             {/* Műtét ideje már nem itt, hanem onkológiai esetben */}
           </div>
         </div>
+        )}
 
         {/* BETEGVIZSGÁLAT */}
+        {userRole !== 'sebészorvos' && (
         <div className="card">
           <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <Calendar className="w-5 h-5 mr-2 text-medical-primary" />
@@ -1697,6 +1793,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
             {/* Felvétel dátuma már nem itt, hanem alapadatokban */}
           </div>
         </div>
+        )}
 
         {/* MEGLÉVŐ IMPLANTÁTUMOK */}
         <div className="card">
@@ -1838,6 +1935,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         </div>
 
         {/* KEZELÉSI TERV */}
+        {userRole !== 'sebészorvos' && (
         <div className="card">
           <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <FileText className="w-5 h-5 mr-2 text-medical-primary" />
@@ -2138,9 +2236,14 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
             </div>
           </div>
         </div>
+        )}
 
         {/* Appointment Booking Section */}
-        <AppointmentBookingSection patientId={patientId} isViewOnly={isViewOnly} />
+        {/* For surgeons, always allow editing appointments even if form is view-only */}
+        <AppointmentBookingSection 
+          patientId={patientId} 
+          isViewOnly={userRole === 'sebészorvos' ? false : isViewOnly} 
+        />
 
         {/* Form Actions */}
         <div className="pt-6 border-t space-y-4">
