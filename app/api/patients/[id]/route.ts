@@ -302,12 +302,11 @@ export async function PUT(
         tnm_staging = $55,
         bno = $56,
         diagnozis = $57,
-        primer_mutet_leirasa = $58,
-        kezelesi_terv_felso = $59::jsonb,
-        kezelesi_terv_also = $60::jsonb,
-        kezelesi_terv_arcot_erinto = $61::jsonb,
+        kezelesi_terv_felso = $58::jsonb,
+        kezelesi_terv_also = $59::jsonb,
+        kezelesi_terv_arcot_erinto = $60::jsonb,
         updated_at = CURRENT_TIMESTAMP,
-        updated_by = $62
+        updated_by = $61
       WHERE id = $1
       RETURNING 
         id, nev, taj, telefonszam, szuletesi_datum as "szuletesiDatum", nem,
@@ -347,7 +346,7 @@ export async function PUT(
         nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
         nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
         tnm_staging as "tnmStaging",
-        bno, diagnozis, primer_mutet_leirasa as "primerMutetLeirasa",
+        bno, diagnozis,
         kezelesi_terv_felso as "kezelesiTervFelso",
         kezelesi_terv_also as "kezelesiTervAlso",
         kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
@@ -415,7 +414,6 @@ export async function PUT(
         validatedPatient.tnmStaging || null,
         validatedPatient.bno || null,
         validatedPatient.diagnozis || null,
-        validatedPatient.primerMutetLeirasa || null,
         validatedPatient.kezelesiTervFelso && Array.isArray(validatedPatient.kezelesiTervFelso)
           ? JSON.stringify(validatedPatient.kezelesiTervFelso)
           : '[]',
@@ -507,7 +505,6 @@ export async function PUT(
         tnm_staging: 'TNM staging',
         bno: 'BNO',
         diagnozis: 'Diagnózis',
-        primer_mutet_leirasa: 'Primer műtét leírása',
         kezelesi_terv_felso: 'Kezelési terv (felső)',
         kezelesi_terv_also: 'Kezelési terv (alsó)',
         kezelesi_terv_arcot_erinto: 'Kezelési terv (arcot érintő rehabilitáció)',
@@ -559,7 +556,6 @@ export async function PUT(
         else if (dbField === 'tnm_staging') newVal = normalize(validatedPatient.tnmStaging);
         else if (dbField === 'bno') newVal = normalize(validatedPatient.bno);
         else if (dbField === 'diagnozis') newVal = normalize(validatedPatient.diagnozis);
-        else if (dbField === 'primer_mutet_leirasa') newVal = normalize(validatedPatient.primerMutetLeirasa);
         else if (dbField === 'kezelesi_terv_felso') newVal = normalize(validatedPatient.kezelesiTervFelso);
         else if (dbField === 'kezelesi_terv_also') newVal = normalize(validatedPatient.kezelesiTervAlso);
         else if (dbField === 'kezelesi_terv_arcot_erinto') newVal = normalize(validatedPatient.kezelesiTervArcotErinto);
