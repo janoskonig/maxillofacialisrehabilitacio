@@ -64,7 +64,7 @@ export async function GET(
     });
 
     // Return as download
-    return new NextResponse(icsFile, {
+    return new NextResponse(icsFile.toString('utf-8'), {
       headers: {
         'Content-Type': 'text/calendar',
         'Content-Disposition': `attachment; filename="appointment-${params.id}.ics"`,
