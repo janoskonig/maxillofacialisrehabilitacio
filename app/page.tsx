@@ -398,7 +398,6 @@ export default function Home() {
                 userRole={userRole}
               />
             </>
-          )}
 
       {/* Patient Form Modal */}
       {showForm && (
