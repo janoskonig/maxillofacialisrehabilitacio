@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
-import { sendAppointmentBookingNotification } from '@/lib/email';
+import { sendAppointmentBookingNotification, sendAppointmentBookingNotificationToPatient } from '@/lib/email';
 import { generateIcsFile } from '@/lib/calendar';
 
 // Get all appointments
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
 
     // Check if patient exists and was created by this surgeon
     const patientResult = await pool.query(
-      'SELECT id, nev, taj, created_by FROM patients WHERE id = $1',
+      'SELECT id, nev, taj, email, created_by FROM patients WHERE id = $1',
       [patientId]
     );
 
@@ -163,7 +163,7 @@ export async function POST(request: NextRequest) {
 
       // Send email notification to dentist
       try {
-        const icsFile = await generateIcsFile({
+        const icsFileDentist = await generateIcsFile({
           patientName: patient.nev,
           patientTaj: patient.taj,
           startTime: startTime,
@@ -177,11 +177,35 @@ export async function POST(request: NextRequest) {
           patient.taj,
           startTime,
           auth.email,
-          icsFile
+          icsFileDentist
         );
       } catch (emailError) {
-        console.error('Failed to send appointment booking notification:', emailError);
+        console.error('Failed to send appointment booking notification to dentist:', emailError);
         // Don't fail the request if email fails
+      }
+
+      // Send email notification to patient if email is available
+      if (patient.email && patient.email.trim() !== '') {
+        try {
+          const icsFilePatient = await generateIcsFile({
+            patientName: patient.nev,
+            patientTaj: patient.taj,
+            startTime: startTime,
+            surgeonName: auth.email,
+            dentistName: timeSlot.dentist_email,
+          });
+
+          await sendAppointmentBookingNotificationToPatient(
+            patient.email,
+            patient.nev,
+            startTime,
+            timeSlot.dentist_email,
+            icsFilePatient
+          );
+        } catch (emailError) {
+          console.error('Failed to send appointment booking notification to patient:', emailError);
+          // Don't fail the request if email fails
+        }
       }
 
       return NextResponse.json({ appointment }, { status: 201 });

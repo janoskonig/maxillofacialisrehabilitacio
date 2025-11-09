@@ -115,7 +115,7 @@ export function AppointmentBooking() {
         await loadData();
         setSelectedPatient('');
         setSelectedSlot('');
-        alert('Időpont sikeresen lefoglalva! A fogpótlástanász értesítést kapott.');
+        alert('Időpont sikeresen lefoglalva! A fogpótlástanász és a beteg (ha van email-címe) értesítést kapott.');
       } else {
         const data = await response.json();
         alert(data.error || 'Hiba történt az időpont foglalásakor');

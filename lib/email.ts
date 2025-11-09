@@ -158,3 +158,42 @@ export async function sendAppointmentBookingNotification(
     ],
   });
 }
+
+/**
+ * Send appointment booking notification to patient
+ */
+export async function sendAppointmentBookingNotificationToPatient(
+  patientEmail: string,
+  patientName: string | null,
+  appointmentTime: Date,
+  dentistName: string,
+  icsFile: Buffer
+): Promise<void> {
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #2563eb;">Időpontfoglalás megerősítése</h2>
+      <p>Kedves ${patientName || 'Beteg'}!</p>
+      <p>Időpontfoglalását sikeresen rögzítettük:</p>
+      <ul>
+        <li><strong>Időpont:</strong> ${appointmentTime.toLocaleString('hu-HU')}</li>
+        <li><strong>Fogpótlástanász:</strong> ${dentistName}</li>
+      </ul>
+      <p>Kérjük, hogy az időpontot tartsa be. Ha bármilyen kérdése van, vagy módosítani szeretné az időpontot, kérjük, lépjen kapcsolatba velünk.</p>
+      <p>Az időpont részleteit a mellékelt naptár fájlban találja, amelyet importálhat naptárkezelő alkalmazásába.</p>
+      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: patientEmail,
+    subject: 'Időpontfoglalás megerősítése - Maxillofaciális Rehabilitáció',
+    html,
+    attachments: [
+      {
+        filename: 'appointment.ics',
+        content: icsFile,
+        contentType: 'text/calendar',
+      },
+    ],
+  });
+}
