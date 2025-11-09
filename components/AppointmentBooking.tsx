@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Calendar, Clock, Download, User, Phone } from 'lucide-react';
+import { Calendar, Clock, Download, User, Phone, Trash2, Edit2, X } from 'lucide-react';
 import { Patient } from '@/lib/types';
 
 interface TimeSlot {
@@ -28,6 +28,8 @@ export function AppointmentBooking() {
   const [loading, setLoading] = useState(true);
   const [selectedPatient, setSelectedPatient] = useState<string>('');
   const [selectedSlot, setSelectedSlot] = useState<string>('');
+  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
+  const [newTimeSlotId, setNewTimeSlotId] = useState<string>('');
 
   useEffect(() => {
     loadData();
@@ -150,6 +152,72 @@ export function AppointmentBooking() {
     }
   };
 
+  const handleCancelAppointment = async (appointmentId: string) => {
+    if (!confirm('Biztosan le szeretné mondani ezt az időpontot? A fogpótlástanász és a beteg értesítést kap.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/appointments/${appointmentId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        await loadData();
+        alert('Időpont sikeresen lemondva! A fogpótlástanász és a beteg (ha van email-címe) értesítést kapott.');
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Hiba történt az időpont lemondásakor');
+      }
+    } catch (error) {
+      console.error('Error cancelling appointment:', error);
+      alert('Hiba történt az időpont lemondásakor');
+    }
+  };
+
+  const handleModifyAppointment = (appointment: Appointment) => {
+    setEditingAppointment(appointment);
+    setNewTimeSlotId('');
+  };
+
+  const handleSaveModification = async () => {
+    if (!editingAppointment || !newTimeSlotId) {
+      alert('Kérjük, válasszon új időpontot!');
+      return;
+    }
+
+    if (!confirm('Biztosan módosítani szeretné ezt az időpontot? A fogpótlástanász és a beteg értesítést kap.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/appointments/${editingAppointment.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          timeSlotId: newTimeSlotId,
+        }),
+      });
+
+      if (response.ok) {
+        await loadData();
+        setEditingAppointment(null);
+        setNewTimeSlotId('');
+        alert('Időpont sikeresen módosítva! A fogpótlástanász és a beteg (ha van email-címe) értesítést kapott.');
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Hiba történt az időpont módosításakor');
+      }
+    } catch (error) {
+      console.error('Error modifying appointment:', error);
+      alert('Hiba történt az időpont módosításakor');
+    }
+  };
+
   const formatDateTime = (dateTime: string) => {
     const date = new Date(dateTime);
     return date.toLocaleString('hu-HU', {
@@ -170,9 +238,82 @@ export function AppointmentBooking() {
   }
 
   const availableSlotsOnly = availableSlots.filter(slot => slot.status === 'available');
+  // For modification, exclude the current appointment's time slot
+  const availableSlotsForModification = availableSlotsOnly.filter(
+    slot => !editingAppointment || slot.id !== editingAppointment.timeSlotId
+  );
 
   return (
     <div className="space-y-6">
+      {/* Modification Modal */}
+      {editingAppointment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-gray-900">Időpont módosítása</h3>
+              <button
+                onClick={() => {
+                  setEditingAppointment(null);
+                  setNewTimeSlotId('');
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-gray-600 mb-2">
+                  <strong>Beteg:</strong> {editingAppointment.patientName || 'Név nélküli'}
+                </p>
+                <p className="text-sm text-gray-600 mb-4">
+                  <strong>Jelenlegi időpont:</strong> {formatDateTime(editingAppointment.startTime)}
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Új időpont
+                </label>
+                <select
+                  value={newTimeSlotId}
+                  onChange={(e) => setNewTimeSlotId(e.target.value)}
+                  className="form-input w-full"
+                >
+                  <option value="">Válasszon új időpontot...</option>
+                  {availableSlotsForModification.map((slot) => (
+                    <option key={slot.id} value={slot.id}>
+                      {formatDateTime(slot.startTime)}
+                    </option>
+                  ))}
+                </select>
+                {availableSlotsForModification.length === 0 && (
+                  <p className="text-sm text-gray-500 mt-2">
+                    Jelenleg nincs elérhető szabad időpont.
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => {
+                    setEditingAppointment(null);
+                    setNewTimeSlotId('');
+                  }}
+                  className="btn-secondary"
+                >
+                  Mégse
+                </button>
+                <button
+                  onClick={handleSaveModification}
+                  disabled={!newTimeSlotId}
+                  className="btn-primary"
+                >
+                  Módosítás mentése
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Book New Appointment */}
       <div className="card p-6">
         <h3 className="text-xl font-bold text-gray-900 mb-4">Új időpont foglalása</h3>
@@ -285,14 +426,32 @@ export function AppointmentBooking() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button
-                        onClick={() => handleDownloadCalendar(appointment.id)}
-                        className="text-blue-600 hover:text-blue-900 flex items-center gap-1"
-                        title="Naptár fájl letöltése"
-                      >
-                        <Download className="w-4 h-4" />
-                        .ics
-                      </button>
+                      <div className="flex items-center justify-end gap-3">
+                        <button
+                          onClick={() => handleDownloadCalendar(appointment.id)}
+                          className="text-blue-600 hover:text-blue-900 flex items-center gap-1"
+                          title="Naptár fájl letöltése"
+                        >
+                          <Download className="w-4 h-4" />
+                          .ics
+                        </button>
+                        <button
+                          onClick={() => handleModifyAppointment(appointment)}
+                          className="text-amber-600 hover:text-amber-900 flex items-center gap-1"
+                          title="Időpont módosítása"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                          Módosítás
+                        </button>
+                        <button
+                          onClick={() => handleCancelAppointment(appointment.id)}
+                          className="text-red-600 hover:text-red-900 flex items-center gap-1"
+                          title="Időpont lemondása"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Lemondás
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

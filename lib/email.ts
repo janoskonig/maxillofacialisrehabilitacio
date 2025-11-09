@@ -197,3 +197,150 @@ export async function sendAppointmentBookingNotificationToPatient(
     ],
   });
 }
+
+/**
+ * Send appointment cancellation notification to dentist
+ */
+export async function sendAppointmentCancellationNotification(
+  dentistEmail: string,
+  patientName: string | null,
+  patientTaj: string | null,
+  appointmentTime: Date,
+  cancelledBy: string
+): Promise<void> {
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #dc2626;">Időpont lemondva</h2>
+      <p>Kedves fogpótlástanász,</p>
+      <p>Egy időpont lemondásra került:</p>
+      <ul>
+        <li><strong>Beteg neve:</strong> ${patientName || 'Név nélküli'}</li>
+        <li><strong>TAJ szám:</strong> ${patientTaj || 'Nincs megadva'}</li>
+        <li><strong>Időpont:</strong> ${appointmentTime.toLocaleString('hu-HU')}</li>
+        <li><strong>Lemondta:</strong> ${cancelledBy}</li>
+      </ul>
+      <p>Az időpont újra elérhetővé vált a rendszerben.</p>
+      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: dentistEmail,
+    subject: 'Időpont lemondva - Maxillofaciális Rehabilitáció',
+    html,
+  });
+}
+
+/**
+ * Send appointment cancellation notification to patient
+ */
+export async function sendAppointmentCancellationNotificationToPatient(
+  patientEmail: string,
+  patientName: string | null,
+  appointmentTime: Date,
+  dentistName: string
+): Promise<void> {
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #dc2626;">Időpont lemondva</h2>
+      <p>Kedves ${patientName || 'Beteg'}!</p>
+      <p>Időpontfoglalását lemondtuk:</p>
+      <ul>
+        <li><strong>Időpont:</strong> ${appointmentTime.toLocaleString('hu-HU')}</li>
+        <li><strong>Fogpótlástanász:</strong> ${dentistName}</li>
+      </ul>
+      <p>Ha új időpontot szeretne foglalni, kérjük, lépjen kapcsolatba velünk.</p>
+      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: patientEmail,
+    subject: 'Időpont lemondva - Maxillofaciális Rehabilitáció',
+    html,
+  });
+}
+
+/**
+ * Send appointment modification notification to dentist
+ */
+export async function sendAppointmentModificationNotification(
+  dentistEmail: string,
+  patientName: string | null,
+  patientTaj: string | null,
+  oldAppointmentTime: Date,
+  newAppointmentTime: Date,
+  modifiedBy: string,
+  icsFile: Buffer
+): Promise<void> {
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #f59e0b;">Időpont módosítva</h2>
+      <p>Kedves fogpótlástanász,</p>
+      <p>Egy időpont módosításra került:</p>
+      <ul>
+        <li><strong>Beteg neve:</strong> ${patientName || 'Név nélküli'}</li>
+        <li><strong>TAJ szám:</strong> ${patientTaj || 'Nincs megadva'}</li>
+        <li><strong>Régi időpont:</strong> ${oldAppointmentTime.toLocaleString('hu-HU')}</li>
+        <li><strong>Új időpont:</strong> ${newAppointmentTime.toLocaleString('hu-HU')}</li>
+        <li><strong>Módosította:</strong> ${modifiedBy}</li>
+      </ul>
+      <p>Az új időpont részleteit a mellékelt naptár fájlban találja, amelyet importálhat naptárkezelő alkalmazásába.</p>
+      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: dentistEmail,
+    subject: 'Időpont módosítva - Maxillofaciális Rehabilitáció',
+    html,
+    attachments: [
+      {
+        filename: 'appointment.ics',
+        content: icsFile,
+        contentType: 'text/calendar',
+      },
+    ],
+  });
+}
+
+/**
+ * Send appointment modification notification to patient
+ */
+export async function sendAppointmentModificationNotificationToPatient(
+  patientEmail: string,
+  patientName: string | null,
+  oldAppointmentTime: Date,
+  newAppointmentTime: Date,
+  dentistName: string,
+  icsFile: Buffer
+): Promise<void> {
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #f59e0b;">Időpont módosítva</h2>
+      <p>Kedves ${patientName || 'Beteg'}!</p>
+      <p>Időpontfoglalását módosítottuk:</p>
+      <ul>
+        <li><strong>Régi időpont:</strong> ${oldAppointmentTime.toLocaleString('hu-HU')}</li>
+        <li><strong>Új időpont:</strong> ${newAppointmentTime.toLocaleString('hu-HU')}</li>
+        <li><strong>Fogpótlástanász:</strong> ${dentistName}</li>
+      </ul>
+      <p>Kérjük, hogy az új időpontot tartsa be. Ha bármilyen kérdése van, kérjük, lépjen kapcsolatba velünk.</p>
+      <p>Az új időpont részleteit a mellékelt naptár fájlban találja, amelyet importálhat naptárkezelő alkalmazásába.</p>
+      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: patientEmail,
+    subject: 'Időpont módosítva - Maxillofaciális Rehabilitáció',
+    html,
+    attachments: [
+      {
+        filename: 'appointment.ics',
+        content: icsFile,
+        contentType: 'text/calendar',
+      },
+    ],
+  });
+}

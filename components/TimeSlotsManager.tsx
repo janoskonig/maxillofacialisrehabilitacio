@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Calendar, Plus, Trash2, Edit2, Clock } from 'lucide-react';
+import { Calendar, Plus, Trash2, Edit2, Clock, X } from 'lucide-react';
 
 interface TimeSlot {
   id: string;
@@ -13,6 +13,7 @@ interface TimeSlot {
 }
 
 interface AppointmentInfo {
+  id: string; // Appointment ID
   patientName: string | null;
   patientTaj: string | null;
   bookedBy: string; // Email of surgeon/admin who booked
@@ -25,6 +26,8 @@ export function TimeSlotsManager() {
   const [showForm, setShowForm] = useState(false);
   const [editingSlot, setEditingSlot] = useState<TimeSlot | null>(null);
   const [newStartTime, setNewStartTime] = useState('');
+  const [modifyingAppointment, setModifyingAppointment] = useState<{ appointmentId: string; timeSlotId: string; startTime: string } | null>(null);
+  const [newTimeSlotId, setNewTimeSlotId] = useState<string>('');
 
   useEffect(() => {
     loadTimeSlots();
@@ -52,6 +55,7 @@ export function TimeSlotsManager() {
         const appointmentsMap: Record<string, AppointmentInfo> = {};
         (appointmentsData.appointments || []).forEach((apt: any) => {
           appointmentsMap[apt.timeSlotId] = {
+            id: apt.id,
             patientName: apt.patientName,
             patientTaj: apt.patientTaj,
             bookedBy: apt.createdBy,
@@ -123,6 +127,72 @@ export function TimeSlotsManager() {
     }
   };
 
+  const handleCancelAppointment = async (appointmentId: string) => {
+    if (!confirm('Biztosan le szeretné mondani ezt az időpontot? A fogpótlástanász és a beteg értesítést kap.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/appointments/${appointmentId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        await loadTimeSlots();
+        alert('Időpont sikeresen lemondva! A fogpótlástanász és a beteg (ha van email-címe) értesítést kapott.');
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Hiba történt az időpont lemondásakor');
+      }
+    } catch (error) {
+      console.error('Error cancelling appointment:', error);
+      alert('Hiba történt az időpont lemondásakor');
+    }
+  };
+
+  const handleModifyAppointment = (appointmentId: string, timeSlotId: string, startTime: string) => {
+    setModifyingAppointment({ appointmentId, timeSlotId, startTime });
+    setNewTimeSlotId('');
+  };
+
+  const handleSaveModification = async () => {
+    if (!modifyingAppointment || !newTimeSlotId) {
+      alert('Kérjük, válasszon új időpontot!');
+      return;
+    }
+
+    if (!confirm('Biztosan módosítani szeretné ezt az időpontot? A fogpótlástanász és a beteg értesítést kap.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/appointments/${modifyingAppointment.appointmentId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          timeSlotId: newTimeSlotId,
+        }),
+      });
+
+      if (response.ok) {
+        await loadTimeSlots();
+        setModifyingAppointment(null);
+        setNewTimeSlotId('');
+        alert('Időpont sikeresen módosítva! A fogpótlástanász és a beteg (ha van email-címe) értesítést kapott.');
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Hiba történt az időpont módosításakor');
+      }
+    } catch (error) {
+      console.error('Error modifying appointment:', error);
+      alert('Hiba történt az időpont módosításakor');
+    }
+  };
+
   const formatDateTime = (dateTime: string) => {
     const date = new Date(dateTime);
     return date.toLocaleString('hu-HU', {
@@ -148,8 +218,78 @@ export function TimeSlotsManager() {
     );
   }
 
+  const availableSlotsForModification = timeSlots.filter(
+    slot => slot.status === 'available' && (!modifyingAppointment || slot.id !== modifyingAppointment.timeSlotId)
+  );
+
   return (
     <div className="space-y-4">
+      {/* Modification Modal */}
+      {modifyingAppointment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-gray-900">Időpont módosítása</h3>
+              <button
+                onClick={() => {
+                  setModifyingAppointment(null);
+                  setNewTimeSlotId('');
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-gray-600 mb-4">
+                  <strong>Jelenlegi időpont:</strong> {formatDateTime(modifyingAppointment.startTime)}
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Új időpont
+                </label>
+                <select
+                  value={newTimeSlotId}
+                  onChange={(e) => setNewTimeSlotId(e.target.value)}
+                  className="form-input w-full"
+                >
+                  <option value="">Válasszon új időpontot...</option>
+                  {availableSlotsForModification.map((slot) => (
+                    <option key={slot.id} value={slot.id}>
+                      {formatDateTime(slot.startTime)}
+                    </option>
+                  ))}
+                </select>
+                {availableSlotsForModification.length === 0 && (
+                  <p className="text-sm text-gray-500 mt-2">
+                    Jelenleg nincs elérhető szabad időpont.
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => {
+                    setModifyingAppointment(null);
+                    setNewTimeSlotId('');
+                  }}
+                  className="btn-secondary"
+                >
+                  Mégse
+                </button>
+                <button
+                  onClick={handleSaveModification}
+                  disabled={!newTimeSlotId}
+                  className="btn-primary"
+                >
+                  Módosítás mentése
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex justify-between items-center">
         <h3 className="text-xl font-bold text-gray-900">Szabad időpontok kezelése</h3>
         <button
@@ -280,15 +420,37 @@ export function TimeSlotsManager() {
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        {slot.status === 'available' && (
-                          <button
-                            onClick={() => handleDeleteTimeSlot(slot.id)}
-                            className="text-red-600 hover:text-red-900"
-                            title="Törlés"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
+                        <div className="flex items-center justify-end gap-2">
+                          {slot.status === 'available' && (
+                            <button
+                              onClick={() => handleDeleteTimeSlot(slot.id)}
+                              className="text-red-600 hover:text-red-900"
+                              title="Törlés"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                          {slot.status === 'booked' && appointment && (
+                            <>
+                              <button
+                                onClick={() => handleModifyAppointment(appointment.id, slot.id, slot.startTime)}
+                                className="text-amber-600 hover:text-amber-900 flex items-center gap-1"
+                                title="Időpont módosítása"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                                Módosítás
+                              </button>
+                              <button
+                                onClick={() => handleCancelAppointment(appointment.id)}
+                                className="text-red-600 hover:text-red-900 flex items-center gap-1"
+                                title="Időpont lemondása"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                Lemondás
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
