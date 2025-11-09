@@ -6,8 +6,10 @@ const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587', 10);
 const SMTP_USER = process.env.SMTP_USER;
 const SMTP_PASS = process.env.SMTP_PASS;
 const SMTP_FROM = process.env.SMTP_FROM;
+const SMTP_FROM_NAME = process.env.SMTP_FROM_NAME || 'Maxillofaciális Rehabilitáció Rendszer';
+const SMTP_REPLY_TO = process.env.SMTP_REPLY_TO || SMTP_FROM;
 
-// Create transporter
+// Create transporter with spam prevention best practices
 const transporter = nodemailer.createTransport({
   host: SMTP_HOST,
   port: SMTP_PORT,
@@ -15,6 +17,21 @@ const transporter = nodemailer.createTransport({
   auth: {
     user: SMTP_USER,
     pass: SMTP_PASS,
+  },
+  // Connection pool settings for better reliability
+  pool: true,
+  maxConnections: 1,
+  maxMessages: 3,
+  // Timeout settings
+  connectionTimeout: 10000, // 10 seconds
+  greetingTimeout: 10000,
+  socketTimeout: 10000,
+  // TLS options for better security
+  tls: {
+    // Do not fail on invalid certificates (useful for self-signed certs)
+    rejectUnauthorized: false,
+    // Use modern TLS versions
+    minVersion: 'TLSv1.2',
   },
 });
 
@@ -30,10 +47,35 @@ export interface SendEmailOptions {
   html: string;
   text?: string;
   attachments?: EmailAttachment[];
+  replyTo?: string;
+}
+
+/**
+ * Convert HTML to plain text (simple version)
+ * Removes HTML tags and converts common entities
+ */
+function htmlToText(html: string): string {
+  return html
+    .replace(/<style[^>]*>.*?<\/style>/gi, '') // Remove style tags
+    .replace(/<script[^>]*>.*?<\/script>/gi, '') // Remove script tags
+    .replace(/<[^>]+>/g, '') // Remove all HTML tags
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n\s*\n\s*\n/g, '\n\n') // Remove multiple newlines
+    .trim();
 }
 
 /**
  * Send an email using the configured SMTP settings
+ * Includes spam prevention best practices:
+ * - Reply-To header
+ * - Plain text version
+ * - Proper From format with name
+ * - Message-ID and Date headers (handled by nodemailer)
  */
 export async function sendEmail(options: SendEmailOptions): Promise<void> {
   if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS || !SMTP_FROM) {
@@ -42,17 +84,32 @@ export async function sendEmail(options: SendEmailOptions): Promise<void> {
   }
 
   try {
+    // Format From address with name
+    const fromAddress = SMTP_FROM_NAME && SMTP_FROM
+      ? `${SMTP_FROM_NAME} <${SMTP_FROM}>`
+      : SMTP_FROM;
+
+    // Generate plain text version if not provided
+    const textVersion = options.text || htmlToText(options.html);
+
     const mailOptions = {
-      from: SMTP_FROM,
+      from: fromAddress,
       to: Array.isArray(options.to) ? options.to.join(', ') : options.to,
+      replyTo: options.replyTo || SMTP_REPLY_TO,
       subject: options.subject,
-      text: options.text,
+      text: textVersion,
       html: options.html,
       attachments: options.attachments?.map(att => ({
         filename: att.filename,
         content: att.content,
         contentType: att.contentType,
       })),
+      // Additional headers for better deliverability
+      headers: {
+        'X-Mailer': 'Maxillofaciális Rehabilitáció Rendszer',
+        'X-Priority': '3', // Normal priority
+        'Importance': 'normal',
+      },
     };
 
     const info = await transporter.sendMail(mailOptions);
@@ -187,6 +244,53 @@ export async function sendAppointmentBookingNotificationToPatient(
   await sendEmail({
     to: patientEmail,
     subject: 'Időpontfoglalás megerősítése - Maxillofaciális Rehabilitáció',
+    html,
+    attachments: [
+      {
+        filename: 'appointment.ics',
+        content: icsFile,
+        contentType: 'text/calendar',
+      },
+    ],
+  });
+}
+
+/**
+ * Send appointment booking notification to admins
+ */
+export async function sendAppointmentBookingNotificationToAdmins(
+  adminEmails: string[],
+  patientName: string | null,
+  patientTaj: string | null,
+  appointmentTime: Date,
+  surgeonName: string,
+  dentistName: string,
+  icsFile: Buffer
+): Promise<void> {
+  if (adminEmails.length === 0) {
+    return;
+  }
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #2563eb;">Új időpont foglalás</h2>
+      <p>Kedves adminisztrátor,</p>
+      <p>Egy új időpont lett lefoglalva:</p>
+      <ul>
+        <li><strong>Beteg neve:</strong> ${patientName || 'Név nélküli'}</li>
+        <li><strong>TAJ szám:</strong> ${patientTaj || 'Nincs megadva'}</li>
+        <li><strong>Időpont:</strong> ${appointmentTime.toLocaleString('hu-HU')}</li>
+        <li><strong>Fogpótlástanász:</strong> ${dentistName}</li>
+        <li><strong>Beutaló orvos:</strong> ${surgeonName}</li>
+      </ul>
+      <p>Az időpont részleteit a mellékelt naptár fájlban találja, amelyet importálhat naptárkezelő alkalmazásába.</p>
+      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: adminEmails,
+    subject: 'Új időpont foglalás - Maxillofaciális Rehabilitáció',
     html,
     attachments: [
       {
@@ -342,5 +446,41 @@ export async function sendAppointmentModificationNotificationToPatient(
         contentType: 'text/calendar',
       },
     ],
+  });
+}
+
+/**
+ * Send appointment time slot freed notification (when patient is deleted)
+ */
+export async function sendAppointmentTimeSlotFreedNotification(
+  recipientEmail: string | string[],
+  patientName: string | null,
+  patientTaj: string | null,
+  appointmentTime: Date,
+  deletedBy: string,
+  dentistEmail?: string | null
+): Promise<void> {
+  const isAdmin = Array.isArray(recipientEmail);
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #059669;">Időpont felszabadult</h2>
+      <p>Kedves ${isAdmin ? 'adminisztrátor' : 'fogpótlástanász'},</p>
+      <p>Egy időpont felszabadult, mert a beteg törölve lett a rendszerből:</p>
+      <ul>
+        <li><strong>Beteg neve:</strong> ${patientName || 'Név nélküli'}</li>
+        <li><strong>TAJ szám:</strong> ${patientTaj || 'Nincs megadva'}</li>
+        <li><strong>Időpont:</strong> ${appointmentTime.toLocaleString('hu-HU')}</li>
+        ${dentistEmail ? `<li><strong>Fogpótlástanász:</strong> ${dentistEmail}</li>` : ''}
+        <li><strong>Törölte:</strong> ${deletedBy}</li>
+      </ul>
+      <p>Az időpont újra elérhetővé vált a rendszerben és újra lefoglalható.</p>
+      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: recipientEmail,
+    subject: 'Időpont felszabadult - Maxillofaciális Rehabilitáció',
+    html,
   });
 }

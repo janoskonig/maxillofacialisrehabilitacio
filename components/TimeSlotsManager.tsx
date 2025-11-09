@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Calendar, Plus, Trash2, Edit2, Clock, X } from 'lucide-react';
+import { getCurrentUser } from '@/lib/auth';
 
 interface TimeSlot {
   id: string;
@@ -19,6 +20,12 @@ interface AppointmentInfo {
   bookedBy: string; // Email of surgeon/admin who booked
 }
 
+interface User {
+  id: string;
+  email: string;
+  role: string;
+}
+
 export function TimeSlotsManager() {
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [appointments, setAppointments] = useState<Record<string, AppointmentInfo>>({});
@@ -28,10 +35,43 @@ export function TimeSlotsManager() {
   const [newStartTime, setNewStartTime] = useState('');
   const [modifyingAppointment, setModifyingAppointment] = useState<{ appointmentId: string; timeSlotId: string; startTime: string } | null>(null);
   const [newTimeSlotId, setNewTimeSlotId] = useState<string>('');
+  const [userRole, setUserRole] = useState<string>('');
+  const [users, setUsers] = useState<User[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string>('');
 
   useEffect(() => {
     loadTimeSlots();
+    loadUserRole();
   }, []);
+
+  const loadUserRole = async () => {
+    try {
+      const user = await getCurrentUser();
+      if (user) {
+        setUserRole(user.role);
+        // If admin, load users list
+        if (user.role === 'admin') {
+          loadUsers();
+        }
+      }
+    } catch (error) {
+      console.error('Error loading user role:', error);
+    }
+  };
+
+  const loadUsers = async () => {
+    try {
+      const response = await fetch('/api/users', {
+        credentials: 'include',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(data.users || []);
+      }
+    } catch (error) {
+      console.error('Error loading users:', error);
+    }
+  };
 
   const loadTimeSlots = async () => {
     try {
@@ -78,19 +118,33 @@ export function TimeSlotsManager() {
       return;
     }
 
+    // For admin, require user selection
+    if (userRole === 'admin' && !selectedUserId) {
+      alert('Kérjük, válasszon felhasználót!');
+      return;
+    }
+
     try {
+      const requestBody: any = { startTime: newStartTime };
+      
+      // If admin and user selected, include userId
+      if (userRole === 'admin' && selectedUserId) {
+        requestBody.userId = selectedUserId;
+      }
+
       const response = await fetch('/api/time-slots', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify({ startTime: newStartTime }),
+        body: JSON.stringify(requestBody),
       });
 
       if (response.ok) {
         await loadTimeSlots();
         setNewStartTime('');
+        setSelectedUserId('');
         setShowForm(false);
         alert('Időpont sikeresen létrehozva!');
       } else {
@@ -310,30 +364,52 @@ export function TimeSlotsManager() {
           <h4 className="font-medium mb-4">
             {editingSlot ? 'Időpont szerkesztése' : 'Új időpont létrehozása'}
           </h4>
-          <div className="flex gap-2">
-            <input
-              type="datetime-local"
-              value={newStartTime}
-              onChange={(e) => setNewStartTime(e.target.value)}
-              min={getMinDateTime()}
-              className="form-input flex-1"
-            />
-            <button
-              onClick={handleCreateTimeSlot}
-              className="btn-primary"
-            >
-              Mentés
-            </button>
-            <button
-              onClick={() => {
-                setShowForm(false);
-                setNewStartTime('');
-                setEditingSlot(null);
-              }}
-              className="btn-secondary"
-            >
-              Mégse
-            </button>
+          <div className="space-y-4">
+            {userRole === 'admin' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Felhasználó
+                </label>
+                <select
+                  value={selectedUserId}
+                  onChange={(e) => setSelectedUserId(e.target.value)}
+                  className="form-input w-full"
+                >
+                  <option value="">Válasszon felhasználót...</option>
+                  {users.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.email} ({user.role})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div className="flex gap-2">
+              <input
+                type="datetime-local"
+                value={newStartTime}
+                onChange={(e) => setNewStartTime(e.target.value)}
+                min={getMinDateTime()}
+                className="form-input flex-1"
+              />
+              <button
+                onClick={handleCreateTimeSlot}
+                className="btn-primary"
+              >
+                Mentés
+              </button>
+              <button
+                onClick={() => {
+                  setShowForm(false);
+                  setNewStartTime('');
+                  setSelectedUserId('');
+                  setEditingSlot(null);
+                }}
+                className="btn-secondary"
+              >
+                Mégse
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -351,6 +427,9 @@ export function TimeSlotsManager() {
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Időpont
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Fogpótlástanász
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Státusz
@@ -380,6 +459,11 @@ export function TimeSlotsManager() {
                             {formatDateTime(slot.startTime)}
                           </span>
                         </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="text-sm text-gray-600">
+                          {slot.userEmail || '-'}
+                        </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span

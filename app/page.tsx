@@ -6,9 +6,11 @@ import { Patient, patientSchema } from '@/lib/types';
 import { getAllPatients, savePatient, searchPatients } from '@/lib/storage';
 import { PatientForm } from '@/components/PatientForm';
 import { PatientList } from '@/components/PatientList';
-import { Plus, Search, Users, LogOut, Shield, Settings, Calendar } from 'lucide-react';
+import { Plus, Search, Users, LogOut, Shield, Settings, Calendar, Eye } from 'lucide-react';
 import { getCurrentUser, getUserEmail, getUserRole, logout } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
+
+type UserRoleType = 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
 
 export default function Home() {
   const router = useRouter();
@@ -19,7 +21,12 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredPatients, setFilteredPatients] = useState<Patient[]>([]);
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState<'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos'>('viewer');
+  const [userRole, setUserRole] = useState<UserRoleType>('viewer');
+  const [originalUserRole, setOriginalUserRole] = useState<UserRoleType>('viewer');
+  const [viewAsRole, setViewAsRole] = useState<UserRoleType | null>(null);
+  
+  // Computed role for display - use viewAsRole if set, otherwise use original role
+  const displayRole = viewAsRole || userRole;
 
   useEffect(() => {
     // Check authentication
@@ -34,6 +41,7 @@ export default function Home() {
       const role = user.role;
     setUserEmail(email);
       setUserRole(role);
+      setOriginalUserRole(role); // Store original role
     loadPatients();
 
     // Send heartbeat only once per session
@@ -246,6 +254,66 @@ export default function Home() {
     router.push('/login');
   };
 
+  const handleViewAsRoleChange = (role: UserRoleType | null) => {
+    setViewAsRole(role);
+  };
+
+  const handleDeletePatient = async (patient: Patient) => {
+    if (!patient.id) {
+      alert('Hiba: A beteg ID nem található');
+      return;
+    }
+
+    // Check if patient has appointment by loading appointments
+    let hasAppointment = false;
+    try {
+      const appointmentsResponse = await fetch('/api/appointments', {
+        credentials: 'include',
+      });
+      if (appointmentsResponse.ok) {
+        const appointmentsData = await appointmentsResponse.json();
+        hasAppointment = (appointmentsData.appointments || []).some(
+          (apt: any) => apt.patientId === patient.id
+        );
+      }
+    } catch (error) {
+      console.error('Error checking appointments:', error);
+    }
+
+    const confirmMessage = hasAppointment
+      ? `Biztosan törölni szeretné ezt a beteget?\n\nA beteg törlésekor a lefoglalt időpont is törlődik és felszabadul. A fogpótlástanász és az adminok értesítést kapnak.`
+      : `Biztosan törölni szeretné ezt a beteget?\n\nA művelet nem vonható vissza!`;
+
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/patients/${patient.id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        await loadPatients();
+        if (data.appointmentsFreed && data.appointmentsFreed > 0) {
+          alert(`Beteg sikeresen törölve! ${data.appointmentsFreed} időpont felszabadult. A fogpótlástanász és az adminok értesítést kaptak.`);
+        } else {
+          alert('Beteg sikeresen törölve!');
+        }
+      } else {
+        const errorData = await response.json();
+        alert(errorData.error || 'Hiba történt a beteg törlésekor');
+      }
+    } catch (error) {
+      console.error('Error deleting patient:', error);
+      alert('Hiba történt a beteg törlésekor');
+    }
+  };
+
+  const availableRoles: UserRoleType[] = ['sebészorvos', 'technikus', 'fogpótlástanász', 'editor', 'viewer'];
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm border-b">
@@ -262,13 +330,46 @@ export default function Home() {
                 </p>
               </div>
             </div>
+            {/* View As Role Selector - Only for admins */}
+            {originalUserRole === 'admin' && (
+              <div className="flex items-center gap-2">
+                <Eye className="w-4 h-4 text-gray-500" />
+                <label className="text-sm text-gray-700 font-medium">
+                  Nézet mint:
+                </label>
+                <select
+                  value={viewAsRole || ''}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    handleViewAsRoleChange(value === '' ? null : (value as UserRoleType));
+                  }}
+                  className="form-input text-sm py-1 px-2 border-gray-300 rounded"
+                >
+                  <option value="">Admin (eredeti)</option>
+                  {availableRoles.map((role) => (
+                    <option key={role} value={role}>
+                      {role === 'sebészorvos' ? 'Sebészorvos' :
+                       role === 'technikus' ? 'Technikus' :
+                       role === 'fogpótlástanász' ? 'Fogpótlástanász' :
+                       role === 'editor' ? 'Szerkesztő' :
+                       role === 'viewer' ? 'Megtekintő' : role}
+                    </option>
+                  ))}
+                </select>
+                {viewAsRole && (
+                  <span className="text-xs text-amber-600 font-medium bg-amber-50 px-2 py-1 rounded">
+                    Előnézet mód
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </header>
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="space-y-6">
           {/* Link to time slots management page for fogpótlástanász and admin */}
-          {(userRole === 'fogpótlástanász' || userRole === 'admin') && (
+          {(displayRole === 'fogpótlástanász' || displayRole === 'admin') && (
             <div className="card p-4">
               <div className="flex justify-between items-center">
                 <div>
@@ -302,7 +403,8 @@ export default function Home() {
           )}
         </div>
         <div className="flex gap-2">
-          {userRole === 'admin' && (
+          {/* Admin button - always show for real admins, even in view-as mode */}
+          {originalUserRole === 'admin' && (
             <button
               onClick={() => router.push('/admin')}
               className="btn-secondary flex items-center gap-2"
@@ -325,7 +427,7 @@ export default function Home() {
             <LogOut className="w-4 h-4" />
             Kijelentkezés
           </button>
-          {(userRole === 'admin' || userRole === 'editor' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos') && (
+          {(displayRole === 'admin' || displayRole === 'editor' || displayRole === 'fogpótlástanász' || displayRole === 'sebészorvos') && (
             <button
               onClick={handleNewPatient}
               className="btn-primary flex items-center gap-2"
@@ -394,8 +496,10 @@ export default function Home() {
                 patients={filteredPatients}
                 onView={handleViewPatient}
                 onEdit={handleEditPatient}
-                canEdit={userRole === 'admin' || userRole === 'editor' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos'}
-                userRole={userRole}
+                onDelete={originalUserRole === 'admin' ? handleDeletePatient : undefined}
+                canEdit={displayRole === 'admin' || displayRole === 'editor' || displayRole === 'fogpótlástanász' || displayRole === 'sebészorvos'}
+                canDelete={originalUserRole === 'admin'}
+                userRole={displayRole}
               />
             </>
 

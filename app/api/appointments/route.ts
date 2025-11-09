@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
-import { sendAppointmentBookingNotification, sendAppointmentBookingNotificationToPatient } from '@/lib/email';
+import { sendAppointmentBookingNotification, sendAppointmentBookingNotificationToPatient, sendAppointmentBookingNotificationToAdmins } from '@/lib/email';
 import { generateIcsFile } from '@/lib/calendar';
 
 // Get all appointments
@@ -206,6 +206,39 @@ export async function POST(request: NextRequest) {
           console.error('Failed to send appointment booking notification to patient:', emailError);
           // Don't fail the request if email fails
         }
+      }
+
+      // Send email notification to all admins
+      try {
+        const adminResult = await pool.query(
+          'SELECT email FROM users WHERE role = $1 AND active = true',
+          ['admin']
+        );
+        
+        if (adminResult.rows.length > 0) {
+          const adminEmails = adminResult.rows.map((row: any) => row.email);
+          
+          const icsFileAdmin = await generateIcsFile({
+            patientName: patient.nev,
+            patientTaj: patient.taj,
+            startTime: startTime,
+            surgeonName: auth.email,
+            dentistName: timeSlot.dentist_email,
+          });
+
+          await sendAppointmentBookingNotificationToAdmins(
+            adminEmails,
+            patient.nev,
+            patient.taj,
+            startTime,
+            auth.email,
+            timeSlot.dentist_email,
+            icsFileAdmin
+          );
+        }
+      } catch (emailError) {
+        console.error('Failed to send appointment booking notification to admins:', emailError);
+        // Don't fail the request if email fails
       }
 
       return NextResponse.json({ appointment }, { status: 201 });

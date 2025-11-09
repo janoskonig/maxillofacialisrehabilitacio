@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { patientSchema } from '@/lib/types';
 import { verifyAuth } from '@/lib/auth-server';
+import { sendAppointmentTimeSlotFreedNotification } from '@/lib/email';
 
 // Egy beteg lekérdezése ID alapján
 export async function GET(
@@ -620,7 +621,7 @@ export async function PUT(
   }
 }
 
-// Beteg törlése
+// Beteg törlése (csak admin)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -635,13 +636,20 @@ export async function DELETE(
       );
     }
 
+    // Only admin can delete patients
+    if (auth.role !== 'admin') {
+      return NextResponse.json(
+        { error: 'Csak admin törölhet betegeket' },
+        { status: 403 }
+      );
+    }
+
     const pool = getDbPool();
-    const role = auth.role;
     const userEmail = auth.email;
     
-    // Először lekérdezzük a beteget, hogy ellenőrizhessük a jogosultságot
+    // Get patient details
     const patientResult = await pool.query(
-      'SELECT id, beutalo_orvos FROM patients WHERE id = $1',
+      'SELECT id, nev, taj, email FROM patients WHERE id = $1',
       [params.id]
     );
 
@@ -654,47 +662,129 @@ export async function DELETE(
     
     const patient = patientResult.rows[0];
     
-    // Szerepkör alapú jogosultság ellenőrzés törléshez
-    if (role === 'sebészorvos') {
-      // Sebészorvos: csak azokat a betegeket törölheti, akiket ő utalt be
-      if (!userEmail || patient.beutalo_orvos !== userEmail) {
-        return NextResponse.json(
-          { error: 'Nincs jogosultsága ehhez a beteg törléséhez' },
-          { status: 403 }
-        );
-      }
-    } else if (role === 'technikus') {
-      // Technikus: nem törölhet betegeket
-      return NextResponse.json(
-        { error: 'Nincs jogosultsága betegek törléséhez' },
-        { status: 403 }
-      );
-    }
-    
-    const result = await pool.query(
-      'DELETE FROM patients WHERE id = $1 RETURNING id',
+    // Check if patient has appointments
+    const appointmentResult = await pool.query(
+      `SELECT 
+        a.id,
+        a.time_slot_id,
+        a.dentist_email,
+        ats.start_time,
+        ats.user_id as time_slot_user_id,
+        u.email as time_slot_user_email
+      FROM appointments a
+      JOIN available_time_slots ats ON a.time_slot_id = ats.id
+      JOIN users u ON ats.user_id = u.id
+      WHERE a.patient_id = $1`,
       [params.id]
     );
 
-    // Activity logging: patient deleted
-    try {
-      const userEmail = auth.email;
-      const ipHeader = request.headers.get('x-forwarded-for') || '';
-      const ipAddress = ipHeader.split(',')[0]?.trim() || null;
-      await pool.query(
-        `INSERT INTO activity_logs (user_email, action, detail, ip_address)
-         VALUES ($1, $2, $3, $4)`,
-        [userEmail, 'patient_deleted', `Patient ID: ${params.id}`, ipAddress]
-      );
-    } catch (logError) {
-      console.error('Failed to log activity:', logError);
-      // Don't fail the request if logging fails
-    }
+    const appointments = appointmentResult.rows;
 
-    return NextResponse.json(
-      { message: 'Beteg sikeresen törölve' },
-      { status: 200 }
-    );
+    // Start transaction
+    await pool.query('BEGIN');
+
+    try {
+      // Delete appointments and free up time slots
+      for (const appointment of appointments) {
+        // Delete the appointment
+        await pool.query('DELETE FROM appointments WHERE id = $1', [appointment.id]);
+        
+        // Update time slot status back to available
+        await pool.query(
+          'UPDATE available_time_slots SET status = $1 WHERE id = $2',
+          ['available', appointment.time_slot_id]
+        );
+      }
+
+      // Delete the patient (this will cascade delete appointments due to ON DELETE CASCADE, but we already handled it)
+      await pool.query('DELETE FROM patients WHERE id = $1', [params.id]);
+
+      await pool.query('COMMIT');
+
+      // Send email notifications for freed time slots
+      for (const appointment of appointments) {
+        const startTime = new Date(appointment.start_time);
+        
+        // Send email to dentist
+        if (appointment.dentist_email) {
+          try {
+            await sendAppointmentTimeSlotFreedNotification(
+              appointment.dentist_email,
+              patient.nev,
+              patient.taj,
+              startTime,
+              userEmail
+            );
+          } catch (emailError) {
+            console.error('Failed to send time slot freed email to dentist:', emailError);
+            // Don't fail the request if email fails
+          }
+        }
+      }
+
+      // Send email to all admins about freed time slots
+      if (appointments.length > 0) {
+        try {
+          const adminResult = await pool.query(
+            'SELECT email FROM users WHERE role = $1 AND active = true',
+            ['admin']
+          );
+          
+          if (adminResult.rows.length > 0) {
+            const adminEmails = adminResult.rows.map((row: any) => row.email);
+            
+            // Send notification for each freed appointment
+            for (const appointment of appointments) {
+              const startTime = new Date(appointment.start_time);
+              try {
+                await sendAppointmentTimeSlotFreedNotification(
+                  adminEmails,
+                  patient.nev,
+                  patient.taj,
+                  startTime,
+                  userEmail,
+                  appointment.dentist_email
+                );
+              } catch (emailError) {
+                console.error('Failed to send time slot freed email to admins:', emailError);
+                // Don't fail the request if email fails
+              }
+            }
+          }
+        } catch (emailError) {
+          console.error('Failed to send time slot freed email to admins:', emailError);
+          // Don't fail the request if email fails
+        }
+      }
+
+      // Activity logging: patient deleted
+      try {
+        const ipHeader = request.headers.get('x-forwarded-for') || '';
+        const ipAddress = ipHeader.split(',')[0]?.trim() || null;
+        const appointmentInfo = appointments.length > 0 
+          ? `, ${appointments.length} időpont törölve és felszabadítva`
+          : '';
+        await pool.query(
+          `INSERT INTO activity_logs (user_email, action, detail, ip_address)
+           VALUES ($1, $2, $3, $4)`,
+          [userEmail, 'patient_deleted', `Patient ID: ${params.id}, Name: ${patient.nev || 'N/A'}${appointmentInfo}`, ipAddress]
+        );
+      } catch (logError) {
+        console.error('Failed to log activity:', logError);
+        // Don't fail the request if logging fails
+      }
+
+      return NextResponse.json(
+        { 
+          message: 'Beteg sikeresen törölve',
+          appointmentsFreed: appointments.length
+        },
+        { status: 200 }
+      );
+    } catch (error) {
+      await pool.query('ROLLBACK');
+      throw error;
+    }
   } catch (error) {
     console.error('Hiba a beteg törlésekor:', error);
     return NextResponse.json(

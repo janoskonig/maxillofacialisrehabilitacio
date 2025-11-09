@@ -161,6 +161,38 @@ A következő környezeti változókat kell beállítani a Render-en:
 
 **Fontos**: Ha ezeket nem állítja be, az alapértelmezett értékek lesznek (`admin@example.com` / `changeme`), ami **nem biztonságos production környezetben!**
 
+### Email Konfiguráció (Spam Szűrés Optimalizálás)
+
+Az email küldéshez és a spam mappába kerülés elkerüléséhez az alábbi környezeti változókat kell beállítani:
+
+- **SMTP_HOST**: SMTP szerver címe (pl. `smtp.gmail.com`, `smtp.sendgrid.net`)
+- **SMTP_PORT**: SMTP port (általában `587` TLS-hez vagy `465` SSL-hez)
+- **SMTP_USER**: SMTP felhasználónév (email cím vagy API kulcs)
+- **SMTP_PASS**: SMTP jelszó vagy API kulcs
+- **SMTP_FROM**: Küldő email cím (pl. `noreply@example.com`)
+- **SMTP_FROM_NAME**: Küldő neve (opcionális, alapértelmezett: "Maxillofaciális Rehabilitáció Rendszer")
+- **SMTP_REPLY_TO**: Reply-To cím (opcionális, alapértelmezett: ugyanaz, mint SMTP_FROM)
+
+**Spam szűrés optimalizálás javaslatok:**
+1. **SPF/DKIM/DMARC beállítása**: Állítsa be a domain DNS rekordjait (SPF, DKIM, DMARC) az email szolgáltatónál
+2. **Reply-To cím**: Mindig legyen beállítva egy valós, válaszolható email cím
+3. **From cím formátum**: Használjon "Név <email@domain.com>" formátumot
+4. **Text verzió**: Az alkalmazás automatikusan generál plain text verziót minden emailhez
+5. **Megbízható SMTP szolgáltató**: Használjon megbízható email szolgáltatót (Gmail, SendGrid, Mailgun, stb.)
+
+**Példa Gmail SMTP konfigurációhoz:**
+```
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+SMTP_FROM=your-email@gmail.com
+SMTP_FROM_NAME=Maxillofaciális Rehabilitáció Rendszer
+SMTP_REPLY_TO=support@yourdomain.com
+```
+
+**Megjegyzés**: Gmail esetén App Password-ot kell használni, nem a normál jelszót. További információ: [Google App Passwords](https://support.google.com/accounts/answer/185833)
+
 ### Opcionális
 
 - Bármilyen egyéb környezeti változó, amit az alkalmazás használ

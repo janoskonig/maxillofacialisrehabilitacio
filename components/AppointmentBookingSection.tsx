@@ -260,7 +260,7 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
                 <option value="">Válasszon időpontot...</option>
                 {availableSlotsOnly.map((slot) => (
                   <option key={slot.id} value={slot.id}>
-                    {formatDateTime(slot.startTime)}
+                    {formatDateTime(slot.startTime)} {slot.userEmail ? `- ${slot.userEmail}` : ''}
                   </option>
                 ))}
               </select>
@@ -273,6 +273,20 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
               </div>
             )}
           </div>
+          {selectedSlot && (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+              <div className="text-sm text-gray-700">
+                <span className="font-medium">Kiválasztott időpont:</span>{' '}
+                {formatDateTime(availableSlotsOnly.find(s => s.id === selectedSlot)?.startTime || '')}
+              </div>
+              {availableSlotsOnly.find(s => s.id === selectedSlot)?.userEmail && (
+                <div className="text-sm text-gray-600 mt-1">
+                  <span className="font-medium">Fogpótlástanász:</span>{' '}
+                  {availableSlotsOnly.find(s => s.id === selectedSlot)?.userEmail}
+                </div>
+              )}
+            </div>
+          )}
           {availableSlotsOnly.length > 0 && (
             <button
               onClick={handleBookAppointment}

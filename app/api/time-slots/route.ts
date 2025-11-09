@@ -85,24 +85,48 @@ export async function POST(request: NextRequest) {
     const pool = getDbPool();
     
     // Get user ID
-    // For admin creating time slot, we need to specify which user (fogpótlástanász) the slot belongs to
-    // For now, if admin creates, we'll use their own user ID, but ideally they should select a fogpótlástanász
-    // For simplicity, admin can create slots for themselves or we can add a user_id parameter
-    const bodyUserId = body.userId; // Optional: if admin wants to create slot for a specific fogpótlástanász
+    // For admin creating time slot, they can specify which user the slot belongs to
+    // For fogpótlástanász, the slot always belongs to them
+    const bodyUserId = body.userId; // Optional: user ID (UUID)
+    const bodyUserEmail = body.userEmail; // Optional: user email
     
     let userId: string;
-    if (bodyUserId && auth.role === 'admin') {
-      // Admin can create slot for a specific user
-      const targetUserResult = await pool.query('SELECT id FROM users WHERE id = $1', [bodyUserId]);
-      if (targetUserResult.rows.length === 0) {
-        return NextResponse.json(
-          { error: 'A megadott felhasználó nem található' },
-          { status: 404 }
-        );
+    
+    if (auth.role === 'admin') {
+      // Admin can create slot for any user
+      if (bodyUserId) {
+        // Use provided user ID
+        const targetUserResult = await pool.query('SELECT id FROM users WHERE id = $1', [bodyUserId]);
+        if (targetUserResult.rows.length === 0) {
+          return NextResponse.json(
+            { error: 'A megadott felhasználó nem található' },
+            { status: 404 }
+          );
+        }
+        userId = targetUserResult.rows[0].id;
+      } else if (bodyUserEmail) {
+        // Use provided user email
+        const targetUserResult = await pool.query('SELECT id FROM users WHERE email = $1', [bodyUserEmail.toLowerCase().trim()]);
+        if (targetUserResult.rows.length === 0) {
+          return NextResponse.json(
+            { error: 'A megadott felhasználó nem található' },
+            { status: 404 }
+          );
+        }
+        userId = targetUserResult.rows[0].id;
+      } else {
+        // Admin didn't specify a user, use their own ID
+        const userResult = await pool.query('SELECT id FROM users WHERE email = $1', [auth.email]);
+        if (userResult.rows.length === 0) {
+          return NextResponse.json(
+            { error: 'Felhasználó nem található' },
+            { status: 404 }
+          );
+        }
+        userId = userResult.rows[0].id;
       }
-      userId = targetUserResult.rows[0].id;
     } else {
-      // Use the current user's ID
+      // Fogpótlástanász: use their own ID
       const userResult = await pool.query('SELECT id FROM users WHERE email = $1', [auth.email]);
       if (userResult.rows.length === 0) {
         return NextResponse.json(

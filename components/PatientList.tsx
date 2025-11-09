@@ -2,14 +2,16 @@
 
 import { useState, useEffect } from 'react';
 import { Patient } from '@/lib/types';
-import { Phone, Mail, Calendar, FileText, Eye, Pencil, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { Phone, Mail, Calendar, FileText, Eye, Pencil, CheckCircle2, XCircle, Clock, Trash2 } from 'lucide-react';
 import { formatDateForDisplay, calculateAge } from '@/lib/dateUtils';
 
 interface PatientListProps {
   patients: Patient[];
   onView: (patient: Patient) => void;
   onEdit?: (patient: Patient) => void;
+  onDelete?: (patient: Patient) => void;
   canEdit?: boolean;
+  canDelete?: boolean;
   userRole?: 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
 }
 
@@ -19,16 +21,14 @@ interface AppointmentInfo {
   dentistEmail: string | null;
 }
 
-export function PatientList({ patients, onView, onEdit, canEdit = false, userRole }: PatientListProps) {
+export function PatientList({ patients, onView, onEdit, onDelete, canEdit = false, canDelete = false, userRole }: PatientListProps) {
   const [appointments, setAppointments] = useState<Record<string, AppointmentInfo>>({});
   const [loadingAppointments, setLoadingAppointments] = useState(false);
 
-  // Load appointments if surgeon role
+  // Load appointments for all roles
   useEffect(() => {
-    if (userRole === 'sebészorvos') {
-      loadAppointments();
-    }
-  }, [userRole, patients]);
+    loadAppointments();
+  }, [patients]);
 
   const loadAppointments = async () => {
     try {
@@ -87,13 +87,10 @@ export function PatientList({ patients, onView, onEdit, canEdit = false, userRol
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Kezelőorvos
               </th>
-              {userRole === 'sebészorvos' ? (
-                <>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Időpont
-                  </th>
-                </>
-              ) : (
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Időpont
+              </th>
+              {userRole !== 'sebészorvos' && (
                 <>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Tervezett fogpótlás (felső)
@@ -179,29 +176,28 @@ export function PatientList({ patients, onView, onEdit, canEdit = false, userRol
                     {patient.kezeleoorvos || 'Kezelőorvosra vár'}
                   </div>
                 </td>
-                {userRole === 'sebészorvos' ? (
-                  <td className="px-6 py-4">
-                    {loadingAppointments ? (
-                      <div className="text-sm text-gray-500">Betöltés...</div>
-                    ) : appointments[patient.id || ''] ? (
-                      <div className="text-sm">
-                        <div className="flex items-center text-gray-900">
-                          <Clock className="w-4 h-4 mr-1 text-medical-primary" />
-                          <span className="font-medium">
-                            {formatDateForDisplay(appointments[patient.id || ''].startTime)}
-                          </span>
-                        </div>
-                        {appointments[patient.id || ''].dentistEmail && (
-                          <div className="text-xs text-gray-500 mt-1">
-                            Fogpótlástanász: {appointments[patient.id || ''].dentistEmail}
-                          </div>
-                        )}
+                <td className="px-6 py-4">
+                  {loadingAppointments ? (
+                    <div className="text-sm text-gray-500">Betöltés...</div>
+                  ) : appointments[patient.id || ''] ? (
+                    <div className="text-sm">
+                      <div className="flex items-center text-gray-900">
+                        <Clock className="w-4 h-4 mr-1 text-medical-primary" />
+                        <span className="font-medium">
+                          {formatDateForDisplay(appointments[patient.id || ''].startTime)}
+                        </span>
                       </div>
-                    ) : (
-                      <div className="text-sm text-gray-400">Nincs időpont</div>
-                    )}
-                  </td>
-                ) : (
+                      {appointments[patient.id || ''].dentistEmail && (
+                        <div className="text-xs text-gray-500 mt-1">
+                          Fogpótlástanász: {appointments[patient.id || ''].dentistEmail}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-gray-400">Nincs időpont</div>
+                  )}
+                </td>
+                {userRole !== 'sebészorvos' && (
                   <>
                     <td className="px-6 py-4">
                       <div className="text-sm text-gray-900">
@@ -287,6 +283,15 @@ export function PatientList({ patients, onView, onEdit, canEdit = false, userRol
                         title="Beteg szerkesztése"
                       >
                         <Pencil className="w-4 h-4" />
+                      </button>
+                    )}
+                    {canDelete && onDelete && (
+                      <button
+                        onClick={() => onDelete(patient)}
+                        className="text-red-600 hover:text-red-800"
+                        title="Beteg törlése"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     )}
                   </div>
