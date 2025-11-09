@@ -22,8 +22,9 @@ export async function GET(request: NextRequest) {
     let paramIndex = 1;
     
     if (role === 'technikus') {
-      // Technikus: csak azokat a betegeket látja, akikhez epitézist rendeltek
-      whereConditions.push('kezelesi_terv_arcot_erinto IS NOT NULL AND jsonb_array_length(kezelesi_terv_arcot_erinto) > 0');
+      // Technikus: csak azokat a betegeket látja, akikhez arcot érintő kezelési terv van
+      // Ellenőrizzük, hogy a kezelesi_terv_arcot_erinto mező nem NULL és nem üres tömb (tömb hossza > 0)
+      whereConditions.push(`kezelesi_terv_arcot_erinto IS NOT NULL AND jsonb_array_length(kezelesi_terv_arcot_erinto) > 0`);
     }
     // sebészorvos, fogpótlástanász, admin, editor, viewer: mindent látnak (nincs szűrés)
     
