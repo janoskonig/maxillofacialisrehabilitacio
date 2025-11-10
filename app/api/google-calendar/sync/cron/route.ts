@@ -47,9 +47,9 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const totalCreated = results.reduce((sum, r) => sum + (r.created || 0), 0);
-    const totalUpdated = results.reduce((sum, r) => sum + (r.updated || 0), 0);
-    const totalDeleted = results.reduce((sum, r) => sum + (r.deleted || 0), 0);
+    const totalCreated = results.reduce((sum, r) => sum + ('created' in r ? (r.created || 0) : 0), 0);
+    const totalUpdated = results.reduce((sum, r) => sum + ('updated' in r ? (r.updated || 0) : 0), 0);
+    const totalDeleted = results.reduce((sum, r) => sum + ('deleted' in r ? (r.deleted || 0) : 0), 0);
 
     return NextResponse.json({
       success: true,

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser, type AuthUser } from '@/lib/auth';
-import { MessageCircle, ChevronDown, ChevronUp, AlertCircle, Bug, Lightbulb } from 'lucide-react';
+import { MessageCircle, ChevronDown, ChevronUp, AlertCircle, Bug, Lightbulb, Mail, Send } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 
 type UserRole = 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
@@ -47,6 +47,21 @@ export default function AdminPage() {
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [feedbackStatusFilter, setFeedbackStatusFilter] = useState<string>('');
   const [expandedFeedback, setExpandedFeedback] = useState<Set<string>>(new Set());
+  
+  // E-mail küldés állapotok
+  const [emailRoles, setEmailRoles] = useState<string[]>([]);
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailContent, setEmailContent] = useState('');
+  const [emailPreview, setEmailPreview] = useState<Array<{ email: string; name: string; role: string }>>([]);
+  const [emailPreviewLoading, setEmailPreviewLoading] = useState(false);
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailSuccess, setEmailSuccess] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [emailPreviewData, setEmailPreviewData] = useState<{
+    users: Array<{ email: string; name: string; role: string }>;
+    includeAdmins: boolean;
+    adminCount: number;
+  } | null>(null);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -242,6 +257,145 @@ export default function AdminPage() {
     });
   };
 
+  // E-mail előnézet betöltése
+  const loadEmailPreview = async () => {
+    if (emailRoles.length === 0) {
+      setEmailPreview([]);
+      setEmailPreviewData(null);
+      return;
+    }
+
+    setEmailPreviewLoading(true);
+    setEmailError(null);
+    try {
+      const rolesParam = emailRoles.join(',');
+      const res = await fetch(`/api/users/send-email?roles=${encodeURIComponent(rolesParam)}`, {
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setEmailPreview(data.users || []);
+        setEmailPreviewData({
+          users: data.users || [],
+          includeAdmins: data.includeAdmins || false,
+          adminCount: data.adminCount || 0,
+        });
+      } else {
+        const data = await res.json();
+        setEmailError(data.error || 'Hiba történt az előnézet betöltésekor');
+        setEmailPreview([]);
+        setEmailPreviewData(null);
+      }
+    } catch (e) {
+      console.error('Error loading email preview:', e);
+      setEmailError('Hiba történt az előnézet betöltésekor');
+      setEmailPreview([]);
+      setEmailPreviewData(null);
+    } finally {
+      setEmailPreviewLoading(false);
+    }
+  };
+
+  // E-mail küldése
+  const sendEmailToUsers = async () => {
+    if (emailRoles.length === 0) {
+      setEmailError('Válasszon ki legalább egy szerepkört');
+      return;
+    }
+
+    if (!emailSubject.trim()) {
+      setEmailError('Az e-mail tárgyának megadása kötelező');
+      return;
+    }
+
+    if (!emailContent.trim()) {
+      setEmailError('Az e-mail tartalmának megadása kötelező');
+      return;
+    }
+
+    setEmailSending(true);
+    setEmailError(null);
+    setEmailSuccess(null);
+
+    try {
+      const res = await fetch('/api/users/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          roles: emailRoles,
+          subject: emailSubject,
+          html: emailContent.replace(/\n/g, '<br>'),
+          text: emailContent,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setEmailSuccess(data.message || 'E-mail sikeresen elküldve');
+        setEmailSubject('');
+        setEmailContent('');
+        setEmailRoles([]);
+        setEmailPreview([]);
+        setEmailPreviewData(null);
+      } else {
+        const data = await res.json();
+        setEmailError(data.error || 'Hiba történt az e-mail küldésekor');
+      }
+    } catch (e) {
+      console.error('Error sending email:', e);
+      setEmailError('Hiba történt az e-mail küldésekor');
+    } finally {
+      setEmailSending(false);
+    }
+  };
+
+  // E-mail előnézet automatikus frissítése, amikor a szerepkörök változnak
+  useEffect(() => {
+    if (emailRoles.length === 0) {
+      setEmailPreview([]);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      const loadPreview = async () => {
+        setEmailPreviewLoading(true);
+        setEmailError(null);
+        try {
+          const rolesParam = emailRoles.join(',');
+          const res = await fetch(`/api/users/send-email?roles=${encodeURIComponent(rolesParam)}`, {
+            credentials: 'include',
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setEmailPreview(data.users || []);
+            setEmailPreviewData({
+              users: data.users || [],
+              includeAdmins: data.includeAdmins || false,
+              adminCount: data.adminCount || 0,
+            });
+          } else {
+            const data = await res.json();
+            setEmailError(data.error || 'Hiba történt az előnézet betöltésekor');
+            setEmailPreview([]);
+            setEmailPreviewData(null);
+          }
+        } catch (e) {
+          console.error('Error loading email preview:', e);
+          setEmailError('Hiba történt az előnézet betöltésekor');
+          setEmailPreview([]);
+        } finally {
+          setEmailPreviewLoading(false);
+        }
+      };
+      loadPreview();
+    }, 500); // Debounce: 500ms késleltetés
+
+    return () => clearTimeout(timer);
+  }, [emailRoles]);
+
   const getTypeIcon = (type: string) => {
     switch (type) {
       case 'bug':
@@ -413,6 +567,160 @@ export default function AdminPage() {
           )}
           <div className="mt-6">
             <button className="btn-secondary" onClick={() => router.push('/')}>Vissza</button>
+          </div>
+        </div>
+
+        {/* E-mail küldés */}
+        <div className="card mt-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Mail className="w-5 h-5 text-medical-primary" />
+            <h2 className="text-xl font-semibold">E-mail küldés felhasználóknak</h2>
+          </div>
+
+          {/* Szerepkör választás */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Szerepkörök (több választható)
+            </label>
+            <div className="flex flex-wrap gap-3">
+              {['sebészorvos', 'fogpótlástanász', 'technikus'].map((role) => (
+                <label key={role} className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={emailRoles.includes(role)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setEmailRoles([...emailRoles, role]);
+                      } else {
+                        setEmailRoles(emailRoles.filter((r) => r !== role));
+                      }
+                    }}
+                    className="mr-2 h-4 w-4 text-medical-primary focus:ring-medical-primary border-gray-300 rounded"
+                  />
+                  <span className="text-sm text-gray-700">
+                    {role === 'sebészorvos' ? 'Sebészorvos' :
+                     role === 'fogpótlástanász' ? 'Fogpótlástanász' :
+                     role === 'technikus' ? 'Technikus' : role}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Előnézet */}
+          {emailPreviewLoading ? (
+            <div className="mb-4 text-sm text-gray-600">Előnézet betöltése...</div>
+          ) : emailPreview.length > 0 ? (
+            <div className="mb-4 space-y-3">
+              <div className="p-3 bg-blue-50 rounded border border-blue-200">
+                <p className="text-sm font-medium text-blue-900 mb-2">
+                  Címzettek ({emailPreview.length}):
+                </p>
+                <div className="text-sm text-blue-800 space-y-1 max-h-32 overflow-y-auto">
+                  {emailPreview.map((user, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <span className="font-medium">{user.name}</span>
+                      <span className="text-blue-600">({user.email})</span>
+                      <span className="text-xs text-blue-500">- {user.role}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {emailPreviewData?.includeAdmins && emailPreviewData.adminCount > 0 && (
+                <div className="p-3 bg-green-50 rounded border border-green-200">
+                  <p className="text-sm font-medium text-green-900 mb-1">
+                    ℹ️ Admin felhasználók automatikusan kapják az e-mailt másolatként
+                  </p>
+                  <p className="text-xs text-green-700">
+                    ({emailPreviewData.adminCount} admin felhasználó)
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : emailRoles.length > 0 ? (
+            <div className="mb-4 p-3 bg-yellow-50 rounded border border-yellow-200">
+              <p className="text-sm text-yellow-800">Nem található aktív felhasználó a kiválasztott szerepkörökkel.</p>
+            </div>
+          ) : null}
+
+          {/* E-mail tárgy */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              E-mail tárgya
+            </label>
+            <input
+              type="text"
+              value={emailSubject}
+              onChange={(e) => setEmailSubject(e.target.value)}
+              placeholder="Pl: Fontos értesítés"
+              className="form-input w-full"
+            />
+          </div>
+
+          {/* E-mail tartalom */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              E-mail tartalma
+            </label>
+            <textarea
+              value={emailContent}
+              onChange={(e) => setEmailContent(e.target.value)}
+              placeholder="Írja be az e-mail tartalmát..."
+              rows={8}
+              className="form-input w-full"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              A sortörések automatikusan bekerülnek az e-mailbe.
+            </p>
+          </div>
+
+          {/* Hiba/Siker üzenetek */}
+          {emailError && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded">
+              <p className="text-sm text-red-800">{emailError}</p>
+            </div>
+          )}
+
+          {emailSuccess && (
+            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded">
+              <p className="text-sm text-green-800">{emailSuccess}</p>
+            </div>
+          )}
+
+          {/* Küldés gomb */}
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={() => {
+                setEmailSubject('');
+                setEmailContent('');
+                setEmailRoles([]);
+                setEmailPreview([]);
+                setEmailPreviewData(null);
+                setEmailError(null);
+                setEmailSuccess(null);
+              }}
+              className="btn-secondary"
+              disabled={emailSending}
+            >
+              Törlés
+            </button>
+            <button
+              onClick={sendEmailToUsers}
+              disabled={emailSending || emailRoles.length === 0 || !emailSubject.trim() || !emailContent.trim()}
+              className="btn-primary flex items-center gap-2"
+            >
+              {emailSending ? (
+                <>
+                  <span className="animate-spin">⏳</span>
+                  Küldés...
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4" />
+                  E-mail küldése
+                </>
+              )}
+            </button>
           </div>
         </div>
 
