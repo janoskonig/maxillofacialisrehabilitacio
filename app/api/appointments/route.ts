@@ -61,9 +61,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (auth.role !== 'sebészorvos' && auth.role !== 'admin') {
+    if (auth.role !== 'sebészorvos' && auth.role !== 'admin' && auth.role !== 'fogpótlástanász') {
       return NextResponse.json(
-        { error: 'Csak sebészorvos vagy admin foglalhat időpontot' },
+        { error: 'Csak sebészorvos, admin vagy fogpótlástanász foglalhat időpontot' },
         { status: 403 }
       );
     }

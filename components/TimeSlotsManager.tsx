@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Calendar, Plus, Trash2, Edit2, Clock, X } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth';
+import { DateTimePicker } from './DateTimePicker';
 
 interface TimeSlot {
   id: string;
@@ -32,7 +33,7 @@ export function TimeSlotsManager() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingSlot, setEditingSlot] = useState<TimeSlot | null>(null);
-  const [newStartTime, setNewStartTime] = useState('');
+  const [newStartTime, setNewStartTime] = useState<Date | null>(null);
   const [modifyingAppointment, setModifyingAppointment] = useState<{ appointmentId: string; timeSlotId: string; startTime: string } | null>(null);
   const [newTimeSlotId, setNewTimeSlotId] = useState<string>('');
   const [userRole, setUserRole] = useState<string>('');
@@ -124,8 +125,16 @@ export function TimeSlotsManager() {
       return;
     }
 
+    // Convert Date to ISO format (YYYY-MM-DDTHH:mm)
+    const year = newStartTime.getFullYear();
+    const month = String(newStartTime.getMonth() + 1).padStart(2, '0');
+    const day = String(newStartTime.getDate()).padStart(2, '0');
+    const hours = String(newStartTime.getHours()).padStart(2, '0');
+    const minutes = String(newStartTime.getMinutes()).padStart(2, '0');
+    const isoDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+
     try {
-      const requestBody: any = { startTime: newStartTime };
+      const requestBody: any = { startTime: isoDateTime };
       
       // If admin and user selected, include userId
       if (userRole === 'admin' && selectedUserId) {
@@ -143,7 +152,7 @@ export function TimeSlotsManager() {
 
       if (response.ok) {
         await loadTimeSlots();
-        setNewStartTime('');
+        setNewStartTime(null);
         setSelectedUserId('');
         setShowForm(false);
         alert('Időpont sikeresen létrehozva!');
@@ -349,7 +358,7 @@ export function TimeSlotsManager() {
         <button
           onClick={() => {
             setEditingSlot(null);
-            setNewStartTime('');
+            setNewStartTime(null);
             setShowForm(!showForm);
           }}
           className="btn-primary flex items-center gap-2"
@@ -385,13 +394,15 @@ export function TimeSlotsManager() {
               </div>
             )}
             <div className="flex gap-2">
-              <input
-                type="datetime-local"
-                value={newStartTime}
-                onChange={(e) => setNewStartTime(e.target.value)}
-                min={getMinDateTime()}
-                className="form-input flex-1"
-              />
+              <div className="flex-1">
+                <DateTimePicker
+                  selected={newStartTime}
+                  onChange={(date: Date | null) => setNewStartTime(date)}
+                  minDate={new Date()}
+                  placeholder="Válasszon dátumot és időt"
+                  className="form-input"
+                />
+              </div>
               <button
                 onClick={handleCreateTimeSlot}
                 className="btn-primary"
@@ -401,7 +412,7 @@ export function TimeSlotsManager() {
               <button
                 onClick={() => {
                   setShowForm(false);
-                  setNewStartTime('');
+                  setNewStartTime(null);
                   setSelectedUserId('');
                   setEditingSlot(null);
                 }}

@@ -71,14 +71,58 @@ export function PatientList({ patients, onView, onEdit, onDelete, canEdit = fals
       if (response.ok) {
         const data = await response.json();
         const appointmentsMap: Record<string, AppointmentInfo> = {};
+        const now = new Date();
+        
+        // Group appointments by patient ID
+        const patientAppointments: Record<string, any[]> = {};
         (data.appointments || []).forEach((apt: any) => {
-          appointmentsMap[apt.patientId] = {
-            id: apt.id,
-            startTime: apt.startTime,
-            dentistEmail: apt.dentistEmail,
-            dentistName: apt.dentistName,
-          };
+          if (!patientAppointments[apt.patientId]) {
+            patientAppointments[apt.patientId] = [];
+          }
+          patientAppointments[apt.patientId].push(apt);
         });
+        
+        // For each patient, find the next (earliest future) appointment
+        Object.keys(patientAppointments).forEach((patientId) => {
+          const apts = patientAppointments[patientId];
+          
+          // Filter future appointments and sort by start time
+          const futureAppointments = apts
+            .filter((apt: any) => new Date(apt.startTime) > now)
+            .sort((a: any, b: any) => 
+              new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+            );
+          
+          // If there are future appointments, use the earliest one
+          // Otherwise, use the most recent past appointment
+          if (futureAppointments.length > 0) {
+            const nextApt = futureAppointments[0];
+            appointmentsMap[patientId] = {
+              id: nextApt.id,
+              startTime: nextApt.startTime,
+              dentistEmail: nextApt.dentistEmail,
+              dentistName: nextApt.dentistName,
+            };
+          } else {
+            // No future appointments, use the most recent past one
+            const pastAppointments = apts
+              .filter((apt: any) => new Date(apt.startTime) <= now)
+              .sort((a: any, b: any) => 
+                new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
+              );
+            
+            if (pastAppointments.length > 0) {
+              const lastApt = pastAppointments[0];
+              appointmentsMap[patientId] = {
+                id: lastApt.id,
+                startTime: lastApt.startTime,
+                dentistEmail: lastApt.dentistEmail,
+                dentistName: lastApt.dentistName,
+              };
+            }
+          }
+        });
+        
         setAppointments(appointmentsMap);
       }
     } catch (error) {

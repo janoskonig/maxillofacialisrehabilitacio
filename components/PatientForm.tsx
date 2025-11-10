@@ -8,6 +8,7 @@ import { formatDateForInput } from '@/lib/dateUtils';
 import { X, Calendar, User, Phone, Mail, MapPin, FileText, AlertTriangle, Plus, Trash2 } from 'lucide-react';
 import { AppointmentBookingSection } from './AppointmentBookingSection';
 import { getCurrentUser } from '@/lib/auth';
+import { DatePicker } from './DatePicker';
 
 const DRAFT_STORAGE_KEY_PREFIX = 'patientFormDraft_';
 const DRAFT_TIMESTAMP_KEY_PREFIX = 'patientFormDraftTimestamp_';
@@ -882,22 +883,15 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="form-label">Születési dátum</label>
-              <input
-                {...register('szuletesiDatum', {
-                  onChange: (e) => {
-                    setValue('szuletesiDatum', e.target.value, { shouldValidate: false });
-                  }
-                })}
-                type="text"
-                pattern="\d{4}-\d{2}-\d{2}"
-                placeholder="YYYY-MM-DD"
-                className="form-input"
-                onBlur={(e) => {
-                  const formatted = formatDateForInput(e.target.value);
-                  if (formatted) {
-                    setValue('szuletesiDatum', formatted, { shouldValidate: true });
-                  }
+              <DatePicker
+                selected={watch('szuletesiDatum') ? new Date(watch('szuletesiDatum')) : null}
+                onChange={(date: Date | null) => {
+                  const formatted = date ? formatDateForInput(date.toISOString().split('T')[0]) : '';
+                  setValue('szuletesiDatum', formatted, { shouldValidate: true });
                 }}
+                placeholder="Válasszon dátumot"
+                disabled={isViewOnly}
+                maxDate={new Date()}
               />
             </div>
             <div>
@@ -1082,23 +1076,15 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
               <>
                 <div>
                   <label className="form-label">Baleset időpontja</label>
-                  <input
-                    {...register('balesetIdopont', {
-                      onChange: (e) => {
-                        setValue('balesetIdopont', e.target.value, { shouldValidate: false });
-                      }
-                    })}
-                    type="text"
-                    pattern="\d{4}-\d{2}-\d{2}"
-                    placeholder="YYYY-MM-DD"
-                    className="form-input"
-                    readOnly={isViewOnly}
-                    onBlur={(e) => {
-                      const formatted = formatDateForInput(e.target.value);
-                      if (formatted) {
-                        setValue('balesetIdopont', formatted, { shouldValidate: true });
-                      }
+                  <DatePicker
+                    selected={watch('balesetIdopont') ? new Date(watch('balesetIdopont')) : null}
+                    onChange={(date: Date | null) => {
+                      const formatted = date ? formatDateForInput(date.toISOString().split('T')[0]) : '';
+                      setValue('balesetIdopont', formatted, { shouldValidate: true });
                     }}
+                    placeholder="Válasszon dátumot"
+                    disabled={isViewOnly}
+                    maxDate={new Date()}
                   />
                 </div>
                 <div>
@@ -1169,23 +1155,15 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                 {/* Műtét ideje csak onkológiai esetben */}
                 <div>
                   <label className="form-label">Műtét ideje</label>
-                  <input
-                    {...register('mutetIdeje', {
-                      onChange: (e) => {
-                        setValue('mutetIdeje', e.target.value, { shouldValidate: false });
-                      }
-                    })}
-                    type="text"
-                    pattern="\d{4}-\d{2}-\d{2}"
-                    placeholder="YYYY-MM-DD"
-                    className="form-input"
-                    readOnly={isViewOnly}
-                    onBlur={(e) => {
-                      const formatted = formatDateForInput(e.target.value);
-                      if (formatted) {
-                        setValue('mutetIdeje', formatted, { shouldValidate: true });
-                      }
+                  <DatePicker
+                    selected={watch('mutetIdeje') ? new Date(watch('mutetIdeje')) : null}
+                    onChange={(date: Date | null) => {
+                      const formatted = date ? formatDateForInput(date.toISOString().split('T')[0]) : '';
+                      setValue('mutetIdeje', formatted, { shouldValidate: true });
                     }}
+                    placeholder="Válasszon dátumot"
+                    disabled={isViewOnly}
+                    maxDate={new Date()}
                   />
                 </div>
                 {/* Primer műtét leírása */}
@@ -2021,27 +1999,14 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
                             <label className="form-label">Tervezett átadás dátuma</label>
-                            <input
-                              type="text"
-                              pattern="\d{4}-\d{2}-\d{2}"
-                              placeholder="YYYY-MM-DD"
-                              value={terv.tervezettAtadasDatuma || ''}
-                              onChange={(e) => {
-                                const value = e.target.value;
-                                updateKezelesiTervFelso(index, 'tervezettAtadasDatuma', value);
+                            <DatePicker
+                              selected={terv.tervezettAtadasDatuma ? new Date(terv.tervezettAtadasDatuma) : null}
+                              onChange={(date: Date | null) => {
+                                const formatted = date ? formatDateForInput(date.toISOString().split('T')[0]) : '';
+                                updateKezelesiTervFelso(index, 'tervezettAtadasDatuma', formatted || null);
                               }}
-                              onBlur={(e) => {
-                                const value = e.target.value.trim();
-                                if (value) {
-                                  const formatted = formatDateForInput(value);
-                                  // Csak akkor frissítjük, ha a formázás sikeres volt és nem üres
-                                  if (formatted && formatted !== '') {
-                                    updateKezelesiTervFelso(index, 'tervezettAtadasDatuma', formatted);
-                                  }
-                                }
-                              }}
-                              className="form-input"
-                              readOnly={isViewOnly}
+                              placeholder="Válasszon dátumot"
+                              disabled={isViewOnly}
                             />
                           </div>
                           <div className="flex items-center">
@@ -2114,27 +2079,14 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
                             <label className="form-label">Tervezett átadás dátuma</label>
-                            <input
-                              type="text"
-                              pattern="\d{4}-\d{2}-\d{2}"
-                              placeholder="YYYY-MM-DD"
-                              value={terv.tervezettAtadasDatuma || ''}
-                              onChange={(e) => {
-                                const value = e.target.value;
-                                updateKezelesiTervAlso(index, 'tervezettAtadasDatuma', value);
+                            <DatePicker
+                              selected={terv.tervezettAtadasDatuma ? new Date(terv.tervezettAtadasDatuma) : null}
+                              onChange={(date: Date | null) => {
+                                const formatted = date ? formatDateForInput(date.toISOString().split('T')[0]) : '';
+                                updateKezelesiTervAlso(index, 'tervezettAtadasDatuma', formatted || null);
                               }}
-                              onBlur={(e) => {
-                                const value = e.target.value.trim();
-                                if (value) {
-                                  const formatted = formatDateForInput(value);
-                                  // Csak akkor frissítjük, ha a formázás sikeres volt és nem üres
-                                  if (formatted && formatted !== '') {
-                                    updateKezelesiTervAlso(index, 'tervezettAtadasDatuma', formatted);
-                                  }
-                                }
-                              }}
-                              className="form-input"
-                              readOnly={isViewOnly}
+                              placeholder="Válasszon dátumot"
+                              disabled={isViewOnly}
                             />
                           </div>
                           <div className="flex items-center">
@@ -2221,27 +2173,14 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
                             <label className="form-label">Tervezett átadás dátuma</label>
-                            <input
-                              type="text"
-                              pattern="\d{4}-\d{2}-\d{2}"
-                              placeholder="YYYY-MM-DD"
-                              value={terv.tervezettAtadasDatuma || ''}
-                              onChange={(e) => {
-                                const value = e.target.value;
-                                updateKezelesiTervArcotErinto(index, 'tervezettAtadasDatuma', value);
+                            <DatePicker
+                              selected={terv.tervezettAtadasDatuma ? new Date(terv.tervezettAtadasDatuma) : null}
+                              onChange={(date: Date | null) => {
+                                const formatted = date ? formatDateForInput(date.toISOString().split('T')[0]) : '';
+                                updateKezelesiTervArcotErinto(index, 'tervezettAtadasDatuma', formatted || null);
                               }}
-                              onBlur={(e) => {
-                                const value = e.target.value.trim();
-                                if (value) {
-                                  const formatted = formatDateForInput(value);
-                                  // Csak akkor frissítjük, ha a formázás sikeres volt és nem üres
-                                  if (formatted && formatted !== '') {
-                                    updateKezelesiTervArcotErinto(index, 'tervezettAtadasDatuma', formatted);
-                                  }
-                                }
-                              }}
-                              className="form-input"
-                              readOnly={isViewOnly}
+                              placeholder="Válasszon dátumot"
+                              disabled={isViewOnly}
                             />
                           </div>
                           <div className="flex items-center">

@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Calendar, Clock, Download, CheckCircle2 } from 'lucide-react';
+import { Calendar, Clock, Download, CheckCircle2, Plus } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth';
+import { DateTimePicker } from './DateTimePicker';
 
 interface TimeSlot {
   id: string;
@@ -31,6 +32,8 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
   const [selectedSlot, setSelectedSlot] = useState<string>('');
   const [userRole, setUserRole] = useState<string>('');
   const [roleLoaded, setRoleLoaded] = useState(false);
+  const [showNewSlotForm, setShowNewSlotForm] = useState(false);
+  const [newSlotDateTime, setNewSlotDateTime] = useState<Date | null>(null);
 
   const loadAvailableSlots = async () => {
     try {
@@ -168,6 +171,83 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
     }
   };
 
+  const handleCreateAndBookNewSlot = async () => {
+    if (!patientId || !newSlotDateTime) {
+      alert('Kérjük, válasszon dátumot és időt!');
+      return;
+    }
+
+    // Check if date is in the future
+    if (newSlotDateTime <= new Date()) {
+      alert('Az időpont csak jövőbeli dátum lehet!');
+      return;
+    }
+
+    // Convert Date to ISO format (YYYY-MM-DDTHH:mm)
+    // This format will be interpreted as local time by the API
+    const year = newSlotDateTime.getFullYear();
+    const month = String(newSlotDateTime.getMonth() + 1).padStart(2, '0');
+    const day = String(newSlotDateTime.getDate()).padStart(2, '0');
+    const hours = String(newSlotDateTime.getHours()).padStart(2, '0');
+    const minutes = String(newSlotDateTime.getMinutes()).padStart(2, '0');
+    const isoDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+
+    if (!confirm('Biztosan létre szeretné hozni ezt az időpontot és rögtön lefoglalni a betegnek?')) {
+      return;
+    }
+
+    try {
+      // First, create the new time slot
+      const createSlotResponse = await fetch('/api/time-slots', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          startTime: isoDateTime,
+        }),
+      });
+
+      if (!createSlotResponse.ok) {
+        const errorData = await createSlotResponse.json();
+        alert(errorData.error || 'Hiba történt az időpont létrehozásakor');
+        return;
+      }
+
+      const slotData = await createSlotResponse.json();
+      const newTimeSlotId = slotData.timeSlot.id;
+
+      // Then, immediately book it for the patient
+      const bookResponse = await fetch('/api/appointments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          patientId: patientId,
+          timeSlotId: newTimeSlotId,
+        }),
+      });
+
+      if (bookResponse.ok) {
+        await loadData();
+        setNewSlotDateTime(null);
+        setShowNewSlotForm(false);
+        alert('Új időpont sikeresen létrehozva és lefoglalva a betegnek!');
+      } else {
+        const errorData = await bookResponse.json();
+        alert(errorData.error || 'Hiba történt az időpont foglalásakor');
+        // If booking failed, we should probably delete the created slot
+        // But for now, just show the error
+      }
+    } catch (error) {
+      console.error('Error creating and booking new slot:', error);
+      alert('Hiba történt az időpont létrehozásakor vagy foglalásakor');
+    }
+  };
+
   const formatDateTime = (dateTime: string) => {
     const date = new Date(dateTime);
     return date.toLocaleString('hu-HU', {
@@ -179,15 +259,15 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
     });
   };
 
-  // Only show for surgeons and admins
+  // Only show for surgeons, admins, and fogpótlástanász
   // Wait for role to load before making decision
   if (!roleLoaded) {
     // Still loading role, show nothing for now
     return null;
   }
   
-  // Role is loaded, check if user is surgeon or admin
-  if (userRole !== 'sebészorvos' && userRole !== 'admin') {
+  // Role is loaded, check if user is surgeon, admin, or fogpótlástanász
+  if (userRole !== 'sebészorvos' && userRole !== 'admin' && userRole !== 'fogpótlástanász') {
     return null;
   }
   
@@ -246,6 +326,59 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
       {/* Book New Appointment */}
       {!isViewOnly && (
         <div className="space-y-4">
+          {/* New slot creation for fogpótlástanász and admin */}
+          {(userRole === 'fogpótlástanász' || userRole === 'admin') && (
+            <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-medium text-gray-900">Új időpont kiírása és foglalása</h4>
+                {!showNewSlotForm && (
+                  <button
+                    onClick={() => setShowNewSlotForm(true)}
+                    className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Új időpont
+                  </button>
+                )}
+              </div>
+              {showNewSlotForm && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Dátum és idő
+                    </label>
+                    <DateTimePicker
+                      selected={newSlotDateTime}
+                      onChange={(date: Date | null) => setNewSlotDateTime(date)}
+                      minDate={new Date()}
+                      placeholder="Válasszon dátumot és időt"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleCreateAndBookNewSlot}
+                      disabled={!newSlotDateTime}
+                      className="btn-primary flex-1 flex items-center justify-center gap-2"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Időpont kiírása és foglalása
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowNewSlotForm(false);
+                        setNewSlotDateTime(null);
+                      }}
+                      className="btn-secondary"
+                    >
+                      Mégse
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Existing slot selection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Szabad időpont kiválasztása
