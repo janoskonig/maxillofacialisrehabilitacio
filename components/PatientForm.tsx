@@ -416,10 +416,16 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
   // Automatikus intézet beállítás a kezelőorvos alapján
   useEffect(() => {
     if (kezeleoorvos && !isViewOnly) {
-      // A statikus lista alapján döntünk, de lehet, hogy ezt is dinamikusan kellene kezelni
-      // Jelenleg megtartjuk a régi logikát, de lehet, hogy a jövőben az adatbázisból kellene jönnie
-      const fogpotlastaniKlinikaOrvosok = ['Dr. Jász', 'Dr. Kádár', 'Dr. König', 'Dr. Takács', 'Dr. Körmendi', 'Dr. Tasi', 'Dr. Vánkos'];
-      if (fogpotlastaniKlinikaOrvosok.some(name => kezeleoorvos.includes(name))) {
+      // Fogpótlástani Klinika orvosok vezetéknevei (rugalmas névformátum kezelés)
+      // A név bármilyen formátumban lehet (pl. "Dr. König", "König János dr.", "König János", stb.)
+      const fogpotlastaniKlinikaVezeteknevek = ['Jász', 'Kádár', 'König', 'Takács', 'Körmendi', 'Tasi', 'Vánkos'];
+      
+      // Ellenőrizzük, hogy a kiválasztott kezelőorvos neve tartalmazza-e valamelyik vezetéknevet
+      const isFogpotlastaniKlinika = fogpotlastaniKlinikaVezeteknevek.some(vezeteknev => 
+        kezeleoorvos.toLowerCase().includes(vezeteknev.toLowerCase())
+      );
+      
+      if (isFogpotlastaniKlinika) {
         setValue('kezeleoorvosIntezete', 'Fogpótlástani Klinika');
       } else {
         setValue('kezeleoorvosIntezete', 'Fogászati és Szájsebészeti Oktató Intézet');
