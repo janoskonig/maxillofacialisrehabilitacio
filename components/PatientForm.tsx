@@ -890,7 +890,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
             <div>
               <label className="form-label">Születési dátum</label>
               <DatePicker
-                selected={watch('szuletesiDatum') ? new Date(watch('szuletesiDatum')) : null}
+                selected={watch('szuletesiDatum') ? new Date(watch('szuletesiDatum') || '') : null}
                 onChange={(date: Date | null) => {
                   const formatted = date ? formatDateForInput(date.toISOString().split('T')[0]) : '';
                   setValue('szuletesiDatum', formatted, { shouldValidate: true });
