@@ -93,8 +93,7 @@ export function PatientList({ patients, onView, onEdit, onDelete, canEdit = fals
               new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
             );
           
-          // If there are future appointments, use the earliest one
-          // Otherwise, use the most recent past appointment
+          // Only show future appointments - don't show past appointments
           if (futureAppointments.length > 0) {
             const nextApt = futureAppointments[0];
             appointmentsMap[patientId] = {
@@ -103,24 +102,9 @@ export function PatientList({ patients, onView, onEdit, onDelete, canEdit = fals
               dentistEmail: nextApt.dentistEmail,
               dentistName: nextApt.dentistName,
             };
-          } else {
-            // No future appointments, use the most recent past one
-            const pastAppointments = apts
-              .filter((apt: any) => new Date(apt.startTime) <= now)
-              .sort((a: any, b: any) => 
-                new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
-              );
-            
-            if (pastAppointments.length > 0) {
-              const lastApt = pastAppointments[0];
-              appointmentsMap[patientId] = {
-                id: lastApt.id,
-                startTime: lastApt.startTime,
-                dentistEmail: lastApt.dentistEmail,
-                dentistName: lastApt.dentistName,
-              };
-            }
           }
+          // If no future appointments, don't add anything to appointmentsMap
+          // This way the patient won't show an appointment in the list
         });
         
         setAppointments(appointmentsMap);

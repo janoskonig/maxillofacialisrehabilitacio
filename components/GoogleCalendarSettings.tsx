@@ -1,20 +1,36 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Calendar, Link2, Unlink, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { Calendar, Link2, Unlink, CheckCircle2, XCircle, Loader2, RefreshCw } from 'lucide-react';
 
 interface GoogleCalendarStatus {
   enabled: boolean;
   email: string | null;
 }
 
+interface GoogleCalendar {
+  id: string;
+  summary: string;
+}
+
+interface CalendarSettings {
+  calendars: GoogleCalendar[];
+  sourceCalendarId: string;
+  targetCalendarId: string;
+}
+
 export function GoogleCalendarSettings() {
   const [status, setStatus] = useState<GoogleCalendarStatus | null>(null);
+  const [calendarSettings, setCalendarSettings] = useState<CalendarSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [sourceCalendarId, setSourceCalendarId] = useState<string>('primary');
+  const [targetCalendarId, setTargetCalendarId] = useState<string>('primary');
 
   useEffect(() => {
     loadStatus();
@@ -52,15 +68,41 @@ export function GoogleCalendarSettings() {
   const loadStatus = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/google-calendar/status', {
-        credentials: 'include',
-      });
+      const [statusResponse, calendarsResponse] = await Promise.all([
+        fetch('/api/google-calendar/status', { credentials: 'include' }),
+        fetch('/api/google-calendar/calendars', { credentials: 'include' }),
+      ]);
       
-      if (response.ok) {
-        const data = await response.json();
-        setStatus(data);
+      if (statusResponse.ok) {
+        const statusData = await statusResponse.json();
+        setStatus(statusData);
       } else {
         console.error('Failed to load Google Calendar status');
+      }
+
+      if (calendarsResponse.ok) {
+        const calendarsData = await calendarsResponse.json();
+        console.log('Calendar settings loaded:', calendarsData);
+        if (calendarsData.calendars && calendarsData.calendars.length > 0) {
+          setCalendarSettings(calendarsData);
+          setSourceCalendarId(calendarsData.sourceCalendarId || 'primary');
+          setTargetCalendarId(calendarsData.targetCalendarId || 'primary');
+        } else {
+          console.warn('No calendars found in response');
+          // Mégis beállítjuk, hogy a UI megjelenjen, de üres listával
+          setCalendarSettings({
+            calendars: [],
+            sourceCalendarId: calendarsData.sourceCalendarId || 'primary',
+            targetCalendarId: calendarsData.targetCalendarId || 'primary',
+          });
+        }
+      } else {
+        const errorData = await calendarsResponse.json().catch(() => ({}));
+        console.error('Failed to load Google Calendar calendars:', calendarsResponse.status, errorData);
+        // Ha nincs összekötve (400), nem hiba, de ha más hiba, akkor jelezzük
+        if (calendarsResponse.status !== 400) {
+          setError('Nem sikerült betölteni a naptárakat. Próbálja újra később.');
+        }
       }
     } catch (error) {
       console.error('Error loading Google Calendar status:', error);
@@ -124,6 +166,68 @@ export function GoogleCalendarSettings() {
     }
   };
 
+  const handleSync = async () => {
+    try {
+      setSyncing(true);
+      setError(null);
+      setSuccess(null);
+      
+      const response = await fetch('/api/google-calendar/sync', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Hiba történt a szinkronizáció során');
+      }
+      
+      const data = await response.json();
+      setSuccess(data.message || 'Szinkronizáció sikeresen befejezve');
+      setTimeout(() => setSuccess(null), 5000);
+    } catch (err) {
+      console.error('Error syncing Google Calendar:', err);
+      setError(err instanceof Error ? err.message : 'Hiba történt a szinkronizáció során');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleSaveCalendarSettings = async () => {
+    try {
+      setSavingSettings(true);
+      setError(null);
+      setSuccess(null);
+      
+      const response = await fetch('/api/google-calendar/calendars', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          sourceCalendarId: sourceCalendarId,
+          targetCalendarId: targetCalendarId,
+        }),
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Hiba történt a beállítások mentésekor');
+      }
+      
+      const data = await response.json();
+      setSuccess(data.message || 'Naptár beállítások sikeresen mentve');
+      setTimeout(() => setSuccess(null), 3000);
+      await loadStatus();
+    } catch (err) {
+      console.error('Error saving calendar settings:', err);
+      setError(err instanceof Error ? err.message : 'Hiba történt a beállítások mentésekor');
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="card">
@@ -176,23 +280,125 @@ export function GoogleCalendarSettings() {
             </div>
           </div>
 
-          <button
-            onClick={handleDisconnect}
-            disabled={disconnecting}
-            className="btn-secondary flex items-center justify-center gap-2"
-          >
-            {disconnecting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Kapcsolat megszüntetése...
-              </>
+          {/* Naptár beállítások */}
+          <div className="p-4 bg-gray-50 border border-gray-200 rounded-md space-y-4">
+            <h3 className="font-medium text-gray-900">Naptár beállítások</h3>
+            
+            {!calendarSettings || calendarSettings.calendars.length === 0 ? (
+              <div className="space-y-4">
+                <div className="text-sm text-yellow-600 bg-yellow-50 border border-yellow-200 px-4 py-3 rounded-md">
+                  Nem sikerült betölteni a naptárakat. Kérjük, próbálja újra vagy ellenőrizze a Google Calendar kapcsolatot.
+                </div>
+                <button
+                  onClick={loadStatus}
+                  className="btn-secondary w-full flex items-center justify-center gap-2"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Újrapróbálás
+                </button>
+              </div>
             ) : (
               <>
-                <Unlink className="w-4 h-4" />
-                Kapcsolat megszüntetése
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Forrás naptár (honnan szedje ki a "szabad" eseményeket)
+                  </label>
+                  <select
+                    value={sourceCalendarId}
+                    onChange={(e) => setSourceCalendarId(e.target.value)}
+                    className="form-input w-full"
+                    disabled={savingSettings}
+                  >
+                    {calendarSettings.calendars.map((cal) => (
+                      <option key={cal.id} value={cal.id}>
+                        {cal.summary} {cal.id === 'primary' ? '(Alapértelmezett)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Ebből a naptárból keresi a "szabad" nevű eseményeket
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Cél naptár (hova mentse az új eseményeket)
+                  </label>
+                  <select
+                    value={targetCalendarId}
+                    onChange={(e) => setTargetCalendarId(e.target.value)}
+                    className="form-input w-full"
+                    disabled={savingSettings}
+                  >
+                    {calendarSettings.calendars.map((cal) => (
+                      <option key={cal.id} value={cal.id}>
+                        {cal.summary} {cal.id === 'primary' ? '(Alapértelmezett)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Ide menti az új időpontfoglalásokat
+                  </p>
+                </div>
+
+                <button
+                  onClick={handleSaveCalendarSettings}
+                  disabled={savingSettings || 
+                    (calendarSettings && sourceCalendarId === calendarSettings.sourceCalendarId && 
+                     targetCalendarId === calendarSettings.targetCalendarId)}
+                  className="btn-primary w-full flex items-center justify-center gap-2"
+                >
+                  {savingSettings ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Mentés...
+                    </>
+                  ) : (
+                    <>
+                      Mentés
+                    </>
+                  )}
+                </button>
               </>
             )}
-          </button>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="btn-primary flex items-center justify-center gap-2 flex-1"
+            >
+              {syncing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Szinkronizálás...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-4 h-4" />
+                  Szinkronizálás most
+                </>
+              )}
+            </button>
+            <button
+              onClick={handleDisconnect}
+              disabled={disconnecting}
+              className="btn-secondary flex items-center justify-center gap-2"
+            >
+              {disconnecting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Kapcsolat megszüntetése...
+                </>
+              ) : (
+                <>
+                  <Unlink className="w-4 h-4" />
+                  Kapcsolat megszüntetése
+                </>
+              )}
+            </button>
+          </div>
         </div>
       ) : (
         <div className="space-y-4">

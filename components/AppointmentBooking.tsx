@@ -55,7 +55,13 @@ export function AppointmentBooking() {
       });
       if (response.ok) {
         const data = await response.json();
-        setAvailableSlots(data.timeSlots || []);
+        const allSlots = data.timeSlots || [];
+        // Csak a jövőbeli időpontokat jelenítjük meg
+        const now = new Date();
+        const futureSlots = allSlots.filter((slot: TimeSlot) => 
+          new Date(slot.startTime) >= now
+        );
+        setAvailableSlots(futureSlots);
       }
     } catch (error) {
       console.error('Error loading time slots:', error);

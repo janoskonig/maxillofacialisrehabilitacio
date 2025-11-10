@@ -3,7 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { sendAppointmentBookingNotification, sendAppointmentBookingNotificationToPatient, sendAppointmentBookingNotificationToAdmins } from '@/lib/email';
 import { generateIcsFile } from '@/lib/calendar';
-import { createGoogleCalendarEvent } from '@/lib/google-calendar';
+import { createGoogleCalendarEvent, updateGoogleCalendarEvent } from '@/lib/google-calendar';
 
 // Get all appointments
 export async function GET(request: NextRequest) {
@@ -190,30 +190,104 @@ export async function POST(request: NextRequest) {
             auth.email,
             icsFileDentist
           ),
-          // Google Calendar esemény létrehozása (fogpótlástanász calendar-jába)
-          createGoogleCalendarEvent(
-            timeSlot.dentist_user_id,
-            {
-              summary: `Betegfogadás - ${patient.nev || 'Név nélküli beteg'}`,
-              description: `Beteg: ${patient.nev || 'Név nélküli'}\nTAJ: ${patient.taj || 'Nincs megadva'}\nBeutaló orvos: ${auth.email}`,
-              startTime: startTime,
-              endTime: endTime,
-              location: 'Maxillofaciális Rehabilitáció',
-            }
-          ).then((eventId) => {
-            if (eventId) {
-              // Event ID mentése az appointments táblába
-              return pool.query(
-                'UPDATE appointments SET google_calendar_event_id = $1 WHERE id = $2',
-                [eventId, appointment.id]
+          // Google Calendar esemény kezelése
+          (async () => {
+            try {
+              // Ellenőrizzük, hogy az időpont Google Calendar-ból származik-e
+              // A mezők snake_case-ben jönnek az adatbázisból
+              const googleCalendarEventId = timeSlot.google_calendar_event_id;
+              const source = timeSlot.source;
+              
+              console.log('[Appointment Booking] Time slot info:', {
+                id: timeSlot.id,
+                google_calendar_event_id: googleCalendarEventId,
+                source: source,
+                dentist_user_id: timeSlot.dentist_user_id,
+                status: timeSlot.status
+              });
+
+              const isFromGoogleCalendar = googleCalendarEventId && source === 'google_calendar';
+
+              let finalEventId: string | null = null;
+
+              // Naptár ID-k lekérése a felhasználó beállításaiból
+              const userCalendarResult = await pool.query(
+                `SELECT google_calendar_source_calendar_id, google_calendar_target_calendar_id 
+                 FROM users 
+                 WHERE id = $1`,
+                [timeSlot.dentist_user_id]
               );
+              const sourceCalendarId = userCalendarResult.rows[0]?.google_calendar_source_calendar_id || 'primary';
+              const targetCalendarId = userCalendarResult.rows[0]?.google_calendar_target_calendar_id || 'primary';
+              
+              if (isFromGoogleCalendar) {
+                console.log('[Appointment Booking] Updating "szabad" event to patient name:', googleCalendarEventId);
+                // Ha Google Calendar-ból származik, átírjuk a "szabad" eseményt beteg nevére
+                const updateResult = await updateGoogleCalendarEvent(
+                  timeSlot.dentist_user_id,
+                  googleCalendarEventId,
+                  {
+                    summary: `Betegfogadás - ${patient.nev || 'Név nélküli beteg'}`,
+                    description: `Beteg: ${patient.nev || 'Név nélküli'}\nTAJ: ${patient.taj || 'Nincs megadva'}\nBeutaló orvos: ${auth.email}`,
+                    startTime: startTime,
+                    endTime: endTime,
+                    location: 'Maxillofaciális Rehabilitáció',
+                  },
+                  sourceCalendarId // Az eredeti esemény a forrás naptárban van, ott is marad
+                );
+                console.log('[Appointment Booking] Update result:', updateResult);
+                
+                if (!updateResult) {
+                  console.error('[Appointment Booking] Failed to update "szabad" Google Calendar event, creating new one');
+                  // Ha a frissítés sikertelen, új eseményt hozunk létre
+                  const newEventId = await createGoogleCalendarEvent(
+                    timeSlot.dentist_user_id,
+                    {
+                      summary: `Betegfogadás - ${patient.nev || 'Név nélküli beteg'}`,
+                      description: `Beteg: ${patient.nev || 'Név nélküli'}\nTAJ: ${patient.taj || 'Nincs megadva'}\nBeutaló orvos: ${auth.email}`,
+                      startTime: startTime,
+                      endTime: endTime,
+                      location: 'Maxillofaciális Rehabilitáció',
+                      calendarId: targetCalendarId,
+                    }
+                  );
+                  finalEventId = newEventId;
+                } else {
+                  console.log('[Appointment Booking] Successfully updated "szabad" event to patient name');
+                  // Az eredeti event ID-t használjuk
+                  finalEventId = googleCalendarEventId;
+                }
+              } else {
+                console.log('[Appointment Booking] Time slot is not from Google Calendar, creating new event');
+                // Ha nem Google Calendar-ból származik, új eseményt hozunk létre
+                const newEventId = await createGoogleCalendarEvent(
+                  timeSlot.dentist_user_id,
+                  {
+                    summary: `Betegfogadás - ${patient.nev || 'Név nélküli beteg'}`,
+                    description: `Beteg: ${patient.nev || 'Név nélküli'}\nTAJ: ${patient.taj || 'Nincs megadva'}\nBeutaló orvos: ${auth.email}`,
+                    startTime: startTime,
+                    endTime: endTime,
+                    location: 'Maxillofaciális Rehabilitáció',
+                    calendarId: targetCalendarId,
+                  }
+                );
+                finalEventId = newEventId;
+              }
+
+              console.log('[Appointment Booking] Final event ID:', finalEventId);
+
+              if (finalEventId) {
+                // Event ID mentése az appointments táblába
+                await pool.query(
+                  'UPDATE appointments SET google_calendar_event_id = $1 WHERE id = $2',
+                  [finalEventId, appointment.id]
+                );
+              }
+            } catch (error) {
+              // Google Calendar hiba esetén csak logolás, nem blokkolja az időpontfoglalást
+              console.error('[Appointment Booking] Failed to handle Google Calendar event:', error);
             }
-            return null;
-          }).catch((error) => {
-            // Google Calendar hiba esetén csak logolás, nem blokkolja az időpontfoglalást
-            console.error('Failed to create Google Calendar event:', error);
-            return null;
-          }),
+          })(),
         ]);
       } catch (emailError) {
         console.error('Failed to send appointment booking notification to dentist:', emailError);

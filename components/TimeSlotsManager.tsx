@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Calendar, Plus, Trash2, Edit2, Clock, X } from 'lucide-react';
+import { Calendar, Plus, Trash2, Edit2, Clock, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth';
 import { DateTimePicker } from './DateTimePicker';
 
@@ -39,6 +39,7 @@ export function TimeSlotsManager() {
   const [userRole, setUserRole] = useState<string>('');
   const [users, setUsers] = useState<User[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
+  const [showPastSlots, setShowPastSlots] = useState(false);
 
   useEffect(() => {
     loadTimeSlots();
@@ -281,9 +282,153 @@ export function TimeSlotsManager() {
     );
   }
 
+  // Szétválasztjuk a jövőbeli és elmúlt időpontokat
+  const now = new Date();
+  const futureSlots = timeSlots.filter(slot => new Date(slot.startTime) >= now);
+  const pastSlots = timeSlots.filter(slot => new Date(slot.startTime) < now);
+
   const availableSlotsForModification = timeSlots.filter(
-    slot => slot.status === 'available' && (!modifyingAppointment || slot.id !== modifyingAppointment.timeSlotId)
+    slot => {
+      const slotDate = new Date(slot.startTime);
+      return slot.status === 'available' 
+        && slotDate >= now
+        && (!modifyingAppointment || slot.id !== modifyingAppointment.timeSlotId);
+    }
   );
+
+  const renderTimeSlotTable = (slots: TimeSlot[], isPast: boolean = false) => {
+    if (slots.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className={isPast ? "bg-gray-100" : "bg-gray-50"}>
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                Időpont
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                Fogpótlástanász
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                Státusz
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                Lefoglalva
+              </th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                Műveletek
+              </th>
+            </tr>
+          </thead>
+          <tbody className={isPast ? "bg-gray-50 divide-y divide-gray-200" : "bg-white divide-y divide-gray-200"}>
+            {slots.map((slot) => {
+              const appointment = appointments[slot.id];
+              return (
+                <tr 
+                  key={slot.id} 
+                  className={`${isPast ? 'opacity-60' : ''} ${
+                    slot.status === 'booked' ? 'bg-red-50' : ''
+                  }`}
+                >
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <Clock className={`w-4 h-4 mr-2 ${isPast ? 'text-gray-400' : 'text-gray-400'}`} />
+                      <span className={`text-sm ${isPast ? 'text-gray-500' : 'text-gray-900'}`}>
+                        {formatDateTime(slot.startTime)}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`text-sm ${isPast ? 'text-gray-500' : 'text-gray-600'}`}>
+                      {slot.userEmail || '-'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span
+                      className={`px-2 py-1 text-xs font-medium rounded-full ${
+                        slot.status === 'available'
+                          ? isPast 
+                            ? 'bg-gray-200 text-gray-600'
+                            : 'bg-green-100 text-green-800'
+                          : isPast
+                            ? 'bg-gray-200 text-gray-600'
+                            : 'bg-red-100 text-red-800'
+                      }`}
+                    >
+                      {slot.status === 'available' ? 'Szabad' : 'Lefoglalva'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    {appointment ? (
+                      <div className={`text-sm space-y-1 ${isPast ? 'text-gray-500' : ''}`}>
+                        <div>
+                          <span className="text-xs font-medium text-gray-500 uppercase">Beteg:</span>
+                          <div className={`font-medium mt-0.5 ${isPast ? 'text-gray-500' : 'text-gray-900'}`}>
+                            {appointment.patientName || 'Név nélküli beteg'}
+                          </div>
+                          {appointment.patientTaj && (
+                            <div className="text-xs text-gray-500">
+                              TAJ: {appointment.patientTaj}
+                            </div>
+                          )}
+                        </div>
+                        <div className="pt-1 border-t border-gray-200">
+                          <span className="text-xs font-medium text-gray-500 uppercase">Foglalta:</span>
+                          <div className={`text-xs mt-0.5 ${isPast ? 'text-gray-500' : 'text-gray-700'}`}>
+                            {appointment.bookedBy}
+                          </div>
+                        </div>
+                      </div>
+                    ) : slot.status === 'booked' ? (
+                      <span className={`text-sm ${isPast ? 'text-gray-500' : 'text-gray-500'}`}>Lefoglalva (adatok betöltése...)</span>
+                    ) : (
+                      <span className={`text-sm ${isPast ? 'text-gray-400' : 'text-gray-400'}`}>-</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <div className="flex items-center justify-end gap-2">
+                      {slot.status === 'available' && (
+                        <button
+                          onClick={() => handleDeleteTimeSlot(slot.id)}
+                          className={`${isPast ? 'text-gray-500 hover:text-gray-700' : 'text-red-600 hover:text-red-900'}`}
+                          title="Törlés"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                      {slot.status === 'booked' && appointment && (
+                        <>
+                          <button
+                            onClick={() => handleModifyAppointment(appointment.id, slot.id, slot.startTime)}
+                            className={`${isPast ? 'text-gray-500 hover:text-gray-700' : 'text-amber-600 hover:text-amber-900'} flex items-center gap-1`}
+                            title="Időpont módosítása"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                            Módosítás
+                          </button>
+                          <button
+                            onClick={() => handleCancelAppointment(appointment.id)}
+                            className={`${isPast ? 'text-gray-500 hover:text-gray-700' : 'text-red-600 hover:text-red-900'} flex items-center gap-1`}
+                            title="Időpont lemondása"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Lemondás
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -425,136 +570,45 @@ export function TimeSlotsManager() {
         </div>
       )}
 
+      {/* Jövőbeli időpontok */}
       <div className="card">
-        {timeSlots.length === 0 ? (
+        <h4 className="text-lg font-semibold mb-4">Jövőbeli időpontok</h4>
+        {futureSlots.length === 0 ? (
+          <div className="text-center py-8">
+            <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-500">Nincs jövőbeli időpont.</p>
+          </div>
+        ) : (
+          renderTimeSlotTable(futureSlots, false)
+        )}
+      </div>
+
+      {/* Elmúlt időpontok */}
+      {pastSlots.length > 0 && (
+        <div className="card">
+          <button
+            onClick={() => setShowPastSlots(!showPastSlots)}
+            className="flex items-center justify-between w-full mb-4 text-left"
+          >
+            <h4 className="text-lg font-semibold text-gray-600">Elmúlt időpontok</h4>
+            {showPastSlots ? (
+              <ChevronUp className="w-5 h-5 text-gray-400" />
+            ) : (
+              <ChevronDown className="w-5 h-5 text-gray-400" />
+            )}
+          </button>
+          {showPastSlots && renderTimeSlotTable(pastSlots, true)}
+        </div>
+      )}
+
+      {timeSlots.length === 0 && (
+        <div className="card">
           <div className="text-center py-8">
             <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-500">Még nincs létrehozva időpont.</p>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Időpont
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Fogpótlástanász
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Státusz
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Lefoglalva
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                    Műveletek
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {timeSlots.map((slot) => {
-                  const appointment = appointments[slot.id];
-                  return (
-                    <tr 
-                      key={slot.id} 
-                      className={`hover:bg-gray-50 ${
-                        slot.status === 'booked' ? 'bg-red-50' : ''
-                      }`}
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <Clock className="w-4 h-4 text-gray-400 mr-2" />
-                          <span className="text-sm text-gray-900">
-                            {formatDateTime(slot.startTime)}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm text-gray-600">
-                          {slot.userEmail || '-'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`px-2 py-1 text-xs font-medium rounded-full ${
-                            slot.status === 'available'
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-red-100 text-red-800'
-                          }`}
-                        >
-                          {slot.status === 'available' ? 'Szabad' : 'Lefoglalva'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        {appointment ? (
-                          <div className="text-sm space-y-1">
-                            <div>
-                              <span className="text-xs font-medium text-gray-500 uppercase">Beteg:</span>
-                              <div className="font-medium text-gray-900 mt-0.5">
-                                {appointment.patientName || 'Név nélküli beteg'}
-                              </div>
-                              {appointment.patientTaj && (
-                                <div className="text-xs text-gray-500">
-                                  TAJ: {appointment.patientTaj}
-                                </div>
-                              )}
-                            </div>
-                            <div className="pt-1 border-t border-gray-200">
-                              <span className="text-xs font-medium text-gray-500 uppercase">Foglalta:</span>
-                              <div className="text-xs text-gray-700 mt-0.5">
-                                {appointment.bookedBy}
-                              </div>
-                            </div>
-                          </div>
-                        ) : slot.status === 'booked' ? (
-                          <span className="text-sm text-gray-500">Lefoglalva (adatok betöltése...)</span>
-                        ) : (
-                          <span className="text-sm text-gray-400">-</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex items-center justify-end gap-2">
-                          {slot.status === 'available' && (
-                            <button
-                              onClick={() => handleDeleteTimeSlot(slot.id)}
-                              className="text-red-600 hover:text-red-900"
-                              title="Törlés"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
-                          {slot.status === 'booked' && appointment && (
-                            <>
-                              <button
-                                onClick={() => handleModifyAppointment(appointment.id, slot.id, slot.startTime)}
-                                className="text-amber-600 hover:text-amber-900 flex items-center gap-1"
-                                title="Időpont módosítása"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                                Módosítás
-                              </button>
-                              <button
-                                onClick={() => handleCancelAppointment(appointment.id)}
-                                className="text-red-600 hover:text-red-900 flex items-center gap-1"
-                                title="Időpont lemondása"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                                Lemondás
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
