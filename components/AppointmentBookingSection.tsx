@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Calendar, Clock, Download, CheckCircle2, Plus } from 'lucide-react';
+import { Calendar, Clock, Download, CheckCircle2, Plus, X } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth';
 import { DateTimePicker } from './DateTimePicker';
 
@@ -177,6 +177,30 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
     }
   };
 
+  const handleCancelAppointment = async (appointmentId: string) => {
+    if (!confirm('Biztosan le szeretné mondani ezt az időpontot?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/appointments/${appointmentId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        await loadData();
+        alert('Időpont sikeresen lemondva!');
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Hiba történt az időpont lemondásakor');
+      }
+    } catch (error) {
+      console.error('Error cancelling appointment:', error);
+      alert('Hiba történt az időpont lemondásakor');
+    }
+  };
+
   const handleCreateAndBookNewSlot = async () => {
     if (!patientId || !newSlotDateTime) {
       alert('Kérjük, válasszon dátumot és időt!');
@@ -315,14 +339,26 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
                     </div>
                   </div>
                 </div>
-                <button
-                  onClick={() => handleDownloadCalendar(appointment.id)}
-                  className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
-                  title="Naptár fájl letöltése"
-                >
-                  <Download className="w-4 h-4" />
-                  .ics
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleDownloadCalendar(appointment.id)}
+                    className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                    title="Naptár fájl letöltése"
+                  >
+                    <Download className="w-4 h-4" />
+                    .ics
+                  </button>
+                  {!isViewOnly && (userRole === 'sebészorvos' || userRole === 'admin' || userRole === 'fogpótlástanász') && (
+                    <button
+                      onClick={() => handleCancelAppointment(appointment.id)}
+                      className="text-sm text-red-600 hover:text-red-800 flex items-center gap-1"
+                      title="Időpont lemondása"
+                    >
+                      <X className="w-4 h-4" />
+                      Lemondás
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>

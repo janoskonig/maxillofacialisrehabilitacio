@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { patientSchema } from '@/lib/types';
 import { verifyAuth } from '@/lib/auth-server';
 import { sendAppointmentTimeSlotFreedNotification } from '@/lib/email';
+import { deleteGoogleCalendarEvent, createGoogleCalendarEvent } from '@/lib/google-calendar';
 
 // Egy beteg lekérdezése ID alapján
 export async function GET(
@@ -668,8 +669,11 @@ export async function DELETE(
         a.id,
         a.time_slot_id,
         a.dentist_email,
+        a.google_calendar_event_id,
         ats.start_time,
         ats.user_id as time_slot_user_id,
+        ats.source as time_slot_source,
+        ats.google_calendar_event_id as time_slot_google_calendar_event_id,
         u.email as time_slot_user_email
       FROM appointments a
       JOIN available_time_slots ats ON a.time_slot_id = ats.id
@@ -701,7 +705,7 @@ export async function DELETE(
 
       await pool.query('COMMIT');
 
-      // Send email notifications for freed time slots
+      // Send email notifications and handle Google Calendar events for freed time slots
       for (const appointment of appointments) {
         const startTime = new Date(appointment.start_time);
         
@@ -718,6 +722,66 @@ export async function DELETE(
           } catch (emailError) {
             console.error('Failed to send time slot freed email to dentist:', emailError);
             // Don't fail the request if email fails
+          }
+        }
+        
+        // Handle Google Calendar events
+        if (appointment.google_calendar_event_id && appointment.time_slot_user_id) {
+          try {
+            // Naptár ID-k lekérése a felhasználó beállításaiból
+            const userCalendarResult = await pool.query(
+              `SELECT google_calendar_source_calendar_id, google_calendar_target_calendar_id 
+               FROM users 
+               WHERE id = $1`,
+              [appointment.time_slot_user_id]
+            );
+            const sourceCalendarId = userCalendarResult.rows[0]?.google_calendar_source_calendar_id || 'primary';
+            const targetCalendarId = userCalendarResult.rows[0]?.google_calendar_target_calendar_id || 'primary';
+            
+            // Töröljük a beteg nevével létrehozott eseményt a cél naptárból
+            await deleteGoogleCalendarEvent(
+              appointment.time_slot_user_id,
+              appointment.google_calendar_event_id,
+              targetCalendarId
+            );
+            console.log('[Patient Deletion] Deleted patient event from target calendar');
+            
+            // Ha a time slot Google Calendar-ból származik, hozzuk vissza a "szabad" eseményt a forrás naptárba
+            const isFromGoogleCalendar = appointment.time_slot_source === 'google_calendar' && appointment.time_slot_google_calendar_event_id;
+            
+            if (isFromGoogleCalendar) {
+              const endTime = new Date(startTime);
+              endTime.setMinutes(endTime.getMinutes() + 30); // 30 minutes duration
+              
+              // Létrehozzuk a "szabad" eseményt a forrás naptárba
+              const szabadEventId = await createGoogleCalendarEvent(
+                appointment.time_slot_user_id,
+                {
+                  summary: 'szabad',
+                  description: 'Szabad időpont',
+                  startTime: startTime,
+                  endTime: endTime,
+                  location: 'Maxillofaciális Rehabilitáció',
+                  calendarId: sourceCalendarId,
+                }
+              );
+              
+              if (szabadEventId) {
+                console.log('[Patient Deletion] Recreated "szabad" event in source calendar');
+                // Frissítjük a time slot google_calendar_event_id mezőjét az új esemény ID-jával
+                await pool.query(
+                  `UPDATE available_time_slots 
+                   SET google_calendar_event_id = $1 
+                   WHERE id = $2`,
+                  [szabadEventId, appointment.time_slot_id]
+                );
+              } else {
+                console.error('[Patient Deletion] Failed to recreate "szabad" event in source calendar');
+              }
+            }
+          } catch (error) {
+            console.error('Failed to handle Google Calendar event during patient deletion:', error);
+            // Nem blokkolja a beteg törlését
           }
         }
       }
