@@ -6,6 +6,7 @@ import { getCurrentUser, type AuthUser } from '@/lib/auth';
 import { Lock, Eye, EyeOff, User, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { Logo } from '@/components/Logo';
+import { GoogleCalendarSettings } from '@/components/GoogleCalendarSettings';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -247,6 +248,10 @@ export default function SettingsPage() {
               </Link>
             </div>
           </form>
+        </div>
+
+        <div className="mt-8">
+          <GoogleCalendarSettings />
         </div>
       </main>
     </div>

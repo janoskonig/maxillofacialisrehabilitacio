@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { sendAppointmentCancellationNotification, sendAppointmentCancellationNotificationToPatient, sendAppointmentModificationNotification, sendAppointmentModificationNotificationToPatient } from '@/lib/email';
 import { generateIcsFile } from '@/lib/calendar';
+import { deleteGoogleCalendarEvent, updateGoogleCalendarEvent, createGoogleCalendarEvent } from '@/lib/google-calendar';
 
 // Update an appointment (change time slot)
 export async function PUT(
@@ -46,6 +47,7 @@ export async function PUT(
         a.time_slot_id as old_time_slot_id,
         a.created_by,
         a.dentist_email,
+        a.google_calendar_event_id,
         ats.start_time as old_start_time,
         ats.user_id as time_slot_user_id,
         p.nev as patient_name,
@@ -89,7 +91,7 @@ export async function PUT(
 
     // Check if new time slot exists and is available
     const newTimeSlotResult = await pool.query(
-      `SELECT ats.*, u.email as dentist_email
+      `SELECT ats.*, u.email as dentist_email, u.id as dentist_user_id
        FROM available_time_slots ats
        JOIN users u ON ats.user_id = u.id
        WHERE ats.id = $1`,
@@ -166,7 +168,10 @@ export async function PUT(
 
       const updatedAppointment = updateResult.rows[0];
 
-      // Send email notifications
+      // Send email notifications and update Google Calendar event (parallel)
+      const newEndTime = new Date(newStartTime);
+      newEndTime.setMinutes(newEndTime.getMinutes() + 30); // 30 minutes duration
+      
       try {
         const icsFile = await generateIcsFile({
           patientName: appointment.patient_name,
@@ -176,15 +181,57 @@ export async function PUT(
           dentistName: newTimeSlot.dentist_email,
         });
 
-        await sendAppointmentModificationNotification(
-          newTimeSlot.dentist_email,
-          appointment.patient_name,
-          appointment.patient_taj,
-          oldStartTime,
-          newStartTime,
-          auth.email,
-          icsFile
-        );
+        // Promise.all() használata: email és Google Calendar párhuzamosan
+        await Promise.all([
+          // Email küldés
+          sendAppointmentModificationNotification(
+            newTimeSlot.dentist_email,
+            appointment.patient_name,
+            appointment.patient_taj,
+            oldStartTime,
+            newStartTime,
+            auth.email,
+            icsFile
+          ),
+          // Google Calendar esemény frissítése
+          (async () => {
+            try {
+              // Ha van régi Google Calendar event ID, töröljük
+              if (appointment.google_calendar_event_id && appointment.time_slot_user_id) {
+                await deleteGoogleCalendarEvent(
+                  appointment.time_slot_user_id,
+                  appointment.google_calendar_event_id
+                ).catch((error) => {
+                  console.error('Failed to delete old Google Calendar event:', error);
+                  // Nem blokkoljuk, ha a törlés sikertelen
+                });
+              }
+              
+              // Új esemény létrehozása az új időponttal
+              const newEventId = await createGoogleCalendarEvent(
+                newTimeSlot.dentist_user_id,
+                {
+                  summary: `Betegfogadás - ${appointment.patient_name || 'Név nélküli beteg'}`,
+                  description: `Beteg: ${appointment.patient_name || 'Név nélküli'}\nTAJ: ${appointment.patient_taj || 'Nincs megadva'}\nBeutaló orvos: ${appointment.created_by}`,
+                  startTime: newStartTime,
+                  endTime: newEndTime,
+                  location: 'Maxillofaciális Rehabilitáció',
+                }
+              );
+              
+              // Event ID mentése az appointments táblába
+              if (newEventId) {
+                await pool.query(
+                  'UPDATE appointments SET google_calendar_event_id = $1 WHERE id = $2',
+                  [newEventId, params.id]
+                );
+              }
+            } catch (error) {
+              console.error('Failed to update Google Calendar event:', error);
+              // Nem blokkolja az időpont módosítását
+            }
+          })(),
+        ]);
       } catch (emailError) {
         console.error('Failed to send modification email to dentist:', emailError);
         // Don't fail the request if email fails
@@ -261,6 +308,7 @@ export async function DELETE(
         a.time_slot_id,
         a.created_by,
         a.dentist_email,
+        a.google_calendar_event_id,
         ats.start_time,
         ats.user_id as time_slot_user_id,
         p.nev as patient_name,
@@ -323,15 +371,32 @@ export async function DELETE(
 
       await pool.query('COMMIT');
 
-      // Send email notifications
+      // Send cancellation email notifications and delete Google Calendar event (parallel)
       try {
-        await sendAppointmentCancellationNotification(
-          appointment.dentist_email,
-          appointment.patient_name,
-          appointment.patient_taj,
-          startTime,
-          auth.email
-        );
+        await Promise.all([
+          // Email küldés
+          sendAppointmentCancellationNotification(
+            appointment.dentist_email,
+            appointment.patient_name,
+            appointment.patient_taj,
+            startTime,
+            auth.email
+          ),
+          // Google Calendar esemény törlése (ha van event ID)
+          (async () => {
+            if (appointment.google_calendar_event_id && appointment.time_slot_user_id) {
+              try {
+                await deleteGoogleCalendarEvent(
+                  appointment.time_slot_user_id,
+                  appointment.google_calendar_event_id
+                );
+              } catch (error) {
+                console.error('Failed to delete Google Calendar event:', error);
+                // Nem blokkolja az időpont törlését
+              }
+            }
+          })(),
+        ]);
       } catch (emailError) {
         console.error('Failed to send cancellation email to dentist:', emailError);
         // Don't fail the request if email fails

@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { sendAppointmentBookingNotification, sendAppointmentBookingNotificationToPatient, sendAppointmentBookingNotificationToAdmins } from '@/lib/email';
 import { generateIcsFile } from '@/lib/calendar';
+import { createGoogleCalendarEvent } from '@/lib/google-calendar';
 
 // Get all appointments
 export async function GET(request: NextRequest) {
@@ -101,7 +102,7 @@ export async function POST(request: NextRequest) {
 
     // Check if time slot exists and is available
     const timeSlotResult = await pool.query(
-      `SELECT ats.*, u.email as dentist_email
+      `SELECT ats.*, u.email as dentist_email, u.id as dentist_user_id
        FROM available_time_slots ats
        JOIN users u ON ats.user_id = u.id
        WHERE ats.id = $1`,
@@ -153,6 +154,11 @@ export async function POST(request: NextRequest) {
         [patientId, timeSlotId, auth.email, timeSlot.dentist_email]
       );
 
+      const appointment = appointmentResult.rows[0];
+      
+      // Google Calendar event ID inicializálása (null)
+      let googleCalendarEventId: string | null = null;
+
       // Update time slot status to booked
       await pool.query(
         'UPDATE available_time_slots SET status = $1 WHERE id = $2',
@@ -161,9 +167,9 @@ export async function POST(request: NextRequest) {
 
       await pool.query('COMMIT');
 
-      const appointment = appointmentResult.rows[0];
-
-      // Send email notification to dentist
+      // Send email notification to dentist and create Google Calendar event (parallel)
+      const endTime = new Date(startTime);
+      endTime.setMinutes(endTime.getMinutes() + 30); // 30 minutes duration
       try {
         const icsFileDentist = await generateIcsFile({
           patientName: patient.nev,
@@ -173,14 +179,42 @@ export async function POST(request: NextRequest) {
           dentistName: timeSlot.dentist_email,
         });
 
-        await sendAppointmentBookingNotification(
-          timeSlot.dentist_email,
-          patient.nev,
-          patient.taj,
-          startTime,
-          auth.email,
-          icsFileDentist
-        );
+        // Promise.all() használata: email és Google Calendar párhuzamosan
+        await Promise.all([
+          // Email küldés
+          sendAppointmentBookingNotification(
+            timeSlot.dentist_email,
+            patient.nev,
+            patient.taj,
+            startTime,
+            auth.email,
+            icsFileDentist
+          ),
+          // Google Calendar esemény létrehozása (fogpótlástanász calendar-jába)
+          createGoogleCalendarEvent(
+            timeSlot.dentist_user_id,
+            {
+              summary: `Betegfogadás - ${patient.nev || 'Név nélküli beteg'}`,
+              description: `Beteg: ${patient.nev || 'Név nélküli'}\nTAJ: ${patient.taj || 'Nincs megadva'}\nBeutaló orvos: ${auth.email}`,
+              startTime: startTime,
+              endTime: endTime,
+              location: 'Maxillofaciális Rehabilitáció',
+            }
+          ).then((eventId) => {
+            if (eventId) {
+              // Event ID mentése az appointments táblába
+              return pool.query(
+                'UPDATE appointments SET google_calendar_event_id = $1 WHERE id = $2',
+                [eventId, appointment.id]
+              );
+            }
+            return null;
+          }).catch((error) => {
+            // Google Calendar hiba esetén csak logolás, nem blokkolja az időpontfoglalást
+            console.error('Failed to create Google Calendar event:', error);
+            return null;
+          }),
+        ]);
       } catch (emailError) {
         console.error('Failed to send appointment booking notification to dentist:', emailError);
         // Don't fail the request if email fails

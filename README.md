@@ -41,12 +41,16 @@ A modern, professional web application for collecting and managing structured pa
 - **Forms**: React Hook Form with Zod validation
 - **Icons**: Lucide React for consistent iconography
 - **Date Handling**: date-fns for reliable date formatting
+- **Google Calendar**: googleapis for OAuth2 integration
 
 ## Getting Started
 
 ### Prerequisites
 - Node.js 18+ 
 - npm or yarn package manager
+- PostgreSQL database
+- SMTP server for email notifications
+- Google Cloud Console project (for Google Calendar integration - optional)
 
 ### Installation
 
@@ -55,13 +59,77 @@ A modern, professional web application for collecting and managing structured pa
    npm install
    ```
 
-2. **Start Development Server**
+2. **Environment Variables**
+   Create a `.env` file in the root directory with the following variables:
+   
+   **Required:**
+   - `DATABASE_URL` - PostgreSQL connection string
+   - `JWT_SECRET` - Secret key for JWT tokens (random string)
+   - `SMTP_HOST` - SMTP server hostname
+   - `SMTP_PORT` - SMTP server port (usually 587)
+   - `SMTP_USER` - SMTP username
+   - `SMTP_PASS` - SMTP password
+   - `SMTP_FROM` - Email address for sending emails
+   
+   **Optional (Google Calendar Integration):**
+   - `GOOGLE_CLIENT_ID` - Google OAuth2 Client ID
+   - `GOOGLE_CLIENT_SECRET` - Google OAuth2 Client Secret
+   - `GOOGLE_REDIRECT_URI` - OAuth2 redirect URI (optional, auto-generated if not set)
+   - `ENCRYPTION_KEY` - 32-byte encryption key for token storage (64 hex characters or 32 UTF-8 characters)
+   - `NEXT_PUBLIC_APP_URL` - Public application URL (optional, auto-detected if not set)
+
+3. **Database Setup**
+   Run the database migrations:
+   ```bash
+   psql -d <database_name> -f database/schema.sql
+   psql -d <database_name> -f database/migration_google_calendar_tokens.sql
+   psql -d <database_name> -f database/migration_appointments_google_calendar_event_id.sql
+   ```
+
+4. **Start Development Server**
    ```bash
    npm run dev
    ```
 
-3. **Open Application**
+5. **Open Application**
    Navigate to [http://localhost:3000](http://localhost:3000) in your browser
+
+### Google Calendar Integration Setup
+
+1. **Create Google Cloud Project**
+   - Go to [Google Cloud Console](https://console.cloud.google.com/)
+   - Create a new project or select an existing one
+   - Enable the Google Calendar API
+
+2. **Create OAuth2 Credentials**
+   - Go to "APIs & Services" > "Credentials"
+   - Click "Create Credentials" > "OAuth client ID"
+   - Choose "Web application"
+   - Add authorized redirect URIs:
+     - `http://localhost:3000/api/google-calendar/callback` (development)
+     - `https://yourdomain.com/api/google-calendar/callback` (production)
+   - Copy the Client ID and Client Secret
+
+3. **Set Environment Variables**
+   Add to your `.env` file:
+   ```
+   GOOGLE_CLIENT_ID=your_client_id_here
+   GOOGLE_CLIENT_SECRET=your_client_secret_here
+   ENCRYPTION_KEY=your_32_byte_key_here
+   ```
+
+4. **Generate Encryption Key**
+   You can generate a secure encryption key using:
+   ```bash
+   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+   ```
+
+5. **Connect Google Calendar**
+   - Log in to the application
+   - Go to Settings page
+   - Click "Google Calendar összekötése"
+   - Authorize the application
+   - Appointments will now automatically sync to Google Calendar
 
 ### Building for Production
 
