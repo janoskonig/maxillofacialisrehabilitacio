@@ -3,7 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { sendAppointmentBookingNotification, sendAppointmentBookingNotificationToPatient, sendAppointmentBookingNotificationToAdmins } from '@/lib/email';
 import { generateIcsFile } from '@/lib/calendar';
-import { createGoogleCalendarEvent, updateGoogleCalendarEvent } from '@/lib/google-calendar';
+import { createGoogleCalendarEvent, deleteGoogleCalendarEvent } from '@/lib/google-calendar';
 
 // Get all appointments
 export async function GET(request: NextRequest) {
@@ -221,41 +221,34 @@ export async function POST(request: NextRequest) {
               const targetCalendarId = userCalendarResult.rows[0]?.google_calendar_target_calendar_id || 'primary';
               
               if (isFromGoogleCalendar) {
-                console.log('[Appointment Booking] Updating "szabad" event to patient name:', googleCalendarEventId);
-                // Ha Google Calendar-ból származik, átírjuk a "szabad" eseményt beteg nevére
-                const updateResult = await updateGoogleCalendarEvent(
+                console.log('[Appointment Booking] Deleting "szabad" event from source calendar:', googleCalendarEventId);
+                // Ha Google Calendar-ból származik, töröljük a "szabad" eseményt a forrás naptárból
+                const deleteResult = await deleteGoogleCalendarEvent(
                   timeSlot.dentist_user_id,
                   googleCalendarEventId,
+                  sourceCalendarId
+                );
+                console.log('[Appointment Booking] Delete result:', deleteResult);
+                
+                // Létrehozunk egy új eseményt a beteg nevével a cél naptárban
+                console.log('[Appointment Booking] Creating new event with patient name in target calendar');
+                const newEventId = await createGoogleCalendarEvent(
+                  timeSlot.dentist_user_id,
                   {
                     summary: `Betegfogadás - ${patient.nev || 'Név nélküli beteg'}`,
                     description: `Beteg: ${patient.nev || 'Név nélküli'}\nTAJ: ${patient.taj || 'Nincs megadva'}\nBeutaló orvos: ${auth.email}`,
                     startTime: startTime,
                     endTime: endTime,
                     location: 'Maxillofaciális Rehabilitáció',
-                  },
-                  sourceCalendarId // Az eredeti esemény a forrás naptárban van, ott is marad
+                    calendarId: targetCalendarId,
+                  }
                 );
-                console.log('[Appointment Booking] Update result:', updateResult);
+                finalEventId = newEventId;
                 
-                if (!updateResult) {
-                  console.error('[Appointment Booking] Failed to update "szabad" Google Calendar event, creating new one');
-                  // Ha a frissítés sikertelen, új eseményt hozunk létre
-                  const newEventId = await createGoogleCalendarEvent(
-                    timeSlot.dentist_user_id,
-                    {
-                      summary: `Betegfogadás - ${patient.nev || 'Név nélküli beteg'}`,
-                      description: `Beteg: ${patient.nev || 'Név nélküli'}\nTAJ: ${patient.taj || 'Nincs megadva'}\nBeutaló orvos: ${auth.email}`,
-                      startTime: startTime,
-                      endTime: endTime,
-                      location: 'Maxillofaciális Rehabilitáció',
-                      calendarId: targetCalendarId,
-                    }
-                  );
-                  finalEventId = newEventId;
+                if (!newEventId) {
+                  console.error('[Appointment Booking] Failed to create new Google Calendar event in target calendar');
                 } else {
-                  console.log('[Appointment Booking] Successfully updated "szabad" event to patient name');
-                  // Az eredeti event ID-t használjuk
-                  finalEventId = googleCalendarEventId;
+                  console.log('[Appointment Booking] Successfully created new event with patient name in target calendar');
                 }
               } else {
                 console.log('[Appointment Booking] Time slot is not from Google Calendar, creating new event');

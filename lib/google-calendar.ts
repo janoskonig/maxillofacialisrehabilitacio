@@ -368,7 +368,8 @@ export async function createGoogleCalendarEvent(
  */
 export async function deleteGoogleCalendarEvent(
   userId: string,
-  eventId: string
+  eventId: string,
+  calendarId?: string
 ): Promise<boolean> {
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
     return false;
@@ -380,8 +381,22 @@ export async function deleteGoogleCalendarEvent(
       return false;
     }
     
+    // Naptár ID meghatározása
+    let targetCalendarId = calendarId || 'primary';
+    
+    // Ha név alapján van megadva, keresd meg az ID-t
+    if (targetCalendarId !== 'primary' && !targetCalendarId.includes('@')) {
+      const foundCalendarId = await getCalendarIdByName(userId, targetCalendarId);
+      if (foundCalendarId) {
+        targetCalendarId = foundCalendarId;
+      } else {
+        console.warn(`Calendar "${targetCalendarId}" not found, using primary`);
+        targetCalendarId = 'primary';
+      }
+    }
+    
     await calendar.events.delete({
-      calendarId: 'primary',
+      calendarId: targetCalendarId,
       eventId: eventId,
     });
     

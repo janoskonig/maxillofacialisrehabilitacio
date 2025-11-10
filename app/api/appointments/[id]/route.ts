@@ -196,18 +196,28 @@ export async function PUT(
           // Google Calendar esemény frissítése
           (async () => {
             try {
-              // Ha van régi Google Calendar event ID, töröljük
+              // Naptár ID-k lekérése a felhasználó beállításaiból
+              const userCalendarResult = await pool.query(
+                `SELECT google_calendar_target_calendar_id 
+                 FROM users 
+                 WHERE id = $1`,
+                [newTimeSlot.dentist_user_id]
+              );
+              const targetCalendarId = userCalendarResult.rows[0]?.google_calendar_target_calendar_id || 'primary';
+              
+              // Ha van régi Google Calendar event ID, töröljük a cél naptárból
               if (appointment.google_calendar_event_id && appointment.time_slot_user_id) {
                 await deleteGoogleCalendarEvent(
                   appointment.time_slot_user_id,
-                  appointment.google_calendar_event_id
+                  appointment.google_calendar_event_id,
+                  targetCalendarId
                 ).catch((error) => {
                   console.error('Failed to delete old Google Calendar event:', error);
                   // Nem blokkoljuk, ha a törlés sikertelen
                 });
               }
               
-              // Új esemény létrehozása az új időponttal
+              // Új esemény létrehozása az új időponttal a cél naptárban
               const newEventId = await createGoogleCalendarEvent(
                 newTimeSlot.dentist_user_id,
                 {
@@ -216,6 +226,7 @@ export async function PUT(
                   startTime: newStartTime,
                   endTime: newEndTime,
                   location: 'Maxillofaciális Rehabilitáció',
+                  calendarId: targetCalendarId,
                 }
               );
               
@@ -386,9 +397,19 @@ export async function DELETE(
           (async () => {
             if (appointment.google_calendar_event_id && appointment.time_slot_user_id) {
               try {
+                // Naptár ID lekérése a felhasználó beállításaiból
+                const userCalendarResult = await pool.query(
+                  `SELECT google_calendar_target_calendar_id 
+                   FROM users 
+                   WHERE id = $1`,
+                  [appointment.time_slot_user_id]
+                );
+                const targetCalendarId = userCalendarResult.rows[0]?.google_calendar_target_calendar_id || 'primary';
+                
                 await deleteGoogleCalendarEvent(
                   appointment.time_slot_user_id,
-                  appointment.google_calendar_event_id
+                  appointment.google_calendar_event_id,
+                  targetCalendarId
                 );
               } catch (error) {
                 console.error('Failed to delete Google Calendar event:', error);
