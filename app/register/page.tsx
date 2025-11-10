@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, Lock, Eye, EyeOff, Mail } from 'lucide-react';
+import { User, Lock, Eye, EyeOff, Mail, UserCircle } from 'lucide-react';
 import Link from 'next/link';
 import { Logo } from '@/components/Logo';
 
@@ -10,6 +10,7 @@ type RegistrationRole = 'sebész' | 'fogpótos' | 'technikus';
 
 export default function Register() {
   const [email, setEmail] = useState('');
+  const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [role, setRole] = useState<RegistrationRole | ''>('');
@@ -25,6 +26,12 @@ export default function Register() {
     setError('');
 
     // Kliens oldali validáció
+    if (!fullName || !fullName.trim()) {
+      setError('Kérjük, adja meg a teljes nevét');
+      setIsLoading(false);
+      return;
+    }
+
     if (!role) {
       setError('Kérjük, válasszon szerepkört');
       setIsLoading(false);
@@ -50,7 +57,7 @@ export default function Register() {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify({ email, password, confirmPassword, role }),
+        body: JSON.stringify({ email, fullName: fullName.trim(), password, confirmPassword, role }),
       });
 
       const data = await response.json();
@@ -95,6 +102,27 @@ export default function Register() {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
           <form className="space-y-6" onSubmit={handleSubmit}>
+            <div>
+              <label htmlFor="fullName" className="block text-sm font-medium text-gray-700">
+                Teljes név
+              </label>
+              <div className="mt-1 relative">
+                <input
+                  id="fullName"
+                  name="fullName"
+                  type="text"
+                  autoComplete="name"
+                  required
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="form-input pl-10"
+                  placeholder="Kovács János dr."
+                />
+                <UserCircle className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              </div>
+              <p className="mt-1 text-xs text-gray-500">Adja meg a teljes nevét (pl. Kovács János dr.)</p>
+            </div>
+
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
                 Email cím

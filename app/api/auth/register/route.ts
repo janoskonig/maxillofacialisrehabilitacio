@@ -36,12 +36,19 @@ function mapRoleToDatabaseRole(role: string): string | null {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, password, confirmPassword, role } = body;
+    const { email, fullName, password, confirmPassword, role } = body;
 
     // Alapvető validációk
     if (!email || !password) {
       return NextResponse.json(
         { error: 'Email cím és jelszó megadása kötelező' },
+        { status: 400 }
+      );
+    }
+
+    if (!fullName || !fullName.trim()) {
+      return NextResponse.json(
+        { error: 'Teljes név megadása kötelező' },
         { status: 400 }
       );
     }
@@ -105,15 +112,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Név generálása: email első 3 karaktere (alapértelmezett)
-    const defaultName = normalizedEmail.substring(0, 3).toUpperCase();
+    // Név tisztítása (trim és normalizálás)
+    const cleanedName = fullName.trim();
 
     // Felhasználó létrehozása (inaktív, admin jóváhagyásra vár)
     const result = await pool.query(
       `INSERT INTO users (email, password_hash, role, active, doktor_neve)
        VALUES ($1, $2, $3, false, $4)
        RETURNING id, email, role, active, doktor_neve`,
-      [normalizedEmail, passwordHash, databaseRole, defaultName]
+      [normalizedEmail, passwordHash, databaseRole, cleanedName]
     );
 
     const user = result.rows[0];
