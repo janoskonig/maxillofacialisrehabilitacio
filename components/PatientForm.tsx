@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Patient, patientSchema, beutaloIntezmenyOptions, nyakiBlokkdisszekcioOptions, fabianFejerdyProtetikaiOsztalyOptions, kezeleoorvosOptions, kezelesiTervOptions, kezelesiTervArcotErintoTipusOptions, kezelesiTervArcotErintoElhorgonyzasOptions } from '@/lib/types';
+import { Patient, patientSchema, beutaloIntezmenyOptions, nyakiBlokkdisszekcioOptions, fabianFejerdyProtetikaiOsztalyOptions, kezelesiTervOptions, kezelesiTervArcotErintoTipusOptions, kezelesiTervArcotErintoElhorgonyzasOptions } from '@/lib/types';
 import { formatDateForInput } from '@/lib/dateUtils';
 import { X, Calendar, User, Phone, Mail, MapPin, FileText, AlertTriangle, Plus, Trash2 } from 'lucide-react';
 import { AppointmentBookingSection } from './AppointmentBookingSection';
@@ -110,6 +110,7 @@ interface PatientFormProps {
 export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: PatientFormProps) {
   const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
   const [userRole, setUserRole] = useState<string>('');
+  const [kezeloorvosOptions, setKezeloorvosOptions] = useState<string[]>([]);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isNewPatient = !patient && !isViewOnly;
   const patientId = patient?.id || null;
@@ -119,7 +120,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
   const initialVanBeutalo = !!(patient?.beutaloOrvos || patient?.beutaloIntezmeny || patient?.kezelesreErkezesIndoka);
   const [vanBeutalo, setVanBeutalo] = useState(initialVanBeutalo);
 
-  // Get user role
+  // Get user role and load kezelőorvos options
   useEffect(() => {
     const checkRole = async () => {
       const user = await getCurrentUser();
@@ -133,6 +134,30 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     };
     checkRole();
   }, [isNewPatient, initialVanBeutalo]);
+
+  // Load kezelőorvos options from API
+  useEffect(() => {
+    const loadKezeloorvosOptions = async () => {
+      try {
+        const response = await fetch('/api/users/fogpotlastanasz');
+        if (response.ok) {
+          const data = await response.json();
+          // Extract display names from the users
+          const names = data.users.map((user: { displayName: string }) => user.displayName);
+          setKezeloorvosOptions(names);
+        } else {
+          console.error('Failed to load kezelőorvos options');
+          // Fallback to empty array if API fails
+          setKezeloorvosOptions([]);
+        }
+      } catch (error) {
+        console.error('Error loading kezelőorvos options:', error);
+        // Fallback to empty array if API fails
+        setKezeloorvosOptions([]);
+      }
+    };
+    loadKezeloorvosOptions();
+  }, []);
 
   // Helper function to load draft from localStorage
   const loadDraft = useCallback((): Patient | null => {
@@ -390,8 +415,10 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
   // Automatikus intézet beállítás a kezelőorvos alapján
   useEffect(() => {
     if (kezeleoorvos && !isViewOnly) {
+      // A statikus lista alapján döntünk, de lehet, hogy ezt is dinamikusan kellene kezelni
+      // Jelenleg megtartjuk a régi logikát, de lehet, hogy a jövőben az adatbázisból kellene jönnie
       const fogpotlastaniKlinikaOrvosok = ['Dr. Jász', 'Dr. Kádár', 'Dr. König', 'Dr. Takács', 'Dr. Körmendi', 'Dr. Tasi', 'Dr. Vánkos'];
-      if (fogpotlastaniKlinikaOrvosok.includes(kezeleoorvos)) {
+      if (fogpotlastaniKlinikaOrvosok.some(name => kezeleoorvos.includes(name))) {
         setValue('kezeleoorvosIntezete', 'Fogpótlástani Klinika');
       } else {
         setValue('kezeleoorvosIntezete', 'Fogászati és Szájsebészeti Oktató Intézet');
@@ -994,7 +1021,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
               <label className="form-label">Kezelőorvos</label>
               <select {...register('kezeleoorvos')} className="form-input" disabled={isViewOnly}>
                 <option value="">Válasszon...</option>
-                {kezeleoorvosOptions.map((option) => (
+                {kezeloorvosOptions.map((option) => (
                   <option key={option} value={option}>{option}</option>
                 ))}
               </select>

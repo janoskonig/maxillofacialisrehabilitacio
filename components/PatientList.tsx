@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Patient } from '@/lib/types';
-import { Phone, Mail, Calendar, FileText, Eye, Pencil, CheckCircle2, XCircle, Clock, Trash2 } from 'lucide-react';
+import { Phone, Mail, Calendar, FileText, Eye, Pencil, CheckCircle2, XCircle, Clock, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import { formatDateForDisplay, calculateAge } from '@/lib/dateUtils';
 
 interface PatientListProps {
@@ -13,15 +13,19 @@ interface PatientListProps {
   canEdit?: boolean;
   canDelete?: boolean;
   userRole?: 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
+  sortField?: 'nev' | 'idopont' | 'createdAt' | null;
+  sortDirection?: 'asc' | 'desc';
+  onSort?: (field: 'nev' | 'idopont' | 'createdAt') => void;
 }
 
 interface AppointmentInfo {
   id: string;
   startTime: string;
   dentistEmail: string | null;
+  dentistName?: string | null;
 }
 
-export function PatientList({ patients, onView, onEdit, onDelete, canEdit = false, canDelete = false, userRole }: PatientListProps) {
+export function PatientList({ patients, onView, onEdit, onDelete, canEdit = false, canDelete = false, userRole, sortField, sortDirection = 'asc', onSort }: PatientListProps) {
   const [appointments, setAppointments] = useState<Record<string, AppointmentInfo>>({});
   const [loadingAppointments, setLoadingAppointments] = useState(false);
 
@@ -29,6 +33,34 @@ export function PatientList({ patients, onView, onEdit, onDelete, canEdit = fals
   useEffect(() => {
     loadAppointments();
   }, [patients]);
+
+  // Sort patients by appointment if needed
+  const sortedPatients = useMemo(() => {
+    if (sortField === 'idopont') {
+      // Sort by appointment proximity (closest first)
+      return [...patients].sort((a, b) => {
+        const aptA = appointments[a.id || ''];
+        const aptB = appointments[b.id || ''];
+        
+        // Patients without appointments go to the end
+        if (!aptA && !aptB) return 0;
+        if (!aptA) return 1;
+        if (!aptB) return -1;
+        
+        const dateA = new Date(aptA.startTime).getTime();
+        const dateB = new Date(aptB.startTime).getTime();
+        const now = Date.now();
+        
+        // Calculate distance from now (absolute value)
+        const distA = Math.abs(dateA - now);
+        const distB = Math.abs(dateB - now);
+        
+        const comparison = distA - distB;
+        return sortDirection === 'asc' ? comparison : -comparison;
+      });
+    }
+    return patients;
+  }, [patients, appointments, sortField, sortDirection]);
 
   const loadAppointments = async () => {
     try {
@@ -44,6 +76,7 @@ export function PatientList({ patients, onView, onEdit, onDelete, canEdit = fals
             id: apt.id,
             startTime: apt.startTime,
             dentistEmail: apt.dentistEmail,
+            dentistName: apt.dentistName,
           };
         });
         setAppointments(appointmentsMap);
@@ -54,12 +87,36 @@ export function PatientList({ patients, onView, onEdit, onDelete, canEdit = fals
       setLoadingAppointments(false);
     }
   };
-  if (patients.length === 0) {
+  // Helper function to render sortable header
+  const renderSortableHeader = (label: string, field: 'nev' | 'idopont' | 'createdAt', className?: string) => {
+    const isActive = sortField === field;
+    const SortIcon = isActive 
+      ? (sortDirection === 'asc' ? ArrowUp : ArrowDown)
+      : null;
+    
     return (
-      <div className="card text-center py-12">
-        <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-gray-900 mb-2">Nincs találat</h3>
-        <p className="text-gray-500">
+      <th 
+        className={`px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none ${
+          isActive ? 'bg-gray-100' : ''
+        } ${className || ''}`}
+        onClick={() => onSort?.(field)}
+      >
+        <div className="flex items-center gap-1">
+          <span>{label}</span>
+          {SortIcon && (
+            <SortIcon className="w-3 h-3 text-medical-primary" />
+          )}
+        </div>
+      </th>
+    );
+  };
+
+  if (sortedPatients.length === 0) {
+    return (
+      <div className="card text-center py-6">
+        <FileText className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+        <h3 className="text-base font-medium text-gray-900 mb-1">Nincs találat</h3>
+        <p className="text-sm text-gray-500">
           {patients.length === 0 
             ? "Kezdje az első betegadat hozzáadásával."
             : "Próbálja módosítani a keresési feltételeket."
@@ -70,64 +127,58 @@ export function PatientList({ patients, onView, onEdit, onDelete, canEdit = fals
   }
 
   return (
-    <div className="card">
+    <div className="card p-0">
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Beteg
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              {renderSortableHeader('Beteg', 'nev')}
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 TAJ szám
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
                 Kapcsolat
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Kezelőorvos
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Időpont
-              </th>
+              {renderSortableHeader('Időpont', 'idopont', 'w-32')}
               {userRole !== 'sebészorvos' && (
                 <>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Tervezett fogpótlás (felső)
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Tervezett fogpótlás (alsó)
                   </th>
                 </>
               )}
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Létrehozva
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+              {renderSortableHeader('Létrehozva', 'createdAt')}
+              <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Műveletek
               </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {patients.map((patient) => {
+            {sortedPatients.map((patient) => {
               const hasNoDoctor = !patient.kezeleoorvos;
               return (
               <tr 
                 key={patient.id} 
                 className={hasNoDoctor ? "bg-red-50 hover:bg-red-100" : "hover:bg-gray-50"}
               >
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-3 py-2 whitespace-nowrap">
                   <div className="flex items-center">
-                    <div className="flex-shrink-0 h-10 w-10">
-                      <div className="h-10 w-10 rounded-full bg-medical-primary flex items-center justify-center">
-                        <span className="text-sm font-medium text-white">
+                    <div className="flex-shrink-0 h-8 w-8">
+                      <div className="h-8 w-8 rounded-full bg-medical-primary flex items-center justify-center">
+                        <span className="text-xs font-medium text-white">
                           {patient.nev ? patient.nev.split(' ').map(n => n.charAt(0)).join('').substring(0, 2) : '??'}
                         </span>
                       </div>
                     </div>
-                    <div className="ml-4">
+                    <div className="ml-2">
                       <div
-                        className="text-sm font-medium text-gray-900 cursor-pointer text-medical-primary hover:underline"
+                        className="text-xs font-medium text-gray-900 cursor-pointer text-medical-primary hover:underline"
                         onClick={() => {
                           // Ha van szerkesztési jogosultság, akkor szerkesztés, különben csak megtekintés
                           if (canEdit && onEdit) {
@@ -140,7 +191,7 @@ export function PatientList({ patients, onView, onEdit, onDelete, canEdit = fals
                       >
                         {patient.nev}
                       </div>
-                      <div className="text-sm text-gray-500">
+                      <div className="text-xs text-gray-500">
                         {patient.nem === 'ferfi' ? 'Férfi' : patient.nem === 'no' ? 'Nő' : ''} 
                         {patient.nem && (() => {
                           const age = calculateAge(patient.szuletesiDatum);
@@ -150,24 +201,30 @@ export function PatientList({ patients, onView, onEdit, onDelete, canEdit = fals
                     </div>
                   </div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900">{patient.taj || '-'}</div>
+                <td className="px-3 py-2 whitespace-nowrap">
+                  <div className="text-xs text-gray-900">{patient.taj || '-'}</div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center text-sm text-gray-900">
-                    <Phone className="w-4 h-4 mr-1 text-gray-400" />
-                    {patient.telefonszam || '-'}
+                <td className="px-2 py-2 whitespace-nowrap w-32">
+                  <div 
+                    className="flex items-center text-xs text-gray-900 truncate"
+                    title={patient.email ? `Telefon: ${patient.telefonszam || '-'}\nEmail: ${patient.email}` : `Telefon: ${patient.telefonszam || '-'}`}
+                  >
+                    <Phone className="w-3 h-3 mr-0.5 text-gray-400 flex-shrink-0" />
+                    <span className="truncate">{patient.telefonszam || '-'}</span>
                   </div>
                   {patient.email && (
-                    <div className="flex items-center text-sm text-gray-500 mt-1">
-                      <Mail className="w-4 h-4 mr-1 text-gray-400" />
-                      {patient.email}
+                    <div 
+                      className="flex items-center text-xs text-gray-500 truncate"
+                      title={patient.email}
+                    >
+                      <Mail className="w-2.5 h-2.5 mr-0.5 text-gray-400 flex-shrink-0" />
+                      <span className="truncate">{patient.email}</span>
                     </div>
                   )}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center text-sm text-gray-900">
-                    <svg className="w-4 h-4 mr-1 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <td className="px-3 py-2 whitespace-nowrap">
+                  <div className="flex items-center text-xs text-gray-900">
+                    <svg className="w-3 h-3 mr-1 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 2C12 2 8 4 8 8C8 10 10 12 12 14C14 12 16 10 16 8C16 4 12 2 12 2Z" />
                       <path d="M12 14V22" />
                       <path d="M8 16C8 16 6 18 6 20" />
@@ -176,50 +233,50 @@ export function PatientList({ patients, onView, onEdit, onDelete, canEdit = fals
                     {patient.kezeleoorvos || 'Kezelőorvosra vár'}
                   </div>
                 </td>
-                <td className="px-6 py-4">
+                <td className="px-2 py-2 w-32">
                   {loadingAppointments ? (
-                    <div className="text-sm text-gray-500">Betöltés...</div>
+                    <div className="text-xs text-gray-500">...</div>
                   ) : appointments[patient.id || ''] ? (
-                    <div className="text-sm">
-                      <div className="flex items-center text-gray-900">
-                        <Clock className="w-4 h-4 mr-1 text-medical-primary" />
+                    <div className="text-xs">
+                      <div className="flex items-center text-gray-900 mb-0.5">
+                        <Clock className="w-3 h-3 mr-0.5 text-medical-primary flex-shrink-0" />
                         <span className="font-medium">
                           {formatDateForDisplay(appointments[patient.id || ''].startTime)}
                         </span>
                       </div>
                       {appointments[patient.id || ''].dentistEmail && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          Fogpótlástanász: {appointments[patient.id || ''].dentistEmail}
+                        <div className="text-xs text-gray-600 truncate" title={appointments[patient.id || ''].dentistEmail || undefined}>
+                          {appointments[patient.id || ''].dentistName || appointments[patient.id || ''].dentistEmail}
                         </div>
                       )}
                     </div>
                   ) : (
-                    <div className="text-sm text-gray-400">Nincs időpont</div>
+                    <div className="text-xs text-gray-400">-</div>
                   )}
                 </td>
                 {userRole !== 'sebészorvos' && (
                   <>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-gray-900">
+                    <td className="px-3 py-2">
+                      <div className="text-xs text-gray-900">
                         {patient.kezelesiTervFelso && Array.isArray(patient.kezelesiTervFelso) && patient.kezelesiTervFelso.length > 0 ? (
-                          <div className="space-y-2">
+                          <div className="space-y-1">
                             {patient.kezelesiTervFelso.map((terv: any, idx: number) => (
-                              <div key={idx} className="border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                              <div key={idx} className="border-b border-gray-100 pb-1 last:border-0 last:pb-0">
                                 <div className="font-medium text-xs">{terv.tipus || '-'}</div>
                                 {terv.tervezettAtadasDatuma && (
-                                  <div className="text-xs text-gray-500 flex items-center mt-1">
-                                    <Calendar className="w-3 h-3 mr-1" />
+                                  <div className="text-xs text-gray-500 flex items-center mt-0.5">
+                                    <Calendar className="w-2.5 h-2.5 mr-0.5" />
                                     {formatDateForDisplay(terv.tervezettAtadasDatuma)}
                                   </div>
                                 )}
-                                <div className="mt-1">
+                                <div className="mt-0.5">
                                   {terv.elkeszult ? (
                                     <span className="inline" title="Elkészült">
-                                      <CheckCircle2 className="w-3 h-3 text-green-600" />
+                                      <CheckCircle2 className="w-2.5 h-2.5 text-green-600" />
                                     </span>
                                   ) : (
                                     <span className="inline" title="Nincs elkészítve">
-                                      <XCircle className="w-3 h-3 text-gray-400" />
+                                      <XCircle className="w-2.5 h-2.5 text-gray-400" />
                                     </span>
                                   )}
                                 </div>
@@ -229,27 +286,27 @@ export function PatientList({ patients, onView, onEdit, onDelete, canEdit = fals
                         ) : '-'}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-gray-900">
+                    <td className="px-3 py-2">
+                      <div className="text-xs text-gray-900">
                         {patient.kezelesiTervAlso && Array.isArray(patient.kezelesiTervAlso) && patient.kezelesiTervAlso.length > 0 ? (
-                          <div className="space-y-2">
+                          <div className="space-y-1">
                             {patient.kezelesiTervAlso.map((terv: any, idx: number) => (
-                              <div key={idx} className="border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                              <div key={idx} className="border-b border-gray-100 pb-1 last:border-0 last:pb-0">
                                 <div className="font-medium text-xs">{terv.tipus || '-'}</div>
                                 {terv.tervezettAtadasDatuma && (
-                                  <div className="text-xs text-gray-500 flex items-center mt-1">
-                                    <Calendar className="w-3 h-3 mr-1" />
+                                  <div className="text-xs text-gray-500 flex items-center mt-0.5">
+                                    <Calendar className="w-2.5 h-2.5 mr-0.5" />
                                     {formatDateForDisplay(terv.tervezettAtadasDatuma)}
                                   </div>
                                 )}
-                                <div className="mt-1">
+                                <div className="mt-0.5">
                                   {terv.elkeszult ? (
                                     <span className="inline" title="Elkészült">
-                                      <CheckCircle2 className="w-3 h-3 text-green-600" />
+                                      <CheckCircle2 className="w-2.5 h-2.5 text-green-600" />
                                     </span>
                                   ) : (
                                     <span className="inline" title="Nincs elkészítve">
-                                      <XCircle className="w-3 h-3 text-gray-400" />
+                                      <XCircle className="w-2.5 h-2.5 text-gray-400" />
                                     </span>
                                   )}
                                 </div>
@@ -261,20 +318,20 @@ export function PatientList({ patients, onView, onEdit, onDelete, canEdit = fals
                     </td>
                   </>
                 )}
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center text-sm text-gray-500">
-                    <Calendar className="w-4 h-4 mr-1 text-gray-400" />
+                <td className="px-3 py-2 whitespace-nowrap">
+                  <div className="flex items-center text-xs text-gray-500">
+                    <Calendar className="w-3 h-3 mr-1 text-gray-400" />
                     {patient.createdAt && formatDateForDisplay(patient.createdAt)}
                   </div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <div className="flex justify-end space-x-2">
+                <td className="px-3 py-2 whitespace-nowrap text-right text-xs font-medium">
+                  <div className="flex justify-end space-x-1.5">
                     <button
                       onClick={() => onView(patient)}
                       className="text-medical-primary hover:text-blue-700"
                       title="Beteg megtekintése"
                     >
-                      <Eye className="w-4 h-4" />
+                      <Eye className="w-3.5 h-3.5" />
                     </button>
                     {canEdit && onEdit && (
                       <button
@@ -282,7 +339,7 @@ export function PatientList({ patients, onView, onEdit, onDelete, canEdit = fals
                         className="text-medical-accent hover:text-amber-600"
                         title="Beteg szerkesztése"
                       >
-                        <Pencil className="w-4 h-4" />
+                        <Pencil className="w-3.5 h-3.5" />
                       </button>
                     )}
                     {canDelete && onDelete && (
@@ -291,7 +348,7 @@ export function PatientList({ patients, onView, onEdit, onDelete, canEdit = fals
                         className="text-red-600 hover:text-red-800"
                         title="Beteg törlése"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     )}
                   </div>

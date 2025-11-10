@@ -105,12 +105,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Név generálása: email első 3 karaktere (alapértelmezett)
+    const defaultName = normalizedEmail.substring(0, 3).toUpperCase();
+
     // Felhasználó létrehozása (inaktív, admin jóváhagyásra vár)
     const result = await pool.query(
-      `INSERT INTO users (email, password_hash, role, active)
-       VALUES ($1, $2, $3, false)
-       RETURNING id, email, role, active`,
-      [normalizedEmail, passwordHash, databaseRole]
+      `INSERT INTO users (email, password_hash, role, active, doktor_neve)
+       VALUES ($1, $2, $3, false, $4)
+       RETURNING id, email, role, active, doktor_neve`,
+      [normalizedEmail, passwordHash, databaseRole, defaultName]
     );
 
     const user = result.rows[0];

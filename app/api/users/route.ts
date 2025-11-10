@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
       `SELECT 
         id,
         email,
+        doktor_neve,
         role,
         active,
         restricted_view,
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { email, password, role = 'editor' } = body;
+    const { email, password, role = 'editor', doktor_neve } = body;
 
     if (!email || !password) {
       return NextResponse.json(
@@ -91,7 +92,8 @@ export async function POST(request: NextRequest) {
     const pool = getDbPool();
     
     // Ellenőrizzük, hogy létezik-e már ilyen email
-    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email.toLowerCase().trim()]);
+    const normalizedEmail = email.toLowerCase().trim();
+    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [normalizedEmail]);
     if (existing.rows.length > 0) {
       return NextResponse.json(
         { error: 'Ez az email cím már használatban van' },
@@ -102,12 +104,15 @@ export async function POST(request: NextRequest) {
     // Jelszó hash-elése
     const passwordHash = await bcrypt.hash(password, 10);
 
+    // Név beállítása: ha meg van adva, akkor azt használjuk, különben email első 3 karaktere
+    const userName = doktor_neve || normalizedEmail.substring(0, 3).toUpperCase();
+
     // Felhasználó létrehozása
     const result = await pool.query(
-      `INSERT INTO users (email, password_hash, role)
-       VALUES ($1, $2, $3)
-       RETURNING id, email, role, active, created_at`,
-      [email.toLowerCase().trim(), passwordHash, role]
+      `INSERT INTO users (email, password_hash, role, doktor_neve)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, email, doktor_neve, role, active, created_at`,
+      [normalizedEmail, passwordHash, role, userName]
     );
 
     return NextResponse.json({ user: result.rows[0] }, { status: 201 });

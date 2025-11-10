@@ -24,6 +24,8 @@ export default function Home() {
   const [userRole, setUserRole] = useState<UserRoleType>('viewer');
   const [originalUserRole, setOriginalUserRole] = useState<UserRoleType>('viewer');
   const [viewAsRole, setViewAsRole] = useState<UserRoleType | null>(null);
+  const [sortField, setSortField] = useState<'nev' | 'idopont' | 'createdAt' | null>('idopont');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   
   // Computed role for display - use viewAsRole if set, otherwise use original role
   const displayRole = viewAsRole || userRole;
@@ -66,16 +68,39 @@ export default function Home() {
   useEffect(() => {
     // Keresés async módon
     const performSearch = async () => {
+      let results: Patient[] = [];
       if (searchQuery.trim()) {
-        const results = await searchPatients(searchQuery);
-        setFilteredPatients(results);
+        results = await searchPatients(searchQuery);
       } else {
-        setFilteredPatients(patients);
+        results = patients;
       }
+      
+      // Apply sorting (only for fields that don't need appointment data)
+      if (sortField === 'nev' || sortField === 'createdAt') {
+        results = [...results].sort((a, b) => {
+          let comparison = 0;
+          
+          if (sortField === 'nev') {
+            const nameA = (a.nev || '').toLowerCase();
+            const nameB = (b.nev || '').toLowerCase();
+            comparison = nameA.localeCompare(nameB, 'hu');
+          } else if (sortField === 'createdAt') {
+            const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            comparison = dateA - dateB;
+          }
+          
+          return sortDirection === 'asc' ? comparison : -comparison;
+        });
+      }
+      // Note: appointment sorting (idopont) is handled in PatientList component
+      // as it needs appointment data
+      
+      setFilteredPatients(results);
     };
     
     performSearch();
-  }, [searchQuery, patients]);
+  }, [searchQuery, patients, sortField, sortDirection]);
 
   const loadPatients = async () => {
     try {
@@ -318,23 +343,23 @@ export default function Home() {
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center gap-4">
-              <Logo width={80} height={92} />
+          <div className="flex justify-between items-center py-2">
+            <div className="flex items-center gap-3">
+              <Logo width={50} height={58} />
               <div>
-                <h1 className="text-2xl font-bold text-medical-primary">
+                <h1 className="text-lg font-bold text-medical-primary">
                   Maxillofaciális Rehabilitáció
                 </h1>
-                <p className="text-sm text-gray-600 mt-1">
+                <p className="text-xs text-gray-600">
                   BETEGREGISZTER
                 </p>
               </div>
             </div>
             {/* View As Role Selector - Only for admins */}
             {originalUserRole === 'admin' && (
-              <div className="flex items-center gap-2">
-                <Eye className="w-4 h-4 text-gray-500" />
-                <label className="text-sm text-gray-700 font-medium">
+              <div className="flex items-center gap-1.5">
+                <Eye className="w-3.5 h-3.5 text-gray-500" />
+                <label className="text-xs text-gray-700 font-medium">
                   Nézet mint:
                 </label>
                 <select
@@ -343,7 +368,7 @@ export default function Home() {
                     const value = e.target.value;
                     handleViewAsRoleChange(value === '' ? null : (value as UserRoleType));
                   }}
-                  className="form-input text-sm py-1 px-2 border-gray-300 rounded"
+                  className="form-input text-xs py-1 px-2 border-gray-300 rounded"
                 >
                   <option value="">Admin (eredeti)</option>
                   {availableRoles.map((role) => (
@@ -357,7 +382,7 @@ export default function Home() {
                   ))}
                 </select>
                 {viewAsRole && (
-                  <span className="text-xs text-amber-600 font-medium bg-amber-50 px-2 py-1 rounded">
+                  <span className="text-xs text-amber-600 font-medium bg-amber-50 px-1.5 py-0.5 rounded">
                     Előnézet mód
                   </span>
                 )}
@@ -366,23 +391,23 @@ export default function Home() {
           </div>
         </div>
       </header>
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="space-y-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div className="space-y-3">
           {/* Link to time slots management page for fogpótlástanász and admin */}
           {(displayRole === 'fogpótlástanász' || displayRole === 'admin') && (
-            <div className="card p-4">
+            <div className="card p-3">
               <div className="flex justify-between items-center">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Időpontkezelés</h3>
-                  <p className="text-sm text-gray-600 mt-1">
+                  <h3 className="text-base font-semibold text-gray-900">Időpontkezelés</h3>
+                  <p className="text-xs text-gray-600">
                     Hozzon létre és kezeljen szabad időpontokat
                   </p>
                 </div>
                 <button
                   onClick={() => router.push('/time-slots')}
-                  className="btn-primary flex items-center gap-2"
+                  className="btn-primary flex items-center gap-1.5 text-sm px-3 py-1.5"
                 >
-                  <Calendar className="w-4 h-4" />
+                  <Calendar className="w-3.5 h-3.5" />
                   Időpontok kezelése
                 </button>
               </div>
@@ -392,47 +417,47 @@ export default function Home() {
           {/* Header */}
           <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-3xl font-bold text-gray-900">Betegnyilvántartás</h2>
-          <p className="text-gray-600 mt-1">
+          <h2 className="text-xl font-bold text-gray-900">Betegnyilvántartás</h2>
+          <p className="text-sm text-gray-600">
             Maxillofaciális rehabilitációs betegadatok kezelése
           </p>
           {userEmail && (
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-xs text-gray-500">
               Bejelentkezve: {userEmail}
             </p>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-1.5">
           {/* Admin button - always show for real admins, even in view-as mode */}
           {originalUserRole === 'admin' && (
             <button
               onClick={() => router.push('/admin')}
-              className="btn-secondary flex items-center gap-2"
+              className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
             >
-              <Shield className="w-4 h-4" />
+              <Shield className="w-3.5 h-3.5" />
               Admin
             </button>
           )}
           <button
             onClick={() => router.push('/settings')}
-            className="btn-secondary flex items-center gap-2"
+            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
           >
-            <Settings className="w-4 h-4" />
+            <Settings className="w-3.5 h-3.5" />
             Beállítások
           </button>
           <button
             onClick={handleLogout}
-            className="btn-secondary flex items-center gap-2"
+            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut className="w-3.5 h-3.5" />
             Kijelentkezés
           </button>
           {(displayRole === 'admin' || displayRole === 'editor' || displayRole === 'fogpótlástanász' || displayRole === 'sebészorvos') && (
             <button
               onClick={handleNewPatient}
-              className="btn-primary flex items-center gap-2"
+              className="btn-primary flex items-center gap-1.5 text-sm px-3 py-1.5"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-3.5 h-3.5" />
               Új beteg
             </button>
           )}
@@ -443,42 +468,42 @@ export default function Home() {
           <>
               {/* Search */}
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400 w-3.5 h-3.5" />
                 <input
                   type="text"
                   placeholder="Keresés név, TAJ szám vagy telefon alapján..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="form-input pl-10"
+                  className="form-input pl-9 py-2 text-sm"
                 />
               </div>
 
               {/* Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="card">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <div className="card p-3">
                   <div className="flex items-center">
-                    <Users className="w-8 h-8 text-medical-primary" />
-                    <div className="ml-3">
-                      <p className="text-sm font-medium text-gray-500">Összes beteg</p>
-                      <p className="text-2xl font-bold text-gray-900">{patients.length}</p>
+                    <Users className="w-5 h-5 text-medical-primary" />
+                    <div className="ml-2">
+                      <p className="text-xs font-medium text-gray-500">Összes beteg</p>
+                      <p className="text-xl font-bold text-gray-900">{patients.length}</p>
                     </div>
                   </div>
                 </div>
-                <div className="card">
+                <div className="card p-3">
                   <div className="flex items-center">
-                    <Search className="w-8 h-8 text-medical-accent" />
-                    <div className="ml-3">
-                      <p className="text-sm font-medium text-gray-500">Keresési eredmények</p>
-                      <p className="text-2xl font-bold text-gray-900">{filteredPatients.length}</p>
+                    <Search className="w-5 h-5 text-medical-accent" />
+                    <div className="ml-2">
+                      <p className="text-xs font-medium text-gray-500">Keresési eredmények</p>
+                      <p className="text-xl font-bold text-gray-900">{filteredPatients.length}</p>
                     </div>
                   </div>
                 </div>
-                <div className="card">
+                <div className="card p-3">
                   <div className="flex items-center">
-                    <Plus className="w-8 h-8 text-medical-success" />
-                    <div className="ml-3">
-                      <p className="text-sm font-medium text-gray-500">Új ebben a hónapban</p>
-                      <p className="text-2xl font-bold text-gray-900">
+                    <Plus className="w-5 h-5 text-medical-success" />
+                    <div className="ml-2">
+                      <p className="text-xs font-medium text-gray-500">Új ebben a hónapban</p>
+                      <p className="text-xl font-bold text-gray-900">
                         {patients.filter(p => {
                           const created = new Date(p.createdAt || '');
                           const now = new Date();
@@ -500,6 +525,18 @@ export default function Home() {
                 canEdit={displayRole === 'admin' || displayRole === 'editor' || displayRole === 'fogpótlástanász' || displayRole === 'sebészorvos'}
                 canDelete={originalUserRole === 'admin'}
                 userRole={displayRole}
+                sortField={sortField}
+                sortDirection={sortDirection}
+                onSort={(field: 'nev' | 'idopont' | 'createdAt') => {
+                  if (sortField === field) {
+                    // Toggle direction if same field
+                    setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                  } else {
+                    // New field, default to ascending
+                    setSortField(field);
+                    setSortDirection('asc');
+                  }
+                }}
               />
             </>
 

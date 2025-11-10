@@ -29,10 +29,12 @@ export async function GET(request: NextRequest) {
         ats.start_time as "startTime",
         ats.status,
         p.nev as "patientName",
-        p.taj as "patientTaj"
+        p.taj as "patientTaj",
+        u.doktor_neve as "dentistName"
       FROM appointments a
       JOIN available_time_slots ats ON a.time_slot_id = ats.id
       JOIN patients p ON a.patient_id = p.id
+      LEFT JOIN users u ON a.dentist_email = u.email
       ORDER BY ats.start_time ASC
     `;
     const params: any[] = [];
