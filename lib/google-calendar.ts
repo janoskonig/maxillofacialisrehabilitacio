@@ -509,7 +509,7 @@ export async function fetchGoogleCalendarEvents(
     let pageToken: string | undefined = undefined;
     
     do {
-      const response = await calendar.events.list({
+      const response: any = await calendar.events.list({
         calendarId: sourceCalendarId,
         timeMin: timeMin.toISOString(),
         timeMax: timeMax.toISOString(),
