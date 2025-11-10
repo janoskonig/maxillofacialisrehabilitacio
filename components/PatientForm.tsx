@@ -1083,7 +1083,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                 <div>
                   <label className="form-label">Baleset időpontja</label>
                   <DatePicker
-                    selected={watch('balesetIdopont') ? new Date(watch('balesetIdopont')) : null}
+                    selected={watch('balesetIdopont') ? new Date(watch('balesetIdopont') || '') : null}
                     onChange={(date: Date | null) => {
                       const formatted = date ? formatDateForInput(date.toISOString().split('T')[0]) : '';
                       setValue('balesetIdopont', formatted, { shouldValidate: true });
@@ -1162,7 +1162,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                 <div>
                   <label className="form-label">Műtét ideje</label>
                   <DatePicker
-                    selected={watch('mutetIdeje') ? new Date(watch('mutetIdeje')) : null}
+                    selected={watch('mutetIdeje') ? new Date(watch('mutetIdeje') || '') : null}
                     onChange={(date: Date | null) => {
                       const formatted = date ? formatDateForInput(date.toISOString().split('T')[0]) : '';
                       setValue('mutetIdeje', formatted, { shouldValidate: true });
