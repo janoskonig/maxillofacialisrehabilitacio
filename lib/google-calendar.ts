@@ -669,7 +669,7 @@ export async function syncTimeSlotsFromGoogleCalendar(userId: string): Promise<{
     }
     
     // Töröljük azokat az időpontokat, amelyek már nincsenek a Google Calendar-ban
-    for (const [eventId, slot] of existingSlots.entries()) {
+    for (const [eventId, slot] of Array.from(existingSlots.entries())) {
       if (!processedEventIds.has(eventId)) {
         // Csak akkor törölünk, ha nincs lefoglalva
         if (slot.status === 'available') {
