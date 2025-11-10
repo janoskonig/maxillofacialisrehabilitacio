@@ -1,13 +1,14 @@
 import nodemailer from 'nodemailer';
 
 // Email configuration from environment variables
-const SMTP_HOST = process.env.SMTP_HOST;
-const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587', 10);
-const SMTP_USER = process.env.SMTP_USER;
-const SMTP_PASS = process.env.SMTP_PASS;
-const SMTP_FROM = process.env.SMTP_FROM;
-const SMTP_FROM_NAME = process.env.SMTP_FROM_NAME || 'Maxillofaciális Rehabilitáció Rendszer';
-const SMTP_REPLY_TO = process.env.SMTP_REPLY_TO || SMTP_FROM;
+// Trim whitespace to avoid authentication issues from copy/paste
+const SMTP_HOST = process.env.SMTP_HOST?.trim();
+const SMTP_PORT = parseInt(process.env.SMTP_PORT?.trim() || '587', 10);
+const SMTP_USER = process.env.SMTP_USER?.trim();
+const SMTP_PASS = process.env.SMTP_PASS?.trim();
+const SMTP_FROM = process.env.SMTP_FROM?.trim();
+const SMTP_FROM_NAME = process.env.SMTP_FROM_NAME?.trim() || 'Maxillofaciális Rehabilitáció Rendszer';
+const SMTP_REPLY_TO = process.env.SMTP_REPLY_TO?.trim() || SMTP_FROM;
 
 // Create transporter with spam prevention best practices
 const transporter = nodemailer.createTransport({
@@ -82,6 +83,9 @@ export async function sendEmail(options: SendEmailOptions): Promise<void> {
     console.error('Email configuration is missing. Please check SMTP_* environment variables.');
     throw new Error('Email configuration is missing');
   }
+
+  // Log SMTP configuration (without sensitive data) for debugging
+  console.log(`[Email] Attempting to send email via ${SMTP_HOST}:${SMTP_PORT} as ${SMTP_USER}`);
 
   try {
     // Format From address with name
