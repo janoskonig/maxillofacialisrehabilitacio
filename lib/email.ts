@@ -49,6 +49,7 @@ export interface SendEmailOptions {
   text?: string;
   attachments?: EmailAttachment[];
   replyTo?: string;
+  bcc?: string | string[]; // Optional BCC recipients (separate from to)
 }
 
 /**
@@ -98,17 +99,23 @@ export async function sendEmail(options: SendEmailOptions): Promise<void> {
     // Generate plain text version if not provided
     const textVersion = options.text || htmlToText(options.html);
 
-    // Handle multiple recipients: use BCC to protect privacy and avoid spam triggers
-    const recipients = Array.isArray(options.to) ? options.to : [options.to];
-    const isMultipleRecipients = recipients.length > 1;
+    // Handle recipients: if explicit BCC is provided, use it; otherwise use smart BCC logic
+    const toRecipients = Array.isArray(options.to) ? options.to : [options.to];
+    const bccRecipients = options.bcc 
+      ? (Array.isArray(options.bcc) ? options.bcc : [options.bcc])
+      : undefined;
     
-    // For multiple recipients, send to first recipient in "to" and rest in BCC
-    // This prevents all recipients from seeing each other's emails (privacy)
-    // and reduces spam score (mass emails with visible recipients are spam triggers)
-    const toAddress = isMultipleRecipients ? recipients[0] : recipients[0];
-    const bccAddresses = isMultipleRecipients ? recipients.slice(1) : undefined;
+    // If explicit BCC is provided, use it; otherwise use smart BCC for multiple recipients
+    const toAddress = toRecipients[0];
+    const bccAddresses = bccRecipients || (toRecipients.length > 1 ? toRecipients.slice(1) : undefined);
+    
+    // All recipients for envelope (both to and bcc)
+    const allRecipients = bccRecipients 
+      ? [...toRecipients, ...bccRecipients]
+      : toRecipients;
 
     // Build proper HTML with meta tags for better email client compatibility
+    // Wrapped in a professional email template with header and footer
     const htmlWithMeta = `
 <!DOCTYPE html>
 <html lang="hu">
@@ -117,8 +124,40 @@ export async function sendEmail(options: SendEmailOptions): Promise<void> {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 </head>
-<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;">
-  ${options.html}
+<body style="margin: 0; padding: 0; font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; background-color: #f5f5f5;">
+  <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f5f5f5; padding: 20px 0;">
+    <tr>
+      <td align="center" style="padding: 20px 0;">
+        <table role="presentation" style="width: 600px; max-width: 100%; border-collapse: collapse; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <!-- Header -->
+          <tr>
+            <td style="padding: 30px 40px; background-color: #2563eb; border-radius: 8px 8px 0 0;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600;">Maxillofaciális Rehabilitáció Rendszer</h1>
+            </td>
+          </tr>
+          <!-- Content -->
+          <tr>
+            <td style="padding: 40px;">
+              ${options.html}
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 30px 40px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; border-radius: 0 0 8px 8px;">
+              <p style="margin: 0 0 10px 0; color: #6b7280; font-size: 14px; line-height: 1.6;">
+                Üdvözlettel,<br>
+                <strong style="color: #111827;">König János</strong>
+              </p>
+              <p style="margin: 10px 0 0 0; color: #9ca3af; font-size: 12px; line-height: 1.5;">
+                Maxillofaciális Rehabilitáció Rendszer<br>
+                Semmelweis Egyetem
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>`.trim();
 
@@ -143,14 +182,16 @@ export async function sendEmail(options: SendEmailOptions): Promise<void> {
         'X-Mailer': 'Maxillofaciális Rehabilitáció Rendszer',
         // Remove X-Priority and Importance - these can trigger spam filters
         // Instead, let email clients determine priority naturally
-        'Precedence': isMultipleRecipients ? 'bulk' : 'normal',
+        'Precedence': allRecipients.length > 1 ? 'bulk' : 'normal',
         'Auto-Submitted': 'no', // Indicates this is not an auto-generated email
         'List-Id': '<maxillofacialis-rehabilitacio.system>', // Helps identify legitimate emails
+        'List-Unsubscribe': '<mailto:' + (options.replyTo || SMTP_REPLY_TO) + '>', // Unsubscribe header for better deliverability
+        'X-Auto-Response-Suppress': 'All', // Suppress auto-responses
       },
       // Set return path for bounce handling
       envelope: {
         from: SMTP_FROM,
-        to: recipients,
+        to: allRecipients,
       },
     };
 

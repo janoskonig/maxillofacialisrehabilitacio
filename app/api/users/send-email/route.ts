@@ -75,6 +75,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Külön kezeljük a konig.janos@semmelweis.hu-t: ő legyen a "to", mindenki más BCC-ben
+    const KONIG_EMAIL = 'konig.janos@semmelweis.hu';
+    const toRecipient = allRecipients.includes(KONIG_EMAIL) ? KONIG_EMAIL : allRecipients[0];
+    const bccRecipients = allRecipients.filter(email => email !== toRecipient);
+
     // Felhasználó részletek összegyűjtése (duplikátumok elkerülése)
     const selectedUserDetails = result.rows.map((row) => ({
       email: row.email,
@@ -98,10 +103,11 @@ export async function POST(request: NextRequest) {
     });
     const userDetails = Array.from(userDetailsMap.values());
 
-    // E-mail küldése
+    // E-mail küldése - konig.janos@semmelweis.hu a "to"-ban, mindenki más BCC-ben
     try {
       await sendEmail({
-        to: allRecipients,
+        to: toRecipient,
+        bcc: bccRecipients.length > 0 ? bccRecipients : undefined,
         subject,
         html,
         text,

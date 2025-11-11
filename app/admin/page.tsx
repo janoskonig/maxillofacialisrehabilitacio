@@ -583,7 +583,7 @@ export default function AdminPage() {
               Szerepkörök (több választható)
             </label>
             <div className="flex flex-wrap gap-3">
-              {['sebészorvos', 'fogpótlástanász', 'technikus'].map((role) => (
+              {['sebészorvos', 'fogpótlástanász', 'technikus', 'admin'].map((role) => (
                 <label key={role} className="flex items-center">
                   <input
                     type="checkbox"
@@ -600,7 +600,8 @@ export default function AdminPage() {
                   <span className="text-sm text-gray-700">
                     {role === 'sebészorvos' ? 'Sebészorvos' :
                      role === 'fogpótlástanász' ? 'Fogpótlástanász' :
-                     role === 'technikus' ? 'Technikus' : role}
+                     role === 'technikus' ? 'Technikus' :
+                     role === 'admin' ? 'Adminisztrátor' : role}
                   </span>
                 </label>
               ))}
