@@ -213,14 +213,21 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
       return;
     }
 
-    // Convert Date to ISO format (YYYY-MM-DDTHH:mm)
-    // This format will be interpreted as local time by the API
+    // Convert Date to ISO format with timezone offset
+    // This ensures the server interprets the time correctly regardless of server timezone
+    const offset = -newSlotDateTime.getTimezoneOffset();
+    const offsetHours = Math.floor(Math.abs(offset) / 60);
+    const offsetMinutes = Math.abs(offset) % 60;
+    const offsetSign = offset >= 0 ? '+' : '-';
+    const offsetString = `${offsetSign}${String(offsetHours).padStart(2, '0')}:${String(offsetMinutes).padStart(2, '0')}`;
+    
     const year = newSlotDateTime.getFullYear();
     const month = String(newSlotDateTime.getMonth() + 1).padStart(2, '0');
     const day = String(newSlotDateTime.getDate()).padStart(2, '0');
     const hours = String(newSlotDateTime.getHours()).padStart(2, '0');
     const minutes = String(newSlotDateTime.getMinutes()).padStart(2, '0');
-    const isoDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+    const seconds = String(newSlotDateTime.getSeconds()).padStart(2, '0');
+    const isoDateTime = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetString}`;
 
     if (!confirm('Biztosan létre szeretné hozni ezt az időpontot és rögtön lefoglalni a betegnek?')) {
       return;

@@ -126,13 +126,21 @@ export function TimeSlotsManager() {
       return;
     }
 
-    // Convert Date to ISO format (YYYY-MM-DDTHH:mm)
+    // Convert Date to ISO format with timezone offset
+    // This ensures the server interprets the time correctly regardless of server timezone
+    const offset = -newStartTime.getTimezoneOffset();
+    const offsetHours = Math.floor(Math.abs(offset) / 60);
+    const offsetMinutes = Math.abs(offset) % 60;
+    const offsetSign = offset >= 0 ? '+' : '-';
+    const offsetString = `${offsetSign}${String(offsetHours).padStart(2, '0')}:${String(offsetMinutes).padStart(2, '0')}`;
+    
     const year = newStartTime.getFullYear();
     const month = String(newStartTime.getMonth() + 1).padStart(2, '0');
     const day = String(newStartTime.getDate()).padStart(2, '0');
     const hours = String(newStartTime.getHours()).padStart(2, '0');
     const minutes = String(newStartTime.getMinutes()).padStart(2, '0');
-    const isoDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+    const seconds = String(newStartTime.getSeconds()).padStart(2, '0');
+    const isoDateTime = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetString}`;
 
     try {
       const requestBody: any = { startTime: isoDateTime };
