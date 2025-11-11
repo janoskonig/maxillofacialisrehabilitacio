@@ -14,7 +14,7 @@ const CSV_HEADERS = [
   'varos',
   'iranyitoszam',
   'beutaloOrvos',
-  'mutetRovidLeirasa',
+  'beutaloIndokolas',
   'mutetIdeje',
   'szovettaniDiagnozis',
   'nyakiBlokkdisszekcio',

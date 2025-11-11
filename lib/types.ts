@@ -45,7 +45,7 @@ export const patientSchema = z.object({
   // BEUTALÓ
   beutaloOrvos: z.string().optional().nullable(),
   beutaloIntezmeny: z.string().optional().nullable(),
-  mutetRovidLeirasa: z.string().optional().nullable(),
+  beutaloIndokolas: z.string().optional().nullable(),
   mutetIdeje: z.string().optional().nullable(),
   szovettaniDiagnozis: z.string().optional().nullable(),
   nyakiBlokkdisszekcio: z.enum(['nem volt', 'volt, egyoldali', 'volt, kétoldali']).optional().nullable().or(z.literal('')),

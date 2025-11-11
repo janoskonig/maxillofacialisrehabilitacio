@@ -322,7 +322,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
             if (draft.meglevoFogak) {
               setFogak(draft.meglevoFogak);
             }
-            if (draft.beutaloOrvos || draft.beutaloIntezmeny || draft.mutetRovidLeirasa) {
+            if (draft.beutaloOrvos || draft.beutaloIntezmeny || draft.beutaloIndokolas) {
               setVanBeutalo(true);
             }
           } else {
@@ -997,7 +997,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
               <div className="md:col-span-2">
                 <label className="form-label">Indokolás</label>
                 <textarea
-                  {...register('mutetRovidLeirasa')}
+                  {...register('beutaloIndokolas')}
                   rows={3}
                   className="form-input"
                   placeholder="Miért kapott beutalót?"

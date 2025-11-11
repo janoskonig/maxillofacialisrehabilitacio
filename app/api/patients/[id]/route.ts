@@ -33,7 +33,8 @@ export async function GET(
         iranyitoszam,
         beutalo_orvos as "beutaloOrvos",
         beutalo_intezmeny as "beutaloIntezmeny",
-        mutet_rovid_leirasa as "mutetRovidLeirasa",
+        beutalo_indokolas as "beutaloIndokolas",
+        primer_mutet_leirasa as "primerMutetLeirasa",
         mutet_ideje as "mutetIdeje",
         szovettani_diagnozis as "szovettaniDiagnozis",
         nyaki_blokkdisszekcio as "nyakiBlokkdisszekcio",
@@ -76,6 +77,12 @@ export async function GET(
         nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
         nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
         tnm_staging as "tnmStaging",
+        bno, diagnozis, primer_mutet_leirasa as "primerMutetLeirasa",
+        baleset_idopont as "balesetIdopont",
+        baleset_etiologiaja as "balesetEtiologiaja",
+        baleset_egyeb as "balesetEgyeb",
+        veleszuletett_rendellenessegek as "veleszuletettRendellenessegek",
+        veleszuletett_mutetek_leirasa as "veleszuletettMutetekLeirasa",
         kezelesi_terv_felso as "kezelesiTervFelso",
         kezelesi_terv_also as "kezelesiTervAlso",
         kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
@@ -259,7 +266,7 @@ export async function PUT(
         iranyitoszam = $10,
         beutalo_orvos = $11,
         beutalo_intezmeny = $12,
-        mutet_rovid_leirasa = $13,
+        beutalo_indokolas = $13,
         mutet_ideje = $14,
         szovettani_diagnozis = $15,
         nyaki_blokkdisszekcio = $16,
@@ -304,16 +311,23 @@ export async function PUT(
         tnm_staging = $55,
         bno = $56,
         diagnozis = $57,
-        kezelesi_terv_felso = $58::jsonb,
-        kezelesi_terv_also = $59::jsonb,
-        kezelesi_terv_arcot_erinto = $60::jsonb,
+        primer_mutet_leirasa = $58,
+        baleset_idopont = $59,
+        baleset_etiologiaja = $60,
+        baleset_egyeb = $61,
+        veleszuletett_rendellenessegek = $62::jsonb,
+        veleszuletett_mutetek_leirasa = $63,
+        kezelesi_terv_felso = $64::jsonb,
+        kezelesi_terv_also = $65::jsonb,
+        kezelesi_terv_arcot_erinto = $66::jsonb,
         updated_at = CURRENT_TIMESTAMP,
-        updated_by = $61
+        updated_by = $67
       WHERE id = $1
       RETURNING 
         id, nev, taj, telefonszam, szuletesi_datum as "szuletesiDatum", nem,
         email, cim, varos, iranyitoszam, beutalo_orvos as "beutaloOrvos",
-        beutalo_intezmeny as "beutaloIntezmeny", mutet_rovid_leirasa as "mutetRovidLeirasa",
+        beutalo_intezmeny as "beutaloIntezmeny", beutalo_indokolas as "beutaloIndokolas",
+        primer_mutet_leirasa as "primerMutetLeirasa",
         mutet_ideje as "mutetIdeje", szovettani_diagnozis as "szovettaniDiagnozis",
         nyaki_blokkdisszekcio as "nyakiBlokkdisszekcio", alkoholfogyasztas,
         dohanyzas_szam as "dohanyzasSzam", maxilladefektus_van as "maxilladefektusVan",
@@ -348,7 +362,12 @@ export async function PUT(
         nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
         nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
         tnm_staging as "tnmStaging",
-        bno, diagnozis,
+        bno, diagnozis, primer_mutet_leirasa as "primerMutetLeirasa",
+        baleset_idopont as "balesetIdopont",
+        baleset_etiologiaja as "balesetEtiologiaja",
+        baleset_egyeb as "balesetEgyeb",
+        veleszuletett_rendellenessegek as "veleszuletettRendellenessegek",
+        veleszuletett_mutetek_leirasa as "veleszuletettMutetekLeirasa",
         kezelesi_terv_felso as "kezelesiTervFelso",
         kezelesi_terv_also as "kezelesiTervAlso",
         kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
@@ -367,7 +386,7 @@ export async function PUT(
         validatedPatient.iranyitoszam || null,
         validatedPatient.beutaloOrvos || null,
         validatedPatient.beutaloIntezmeny || null,
-        validatedPatient.mutetRovidLeirasa || null,
+        validatedPatient.beutaloIndokolas || null,
         validatedPatient.mutetIdeje || null,
         validatedPatient.szovettaniDiagnozis || null,
         validatedPatient.nyakiBlokkdisszekcio || null,
@@ -416,6 +435,14 @@ export async function PUT(
         validatedPatient.tnmStaging || null,
         validatedPatient.bno || null,
         validatedPatient.diagnozis || null,
+        validatedPatient.primerMutetLeirasa || null,
+        validatedPatient.balesetIdopont || null,
+        validatedPatient.balesetEtiologiaja || null,
+        validatedPatient.balesetEgyeb || null,
+        validatedPatient.veleszuletettRendellenessegek && Array.isArray(validatedPatient.veleszuletettRendellenessegek)
+          ? JSON.stringify(validatedPatient.veleszuletettRendellenessegek)
+          : '[]',
+        validatedPatient.veleszuletettMutetekLeirasa || null,
         validatedPatient.kezelesiTervFelso && Array.isArray(validatedPatient.kezelesiTervFelso)
           ? JSON.stringify(validatedPatient.kezelesiTervFelso)
           : '[]',
@@ -466,7 +493,8 @@ export async function PUT(
         iranyitoszam: 'Irányítószám',
         beutalo_orvos: 'Beutaló orvos',
         beutalo_intezmeny: 'Beutaló intézmény',
-        mutet_rovid_leirasa: 'Műtét rövid leírása',
+        beutalo_indokolas: 'Beutaló indokolás',
+        primer_mutet_leirasa: 'Primer műtét leírása',
         mutet_ideje: 'Műtét ideje',
         szovettani_diagnozis: 'Szövettani diagnózis',
         nyaki_blokkdisszekcio: 'Nyaki blokkdisszekció',
@@ -521,7 +549,8 @@ export async function PUT(
         if (dbField === 'szuletesi_datum') newVal = normalize(validatedPatient.szuletesiDatum);
         else if (dbField === 'beutalo_orvos') newVal = normalize(validatedPatient.beutaloOrvos);
         else if (dbField === 'beutalo_intezmeny') newVal = normalize(validatedPatient.beutaloIntezmeny);
-        else if (dbField === 'mutet_rovid_leirasa') newVal = normalize(validatedPatient.mutetRovidLeirasa);
+        else if (dbField === 'beutalo_indokolas') newVal = normalize(validatedPatient.beutaloIndokolas);
+        else if (dbField === 'primer_mutet_leirasa') newVal = normalize(validatedPatient.primerMutetLeirasa);
         else if (dbField === 'mutet_ideje') newVal = normalize(validatedPatient.mutetIdeje);
         else if (dbField === 'szovettani_diagnozis') newVal = normalize(validatedPatient.szovettaniDiagnozis);
         else if (dbField === 'nyaki_blokkdisszekcio') newVal = normalize(validatedPatient.nyakiBlokkdisszekcio);
