@@ -52,7 +52,7 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { startTime, status } = body;
+    const { startTime, status, cim, teremszam } = body;
 
     const updates: string[] = [];
     const values: any[] = [];
@@ -87,6 +87,18 @@ export async function PUT(
       paramIndex++;
     }
 
+    if (cim !== undefined) {
+      updates.push(`cim = $${paramIndex}`);
+      values.push(cim || null);
+      paramIndex++;
+    }
+
+    if (teremszam !== undefined) {
+      updates.push(`teremszam = $${paramIndex}`);
+      values.push(teremszam || null);
+      paramIndex++;
+    }
+
     if (updates.length === 0) {
       return NextResponse.json(
         { error: 'Nincs módosítandó mező' },
@@ -103,6 +115,8 @@ export async function PUT(
         id,
         start_time as "startTime",
         status,
+        cim,
+        teremszam,
         created_at as "createdAt",
         updated_at as "updatedAt"
     `;

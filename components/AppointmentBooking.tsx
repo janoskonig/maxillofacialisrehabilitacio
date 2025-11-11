@@ -8,6 +8,8 @@ interface TimeSlot {
   id: string;
   startTime: string;
   status: 'available' | 'booked';
+  cim?: string | null;
+  teremszam?: string | null;
   userEmail?: string;
 }
 
@@ -289,6 +291,8 @@ export function AppointmentBooking() {
                   {availableSlotsForModification.map((slot) => (
                     <option key={slot.id} value={slot.id}>
                       {formatDateTime(slot.startTime)}
+                      {slot.cim ? ` - ${slot.cim}` : ''}
+                      {slot.teremszam ? ` (Terem: ${slot.teremszam})` : ''}
                     </option>
                   ))}
                 </select>
@@ -354,6 +358,8 @@ export function AppointmentBooking() {
               {availableSlotsOnly.map((slot) => (
                 <option key={slot.id} value={slot.id}>
                   {formatDateTime(slot.startTime)}
+                  {slot.cim ? ` - ${slot.cim}` : ''}
+                  {slot.teremszam ? ` (Terem: ${slot.teremszam})` : ''}
                 </option>
               ))}
             </select>

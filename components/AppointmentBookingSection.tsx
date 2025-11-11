@@ -9,6 +9,8 @@ interface TimeSlot {
   id: string;
   startTime: string;
   status: 'available' | 'booked';
+  cim?: string | null;
+  teremszam?: string | null;
   userEmail?: string;
 }
 
@@ -442,7 +444,10 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
                 <option value="">Válasszon időpontot...</option>
                 {availableSlotsOnly.map((slot) => (
                   <option key={slot.id} value={slot.id}>
-                    {formatDateTime(slot.startTime)} {slot.userEmail ? `- ${slot.userEmail}` : ''}
+                    {formatDateTime(slot.startTime)}
+                    {slot.cim ? ` - ${slot.cim}` : ''}
+                    {slot.teremszam ? ` (Terem: ${slot.teremszam})` : ''}
+                    {slot.userEmail ? ` - ${slot.userEmail}` : ''}
                   </option>
                 ))}
               </select>
@@ -461,12 +466,28 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
                 <span className="font-medium">Kiválasztott időpont:</span>{' '}
                 {formatDateTime(availableSlotsOnly.find(s => s.id === selectedSlot)?.startTime || '')}
               </div>
-              {availableSlotsOnly.find(s => s.id === selectedSlot)?.userEmail && (
-                <div className="text-sm text-gray-600 mt-1">
-                  <span className="font-medium">Fogpótlástanász:</span>{' '}
-                  {availableSlotsOnly.find(s => s.id === selectedSlot)?.userEmail}
-                </div>
-              )}
+              {(() => {
+                const selectedSlotData = availableSlotsOnly.find(s => s.id === selectedSlot);
+                return (
+                  <>
+                    {selectedSlotData?.cim && (
+                      <div className="text-sm text-gray-600 mt-1">
+                        <span className="font-medium">Cím:</span> {selectedSlotData.cim}
+                      </div>
+                    )}
+                    {selectedSlotData?.teremszam && (
+                      <div className="text-sm text-gray-600 mt-1">
+                        <span className="font-medium">Teremszám:</span> {selectedSlotData.teremszam}
+                      </div>
+                    )}
+                    {selectedSlotData?.userEmail && (
+                      <div className="text-sm text-gray-600 mt-1">
+                        <span className="font-medium">Fogpótlástanász:</span> {selectedSlotData.userEmail}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           )}
           {availableSlotsOnly.length > 0 && (

@@ -23,6 +23,8 @@ export async function GET(request: NextRequest) {
         ats.id,
         ats.start_time as "startTime",
         ats.status,
+        ats.cim,
+        ats.teremszam,
         ats.created_at as "createdAt",
         ats.updated_at as "updatedAt",
         u.email as "userEmail"
@@ -62,7 +64,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { startTime } = body;
+    const { startTime, cim, teremszam } = body;
 
     if (!startTime) {
       return NextResponse.json(
@@ -139,15 +141,17 @@ export async function POST(request: NextRequest) {
 
     // Insert time slot
     const result = await pool.query(
-      `INSERT INTO available_time_slots (user_id, start_time, status)
-       VALUES ($1, $2, 'available')
+      `INSERT INTO available_time_slots (user_id, start_time, status, cim, teremszam)
+       VALUES ($1, $2, 'available', $3, $4)
        RETURNING 
          id,
          start_time as "startTime",
          status,
+         cim,
+         teremszam,
          created_at as "createdAt",
          updated_at as "updatedAt"`,
-      [userId, startDate.toISOString()]
+      [userId, startDate.toISOString(), cim || null, teremszam || null]
     );
 
     return NextResponse.json({ timeSlot: result.rows[0] }, { status: 201 });

@@ -9,6 +9,8 @@ interface TimeSlot {
   id: string;
   startTime: string;
   status: 'available' | 'booked';
+  cim?: string | null;
+  teremszam?: string | null;
   createdAt: string;
   updatedAt: string;
   userEmail?: string;
@@ -34,6 +36,8 @@ export function TimeSlotsManager() {
   const [showForm, setShowForm] = useState(false);
   const [editingSlot, setEditingSlot] = useState<TimeSlot | null>(null);
   const [newStartTime, setNewStartTime] = useState<Date | null>(null);
+  const [newCim, setNewCim] = useState<string>('');
+  const [newTeremszam, setNewTeremszam] = useState<string>('');
   const [modifyingAppointment, setModifyingAppointment] = useState<{ appointmentId: string; timeSlotId: string; startTime: string } | null>(null);
   const [newTimeSlotId, setNewTimeSlotId] = useState<string>('');
   const [userRole, setUserRole] = useState<string>('');
@@ -143,7 +147,11 @@ export function TimeSlotsManager() {
     const isoDateTime = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetString}`;
 
     try {
-      const requestBody: any = { startTime: isoDateTime };
+      const requestBody: any = { 
+        startTime: isoDateTime,
+        cim: newCim || null,
+        teremszam: newTeremszam || null
+      };
       
       // If admin and user selected, include userId
       if (userRole === 'admin' && selectedUserId) {
@@ -162,6 +170,8 @@ export function TimeSlotsManager() {
       if (response.ok) {
         await loadTimeSlots();
         setNewStartTime(null);
+        setNewCim('');
+        setNewTeremszam('');
         setSelectedUserId('');
         setShowForm(false);
         alert('Időpont sikeresen létrehozva!');
@@ -318,6 +328,12 @@ export function TimeSlotsManager() {
                 Időpont
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                Cím
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                Teremszám
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                 Fogpótlástanász
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
@@ -348,6 +364,16 @@ export function TimeSlotsManager() {
                         {formatDateTime(slot.startTime)}
                       </span>
                     </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`text-sm ${isPast ? 'text-gray-500' : 'text-gray-600'}`}>
+                      {slot.cim || '-'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`text-sm ${isPast ? 'text-gray-500' : 'text-gray-600'}`}>
+                      {slot.teremszam || '-'}
+                    </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`text-sm ${isPast ? 'text-gray-500' : 'text-gray-600'}`}>
@@ -512,6 +538,8 @@ export function TimeSlotsManager() {
           onClick={() => {
             setEditingSlot(null);
             setNewStartTime(null);
+            setNewCim('');
+            setNewTeremszam('');
             setShowForm(!showForm);
           }}
           className="btn-primary flex items-center gap-2"
@@ -546,33 +574,65 @@ export function TimeSlotsManager() {
                 </select>
               </div>
             )}
-            <div className="flex gap-2">
-              <div className="flex-1">
-                <DateTimePicker
-                  selected={newStartTime}
-                  onChange={(date: Date | null) => setNewStartTime(date)}
-                  minDate={new Date()}
-                  placeholder="Válasszon dátumot és időt"
-                  className="form-input"
-                />
+            <div className="space-y-4">
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <DateTimePicker
+                    selected={newStartTime}
+                    onChange={(date: Date | null) => setNewStartTime(date)}
+                    minDate={new Date()}
+                    placeholder="Válasszon dátumot és időt"
+                    className="form-input"
+                  />
+                </div>
               </div>
-              <button
-                onClick={handleCreateTimeSlot}
-                className="btn-primary"
-              >
-                Mentés
-              </button>
-              <button
-                onClick={() => {
-                  setShowForm(false);
-                  setNewStartTime(null);
-                  setSelectedUserId('');
-                  setEditingSlot(null);
-                }}
-                className="btn-secondary"
-              >
-                Mégse
-              </button>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Cím
+                  </label>
+                  <input
+                    type="text"
+                    value={newCim}
+                    onChange={(e) => setNewCim(e.target.value)}
+                    placeholder="Pl. Budapest, Fő utca 1."
+                    className="form-input w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Teremszám
+                  </label>
+                  <input
+                    type="text"
+                    value={newTeremszam}
+                    onChange={(e) => setNewTeremszam(e.target.value)}
+                    placeholder="Pl. 101"
+                    className="form-input w-full"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleCreateTimeSlot}
+                  className="btn-primary"
+                >
+                  Mentés
+                </button>
+                <button
+                  onClick={() => {
+                    setShowForm(false);
+                    setNewStartTime(null);
+                    setNewCim('');
+                    setNewTeremszam('');
+                    setSelectedUserId('');
+                    setEditingSlot(null);
+                  }}
+                  className="btn-secondary"
+                >
+                  Mégse
+                </button>
+              </div>
             </div>
           </div>
         </div>
