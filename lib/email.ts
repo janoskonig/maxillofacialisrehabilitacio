@@ -76,6 +76,8 @@ function htmlToText(html: string): string {
  * - Reply-To header
  * - Plain text version
  * - Proper From format with name
+ * - BCC for multiple recipients (privacy)
+ * - Proper MIME headers
  * - Message-ID and Date headers (handled by nodemailer)
  */
 export async function sendEmail(options: SendEmailOptions): Promise<void> {
@@ -96,23 +98,59 @@ export async function sendEmail(options: SendEmailOptions): Promise<void> {
     // Generate plain text version if not provided
     const textVersion = options.text || htmlToText(options.html);
 
-    const mailOptions = {
+    // Handle multiple recipients: use BCC to protect privacy and avoid spam triggers
+    const recipients = Array.isArray(options.to) ? options.to : [options.to];
+    const isMultipleRecipients = recipients.length > 1;
+    
+    // For multiple recipients, send to first recipient in "to" and rest in BCC
+    // This prevents all recipients from seeing each other's emails (privacy)
+    // and reduces spam score (mass emails with visible recipients are spam triggers)
+    const toAddress = isMultipleRecipients ? recipients[0] : recipients[0];
+    const bccAddresses = isMultipleRecipients ? recipients.slice(1) : undefined;
+
+    // Build proper HTML with meta tags for better email client compatibility
+    const htmlWithMeta = `
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+</head>
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;">
+  ${options.html}
+</body>
+</html>`.trim();
+
+    const mailOptions: any = {
       from: fromAddress,
-      to: Array.isArray(options.to) ? options.to.join(', ') : options.to,
+      to: toAddress,
       replyTo: options.replyTo || SMTP_REPLY_TO,
       subject: options.subject,
       text: textVersion,
-      html: options.html,
+      html: htmlWithMeta,
+      // Use BCC for multiple recipients to protect privacy
+      ...(bccAddresses && bccAddresses.length > 0 && { bcc: bccAddresses }),
       attachments: options.attachments?.map(att => ({
         filename: att.filename,
         content: att.content,
         contentType: att.contentType,
       })),
-      // Additional headers for better deliverability
+      // Additional headers for better deliverability and spam prevention
       headers: {
+        'MIME-Version': '1.0',
+        // Content-Type is automatically set by nodemailer based on html/text
         'X-Mailer': 'Maxillofaciális Rehabilitáció Rendszer',
-        'X-Priority': '3', // Normal priority
-        'Importance': 'normal',
+        // Remove X-Priority and Importance - these can trigger spam filters
+        // Instead, let email clients determine priority naturally
+        'Precedence': isMultipleRecipients ? 'bulk' : 'normal',
+        'Auto-Submitted': 'no', // Indicates this is not an auto-generated email
+        'List-Id': '<maxillofacialis-rehabilitacio.system>', // Helps identify legitimate emails
+      },
+      // Set return path for bounce handling
+      envelope: {
+        from: SMTP_FROM,
+        to: recipients,
       },
     };
 
