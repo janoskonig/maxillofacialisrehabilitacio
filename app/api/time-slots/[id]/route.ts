@@ -34,10 +34,10 @@ export async function PUT(
       );
     }
 
-    const timeSlot = timeSlotResult.rows[0];
+    const existingTimeSlot = timeSlotResult.rows[0];
 
     // Only fogpótlástanász can update their own time slots, or admin
-    if (auth.role === 'fogpótlástanász' && timeSlot.user_email !== auth.email) {
+    if (auth.role === 'fogpótlástanász' && existingTimeSlot.user_email !== auth.email) {
       return NextResponse.json(
         { error: 'Nincs jogosultsága ezt az időpontot módosítani' },
         { status: 403 }
