@@ -604,13 +604,18 @@ export async function syncTimeSlotsFromGoogleCalendar(userId: string): Promise<{
     const events = await fetchGoogleCalendarEvents(userId, now, timeMax, sourceCalendarId);
     console.log(`[syncTimeSlotsFromGoogleCalendar] Found ${events.length} total events from ${now.toISOString()} to ${timeMax.toISOString()}`);
     
-    // Keresjük a "szabad" nevű eseményeket (pontos egyezés)
-    const szabadEvents = events.filter((event) => event.summary === 'szabad');
+    // Keresjük a "szabad" vagy "szabad X" formátumú eseményeket
+    // Regex: szabad\s+(\d+) - "szabad" szó után opcionális szóköz(ök) és szám
+    const szabadPattern = /^szabad\s+(\d+)$/i;
+    const szabadEvents = events.filter((event) => {
+      const summary = event.summary || '';
+      return summary.toLowerCase() === 'szabad' || szabadPattern.test(summary);
+    });
     console.log(`[syncTimeSlotsFromGoogleCalendar] Found ${szabadEvents.length} "szabad" events`);
     
     // Lekérjük az adatbázisban lévő Google Calendar-ból származó időpontokat
     const existingSlotsResult = await pool.query(
-      `SELECT id, google_calendar_event_id, start_time, status 
+      `SELECT id, google_calendar_event_id, start_time, status, teremszam 
        FROM available_time_slots 
        WHERE user_id = $1 AND source = 'google_calendar' AND google_calendar_event_id IS NOT NULL`,
       [userId]
@@ -620,6 +625,7 @@ export async function syncTimeSlotsFromGoogleCalendar(userId: string): Promise<{
       id: string;
       startTime: Date;
       status: string;
+      teremszam: string | null;
     }>();
     
     existingSlotsResult.rows.forEach((row) => {
@@ -628,6 +634,7 @@ export async function syncTimeSlotsFromGoogleCalendar(userId: string): Promise<{
           id: row.id,
           startTime: new Date(row.start_time),
           status: row.status,
+          teremszam: row.teremszam,
         });
       }
     });
@@ -656,28 +663,59 @@ export async function syncTimeSlotsFromGoogleCalendar(userId: string): Promise<{
         continue;
       }
       
+      // Kinyerjük a teremszámot a "szabad X" formátumból
+      let teremszam: string | null = null;
+      const summary = event.summary || '';
+      const match = summary.match(/^szabad\s+(\d+)$/i);
+      if (match && match[1]) {
+        teremszam = match[1];
+      }
+      
       const existingSlot = existingSlots.get(event.id);
       
       if (existingSlot) {
         // Ha van már ilyen időpont, ellenőrizzük, hogy változott-e
-        if (existingSlot.startTime.getTime() !== startTime.getTime()) {
+        const startTimeChanged = existingSlot.startTime.getTime() !== startTime.getTime();
+        const teremszamChanged = existingSlot.teremszam !== teremszam;
+        
+        if (startTimeChanged || teremszamChanged) {
           // Csak akkor frissítünk, ha nincs lefoglalva
           if (existingSlot.status === 'available') {
-            await pool.query(
-              `UPDATE available_time_slots 
-               SET start_time = $1, updated_at = CURRENT_TIMESTAMP 
-               WHERE id = $2`,
-              [startTime.toISOString(), existingSlot.id]
-            );
-            result.updated++;
+            const updates: string[] = [];
+            const values: any[] = [];
+            let paramIndex = 1;
+            
+            if (startTimeChanged) {
+              updates.push(`start_time = $${paramIndex}`);
+              values.push(startTime.toISOString());
+              paramIndex++;
+            }
+            
+            if (teremszamChanged) {
+              updates.push(`teremszam = $${paramIndex}`);
+              values.push(teremszam);
+              paramIndex++;
+            }
+            
+            if (updates.length > 0) {
+              values.push(existingSlot.id);
+              await pool.query(
+                `UPDATE available_time_slots 
+                 SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP 
+                 WHERE id = $${paramIndex}`,
+                values
+              );
+              result.updated++;
+            }
           }
         }
       } else {
         // Új időpont létrehozása
+        // cim-et nem állítjuk be (marad NULL, majd az API alapértelmezett értéket használ)
         await pool.query(
-          `INSERT INTO available_time_slots (user_id, start_time, status, google_calendar_event_id, source)
-           VALUES ($1, $2, 'available', $3, 'google_calendar')`,
-          [userId, startTime.toISOString(), event.id]
+          `INSERT INTO available_time_slots (user_id, start_time, status, google_calendar_event_id, source, teremszam)
+           VALUES ($1, $2, 'available', $3, 'google_calendar', $4)`,
+          [userId, startTime.toISOString(), event.id, teremszam]
         );
         result.created++;
       }

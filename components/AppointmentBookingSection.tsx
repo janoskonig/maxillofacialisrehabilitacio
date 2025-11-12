@@ -45,10 +45,11 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
       if (response.ok) {
         const data = await response.json();
         const allSlots = data.timeSlots || [];
-        // Csak a jövőbeli időpontokat jelenítjük meg
+        // Csak a jövőbeli időpontokat jelenítjük meg (4 óra késleltetéssel)
         const now = new Date();
+        const fourHoursFromNow = new Date(now.getTime() - 4 * 60 * 60 * 1000);
         const futureSlots = allSlots.filter((slot: TimeSlot) => 
-          new Date(slot.startTime) >= now
+          new Date(slot.startTime) >= fourHoursFromNow
         );
         setAvailableSlots(futureSlots);
       }
@@ -442,14 +443,18 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
                 disabled={isViewOnly}
               >
                 <option value="">Válasszon időpontot...</option>
-                {availableSlotsOnly.map((slot) => (
-                  <option key={slot.id} value={slot.id}>
-                    {formatDateTime(slot.startTime)}
-                    {slot.cim ? ` - ${slot.cim}` : ''}
-                    {slot.teremszam ? ` (Terem: ${slot.teremszam})` : ''}
-                    {slot.userEmail ? ` - ${slot.userEmail}` : ''}
-                  </option>
-                ))}
+                {availableSlotsOnly.map((slot) => {
+                  const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
+                  const displayCim = slot.cim || DEFAULT_CIM;
+                  return (
+                    <option key={slot.id} value={slot.id}>
+                      {formatDateTime(slot.startTime)}
+                      {` - ${displayCim}`}
+                      {slot.teremszam ? ` (Terem: ${slot.teremszam})` : ''}
+                      {slot.userEmail ? ` - ${slot.userEmail}` : ''}
+                    </option>
+                  );
+                })}
               </select>
             ) : (
               <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
@@ -470,11 +475,15 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
                 const selectedSlotData = availableSlotsOnly.find(s => s.id === selectedSlot);
                 return (
                   <>
-                    {selectedSlotData?.cim && (
-                      <div className="text-sm text-gray-600 mt-1">
-                        <span className="font-medium">Cím:</span> {selectedSlotData.cim}
-                      </div>
-                    )}
+                    {(() => {
+                      const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
+                      const displayCim = selectedSlotData?.cim || DEFAULT_CIM;
+                      return (
+                        <div className="text-sm text-gray-600 mt-1">
+                          <span className="font-medium">Cím:</span> {displayCim}
+                        </div>
+                      );
+                    })()}
                     {selectedSlotData?.teremszam && (
                       <div className="text-sm text-gray-600 mt-1">
                         <span className="font-medium">Teremszám:</span> {selectedSlotData.teremszam}

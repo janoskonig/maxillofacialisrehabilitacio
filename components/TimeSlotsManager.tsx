@@ -36,7 +36,6 @@ export function TimeSlotsManager() {
   const [showForm, setShowForm] = useState(false);
   const [editingSlot, setEditingSlot] = useState<TimeSlot | null>(null);
   const [newStartTime, setNewStartTime] = useState<Date | null>(null);
-  const [newCim, setNewCim] = useState<string>('');
   const [newTeremszam, setNewTeremszam] = useState<string>('');
   const [modifyingAppointment, setModifyingAppointment] = useState<{ appointmentId: string; timeSlotId: string; startTime: string } | null>(null);
   const [newTimeSlotId, setNewTimeSlotId] = useState<string>('');
@@ -147,9 +146,11 @@ export function TimeSlotsManager() {
     const isoDateTime = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetString}`;
 
     try {
+      // Alapértelmezett cím: "1088 Budapest, Szentkirályi utca 47"
+      const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
       const requestBody: any = { 
         startTime: isoDateTime,
-        cim: newCim || null,
+        cim: DEFAULT_CIM,
         teremszam: newTeremszam || null
       };
       
@@ -170,7 +171,6 @@ export function TimeSlotsManager() {
       if (response.ok) {
         await loadTimeSlots();
         setNewStartTime(null);
-        setNewCim('');
         setNewTeremszam('');
         setSelectedUserId('');
         setShowForm(false);
@@ -367,7 +367,7 @@ export function TimeSlotsManager() {
                   </td>
                   <td className="px-6 py-4">
                     <span className={`text-sm ${isPast ? 'text-gray-500' : 'text-gray-600'}`}>
-                      {slot.cim || '-'}
+                      {slot.cim || '1088 Budapest, Szentkirályi utca 47'}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -538,7 +538,6 @@ export function TimeSlotsManager() {
           onClick={() => {
             setEditingSlot(null);
             setNewStartTime(null);
-            setNewCim('');
             setNewTeremszam('');
             setShowForm(!showForm);
           }}
@@ -586,31 +585,17 @@ export function TimeSlotsManager() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Cím
-                  </label>
-                  <input
-                    type="text"
-                    value={newCim}
-                    onChange={(e) => setNewCim(e.target.value)}
-                    placeholder="Pl. Budapest, Fő utca 1."
-                    className="form-input w-full"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Teremszám
-                  </label>
-                  <input
-                    type="text"
-                    value={newTeremszam}
-                    onChange={(e) => setNewTeremszam(e.target.value)}
-                    placeholder="Pl. 101"
-                    className="form-input w-full"
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Teremszám
+                </label>
+                <input
+                  type="text"
+                  value={newTeremszam}
+                  onChange={(e) => setNewTeremszam(e.target.value)}
+                  placeholder="Pl. 101"
+                  className="form-input w-full"
+                />
               </div>
               <div className="flex gap-2">
                 <button
@@ -623,7 +608,6 @@ export function TimeSlotsManager() {
                   onClick={() => {
                     setShowForm(false);
                     setNewStartTime(null);
-                    setNewCim('');
                     setNewTeremszam('');
                     setSelectedUserId('');
                     setEditingSlot(null);

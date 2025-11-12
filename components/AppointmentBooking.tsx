@@ -58,10 +58,11 @@ export function AppointmentBooking() {
       if (response.ok) {
         const data = await response.json();
         const allSlots = data.timeSlots || [];
-        // Csak a jövőbeli időpontokat jelenítjük meg
+        // Csak a jövőbeli időpontokat jelenítjük meg (4 óra késleltetéssel)
         const now = new Date();
+        const fourHoursFromNow = new Date(now.getTime() - 4 * 60 * 60 * 1000);
         const futureSlots = allSlots.filter((slot: TimeSlot) => 
-          new Date(slot.startTime) >= now
+          new Date(slot.startTime) >= fourHoursFromNow
         );
         setAvailableSlots(futureSlots);
       }
@@ -291,7 +292,7 @@ export function AppointmentBooking() {
                   {availableSlotsForModification.map((slot) => (
                     <option key={slot.id} value={slot.id}>
                       {formatDateTime(slot.startTime)}
-                      {slot.cim ? ` - ${slot.cim}` : ''}
+                      {` - ${slot.cim || '1088 Budapest, Szentkirályi utca 47'}`}
                       {slot.teremszam ? ` (Terem: ${slot.teremszam})` : ''}
                     </option>
                   ))}

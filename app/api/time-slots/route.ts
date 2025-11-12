@@ -35,7 +35,15 @@ export async function GET(request: NextRequest) {
     const params: any[] = [];
 
     const result = await pool.query(query, params);
-    return NextResponse.json({ timeSlots: result.rows });
+    
+    // Default cím érték: "1088 Budapest, Szentkirályi utca 47"
+    const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
+    const timeSlots = result.rows.map((row: any) => ({
+      ...row,
+      cim: row.cim || DEFAULT_CIM,
+    }));
+    
+    return NextResponse.json({ timeSlots });
   } catch (error) {
     console.error('Error fetching time slots:', error);
     return NextResponse.json(
@@ -65,6 +73,10 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { startTime, cim, teremszam } = body;
+    
+    // Default cím érték: "1088 Budapest, Szentkirályi utca 47"
+    const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
+    const finalCim = cim || DEFAULT_CIM;
 
     if (!startTime) {
       return NextResponse.json(
@@ -151,7 +163,7 @@ export async function POST(request: NextRequest) {
          teremszam,
          created_at as "createdAt",
          updated_at as "updatedAt"`,
-      [userId, startDate.toISOString(), cim || null, teremszam || null]
+      [userId, startDate.toISOString(), finalCim, teremszam || null]
     );
 
     return NextResponse.json({ timeSlot: result.rows[0] }, { status: 201 });

@@ -122,7 +122,15 @@ export async function PUT(
     `;
 
     const result = await pool.query(query, values);
-    return NextResponse.json({ timeSlot: result.rows[0] });
+    
+    // Default cím érték: "1088 Budapest, Szentkirályi utca 47"
+    const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
+    const timeSlot = {
+      ...result.rows[0],
+      cim: result.rows[0].cim || DEFAULT_CIM,
+    };
+    
+    return NextResponse.json({ timeSlot });
   } catch (error) {
     console.error('Error updating time slot:', error);
     return NextResponse.json(

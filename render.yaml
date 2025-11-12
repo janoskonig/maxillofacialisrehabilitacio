@@ -15,7 +15,7 @@ services:
   - type: cron
     name: google-calendar-sync
     env: node
-    schedule: "0 * * * *"  # Óránként futtatás (minden óra 0. percében)
+    schedule: "* * * * *"  # 1 percenként futtatás
     buildCommand: npm install
     startCommand: node scripts/cron-sync.js
     envVars:
