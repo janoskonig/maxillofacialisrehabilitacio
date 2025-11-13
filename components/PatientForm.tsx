@@ -9,6 +9,7 @@ import { X, Calendar, User, Phone, Mail, MapPin, FileText, AlertTriangle, Plus, 
 import { AppointmentBookingSection } from './AppointmentBookingSection';
 import { getCurrentUser } from '@/lib/auth';
 import { DatePicker } from './DatePicker';
+import { savePatient } from '@/lib/storage';
 
 const DRAFT_STORAGE_KEY_PREFIX = 'patientFormDraft_';
 const DRAFT_TIMESTAMP_KEY_PREFIX = 'patientFormDraftTimestamp_';
@@ -116,7 +117,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
   const [institutionOptions, setInstitutionOptions] = useState<string[]>([]);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isNewPatient = !patient && !isViewOnly;
-  const patientId = patient?.id || null;
+  const [currentPatient, setCurrentPatient] = useState<Patient | null | undefined>(patient);
+  const patientId = currentPatient?.id || null;
 
   // State for "vanBeutalo" toggle (default true if bármely beutaló-adat van, or always true for new patients if surgeon role)
   // Note: userRole might not be loaded yet, so we'll update it in useEffect
@@ -255,6 +257,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     setValue,
     watch,
     reset,
+    getValues,
   } = useForm<Patient>({
     resolver: zodResolver(patientSchema),
     defaultValues: patient ? {
@@ -404,6 +407,11 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     }
   }, [isViewOnly, hasRestoredDraft, restoreDraft]);
 
+  // Update currentPatient when patient prop changes
+  useEffect(() => {
+    setCurrentPatient(patient);
+  }, [patient]);
+
   // Implantátumok frissítése amikor patient változik
   useEffect(() => {
     if (patient?.meglevoImplantatumok) {
@@ -422,6 +430,14 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
   // Auto-save draft to localStorage (only for new patients, not for existing patients without changes)
   useEffect(() => {
     if (isViewOnly || !hasRestoredDraft) {
+      return;
+    }
+
+    // Don't save draft if patient has been saved (has an ID)
+    // This prevents saving draft after patient was saved via booking
+    if (currentPatient?.id) {
+      // Patient has been saved, clear any existing draft
+      clearDraft();
       return;
     }
 
@@ -475,7 +491,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [formValues, implantatumok, fogak, isViewOnly, hasRestoredDraft, isNewPatient, isDirty, saveDraft, clearDraft]);
+  }, [formValues, implantatumok, fogak, isViewOnly, hasRestoredDraft, isNewPatient, isDirty, currentPatient, saveDraft, clearDraft]);
 
   // Automatikus intézet beállítás a kezelőorvos alapján
   useEffect(() => {
@@ -701,6 +717,71 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     onSave(data);
   };
 
+  // Save patient for booking - used when booking appointment before saving form
+  const savePatientForBooking = useCallback(async (): Promise<Patient> => {
+    // Get current form values
+    const formData = getValues();
+    
+    // Normalize fogak data
+    const normalizedFogak: Record<string, { status?: 'D' | 'F' | 'M'; description?: string }> = {};
+    Object.entries(fogak).forEach(([toothNumber, value]) => {
+      const normalizedValue = normalizeToothData(value);
+      if (normalizedValue) {
+        normalizedFogak[toothNumber] = normalizedValue;
+      }
+    });
+    
+    // Prepare patient data
+    const patientData: Patient = {
+      ...formData,
+      id: currentPatient?.id,
+      meglevoImplantatumok: implantatumok,
+      meglevoFogak: normalizedFogak,
+    };
+    
+    // Validate using schema
+    const validatedPatient = patientSchema.parse(patientData);
+    
+    // Save patient
+    const savedPatient = await savePatient(validatedPatient);
+    
+    // Update local state
+    setCurrentPatient(savedPatient);
+    
+    // Update implantatumok and fogak state with saved values
+    if (savedPatient.meglevoImplantatumok) {
+      setImplantatumok(savedPatient.meglevoImplantatumok);
+    }
+    if (savedPatient.meglevoFogak) {
+      setFogak(savedPatient.meglevoFogak as Record<string, ToothStatus>);
+    }
+    
+    // Clear draft
+    clearDraft();
+    
+    // Reset form dirty state - this will mark the form as not dirty
+    reset(savedPatient ? {
+      ...savedPatient,
+      szuletesiDatum: formatDateForInput(savedPatient.szuletesiDatum),
+      mutetIdeje: formatDateForInput(savedPatient.mutetIdeje),
+      felvetelDatuma: formatDateForInput(savedPatient.felvetelDatuma),
+      kezelesiTervFelso: savedPatient.kezelesiTervFelso?.map(item => ({
+        ...item,
+        tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+      })) || [],
+      kezelesiTervAlso: savedPatient.kezelesiTervAlso?.map(item => ({
+        ...item,
+        tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+      })) || [],
+      kezelesiTervArcotErinto: savedPatient.kezelesiTervArcotErinto?.map(item => ({
+        ...item,
+        tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+      })) || [],
+    } : undefined, { keepDefaultValues: true });
+    
+    return savedPatient;
+  }, [getValues, fogak, implantatumok, currentPatient, clearDraft, reset, setImplantatumok, setFogak]);
+
   // Check if form has unsaved changes
   const hasUnsavedChanges = useCallback(() => {
     if (isViewOnly) return false;
@@ -708,17 +789,21 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     // Check if form is dirty
     if (isDirty) return true;
     
+    // Use currentPatient for comparison (it gets updated when patient is saved via booking)
+    const referencePatient = currentPatient || patient;
+    
     // Check if implantatumok or fogak have changed
-    const originalImplantatumok = patient?.meglevoImplantatumok || {};
-    const originalFogak = patient?.meglevoFogak || {};
+    const originalImplantatumok = referencePatient?.meglevoImplantatumok || {};
+    const originalFogak = referencePatient?.meglevoFogak || {};
     
     const implantatumokChanged = JSON.stringify(implantatumok) !== JSON.stringify(originalImplantatumok);
     const fogakChanged = JSON.stringify(fogak) !== JSON.stringify(originalFogak);
     
     if (implantatumokChanged || fogakChanged) return true;
     
-    // Check if any form field has value (for new patients)
-    if (isNewPatient) {
+    // Check if any form field has value (for new patients that haven't been saved yet)
+    // If currentPatient has an ID, it means the patient has been saved, so don't check this
+    if (isNewPatient && !currentPatient?.id) {
       const hasAnyValue = Object.values(formValues).some(value => {
         if (value === null || value === undefined || value === '') return false;
         if (typeof value === 'object' && Object.keys(value).length === 0) return false;
@@ -732,7 +817,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     }
     
     return false;
-  }, [isViewOnly, isDirty, patient, implantatumok, fogak, isNewPatient, formValues]);
+  }, [isViewOnly, isDirty, patient, currentPatient, implantatumok, fogak, isNewPatient, formValues]);
 
   // Handle form cancellation - check for unsaved changes
   const handleCancel = () => {
@@ -741,11 +826,21 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       return;
     }
     
+    // If patient has been saved (has an ID), don't prompt for draft save
+    // This prevents prompting after patient was saved via booking
+    if (currentPatient?.id && !hasUnsavedChanges()) {
+      // Patient is saved and no changes, just close
+      clearDraft();
+      onCancel();
+      return;
+    }
+    
     // For existing patients: only prompt if form is dirty (has actual changes)
     // For new patients: check if there's any data entered
     if (isNewPatient) {
       // New patient: check if there's any data
-      if (hasUnsavedChanges()) {
+      // But only if patient hasn't been saved yet
+      if (!currentPatient?.id && hasUnsavedChanges()) {
         const shouldSave = window.confirm(
           'Van nem mentett változás az űrlapban. Szeretné menteni az eddig beírt adatokat piszkozatként? (A piszkozat később visszatölthető, de az adatok csak a "Beteg mentése" gombbal kerülnek az adatbázisba.)'
         );
@@ -771,12 +866,15 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           // User chose not to save, clear draft
           clearDraft();
         }
+      } else {
+        // Patient has been saved or no changes, clear draft
+        clearDraft();
       }
     } else {
       // Existing patient: only prompt if form is dirty (has actual changes)
       // The isDirty flag should catch all changes including implantatumok and fogak
       // since we use setValue to update the form when these change
-      if (isDirty) {
+      if (hasUnsavedChanges()) {
         const shouldSave = window.confirm(
           'Van nem mentett változás az űrlapban. Szeretné menteni az eddig beírt adatokat piszkozatként? (A piszkozat később visszatölthető, de az adatok csak a "Beteg mentése" gombbal kerülnek az adatbázisba.)'
         );
@@ -2323,7 +2421,15 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         {/* For surgeons, always allow editing appointments even if form is view-only */}
         <AppointmentBookingSection 
           patientId={patientId} 
-          isViewOnly={userRole === 'sebészorvos' ? false : isViewOnly} 
+          isViewOnly={userRole === 'sebészorvos' ? false : isViewOnly}
+          onSavePatientBeforeBooking={!isViewOnly ? savePatientForBooking : undefined}
+          isPatientDirty={!isViewOnly && (isDirty || hasUnsavedChanges())}
+          isNewPatient={isNewPatient}
+          onPatientSaved={(savedPatient) => {
+            setCurrentPatient(savedPatient);
+            // Also notify parent component
+            onSave(savedPatient);
+          }}
         />
 
         {/* Form Actions */}

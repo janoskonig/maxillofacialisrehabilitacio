@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Calendar, Clock, Download, CheckCircle2, Plus, X } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth';
 import { DateTimePicker } from './DateTimePicker';
+import { Patient } from '@/lib/types';
 
 interface TimeSlot {
   id: string;
@@ -27,9 +28,20 @@ interface Appointment {
 interface AppointmentBookingSectionProps {
   patientId: string | null | undefined;
   isViewOnly?: boolean;
+  onSavePatientBeforeBooking?: () => Promise<Patient>;
+  isPatientDirty?: boolean;
+  isNewPatient?: boolean;
+  onPatientSaved?: (savedPatient: Patient) => void;
 }
 
-export function AppointmentBookingSection({ patientId, isViewOnly = false }: AppointmentBookingSectionProps) {
+export function AppointmentBookingSection({ 
+  patientId, 
+  isViewOnly = false,
+  onSavePatientBeforeBooking,
+  isPatientDirty = false,
+  isNewPatient = false,
+  onPatientSaved
+}: AppointmentBookingSectionProps) {
   const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -130,8 +142,37 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
   }, [patientId]);
 
   const handleBookAppointment = async () => {
-    if (!patientId || !selectedSlot) {
+    if (!selectedSlot) {
       alert('Kérjük, válasszon időpontot!');
+      return;
+    }
+
+    // Check if patient needs to be saved first
+    let currentPatientId = patientId;
+    if ((isNewPatient || isPatientDirty) && onSavePatientBeforeBooking) {
+      try {
+        const savedPatient = await onSavePatientBeforeBooking();
+        currentPatientId = savedPatient.id;
+        
+        // Notify parent component about the saved patient
+        if (onPatientSaved) {
+          onPatientSaved(savedPatient);
+        }
+        
+        // Reload data with new patient ID
+        if (currentPatientId) {
+          await loadAppointments();
+        }
+      } catch (error: any) {
+        console.error('Error saving patient before booking:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Hiba történt a beteg mentésekor';
+        alert(`Hiba a beteg mentésekor: ${errorMessage}. Az időpont foglalása megszakadt.`);
+        return;
+      }
+    }
+
+    if (!currentPatientId) {
+      alert('Hiba: A beteg ID nem elérhető. Kérjük, mentse el először a beteg adatait.');
       return;
     }
 
@@ -147,7 +188,7 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
         },
         credentials: 'include',
         body: JSON.stringify({
-          patientId: patientId,
+          patientId: currentPatientId,
           timeSlotId: selectedSlot,
           cim: customCim || (availableCims.length === 1 ? DEFAULT_CIM : null),
           teremszam: customTeremszam.trim() || null,
@@ -219,7 +260,7 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
   };
 
   const handleCreateAndBookNewSlot = async () => {
-    if (!patientId || !newSlotDateTime) {
+    if (!newSlotDateTime) {
       alert('Kérjük, válasszon dátumot és időt!');
       return;
     }
@@ -227,6 +268,35 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
     // Check if date is in the future
     if (newSlotDateTime <= new Date()) {
       alert('Az időpont csak jövőbeli dátum lehet!');
+      return;
+    }
+
+    // Check if patient needs to be saved first
+    let currentPatientId = patientId;
+    if ((isNewPatient || isPatientDirty) && onSavePatientBeforeBooking) {
+      try {
+        const savedPatient = await onSavePatientBeforeBooking();
+        currentPatientId = savedPatient.id;
+        
+        // Notify parent component about the saved patient
+        if (onPatientSaved) {
+          onPatientSaved(savedPatient);
+        }
+        
+        // Reload data with new patient ID
+        if (currentPatientId) {
+          await loadAppointments();
+        }
+      } catch (error: any) {
+        console.error('Error saving patient before booking:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Hiba történt a beteg mentésekor';
+        alert(`Hiba a beteg mentésekor: ${errorMessage}. Az időpont létrehozása megszakadt.`);
+        return;
+      }
+    }
+
+    if (!currentPatientId) {
+      alert('Hiba: A beteg ID nem elérhető. Kérjük, mentse el először a beteg adatait.');
       return;
     }
 
@@ -282,7 +352,7 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
         },
         credentials: 'include',
         body: JSON.stringify({
-          patientId: patientId,
+          patientId: currentPatientId,
           timeSlotId: newTimeSlotId,
         }),
       });
@@ -599,11 +669,11 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
           {availableSlotsOnly.length > 0 && (
             <button
               onClick={handleBookAppointment}
-              disabled={!selectedSlot || isViewOnly}
+              disabled={!selectedSlot || isViewOnly || (!patientId && !onSavePatientBeforeBooking)}
               className="btn-primary w-full flex items-center justify-center gap-2"
             >
               <Clock className="w-4 h-4" />
-              Időpont foglalása
+              {isNewPatient || isPatientDirty ? 'Beteg mentése és időpont foglalása' : 'Időpont foglalása'}
             </button>
           )}
         </div>
