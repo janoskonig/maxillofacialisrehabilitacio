@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { SignJWT } from 'jose';
+import { sendRegistrationNotificationToAdmins } from '@/lib/email';
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'change-this-to-a-random-secret-in-production'
@@ -154,6 +155,29 @@ export async function POST(request: NextRequest) {
       );
     } catch (e) {
       console.error('Failed to log registration activity:', e);
+    }
+
+    // Email értesítés küldése az adminoknak
+    try {
+      const adminResult = await pool.query(
+        `SELECT email FROM users WHERE role = 'admin' AND active = true`
+      );
+      const adminEmails = adminResult.rows.map((row: { email: string }) => row.email);
+      
+      if (adminEmails.length > 0) {
+        await sendRegistrationNotificationToAdmins(
+          adminEmails,
+          user.email,
+          user.doktor_neve || user.email,
+          user.role,
+          user.intezmeny || institution,
+          user.hozzaferes_indokolas || accessReason.trim(),
+          new Date()
+        );
+      }
+    } catch (emailError) {
+      console.error('Failed to send registration notification email to admins:', emailError);
+      // Nem dobunk hibát, mert a regisztráció sikeres volt
     }
 
     // Visszatérési válasz - NEM jelentkeztetjük be, mert inaktív

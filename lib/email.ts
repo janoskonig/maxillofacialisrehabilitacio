@@ -662,3 +662,55 @@ export async function sendAppointmentTimeSlotFreedNotification(
     html,
   });
 }
+
+/**
+ * Send registration notification to admins
+ */
+export async function sendRegistrationNotificationToAdmins(
+  adminEmails: string[],
+  userEmail: string,
+  userName: string,
+  role: string,
+  institution: string,
+  accessReason: string,
+  registrationDate: Date
+): Promise<void> {
+  if (adminEmails.length === 0) {
+    return;
+  }
+
+  // Szerepkör leképezés felhasználóbarát névre
+  const roleMap: Record<string, string> = {
+    'sebészorvos': 'Sebész',
+    'fogpótlástanász': 'Fogpótlástanász',
+    'technikus': 'Technikus',
+    'admin': 'Adminisztrátor',
+    'editor': 'Szerkesztő',
+    'viewer': 'Megtekintő',
+  };
+  const roleDisplayName = roleMap[role] || role;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #2563eb;">Új regisztráció</h2>
+      <p>Kedves adminisztrátor,</p>
+      <p>Egy új felhasználó regisztrált a rendszerben és jóváhagyásra vár:</p>
+      <ul>
+        <li><strong>Email cím:</strong> ${userEmail}</li>
+        <li><strong>Név:</strong> ${userName}</li>
+        <li><strong>Szerepkör:</strong> ${roleDisplayName}</li>
+        <li><strong>Intézmény:</strong> ${institution}</li>
+        <li><strong>Hozzáférés indoklása:</strong> ${accessReason}</li>
+        <li><strong>Regisztráció dátuma:</strong> ${registrationDate.toLocaleString('hu-HU')}</li>
+      </ul>
+      <p>Kérjük, jelentkezzen be az adminisztrációs felületre, hogy jóváhagyja vagy elutasítsa a regisztrációt.</p>
+      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: adminEmails,
+    subject: 'Új regisztráció - Maxillofaciális Rehabilitáció',
+    html,
+  });
+}
