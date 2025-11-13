@@ -1,13 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { User, Lock, Eye, EyeOff, Mail, UserCircle } from 'lucide-react';
 import Link from 'next/link';
 import { Logo } from '@/components/Logo';
 
 type RegistrationRole = 'sebész' | 'fogpótos' | 'technikus';
-type Institution = 'Arc-, Állcsont-, ...' | 'Észak-Pesti Centrumkórház' | 'OOI Fej-Nyaki...';
 
 export default function Register() {
   const [email, setEmail] = useState('');
@@ -15,13 +14,88 @@ export default function Register() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [role, setRole] = useState<RegistrationRole | ''>('');
-  const [institution, setInstitution] = useState<Institution | ''>('');
+  const [institution, setInstitution] = useState('');
+  const [institutionOptions, setInstitutionOptions] = useState<string[]>([]);
+  const [filteredInstitutions, setFilteredInstitutions] = useState<string[]>([]);
+  const [showInstitutionDropdown, setShowInstitutionDropdown] = useState(false);
   const [accessReason, setAccessReason] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const institutionInputRef = useRef<HTMLInputElement>(null);
+  const institutionDropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+
+  // Betöltjük az intézményeket az API-ból
+  useEffect(() => {
+    const fetchInstitutions = async () => {
+      try {
+        const response = await fetch('/api/institutions');
+        if (response.ok) {
+          const data = await response.json();
+          setInstitutionOptions(data.institutions || []);
+          setFilteredInstitutions(data.institutions || []);
+        }
+      } catch (error) {
+        console.error('Error fetching institutions:', error);
+      }
+    };
+    fetchInstitutions();
+  }, []);
+
+  // Szűrés az intézmények között
+  const handleInstitutionChange = (value: string) => {
+    setInstitution(value);
+    if (value.trim() === '') {
+      setFilteredInstitutions(institutionOptions);
+      setShowInstitutionDropdown(false);
+    } else {
+      const filtered = institutionOptions.filter(inst =>
+        inst.toLowerCase().includes(value.toLowerCase())
+      );
+      setFilteredInstitutions(filtered);
+      setShowInstitutionDropdown(filtered.length > 0);
+    }
+  };
+
+  // Fókusz esetén mutatjuk az összes intézményt, ha üres a mező
+  const handleInstitutionFocus = () => {
+    if (institution.trim() === '') {
+      setFilteredInstitutions(institutionOptions);
+    }
+    if (institutionOptions.length > 0) {
+      setShowInstitutionDropdown(true);
+    }
+  };
+
+  // Intézmény kiválasztása a dropdown-ból
+  const selectInstitution = (value: string) => {
+    setInstitution(value);
+    setShowInstitutionDropdown(false);
+    if (institutionInputRef.current) {
+      institutionInputRef.current.blur();
+    }
+  };
+
+  // Kattintás kezelése a dropdown-on kívül
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        institutionDropdownRef.current &&
+        !institutionDropdownRef.current.contains(event.target as Node) &&
+        institutionInputRef.current &&
+        !institutionInputRef.current.contains(event.target as Node)
+      ) {
+        setShowInstitutionDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -247,22 +321,40 @@ export default function Register() {
               <label htmlFor="institution" className="block text-sm font-medium text-gray-700">
                 Intézmény
               </label>
-              <div className="mt-1">
-                <select
+              <div className="mt-1 relative">
+                <input
                   id="institution"
                   name="institution"
+                  type="text"
                   required
                   value={institution}
-                  onChange={(e) => setInstitution(e.target.value as Institution)}
+                  onChange={(e) => handleInstitutionChange(e.target.value)}
+                  onFocus={handleInstitutionFocus}
+                  ref={institutionInputRef}
                   className="form-input w-full"
-                >
-                  <option value="">-- Válasszon intézményt --</option>
-                  <option value="Arc-, Állcsont-, ...">Arc-, Állcsont-, ...</option>
-                  <option value="Észak-Pesti Centrumkórház">Észak-Pesti Centrumkórház</option>
-                  <option value="OOI Fej-Nyaki...">OOI Fej-Nyaki...</option>
-                </select>
+                  placeholder="Kezdjen el gépelni vagy válasszon az intézmények közül..."
+                  autoComplete="off"
+                />
+                {showInstitutionDropdown && filteredInstitutions.length > 0 && (
+                  <div
+                    ref={institutionDropdownRef}
+                    className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto"
+                  >
+                    {filteredInstitutions.map((inst, index) => (
+                      <div
+                        key={index}
+                        onClick={() => selectInstitution(inst)}
+                        className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm text-gray-700 border-b border-gray-100 last:border-b-0"
+                      >
+                        {inst}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              <p className="mt-1 text-xs text-gray-500">Kérjük, válassza ki az intézményt</p>
+              <p className="mt-1 text-xs text-gray-500">
+                Kezdjen el gépelni vagy válasszon az eddig regisztrált intézmények közül
+              </p>
             </div>
 
             <div>
