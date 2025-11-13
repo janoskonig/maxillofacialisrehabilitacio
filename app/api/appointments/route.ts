@@ -85,7 +85,14 @@ export async function POST(request: NextRequest) {
     const pool = getDbPool();
 
     // Check if patient exists and was created by this surgeon
-    const patientResult = await queryWithRetry(
+    const patientResult = await queryWithRetry<{
+      id: string;
+      nev: string | null;
+      taj: string | null;
+      email: string | null;
+      nem: string | null;
+      created_by: string | null;
+    }>(
       pool,
       'SELECT id, nev, taj, email, nem, created_by FROM patients WHERE id = $1',
       [patientId]
@@ -105,7 +112,17 @@ export async function POST(request: NextRequest) {
     // Note: Surgeons can book appointments for any patient, but can only edit their own patients
 
     // Check if time slot exists and is available
-    const timeSlotResult = await queryWithRetry(
+    const timeSlotResult = await queryWithRetry<{
+      id: string;
+      start_time: string;
+      status: string;
+      cim: string | null;
+      teremszam: string | null;
+      google_calendar_event_id: string | null;
+      source: string | null;
+      dentist_email: string;
+      dentist_user_id: string;
+    }>(
       pool,
       `SELECT ats.*, u.email as dentist_email, u.id as dentist_user_id
        FROM available_time_slots ats
@@ -213,8 +230,8 @@ export async function POST(request: NextRequest) {
       // Optimalizálás: admin email-eket és dentist full name-t egyszer lekérdezzük
       // ICS fájlt is egyszer generáljuk és újrahasznosítjuk
       const [adminResult, dentistUserResult] = await Promise.all([
-        queryWithRetry(pool, 'SELECT email FROM users WHERE role = $1 AND active = true', ['admin']),
-        queryWithRetry(pool, `SELECT doktor_neve FROM users WHERE email = $1`, [timeSlot.dentist_email])
+        queryWithRetry<{ email: string }>(pool, 'SELECT email FROM users WHERE role = $1 AND active = true', ['admin']),
+        queryWithRetry<{ doktor_neve: string | null }>(pool, `SELECT doktor_neve FROM users WHERE email = $1`, [timeSlot.dentist_email])
       ]);
       
       const adminEmails = adminResult.rows.map((row: { email: string }) => row.email);
@@ -266,7 +283,10 @@ export async function POST(request: NextRequest) {
               let finalEventId: string | null = null;
 
               // Naptár ID-k lekérése a felhasználó beállításaiból
-              const userCalendarResult = await queryWithRetry(
+              const userCalendarResult = await queryWithRetry<{
+                google_calendar_source_calendar_id: string | null;
+                google_calendar_target_calendar_id: string | null;
+              }>(
                 pool,
                 `SELECT google_calendar_source_calendar_id, google_calendar_target_calendar_id 
                  FROM users 
