@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { Patient } from '@/lib/types';
-import { Phone, Mail, Calendar, FileText, Eye, Pencil, CheckCircle2, XCircle, Clock, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
+import { Phone, Mail, Calendar, FileText, Eye, Pencil, CheckCircle2, XCircle, Clock, Trash2, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatDateForDisplay, calculateAge } from '@/lib/dateUtils';
 
 interface PatientListProps {
@@ -28,6 +28,8 @@ interface AppointmentInfo {
 export function PatientList({ patients, onView, onEdit, onDelete, canEdit = false, canDelete = false, userRole, sortField, sortDirection = 'asc', onSort }: PatientListProps) {
   const [appointments, setAppointments] = useState<Record<string, AppointmentInfo>>({});
   const [loadingAppointments, setLoadingAppointments] = useState(false);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const itemsPerPage = 50;
 
   // Load appointments for all roles
   useEffect(() => {
@@ -50,10 +52,12 @@ export function PatientList({ patients, onView, onEdit, onDelete, canEdit = fals
         const dateA = new Date(aptA.startTime).getTime();
         const dateB = new Date(aptB.startTime).getTime();
         const now = Date.now();
+        // 4 órás késleltetés: az időpontok rendezésekor is figyelembe vesszük a 4 órás késleltetést
+        const fourHoursFromNow = now - 4 * 60 * 60 * 1000;
         
-        // Calculate distance from now (absolute value)
-        const distA = Math.abs(dateA - now);
-        const distB = Math.abs(dateB - now);
+        // Calculate distance from 4 hours ago (to account for the delay)
+        const distA = Math.abs(dateA - fourHoursFromNow);
+        const distB = Math.abs(dateB - fourHoursFromNow);
         
         const comparison = distA - distB;
         return sortDirection === 'asc' ? comparison : -comparison;
@@ -61,6 +65,17 @@ export function PatientList({ patients, onView, onEdit, onDelete, canEdit = fals
     }
     return patients;
   }, [patients, appointments, sortField, sortDirection]);
+  
+  // Pagináció
+  const totalPages = Math.ceil(sortedPatients.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedPatients = sortedPatients.slice(startIndex, endIndex);
+  
+  // Reset to first page when patients or sort changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [patients.length, sortField, sortDirection]);
 
   const loadAppointments = async () => {
     try {
@@ -83,17 +98,20 @@ export function PatientList({ patients, onView, onEdit, onDelete, canEdit = fals
         });
         
         // For each patient, find the next (earliest future) appointment
+        // 4 órás késleltetés: csak azokat az időpontokat jelenítjük meg, amelyek kezdete legalább 4 órával a jelenlegi időpont után van
+        const fourHoursFromNow = new Date(now.getTime() - 4 * 60 * 60 * 1000);
+        
         Object.keys(patientAppointments).forEach((patientId) => {
           const apts = patientAppointments[patientId];
           
-          // Filter future appointments and sort by start time
+          // Filter appointments with 4 hour delay and sort by start time
           const futureAppointments = apts
-            .filter((apt: any) => new Date(apt.startTime) > now)
+            .filter((apt: any) => new Date(apt.startTime) >= fourHoursFromNow)
             .sort((a: any, b: any) => 
               new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
             );
           
-          // Only show future appointments - don't show past appointments
+          // Only show appointments with 4 hour delay - don't show appointments that are more than 4 hours past
           if (futureAppointments.length > 0) {
             const nextApt = futureAppointments[0];
             appointmentsMap[patientId] = {
@@ -103,7 +121,7 @@ export function PatientList({ patients, onView, onEdit, onDelete, canEdit = fals
               dentistName: nextApt.dentistName,
             };
           }
-          // If no future appointments, don't add anything to appointmentsMap
+          // If no future appointments (with 4 hour delay), don't add anything to appointmentsMap
           // This way the patient won't show an appointment in the list
         });
         
@@ -188,7 +206,7 @@ export function PatientList({ patients, onView, onEdit, onDelete, canEdit = fals
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {sortedPatients.map((patient) => {
+            {paginatedPatients.map((patient) => {
               const hasNoDoctor = !patient.kezeleoorvos;
               return (
               <tr 
@@ -387,6 +405,66 @@ export function PatientList({ patients, onView, onEdit, onDelete, canEdit = fals
           </tbody>
         </table>
       </div>
+      
+      {/* Pagináció */}
+      {totalPages > 1 && (
+        <div className="mt-4 px-4 py-3 flex items-center justify-between border-t border-gray-200">
+          <div className="text-sm text-gray-600">
+            Oldal {currentPage} / {totalPages} (összesen {sortedPatients.length} beteg)
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className={`px-3 py-2 rounded-md text-sm font-medium ${
+                currentPage === 1
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+              }`}
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum: number;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`px-3 py-2 rounded-md text-sm font-medium ${
+                      currentPage === pageNum
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              className={`px-3 py-2 rounded-md text-sm font-medium ${
+                currentPage === totalPages
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+              }`}
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

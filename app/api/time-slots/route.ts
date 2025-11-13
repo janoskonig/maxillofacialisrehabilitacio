@@ -27,7 +27,8 @@ export async function GET(request: NextRequest) {
         ats.teremszam,
         ats.created_at as "createdAt",
         ats.updated_at as "updatedAt",
-        u.email as "userEmail"
+        u.email as "userEmail",
+        u.doktor_neve as "dentistName"
       FROM available_time_slots ats
       JOIN users u ON ats.user_id = u.id
       ORDER BY ats.start_time ASC

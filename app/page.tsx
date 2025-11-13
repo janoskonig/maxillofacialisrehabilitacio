@@ -117,8 +117,9 @@ export default function Home() {
       const validatedPatient = patientSchema.parse(patientData);
       await savePatient(validatedPatient);
       await loadPatients();
-      setShowForm(false);
-      setEditingPatient(null);
+      // Ne zárjuk be az űrlapot automatikusan - a felhasználó manuálisan zárhatja be
+      // setShowForm(false);
+      // setEditingPatient(null);
       alert('Betegadat sikeresen mentve az adatbázisba!');
     } catch (error: any) {
       console.error('Hiba a beteg mentésekor:', error);

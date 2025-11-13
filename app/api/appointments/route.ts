@@ -29,6 +29,8 @@ export async function GET(request: NextRequest) {
         a.created_at as "createdAt",
         ats.start_time as "startTime",
         ats.status,
+        ats.cim,
+        ats.teremszam,
         p.nev as "patientName",
         p.taj as "patientTaj",
         u.doktor_neve as "dentistName"
@@ -70,7 +72,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { patientId, timeSlotId } = body;
+    const { patientId, timeSlotId, cim, teremszam } = body;
 
     if (!patientId || !timeSlotId) {
       return NextResponse.json(
@@ -83,7 +85,7 @@ export async function POST(request: NextRequest) {
 
     // Check if patient exists and was created by this surgeon
     const patientResult = await pool.query(
-      'SELECT id, nev, taj, email, created_by FROM patients WHERE id = $1',
+      'SELECT id, nev, taj, email, nem, created_by FROM patients WHERE id = $1',
       [patientId]
     );
 
@@ -108,6 +110,9 @@ export async function POST(request: NextRequest) {
        WHERE ats.id = $1`,
       [timeSlotId]
     );
+    
+    // Default cím érték
+    const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
 
     if (timeSlotResult.rows.length === 0) {
       return NextResponse.json(
@@ -159,26 +164,58 @@ export async function POST(request: NextRequest) {
       // Google Calendar event ID inicializálása (null)
       let googleCalendarEventId: string | null = null;
 
-      // Update time slot status to booked
+      // Update time slot status to booked and optionally update cim and teremszam
+      const updateFields: string[] = ['status = $1'];
+      const updateValues: any[] = ['booked'];
+      let paramIndex = 2;
+      
+      if (cim !== undefined && cim !== null && cim.trim() !== '') {
+        updateFields.push(`cim = $${paramIndex}`);
+        updateValues.push(cim.trim());
+        paramIndex++;
+      }
+      
+      if (teremszam !== undefined && teremszam !== null && teremszam.trim() !== '') {
+        updateFields.push(`teremszam = $${paramIndex}`);
+        updateValues.push(teremszam.trim());
+        paramIndex++;
+      }
+      
+      updateValues.push(timeSlotId);
       await pool.query(
-        'UPDATE available_time_slots SET status = $1 WHERE id = $2',
-        ['booked', timeSlotId]
+        `UPDATE available_time_slots SET ${updateFields.join(', ')} WHERE id = $${paramIndex}`,
+        updateValues
       );
 
       await pool.query('COMMIT');
+      
+      // Re-fetch time slot to get updated teremszam
+      const updatedTimeSlotResult = await pool.query(
+        `SELECT ats.*, u.email as dentist_email, u.id as dentist_user_id
+         FROM available_time_slots ats
+         JOIN users u ON ats.user_id = u.id
+         WHERE ats.id = $1`,
+        [timeSlotId]
+      );
+      const updatedTimeSlot = updatedTimeSlotResult.rows[0] || timeSlot;
+
+      // Cím és teremszám információk - itt definiáljuk, hogy mindenhol elérhető legyen
+      const appointmentCim = updatedTimeSlot.cim || DEFAULT_CIM;
+      const appointmentTeremszam = updatedTimeSlot.teremszam || null;
 
       // Send email notification to dentist and create Google Calendar event (parallel)
-      const endTime = new Date(startTime);
+      const updatedStartTime = new Date(updatedTimeSlot.start_time);
+      const endTime = new Date(updatedStartTime);
       endTime.setMinutes(endTime.getMinutes() + 30); // 30 minutes duration
       try {
         const icsFileDentist = await generateIcsFile({
           patientName: patient.nev,
           patientTaj: patient.taj,
-          startTime: startTime,
+          startTime: updatedStartTime,
           surgeonName: auth.email,
           dentistName: timeSlot.dentist_email,
         });
-
+        
         // Promise.all() használata: email és Google Calendar párhuzamosan
         await Promise.all([
           // Email küldés
@@ -186,9 +223,11 @@ export async function POST(request: NextRequest) {
             timeSlot.dentist_email,
             patient.nev,
             patient.taj,
-            startTime,
+            updatedStartTime,
             auth.email,
-            icsFileDentist
+            icsFileDentist,
+            appointmentCim,
+            appointmentTeremszam
           ),
           // Google Calendar esemény kezelése
           (async () => {
@@ -237,7 +276,7 @@ export async function POST(request: NextRequest) {
                   {
                     summary: `Betegfogadás - ${patient.nev || 'Név nélküli beteg'}`,
                     description: `Beteg: ${patient.nev || 'Név nélküli'}\nTAJ: ${patient.taj || 'Nincs megadva'}\nBeutaló orvos: ${auth.email}`,
-                    startTime: startTime,
+                    startTime: updatedStartTime,
                     endTime: endTime,
                     location: 'Maxillofaciális Rehabilitáció',
                     calendarId: targetCalendarId,
@@ -258,7 +297,7 @@ export async function POST(request: NextRequest) {
                   {
                     summary: `Betegfogadás - ${patient.nev || 'Név nélküli beteg'}`,
                     description: `Beteg: ${patient.nev || 'Név nélküli'}\nTAJ: ${patient.taj || 'Nincs megadva'}\nBeutaló orvos: ${auth.email}`,
-                    startTime: startTime,
+                    startTime: updatedStartTime,
                     endTime: endTime,
                     location: 'Maxillofaciális Rehabilitáció',
                     calendarId: targetCalendarId,
@@ -290,10 +329,26 @@ export async function POST(request: NextRequest) {
       // Send email notification to patient if email is available
       if (patient.email && patient.email.trim() !== '') {
         try {
+          console.log('[Appointment Booking] Sending email to patient:', patient.email);
+          // Lekérdezzük a kezelőorvos teljes nevét (doktor_neve)
+          const dentistUserResult = await pool.query(
+            `SELECT doktor_neve FROM users WHERE email = $1`,
+            [timeSlot.dentist_email]
+          );
+          const dentistFullName = dentistUserResult.rows[0]?.doktor_neve || timeSlot.dentist_email;
+          
+          // Lekérdezzük az admin email-eket
+          const adminResult = await pool.query(
+            'SELECT email FROM users WHERE role = $1 AND active = true',
+            ['admin']
+          );
+          const adminEmails = adminResult.rows.map((row: any) => row.email);
+          const adminEmail = adminEmails.length > 0 ? adminEmails[0] : '';
+          
           const icsFilePatient = await generateIcsFile({
             patientName: patient.nev,
             patientTaj: patient.taj,
-            startTime: startTime,
+            startTime: updatedStartTime,
             surgeonName: auth.email,
             dentistName: timeSlot.dentist_email,
           });
@@ -301,14 +356,23 @@ export async function POST(request: NextRequest) {
           await sendAppointmentBookingNotificationToPatient(
             patient.email,
             patient.nev,
-            startTime,
+            patient.nem,
+            updatedStartTime,
+            dentistFullName,
             timeSlot.dentist_email,
-            icsFilePatient
+            icsFilePatient,
+            appointmentCim,
+            appointmentTeremszam,
+            adminEmail
           );
+          console.log('[Appointment Booking] Email sent successfully to patient:', patient.email);
         } catch (emailError) {
           console.error('Failed to send appointment booking notification to patient:', emailError);
+          console.error('Error details:', emailError instanceof Error ? emailError.stack : emailError);
           // Don't fail the request if email fails
         }
+      } else {
+        console.log('[Appointment Booking] Patient has no email address, skipping email notification');
       }
 
       // Send email notification to all admins
@@ -324,7 +388,7 @@ export async function POST(request: NextRequest) {
           const icsFileAdmin = await generateIcsFile({
             patientName: patient.nev,
             patientTaj: patient.taj,
-            startTime: startTime,
+            startTime: updatedStartTime,
             surgeonName: auth.email,
             dentistName: timeSlot.dentist_email,
           });
@@ -333,10 +397,12 @@ export async function POST(request: NextRequest) {
             adminEmails,
             patient.nev,
             patient.taj,
-            startTime,
+            updatedStartTime,
             auth.email,
             timeSlot.dentist_email,
-            icsFileAdmin
+            icsFileAdmin,
+            appointmentCim,
+            appointmentTeremszam
           );
         }
       } catch (emailError) {

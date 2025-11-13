@@ -20,6 +20,8 @@ interface Appointment {
   timeSlotId: string;
   startTime: string;
   dentistEmail: string | null;
+  cim?: string | null;
+  teremszam?: string | null;
 }
 
 interface AppointmentBookingSectionProps {
@@ -36,6 +38,14 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
   const [roleLoaded, setRoleLoaded] = useState(false);
   const [showNewSlotForm, setShowNewSlotForm] = useState(false);
   const [newSlotDateTime, setNewSlotDateTime] = useState<Date | null>(null);
+  const [newSlotTeremszam, setNewSlotTeremszam] = useState<string>('');
+  const [newSlotCim, setNewSlotCim] = useState<string>('');
+  const [customCim, setCustomCim] = useState<string>('');
+  const [customTeremszam, setCustomTeremszam] = useState<string>('');
+  
+  // Elérhető címek (egyelőre csak egy, de később bővíthető)
+  const availableCims = ['1088 Budapest, Szentkirályi utca 47'];
+  const DEFAULT_CIM = availableCims[0]; // Alapértelmezett cím
 
   const loadAvailableSlots = async () => {
     try {
@@ -139,12 +149,16 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
         body: JSON.stringify({
           patientId: patientId,
           timeSlotId: selectedSlot,
+          cim: customCim || (availableCims.length === 1 ? DEFAULT_CIM : null),
+          teremszam: customTeremszam.trim() || null,
         }),
       });
 
       if (response.ok) {
         await loadData();
         setSelectedSlot('');
+        setCustomCim('');
+        setCustomTeremszam('');
         alert('Időpont sikeresen lefoglalva! A fogpótlástanász értesítést kapott.');
       } else {
         const data = await response.json();
@@ -246,6 +260,8 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
         credentials: 'include',
         body: JSON.stringify({
           startTime: isoDateTime,
+          cim: newSlotCim || DEFAULT_CIM,
+          teremszam: newSlotTeremszam.trim() || null,
         }),
       });
 
@@ -274,6 +290,8 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
       if (bookResponse.ok) {
         await loadData();
         setNewSlotDateTime(null);
+        setNewSlotCim('');
+        setNewSlotTeremszam('');
         setShowNewSlotForm(false);
         alert('Új időpont sikeresen létrehozva és lefoglalva a betegnek!');
       } else {
@@ -333,7 +351,10 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
         <div className="mb-6">
           <h4 className="text-sm font-medium text-gray-700 mb-3">Lefoglalt időpontok</h4>
           <div className="space-y-2">
-            {appointments.map((appointment) => (
+            {appointments.map((appointment) => {
+              const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
+              const displayCim = appointment.cim || DEFAULT_CIM;
+              return (
               <div
                 key={appointment.id}
                 className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-md"
@@ -345,7 +366,11 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
                       {formatDateTime(appointment.startTime)}
                     </div>
                     <div className="text-xs text-gray-500">
-                      Fogpótlástanász: {appointment.dentistEmail || 'Nincs megadva'}
+                      <div>Cím: {displayCim}</div>
+                      {appointment.teremszam && (
+                        <div>Teremszám: {appointment.teremszam}</div>
+                      )}
+                      <div>Fogpótlástanász: {appointment.dentistEmail || 'Nincs megadva'}</div>
                     </div>
                   </div>
                 </div>
@@ -370,7 +395,8 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
                   )}
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
         </div>
       )}
@@ -406,6 +432,36 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
                       placeholder="Válasszon dátumot és időt"
                     />
                   </div>
+                  {availableCims.length > 1 ? (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Cím
+                      </label>
+                      <select
+                        value={newSlotCim || DEFAULT_CIM}
+                        onChange={(e) => setNewSlotCim(e.target.value)}
+                        className="form-input w-full"
+                      >
+                        {availableCims.map(cim => (
+                          <option key={cim} value={cim}>{cim}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <input type="hidden" value={DEFAULT_CIM} />
+                  )}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Teremszám
+                    </label>
+                    <input
+                      type="text"
+                      value={newSlotTeremszam}
+                      onChange={(e) => setNewSlotTeremszam(e.target.value)}
+                      className="form-input w-full"
+                      placeholder="Pl. 611"
+                    />
+                  </div>
                   <div className="flex gap-2">
                     <button
                       onClick={handleCreateAndBookNewSlot}
@@ -419,6 +475,8 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
                       onClick={() => {
                         setShowNewSlotForm(false);
                         setNewSlotDateTime(null);
+                        setNewSlotCim('');
+                        setNewSlotTeremszam('');
                       }}
                       className="btn-secondary"
                     >
@@ -466,37 +524,76 @@ export function AppointmentBookingSection({ patientId, isViewOnly = false }: App
             )}
           </div>
           {selectedSlot && (
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
-              <div className="text-sm text-gray-700">
-                <span className="font-medium">Kiválasztott időpont:</span>{' '}
-                {formatDateTime(availableSlotsOnly.find(s => s.id === selectedSlot)?.startTime || '')}
-              </div>
-              {(() => {
-                const selectedSlotData = availableSlotsOnly.find(s => s.id === selectedSlot);
-                return (
-                  <>
-                    {(() => {
-                      const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
-                      const displayCim = selectedSlotData?.cim || DEFAULT_CIM;
-                      return (
+            <div className="space-y-3">
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <div className="text-sm text-gray-700">
+                  <span className="font-medium">Kiválasztott időpont:</span>{' '}
+                  {formatDateTime(availableSlotsOnly.find(s => s.id === selectedSlot)?.startTime || '')}
+                </div>
+                {(() => {
+                  const selectedSlotData = availableSlotsOnly.find(s => s.id === selectedSlot);
+                  return (
+                    <>
+                      {(() => {
+                        const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
+                        const displayCim = selectedSlotData?.cim || DEFAULT_CIM;
+                        return (
+                          <div className="text-sm text-gray-600 mt-1">
+                            <span className="font-medium">Cím:</span> {displayCim}
+                          </div>
+                        );
+                      })()}
+                      <div className="text-sm text-gray-600 mt-1">
+                        <span className="font-medium">Teremszám:</span> {selectedSlotData?.teremszam || 'Nincs megadva'}
+                      </div>
+                      {selectedSlotData?.userEmail && (
                         <div className="text-sm text-gray-600 mt-1">
-                          <span className="font-medium">Cím:</span> {displayCim}
+                          <span className="font-medium">Fogpótlástanász:</span> {selectedSlotData.userEmail}
                         </div>
-                      );
-                    })()}
-                    {selectedSlotData?.teremszam && (
-                      <div className="text-sm text-gray-600 mt-1">
-                        <span className="font-medium">Teremszám:</span> {selectedSlotData.teremszam}
-                      </div>
-                    )}
-                    {selectedSlotData?.userEmail && (
-                      <div className="text-sm text-gray-600 mt-1">
-                        <span className="font-medium">Fogpótlástanász:</span> {selectedSlotData.userEmail}
-                      </div>
-                    )}
-                  </>
-                );
-              })()}
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+              
+              {/* Cím és teremszám módosítása */}
+              <div className="p-3 bg-gray-50 border border-gray-200 rounded-md">
+                <h5 className="text-sm font-medium text-gray-700 mb-2">Cím és teremszám módosítása (opcionális)</h5>
+                <div className="space-y-2">
+                  {availableCims.length > 1 ? (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Cím
+                      </label>
+                      <select
+                        value={customCim || DEFAULT_CIM}
+                        onChange={(e) => setCustomCim(e.target.value)}
+                        className="form-input w-full text-sm"
+                      >
+                        {availableCims.map(cim => (
+                          <option key={cim} value={cim}>{cim}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-gray-500">
+                      <span className="font-medium">Cím:</span> {DEFAULT_CIM}
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      Teremszám
+                    </label>
+                    <input
+                      type="text"
+                      value={customTeremszam}
+                      onChange={(e) => setCustomTeremszam(e.target.value)}
+                      className="form-input w-full text-sm"
+                      placeholder={availableSlotsOnly.find(s => s.id === selectedSlot)?.teremszam || 'Pl. 611'}
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           )}
           {availableSlotsOnly.length > 0 && (

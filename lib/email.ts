@@ -267,8 +267,13 @@ export async function sendAppointmentBookingNotification(
   patientTaj: string | null,
   appointmentTime: Date,
   surgeonName: string,
-  icsFile: Buffer
+  icsFile: Buffer,
+  cim?: string | null,
+  teremszam?: string | null
 ): Promise<void> {
+  const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
+  const displayCim = cim || DEFAULT_CIM;
+  
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <h2 style="color: #2563eb;">Új időpont foglalás</h2>
@@ -278,6 +283,8 @@ export async function sendAppointmentBookingNotification(
         <li><strong>Beteg neve:</strong> ${patientName || 'Név nélküli'}</li>
         <li><strong>TAJ szám:</strong> ${patientTaj || 'Nincs megadva'}</li>
         <li><strong>Időpont:</strong> ${appointmentTime.toLocaleString('hu-HU')}</li>
+        <li><strong>Cím:</strong> ${displayCim}</li>
+        ${teremszam ? `<li><strong>Teremszám:</strong> ${teremszam}</li>` : ''}
         <li><strong>Beutaló orvos:</strong> ${surgeonName}</li>
       </ul>
       <p>Az időpont részleteit a mellékelt naptár fájlban találja, amelyet importálhat naptárkezelő alkalmazásába.</p>
@@ -305,20 +312,101 @@ export async function sendAppointmentBookingNotification(
 export async function sendAppointmentBookingNotificationToPatient(
   patientEmail: string,
   patientName: string | null,
+  patientNem: string | null,
   appointmentTime: Date,
-  dentistName: string,
-  icsFile: Buffer
+  dentistFullName: string,
+  dentistEmail: string,
+  icsFile: Buffer,
+  cim?: string | null,
+  teremszam?: string | null,
+  adminEmail?: string | null
 ): Promise<void> {
+  const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
+  const displayCim = cim || DEFAULT_CIM;
+  
+  // Dátum formátum: 2025. 11. 11. 15:15:00
+  // Az appointmentTime Date objektum, ami az adatbázisból jön
+  // Explicit módon használjuk a Europe/Budapest időzónát, hogy független legyen a szerver időzónájától
+  const formatter = new Intl.DateTimeFormat('hu-HU', {
+    timeZone: 'Europe/Budapest',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+  
+  const parts = formatter.formatToParts(appointmentTime);
+  const year = parts.find(p => p.type === 'year')?.value || '';
+  const month = parts.find(p => p.type === 'month')?.value || '';
+  const day = parts.find(p => p.type === 'day')?.value || '';
+  const hours = parts.find(p => p.type === 'hour')?.value || '';
+  const minutes = parts.find(p => p.type === 'minute')?.value || '';
+  const seconds = parts.find(p => p.type === 'second')?.value || '';
+  const formattedDate = `${year}. ${month}. ${day}. ${hours}:${minutes}:${seconds}`;
+  
+  // Cím formátum: 1088 Budapest Szentkirályi utca 47. 611. terem
+  // Eltávolítjuk a vesszőt a címből, ha van
+  let formattedAddress = displayCim.replace(/,/g, '');
+  if (teremszam) {
+    // Ha van teremszám, hozzáadjuk a címhez
+    formattedAddress = `${formattedAddress.replace(/\.$/, '')}. ${teremszam}. terem`;
+  } else {
+    // Ha nincs teremszám, csak a cím
+    formattedAddress = formattedAddress.replace(/\.$/, '');
+  }
+  
+  // Üdvözlés: Tisztelt Vezetknév Keresztnév Úr/Hölgy
+  let greeting = 'Tisztelt';
+  if (patientName) {
+    const nameParts = patientName.trim().split(/\s+/);
+    if (nameParts.length >= 2) {
+      const vezeteknev = nameParts[0];
+      const keresztnev = nameParts.slice(1).join(' ');
+      const title = patientNem === 'no' ? 'Hölgy' : patientNem === 'ferfi' ? 'Úr' : '';
+      greeting = `Tisztelt ${vezeteknev} ${keresztnev} ${title}`.trim();
+    } else {
+      greeting = `Tisztelt ${patientName}`;
+    }
+  } else {
+    greeting = 'Tisztelt Beteg';
+  }
+  
+  // Kapcsolattartási információk - duplikáció elkerülése és címkézés
+  let contactText = 'rendszerünkön keresztül';
+  if (adminEmail && dentistEmail) {
+    const adminEmailLower = adminEmail.toLowerCase();
+    const dentistEmailLower = dentistEmail.toLowerCase();
+    
+    if (adminEmailLower === dentistEmailLower) {
+      // Ha ugyanaz az email, csak egyszer jelenítjük meg, de jelezzük mindkét szerepkört
+      contactText = `az adminisztrátorral (${adminEmail}) vagy a kezelőorvossal (${dentistEmail})`;
+    } else {
+      // Ha különböző email-ek, külön jelenítjük meg címkével
+      const parts: string[] = [];
+      parts.push(`az adminisztrátorral (${adminEmail})`);
+      parts.push(`a kezelőorvossal (${dentistEmail})`);
+      contactText = parts.join(' vagy ');
+    }
+  } else if (adminEmail) {
+    contactText = `az adminisztrátorral (${adminEmail})`;
+  } else if (dentistEmail) {
+    contactText = `a kezelőorvossal (${dentistEmail})`;
+  }
+  
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #2563eb;">Időpontfoglalás megerősítése</h2>
-      <p>Kedves ${patientName || 'Beteg'}!</p>
+      <h2 style="color: #2563eb;">Új időpont foglalás</h2>
+      <p>${greeting}!</p>
       <p>Időpontfoglalását sikeresen rögzítettük:</p>
       <ul>
-        <li><strong>Időpont:</strong> ${appointmentTime.toLocaleString('hu-HU')}</li>
-        <li><strong>Fogpótlástanász:</strong> ${dentistName}</li>
+        <li><strong>Időpont:</strong> ${formattedDate}</li>
+        <li><strong>Cím:</strong> ${formattedAddress}</li>
+        <li><strong>Kezelőorvos:</strong> ${dentistFullName}</li>
       </ul>
-      <p>Kérjük, hogy az időpontot tartsa be. Ha bármilyen kérdése van, vagy módosítani szeretné az időpontot, kérjük, lépjen kapcsolatba velünk.</p>
+      <p>Kérjük pontosan érkezzen! Ha bármilyen kérdése van, vagy módosítani szeretné az időpontot, kérjük, lépjen kapcsolatba velünk a ${contactText} elérhetőségeken.</p>
       <p>Az időpont részleteit a mellékelt naptár fájlban találja, amelyet importálhat naptárkezelő alkalmazásába.</p>
       <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
     </div>
@@ -326,7 +414,7 @@ export async function sendAppointmentBookingNotificationToPatient(
 
   await sendEmail({
     to: patientEmail,
-    subject: 'Időpontfoglalás megerősítése - Maxillofaciális Rehabilitáció',
+    subject: 'Új időpont foglalás - Maxillofaciális Rehabilitáció',
     html,
     attachments: [
       {
@@ -348,11 +436,16 @@ export async function sendAppointmentBookingNotificationToAdmins(
   appointmentTime: Date,
   surgeonName: string,
   dentistName: string,
-  icsFile: Buffer
+  icsFile: Buffer,
+  cim?: string | null,
+  teremszam?: string | null
 ): Promise<void> {
   if (adminEmails.length === 0) {
     return;
   }
+
+  const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
+  const displayCim = cim || DEFAULT_CIM;
 
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -363,6 +456,8 @@ export async function sendAppointmentBookingNotificationToAdmins(
         <li><strong>Beteg neve:</strong> ${patientName || 'Név nélküli'}</li>
         <li><strong>TAJ szám:</strong> ${patientTaj || 'Nincs megadva'}</li>
         <li><strong>Időpont:</strong> ${appointmentTime.toLocaleString('hu-HU')}</li>
+        <li><strong>Cím:</strong> ${displayCim}</li>
+        ${teremszam ? `<li><strong>Teremszám:</strong> ${teremszam}</li>` : ''}
         <li><strong>Fogpótlástanász:</strong> ${dentistName}</li>
         <li><strong>Beutaló orvos:</strong> ${surgeonName}</li>
       </ul>

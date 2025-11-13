@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser, type AuthUser } from '@/lib/auth';
-import { MessageCircle, ChevronDown, ChevronUp, AlertCircle, Bug, Lightbulb, Mail, Send } from 'lucide-react';
+import { MessageCircle, ChevronDown, ChevronUp, AlertCircle, Bug, Lightbulb, Mail, Send, ArrowUp, ArrowDown } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 
 type UserRole = 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
@@ -62,6 +62,66 @@ export default function AdminPage() {
     includeAdmins: boolean;
     adminCount: number;
   } | null>(null);
+  
+  // Rendezés a felhasználók táblázathoz
+  const [userSortField, setUserSortField] = useState<'email' | 'role' | 'last_login' | null>(null);
+  const [userSortDirection, setUserSortDirection] = useState<'asc' | 'desc'>('asc');
+  
+  // Rendezett felhasználók
+  const sortedUsers = useMemo(() => {
+    const activeUsers = users.filter((u) => u.active);
+    if (!userSortField) return activeUsers;
+    
+    return [...activeUsers].sort((a, b) => {
+      let comparison = 0;
+      
+      switch (userSortField) {
+        case 'email':
+          comparison = a.email.localeCompare(b.email, 'hu');
+          break;
+        case 'role':
+          comparison = a.role.localeCompare(b.role, 'hu');
+          break;
+        case 'last_login':
+          const dateA = a.last_login ? new Date(a.last_login).getTime() : 0;
+          const dateB = b.last_login ? new Date(b.last_login).getTime() : 0;
+          comparison = dateA - dateB;
+          break;
+      }
+      
+      return userSortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [users, userSortField, userSortDirection]);
+  
+  const handleUserSort = (field: 'email' | 'role' | 'last_login') => {
+    if (userSortField === field) {
+      setUserSortDirection(userSortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setUserSortField(field);
+      setUserSortDirection('asc');
+    }
+  };
+  
+  const renderSortableHeader = (label: string, field: 'email' | 'role' | 'last_login') => {
+    const isActive = userSortField === field;
+    const SortIcon = isActive 
+      ? (userSortDirection === 'asc' ? ArrowUp : ArrowDown)
+      : null;
+    
+    return (
+      <th 
+        className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+        onClick={() => handleUserSort(field)}
+      >
+        <div className="flex items-center gap-1">
+          <span>{label}</span>
+          {SortIcon && (
+            <SortIcon className="w-3 h-3 text-blue-600" />
+          )}
+        </div>
+      </th>
+    );
+  };
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -525,23 +585,21 @@ export default function AdminPage() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Szerepkör</th>
+                    {renderSortableHeader('Email', 'email')}
+                    {renderSortableHeader('Szerepkör', 'role')}
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Állapot</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Utolsó bejelentkezés</th>
+                    {renderSortableHeader('Utolsó bejelentkezés', 'last_login')}
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {users
-                    .filter((u) => u.active)
-                    .map((user) => (
-                      <tr key={user.id}>
-                        <td className="px-4 py-3 text-sm text-gray-900">{user.email}</td>
+                  {sortedUsers.map((user) => (
+                    <tr key={user.id}>
+                      <td className="px-4 py-3 text-sm text-gray-900">{user.email}</td>
                       <td className="px-4 py-3">
                         <select
                           className="form-input"
-                            value={user.role}
-                            onChange={(e) => updateRole(user.id, e.target.value as UserRole)}
+                          value={user.role}
+                          onChange={(e) => updateRole(user.id, e.target.value as UserRole)}
                         >
                           <option value="admin">admin</option>
                           <option value="fogpótlástanász">fogpótlástanász</option>
@@ -549,16 +607,16 @@ export default function AdminPage() {
                           <option value="sebészorvos">sebészorvos</option>
                         </select>
                       </td>
-                        <td className="px-4 py-3 text-sm">
-                          {user.active ? (
-                            <span className="text-green-600">Aktív</span>
-                          ) : (
-                            <span className="text-red-600">Inaktív</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-700">
-                          {user.last_login ? new Date(user.last_login).toLocaleString('hu-HU') : '-'}
-                        </td>
+                      <td className="px-4 py-3 text-sm">
+                        {user.active ? (
+                          <span className="text-green-600">Aktív</span>
+                        ) : (
+                          <span className="text-red-600">Inaktív</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-700">
+                        {user.last_login ? new Date(user.last_login).toLocaleString('hu-HU') : '-'}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

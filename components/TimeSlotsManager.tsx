@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Calendar, Plus, Trash2, Edit2, Clock, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Calendar, Plus, Trash2, Edit2, Clock, X, ChevronDown, ChevronUp, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth';
 import { DateTimePicker } from './DateTimePicker';
 
@@ -14,6 +14,7 @@ interface TimeSlot {
   createdAt: string;
   updatedAt: string;
   userEmail?: string;
+  dentistName?: string | null;
 }
 
 interface AppointmentInfo {
@@ -43,6 +44,14 @@ export function TimeSlotsManager() {
   const [users, setUsers] = useState<User[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [showPastSlots, setShowPastSlots] = useState(false);
+  const [sortField, setSortField] = useState<'startTime' | 'cim' | 'teremszam' | 'dentistName' | 'status' | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [filterCim, setFilterCim] = useState<string>('');
+  const [filterTeremszam, setFilterTeremszam] = useState<string>('');
+  const [filterDentistName, setFilterDentistName] = useState<string>('');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'available' | 'booked'>('all');
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const itemsPerPage = 50;
 
   useEffect(() => {
     loadTimeSlots();
@@ -292,20 +301,117 @@ export function TimeSlotsManager() {
     return now.toISOString().slice(0, 16);
   };
 
-  if (loading) {
-    return (
-      <div className="card text-center py-8">
-        <p className="text-gray-500">Betöltés...</p>
-      </div>
-    );
-  }
-
-  // Szétválasztjuk a jövőbeli és elmúlt időpontokat
+  // Szűrés és rendezés - HOOKS SZABÁLY: minden hook a komponens tetején, early return előtt
+  const filteredAndSortedSlots = useMemo(() => {
+    let filtered = [...timeSlots];
+    
+    // Szűrés legördülő menükkel
+    if (filterCim) {
+      filtered = filtered.filter(slot => {
+        const slotCim = (slot.cim || '1088 Budapest, Szentkirályi utca 47').toLowerCase();
+        return slotCim === filterCim.toLowerCase();
+      });
+    }
+    
+    if (filterTeremszam) {
+      filtered = filtered.filter(slot => {
+        const slotTerem = (slot.teremszam || '').toLowerCase();
+        return slotTerem === filterTeremszam.toLowerCase();
+      });
+    }
+    
+    if (filterDentistName) {
+      filtered = filtered.filter(slot => {
+        const slotDentist = (slot.dentistName || slot.userEmail || '').toLowerCase();
+        return slotDentist === filterDentistName.toLowerCase();
+      });
+    }
+    
+    if (filterStatus !== 'all') {
+      filtered = filtered.filter(slot => slot.status === filterStatus);
+    }
+    
+    // Rendezés
+    if (sortField) {
+      filtered.sort((a, b) => {
+        let comparison = 0;
+        
+        switch (sortField) {
+          case 'startTime':
+            comparison = new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
+            break;
+          case 'cim':
+            const cimA = (a.cim || '1088 Budapest, Szentkirályi utca 47').toLowerCase();
+            const cimB = (b.cim || '1088 Budapest, Szentkirályi utca 47').toLowerCase();
+            comparison = cimA.localeCompare(cimB, 'hu');
+            break;
+          case 'teremszam':
+            const teremA = (a.teremszam || '').toLowerCase();
+            const teremB = (b.teremszam || '').toLowerCase();
+            comparison = teremA.localeCompare(teremB, 'hu');
+            break;
+          case 'dentistName':
+            const dentistA = (a.dentistName || a.userEmail || '').toLowerCase();
+            const dentistB = (b.dentistName || b.userEmail || '').toLowerCase();
+            comparison = dentistA.localeCompare(dentistB, 'hu');
+            break;
+          case 'status':
+            const statusA = a.status === 'available' ? 0 : 1;
+            const statusB = b.status === 'available' ? 0 : 1;
+            comparison = statusA - statusB;
+            break;
+        }
+        
+        return sortDirection === 'asc' ? comparison : -comparison;
+      });
+    }
+    
+    return filtered;
+  }, [timeSlots, filterCim, filterTeremszam, filterDentistName, filterStatus, sortField, sortDirection]);
+  
+  // Pagináció
+  const totalPages = Math.ceil(filteredAndSortedSlots.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedSlots = filteredAndSortedSlots.slice(startIndex, endIndex);
+  
+  // Egyedi értékek a szűrőkhöz
+  const uniqueCims = useMemo(() => {
+    const cims = new Set<string>();
+    timeSlots.forEach(slot => {
+      const cim = slot.cim || '1088 Budapest, Szentkirályi utca 47';
+      cims.add(cim);
+    });
+    return Array.from(cims).sort();
+  }, [timeSlots]);
+  
+  const uniqueTeremszamok = useMemo(() => {
+    const teremszamok = new Set<string>();
+    timeSlots.forEach(slot => {
+      if (slot.teremszam) {
+        teremszamok.add(slot.teremszam);
+      }
+    });
+    return Array.from(teremszamok).sort();
+  }, [timeSlots]);
+  
+  const uniqueDentists = useMemo(() => {
+    const dentists = new Set<string>();
+    timeSlots.forEach(slot => {
+      const dentist = slot.dentistName || slot.userEmail || '';
+      if (dentist) {
+        dentists.add(dentist);
+      }
+    });
+    return Array.from(dentists).sort();
+  }, [timeSlots]);
+  
+  // Szétválasztjuk a jövőbeli és elmúlt időpontokat (paginált listákból)
   const now = new Date();
-  const futureSlots = timeSlots.filter(slot => new Date(slot.startTime) >= now);
-  const pastSlots = timeSlots.filter(slot => new Date(slot.startTime) < now);
+  const futureSlots = paginatedSlots.filter(slot => new Date(slot.startTime) >= now);
+  const pastSlots = paginatedSlots.filter(slot => new Date(slot.startTime) < now);
 
-  const availableSlotsForModification = timeSlots.filter(
+  const availableSlotsForModification = filteredAndSortedSlots.filter(
     slot => {
       const slotDate = new Date(slot.startTime);
       return slot.status === 'available' 
@@ -313,6 +419,48 @@ export function TimeSlotsManager() {
         && (!modifyingAppointment || slot.id !== modifyingAppointment.timeSlotId);
     }
   );
+
+  const handleSort = (field: 'startTime' | 'cim' | 'teremszam' | 'dentistName' | 'status') => {
+    if (sortField === field) {
+      // Ha ugyanaz a mező, fordítjuk a rendezési irányt
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // Ha új mező, alapértelmezetten növekvő
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const renderSortableHeader = (label: string, field: 'startTime' | 'cim' | 'teremszam' | 'dentistName' | 'status', className?: string) => {
+    const isActive = sortField === field;
+    const SortIcon = isActive 
+      ? (sortDirection === 'asc' ? ArrowUp : ArrowDown)
+      : null;
+    
+    return (
+      <th 
+        className={`px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none ${
+          isActive ? 'bg-gray-100' : ''
+        } ${className || ''}`}
+        onClick={() => handleSort(field)}
+      >
+        <div className="flex items-center gap-1">
+          <span>{label}</span>
+          {SortIcon && (
+            <SortIcon className="w-3 h-3 text-blue-600" />
+          )}
+        </div>
+      </th>
+    );
+  };
+
+  if (loading) {
+    return (
+      <div className="card text-center py-8">
+        <p className="text-gray-500">Betöltés...</p>
+      </div>
+    );
+  }
 
   const renderTimeSlotTable = (slots: TimeSlot[], isPast: boolean = false) => {
     if (slots.length === 0) {
@@ -324,21 +472,11 @@ export function TimeSlotsManager() {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className={isPast ? "bg-gray-100" : "bg-gray-50"}>
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Időpont
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Cím
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Teremszám
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Fogpótlástanász
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Státusz
-              </th>
+              {renderSortableHeader('Időpont', 'startTime')}
+              {renderSortableHeader('Cím', 'cim')}
+              {renderSortableHeader('Teremszám', 'teremszam')}
+              {renderSortableHeader('Fogpótlástanász', 'dentistName')}
+              {renderSortableHeader('Státusz', 'status')}
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                 Lefoglalva
               </th>
@@ -377,7 +515,7 @@ export function TimeSlotsManager() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`text-sm ${isPast ? 'text-gray-500' : 'text-gray-600'}`}>
-                      {slot.userEmail || '-'}
+                      {slot.dentistName || slot.userEmail || '-'}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -547,6 +685,105 @@ export function TimeSlotsManager() {
           Új időpont
         </button>
       </div>
+      
+      {/* Szűrők */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Cím
+          </label>
+          <select
+            value={filterCim}
+            onChange={(e) => {
+              setFilterCim(e.target.value);
+              setCurrentPage(1); // Reset to first page when filter changes
+            }}
+            className="form-input w-full"
+          >
+            <option value="">Összes cím</option>
+            {uniqueCims.map(cim => (
+              <option key={cim} value={cim}>{cim}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Teremszám
+          </label>
+          <select
+            value={filterTeremszam}
+            onChange={(e) => {
+              setFilterTeremszam(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="form-input w-full"
+          >
+            <option value="">Összes terem</option>
+            {uniqueTeremszamok.map(terem => (
+              <option key={terem} value={terem}>{terem}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Fogpótlástanász
+          </label>
+          <select
+            value={filterDentistName}
+            onChange={(e) => {
+              setFilterDentistName(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="form-input w-full"
+          >
+            <option value="">Összes fogpótlástanász</option>
+            {uniqueDentists.map(dentist => (
+              <option key={dentist} value={dentist}>{dentist}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Státusz
+          </label>
+          <select
+            value={filterStatus}
+            onChange={(e) => {
+              setFilterStatus(e.target.value as 'all' | 'available' | 'booked');
+              setCurrentPage(1);
+            }}
+            className="form-input w-full"
+          >
+            <option value="all">Összes</option>
+            <option value="available">Szabad</option>
+            <option value="booked">Lefoglalva</option>
+          </select>
+        </div>
+      </div>
+      
+      {/* Eredmények száma és törlés gomb */}
+      <div className="flex justify-between items-center">
+        <div className="text-sm text-gray-600">
+          Összesen: {filteredAndSortedSlots.length} időpont
+          {filteredAndSortedSlots.length !== timeSlots.length && (
+            <span> (szűrve: {timeSlots.length} összesből)</span>
+          )}
+        </div>
+        {(filterCim || filterTeremszam || filterDentistName || filterStatus !== 'all') && (
+          <button
+            onClick={() => {
+              setFilterCim('');
+              setFilterTeremszam('');
+              setFilterDentistName('');
+              setFilterStatus('all');
+              setCurrentPage(1);
+            }}
+            className="text-sm text-blue-600 hover:text-blue-800"
+          >
+            Szűrők törlése
+          </button>
+        )}
+      </div>
 
       {showForm && (
         <div className="card p-4">
@@ -650,6 +887,66 @@ export function TimeSlotsManager() {
             )}
           </button>
           {showPastSlots && renderTimeSlotTable(pastSlots, true)}
+        </div>
+      )}
+
+      {/* Pagináció */}
+      {totalPages > 1 && (
+        <div className="mt-6 flex items-center justify-between">
+          <div className="text-sm text-gray-600">
+            Oldal {currentPage} / {totalPages} (összesen {filteredAndSortedSlots.length} időpont)
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className={`px-3 py-2 rounded-md text-sm font-medium ${
+                currentPage === 1
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+              }`}
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum: number;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`px-3 py-2 rounded-md text-sm font-medium ${
+                      currentPage === pageNum
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              className={`px-3 py-2 rounded-md text-sm font-medium ${
+                currentPage === totalPages
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+              }`}
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
 
