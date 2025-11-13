@@ -22,7 +22,10 @@ export async function GET(request: NextRequest) {
     const pool = getDbPool();
     
     // Lekérjük az összes Google Calendar-hoz kapcsolt felhasználót
-    const usersResult = await queryWithRetry(
+    const usersResult = await queryWithRetry<{
+      id: string;
+      email: string;
+    }>(
       pool,
       `SELECT id, email 
        FROM users 
