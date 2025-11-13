@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, memo } from 'react';
 import { Patient } from '@/lib/types';
 import { Phone, Mail, Calendar, FileText, Eye, Pencil, CheckCircle2, XCircle, Clock, Trash2, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatDateForDisplay, calculateAge } from '@/lib/dateUtils';
@@ -25,7 +25,7 @@ interface AppointmentInfo {
   dentistName?: string | null;
 }
 
-export function PatientList({ patients, onView, onEdit, onDelete, canEdit = false, canDelete = false, userRole, sortField, sortDirection = 'asc', onSort }: PatientListProps) {
+function PatientListComponent({ patients, onView, onEdit, onDelete, canEdit = false, canDelete = false, userRole, sortField, sortDirection = 'asc', onSort }: PatientListProps) {
   const [appointments, setAppointments] = useState<Record<string, AppointmentInfo>>({});
   const [loadingAppointments, setLoadingAppointments] = useState(false);
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -468,3 +468,20 @@ export function PatientList({ patients, onView, onEdit, onDelete, canEdit = fals
     </div>
   );
 }
+
+// Memoizálás a teljesítmény javításához
+export const PatientList = memo(PatientListComponent, (prevProps, nextProps) => {
+  // Egyedi összehasonlítás a props-okhoz
+  return (
+    prevProps.patients === nextProps.patients &&
+    prevProps.canEdit === nextProps.canEdit &&
+    prevProps.canDelete === nextProps.canDelete &&
+    prevProps.userRole === nextProps.userRole &&
+    prevProps.sortField === nextProps.sortField &&
+    prevProps.sortDirection === nextProps.sortDirection &&
+    prevProps.onView === nextProps.onView &&
+    prevProps.onEdit === nextProps.onEdit &&
+    prevProps.onDelete === nextProps.onDelete &&
+    prevProps.onSort === nextProps.onSort
+  );
+});

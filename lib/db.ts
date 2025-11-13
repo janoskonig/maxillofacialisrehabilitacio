@@ -19,12 +19,22 @@ export function getDbPool(): Pool {
       connectionString.includes('amazonaws.com') ||
       process.env.NODE_ENV === 'production';
 
+    // Pool beállítások környezeti változókból vagy alapértelmezett értékekből
+    const maxConnections = parseInt(process.env.DB_POOL_MAX || '20', 10);
+    const connectionTimeout = parseInt(process.env.DB_POOL_CONNECTION_TIMEOUT || '5000', 10);
+    const idleTimeout = parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000', 10);
+    const minConnections = parseInt(process.env.DB_POOL_MIN || '2', 10);
+
     pool = new Pool({
       connectionString,
       // Kapcsolat timeout (ms)
-      connectionTimeoutMillis: 5000,
+      connectionTimeoutMillis: connectionTimeout,
+      // Minimális kapcsolatok száma a pool-ban
+      min: minConnections,
       // Maximális kapcsolatok száma a pool-ban
-      max: 20,
+      max: maxConnections,
+      // Idle timeout (ms) - mennyi ideig lehet egy kapcsolat tétlen
+      idleTimeoutMillis: idleTimeout,
       // SSL beállítások (cloud adatbázisok esetében szükséges)
       ssl: requiresSSL 
         ? { rejectUnauthorized: false } 

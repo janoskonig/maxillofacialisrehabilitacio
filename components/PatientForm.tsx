@@ -345,60 +345,63 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
   // Watch all form values for auto-save
   const formValues = watch();
 
+  // Restore draft logic memoized
+  const restoreDraft = useCallback(() => {
+    const draft = loadDraft();
+    if (draft) {
+      const timestampKey = getDraftTimestampKey(patientId);
+      const timestamp = localStorage.getItem(timestampKey);
+      const draftDate = timestamp ? new Date(timestamp) : null;
+      const now = new Date();
+      const hoursSinceDraft = draftDate ? (now.getTime() - draftDate.getTime()) / (1000 * 60 * 60) : 0;
+      
+      // Only show restore prompt if draft is less than 7 days old
+      if (hoursSinceDraft < 168) {
+        // For existing patients, always restore silently (no prompt)
+        // For new patients, ask for confirmation
+        const shouldRestore = isNewPatient 
+          ? window.confirm(
+              `Van egy mentett piszkozat az űrlapból (${draftDate ? draftDate.toLocaleString('hu-HU') : 'korábban'}). Szeretné visszatölteni?`
+            )
+          : true; // Always restore for existing patients
+        
+        if (shouldRestore) {
+          // Restore draft data
+          Object.keys(draft).forEach((key) => {
+            const value = draft[key as keyof Patient];
+            if (value !== undefined && value !== null) {
+              setValue(key as keyof Patient, value as any, { shouldValidate: false });
+            }
+          });
+          
+          // Restore implantatumok and fogak if they exist
+          if (draft.meglevoImplantatumok) {
+            setImplantatumok(draft.meglevoImplantatumok);
+          }
+          if (draft.meglevoFogak) {
+            setFogak(draft.meglevoFogak);
+          }
+          if (draft.beutaloOrvos || draft.beutaloIntezmeny || draft.beutaloIndokolas) {
+            setVanBeutalo(true);
+          }
+        } else {
+          // User chose not to restore, clear the draft
+          clearDraft();
+        }
+      } else {
+        // Draft is too old, clear it
+        clearDraft();
+      }
+    }
+    setHasRestoredDraft(true);
+  }, [isNewPatient, patientId, loadDraft, clearDraft, setValue]);
+
   // Load draft when opening patient form (after form is initialized)
   useEffect(() => {
     if (!isViewOnly && !hasRestoredDraft) {
-      const draft = loadDraft();
-      if (draft) {
-        const timestampKey = getDraftTimestampKey(patientId);
-        const timestamp = localStorage.getItem(timestampKey);
-        const draftDate = timestamp ? new Date(timestamp) : null;
-        const now = new Date();
-        const hoursSinceDraft = draftDate ? (now.getTime() - draftDate.getTime()) / (1000 * 60 * 60) : 0;
-        
-        // Only show restore prompt if draft is less than 7 days old
-        if (hoursSinceDraft < 168) {
-          // For existing patients, always restore silently (no prompt)
-          // For new patients, ask for confirmation
-          const shouldRestore = isNewPatient 
-            ? window.confirm(
-                `Van egy mentett piszkozat az űrlapból (${draftDate ? draftDate.toLocaleString('hu-HU') : 'korábban'}). Szeretné visszatölteni?`
-              )
-            : true; // Always restore for existing patients
-          
-          if (shouldRestore) {
-            // Restore draft data
-            Object.keys(draft).forEach((key) => {
-              const value = draft[key as keyof Patient];
-              if (value !== undefined && value !== null) {
-                setValue(key as keyof Patient, value as any, { shouldValidate: false });
-              }
-            });
-            
-            // Restore implantatumok and fogak if they exist
-            if (draft.meglevoImplantatumok) {
-              setImplantatumok(draft.meglevoImplantatumok);
-            }
-            if (draft.meglevoFogak) {
-              setFogak(draft.meglevoFogak);
-            }
-            if (draft.beutaloOrvos || draft.beutaloIntezmeny || draft.beutaloIndokolas) {
-              setVanBeutalo(true);
-            }
-          } else {
-            // User chose not to restore, clear the draft
-            clearDraft();
-          }
-        } else {
-          // Draft is too old, clear it
-          clearDraft();
-        }
-        setHasRestoredDraft(true);
-      } else {
-        setHasRestoredDraft(true);
-      }
+      restoreDraft();
     }
-  }, [isViewOnly, hasRestoredDraft, isNewPatient, patientId, loadDraft, clearDraft, setValue, setImplantatumok, setFogak, setVanBeutalo]);
+  }, [isViewOnly, hasRestoredDraft, restoreDraft]);
 
   // Implantátumok frissítése amikor patient változik
   useEffect(() => {

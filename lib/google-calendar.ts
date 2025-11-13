@@ -95,6 +95,24 @@ function getOAuth2Client() {
   );
 }
 
+// In-memory cache a token érvényességére (1 perc TTL)
+interface TokenCacheEntry {
+  accessToken: string;
+  expiresAt: number; // timestamp
+}
+
+const tokenCache = new Map<string, TokenCacheEntry>();
+const CACHE_TTL_MS = 60 * 1000; // 1 perc
+
+// Cache a naptár ID-khoz (5 perc TTL)
+interface CalendarCacheEntry {
+  calendars: Array<{ id: string; summary: string }>;
+  expiresAt: number;
+}
+
+const calendarCache = new Map<string, CalendarCacheEntry>();
+const CALENDAR_CACHE_TTL_MS = 5 * 60 * 1000; // 5 perc
+
 /**
  * Tokenek lekérdezése adatbázisból
  */
@@ -139,8 +157,19 @@ export async function refreshAccessTokenIfNeeded(userId: string): Promise<string
     return null;
   }
   
+  // Ellenőrizzük a cache-t
+  const cached = tokenCache.get(userId);
+  const now = Date.now();
+  
+  if (cached && cached.expiresAt > now) {
+    // Cache érvényes, visszaadjuk a token-t
+    return cached.accessToken;
+  }
+  
+  // Cache lejárt vagy nincs, lekérdezzük az adatbázisból
   const tokens = await getTokensFromDb(userId);
   if (!tokens || !tokens.refreshToken) {
+    tokenCache.delete(userId); // Cache törlése ha nincs token
     return null;
   }
   
@@ -150,11 +179,15 @@ export async function refreshAccessTokenIfNeeded(userId: string): Promise<string
   }
   
   // Ellenőrizzük, hogy lejárt-e az access token
-  const now = new Date();
   const expiresAt = tokens.expiresAt ? new Date(tokens.expiresAt) : null;
   
   // Ha van érvényes access token és még nem járt le (5 perc buffer)
-  if (tokens.accessToken && expiresAt && expiresAt.getTime() > now.getTime() + 5 * 60 * 1000) {
+  if (tokens.accessToken && expiresAt && expiresAt.getTime() > now + 5 * 60 * 1000) {
+    // Cache-be mentjük
+    tokenCache.set(userId, {
+      accessToken: tokens.accessToken,
+      expiresAt: Math.min(expiresAt.getTime(), now + CACHE_TTL_MS),
+    });
     return tokens.accessToken;
   }
   
@@ -184,6 +217,13 @@ export async function refreshAccessTokenIfNeeded(userId: string): Promise<string
       ]
     );
     
+    // Cache-be mentjük az új token-t
+    const expiryDate = new Date(credentials.expiry_date);
+    tokenCache.set(userId, {
+      accessToken: credentials.access_token,
+      expiresAt: Math.min(expiryDate.getTime(), Date.now() + CACHE_TTL_MS),
+    });
+    
     return credentials.access_token;
   } catch (error) {
     console.error('Error refreshing access token:', error);
@@ -198,6 +238,9 @@ export async function refreshAccessTokenIfNeeded(userId: string): Promise<string
        WHERE id = $1`,
       [userId]
     );
+    
+    // Cache törlése
+    tokenCache.delete(userId);
     
     return null;
   }
@@ -246,6 +289,15 @@ export async function listGoogleCalendars(userId: string): Promise<Array<{ id: s
     return [];
   }
   
+  // Ellenőrizzük a cache-t
+  const cached = calendarCache.get(userId);
+  const now = Date.now();
+  
+  if (cached && cached.expiresAt > now) {
+    // Cache érvényes, visszaadjuk a naptárakat
+    return cached.calendars;
+  }
+  
   try {
     console.log(`[listGoogleCalendars] Getting calendar client for user ${userId}`);
     const calendar = await getCalendarClient(userId);
@@ -264,6 +316,12 @@ export async function listGoogleCalendars(userId: string): Promise<Array<{ id: s
       id: cal.id || '',
       summary: cal.summary || '',
     }));
+    
+    // Cache-be mentjük
+    calendarCache.set(userId, {
+      calendars: result,
+      expiresAt: now + CALENDAR_CACHE_TTL_MS,
+    });
     
     return result;
   } catch (error) {

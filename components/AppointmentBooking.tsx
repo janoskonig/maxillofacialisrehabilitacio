@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Calendar, Clock, Download, User, Phone, Trash2, Edit2, X } from 'lucide-react';
 import { Patient } from '@/lib/types';
 
@@ -32,25 +32,9 @@ export function AppointmentBooking() {
   const [selectedSlot, setSelectedSlot] = useState<string>('');
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [newTimeSlotId, setNewTimeSlotId] = useState<string>('');
+  const isLoadingRef = useRef(false);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      await Promise.all([
-        loadAvailableSlots(),
-        loadAppointments(),
-        loadPatients(),
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadAvailableSlots = async () => {
+  const loadAvailableSlots = useCallback(async () => {
     try {
       const response = await fetch('/api/time-slots', {
         credentials: 'include',
@@ -69,9 +53,9 @@ export function AppointmentBooking() {
     } catch (error) {
       console.error('Error loading time slots:', error);
     }
-  };
+  }, []);
 
-  const loadAppointments = async () => {
+  const loadAppointments = useCallback(async () => {
     try {
       const response = await fetch('/api/appointments', {
         credentials: 'include',
@@ -83,9 +67,9 @@ export function AppointmentBooking() {
     } catch (error) {
       console.error('Error loading appointments:', error);
     }
-  };
+  }, []);
 
-  const loadPatients = async () => {
+  const loadPatients = useCallback(async () => {
     try {
       const response = await fetch('/api/patients', {
         credentials: 'include',
@@ -97,9 +81,33 @@ export function AppointmentBooking() {
     } catch (error) {
       console.error('Error loading patients:', error);
     }
-  };
+  }, []);
 
-  const handleBookAppointment = async () => {
+  const loadData = useCallback(async () => {
+    // Prevent concurrent loads
+    if (isLoadingRef.current) {
+      return;
+    }
+    
+    try {
+      isLoadingRef.current = true;
+      setLoading(true);
+      await Promise.all([
+        loadAvailableSlots(),
+        loadAppointments(),
+        loadPatients(),
+      ]);
+    } finally {
+      setLoading(false);
+      isLoadingRef.current = false;
+    }
+  }, [loadAvailableSlots, loadAppointments, loadPatients]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const handleBookAppointment = useCallback(async () => {
     if (!selectedPatient || !selectedSlot) {
       alert('Kérjük, válasszon beteget és időpontot!');
       return;
@@ -135,9 +143,9 @@ export function AppointmentBooking() {
       console.error('Error booking appointment:', error);
       alert('Hiba történt az időpont foglalásakor');
     }
-  };
+  }, [selectedPatient, selectedSlot, loadData]);
 
-  const handleDownloadCalendar = async (appointmentId: string) => {
+  const handleDownloadCalendar = useCallback(async (appointmentId: string) => {
     try {
       const response = await fetch(`/api/appointments/${appointmentId}/calendar.ics`, {
         credentials: 'include',
@@ -159,9 +167,9 @@ export function AppointmentBooking() {
       console.error('Error downloading calendar:', error);
       alert('Hiba történt a naptár fájl letöltésekor');
     }
-  };
+  }, []);
 
-  const handleCancelAppointment = async (appointmentId: string) => {
+  const handleCancelAppointment = useCallback(async (appointmentId: string) => {
     if (!confirm('Biztosan le szeretné mondani ezt az időpontot? A fogpótlástanász és a beteg értesítést kap.')) {
       return;
     }
@@ -183,14 +191,14 @@ export function AppointmentBooking() {
       console.error('Error cancelling appointment:', error);
       alert('Hiba történt az időpont lemondásakor');
     }
-  };
+  }, [loadData]);
 
-  const handleModifyAppointment = (appointment: Appointment) => {
+  const handleModifyAppointment = useCallback((appointment: Appointment) => {
     setEditingAppointment(appointment);
     setNewTimeSlotId('');
-  };
+  }, []);
 
-  const handleSaveModification = async () => {
+  const handleSaveModification = useCallback(async () => {
     if (!editingAppointment || !newTimeSlotId) {
       alert('Kérjük, válasszon új időpontot!');
       return;
@@ -225,9 +233,9 @@ export function AppointmentBooking() {
       console.error('Error modifying appointment:', error);
       alert('Hiba történt az időpont módosításakor');
     }
-  };
+  }, [editingAppointment, newTimeSlotId, loadData]);
 
-  const formatDateTime = (dateTime: string) => {
+  const formatDateTime = useCallback((dateTime: string) => {
     const date = new Date(dateTime);
     return date.toLocaleString('hu-HU', {
       year: 'numeric',
@@ -236,7 +244,7 @@ export function AppointmentBooking() {
       hour: '2-digit',
       minute: '2-digit',
     });
-  };
+  }, []);
 
   if (loading) {
     return (
@@ -246,10 +254,17 @@ export function AppointmentBooking() {
     );
   }
 
-  const availableSlotsOnly = availableSlots.filter(slot => slot.status === 'available');
+  const availableSlotsOnly = useMemo(
+    () => availableSlots.filter(slot => slot.status === 'available'),
+    [availableSlots]
+  );
+  
   // For modification, exclude the current appointment's time slot
-  const availableSlotsForModification = availableSlotsOnly.filter(
-    slot => !editingAppointment || slot.id !== editingAppointment.timeSlotId
+  const availableSlotsForModification = useMemo(
+    () => availableSlotsOnly.filter(
+      slot => !editingAppointment || slot.id !== editingAppointment.timeSlotId
+    ),
+    [availableSlotsOnly, editingAppointment]
   );
 
   return (

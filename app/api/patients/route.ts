@@ -4,6 +4,80 @@ import { Patient, patientSchema } from '@/lib/types';
 import { verifyAuth } from '@/lib/auth-server';
 import { sendPatientCreationNotification } from '@/lib/email';
 
+// Patient SELECT lista - közös használatra
+const PATIENT_SELECT_FIELDS = `
+  id,
+  nev,
+  taj,
+  telefonszam,
+  szuletesi_datum as "szuletesiDatum",
+  nem,
+  email,
+  cim,
+  varos,
+  iranyitoszam,
+  beutalo_orvos as "beutaloOrvos",
+  beutalo_intezmeny as "beutaloIntezmeny",
+  beutalo_indokolas as "beutaloIndokolas",
+  primer_mutet_leirasa as "primerMutetLeirasa",
+  mutet_ideje as "mutetIdeje",
+  szovettani_diagnozis as "szovettaniDiagnozis",
+  nyaki_blokkdisszekcio as "nyakiBlokkdisszekcio",
+  alkoholfogyasztas,
+  dohanyzas_szam as "dohanyzasSzam",
+  kezelesre_erkezes_indoka as "kezelesreErkezesIndoka",
+  maxilladefektus_van as "maxilladefektusVan",
+  brown_fuggoleges_osztaly as "brownFuggolegesOsztaly",
+  brown_vizszintes_komponens as "brownVizszintesKomponens",
+  mandibuladefektus_van as "mandibuladefektusVan",
+  kovacs_dobak_osztaly as "kovacsDobakOsztaly",
+  nyelvmozgasok_akadalyozottak as "nyelvmozgásokAkadályozottak",
+  gombocos_beszed as "gombocosBeszed",
+  nyalmirigy_allapot as "nyalmirigyAllapot",
+  fabian_fejerdy_protetikai_osztaly_felso as "fabianFejerdyProtetikaiOsztalyFelso",
+  fabian_fejerdy_protetikai_osztaly_also as "fabianFejerdyProtetikaiOsztalyAlso",
+  radioterapia,
+  radioterapia_dozis as "radioterapiaDozis",
+  radioterapia_datum_intervallum as "radioterapiaDatumIntervallum",
+  chemoterapia,
+  chemoterapia_leiras as "chemoterapiaLeiras",
+  fabian_fejerdy_protetikai_osztaly as "fabianFejerdyProtetikaiOsztaly",
+  kezeleoorvos,
+  kezeleoorvos_intezete as "kezeleoorvosIntezete",
+  felvetel_datuma as "felvetelDatuma",
+  felso_fogpotlas_van as "felsoFogpotlasVan",
+  felso_fogpotlas_mikor as "felsoFogpotlasMikor",
+  felso_fogpotlas_keszito as "felsoFogpotlasKeszito",
+  felso_fogpotlas_elegedett as "felsoFogpotlasElegedett",
+  felso_fogpotlas_problema as "felsoFogpotlasProblema",
+  also_fogpotlas_van as "alsoFogpotlasVan",
+  also_fogpotlas_mikor as "alsoFogpotlasMikor",
+  also_fogpotlas_keszito as "alsoFogpotlasKeszito",
+  also_fogpotlas_elegedett as "alsoFogpotlasElegedett",
+  also_fogpotlas_problema as "alsoFogpotlasProblema",
+  meglevo_fogak as "meglevoFogak",
+  felso_fogpotlas_tipus as "felsoFogpotlasTipus",
+  also_fogpotlas_tipus as "alsoFogpotlasTipus",
+  meglevo_implantatumok as "meglevoImplantatumok",
+  nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
+  nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
+  tnm_staging as "tnmStaging",
+  bno,
+  diagnozis,
+  baleset_idopont as "balesetIdopont",
+  baleset_etiologiaja as "balesetEtiologiaja",
+  baleset_egyeb as "balesetEgyeb",
+  veleszuletett_rendellenessegek as "veleszuletettRendellenessegek",
+  veleszuletett_mutetek_leirasa as "veleszuletettMutetekLeirasa",
+  kezelesi_terv_felso as "kezelesiTervFelso",
+  kezelesi_terv_also as "kezelesiTervAlso",
+  kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
+  created_at as "createdAt",
+  updated_at as "updatedAt",
+  created_by as "createdBy",
+  updated_by as "updatedBy"
+`;
+
 // Összes beteg lekérdezése
 export async function GET(request: NextRequest) {
   try {
@@ -18,7 +92,7 @@ export async function GET(request: NextRequest) {
     
     // Szerepkör alapú szűrés meghatározása
     let whereConditions: string[] = [];
-    let queryParams: any[] = [];
+    let queryParams: string[] = [];
     let paramIndex = 1;
     
     if (role === 'technikus') {
@@ -41,71 +115,7 @@ export async function GET(request: NextRequest) {
         : searchBase;
       
       result = await pool.query(
-        `SELECT 
-          id,
-          nev,
-          taj,
-          telefonszam,
-          szuletesi_datum as "szuletesiDatum",
-          nem,
-          email,
-          cim,
-          varos,
-          iranyitoszam,
-          beutalo_orvos as "beutaloOrvos",
-          beutalo_intezmeny as "beutaloIntezmeny",
-          beutalo_indokolas as "beutaloIndokolas",
-          primer_mutet_leirasa as "primerMutetLeirasa",
-          mutet_ideje as "mutetIdeje",
-          szovettani_diagnozis as "szovettaniDiagnozis",
-          nyaki_blokkdisszekcio as "nyakiBlokkdisszekcio",
-          alkoholfogyasztas,
-          dohanyzas_szam as "dohanyzasSzam",
-          kezelesre_erkezes_indoka as "kezelesreErkezesIndoka",
-          maxilladefektus_van as "maxilladefektusVan",
-          brown_fuggoleges_osztaly as "brownFuggolegesOsztaly",
-          brown_vizszintes_komponens as "brownVizszintesKomponens",
-          mandibuladefektus_van as "mandibuladefektusVan",
-          kovacs_dobak_osztaly as "kovacsDobakOsztaly",
-          nyelvmozgasok_akadalyozottak as "nyelvmozgásokAkadályozottak",
-          gombocos_beszed as "gombocosBeszed",
-          nyalmirigy_allapot as "nyalmirigyAllapot",
-          fabian_fejerdy_protetikai_osztaly_felso as "fabianFejerdyProtetikaiOsztalyFelso",
-          fabian_fejerdy_protetikai_osztaly_also as "fabianFejerdyProtetikaiOsztalyAlso",
-          radioterapia,
-          radioterapia_dozis as "radioterapiaDozis",
-          radioterapia_datum_intervallum as "radioterapiaDatumIntervallum",
-          chemoterapia,
-          chemoterapia_leiras as "chemoterapiaLeiras",
-          fabian_fejerdy_protetikai_osztaly as "fabianFejerdyProtetikaiOsztaly",
-          kezeleoorvos,
-          kezeleoorvos_intezete as "kezeleoorvosIntezete",
-          felvetel_datuma as "felvetelDatuma",
-          felso_fogpotlas_van as "felsoFogpotlasVan",
-          felso_fogpotlas_mikor as "felsoFogpotlasMikor",
-          felso_fogpotlas_keszito as "felsoFogpotlasKeszito",
-          felso_fogpotlas_elegedett as "felsoFogpotlasElegedett",
-          felso_fogpotlas_problema as "felsoFogpotlasProblema",
-          also_fogpotlas_van as "alsoFogpotlasVan",
-          also_fogpotlas_mikor as "alsoFogpotlasMikor",
-          also_fogpotlas_keszito as "alsoFogpotlasKeszito",
-          also_fogpotlas_elegedett as "alsoFogpotlasElegedett",
-          also_fogpotlas_problema as "alsoFogpotlasProblema",
-          meglevo_fogak as "meglevoFogak",
-          felso_fogpotlas_tipus as "felsoFogpotlasTipus",
-          also_fogpotlas_tipus as "alsoFogpotlasTipus",
-          meglevo_implantatumok as "meglevoImplantatumok",
-          nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
-          nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
-          tnm_staging as "tnmStaging",
-          bno, diagnozis,
-          kezelesi_terv_felso as "kezelesiTervFelso",
-          kezelesi_terv_also as "kezelesiTervAlso",
-          kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
-          created_at as "createdAt",
-          updated_at as "updatedAt",
-          created_by as "createdBy",
-          updated_by as "updatedBy"
+        `SELECT ${PATIENT_SELECT_FIELDS}
         FROM patients
         WHERE ${searchCondition}
         ORDER BY created_at DESC`,
@@ -118,78 +128,9 @@ export async function GET(request: NextRequest) {
         : '';
       
       result = await pool.query(
-        `SELECT 
-          id,
-          nev,
-          taj,
-          telefonszam,
-          szuletesi_datum as "szuletesiDatum",
-          nem,
-          email,
-          cim,
-          varos,
-          iranyitoszam,
-          beutalo_orvos as "beutaloOrvos",
-          beutalo_intezmeny as "beutaloIntezmeny",
-          beutalo_indokolas as "beutaloIndokolas",
-          primer_mutet_leirasa as "primerMutetLeirasa",
-          mutet_ideje as "mutetIdeje",
-          szovettani_diagnozis as "szovettaniDiagnozis",
-          nyaki_blokkdisszekcio as "nyakiBlokkdisszekcio",
-          alkoholfogyasztas,
-          dohanyzas_szam as "dohanyzasSzam",
-          kezelesre_erkezes_indoka as "kezelesreErkezesIndoka",
-          maxilladefektus_van as "maxilladefektusVan",
-          brown_fuggoleges_osztaly as "brownFuggolegesOsztaly",
-          brown_vizszintes_komponens as "brownVizszintesKomponens",
-          mandibuladefektus_van as "mandibuladefektusVan",
-          kovacs_dobak_osztaly as "kovacsDobakOsztaly",
-          nyelvmozgasok_akadalyozottak as "nyelvmozgásokAkadályozottak",
-          gombocos_beszed as "gombocosBeszed",
-          nyalmirigy_allapot as "nyalmirigyAllapot",
-          fabian_fejerdy_protetikai_osztaly_felso as "fabianFejerdyProtetikaiOsztalyFelso",
-          fabian_fejerdy_protetikai_osztaly_also as "fabianFejerdyProtetikaiOsztalyAlso",
-          radioterapia,
-          radioterapia_dozis as "radioterapiaDozis",
-          radioterapia_datum_intervallum as "radioterapiaDatumIntervallum",
-          chemoterapia,
-          chemoterapia_leiras as "chemoterapiaLeiras",
-          fabian_fejerdy_protetikai_osztaly as "fabianFejerdyProtetikaiOsztaly",
-          kezeleoorvos,
-          kezeleoorvos_intezete as "kezeleoorvosIntezete",
-          felvetel_datuma as "felvetelDatuma",
-          felso_fogpotlas_van as "felsoFogpotlasVan",
-          felso_fogpotlas_mikor as "felsoFogpotlasMikor",
-          felso_fogpotlas_keszito as "felsoFogpotlasKeszito",
-          felso_fogpotlas_elegedett as "felsoFogpotlasElegedett",
-          felso_fogpotlas_problema as "felsoFogpotlasProblema",
-          also_fogpotlas_van as "alsoFogpotlasVan",
-          also_fogpotlas_mikor as "alsoFogpotlasMikor",
-          also_fogpotlas_keszito as "alsoFogpotlasKeszito",
-          also_fogpotlas_elegedett as "alsoFogpotlasElegedett",
-          also_fogpotlas_problema as "alsoFogpotlasProblema",
-          meglevo_fogak as "meglevoFogak",
-          felso_fogpotlas_tipus as "felsoFogpotlasTipus",
-          also_fogpotlas_tipus as "alsoFogpotlasTipus",
-          meglevo_implantatumok as "meglevoImplantatumok",
-          nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
-        nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
-        tnm_staging as "tnmStaging",
-        bno, diagnozis, primer_mutet_leirasa as "primerMutetLeirasa",
-        baleset_idopont as "balesetIdopont",
-        baleset_etiologiaja as "balesetEtiologiaja",
-        baleset_egyeb as "balesetEgyeb",
-        veleszuletett_rendellenessegek as "veleszuletettRendellenessegek",
-        veleszuletett_mutetek_leirasa as "veleszuletettMutetekLeirasa",
-        kezelesi_terv_felso as "kezelesiTervFelso",
-        kezelesi_terv_also as "kezelesiTervAlso",
-        kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
-        created_at as "createdAt",
-        updated_at as "updatedAt",
-        created_by as "createdBy",
-        updated_by as "updatedBy"
-      FROM patients
-      ${whereClause}
+        `SELECT ${PATIENT_SELECT_FIELDS}
+        FROM patients
+        ${whereClause}
         ORDER BY created_at DESC`,
         whereConditions.length > 0 ? queryParams : []
       );
@@ -285,7 +226,7 @@ export async function POST(request: NextRequest) {
     const patientId = validatedPatient.id || null;
     
     // Építjük a paraméterek tömbjét és a SQL query-t
-    const values: any[] = [];
+    const values: (string | number | boolean | null | Record<string, unknown>)[] = [];
     let paramIndex = 1;
     
     // Ha van ID, hozzáadjuk
@@ -480,7 +421,7 @@ export async function POST(request: NextRequest) {
         const adminResult = await pool.query(
           `SELECT email FROM users WHERE role = 'admin' AND active = true`
         );
-        const adminEmails = adminResult.rows.map((row: any) => row.email);
+        const adminEmails = adminResult.rows.map((row: { email: string }) => row.email);
         
         if (adminEmails.length > 0) {
           await sendPatientCreationNotification(
@@ -498,18 +439,28 @@ export async function POST(request: NextRequest) {
     }
     
     return NextResponse.json({ patient: result.rows[0] }, { status: 201 });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Hiba a beteg mentésekor:', error);
-    console.error('Hiba részletei:', {
+    const errorDetails = error instanceof Error ? {
       message: error.message,
-      code: error.code,
-      detail: error.detail,
-      constraint: error.constraint
-    });
+      name: error.name,
+      stack: error.stack,
+    } : { error };
+    console.error('Hiba részletei:', errorDetails);
     
-    if (error.name === 'ZodError') {
+    // PostgreSQL hiba kódok ellenőrzése
+    if (error && typeof error === 'object' && 'code' in error) {
+      console.error('PostgreSQL hiba:', {
+        code: (error as { code?: string }).code,
+        detail: (error as { detail?: string }).detail,
+        constraint: (error as { constraint?: string }).constraint,
+      });
+    }
+    
+    // Zod validation error ellenőrzése
+    if (error && typeof error === 'object' && 'name' in error && error.name === 'ZodError' && 'errors' in error) {
       return NextResponse.json(
-        { error: 'Érvénytelen adatok', details: error.errors },
+        { error: 'Érvénytelen adatok', details: (error as { errors: unknown }).errors },
         { status: 400 }
       );
     }
