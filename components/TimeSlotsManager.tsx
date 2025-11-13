@@ -90,23 +90,45 @@ export function TimeSlotsManager() {
   const loadTimeSlots = async () => {
     try {
       setLoading(true);
-      const timeSlotsResponse = await fetch('/api/time-slots', { credentials: 'include' });
-
-      if (timeSlotsResponse.ok) {
-        const timeSlotsData = await timeSlotsResponse.json();
-        // Get ALL time slots (both available and booked) for the current user
-        setTimeSlots(timeSlotsData.timeSlots || []);
-      } else {
-        console.error('Failed to load time slots');
-      }
-
-      // Load all appointments paginated
+      
+      // Load all time slots paginated
       let page = 1;
       let hasMore = true;
-      const allAppointments: any[] = [];
+      const allTimeSlots: TimeSlot[] = [];
       
       while (hasMore) {
-        const appointmentsResponse = await fetch(`/api/appointments?page=${page}&limit=50`, {
+        const timeSlotsResponse = await fetch(`/api/time-slots?page=${page}&limit=50`, {
+          credentials: 'include',
+        });
+
+        if (timeSlotsResponse.ok) {
+          const timeSlotsData = await timeSlotsResponse.json();
+          const pageTimeSlots = timeSlotsData.timeSlots || [];
+          allTimeSlots.push(...pageTimeSlots);
+          
+          // Check if there are more pages
+          const pagination = timeSlotsData.pagination;
+          if (pagination && page < pagination.totalPages) {
+            page++;
+          } else {
+            hasMore = false;
+          }
+        } else {
+          console.error('Failed to load time slots');
+          hasMore = false;
+        }
+      }
+      
+      // Get ALL time slots (both available and booked) for the current user
+      setTimeSlots(allTimeSlots);
+
+      // Load all appointments paginated
+      let appointmentsPage = 1;
+      let hasMoreAppointments = true;
+      const allAppointments: any[] = [];
+      
+      while (hasMoreAppointments) {
+        const appointmentsResponse = await fetch(`/api/appointments?page=${appointmentsPage}&limit=50`, {
           credentials: 'include',
         });
         
@@ -116,14 +138,14 @@ export function TimeSlotsManager() {
           allAppointments.push(...pageAppointments);
           
           // Check if there are more pages
-          const pagination = appointmentsData.pagination;
-          if (pagination && page < pagination.totalPages) {
-            page++;
+          const appointmentsPagination = appointmentsData.pagination;
+          if (appointmentsPagination && appointmentsPage < appointmentsPagination.totalPages) {
+            appointmentsPage++;
           } else {
-            hasMore = false;
+            hasMoreAppointments = false;
           }
         } else {
-          hasMore = false;
+          hasMoreAppointments = false;
         }
       }
       
