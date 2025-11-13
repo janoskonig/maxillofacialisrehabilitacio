@@ -264,6 +264,16 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     }
   }, [patient?.id]); // Only reset when patient ID changes (when opening a different patient)
 
+  // Set kezeleoorvos value when options are loaded and patient has a value
+  useEffect(() => {
+    if (patient?.kezeleoorvos && kezeloorvosOptions.length > 0) {
+      // Check if the patient's kezeleoorvos value exists in the options
+      if (kezeloorvosOptions.includes(patient.kezeleoorvos)) {
+        setValue('kezeleoorvos', patient.kezeleoorvos);
+      }
+    }
+  }, [kezeloorvosOptions, patient?.kezeleoorvos, setValue]);
+
   const radioterapia = watch('radioterapia');
   const chemoterapia = watch('chemoterapia');
   const kezeleoorvos = watch('kezeleoorvos');
