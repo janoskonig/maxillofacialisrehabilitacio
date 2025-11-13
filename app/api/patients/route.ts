@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDbPool } from '@/lib/db';
+import { getDbPool, queryWithRetry } from '@/lib/db';
 import { Patient, patientSchema } from '@/lib/types';
 import { verifyAuth } from '@/lib/auth-server';
 import { sendPatientCreationNotification } from '@/lib/email';
@@ -246,7 +246,8 @@ export async function POST(request: NextRequest) {
       const normalizedTAJ = validatedPatient.taj.replace(/-/g, '');
       
       // Ellenőrizzük, hogy létezik-e már beteg ezzel a TAJ-számmal
-      const existingPatient = await pool.query(
+      const existingPatient = await queryWithRetry(
+        pool,
         `SELECT id, nev, taj FROM patients 
          WHERE REPLACE(taj, '-', '') = $1`,
         [normalizedTAJ]
@@ -364,7 +365,8 @@ export async function POST(request: NextRequest) {
     const idPart = patientId ? 'id, ' : '';
     const paramPlaceholders = values.map((_, i) => `$${i + 1}`).join(', ');
     
-    const result = await pool.query(
+    const result = await queryWithRetry(
+      pool,
       `INSERT INTO patients (
         ${idPart}nev, taj, telefonszam, szuletesi_datum, nem, email, cim, varos,
         iranyitoszam, beutalo_orvos, beutalo_intezmeny, beutalo_indokolas,
@@ -448,7 +450,8 @@ export async function POST(request: NextRequest) {
     try {
       const ipHeader = request.headers.get('x-forwarded-for') || '';
       const ipAddress = ipHeader.split(',')[0]?.trim() || null;
-      await pool.query(
+      await queryWithRetry(
+        pool,
         `INSERT INTO activity_logs (user_email, action, detail, ip_address)
          VALUES ($1, $2, $3, $4)`,
         [userEmail, 'patient_created', `Patient ID: ${result.rows[0].id}, Name: ${result.rows[0].nev || 'N/A'}`, ipAddress]
@@ -461,7 +464,8 @@ export async function POST(request: NextRequest) {
     // Send email notification to admins if surgeon created the patient
     if (role === 'sebészorvos') {
       try {
-        const adminResult = await pool.query(
+        const adminResult = await queryWithRetry(
+          pool,
           `SELECT email FROM users WHERE role = 'admin' AND active = true`
         );
         const adminEmails = adminResult.rows.map((row: { email: string }) => row.email);

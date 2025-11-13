@@ -56,6 +56,27 @@ export function handleApiError(error: unknown, defaultMessage: string = 'Hiba t�
     });
   }
   
+  // Connection termination errors
+  if (error instanceof Error) {
+    const errorMessage = error.message.toLowerCase();
+    const connectionErrors = [
+      'connection terminated unexpectedly',
+      'server closed the connection',
+      'connection closed',
+      'socket hang up',
+      'econnreset',
+      'epipe',
+    ];
+    
+    if (connectionErrors.some(err => errorMessage.includes(err))) {
+      logger.error('PostgreSQL kapcsolat megszakadás:', error);
+      return NextResponse.json(
+        { error: 'Adatbázis kapcsolat hiba történt. Kérjük, próbálja újra.' },
+        { status: 503 } // Service Unavailable
+      );
+    }
+  }
+  
   // Standard Error object
   if (error instanceof Error) {
     // Don't expose internal error messages in production
