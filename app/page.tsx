@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Patient, patientSchema } from '@/lib/types';
-import { getAllPatients, savePatient, searchPatients } from '@/lib/storage';
+import { getAllPatients, savePatient, searchPatients, PaginationInfo } from '@/lib/storage';
 import { PatientForm } from '@/components/PatientForm';
 import { PatientList } from '@/components/PatientList';
 import { Plus, Search, Users, LogOut, Shield, Settings, Calendar, Eye } from 'lucide-react';
@@ -26,6 +26,13 @@ export default function Home() {
   const [viewAsRole, setViewAsRole] = useState<UserRoleType | null>(null);
   const [sortField, setSortField] = useState<'nev' | 'idopont' | 'createdAt' | null>('idopont');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pagination, setPagination] = useState<PaginationInfo>({
+    page: 1,
+    limit: 50,
+    total: 0,
+    totalPages: 0,
+  });
   
   // Computed role for display - use viewAsRole if set, otherwise use original role
   const displayRole = viewAsRole || userRole;
@@ -66,50 +73,59 @@ export default function Home() {
   }, [router]);
 
   useEffect(() => {
-    // Keresés async módon
-    const performSearch = async () => {
-      let results: Patient[] = [];
-      if (searchQuery.trim()) {
-        results = await searchPatients(searchQuery);
-      } else {
-        results = patients;
+    // Reset to first page when search query changes
+    setCurrentPage(1);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    // Load patients with pagination
+    const loadPatientsData = async () => {
+      try {
+        let data;
+        if (searchQuery.trim()) {
+          data = await searchPatients(searchQuery, currentPage, 50);
+        } else {
+          data = await getAllPatients(currentPage, 50);
+        }
+        
+        setPatients(data.patients);
+        setPagination(data.pagination);
+        
+        // Apply sorting (only for fields that don't need appointment data)
+        let sortedResults = [...data.patients];
+        if (sortField === 'nev' || sortField === 'createdAt') {
+          sortedResults = sortedResults.sort((a, b) => {
+            let comparison = 0;
+            
+            if (sortField === 'nev') {
+              const nameA = (a.nev || '').toLowerCase();
+              const nameB = (b.nev || '').toLowerCase();
+              comparison = nameA.localeCompare(nameB, 'hu');
+            } else if (sortField === 'createdAt') {
+              const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+              const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+              comparison = dateA - dateB;
+            }
+            
+            return sortDirection === 'asc' ? comparison : -comparison;
+          });
+        }
+        // Note: appointment sorting (idopont) is handled in PatientList component
+        // as it needs appointment data
+        
+        setFilteredPatients(sortedResults);
+      } catch (error) {
+        console.error('Hiba a betegek betöltésekor:', error);
+        alert('Hiba történt a betegek betöltésekor. Kérjük, próbálja újra.');
       }
-      
-      // Apply sorting (only for fields that don't need appointment data)
-      if (sortField === 'nev' || sortField === 'createdAt') {
-        results = [...results].sort((a, b) => {
-          let comparison = 0;
-          
-          if (sortField === 'nev') {
-            const nameA = (a.nev || '').toLowerCase();
-            const nameB = (b.nev || '').toLowerCase();
-            comparison = nameA.localeCompare(nameB, 'hu');
-          } else if (sortField === 'createdAt') {
-            const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-            const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-            comparison = dateA - dateB;
-          }
-          
-          return sortDirection === 'asc' ? comparison : -comparison;
-        });
-      }
-      // Note: appointment sorting (idopont) is handled in PatientList component
-      // as it needs appointment data
-      
-      setFilteredPatients(results);
     };
     
-    performSearch();
-  }, [searchQuery, patients, sortField, sortDirection]);
+    loadPatientsData();
+  }, [searchQuery, currentPage, sortField, sortDirection]);
 
   const loadPatients = async () => {
-    try {
-      const data = await getAllPatients();
-      setPatients(data);
-    } catch (error) {
-      console.error('Hiba a betegek betöltésekor:', error);
-      alert('Hiba történt a betegek betöltésekor. Kérjük, próbálja újra.');
-    }
+    // Reload current page
+    setCurrentPage(1);
   };
 
   const handleSavePatient = async (patientData: Patient) => {
@@ -538,6 +554,8 @@ export default function Home() {
                     setSortDirection('asc');
                   }
                 }}
+                pagination={pagination}
+                onPageChange={(page: number) => setCurrentPage(page)}
               />
             </>
 

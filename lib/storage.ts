@@ -128,43 +128,72 @@ export async function savePatient(patient: Patient): Promise<Patient> {
   }
 }
 
-// Összes beteg lekérdezése
-export async function getAllPatients(): Promise<Patient[]> {
+// Pagination interface
+export interface PaginationInfo {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface PatientsResponse {
+  patients: Patient[];
+  pagination: PaginationInfo;
+}
+
+// Összes beteg lekérdezése (pagination támogatással)
+export async function getAllPatients(page: number = 1, limit: number = 50): Promise<PatientsResponse> {
   try {
     const response = await fetchWithTimeout(
-      API_BASE_URL,
+      `${API_BASE_URL}?page=${page}&limit=${limit}`,
       {
         credentials: 'include',
       },
       30000 // 30 másodperc timeout
     );
-    const data = await handleApiResponse<{ patients: Patient[] }>(response);
-    return data.patients;
+    const data = await handleApiResponse<PatientsResponse>(response);
+    return data;
   } catch (error) {
     console.error('Hiba a betegek lekérdezésekor:', error);
-    return [];
+    return {
+      patients: [],
+      pagination: {
+        page: 1,
+        limit: 50,
+        total: 0,
+        totalPages: 0,
+      },
+    };
   }
 }
 
-// Beteg keresése
-export async function searchPatients(query: string): Promise<Patient[]> {
+// Beteg keresése (pagination támogatással)
+export async function searchPatients(query: string, page: number = 1, limit: number = 50): Promise<PatientsResponse> {
   try {
     if (!query.trim()) {
-      return getAllPatients();
+      return getAllPatients(page, limit);
     }
     
     const response = await fetchWithTimeout(
-      `${API_BASE_URL}?q=${encodeURIComponent(query)}`,
+      `${API_BASE_URL}?q=${encodeURIComponent(query)}&page=${page}&limit=${limit}`,
       {
         credentials: 'include',
       },
       30000 // 30 másodperc timeout
     );
-    const data = await handleApiResponse<{ patients: Patient[] }>(response);
-    return data.patients;
+    const data = await handleApiResponse<PatientsResponse>(response);
+    return data;
   } catch (error) {
     console.error('Hiba a kereséskor:', error);
-    return [];
+    return {
+      patients: [],
+      pagination: {
+        page: 1,
+        limit: 50,
+        total: 0,
+        totalPages: 0,
+      },
+    };
   }
 }
 
@@ -191,8 +220,19 @@ export async function deletePatient(id: string): Promise<void> {
 
 // CSV export funkció - teljes adatbázis
 export async function exportAllPatientsToCSV(): Promise<string> {
-  const patients = await getAllPatients();
-  return convertPatientsToCSV(patients);
+  // Fetch all patients without pagination for CSV export
+  let allPatients: Patient[] = [];
+  let currentPage = 1;
+  let hasMore = true;
+  
+  while (hasMore) {
+    const response = await getAllPatients(currentPage, 1000); // Use large limit
+    allPatients = [...allPatients, ...response.patients];
+    hasMore = currentPage < response.pagination.totalPages;
+    currentPage++;
+  }
+  
+  return convertPatientsToCSV(allPatients);
 }
 
 // CSV import funkció (batch mentés)

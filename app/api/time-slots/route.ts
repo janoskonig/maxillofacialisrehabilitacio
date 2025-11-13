@@ -16,8 +16,21 @@ export async function GET(request: NextRequest) {
     const pool = getDbPool();
     const role = auth.role;
     const userEmail = auth.email;
+    
+    // Pagination paraméterek
+    const searchParams = request.nextUrl.searchParams;
+    const page = parseInt(searchParams.get('page') || '1', 10);
+    const limit = parseInt(searchParams.get('limit') || '50', 10);
+    const offset = (page - 1) * limit;
 
-    // Everyone sees all time slots (available and booked)
+    // Count query
+    const countResult = await pool.query(`
+      SELECT COUNT(*) as total
+      FROM available_time_slots ats
+      JOIN users u ON ats.user_id = u.id
+    `);
+
+    // Data query with pagination
     const query = `
       SELECT 
         ats.id,
@@ -32,19 +45,31 @@ export async function GET(request: NextRequest) {
       FROM available_time_slots ats
       JOIN users u ON ats.user_id = u.id
       ORDER BY ats.start_time ASC
+      LIMIT $1 OFFSET $2
     `;
-    const params: any[] = [];
+    const params: unknown[] = [limit.toString(), offset.toString()];
 
     const result = await pool.query(query, params);
     
     // Default cím érték: "1088 Budapest, Szentkirályi utca 47"
     const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
-    const timeSlots = result.rows.map((row: any) => ({
+    const timeSlots = result.rows.map((row: { cim?: string | null; [key: string]: unknown }) => ({
       ...row,
       cim: row.cim || DEFAULT_CIM,
     }));
     
-    return NextResponse.json({ timeSlots });
+    const total = parseInt(countResult.rows[0].total, 10);
+    const totalPages = Math.ceil(total / limit);
+    
+    return NextResponse.json({ 
+      timeSlots,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+      }
+    });
   } catch (error) {
     console.error('Error fetching time slots:', error);
     return NextResponse.json(

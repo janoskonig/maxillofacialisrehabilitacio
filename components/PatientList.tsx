@@ -5,6 +5,13 @@ import { Patient } from '@/lib/types';
 import { Phone, Mail, Calendar, FileText, Eye, Pencil, CheckCircle2, XCircle, Clock, Trash2, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatDateForDisplay, calculateAge } from '@/lib/dateUtils';
 
+interface PaginationInfo {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
 interface PatientListProps {
   patients: Patient[];
   onView: (patient: Patient) => void;
@@ -16,6 +23,8 @@ interface PatientListProps {
   sortField?: 'nev' | 'idopont' | 'createdAt' | null;
   sortDirection?: 'asc' | 'desc';
   onSort?: (field: 'nev' | 'idopont' | 'createdAt') => void;
+  pagination?: PaginationInfo;
+  onPageChange?: (page: number) => void;
 }
 
 interface AppointmentInfo {
@@ -25,11 +34,14 @@ interface AppointmentInfo {
   dentistName?: string | null;
 }
 
-function PatientListComponent({ patients, onView, onEdit, onDelete, canEdit = false, canDelete = false, userRole, sortField, sortDirection = 'asc', onSort }: PatientListProps) {
+function PatientListComponent({ patients, onView, onEdit, onDelete, canEdit = false, canDelete = false, userRole, sortField, sortDirection = 'asc', onSort, pagination, onPageChange }: PatientListProps) {
   const [appointments, setAppointments] = useState<Record<string, AppointmentInfo>>({});
   const [loadingAppointments, setLoadingAppointments] = useState(false);
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const itemsPerPage = 50;
+  
+  // Use pagination from props if available, otherwise use client-side pagination as fallback
+  const currentPage = pagination?.page || 1;
+  const totalPages = pagination?.totalPages || Math.ceil(patients.length / 50);
+  const itemsPerPage = pagination?.limit || 50;
 
   // Load appointments for all roles
   useEffect(() => {
@@ -66,16 +78,16 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, canEdit = fa
     return patients;
   }, [patients, appointments, sortField, sortDirection]);
   
-  // Pagináció
-  const totalPages = Math.ceil(sortedPatients.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedPatients = sortedPatients.slice(startIndex, endIndex);
+  // Pagináció - csak ha nincs server-side pagination
+  const paginatedPatients = pagination 
+    ? sortedPatients // Server-side pagination esetén már paginated az adat
+    : sortedPatients.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   
-  // Reset to first page when patients or sort changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [patients.length, sortField, sortDirection]);
+  const handlePageChange = (page: number) => {
+    if (onPageChange) {
+      onPageChange(page);
+    }
+  };
 
   const loadAppointments = async () => {
     try {
@@ -410,11 +422,11 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, canEdit = fa
       {totalPages > 1 && (
         <div className="mt-4 px-4 py-3 flex items-center justify-between border-t border-gray-200">
           <div className="text-sm text-gray-600">
-            Oldal {currentPage} / {totalPages} (összesen {sortedPatients.length} beteg)
+            Oldal {currentPage} / {totalPages} (összesen {pagination?.total ?? sortedPatients.length} beteg)
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
               disabled={currentPage === 1}
               className={`px-3 py-2 rounded-md text-sm font-medium ${
                 currentPage === 1
@@ -439,7 +451,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, canEdit = fa
                 return (
                   <button
                     key={pageNum}
-                    onClick={() => setCurrentPage(pageNum)}
+                    onClick={() => handlePageChange(pageNum)}
                     className={`px-3 py-2 rounded-md text-sm font-medium ${
                       currentPage === pageNum
                         ? 'bg-blue-600 text-white'
@@ -452,7 +464,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, canEdit = fa
               })}
             </div>
             <button
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
               disabled={currentPage === totalPages}
               className={`px-3 py-2 rounded-md text-sm font-medium ${
                 currentPage === totalPages

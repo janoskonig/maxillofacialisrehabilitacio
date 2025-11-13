@@ -317,7 +317,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
   useEffect(() => {
     if (patient?.kezeleoorvos && kezeloorvosOptions.length > 0) {
       // Check if the patient's kezeleoorvos value exists in the options
-      if (kezeloorvosOptions.includes(patient.kezeleoorvos)) {
+      const optionExists = kezeloorvosOptions.some(option => option.name === patient.kezeleoorvos);
+      if (optionExists) {
         setValue('kezeleoorvos', patient.kezeleoorvos);
       }
     }

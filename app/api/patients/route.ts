@@ -84,6 +84,11 @@ export async function GET(request: NextRequest) {
     const pool = getDbPool();
     const searchParams = request.nextUrl.searchParams;
     const query = searchParams.get('q');
+    
+    // Pagination paraméterek
+    const page = parseInt(searchParams.get('page') || '1', 10);
+    const limit = parseInt(searchParams.get('limit') || '50', 10);
+    const offset = (page - 1) * limit;
 
     // Ellenőrizzük a felhasználó szerepkörét és jogosultságait
     const auth = await verifyAuth(request);
@@ -102,6 +107,7 @@ export async function GET(request: NextRequest) {
     }
     // sebészorvos, fogpótlástanász, admin, editor, viewer: mindent látnak (nincs szűrés)
     
+    let countResult;
     let result;
     
     if (query) {
@@ -114,11 +120,22 @@ export async function GET(request: NextRequest) {
         ? `${searchBase} AND ${whereConditions.join(' AND ')}`
         : searchBase;
       
+      // Count query
+      countResult = await pool.query(
+        `SELECT COUNT(*) as total
+        FROM patients
+        WHERE ${searchCondition}`,
+        queryParams
+      );
+      
+      // Data query with pagination
+      queryParams.push(limit.toString(), offset.toString());
       result = await pool.query(
         `SELECT ${PATIENT_SELECT_FIELDS}
         FROM patients
         WHERE ${searchCondition}
-        ORDER BY created_at DESC`,
+        ORDER BY created_at DESC
+        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
         queryParams
       );
     } else {
@@ -127,14 +144,32 @@ export async function GET(request: NextRequest) {
         ? `WHERE ${whereConditions.join(' AND ')}`
         : '';
       
+      // Count query
+      const countQuery = whereClause 
+        ? `SELECT COUNT(*) as total FROM patients ${whereClause}`
+        : `SELECT COUNT(*) as total FROM patients`;
+      countResult = await pool.query(
+        countQuery,
+        whereConditions.length > 0 ? queryParams : []
+      );
+      
+      // Data query with pagination
+      const countParams = whereConditions.length > 0 ? [...queryParams] : [];
+      countParams.push(limit.toString(), offset.toString());
+      const limitParamIndex = whereConditions.length > 0 ? queryParams.length + 1 : 1;
+      
       result = await pool.query(
         `SELECT ${PATIENT_SELECT_FIELDS}
         FROM patients
         ${whereClause}
-        ORDER BY created_at DESC`,
-        whereConditions.length > 0 ? queryParams : []
+        ORDER BY created_at DESC
+        LIMIT $${limitParamIndex} OFFSET $${limitParamIndex + 1}`,
+        countParams
       );
     }
+    
+    const total = parseInt(countResult.rows[0].total, 10);
+    const totalPages = Math.ceil(total / limit);
 
     // Activity logging: patients list viewed or searched (csak ha be van jelentkezve)
     try {
@@ -159,7 +194,15 @@ export async function GET(request: NextRequest) {
       // Don't fail the request if logging fails
     }
 
-    return NextResponse.json({ patients: result.rows }, { status: 200 });
+    return NextResponse.json({ 
+      patients: result.rows,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+      }
+    }, { status: 200 });
   } catch (error) {
     console.error('Hiba a betegek lekérdezésekor:', error);
     return NextResponse.json(
