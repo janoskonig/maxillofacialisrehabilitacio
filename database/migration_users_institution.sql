@@ -20,3 +20,4 @@ COMMENT ON COLUMN users.hozzaferes_indokolas IS 'Rövid indokolás, miért kér 
 
 COMMIT;
 
+

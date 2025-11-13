@@ -46,3 +46,4 @@ COMMENT ON COLUMN feedback.error_stack IS 'Stack trace ha elérhető';
 
 
 
+

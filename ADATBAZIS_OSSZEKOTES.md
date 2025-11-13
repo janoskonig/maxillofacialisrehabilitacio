@@ -92,3 +92,4 @@ psql -d maxillofacial_rehab -f database/schema.sql
 
 
 
+

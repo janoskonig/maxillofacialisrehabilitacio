@@ -104,8 +104,25 @@ export async function GET(request: NextRequest) {
       // Technikus: csak azokat a betegeket látja, akikhez arcot érintő kezelési terv van
       // Ellenőrizzük, hogy a kezelesi_terv_arcot_erinto mező nem NULL és nem üres tömb (tömb hossza > 0)
       whereConditions.push(`kezelesi_terv_arcot_erinto IS NOT NULL AND jsonb_array_length(kezelesi_terv_arcot_erinto) > 0`);
+    } else if (role === 'sebészorvos' && userEmail) {
+      // Sebészorvos: csak azokat a betegeket látja, akik az ő intézményéből származnak
+      // Lekérdezzük a felhasználó intézményét
+      const userResult = await pool.query(
+        `SELECT intezmeny FROM users WHERE email = $1`,
+        [userEmail]
+      );
+      
+      if (userResult.rows.length > 0 && userResult.rows[0].intezmeny) {
+        const userInstitution = userResult.rows[0].intezmeny;
+        whereConditions.push(`beutalo_intezmeny = $${paramIndex}`);
+        queryParams.push(userInstitution);
+        paramIndex++;
+      } else {
+        // Ha nincs intézmény beállítva, ne lásson betegeket
+        whereConditions.push(`1 = 0`);
+      }
     }
-    // sebészorvos, fogpótlástanász, admin, editor, viewer: mindent látnak (nincs szűrés)
+    // fogpótlástanász, admin, editor, viewer: mindent látnak (nincs szűrés)
     
     let countResult;
     let result;

@@ -116,10 +116,25 @@ export async function GET(
           { status: 403 }
         );
       }
-    } else if (role === 'sebészorvos') {
-      // Sebészorvos: csak azokat a betegeket látja, akiket ő utalt be
-      // Pontos egyezés: a beutalo_orvos mező pontosan egyezzen az email címmel
-      if (!userEmail || patient.beutaloOrvos !== userEmail) {
+    } else if (role === 'sebészorvos' && userEmail) {
+      // Sebészorvos: csak azokat a betegeket látja, akik az ő intézményéből származnak
+      // Lekérdezzük a felhasználó intézményét
+      const userResult = await pool.query(
+        `SELECT intezmeny FROM users WHERE email = $1`,
+        [userEmail]
+      );
+      
+      if (userResult.rows.length > 0 && userResult.rows[0].intezmeny) {
+        const userInstitution = userResult.rows[0].intezmeny;
+        // Ellenőrizzük, hogy a beteg beutalo_intezmeny mezője egyezik-e a felhasználó intézményével
+        if (patient.beutaloIntezmeny !== userInstitution) {
+          return NextResponse.json(
+            { error: 'Nincs jogosultsága ehhez a beteghez' },
+            { status: 403 }
+          );
+        }
+      } else {
+        // Ha nincs intézmény beállítva, ne lássa a beteget
         return NextResponse.json(
           { error: 'Nincs jogosultsága ehhez a beteghez' },
           { status: 403 }
@@ -193,24 +208,29 @@ export async function PUT(
     const oldPatient = oldPatientResult.rows[0];
     
     // Szerepkör alapú jogosultság ellenőrzés szerkesztéshez
-    if (role === 'sebészorvos') {
-      // Sebészorvos: csak azokat a betegeket szerkesztheti, akiket ő hozott létre (created_by)
-      if (!userEmail || oldPatient.created_by !== userEmail) {
+    if (role === 'sebészorvos' && userEmail) {
+      // Sebészorvos: csak azokat a betegeket szerkesztheti, akik az ő intézményéből származnak
+      // Lekérdezzük a felhasználó intézményét
+      const userResult = await pool.query(
+        `SELECT intezmeny FROM users WHERE email = $1`,
+        [userEmail]
+      );
+      
+      if (userResult.rows.length > 0 && userResult.rows[0].intezmeny) {
+        const userInstitution = userResult.rows[0].intezmeny;
+        // Ellenőrizzük, hogy a beteg beutalo_intezmeny mezője egyezik-e a felhasználó intézményével
+        if (oldPatient.beutalo_intezmeny !== userInstitution) {
+          return NextResponse.json(
+            { error: 'Nincs jogosultsága ehhez a beteg szerkesztéséhez. Csak az adott intézményből származó betegeket szerkesztheti.' },
+            { status: 403 }
+          );
+        }
+      } else {
+        // Ha nincs intézmény beállítva, ne szerkeszthesse a beteget
         return NextResponse.json(
-          { error: 'Nincs jogosultsága ehhez a beteg szerkesztéséhez. Csak az általuk létrehozott betegeket szerkeszthetik.' },
+          { error: 'Nincs jogosultsága ehhez a beteg szerkesztéséhez' },
           { status: 403 }
         );
-      }
-      // Sebészorvos esetén biztosítjuk, hogy a beutalo_orvos mező ne változzon meg
-      if (validatedPatient.beutaloOrvos && validatedPatient.beutaloOrvos !== userEmail) {
-        return NextResponse.json(
-          { error: 'Nem módosíthatja a beutaló orvos mezőt' },
-          { status: 403 }
-        );
-      }
-      // Ha nincs beállítva, automatikusan beállítjuk
-      if (!validatedPatient.beutaloOrvos) {
-        validatedPatient.beutaloOrvos = userEmail;
       }
     } else if (role === 'technikus') {
       // Technikus: csak azokat a betegeket szerkesztheti, akikhez epitézist rendeltek

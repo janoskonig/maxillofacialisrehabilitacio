@@ -14,3 +14,4 @@ COMMENT ON COLUMN patients.bno IS 'BNO (onkológiai kezelés utáni állapot)';
 COMMENT ON COLUMN patients.diagnozis IS 'Diagnózis (onkológiai kezelés utáni állapot)';
 
 
+
