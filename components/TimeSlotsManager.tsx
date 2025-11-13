@@ -407,15 +407,17 @@ export function TimeSlotsManager() {
   }, [timeSlots]);
   
   // Szétválasztjuk a jövőbeli és elmúlt időpontokat (paginált listákból)
+  // 4 órás késleltetés: ne vedd elmúlt időpontnak 4 óráig
   const now = new Date();
-  const futureSlots = paginatedSlots.filter(slot => new Date(slot.startTime) >= now);
-  const pastSlots = paginatedSlots.filter(slot => new Date(slot.startTime) < now);
+  const fourHoursBeforeNow = new Date(now.getTime() - 4 * 60 * 60 * 1000);
+  const futureSlots = paginatedSlots.filter(slot => new Date(slot.startTime) >= fourHoursBeforeNow);
+  const pastSlots = paginatedSlots.filter(slot => new Date(slot.startTime) < fourHoursBeforeNow);
 
   const availableSlotsForModification = filteredAndSortedSlots.filter(
     slot => {
       const slotDate = new Date(slot.startTime);
       return slot.status === 'available' 
-        && slotDate >= now
+        && slotDate >= fourHoursBeforeNow
         && (!modifyingAppointment || slot.id !== modifyingAppointment.timeSlotId);
     }
   );
