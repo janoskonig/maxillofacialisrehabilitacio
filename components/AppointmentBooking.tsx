@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Calendar, Clock, Download, User, Phone, Trash2, Edit2, X } from 'lucide-react';
+import { Calendar, Clock, Download, User, Phone, Trash2, Edit2, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Patient } from '@/lib/types';
 
 interface TimeSlot {
@@ -23,9 +23,18 @@ interface Appointment {
   dentistEmail: string;
 }
 
+interface PaginationInfo {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
 export function AppointmentBooking() {
   const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [appointmentsPagination, setAppointmentsPagination] = useState<PaginationInfo | null>(null);
+  const [appointmentsPage, setAppointmentsPage] = useState<number>(1);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPatient, setSelectedPatient] = useState<string>('');
@@ -55,14 +64,15 @@ export function AppointmentBooking() {
     }
   }, []);
 
-  const loadAppointments = useCallback(async () => {
+  const loadAppointments = useCallback(async (page: number = 1) => {
     try {
-      const response = await fetch('/api/appointments', {
+      const response = await fetch(`/api/appointments?page=${page}&limit=50`, {
         credentials: 'include',
       });
       if (response.ok) {
         const data = await response.json();
         setAppointments(data.appointments || []);
+        setAppointmentsPagination(data.pagination || null);
       }
     } catch (error) {
       console.error('Error loading appointments:', error);
@@ -94,18 +104,22 @@ export function AppointmentBooking() {
       setLoading(true);
       await Promise.all([
         loadAvailableSlots(),
-        loadAppointments(),
+        loadAppointments(appointmentsPage),
         loadPatients(),
       ]);
     } finally {
       setLoading(false);
       isLoadingRef.current = false;
     }
-  }, [loadAvailableSlots, loadAppointments, loadPatients]);
+  }, [loadAvailableSlots, loadAppointments, loadPatients, appointmentsPage]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    loadAppointments(appointmentsPage);
+  }, [appointmentsPage, loadAppointments]);
 
   const handleBookAppointment = useCallback(async () => {
     if (!selectedPatient || !selectedSlot) {
@@ -485,6 +499,65 @@ export function AppointmentBooking() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        {/* Pagináció */}
+        {appointmentsPagination && appointmentsPagination.totalPages > 1 && (
+          <div className="mt-4 px-6 py-3 flex items-center justify-between border-t border-gray-200">
+            <div className="text-sm text-gray-600">
+              Oldal {appointmentsPagination.page} / {appointmentsPagination.totalPages} (összesen {appointmentsPagination.total} időpont)
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setAppointmentsPage(prev => Math.max(1, prev - 1))}
+                disabled={appointmentsPagination.page === 1}
+                className={`px-3 py-2 rounded-md text-sm font-medium ${
+                  appointmentsPagination.page === 1
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                }`}
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: Math.min(5, appointmentsPagination.totalPages) }, (_, i) => {
+                  let pageNum: number;
+                  if (appointmentsPagination.totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (appointmentsPagination.page <= 3) {
+                    pageNum = i + 1;
+                  } else if (appointmentsPagination.page >= appointmentsPagination.totalPages - 2) {
+                    pageNum = appointmentsPagination.totalPages - 4 + i;
+                  } else {
+                    pageNum = appointmentsPagination.page - 2 + i;
+                  }
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => setAppointmentsPage(pageNum)}
+                      className={`px-3 py-2 rounded-md text-sm font-medium ${
+                        appointmentsPagination.page === pageNum
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                onClick={() => setAppointmentsPage(prev => Math.min(appointmentsPagination.totalPages, prev + 1))}
+                disabled={appointmentsPagination.page === appointmentsPagination.totalPages}
+                className={`px-3 py-2 rounded-md text-sm font-medium ${
+                  appointmentsPagination.page === appointmentsPagination.totalPages
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                }`}
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         )}
       </div>

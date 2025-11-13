@@ -90,10 +90,7 @@ export function TimeSlotsManager() {
   const loadTimeSlots = async () => {
     try {
       setLoading(true);
-      const [timeSlotsResponse, appointmentsResponse] = await Promise.all([
-        fetch('/api/time-slots', { credentials: 'include' }),
-        fetch('/api/appointments', { credentials: 'include' }),
-      ]);
+      const timeSlotsResponse = await fetch('/api/time-slots', { credentials: 'include' });
 
       if (timeSlotsResponse.ok) {
         const timeSlotsData = await timeSlotsResponse.json();
@@ -103,22 +100,44 @@ export function TimeSlotsManager() {
         console.error('Failed to load time slots');
       }
 
-      if (appointmentsResponse.ok) {
-        const appointmentsData = await appointmentsResponse.json();
-        // Create a map of timeSlotId -> appointment info
-        const appointmentsMap: Record<string, AppointmentInfo> = {};
-        (appointmentsData.appointments || []).forEach((apt: any) => {
-          appointmentsMap[apt.timeSlotId] = {
-            id: apt.id,
-            patientName: apt.patientName,
-            patientTaj: apt.patientTaj,
-            bookedBy: apt.createdBy,
-          };
+      // Load all appointments paginated
+      let page = 1;
+      let hasMore = true;
+      const allAppointments: any[] = [];
+      
+      while (hasMore) {
+        const appointmentsResponse = await fetch(`/api/appointments?page=${page}&limit=50`, {
+          credentials: 'include',
         });
-        setAppointments(appointmentsMap);
-      } else {
-        console.error('Failed to load appointments');
+        
+        if (appointmentsResponse.ok) {
+          const appointmentsData = await appointmentsResponse.json();
+          const pageAppointments = appointmentsData.appointments || [];
+          allAppointments.push(...pageAppointments);
+          
+          // Check if there are more pages
+          const pagination = appointmentsData.pagination;
+          if (pagination && page < pagination.totalPages) {
+            page++;
+          } else {
+            hasMore = false;
+          }
+        } else {
+          hasMore = false;
+        }
       }
+      
+      // Create a map of timeSlotId -> appointment info
+      const appointmentsMap: Record<string, AppointmentInfo> = {};
+      allAppointments.forEach((apt: any) => {
+        appointmentsMap[apt.timeSlotId] = {
+          id: apt.id,
+          patientName: apt.patientName,
+          patientTaj: apt.patientTaj,
+          bookedBy: apt.createdBy,
+        };
+      });
+      setAppointments(appointmentsMap);
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {

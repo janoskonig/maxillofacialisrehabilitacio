@@ -309,14 +309,31 @@ export default function Home() {
     // Check if patient has appointment by loading appointments
     let hasAppointment = false;
     try {
-      const appointmentsResponse = await fetch('/api/appointments', {
-        credentials: 'include',
-      });
-      if (appointmentsResponse.ok) {
-        const appointmentsData = await appointmentsResponse.json();
-        hasAppointment = (appointmentsData.appointments || []).some(
-          (apt: any) => apt.patientId === patient.id
-        );
+      // Load all appointments paginated to check if patient has any appointments
+      let page = 1;
+      let hasMore = true;
+      
+      while (hasMore && !hasAppointment) {
+        const appointmentsResponse = await fetch(`/api/appointments?page=${page}&limit=50`, {
+          credentials: 'include',
+        });
+        if (appointmentsResponse.ok) {
+          const appointmentsData = await appointmentsResponse.json();
+          const pageAppointments = appointmentsData.appointments || [];
+          hasAppointment = pageAppointments.some(
+            (apt: any) => apt.patientId === patient.id
+          );
+          
+          // Check if there are more pages
+          const pagination = appointmentsData.pagination;
+          if (pagination && page < pagination.totalPages && !hasAppointment) {
+            page++;
+          } else {
+            hasMore = false;
+          }
+        } else {
+          hasMore = false;
+        }
       }
     } catch (error) {
       console.error('Error checking appointments:', error);

@@ -19,6 +19,21 @@ export async function GET(request: NextRequest) {
 
     const pool = getDbPool();
 
+    // Pagination paraméterek
+    const searchParams = request.nextUrl.searchParams;
+    const page = parseInt(searchParams.get('page') || '1', 10);
+    const limit = parseInt(searchParams.get('limit') || '50', 10);
+    const offset = (page - 1) * limit;
+
+    // Count query
+    const countResult = await pool.query(`
+      SELECT COUNT(*) as total
+      FROM appointments a
+      JOIN available_time_slots ats ON a.time_slot_id = ats.id
+      JOIN patients p ON a.patient_id = p.id
+      LEFT JOIN users u ON a.dentist_email = u.email
+    `);
+
     // Everyone sees all appointments
     const query = `
       SELECT 
@@ -40,11 +55,24 @@ export async function GET(request: NextRequest) {
       JOIN patients p ON a.patient_id = p.id
       LEFT JOIN users u ON a.dentist_email = u.email
       ORDER BY ats.start_time ASC
+      LIMIT $1 OFFSET $2
     `;
-    const params: unknown[] = [];
+    const params: unknown[] = [limit.toString(), offset.toString()];
 
     const result = await pool.query(query, params);
-    return NextResponse.json({ appointments: result.rows });
+    
+    const total = parseInt(countResult.rows[0].total, 10);
+    const totalPages = Math.ceil(total / limit);
+    
+    return NextResponse.json({ 
+      appointments: result.rows,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+      }
+    });
   } catch (error) {
     console.error('Error fetching appointments:', error);
     return NextResponse.json(

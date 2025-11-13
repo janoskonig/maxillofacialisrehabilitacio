@@ -84,17 +84,38 @@ export function AppointmentBookingSection({
     if (!patientId) return;
     
     try {
-      const response = await fetch('/api/appointments', {
-        credentials: 'include',
-      });
-      if (response.ok) {
-        const data = await response.json();
-        // Filter appointments for this patient
-        const patientAppointments = (data.appointments || []).filter(
-          (apt: Appointment) => apt.patientId === patientId
-        );
-        setAppointments(patientAppointments);
+      // Load all appointments paginated to find all appointments for this patient
+      let page = 1;
+      let hasMore = true;
+      const allAppointments: Appointment[] = [];
+      
+      while (hasMore) {
+        const response = await fetch(`/api/appointments?page=${page}&limit=50`, {
+          credentials: 'include',
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          const pageAppointments = data.appointments || [];
+          allAppointments.push(...pageAppointments);
+          
+          // Check if there are more pages
+          const pagination = data.pagination;
+          if (pagination && page < pagination.totalPages) {
+            page++;
+          } else {
+            hasMore = false;
+          }
+        } else {
+          hasMore = false;
+        }
       }
+      
+      // Filter appointments for this patient
+      const patientAppointments = allAppointments.filter(
+        (apt: Appointment) => apt.patientId === patientId
+      );
+      setAppointments(patientAppointments);
     } catch (error) {
       console.error('Error loading appointments:', error);
     }

@@ -92,53 +92,73 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, canEdit = fa
   const loadAppointments = async () => {
     try {
       setLoadingAppointments(true);
-      const response = await fetch('/api/appointments', {
-        credentials: 'include',
-      });
-      if (response.ok) {
-        const data = await response.json();
-        const appointmentsMap: Record<string, AppointmentInfo> = {};
-        const now = new Date();
-        
-        // Group appointments by patient ID
-        const patientAppointments: Record<string, any[]> = {};
-        (data.appointments || []).forEach((apt: any) => {
-          if (!patientAppointments[apt.patientId]) {
-            patientAppointments[apt.patientId] = [];
-          }
-          patientAppointments[apt.patientId].push(apt);
+      const appointmentsMap: Record<string, AppointmentInfo> = {};
+      const now = new Date();
+      const fourHoursFromNow = new Date(now.getTime() - 4 * 60 * 60 * 1000);
+      
+      // Load all appointments paginated
+      let page = 1;
+      let hasMore = true;
+      const allAppointments: any[] = [];
+      
+      while (hasMore) {
+        const response = await fetch(`/api/appointments?page=${page}&limit=50`, {
+          credentials: 'include',
         });
         
-        // For each patient, find the next (earliest future) appointment
-        // 4 órás késleltetés: csak azokat az időpontokat jelenítjük meg, amelyek kezdete legalább 4 órával a jelenlegi időpont után van
-        const fourHoursFromNow = new Date(now.getTime() - 4 * 60 * 60 * 1000);
-        
-        Object.keys(patientAppointments).forEach((patientId) => {
-          const apts = patientAppointments[patientId];
+        if (response.ok) {
+          const data = await response.json();
+          const pageAppointments = data.appointments || [];
+          allAppointments.push(...pageAppointments);
           
-          // Filter appointments with 4 hour delay and sort by start time
-          const futureAppointments = apts
-            .filter((apt: any) => new Date(apt.startTime) >= fourHoursFromNow)
-            .sort((a: any, b: any) => 
-              new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
-            );
-          
-          // Only show appointments with 4 hour delay - don't show appointments that are more than 4 hours past
-          if (futureAppointments.length > 0) {
-            const nextApt = futureAppointments[0];
-            appointmentsMap[patientId] = {
-              id: nextApt.id,
-              startTime: nextApt.startTime,
-              dentistEmail: nextApt.dentistEmail,
-              dentistName: nextApt.dentistName,
-            };
+          // Check if there are more pages
+          const pagination = data.pagination;
+          if (pagination && page < pagination.totalPages) {
+            page++;
+          } else {
+            hasMore = false;
           }
-          // If no future appointments (with 4 hour delay), don't add anything to appointmentsMap
-          // This way the patient won't show an appointment in the list
-        });
-        
-        setAppointments(appointmentsMap);
+        } else {
+          hasMore = false;
+        }
       }
+      
+      // Group appointments by patient ID
+      const patientAppointments: Record<string, any[]> = {};
+      allAppointments.forEach((apt: any) => {
+        if (!patientAppointments[apt.patientId]) {
+          patientAppointments[apt.patientId] = [];
+        }
+        patientAppointments[apt.patientId].push(apt);
+      });
+      
+      // For each patient, find the next (earliest future) appointment
+      // 4 órás késleltetés: csak azokat az időpontokat jelenítjük meg, amelyek kezdete legalább 4 órával a jelenlegi időpont után van
+      Object.keys(patientAppointments).forEach((patientId) => {
+        const apts = patientAppointments[patientId];
+        
+        // Filter appointments with 4 hour delay and sort by start time
+        const futureAppointments = apts
+          .filter((apt: any) => new Date(apt.startTime) >= fourHoursFromNow)
+          .sort((a: any, b: any) => 
+            new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+          );
+        
+        // Only show appointments with 4 hour delay - don't show appointments that are more than 4 hours past
+        if (futureAppointments.length > 0) {
+          const nextApt = futureAppointments[0];
+          appointmentsMap[patientId] = {
+            id: nextApt.id,
+            startTime: nextApt.startTime,
+            dentistEmail: nextApt.dentistEmail,
+            dentistName: nextApt.dentistName,
+          };
+        }
+        // If no future appointments (with 4 hour delay), don't add anything to appointmentsMap
+        // This way the patient won't show an appointment in the list
+      });
+      
+      setAppointments(appointmentsMap);
     } catch (error) {
       console.error('Error loading appointments:', error);
     } finally {
