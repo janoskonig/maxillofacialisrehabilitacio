@@ -38,19 +38,29 @@ export async function GET(request: NextRequest) {
     const pool = getDbPool();
     const result = await pool.query(
       `SELECT 
-        id,
-        email,
-        doktor_neve,
-        role,
-        active,
-        restricted_view,
-        intezmeny,
-        hozzaferes_indokolas,
-        created_at,
-        updated_at,
-        last_login
-       FROM users
-       ORDER BY email ASC`
+        u.id,
+        u.email,
+        u.doktor_neve,
+        u.role,
+        u.active,
+        u.restricted_view,
+        u.intezmeny,
+        u.hozzaferes_indokolas,
+        u.created_at,
+        u.updated_at,
+        u.last_login,
+        a_last.created_at AS last_activity,
+        a_last.action AS last_activity_action,
+        a_last.detail AS last_activity_detail
+       FROM users u
+       LEFT JOIN LATERAL (
+         SELECT created_at, action, detail
+         FROM activity_logs
+         WHERE user_email = u.email
+         ORDER BY created_at DESC
+         LIMIT 1
+       ) a_last ON true
+       ORDER BY u.email ASC`
     );
 
     return NextResponse.json({ users: result.rows });

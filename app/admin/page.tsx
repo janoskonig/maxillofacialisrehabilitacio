@@ -19,6 +19,9 @@ type User = {
   created_at: string;
   updated_at: string;
   last_login: string | null;
+  last_activity: string | null;
+  last_activity_action: string | null;
+  last_activity_detail: string | null;
 };
 
 type Feedback = {
@@ -66,7 +69,7 @@ export default function AdminPage() {
   } | null>(null);
   
   // Rendezés a felhasználók táblázathoz
-  const [userSortField, setUserSortField] = useState<'email' | 'role' | 'last_login' | null>(null);
+  const [userSortField, setUserSortField] = useState<'email' | 'role' | 'last_activity' | null>(null);
   const [userSortDirection, setUserSortDirection] = useState<'asc' | 'desc'>('asc');
   
   // Rendezett felhasználók
@@ -84,9 +87,9 @@ export default function AdminPage() {
         case 'role':
           comparison = a.role.localeCompare(b.role, 'hu');
           break;
-        case 'last_login':
-          const dateA = a.last_login ? new Date(a.last_login).getTime() : 0;
-          const dateB = b.last_login ? new Date(b.last_login).getTime() : 0;
+        case 'last_activity':
+          const dateA = a.last_activity ? new Date(a.last_activity).getTime() : 0;
+          const dateB = b.last_activity ? new Date(b.last_activity).getTime() : 0;
           comparison = dateA - dateB;
           break;
       }
@@ -95,7 +98,7 @@ export default function AdminPage() {
     });
   }, [users, userSortField, userSortDirection]);
   
-  const handleUserSort = (field: 'email' | 'role' | 'last_login') => {
+  const handleUserSort = (field: 'email' | 'role' | 'last_activity') => {
     if (userSortField === field) {
       setUserSortDirection(userSortDirection === 'asc' ? 'desc' : 'asc');
     } else {
@@ -104,7 +107,7 @@ export default function AdminPage() {
     }
   };
   
-  const renderSortableHeader = (label: string, field: 'email' | 'role' | 'last_login') => {
+  const renderSortableHeader = (label: string, field: 'email' | 'role' | 'last_activity') => {
     const isActive = userSortField === field;
     const SortIcon = isActive 
       ? (userSortDirection === 'asc' ? ArrowUp : ArrowDown)
@@ -600,7 +603,7 @@ export default function AdminPage() {
                     {renderSortableHeader('Email', 'email')}
                     {renderSortableHeader('Szerepkör', 'role')}
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Állapot</th>
-                    {renderSortableHeader('Utolsó bejelentkezés', 'last_login')}
+                    {renderSortableHeader('Utolsó aktivitás', 'last_activity')}
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -627,7 +630,31 @@ export default function AdminPage() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-700">
-                        {user.last_login ? new Date(user.last_login).toLocaleString('hu-HU') : '-'}
+                        {user.last_activity ? (
+                          <div>
+                            <div className="font-medium">
+                              {user.last_activity_action === 'login' && 'Bejelentkezés'}
+                              {user.last_activity_action === 'heartbeat' && 'Oldal megtekintés'}
+                              {user.last_activity_action === 'patient_created' && 'Beteg létrehozása'}
+                              {user.last_activity_action === 'patient_updated' && 'Beteg módosítása'}
+                              {user.last_activity_action === 'patient_deleted' && 'Beteg törlése'}
+                              {user.last_activity_action === 'patient_viewed' && 'Beteg megtekintése'}
+                              {user.last_activity_action === 'register' && 'Regisztráció'}
+                              {user.last_activity_action === 'password_change' && 'Jelszó változtatás'}
+                              {!['login', 'heartbeat', 'patient_created', 'patient_updated', 'patient_deleted', 'patient_viewed', 'register', 'password_change'].includes(user.last_activity_action || '') && (user.last_activity_action || 'Ismeretlen aktivitás')}
+                            </div>
+                            {user.last_activity_detail && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                {user.last_activity_detail}
+                              </div>
+                            )}
+                            <div className="text-xs text-gray-400 mt-1">
+                              {new Date(user.last_activity).toLocaleString('hu-HU')}
+                            </div>
+                          </div>
+                        ) : (
+                          '-'
+                        )}
                       </td>
                     </tr>
                   ))}
