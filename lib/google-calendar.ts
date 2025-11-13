@@ -1,5 +1,5 @@
 import { google } from 'googleapis';
-import { getDbPool, queryWithRetry } from './db';
+import { getDbPool } from './db';
 import crypto from 'crypto';
 
 // Google OAuth2 konfiguráció
@@ -640,8 +640,7 @@ export async function syncTimeSlotsFromGoogleCalendar(userId: string): Promise<{
     const pool = getDbPool();
     
     // Ellenőrizzük, hogy a felhasználó Google Calendar-hoz kapcsolva van-e
-    const userResult = await queryWithRetry(
-      pool,
+    const userResult = await pool.query(
       `SELECT id, email, google_calendar_source_calendar_id 
        FROM users 
        WHERE id = $1 AND google_calendar_enabled = true`,
@@ -649,14 +648,11 @@ export async function syncTimeSlotsFromGoogleCalendar(userId: string): Promise<{
     );
     
     if (userResult.rows.length === 0) {
-      console.log(`[syncTimeSlotsFromGoogleCalendar] User ${userId} not found or Google Calendar not enabled`);
       return result;
     }
     
     const user = userResult.rows[0];
     const sourceCalendarId = user.google_calendar_source_calendar_id || 'primary';
-    
-    console.log(`[syncTimeSlotsFromGoogleCalendar] Starting sync for user ID: ${user.id}, email: ${user.email}`);
     
     // Lekérjük a jövőbeli eseményeket (2 év előre, hogy a jövő évi eseményeket is megtalálja)
     const now = new Date();
@@ -676,8 +672,7 @@ export async function syncTimeSlotsFromGoogleCalendar(userId: string): Promise<{
     console.log(`[syncTimeSlotsFromGoogleCalendar] Found ${szabadEvents.length} "szabad" events`);
     
     // Lekérjük az adatbázisban lévő Google Calendar-ból származó időpontokat
-    const existingSlotsResult = await queryWithRetry(
-      pool,
+    const existingSlotsResult = await pool.query(
       `SELECT id, google_calendar_event_id, start_time, status, teremszam 
        FROM available_time_slots 
        WHERE user_id = $1 AND source = 'google_calendar' AND google_calendar_event_id IS NOT NULL`,
@@ -762,8 +757,7 @@ export async function syncTimeSlotsFromGoogleCalendar(userId: string): Promise<{
             
             if (updates.length > 0) {
               values.push(existingSlot.id);
-              await queryWithRetry(
-                pool,
+              await pool.query(
                 `UPDATE available_time_slots 
                  SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP 
                  WHERE id = $${paramIndex}`,
@@ -776,8 +770,7 @@ export async function syncTimeSlotsFromGoogleCalendar(userId: string): Promise<{
       } else {
         // Új időpont létrehozása
         // cim-et nem állítjuk be (marad NULL, majd az API alapértelmezett értéket használ)
-        await queryWithRetry(
-          pool,
+        await pool.query(
           `INSERT INTO available_time_slots (user_id, start_time, status, google_calendar_event_id, source, teremszam)
            VALUES ($1, $2, 'available', $3, 'google_calendar', $4)`,
           [userId, startTime.toISOString(), event.id, teremszam]
@@ -791,8 +784,7 @@ export async function syncTimeSlotsFromGoogleCalendar(userId: string): Promise<{
       if (!processedEventIds.has(eventId)) {
         // Csak akkor törölünk, ha nincs lefoglalva
         if (slot.status === 'available') {
-          await queryWithRetry(
-            pool,
+          await pool.query(
             `DELETE FROM available_time_slots WHERE id = $1`,
             [slot.id]
           );
@@ -800,8 +792,6 @@ export async function syncTimeSlotsFromGoogleCalendar(userId: string): Promise<{
         }
       }
     }
-    
-    console.log(`[syncTimeSlotsFromGoogleCalendar] Sync completed for user ID: ${user.id}, email: ${user.email}. Created: ${result.created}, Updated: ${result.updated}, Deleted: ${result.deleted}, Errors: ${result.errors.length}`);
     
     return result;
   } catch (error) {
