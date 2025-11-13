@@ -91,3 +91,4 @@ psql -d maxillofacial_rehab -f database/schema.sql
 - Adatbázis séma: `database/schema.sql`
 
 
+

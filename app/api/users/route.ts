@@ -44,6 +44,8 @@ export async function GET(request: NextRequest) {
         role,
         active,
         restricted_view,
+        intezmeny,
+        hozzaferes_indokolas,
         created_at,
         updated_at,
         last_login

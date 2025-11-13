@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Patient, patientSchema, beutaloIntezmenyOptions, nyakiBlokkdisszekcioOptions, fabianFejerdyProtetikaiOsztalyOptions, kezelesiTervOptions, kezelesiTervArcotErintoTipusOptions, kezelesiTervArcotErintoElhorgonyzasOptions } from '@/lib/types';
+import { Patient, patientSchema, nyakiBlokkdisszekcioOptions, fabianFejerdyProtetikaiOsztalyOptions, kezelesiTervOptions, kezelesiTervArcotErintoTipusOptions, kezelesiTervArcotErintoElhorgonyzasOptions } from '@/lib/types';
 import { formatDateForInput } from '@/lib/dateUtils';
 import { X, Calendar, User, Phone, Mail, MapPin, FileText, AlertTriangle, Plus, Trash2 } from 'lucide-react';
 import { AppointmentBookingSection } from './AppointmentBookingSection';
@@ -111,7 +111,9 @@ interface PatientFormProps {
 export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: PatientFormProps) {
   const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
   const [userRole, setUserRole] = useState<string>('');
-  const [kezeloorvosOptions, setKezeloorvosOptions] = useState<string[]>([]);
+  const [kezeloorvosOptions, setKezeloorvosOptions] = useState<Array<{ name: string; intezmeny: string | null }>>([]);
+  const [doctorOptions, setDoctorOptions] = useState<Array<{ name: string; intezmeny: string | null }>>([]);
+  const [institutionOptions, setInstitutionOptions] = useState<string[]>([]);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isNewPatient = !patient && !isViewOnly;
   const patientId = patient?.id || null;
@@ -143,9 +145,12 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         const response = await fetch('/api/users/fogpotlastanasz');
         if (response.ok) {
           const data = await response.json();
-          // Extract display names from the users
-          const names = data.users.map((user: { displayName: string }) => user.displayName);
-          setKezeloorvosOptions(names);
+          // Store users with their institutions
+          const usersWithInstitutions = data.users.map((user: { displayName: string; intezmeny: string | null }) => ({
+            name: user.displayName,
+            intezmeny: user.intezmeny
+          }));
+          setKezeloorvosOptions(usersWithInstitutions);
         } else {
           console.error('Failed to load kezelőorvos options');
           // Fallback to empty array if API fails
@@ -158,6 +163,50 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       }
     };
     loadKezeloorvosOptions();
+  }, []);
+
+  // Load institution options from API
+  useEffect(() => {
+    const loadInstitutionOptions = async () => {
+      try {
+        const response = await fetch('/api/institutions');
+        if (response.ok) {
+          const data = await response.json();
+          setInstitutionOptions(data.institutions || []);
+        } else {
+          console.error('Failed to load institution options');
+          // Fallback to empty array if API fails
+          setInstitutionOptions([]);
+        }
+      } catch (error) {
+        console.error('Error loading institution options:', error);
+        // Fallback to empty array if API fails
+        setInstitutionOptions([]);
+      }
+    };
+    loadInstitutionOptions();
+  }, []);
+
+  // Load doctor options from API (for beutaló orvos autocomplete)
+  useEffect(() => {
+    const loadDoctorOptions = async () => {
+      try {
+        const response = await fetch('/api/users/doctors');
+        if (response.ok) {
+          const data = await response.json();
+          setDoctorOptions(data.doctors || []);
+        } else {
+          console.error('Failed to load doctor options');
+          // Fallback to empty array if API fails
+          setDoctorOptions([]);
+        }
+      } catch (error) {
+        console.error('Error loading doctor options:', error);
+        // Fallback to empty array if API fails
+        setDoctorOptions([]);
+      }
+    };
+    loadDoctorOptions();
   }, []);
 
   // Helper function to load draft from localStorage
@@ -277,6 +326,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
   const radioterapia = watch('radioterapia');
   const chemoterapia = watch('chemoterapia');
   const kezeleoorvos = watch('kezeleoorvos');
+  const beutaloOrvos = watch('beutaloOrvos');
   const nemIsmertPoziciokbanImplantatum = watch('nemIsmertPoziciokbanImplantatum');
   const felsoFogpotlasVan = watch('felsoFogpotlasVan');
   const felsoFogpotlasElegedett = watch('felsoFogpotlasElegedett');
@@ -425,23 +475,58 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
 
   // Automatikus intézet beállítás a kezelőorvos alapján
   useEffect(() => {
-    if (kezeleoorvos && !isViewOnly) {
-      // Fogpótlástani Klinika orvosok vezetéknevei (rugalmas névformátum kezelés)
-      // A név bármilyen formátumban lehet (pl. "Dr. König", "König János dr.", "König János", stb.)
-      const fogpotlastaniKlinikaVezeteknevek = ['Jász', 'Kádár', 'König', 'Takács', 'Körmendi', 'Tasi', 'Vánkos'];
-      
-      // Ellenőrizzük, hogy a kiválasztott kezelőorvos neve tartalmazza-e valamelyik vezetéknevet
-      const isFogpotlastaniKlinika = fogpotlastaniKlinikaVezeteknevek.some(vezeteknev => 
-        kezeleoorvos.toLowerCase().includes(vezeteknev.toLowerCase())
+    const currentIntezete = watch('kezeleoorvosIntezete');
+    if (kezeleoorvos && !isViewOnly && kezeloorvosOptions.length > 0) {
+      // Keresés a kezelőorvos listában
+      const selectedDoctor = kezeloorvosOptions.find(
+        (doc) => doc.name === kezeleoorvos
       );
       
-      if (isFogpotlastaniKlinika) {
-        setValue('kezeleoorvosIntezete', 'Fogpótlástani Klinika');
-      } else {
-        setValue('kezeleoorvosIntezete', 'Fogászati és Szájsebészeti Oktató Intézet');
+      if (selectedDoctor && selectedDoctor.intezmeny) {
+        // Csak akkor állítjuk be, ha még nincs érték vagy ha az intézmény változott
+        if (!currentIntezete || currentIntezete !== selectedDoctor.intezmeny) {
+          setValue('kezeleoorvosIntezete', selectedDoctor.intezmeny);
+        }
       }
     }
-  }, [kezeleoorvos, setValue, isViewOnly]);
+  }, [kezeleoorvos, kezeloorvosOptions, setValue, isViewOnly, watch]);
+
+  // Automatikus intézet beállítás a beutaló orvos alapján
+  useEffect(() => {
+    const currentBeutaloIntezmeny = watch('beutaloIntezmeny');
+    if (beutaloOrvos && !isViewOnly && vanBeutalo && beutaloOrvos.trim() !== '' && doctorOptions.length > 0) {
+      // Először próbáljuk megkeresni a lokális listában
+      const foundDoctor = doctorOptions.find(
+        (doc) => doc.name.toLowerCase() === beutaloOrvos.trim().toLowerCase()
+      );
+      
+      if (foundDoctor && foundDoctor.intezmeny) {
+        // Ha megtaláltuk a lokális listában és van intézménye
+        if (!currentBeutaloIntezmeny || currentBeutaloIntezmeny !== foundDoctor.intezmeny) {
+          setValue('beutaloIntezmeny', foundDoctor.intezmeny);
+        }
+      } else {
+        // Ha nem találjuk meg lokálisan, lekérjük az API-ból
+        const fetchInstitution = async () => {
+          try {
+            const response = await fetch(`/api/users/by-name?name=${encodeURIComponent(beutaloOrvos.trim())}`);
+            if (response.ok) {
+              const data = await response.json();
+              if (data.intezmeny && (!currentBeutaloIntezmeny || currentBeutaloIntezmeny !== data.intezmeny)) {
+                setValue('beutaloIntezmeny', data.intezmeny);
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching institution for beutaló orvos:', error);
+          }
+        };
+        
+        // Debounce: csak akkor kérjük le, ha a felhasználó nem ír éppen
+        const timeoutId = setTimeout(fetchInstitution, 500);
+        return () => clearTimeout(timeoutId);
+      }
+    }
+  }, [beutaloOrvos, vanBeutalo, doctorOptions, setValue, isViewOnly, watch]);
 
   // Implantátumok frissítése a form-ban
   useEffect(() => {
@@ -982,11 +1067,17 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                 <label className="form-label">Beutaló orvos</label>
                 <input
                   {...register('beutaloOrvos')}
+                  list="beutalo-orvos-options"
                   className="form-input"
                   placeholder="Beutaló orvos neve"
                   readOnly={isViewOnly}
                   disabled={!vanBeutalo}
                 />
+                <datalist id="beutalo-orvos-options">
+                  {doctorOptions.map((doctor) => (
+                    <option key={doctor.name} value={doctor.name} />
+                  ))}
+                </datalist>
               </div>
               <div>
                 <label className="form-label">Beutaló intézmény</label>
@@ -994,12 +1085,12 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                   {...register('beutaloIntezmeny')}
                   list="beutalo-intezmeny-options"
                   className="form-input"
-                  placeholder="Beutaló intézmény neve"
+                  placeholder="Válasszon vagy írjon be új intézményt..."
                   readOnly={isViewOnly}
                   disabled={!vanBeutalo}
                 />
                 <datalist id="beutalo-intezmeny-options">
-                  {beutaloIntezmenyOptions.map((option) => (
+                  {institutionOptions.map((option) => (
                     <option key={option} value={option} />
                   ))}
                 </datalist>
@@ -1032,18 +1123,22 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
               <select {...register('kezeleoorvos')} className="form-input" disabled={isViewOnly}>
                 <option value="">Válasszon...</option>
                 {kezeloorvosOptions.map((option) => (
-                  <option key={option} value={option}>{option}</option>
+                  <option key={option.name} value={option.name}>{option.name}</option>
                 ))}
               </select>
             </div>
             <div>
               <label className="form-label">Kezelőorvos intézete</label>
-              <input
+              <select
                 {...register('kezeleoorvosIntezete')}
                 className="form-input"
-                placeholder="Automatikusan kitöltődik"
-                readOnly
-              />
+                disabled={isViewOnly}
+              >
+                <option value="">Válasszon intézményt...</option>
+                {institutionOptions.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
             </div>
           </div>
         </div>

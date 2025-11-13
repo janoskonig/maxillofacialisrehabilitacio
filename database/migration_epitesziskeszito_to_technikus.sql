@@ -18,3 +18,4 @@ CHECK (role IN ('admin', 'editor', 'viewer', 'fogpótlástanász', 'technikus', 
 COMMENT ON COLUMN users.role IS 'Felhasználó szerepköre: admin, editor, viewer, fogpótlástanász, technikus, vagy sebészorvos';
 
 
+

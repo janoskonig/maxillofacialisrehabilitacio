@@ -22,3 +22,4 @@ COMMENT ON COLUMN available_time_slots.source IS 'Az időpont forrása: manual (
 
 COMMIT;
 
+

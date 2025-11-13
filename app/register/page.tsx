@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { Logo } from '@/components/Logo';
 
 type RegistrationRole = 'sebész' | 'fogpótos' | 'technikus';
+type Institution = 'Arc-, Állcsont-, ...' | 'Észak-Pesti Centrumkórház' | 'OOI Fej-Nyaki...';
 
 export default function Register() {
   const [email, setEmail] = useState('');
@@ -14,6 +15,8 @@ export default function Register() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [role, setRole] = useState<RegistrationRole | ''>('');
+  const [institution, setInstitution] = useState<Institution | ''>('');
+  const [accessReason, setAccessReason] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
@@ -38,6 +41,18 @@ export default function Register() {
       return;
     }
 
+    if (!institution) {
+      setError('Kérjük, válassza ki az intézményt');
+      setIsLoading(false);
+      return;
+    }
+
+    if (!accessReason || !accessReason.trim()) {
+      setError('Kérjük, adja meg az indokolást');
+      setIsLoading(false);
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError('A jelszavak nem egyeznek meg');
       setIsLoading(false);
@@ -57,7 +72,15 @@ export default function Register() {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify({ email, fullName: fullName.trim(), password, confirmPassword, role }),
+        body: JSON.stringify({ 
+          email, 
+          fullName: fullName.trim(), 
+          password, 
+          confirmPassword, 
+          role,
+          institution,
+          accessReason: accessReason.trim()
+        }),
       });
 
       const data = await response.json();
@@ -218,6 +241,47 @@ export default function Register() {
                 </select>
               </div>
               <p className="mt-1 text-xs text-gray-500">Kérjük, válassza ki, milyen szerepkörben szeretne regisztrálni</p>
+            </div>
+
+            <div>
+              <label htmlFor="institution" className="block text-sm font-medium text-gray-700">
+                Intézmény
+              </label>
+              <div className="mt-1">
+                <select
+                  id="institution"
+                  name="institution"
+                  required
+                  value={institution}
+                  onChange={(e) => setInstitution(e.target.value as Institution)}
+                  className="form-input w-full"
+                >
+                  <option value="">-- Válasszon intézményt --</option>
+                  <option value="Arc-, Állcsont-, ...">Arc-, Állcsont-, ...</option>
+                  <option value="Észak-Pesti Centrumkórház">Észak-Pesti Centrumkórház</option>
+                  <option value="OOI Fej-Nyaki...">OOI Fej-Nyaki...</option>
+                </select>
+              </div>
+              <p className="mt-1 text-xs text-gray-500">Kérjük, válassza ki az intézményt</p>
+            </div>
+
+            <div>
+              <label htmlFor="accessReason" className="block text-sm font-medium text-gray-700">
+                Hozzáférés indokolása
+              </label>
+              <div className="mt-1">
+                <textarea
+                  id="accessReason"
+                  name="accessReason"
+                  required
+                  rows={4}
+                  value={accessReason}
+                  onChange={(e) => setAccessReason(e.target.value)}
+                  className="form-input w-full"
+                  placeholder="Rövid indokolás, miért kér hozzáférést a rendszerhez..."
+                />
+              </div>
+              <p className="mt-1 text-xs text-gray-500">Kérjük, röviden indokolja, miért kér hozzáférést</p>
             </div>
 
             {error && (

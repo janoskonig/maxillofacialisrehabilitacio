@@ -17,3 +17,4 @@ COMMENT ON COLUMN available_time_slots.teremszam IS 'Az időpont teremszáma';
 
 COMMIT;
 
+

@@ -17,3 +17,4 @@ COMMENT ON COLUMN users.google_calendar_target_calendar_id IS 'Google Calendar c
 
 COMMIT;
 
+

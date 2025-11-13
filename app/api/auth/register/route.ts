@@ -36,7 +36,7 @@ function mapRoleToDatabaseRole(role: string): string | null {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, fullName, password, confirmPassword, role } = body;
+    const { email, fullName, password, confirmPassword, role, institution, accessReason } = body;
 
     // Alapvető validációk
     if (!email || !password) {
@@ -56,6 +56,20 @@ export async function POST(request: NextRequest) {
     if (!role) {
       return NextResponse.json(
         { error: 'Szerepkör megadása kötelező' },
+        { status: 400 }
+      );
+    }
+
+    if (!institution) {
+      return NextResponse.json(
+        { error: 'Intézmény megadása kötelező' },
+        { status: 400 }
+      );
+    }
+
+    if (!accessReason || !accessReason.trim()) {
+      return NextResponse.json(
+        { error: 'Hozzáférés indokolásának megadása kötelező' },
         { status: 400 }
       );
     }
@@ -117,10 +131,10 @@ export async function POST(request: NextRequest) {
 
     // Felhasználó létrehozása (inaktív, admin jóváhagyásra vár)
     const result = await pool.query(
-      `INSERT INTO users (email, password_hash, role, active, doktor_neve)
-       VALUES ($1, $2, $3, false, $4)
-       RETURNING id, email, role, active, doktor_neve`,
-      [normalizedEmail, passwordHash, databaseRole, cleanedName]
+      `INSERT INTO users (email, password_hash, role, active, doktor_neve, intezmeny, hozzaferes_indokolas)
+       VALUES ($1, $2, $3, false, $4, $5, $6)
+       RETURNING id, email, role, active, doktor_neve, intezmeny, hozzaferes_indokolas`,
+      [normalizedEmail, passwordHash, databaseRole, cleanedName, institution, accessReason.trim()]
     );
 
     const user = result.rows[0];

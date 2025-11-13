@@ -24,7 +24,8 @@ export async function GET(request: NextRequest) {
         email,
         doktor_neve,
         role,
-        active
+        active,
+        intezmeny
        FROM users
        WHERE (role = 'fogpótlástanász' OR role = 'admin') AND active = true
        ORDER BY COALESCE(doktor_neve, email) ASC`
@@ -36,6 +37,7 @@ export async function GET(request: NextRequest) {
       email: row.email,
       name: row.doktor_neve || row.email, // Ha nincs név, akkor email
       displayName: row.doktor_neve || row.email, // Megjelenítendő név
+      intezmeny: row.intezmeny || null, // Intézmény
     }));
 
     return NextResponse.json({ users });

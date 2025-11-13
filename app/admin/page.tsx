@@ -14,6 +14,8 @@ type User = {
   role: UserRole;
   active: boolean;
   restricted_view: boolean;
+  intezmeny: string | null;
+  hozzaferes_indokolas: string | null;
   created_at: string;
   updated_at: string;
   last_login: string | null;
@@ -537,6 +539,8 @@ export default function AdminPage() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Intézmény</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hozzáférés indokolása</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Regisztráció ideje</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Műveletek</th>
                   </tr>
@@ -547,6 +551,14 @@ export default function AdminPage() {
                     .map((user) => (
                       <tr key={user.id} className="bg-yellow-50">
                         <td className="px-4 py-3 text-sm text-gray-900">{user.email}</td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {user.intezmeny || '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700 max-w-md">
+                          <div className="truncate" title={user.hozzaferes_indokolas || ''}>
+                            {user.hozzaferes_indokolas || '-'}
+                          </div>
+                        </td>
                         <td className="px-4 py-3 text-sm text-gray-700">
                           {user.created_at ? new Date(user.created_at).toLocaleString('hu-HU') : '-'}
                         </td>
