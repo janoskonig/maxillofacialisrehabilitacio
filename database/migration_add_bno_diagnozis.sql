@@ -15,3 +15,4 @@ COMMENT ON COLUMN patients.diagnozis IS 'Diagnózis (onkológiai kezelés utáni
 
 
 
+

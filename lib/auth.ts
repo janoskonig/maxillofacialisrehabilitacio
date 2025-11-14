@@ -3,6 +3,7 @@
 export type AuthUser = {
   email: string;
   role: 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
+  intezmeny?: string | null;
 };
 
 let cachedUser: AuthUser | null = null;

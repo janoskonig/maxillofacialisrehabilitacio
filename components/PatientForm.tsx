@@ -10,6 +10,7 @@ import { AppointmentBookingSection } from './AppointmentBookingSection';
 import { getCurrentUser } from '@/lib/auth';
 import { DatePicker } from './DatePicker';
 import { savePatient } from '@/lib/storage';
+import { BNOAutocomplete } from './BNOAutocomplete';
 
 const DRAFT_STORAGE_KEY_PREFIX = 'patientFormDraft_';
 const DRAFT_TIMESTAMP_KEY_PREFIX = 'patientFormDraftTimestamp_';
@@ -1329,11 +1330,15 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                 {/* BNO mező */}
                 <div>
                   <label className="form-label">BNO</label>
-                  <input
-                    {...register('bno')}
-                    className="form-input"
-                    placeholder="BNO"
+                  <BNOAutocomplete
+                    value={watch('bno') || ''}
+                    onChange={(kod, nev) => {
+                      setValue('bno', kod, { shouldDirty: true, shouldValidate: true });
+                      setValue('diagnozis', nev, { shouldDirty: true, shouldValidate: true });
+                    }}
+                    placeholder="Kezdjen el gépelni a BNO kód vagy név alapján..."
                     readOnly={isViewOnly}
+                    disabled={isViewOnly}
                   />
                 </div>
                 {/* Diagnózis mező */}

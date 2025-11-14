@@ -20,3 +20,4 @@ COMMENT ON COLUMN users.role IS 'Felhasználó szerepköre: admin, editor, viewe
 
 
 
+

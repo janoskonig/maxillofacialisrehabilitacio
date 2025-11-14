@@ -23,6 +23,7 @@ export default function Home() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<UserRoleType>('viewer');
   const [originalUserRole, setOriginalUserRole] = useState<UserRoleType>('viewer');
+  const [userInstitution, setUserInstitution] = useState<string | null>(null);
   const [viewAsRole, setViewAsRole] = useState<UserRoleType | null>(null);
   const [sortField, setSortField] = useState<'nev' | 'idopont' | 'createdAt' | null>('idopont');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -48,9 +49,11 @@ export default function Home() {
     
       const email = user.email;
       const role = user.role;
+      const intezmeny = user.intezmeny || null;
     setUserEmail(email);
       setUserRole(role);
       setOriginalUserRole(role); // Store original role
+      setUserInstitution(intezmeny);
     loadPatients();
 
     // Send heartbeat only once per session
@@ -385,8 +388,13 @@ export default function Home() {
                   Maxillofaciális Rehabilitáció
                 </h1>
                 <p className="text-xs text-gray-600">
-                  BETEGREGISZTER
+                  BETEGREGISZTER ÉS IDŐPONTKEZELŐ
                 </p>
+                {originalUserRole === 'sebészorvos' && userInstitution && (
+                  <p className="text-xs font-semibold text-red-600 mt-0.5">
+                    SEBÉSZ MÓD (csak a {userInstitution} páciensei)
+                  </p>
+                )}
               </div>
             </div>
             {/* View As Role Selector - Only for admins */}
@@ -451,10 +459,7 @@ export default function Home() {
           {/* Header */}
           <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">Betegnyilvántartás</h2>
-          <p className="text-sm text-gray-600">
-            Maxillofaciális rehabilitációs betegadatok kezelése
-          </p>
+          <h2 className="text-xl font-bold text-gray-900">eCRF-katalógus (electronic Case Report Form)</h2>
           {userEmail && (
             <p className="text-xs text-gray-500">
               Bejelentkezve: {userEmail}
