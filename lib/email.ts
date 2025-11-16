@@ -714,3 +714,128 @@ export async function sendRegistrationNotificationToAdmins(
     html,
   });
 }
+
+/**
+ * Send conditional appointment request to patient
+ * Patient can approve, reject, or request a new time slot
+ */
+export async function sendConditionalAppointmentRequestToPatient(
+  patientEmail: string,
+  patientName: string | null,
+  patientNem: string | null,
+  appointmentTime: Date,
+  dentistFullName: string,
+  approvalToken: string,
+  baseUrl: string
+): Promise<void> {
+  // Dátum formátum: 2025. 11. 11. 15:15:00
+  const formatter = new Intl.DateTimeFormat('hu-HU', {
+    timeZone: 'Europe/Budapest',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+  
+  const parts = formatter.formatToParts(appointmentTime);
+  const year = parts.find(p => p.type === 'year')?.value || '';
+  const month = parts.find(p => p.type === 'month')?.value || '';
+  const day = parts.find(p => p.type === 'day')?.value || '';
+  const hours = parts.find(p => p.type === 'hour')?.value || '';
+  const minutes = parts.find(p => p.type === 'minute')?.value || '';
+  const seconds = parts.find(p => p.type === 'second')?.value || '';
+  const formattedDate = `${year}. ${month}. ${day}. ${hours}:${minutes}:${seconds}`;
+  
+  // Üdvözlés: Tisztelt Vezetknév Keresztnév Úr/Hölgy
+  let greeting = 'Tisztelt';
+  if (patientName) {
+    const nameParts = patientName.trim().split(/\s+/);
+    if (nameParts.length >= 2) {
+      const vezeteknev = nameParts[0];
+      const keresztnev = nameParts.slice(1).join(' ');
+      const title = patientNem === 'no' ? 'Hölgy' : patientNem === 'ferfi' ? 'Úr' : '';
+      greeting = `Tisztelt ${vezeteknev} ${keresztnev} ${title}`.trim();
+    } else {
+      greeting = `Tisztelt ${patientName}`;
+    }
+  } else {
+    greeting = 'Tisztelt Beteg';
+  }
+  
+  const approveUrl = `${baseUrl}/api/appointments/approve?token=${approvalToken}`;
+  const rejectUrl = `${baseUrl}/api/appointments/reject?token=${approvalToken}`;
+  const requestNewUrl = `${baseUrl}/api/appointments/request-new?token=${approvalToken}`;
+  
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #2563eb;">Időpontválasztás jóváhagyása</h2>
+      <p>${greeting}!</p>
+      <p>Időpontfoglalást javasoltunk Önnek:</p>
+      <ul>
+        <li><strong>Időpont:</strong> ${formattedDate}</li>
+        <li><strong>Kezelőorvos:</strong> ${dentistFullName}</li>
+      </ul>
+      <p>Kérjük, válassza ki az alábbi lehetőségek közül:</p>
+      <div style="margin: 30px 0; text-align: center;">
+        <a href="${approveUrl}" style="display: inline-block; background-color: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 5px; font-weight: bold;">✓ Elfogadom</a>
+        <a href="${rejectUrl}" style="display: inline-block; background-color: #ef4444; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 5px; font-weight: bold;">✗ Elvetem</a>
+        <a href="${requestNewUrl}" style="display: inline-block; background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 5px; font-weight: bold;">🔄 Új időpontot kérek</a>
+      </div>
+      <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+        Ha a gombok nem működnek, másolja be az alábbi linkeket a böngészőjébe:<br>
+        Elfogadás: <a href="${approveUrl}" style="color: #3b82f6;">${approveUrl}</a><br>
+        Elvetés: <a href="${rejectUrl}" style="color: #3b82f6;">${rejectUrl}</a><br>
+        Új időpont kérése: <a href="${requestNewUrl}" style="color: #3b82f6;">${requestNewUrl}</a>
+      </p>
+      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: patientEmail,
+    subject: 'Időpontválasztás jóváhagyása - Maxillofaciális Rehabilitáció',
+    html,
+  });
+}
+
+/**
+ * Send notification to admin when patient requests a new appointment
+ */
+export async function sendNewAppointmentRequestToAdmin(
+  adminEmails: string[],
+  patientName: string | null,
+  patientTaj: string | null,
+  patientEmail: string | null,
+  oldAppointmentTime: Date,
+  appointmentId: string
+): Promise<void> {
+  if (adminEmails.length === 0) {
+    return;
+  }
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #3b82f6;">Új időpont kérése</h2>
+      <p>Kedves adminisztrátor,</p>
+      <p>A páciens új időpontot kért:</p>
+      <ul>
+        <li><strong>Beteg neve:</strong> ${patientName || 'Név nélküli'}</li>
+        <li><strong>TAJ szám:</strong> ${patientTaj || 'Nincs megadva'}</li>
+        <li><strong>Email cím:</strong> ${patientEmail || 'Nincs megadva'}</li>
+        <li><strong>Eredeti időpont:</strong> ${oldAppointmentTime.toLocaleString('hu-HU')}</li>
+        <li><strong>Időpont ID:</strong> ${appointmentId}</li>
+      </ul>
+      <p>Kérjük, jelentkezzen be a rendszerbe és válasszon új időpontot a páciens számára.</p>
+      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: adminEmails,
+    subject: 'Új időpont kérése - Maxillofaciális Rehabilitáció',
+    html,
+  });
+}

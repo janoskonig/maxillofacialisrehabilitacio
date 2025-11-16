@@ -11,6 +11,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { DatePicker } from './DatePicker';
 import { savePatient } from '@/lib/storage';
 import { BNOAutocomplete } from './BNOAutocomplete';
+import { PatientDocuments } from './PatientDocuments';
 
 const DRAFT_STORAGE_KEY_PREFIX = 'patientFormDraft_';
 const DRAFT_TIMESTAMP_KEY_PREFIX = 'patientFormDraftTimestamp_';
@@ -717,6 +718,74 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     clearDraft();
     onSave(data);
   };
+
+  // Save patient silently (without alert) - used for document upload
+  const savePatientSilently = useCallback(async (): Promise<string | null> => {
+    // Get current form values
+    const formData = getValues();
+    
+    // Normalize fogak data
+    const normalizedFogak: Record<string, { status?: 'D' | 'F' | 'M'; description?: string }> = {};
+    Object.entries(fogak).forEach(([toothNumber, value]) => {
+      const normalizedValue = normalizeToothData(value);
+      if (normalizedValue) {
+        normalizedFogak[toothNumber] = normalizedValue;
+      }
+    });
+    
+    // Prepare patient data
+    const patientData: Patient = {
+      ...formData,
+      id: currentPatient?.id,
+      meglevoImplantatumok: implantatumok,
+      meglevoFogak: normalizedFogak,
+    };
+    
+    // Validate using schema
+    const validatedPatient = patientSchema.parse(patientData);
+    
+    // Save patient directly via API (bypassing onSave callback to avoid alert)
+    const savedPatient = await savePatient(validatedPatient);
+    
+    // Update local state
+    setCurrentPatient(savedPatient);
+    
+    // Update implantatumok and fogak state with saved values
+    if (savedPatient.meglevoImplantatumok) {
+      setImplantatumok(savedPatient.meglevoImplantatumok);
+    }
+    if (savedPatient.meglevoFogak) {
+      setFogak(savedPatient.meglevoFogak as Record<string, ToothStatus>);
+    }
+    
+    // Clear draft
+    clearDraft();
+    
+    // Reset form dirty state
+    reset(savedPatient ? {
+      ...savedPatient,
+      szuletesiDatum: formatDateForInput(savedPatient.szuletesiDatum),
+      mutetIdeje: formatDateForInput(savedPatient.mutetIdeje),
+      felvetelDatuma: formatDateForInput(savedPatient.felvetelDatuma),
+      kezelesiTervFelso: savedPatient.kezelesiTervFelso?.map(item => ({
+        ...item,
+        tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+      })) || [],
+      kezelesiTervAlso: savedPatient.kezelesiTervAlso?.map(item => ({
+        ...item,
+        tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+      })) || [],
+      kezelesiTervArcotErinto: savedPatient.kezelesiTervArcotErinto?.map(item => ({
+        ...item,
+        tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+      })) || [],
+    } : undefined, { keepDefaultValues: true });
+    
+    // Don't call onSave callback to avoid triggering alert
+    // The patient is saved, but we don't want to show the "Beteg mentve" popup
+    
+    return savedPatient.id || null;
+  }, [getValues, fogak, implantatumok, currentPatient, clearDraft, reset, setImplantatumok, setFogak, onSave]);
 
   // Save patient for booking - used when booking appointment before saving form
   const savePatientForBooking = useCallback(async (): Promise<Patient> => {
@@ -2421,6 +2490,16 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           </div>
         </div>
         )}
+
+        {/* Documents Section */}
+        <PatientDocuments
+          patientId={patientId}
+          isViewOnly={isViewOnly}
+          canUpload={userRole === 'admin' || userRole === 'editor'}
+          canDelete={userRole === 'admin'}
+          onSavePatientBeforeUpload={!isViewOnly ? savePatientSilently : undefined}
+          isPatientDirty={!isViewOnly && (isDirty || hasUnsavedChanges())}
+        />
 
         {/* Appointment Booking Section */}
         {/* For surgeons, always allow editing appointments even if form is view-only */}

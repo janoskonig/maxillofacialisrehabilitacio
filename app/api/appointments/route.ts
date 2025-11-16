@@ -43,13 +43,15 @@ export async function GET(request: NextRequest) {
         a.created_by as "createdBy",
         a.dentist_email as "dentistEmail",
         a.created_at as "createdAt",
+        a.approval_status as "approvalStatus",
+        a.approval_token as "approvalToken",
         ats.start_time as "startTime",
         ats.status,
         ats.cim,
         ats.teremszam,
         p.nev as "patientName",
         p.taj as "patientTaj",
-        u.doktor_neve as "dentistName"
+        p.email as "patientEmail"
       FROM appointments a
       JOIN available_time_slots ats ON a.time_slot_id = ats.id
       JOIN patients p ON a.patient_id = p.id

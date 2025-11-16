@@ -139,7 +139,12 @@ export default function Home() {
       // Ne zárjuk be az űrlapot automatikusan - a felhasználó manuálisan zárhatja be
       // setShowForm(false);
       // setEditingPatient(null);
-      alert('Betegadat sikeresen mentve az adatbázisba!');
+      
+      // Check if this is a silent save (for document upload, etc.)
+      const isSilent = (handleSavePatient as any)._silent;
+      if (!isSilent) {
+        alert('Betegadat sikeresen mentve az adatbázisba!');
+      }
     } catch (error: any) {
       console.error('Hiba a beteg mentésekor:', error);
       let errorMessage = 'Kérjük, ellenőrizze az összes kötelező mezőt és próbálja újra.';

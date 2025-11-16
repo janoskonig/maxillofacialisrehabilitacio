@@ -286,3 +286,21 @@ export const kezelesiTervArcotErintoElhorgonyzasOptions = [
   'rúd-lovas rendszer',
   'gömbretenció'
 ];
+
+// Patient Document Schema
+export const documentSchema = z.object({
+  id: z.string().optional(),
+  patientId: z.string(),
+  filename: z.string().min(1, 'Fájlnév kötelező'),
+  filePath: z.string().optional(),
+  fileSize: z.number().int().positive('Fájlméret pozitív szám kell legyen'),
+  mimeType: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  tags: z.array(z.string()).default([]),
+  uploadedBy: z.string().email('Érvénytelen email cím'),
+  uploadedAt: z.string().optional().nullable(),
+  createdAt: z.string().optional().nullable(),
+  updatedAt: z.string().optional().nullable(),
+});
+
+export type PatientDocument = z.infer<typeof documentSchema>;

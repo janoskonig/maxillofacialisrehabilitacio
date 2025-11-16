@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, memo } from 'react';
 import { Patient } from '@/lib/types';
-import { Phone, Mail, Calendar, FileText, Eye, Pencil, CheckCircle2, XCircle, Clock, Trash2, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Phone, Mail, Calendar, FileText, Eye, Pencil, CheckCircle2, XCircle, Clock, Trash2, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Image } from 'lucide-react';
 import { formatDateForDisplay, calculateAge } from '@/lib/dateUtils';
 
 interface PaginationInfo {
@@ -37,6 +37,7 @@ interface AppointmentInfo {
 function PatientListComponent({ patients, onView, onEdit, onDelete, canEdit = false, canDelete = false, userRole, sortField, sortDirection = 'asc', onSort, pagination, onPageChange }: PatientListProps) {
   const [appointments, setAppointments] = useState<Record<string, AppointmentInfo>>({});
   const [loadingAppointments, setLoadingAppointments] = useState(false);
+  const [opDocuments, setOpDocuments] = useState<Record<string, number>>({});
   
   // Use pagination from props if available, otherwise use client-side pagination as fallback
   const currentPage = pagination?.page || 1;
@@ -47,6 +48,33 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, canEdit = fa
   useEffect(() => {
     loadAppointments();
   }, [patients]);
+
+  // Load OP documents for quick access
+  useEffect(() => {
+    loadOpDocuments();
+  }, [patients]);
+
+  const loadOpDocuments = async () => {
+    const opDocsMap: Record<string, number> = {};
+    
+    // Load OP documents for each patient
+    const promises = patients.map(async (patient) => {
+      if (!patient.id) return;
+      try {
+        const response = await fetch(`/api/patients/${patient.id}/documents/op`);
+        if (response.ok) {
+          const data = await response.json();
+          opDocsMap[patient.id] = data.documents?.length || 0;
+        }
+      } catch (error) {
+        // Silently fail - not critical
+        console.error(`Failed to load OP documents for patient ${patient.id}:`, error);
+      }
+    });
+
+    await Promise.all(promises);
+    setOpDocuments(opDocsMap);
+  };
 
   // Sort patients by appointment if needed
   const sortedPatients = useMemo(() => {
@@ -221,6 +249,9 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, canEdit = fa
                 Kezelőorvos
               </th>
               {renderSortableHeader('Időpont', 'idopont', 'w-32')}
+              <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20">
+                OP
+              </th>
               {userRole !== 'sebészorvos' && (
                 <>
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -330,6 +361,20 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, canEdit = fa
                     </div>
                   ) : (
                     <div className="text-xs text-gray-400">-</div>
+                  )}
+                </td>
+                <td className="px-3 py-2 text-center">
+                  {opDocuments[patient.id || ''] > 0 ? (
+                    <button
+                      onClick={() => onView(patient)}
+                      className="inline-flex items-center justify-center p-1.5 rounded-full bg-medical-primary/10 text-medical-primary hover:bg-medical-primary/20 transition-colors"
+                      title={`${opDocuments[patient.id || '']} OP dokumentum`}
+                    >
+                      <Image className="w-4 h-4" />
+                      <span className="ml-1 text-xs font-medium">{opDocuments[patient.id || '']}</span>
+                    </button>
+                  ) : (
+                    <span className="text-xs text-gray-300">-</span>
                   )}
                 </td>
                 {userRole !== 'sebészorvos' && (

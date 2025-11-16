@@ -241,3 +241,4 @@ ORDER BY hasznalat_szama DESC;
 
 
 
+

@@ -17,3 +17,4 @@ WHERE nem = 'egyeb';
 
 
 
+

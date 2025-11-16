@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { getCurrentUser, type AuthUser } from '@/lib/auth';
 import { MessageCircle, ChevronDown, ChevronUp, AlertCircle, Bug, Lightbulb, Mail, Send, ArrowUp, ArrowDown } from 'lucide-react';
 import { Logo } from '@/components/Logo';
+import { ConditionalAppointmentBooking } from '@/components/ConditionalAppointmentBooking';
 
 type UserRole = 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
 
@@ -854,6 +855,11 @@ export default function AdminPage() {
               </table>
             </div>
           )}
+        </div>
+
+        {/* Feltételes időpontválasztás */}
+        <div className="mt-6">
+          <ConditionalAppointmentBooking />
         </div>
 
         <div className="card mt-6">
