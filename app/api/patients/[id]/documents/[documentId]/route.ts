@@ -106,7 +106,8 @@ export async function GET(
     }
 
     // Return file
-    return new NextResponse(fileBuffer, {
+    // Convert Buffer to Uint8Array for NextResponse compatibility
+    return new NextResponse(new Uint8Array(fileBuffer), {
       status: 200,
       headers: {
         'Content-Type': document.mime_type || 'application/octet-stream',
