@@ -17,6 +17,7 @@ interface PatientListProps {
   onView: (patient: Patient) => void;
   onEdit?: (patient: Patient) => void;
   onDelete?: (patient: Patient) => void;
+  onViewOP?: (patient: Patient) => void;
   canEdit?: boolean;
   canDelete?: boolean;
   userRole?: 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
@@ -34,7 +35,7 @@ interface AppointmentInfo {
   dentistName?: string | null;
 }
 
-function PatientListComponent({ patients, onView, onEdit, onDelete, canEdit = false, canDelete = false, userRole, sortField, sortDirection = 'asc', onSort, pagination, onPageChange }: PatientListProps) {
+function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, canEdit = false, canDelete = false, userRole, sortField, sortDirection = 'asc', onSort, pagination, onPageChange }: PatientListProps) {
   const [appointments, setAppointments] = useState<Record<string, AppointmentInfo>>({});
   const [loadingAppointments, setLoadingAppointments] = useState(false);
   const [opDocuments, setOpDocuments] = useState<Record<string, number>>({});
@@ -366,7 +367,14 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, canEdit = fa
                 <td className="px-3 py-2 text-center">
                   {opDocuments[patient.id || ''] > 0 ? (
                     <button
-                      onClick={() => onView(patient)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onViewOP) {
+                          onViewOP(patient);
+                        } else {
+                          onView(patient);
+                        }
+                      }}
                       className="inline-flex items-center justify-center p-1.5 rounded-full bg-medical-primary/10 text-medical-primary hover:bg-medical-primary/20 transition-colors"
                       title={`${opDocuments[patient.id || '']} OP dokumentum`}
                     >
@@ -559,6 +567,7 @@ export const PatientList = memo(PatientListComponent, (prevProps, nextProps) => 
     prevProps.onView === nextProps.onView &&
     prevProps.onEdit === nextProps.onEdit &&
     prevProps.onDelete === nextProps.onDelete &&
+    prevProps.onViewOP === nextProps.onViewOP &&
     prevProps.onSort === nextProps.onSort
   );
 });

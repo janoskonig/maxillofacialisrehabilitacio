@@ -42,6 +42,7 @@ export function PatientDocuments({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [fileAccept, setFileAccept] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     const checkRole = async () => {
@@ -75,6 +76,24 @@ export function PatientDocuments({
       console.error('Error loading available tags:', error);
     }
   };
+
+  // Update file accept attribute based on tags
+  useEffect(() => {
+    const hasOPTag = tags.some(tag => 
+      tag.toLowerCase() === 'op' || 
+      tag.toLowerCase() === 'orthopantomogram'
+    );
+    setFileAccept(hasOPTag ? 'image/*' : undefined);
+    
+    // Also update the input element's accept attribute if ref is available
+    if (fileInputRef.current) {
+      if (hasOPTag) {
+        fileInputRef.current.setAttribute('accept', 'image/*');
+      } else {
+        fileInputRef.current.removeAttribute('accept');
+      }
+    }
+  }, [tags]);
 
   // Filter tags based on input
   useEffect(() => {
@@ -126,6 +145,20 @@ export function PatientDocuments({
 
   const handleFileSelect = (file: File) => {
     if (file) {
+      // Check if OP tag is selected and file is not an image
+      const hasOPTag = tags.some(tag => 
+        tag.toLowerCase() === 'op' || 
+        tag.toLowerCase() === 'orthopantomogram'
+      );
+      
+      if (hasOPTag) {
+        const isImage = file.type && file.type.startsWith('image/');
+        if (!isImage) {
+          alert('OP tag-gel csak képfájlok tölthetők fel. Kérjük, válasszon ki egy képfájlt vagy távolítsa el az OP tag-et.');
+          return;
+        }
+      }
+      
       setSelectedFile(file);
       setShowUploadForm(true);
     }
@@ -167,6 +200,20 @@ export function PatientDocuments({
 
   const handleUpload = async () => {
     if (!selectedFile) return;
+
+    // Validate: OP tag can only be used with image files
+    const hasOPTag = tags.some(tag => 
+      tag.toLowerCase() === 'op' || 
+      tag.toLowerCase() === 'orthopantomogram'
+    );
+    
+    if (hasOPTag) {
+      const isImage = selectedFile.type && selectedFile.type.startsWith('image/');
+      if (!isImage) {
+        alert('OP tag-gel csak képfájlok tölthetők fel. Kérjük, válasszon ki egy képfájlt vagy távolítsa el az OP tag-et.');
+        return;
+      }
+    }
 
     // Check if patient needs to be saved first
     let currentPatientId = patientId;
@@ -296,6 +343,16 @@ export function PatientDocuments({
   const addTag = (tagToAdd?: string) => {
     const tag = tagToAdd || newTag.trim();
     if (tag && !tags.includes(tag)) {
+      // Check if adding OP tag and selected file is not an image
+      const isOPTag = tag.toLowerCase() === 'op' || tag.toLowerCase() === 'orthopantomogram';
+      if (isOPTag && selectedFile) {
+        const isImage = selectedFile.type && selectedFile.type.startsWith('image/');
+        if (!isImage) {
+          alert('OP tag-gel csak képfájlok tölthetők fel. Kérjük, válasszon ki egy képfájlt vagy távolítsa el a fájlt.');
+          return;
+        }
+      }
+      
       setTags([...tags, tag]);
       setNewTag('');
       setShowTagSuggestions(false);
@@ -410,6 +467,7 @@ export function PatientDocuments({
                   ref={fileInputRef}
                   type="file"
                   className="hidden"
+                  accept={fileAccept}
                   onChange={(e) => {
                     if (e.target.files && e.target.files[0]) {
                       handleFileSelect(e.target.files[0]);

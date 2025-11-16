@@ -90,7 +90,8 @@ export async function GET(
     }
 
     // Download file from FTP
-    const fileBuffer = await downloadFile(document.file_path);
+    // Pass patientId to downloadFile so it can navigate to the correct directory
+    const fileBuffer = await downloadFile(document.file_path, patientId);
 
     // Activity logging
     try {
@@ -105,14 +106,33 @@ export async function GET(
       console.error('Failed to log activity:', logError);
     }
 
+    // Check if this is an image - if so, use inline disposition for viewing
+    const isImage = document.mime_type && (
+      document.mime_type.startsWith('image/') ||
+      document.mime_type === 'image/jpeg' ||
+      document.mime_type === 'image/jpg' ||
+      document.mime_type === 'image/png' ||
+      document.mime_type === 'image/gif' ||
+      document.mime_type === 'image/webp' ||
+      document.mime_type === 'image/svg+xml'
+    );
+    
+    // Check if request wants inline display (from query param or referer)
+    const url = new URL(request.url);
+    const viewInline = url.searchParams.get('inline') === 'true' || isImage;
+    
     // Return file
     // Convert Buffer to Uint8Array for NextResponse compatibility
     return new NextResponse(new Uint8Array(fileBuffer), {
       status: 200,
       headers: {
         'Content-Type': document.mime_type || 'application/octet-stream',
-        'Content-Disposition': `attachment; filename="${encodeURIComponent(document.filename)}"`,
+        'Content-Disposition': viewInline 
+          ? `inline; filename="${encodeURIComponent(document.filename)}"`
+          : `attachment; filename="${encodeURIComponent(document.filename)}"`,
         'Content-Length': document.file_size.toString(),
+        // Add CORS headers for cross-origin image loading if needed
+        'Cache-Control': 'private, max-age=3600',
       },
     });
   } catch (error) {

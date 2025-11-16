@@ -408,18 +408,35 @@ export async function uploadFile(
 
 /**
  * Download a file from FTP server
- * @param filePath FTP file path
+ * @param filePath FTP file path (full path from database)
+ * @param patientId Optional patient ID to navigate to patient directory
  * @returns File buffer
  */
-export async function downloadFile(filePath: string): Promise<Buffer> {
+export async function downloadFile(filePath: string, patientId?: string): Promise<Buffer> {
   const client = await getFtpClient();
   
   try {
     // Validate path doesn't contain path traversal
-    if (filePath.includes('..') || !filePath.startsWith(FTP_BASE_PATH)) {
+    if (filePath.includes('..')) {
       throw new Error('Invalid file path');
     }
 
+    // Extract filename from file_path
+    // file_path format: /home/jancsi/ftp/rehab_prot/patients/{patientId}/{filename}
+    // or relative: patients/{patientId}/{filename}
+    let filename = filePath;
+    
+    // If file_path contains the patient directory, extract just the filename
+    if (patientId && filePath.includes(patientId)) {
+      const parts = filePath.split('/');
+      filename = parts[parts.length - 1]; // Get last part (filename)
+    } else if (filePath.includes('/')) {
+      // Extract filename from path
+      filename = filePath.split('/').pop() || filePath;
+    }
+    
+    console.log(`[FTP] Downloading file: ${filename} from path: ${filePath}`);
+    
     const chunks: Buffer[] = [];
     
     const writable = new Writable({
@@ -429,8 +446,17 @@ export async function downloadFile(filePath: string): Promise<Buffer> {
       }
     });
     
-    await client.downloadTo(writable, filePath);
+    // Navigate to patient directory if patientId is provided
+    if (patientId) {
+      await ensurePatientDirectory(client, patientId);
+      // Now we're in the patient directory, use relative filename
+      await client.downloadTo(writable, filename);
+    } else {
+      // Try to use full path (for backward compatibility)
+      await client.downloadTo(writable, filePath);
+    }
     
+    console.log(`[FTP] Successfully downloaded file: ${filename}, size: ${Buffer.concat(chunks).length} bytes`);
     return Buffer.concat(chunks);
   } catch (error) {
     console.error('FTP download error:', error);

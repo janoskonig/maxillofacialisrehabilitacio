@@ -6,6 +6,7 @@ import { Patient, patientSchema } from '@/lib/types';
 import { getAllPatients, savePatient, searchPatients, PaginationInfo } from '@/lib/storage';
 import { PatientForm } from '@/components/PatientForm';
 import { PatientList } from '@/components/PatientList';
+import { OPImageViewer } from '@/components/OPImageViewer';
 import { Plus, Search, Users, LogOut, Shield, Settings, Calendar, Eye } from 'lucide-react';
 import { getCurrentUser, getUserEmail, getUserRole, logout } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
@@ -34,6 +35,7 @@ export default function Home() {
     total: 0,
     totalPages: 0,
   });
+  const [opViewerPatient, setOpViewerPatient] = useState<Patient | null>(null);
   
   // Computed role for display - use viewAsRole if set, otherwise use original role
   const displayRole = viewAsRole || userRole;
@@ -284,6 +286,10 @@ export default function Home() {
     setEditingPatient(patient);
     setIsViewMode(true);
     setShowForm(true);
+  };
+
+  const handleViewOP = (patient: Patient) => {
+    setOpViewerPatient(patient);
   };
 
   const handleEditPatient = (patient: Patient) => {
@@ -566,6 +572,7 @@ export default function Home() {
                 onView={handleViewPatient}
                 onEdit={handleEditPatient}
                 onDelete={originalUserRole === 'admin' ? handleDeletePatient : undefined}
+                onViewOP={handleViewOP}
                 canEdit={displayRole === 'admin' || displayRole === 'editor' || displayRole === 'fogpótlástanász' || displayRole === 'sebészorvos'}
                 canDelete={originalUserRole === 'admin'}
                 userRole={displayRole}
@@ -617,6 +624,16 @@ export default function Home() {
             />
           </div>
         </div>
+      )}
+
+      {/* OP Image Viewer Modal */}
+      {opViewerPatient && opViewerPatient.id && (
+        <OPImageViewer
+          patientId={opViewerPatient.id}
+          patientName={opViewerPatient.nev || undefined}
+          isOpen={!!opViewerPatient}
+          onClose={() => setOpViewerPatient(null)}
+        />
       )}
         </div>
       </main>

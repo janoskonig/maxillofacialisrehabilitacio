@@ -231,6 +231,23 @@ export async function POST(
     
     console.log('Parsed tags:', tags);
 
+    // Validate: OP tag can only be used with image files
+    const hasOPTag = tags.some(tag => 
+      tag.toLowerCase() === 'op' || 
+      tag.toLowerCase() === 'orthopantomogram'
+    );
+    
+    if (hasOPTag) {
+      // Check if file is an image
+      const isImage = file.type && file.type.startsWith('image/');
+      if (!isImage) {
+        return NextResponse.json(
+          { error: 'OP tag-gel csak képfájlok tölthetők fel' },
+          { status: 400 }
+        );
+      }
+    }
+
     // Generate new filename: {cimke}_{patientId}_{datum}.{kiterjesztes}
     const { generateDocumentFilename } = await import('@/lib/ftp-client');
     const newFilename = generateDocumentFilename(
