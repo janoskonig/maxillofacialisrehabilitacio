@@ -242,11 +242,11 @@ export function PatientDocuments({
     }
   };
 
-  const handleDownload = async (document: PatientDocument) => {
+  const handleDownload = async (doc: PatientDocument) => {
     if (!patientId) return;
 
     try {
-      const response = await fetch(`/api/patients/${patientId}/documents/${document.id}`);
+      const response = await fetch(`/api/patients/${patientId}/documents/${doc.id}`);
       if (!response.ok) {
         throw new Error('Download failed');
       }
@@ -255,7 +255,7 @@ export function PatientDocuments({
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = document.filename;
+      a.download = doc.filename;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -266,13 +266,13 @@ export function PatientDocuments({
     }
   };
 
-  const handleDelete = async (document: PatientDocument) => {
-    if (!patientId || !confirm(`Biztosan törölni szeretné a "${document.filename}" dokumentumot?`)) {
+  const handleDelete = async (doc: PatientDocument) => {
+    if (!patientId || !confirm(`Biztosan törölni szeretné a "${doc.filename}" dokumentumot?`)) {
       return;
     }
 
     try {
-      const response = await fetch(`/api/patients/${patientId}/documents/${document.id}`, {
+      const response = await fetch(`/api/patients/${patientId}/documents/${doc.id}`, {
         method: 'DELETE',
       });
 
@@ -282,7 +282,7 @@ export function PatientDocuments({
       }
 
       const data = await response.json();
-      setDocuments(documents.filter(doc => doc.id !== document.id));
+      setDocuments(documents.filter(d => d.id !== doc.id));
       
       // Show success message
       alert(data.message || 'Dokumentum sikeresen törölve');
