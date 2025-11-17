@@ -7,6 +7,7 @@ import { getAllPatients, savePatient, searchPatients, PaginationInfo } from '@/l
 import { PatientForm } from '@/components/PatientForm';
 import { PatientList } from '@/components/PatientList';
 import { OPImageViewer } from '@/components/OPImageViewer';
+import { Toast } from '@/components/Toast';
 import { Plus, Search, Users, LogOut, Shield, Settings, Calendar, Eye } from 'lucide-react';
 import { getCurrentUser, getUserEmail, getUserRole, logout } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
@@ -36,6 +37,7 @@ export default function Home() {
     totalPages: 0,
   });
   const [opViewerPatient, setOpViewerPatient] = useState<Patient | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   
   // Computed role for display - use viewAsRole if set, otherwise use original role
   const displayRole = viewAsRole || userRole;
@@ -145,7 +147,7 @@ export default function Home() {
       // Check if this is a silent save (for document upload, etc.)
       const isSilent = (handleSavePatient as any)._silent;
       if (!isSilent) {
-        alert('Betegadat sikeresen mentve az adatbázisba!');
+        setToast({ message: 'Betegadat sikeresen mentve', type: 'success' });
       }
     } catch (error: any) {
       console.error('Hiba a beteg mentésekor:', error);
@@ -164,7 +166,7 @@ export default function Home() {
         errorMessage = 'A kérés túl hosszú ideig tartott. Lehet, hogy az adatok túl nagyok. Próbálja újra.';
       }
       
-      alert(`Hiba a mentés során: ${errorMessage}`);
+      setToast({ message: `Hiba a mentés során: ${errorMessage}`, type: 'error' });
     }
   };
 
@@ -633,6 +635,17 @@ export default function Home() {
           patientName={opViewerPatient.nev || undefined}
           isOpen={!!opViewerPatient}
           onClose={() => setOpViewerPatient(null)}
+        />
+      )}
+
+      {/* Toast Notification */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          isVisible={!!toast}
+          onClose={() => setToast(null)}
+          duration={toast.type === 'error' ? 5000 : 3000}
         />
       )}
         </div>
