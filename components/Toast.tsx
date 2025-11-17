@@ -41,7 +41,7 @@ export function Toast({ message, type = 'info', isVisible, onClose, duration = 3
   const colorClass = colors[type];
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 animate-slide-up">
+    <div className="animate-slide-up">
       <div className={`${colorClass} border rounded-lg shadow-lg p-4 min-w-[300px] max-w-[500px] flex items-start gap-3`}>
         <Icon className="w-5 h-5 flex-shrink-0 mt-0.5" />
         <div className="flex-1 text-sm font-medium">{message}</div>

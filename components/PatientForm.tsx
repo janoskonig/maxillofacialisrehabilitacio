@@ -12,6 +12,7 @@ import { DatePicker } from './DatePicker';
 import { savePatient } from '@/lib/storage';
 import { BNOAutocomplete } from './BNOAutocomplete';
 import { PatientDocuments } from './PatientDocuments';
+import { useToast } from '@/contexts/ToastContext';
 
 const DRAFT_STORAGE_KEY_PREFIX = 'patientFormDraft_';
 const DRAFT_TIMESTAMP_KEY_PREFIX = 'patientFormDraftTimestamp_';
@@ -112,6 +113,7 @@ interface PatientFormProps {
 }
 
 export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: PatientFormProps) {
+  const { confirm: confirmDialog } = useToast();
   const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
   const [userRole, setUserRole] = useState<string>('');
   const [kezeloorvosOptions, setKezeloorvosOptions] = useState<Array<{ name: string; intezmeny: string | null }>>([]);
@@ -352,7 +354,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
   const formValues = watch();
 
   // Restore draft logic memoized
-  const restoreDraft = useCallback(() => {
+  const restoreDraft = useCallback(async () => {
     const draft = loadDraft();
     if (draft) {
       const timestampKey = getDraftTimestampKey(patientId);
@@ -365,11 +367,18 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       if (hoursSinceDraft < 168) {
         // For existing patients, always restore silently (no prompt)
         // For new patients, ask for confirmation
-        const shouldRestore = isNewPatient 
-          ? window.confirm(
-              `Van egy mentett piszkozat az űrlapból (${draftDate ? draftDate.toLocaleString('hu-HU') : 'korábban'}). Szeretné visszatölteni?`
-            )
-          : true; // Always restore for existing patients
+        let shouldRestore = true;
+        if (isNewPatient) {
+          shouldRestore = await confirmDialog(
+            `Van egy mentett piszkozat az űrlapból (${draftDate ? draftDate.toLocaleString('hu-HU') : 'korábban'}). Szeretné visszatölteni?`,
+            {
+              title: 'Piszkozat visszatöltése',
+              confirmText: 'Igen',
+              cancelText: 'Nem',
+              type: 'info'
+            }
+          );
+        }
         
         if (shouldRestore) {
           // Restore draft data
@@ -400,7 +409,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       }
     }
     setHasRestoredDraft(true);
-  }, [isNewPatient, patientId, loadDraft, clearDraft, setValue]);
+  }, [isNewPatient, patientId, loadDraft, clearDraft, setValue, confirmDialog]);
 
   // Load draft when opening patient form (after form is initialized)
   useEffect(() => {
@@ -713,10 +722,68 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     });
   };
 
-  const onSubmit = (data: Patient) => {
-    // Clear draft on successful save (for both new and existing patients)
-    clearDraft();
-    onSave(data);
+  const onSubmit = async (data: Patient) => {
+    try {
+      // Normalize fogak data before saving
+      const normalizedFogak: Record<string, { status?: 'D' | 'F' | 'M'; description?: string }> = {};
+      Object.entries(fogak).forEach(([toothNumber, value]) => {
+        const normalizedValue = normalizeToothData(value);
+        if (normalizedValue) {
+          normalizedFogak[toothNumber] = normalizedValue;
+        }
+      });
+      
+      // Prepare patient data with normalized fogak
+      const patientData: Patient = {
+        ...data,
+        id: currentPatient?.id,
+        meglevoImplantatumok: implantatumok,
+        meglevoFogak: normalizedFogak,
+      };
+      
+      // Save patient and get the saved patient back
+      const savedPatient = await savePatient(patientData);
+      
+      // Update currentPatient with saved patient data
+      setCurrentPatient(savedPatient);
+      
+      // Update implantatumok and fogak state with saved values
+      if (savedPatient.meglevoImplantatumok) {
+        setImplantatumok(savedPatient.meglevoImplantatumok);
+      }
+      if (savedPatient.meglevoFogak) {
+        setFogak(savedPatient.meglevoFogak as Record<string, ToothStatus>);
+      }
+      
+      // Clear draft on successful save (for both new and existing patients)
+      clearDraft();
+      
+      // Reset form dirty state with saved patient data
+      reset(savedPatient ? {
+        ...savedPatient,
+        szuletesiDatum: formatDateForInput(savedPatient.szuletesiDatum),
+        mutetIdeje: formatDateForInput(savedPatient.mutetIdeje),
+        felvetelDatuma: formatDateForInput(savedPatient.felvetelDatuma),
+        kezelesiTervFelso: savedPatient.kezelesiTervFelso?.map(item => ({
+          ...item,
+          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+        })) || [],
+        kezelesiTervAlso: savedPatient.kezelesiTervAlso?.map(item => ({
+          ...item,
+          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+        })) || [],
+        kezelesiTervArcotErinto: savedPatient.kezelesiTervArcotErinto?.map(item => ({
+          ...item,
+          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+        })) || [],
+      } : undefined, { keepDefaultValues: true });
+      
+      // Call onSave callback with saved patient
+      onSave(savedPatient);
+    } catch (error) {
+      // Error handling is done in onSave callback
+      onSave(data);
+    }
   };
 
   // Save patient silently (without alert) - used for document upload
@@ -856,41 +923,92 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
   const hasUnsavedChanges = useCallback(() => {
     if (isViewOnly) return false;
     
-    // Check if form is dirty
-    if (isDirty) return true;
-    
     // Use currentPatient for comparison (it gets updated when patient is saved via booking)
     const referencePatient = currentPatient || patient;
     
-    // Check if implantatumok or fogak have changed
-    const originalImplantatumok = referencePatient?.meglevoImplantatumok || {};
-    const originalFogak = referencePatient?.meglevoFogak || {};
-    
-    const implantatumokChanged = JSON.stringify(implantatumok) !== JSON.stringify(originalImplantatumok);
-    const fogakChanged = JSON.stringify(fogak) !== JSON.stringify(originalFogak);
-    
-    if (implantatumokChanged || fogakChanged) return true;
-    
-    // Check if any form field has value (for new patients that haven't been saved yet)
-    // If currentPatient has an ID, it means the patient has been saved, so don't check this
-    if (isNewPatient && !currentPatient?.id) {
-      const hasAnyValue = Object.values(formValues).some(value => {
-        if (value === null || value === undefined || value === '') return false;
-        if (typeof value === 'object' && Object.keys(value).length === 0) return false;
-        if (Array.isArray(value) && value.length === 0) return false;
-        if (typeof value === 'boolean' && value === false) return false;
-        return true;
-      });
-      if (hasAnyValue || Object.keys(implantatumok).length > 0 || Object.keys(fogak).length > 0) {
+    // For existing patients: compare current values with original patient data
+    if (!isNewPatient && referencePatient) {
+      // Check if implantatumok or fogak have changed
+      const originalImplantatumok = referencePatient.meglevoImplantatumok || {};
+      const originalFogak = referencePatient.meglevoFogak || {};
+      
+      const implantatumokChanged = JSON.stringify(implantatumok) !== JSON.stringify(originalImplantatumok);
+      const fogakChanged = JSON.stringify(fogak) !== JSON.stringify(originalFogak);
+      
+      // Only check isDirty if implantatumok and fogak haven't changed
+      // This prevents false positives from form initialization
+      if (implantatumokChanged || fogakChanged) {
         return true;
       }
+      
+      // For form fields, only consider it changed if isDirty AND there's actual difference
+      // This prevents false positives when form is initialized
+      if (isDirty) {
+        // Compare key fields that matter
+        const keyFields: (keyof Patient)[] = [
+          'nev', 'taj', 'telefonszam', 'email', 'szuletesiDatum', 'nem',
+          'beutaloOrvos', 'beutaloIntezmeny', 'beutaloIndokolas',
+          'kezeleoorvos', 'kezeleoorvosIntezete',
+          'kezelesreErkezesIndoka', 'bno', 'diagnozis', 'mutetIdeje'
+        ];
+        
+        // Check if any key field actually changed
+        const hasActualChange = keyFields.some(field => {
+          const currentValue = formValues[field];
+          const originalValue = referencePatient[field];
+          
+          // Normalize dates for comparison
+          if (field === 'szuletesiDatum' || field === 'mutetIdeje' || field === 'felvetelDatuma') {
+            const currentDate = currentValue ? formatDateForInput(currentValue as string) : null;
+            const originalDate = originalValue ? formatDateForInput(originalValue as string) : null;
+            return currentDate !== originalDate;
+          }
+          
+          // For arrays and objects, compare JSON
+          if (Array.isArray(currentValue) || Array.isArray(originalValue)) {
+            return JSON.stringify(currentValue) !== JSON.stringify(originalValue);
+          }
+          
+          if (typeof currentValue === 'object' && typeof originalValue === 'object') {
+            return JSON.stringify(currentValue) !== JSON.stringify(originalValue);
+          }
+          
+          return currentValue !== originalValue;
+        });
+        
+        return hasActualChange;
+      }
+      
+      return false;
+    }
+    
+    // For new patients: check if there's any meaningful data entered
+    if (isNewPatient && !currentPatient?.id) {
+      // Check if any important field has value
+      const importantFields: (keyof Patient)[] = [
+        'nev', 'taj', 'telefonszam', 'email', 'szuletesiDatum', 'nem',
+        'beutaloOrvos', 'beutaloIntezmeny', 'beutaloIndokolas',
+        'kezeleoorvos', 'kezelesreErkezesIndoka'
+      ];
+      
+      const hasImportantData = importantFields.some(field => {
+        const value = formValues[field];
+        if (value === null || value === undefined || value === '') return false;
+        if (typeof value === 'string' && value.trim() === '') return false;
+        return true;
+      });
+      
+      // Also check implantatumok and fogak
+      const hasImplantatumokOrFogak = Object.keys(implantatumok).length > 0 || Object.keys(fogak).length > 0;
+      
+      return hasImportantData || hasImplantatumokOrFogak;
     }
     
     return false;
   }, [isViewOnly, isDirty, patient, currentPatient, implantatumok, fogak, isNewPatient, formValues]);
 
   // Handle form cancellation - check for unsaved changes
-  const handleCancel = () => {
+  const handleCancel = async () => {
     if (isViewOnly) {
       onCancel();
       return;
@@ -911,8 +1029,14 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       // New patient: check if there's any data
       // But only if patient hasn't been saved yet
       if (!currentPatient?.id && hasUnsavedChanges()) {
-        const shouldSave = window.confirm(
-          'Van nem mentett változás az űrlapban. Szeretné menteni az eddig beírt adatokat piszkozatként? (A piszkozat később visszatölthető, de az adatok csak a "Beteg mentése" gombbal kerülnek az adatbázisba.)'
+        const shouldSave = await confirmDialog(
+          'Van nem mentett változás az űrlapban. Szeretné menteni az eddig beírt adatokat piszkozatként? (A piszkozat később visszatölthető, de az adatok csak a "Beteg mentése" gombbal kerülnek az adatbázisba.)',
+          {
+            title: 'Piszkozat mentése',
+            confirmText: 'Igen, mentem',
+            cancelText: 'Nem',
+            type: 'info'
+          }
         );
         
         if (shouldSave) {
@@ -945,8 +1069,14 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       // The isDirty flag should catch all changes including implantatumok and fogak
       // since we use setValue to update the form when these change
       if (hasUnsavedChanges()) {
-        const shouldSave = window.confirm(
-          'Van nem mentett változás az űrlapban. Szeretné menteni az eddig beírt adatokat piszkozatként? (A piszkozat később visszatölthető, de az adatok csak a "Beteg mentése" gombbal kerülnek az adatbázisba.)'
+        const shouldSave = await confirmDialog(
+          'Van nem mentett változás az űrlapban. Szeretné menteni az eddig beírt adatokat piszkozatként? (A piszkozat később visszatölthető, de az adatok csak a "Beteg mentése" gombbal kerülnek az adatbázisba.)',
+          {
+            title: 'Piszkozat mentése',
+            confirmText: 'Igen, mentem',
+            cancelText: 'Nem',
+            type: 'info'
+          }
         );
         
         if (shouldSave) {

@@ -5,6 +5,7 @@ import { PatientDocument } from '@/lib/types';
 import { Upload, File, Download, Trash2, X, Tag, Plus } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth';
 import { formatDateForDisplay } from '@/lib/dateUtils';
+import { useToast } from '@/contexts/ToastContext';
 
 interface PatientDocumentsProps {
   patientId: string | null;
@@ -23,6 +24,7 @@ export function PatientDocuments({
   onSavePatientBeforeUpload,
   isPatientDirty = false
 }: PatientDocumentsProps) {
+  const { showToast, confirm: confirmDialog } = useToast();
   const [documents, setDocuments] = useState<PatientDocument[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -154,7 +156,7 @@ export function PatientDocuments({
       if (hasOPTag) {
         const isImage = file.type && file.type.startsWith('image/');
         if (!isImage) {
-          alert('OP tag-gel csak képfájlok tölthetők fel. Kérjük, válasszon ki egy képfájlt vagy távolítsa el az OP tag-et.');
+          showToast('OP tag-gel csak képfájlok tölthetők fel. Kérjük, válasszon ki egy képfájlt vagy távolítsa el az OP tag-et.', 'error');
           return;
         }
       }
@@ -210,7 +212,7 @@ export function PatientDocuments({
     if (hasOPTag) {
       const isImage = selectedFile.type && selectedFile.type.startsWith('image/');
       if (!isImage) {
-        alert('OP tag-gel csak képfájlok tölthetők fel. Kérjük, válasszon ki egy képfájlt vagy távolítsa el az OP tag-et.');
+        showToast('OP tag-gel csak képfájlok tölthetők fel. Kérjük, válasszon ki egy képfájlt vagy távolítsa el az OP tag-et.', 'error');
         return;
       }
     }
@@ -221,7 +223,7 @@ export function PatientDocuments({
       try {
         const savedPatientId = await onSavePatientBeforeUpload();
         if (!savedPatientId) {
-          alert('A beteg mentése szükséges a dokumentum feltöltéséhez. Kérjük, mentse el először a beteg adatait.');
+          showToast('A beteg mentése szükséges a dokumentum feltöltéséhez. Kérjük, mentse el először a beteg adatait.', 'error');
           return;
         }
         currentPatientId = savedPatientId;
@@ -232,13 +234,13 @@ export function PatientDocuments({
       } catch (error: any) {
         console.error('Error saving patient before upload:', error);
         const errorMessage = error instanceof Error ? error.message : 'Hiba történt a beteg mentésekor';
-        alert(`Hiba a beteg mentésekor: ${errorMessage}. A dokumentum feltöltése megszakadt.`);
+        showToast(`Hiba a beteg mentésekor: ${errorMessage}. A dokumentum feltöltése megszakadt.`, 'error');
         return;
       }
     }
 
     if (!currentPatientId) {
-      alert('Hiba: A beteg ID nem elérhető. Kérjük, mentse el először a beteg adatait.');
+      showToast('Hiba: A beteg ID nem elérhető. Kérjük, mentse el először a beteg adatait.', 'error');
       return;
     }
 
@@ -282,7 +284,7 @@ export function PatientDocuments({
       }
     } catch (error) {
       console.error('Error uploading document:', error);
-      alert(error instanceof Error ? error.message : 'Hiba történt a feltöltés során');
+      showToast(error instanceof Error ? error.message : 'Hiba történt a feltöltés során', 'error');
     } finally {
       setUploading(false);
       setUploadProgress(0);
@@ -309,12 +311,24 @@ export function PatientDocuments({
       document.body.removeChild(a);
     } catch (error) {
       console.error('Error downloading document:', error);
-      alert('Hiba történt a letöltés során');
+      showToast('Hiba történt a letöltés során', 'error');
     }
   };
 
   const handleDelete = async (doc: PatientDocument) => {
-    if (!patientId || !confirm(`Biztosan törölni szeretné a "${doc.filename}" dokumentumot?`)) {
+    if (!patientId) return;
+
+    const confirmed = await confirmDialog(
+      `Biztosan törölni szeretné a "${doc.filename}" dokumentumot?`,
+      {
+        title: 'Dokumentum törlése',
+        confirmText: 'Törlés',
+        cancelText: 'Mégse',
+        type: 'danger'
+      }
+    );
+
+    if (!confirmed) {
       return;
     }
 
@@ -332,11 +346,11 @@ export function PatientDocuments({
       setDocuments(documents.filter(d => d.id !== doc.id));
       
       // Show success message
-      alert(data.message || 'Dokumentum sikeresen törölve');
+      showToast(data.message || 'Dokumentum sikeresen törölve', 'success');
     } catch (error) {
       console.error('Error deleting document:', error);
       const errorMessage = error instanceof Error ? error.message : 'Hiba történt a törlés során';
-      alert(errorMessage);
+      showToast(errorMessage, 'error');
     }
   };
 
@@ -348,7 +362,7 @@ export function PatientDocuments({
       if (isOPTag && selectedFile) {
         const isImage = selectedFile.type && selectedFile.type.startsWith('image/');
         if (!isImage) {
-          alert('OP tag-gel csak képfájlok tölthetők fel. Kérjük, válasszon ki egy képfájlt vagy távolítsa el a fájlt.');
+          showToast('OP tag-gel csak képfájlok tölthetők fel. Kérjük, válasszon ki egy képfájlt vagy távolítsa el a fájlt.', 'error');
           return;
         }
       }

@@ -7,7 +7,7 @@ import { getAllPatients, savePatient, searchPatients, PaginationInfo } from '@/l
 import { PatientForm } from '@/components/PatientForm';
 import { PatientList } from '@/components/PatientList';
 import { OPImageViewer } from '@/components/OPImageViewer';
-import { Toast } from '@/components/Toast';
+import { useToast } from '@/contexts/ToastContext';
 import { Plus, Search, Users, LogOut, Shield, Settings, Calendar, Eye } from 'lucide-react';
 import { getCurrentUser, getUserEmail, getUserRole, logout } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
@@ -37,7 +37,7 @@ export default function Home() {
     totalPages: 0,
   });
   const [opViewerPatient, setOpViewerPatient] = useState<Patient | null>(null);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const { showToast, confirm: confirmDialog } = useToast();
   
   // Computed role for display - use viewAsRole if set, otherwise use original role
   const displayRole = viewAsRole || userRole;
@@ -123,7 +123,7 @@ export default function Home() {
         setFilteredPatients(sortedResults);
       } catch (error) {
         console.error('Hiba a betegek betöltésekor:', error);
-        alert('Hiba történt a betegek betöltésekor. Kérjük, próbálja újra.');
+        showToast('Hiba történt a betegek betöltésekor. Kérjük, próbálja újra.', 'error');
       }
     };
     
@@ -137,6 +137,22 @@ export default function Home() {
 
   const handleSavePatient = async (patientData: Patient) => {
     try {
+      // Check if this is a silent save (for document upload, etc.)
+      const isSilent = (handleSavePatient as any)._silent;
+      
+      // If patient already has an ID, it means it was already saved in PatientForm
+      // In that case, we just need to reload the list and show success message
+      if (patientData.id) {
+        await loadPatients();
+        // Update editingPatient with the saved patient data
+        setEditingPatient(patientData);
+        if (!isSilent) {
+          showToast('Betegadat sikeresen mentve', 'success');
+        }
+        return;
+      }
+      
+      // For new patients or if save failed in PatientForm, save here
       const validatedPatient = patientSchema.parse(patientData);
       await savePatient(validatedPatient);
       await loadPatients();
@@ -144,10 +160,8 @@ export default function Home() {
       // setShowForm(false);
       // setEditingPatient(null);
       
-      // Check if this is a silent save (for document upload, etc.)
-      const isSilent = (handleSavePatient as any)._silent;
       if (!isSilent) {
-        setToast({ message: 'Betegadat sikeresen mentve', type: 'success' });
+        showToast('Betegadat sikeresen mentve', 'success');
       }
     } catch (error: any) {
       console.error('Hiba a beteg mentésekor:', error);
@@ -166,7 +180,7 @@ export default function Home() {
         errorMessage = 'A kérés túl hosszú ideig tartott. Lehet, hogy az adatok túl nagyok. Próbálja újra.';
       }
       
-      setToast({ message: `Hiba a mentés során: ${errorMessage}`, type: 'error' });
+      showToast(`Hiba a mentés során: ${errorMessage}`, 'error');
     }
   };
 
@@ -318,7 +332,7 @@ export default function Home() {
 
   const handleDeletePatient = async (patient: Patient) => {
     if (!patient.id) {
-      alert('Hiba: A beteg ID nem található');
+      showToast('Hiba: A beteg ID nem található', 'error');
       return;
     }
 
@@ -359,7 +373,14 @@ export default function Home() {
       ? `Biztosan törölni szeretné ezt a beteget?\n\nA beteg törlésekor a lefoglalt időpont is törlődik és felszabadul. A fogpótlástanász és az adminok értesítést kapnak.`
       : `Biztosan törölni szeretné ezt a beteget?\n\nA művelet nem vonható vissza!`;
 
-    if (!window.confirm(confirmMessage)) {
+    const confirmed = await confirmDialog(confirmMessage, {
+      title: 'Beteg törlése',
+      confirmText: 'Törlés',
+      cancelText: 'Mégse',
+      type: 'danger'
+    });
+
+    if (!confirmed) {
       return;
     }
 
@@ -373,17 +394,17 @@ export default function Home() {
         const data = await response.json();
         await loadPatients();
         if (data.appointmentsFreed && data.appointmentsFreed > 0) {
-          alert(`Beteg sikeresen törölve! ${data.appointmentsFreed} időpont felszabadult. A fogpótlástanász és az adminok értesítést kaptak.`);
+          showToast(`Beteg sikeresen törölve! ${data.appointmentsFreed} időpont felszabadult. A fogpótlástanász és az adminok értesítést kaptak.`, 'success');
         } else {
-          alert('Beteg sikeresen törölve!');
+          showToast('Beteg sikeresen törölve!', 'success');
         }
       } else {
         const errorData = await response.json();
-        alert(errorData.error || 'Hiba történt a beteg törlésekor');
+        showToast(errorData.error || 'Hiba történt a beteg törlésekor', 'error');
       }
     } catch (error) {
       console.error('Error deleting patient:', error);
-      alert('Hiba történt a beteg törlésekor');
+      showToast('Hiba történt a beteg törlésekor', 'error');
     }
   };
 
@@ -638,16 +659,6 @@ export default function Home() {
         />
       )}
 
-      {/* Toast Notification */}
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          isVisible={!!toast}
-          onClose={() => setToast(null)}
-          duration={toast.type === 'error' ? 5000 : 3000}
-        />
-      )}
         </div>
       </main>
     </div>
