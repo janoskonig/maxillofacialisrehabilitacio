@@ -14,17 +14,6 @@ import { BNOAutocomplete } from './BNOAutocomplete';
 import { PatientDocuments } from './PatientDocuments';
 import { useToast } from '@/contexts/ToastContext';
 
-const DRAFT_STORAGE_KEY_PREFIX = 'patientFormDraft_';
-const DRAFT_TIMESTAMP_KEY_PREFIX = 'patientFormDraftTimestamp_';
-
-// Helper to get storage keys based on patient ID
-const getDraftStorageKey = (patientId: string | undefined | null): string => {
-  return patientId ? `${DRAFT_STORAGE_KEY_PREFIX}${patientId}` : `${DRAFT_STORAGE_KEY_PREFIX}new`;
-};
-
-const getDraftTimestampKey = (patientId: string | undefined | null): string => {
-  return patientId ? `${DRAFT_TIMESTAMP_KEY_PREFIX}${patientId}` : `${DRAFT_TIMESTAMP_KEY_PREFIX}new`;
-};
 
 // Fog állapot típus
 type ToothStatus = { status?: 'D' | 'F' | 'M'; description?: string } | string;
@@ -114,12 +103,10 @@ interface PatientFormProps {
 
 export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: PatientFormProps) {
   const { confirm: confirmDialog } = useToast();
-  const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
   const [userRole, setUserRole] = useState<string>('');
   const [kezeloorvosOptions, setKezeloorvosOptions] = useState<Array<{ name: string; intezmeny: string | null }>>([]);
   const [doctorOptions, setDoctorOptions] = useState<Array<{ name: string; intezmeny: string | null }>>([]);
   const [institutionOptions, setInstitutionOptions] = useState<string[]>([]);
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isNewPatient = !patient && !isViewOnly;
   const [currentPatient, setCurrentPatient] = useState<Patient | null | undefined>(patient);
   const patientId = currentPatient?.id || null;
@@ -215,53 +202,17 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     loadDoctorOptions();
   }, []);
 
-  // Helper function to load draft from localStorage
-  const loadDraft = useCallback((): Patient | null => {
-    try {
-      const storageKey = getDraftStorageKey(patientId);
-      const draftData = localStorage.getItem(storageKey);
-      if (!draftData) return null;
-      
-      const parsed = JSON.parse(draftData);
-      return parsed as Patient;
-    } catch (error) {
-      console.error('Hiba a piszkozat betöltésekor:', error);
-      return null;
-    }
-  }, [patientId]);
-
-  // Helper function to save draft to localStorage
-  const saveDraft = useCallback((formData: Partial<Patient>) => {
-    try {
-      const storageKey = getDraftStorageKey(patientId);
-      const timestampKey = getDraftTimestampKey(patientId);
-      localStorage.setItem(storageKey, JSON.stringify(formData));
-      localStorage.setItem(timestampKey, new Date().toISOString());
-    } catch (error) {
-      console.error('Hiba a piszkozat mentésekor:', error);
-    }
-  }, [patientId]);
-
-  // Helper function to clear draft from localStorage
-  const clearDraft = useCallback(() => {
-    try {
-      const storageKey = getDraftStorageKey(patientId);
-      const timestampKey = getDraftTimestampKey(patientId);
-      localStorage.removeItem(storageKey);
-      localStorage.removeItem(timestampKey);
-    } catch (error) {
-      console.error('Hiba a piszkozat törlésekor:', error);
-    }
-  }, [patientId]);
 
   const {
     register,
     handleSubmit,
     formState: { errors, isDirty },
     setValue,
+    setError,
     watch,
     reset,
     getValues,
+    trigger,
   } = useForm<Patient>({
     resolver: zodResolver(patientSchema),
     defaultValues: patient ? {
@@ -350,81 +301,224 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
   const kezelesiTervAlso = watch('kezelesiTervAlso') || [];
   const kezelesiTervArcotErinto = watch('kezelesiTervArcotErinto') || [];
 
-  // Watch all form values for auto-save
+  // Watch all form values - this will trigger on any field change
   const formValues = watch();
 
-  // Restore draft logic memoized
-  const restoreDraft = useCallback(async () => {
-    const draft = loadDraft();
-    if (draft) {
-      const timestampKey = getDraftTimestampKey(patientId);
-      const timestamp = localStorage.getItem(timestampKey);
-      const draftDate = timestamp ? new Date(timestamp) : null;
-      const now = new Date();
-      const hoursSinceDraft = draftDate ? (now.getTime() - draftDate.getTime()) / (1000 * 60 * 60) : 0;
-      
-      // Only show restore prompt if draft is less than 7 days old
-      if (hoursSinceDraft < 168) {
-        // For existing patients, always restore silently (no prompt)
-        // For new patients, ask for confirmation
-        let shouldRestore = true;
-        if (isNewPatient) {
-          shouldRestore = await confirmDialog(
-            `Van egy mentett piszkozat az űrlapból (${draftDate ? draftDate.toLocaleString('hu-HU') : 'korábban'}). Szeretné visszatölteni?`,
-            {
-              title: 'Piszkozat visszatöltése',
-              confirmText: 'Igen',
-              cancelText: 'Nem',
-              type: 'info'
-            }
-          );
-        }
+  // Watch individual fields to ensure we catch all changes
+  const nevValue = watch('nev');
+  const tajValue = watch('taj');
+  const telefonszamValue = watch('telefonszam');
+  const emailValue = watch('email');
+  const szuletesiDatumValue = watch('szuletesiDatum');
+  const nemValue = watch('nem');
+  const cimValue = watch('cim');
+  const varosValue = watch('varos');
+  const iranyitoszamValue = watch('iranyitoszam');
+  const beutaloOrvosValue = watch('beutaloOrvos');
+  const beutaloIntezmenyValue = watch('beutaloIntezmeny');
+  const beutaloIndokolasValue = watch('beutaloIndokolas');
+  const mutetIdejeValue = watch('mutetIdeje');
+  const szovettaniDiagnozisValue = watch('szovettaniDiagnozis');
+  const nyakiBlokkdisszekcioValue = watch('nyakiBlokkdisszekcio');
+  const kezeleoorvosValue = watch('kezeleoorvos');
+  const kezeleoorvosIntezeteValue = watch('kezeleoorvosIntezete');
+  const felvetelDatumaValue = watch('felvetelDatuma');
+  const kezelesreErkezesIndokaValue = watch('kezelesreErkezesIndoka');
+
+  // Auto-save to database - save automatically when form changes
+  // This saves ALL partial data, even if validation fails for some fields
+  useEffect(() => {
+    if (isViewOnly) {
+      return;
+    }
+
+    // Always try to save when form values change, regardless of validation
+    // The debounce will prevent too frequent saves
+
+    // Debounce: wait 800ms after last change before saving
+    const timeoutId = setTimeout(async () => {
+      try {
+        // Normalize fogak data
+        const normalizedFogak: Record<string, { status?: 'D' | 'F' | 'M'; description?: string }> = {};
+        Object.entries(fogak).forEach(([toothNumber, value]) => {
+          const normalizedValue = normalizeToothData(value);
+          if (normalizedValue) {
+            normalizedFogak[toothNumber] = normalizedValue;
+          }
+        });
         
-        if (shouldRestore) {
-          // Restore draft data
-          Object.keys(draft).forEach((key) => {
-            const value = draft[key as keyof Patient];
-            if (value !== undefined && value !== null) {
-              setValue(key as keyof Patient, value as any, { shouldValidate: false });
+        // Prepare patient data - keep original values for invalid fields
+        // Start with current patient data (if exists) to preserve valid values
+        const baseData = currentPatient || {} as Patient;
+        
+        const patientData: Patient = {
+          ...baseData, // Start with existing data
+          ...formValues, // Override with form values
+          id: currentPatient?.id,
+          meglevoImplantatumok: implantatumok,
+          meglevoFogak: normalizedFogak,
+          // Ensure default values for required boolean fields
+          radioterapia: formValues.radioterapia ?? false,
+          chemoterapia: formValues.chemoterapia ?? false,
+          felsoFogpotlasVan: formValues.felsoFogpotlasVan ?? false,
+          felsoFogpotlasElegedett: formValues.felsoFogpotlasElegedett ?? true,
+          alsoFogpotlasVan: formValues.alsoFogpotlasVan ?? false,
+          alsoFogpotlasElegedett: formValues.alsoFogpotlasElegedett ?? true,
+          nemIsmertPoziciokbanImplantatum: formValues.nemIsmertPoziciokbanImplantatum ?? false,
+          maxilladefektusVan: formValues.maxilladefektusVan ?? false,
+          kezelesiTervFelso: formValues.kezelesiTervFelso || [],
+          kezelesiTervAlso: formValues.kezelesiTervAlso || [],
+          kezelesiTervArcotErinto: formValues.kezelesiTervArcotErinto || [],
+        };
+        
+        // Validate using schema
+        const validationResult = patientSchema.safeParse(patientData);
+        
+        if (!validationResult.success) {
+          // Validation failed - don't save invalid data
+          // Log validation errors for debugging
+          console.warn('Auto-save: Validation failed, not saving:', validationResult.error.errors);
+          
+          // Check which fields are invalid
+          const invalidFields = validationResult.error.flatten().fieldErrors;
+          
+          // For invalid fields, keep original values instead of invalid form values
+          // This prevents saving invalid data
+          const patientToSave: Patient = {
+            ...patientData,
+          };
+          
+          // Restore original values for invalid fields (don't save invalid empty strings)
+          if (invalidFields.email) {
+            if (currentPatient?.email !== undefined) {
+              patientToSave.email = currentPatient.email;
+            } else {
+              // If no original value, set to null (don't save invalid empty string)
+              patientToSave.email = null;
             }
+          }
+          
+          if (invalidFields.taj) {
+            if (currentPatient?.taj !== undefined) {
+              patientToSave.taj = currentPatient.taj;
+            } else {
+              patientToSave.taj = null;
+            }
+          }
+          
+          if (invalidFields.telefonszam) {
+            if (currentPatient?.telefonszam !== undefined) {
+              patientToSave.telefonszam = currentPatient.telefonszam;
+            } else {
+              patientToSave.telefonszam = null;
+            }
+          }
+          
+          // Only save if there are valid changes (not just invalid fields)
+          // Check if any non-invalid fields have changed
+          const hasValidChanges = Object.keys(formValues).some(key => {
+            const field = key as keyof Patient;
+            // Skip invalid fields
+            if (invalidFields[field]) return false;
+            // Check if field value changed
+            const formValue = formValues[field];
+            const originalValue = currentPatient?.[field];
+            return JSON.stringify(formValue) !== JSON.stringify(originalValue);
           });
           
-          // Restore implantatumok and fogak if they exist
-          if (draft.meglevoImplantatumok) {
-            setImplantatumok(draft.meglevoImplantatumok);
+          if (!hasValidChanges) {
+            // No valid changes, just trigger validation to show errors
+            await trigger();
+            return; // Don't save if only invalid fields changed
           }
-          if (draft.meglevoFogak) {
-            setFogak(draft.meglevoFogak);
+          
+          // Save with original values for invalid fields
+          // Trigger form validation to show errors to user
+          await trigger();
+          
+          // Save patient with corrected data (invalid fields reverted to original)
+          const savedPatient = await savePatient(patientToSave);
+          setCurrentPatient(savedPatient);
+          
+          // Update parent component
+          try {
+            (onSave as any)._silent = true;
+            onSave(savedPatient);
+            delete (onSave as any)._silent;
+          } catch (error) {
+            console.error('Error calling onSave callback after auto-save:', error);
           }
-          if (draft.beutaloOrvos || draft.beutaloIntezmeny || draft.beutaloIndokolas) {
-            setVanBeutalo(true);
-          }
-        } else {
-          // User chose not to restore, clear the draft
-          clearDraft();
+          
+          return;
         }
-      } else {
-        // Draft is too old, clear it
-        clearDraft();
+        
+        const patientToSave = validationResult.data;
+        
+        // Save patient silently (without alert)
+        const savedPatient = await savePatient(patientToSave);
+        
+        // Update local state
+        setCurrentPatient(savedPatient);
+        
+        // Update implantatumok and fogak state with saved values
+        if (savedPatient.meglevoImplantatumok) {
+          setImplantatumok(savedPatient.meglevoImplantatumok);
+        }
+        if (savedPatient.meglevoFogak) {
+          setFogak(savedPatient.meglevoFogak as Record<string, ToothStatus>);
+        }
+        
+        // Notify parent component about the save (silently, without alert)
+        // This ensures the parent component's editingPatient state is updated
+        // so when the form is reopened, it shows the latest saved data
+        try {
+          // Mark as silent save to avoid showing toast
+          (onSave as any)._silent = true;
+          onSave(savedPatient);
+          delete (onSave as any)._silent;
+        } catch (error) {
+          // Ignore errors in callback
+          console.error('Error in onSave callback:', error);
+        }
+        
+        // Don't reset form after auto-save - keep current form values intact
+        // The form values are already correct, we just need to update currentPatient
+        // to track that it's been saved. This prevents losing user input.
+        // The reset() would overwrite form values with server response, which might
+        // not include all fields or might have different formatting.
+      } catch (error) {
+        // Log error for debugging, but don't show to user (silent auto-save)
+        console.error('Auto-save failed:', error);
       }
-    }
-    setHasRestoredDraft(true);
-  }, [isNewPatient, patientId, loadDraft, clearDraft, setValue, confirmDialog]);
+    }, 800); // 800ms debounce
 
-  // Load draft when opening patient form (after form is initialized)
-  useEffect(() => {
-    if (!isViewOnly && !hasRestoredDraft) {
-      restoreDraft();
-    }
-  }, [isViewOnly, hasRestoredDraft, restoreDraft]);
+    // Cleanup timeout on unmount or when dependencies change
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [
+    formValues, 
+    nevValue, tajValue, telefonszamValue, emailValue, szuletesiDatumValue, nemValue,
+    cimValue, varosValue, iranyitoszamValue, beutaloOrvosValue, beutaloIntezmenyValue,
+    beutaloIndokolasValue, mutetIdejeValue, szovettaniDiagnozisValue, nyakiBlokkdisszekcioValue,
+    kezeleoorvosValue, kezeleoorvosIntezeteValue, felvetelDatumaValue, kezelesreErkezesIndokaValue,
+    implantatumok, fogak, isViewOnly, isNewPatient, currentPatient, reset, setImplantatumok, setFogak, onSave
+  ]);
 
-  // Update currentPatient when patient prop changes
+  // Update currentPatient when patient prop changes (but not from auto-save)
   useEffect(() => {
+    // Only update if patient prop actually changed (not from auto-save)
+    // This prevents overwriting currentPatient after auto-save
+    if (patient && (!currentPatient || patient.id !== currentPatient.id)) {
     setCurrentPatient(patient);
-  }, [patient]);
+    }
+  }, [patient, currentPatient]);
 
-  // Implantátumok frissítése amikor patient változik
+  // Implantátumok frissítése amikor patient prop changes (but not from auto-save)
   useEffect(() => {
+    // Only update if patient prop actually changed (not from auto-save)
+    // This prevents overwriting implantatumok/fogak after auto-save
+    if (patient && (!currentPatient || patient.id !== currentPatient.id)) {
     if (patient?.meglevoImplantatumok) {
       setImplantatumok(patient.meglevoImplantatumok);
     } else {
@@ -436,77 +530,12 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     } else {
       setFogak({});
     }
-  }, [patient]);
-
-  // Auto-save draft to localStorage (only for new patients, not for existing patients without changes)
-  useEffect(() => {
-    if (isViewOnly || !hasRestoredDraft) {
-      return;
     }
+  }, [patient, currentPatient]);
 
-    // Don't save draft if patient has been saved (has an ID)
-    // This prevents saving draft after patient was saved via booking
-    if (currentPatient?.id) {
-      // Patient has been saved, clear any existing draft
-      clearDraft();
-      return;
-    }
-
-    // For existing patients, only save draft if form is dirty (has changes)
-    if (!isNewPatient && !isDirty) {
-      // No changes for existing patient, clear any existing draft
-      clearDraft();
-      return;
-    }
-
-    // Clear previous timeout
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-
-    // Debounce: save after 500ms of inactivity
-    saveTimeoutRef.current = setTimeout(() => {
-      // Normalizáljuk a fogak adatokat mentés előtt
-      const normalizedFogak: Record<string, { status?: 'D' | 'F' | 'M'; description?: string }> = {};
-      Object.entries(fogak).forEach(([toothNumber, value]) => {
-        const normalizedValue = normalizeToothData(value);
-        if (normalizedValue) {
-          normalizedFogak[toothNumber] = normalizedValue;
-        }
-      });
-      
-      const formData: Partial<Patient> = {
-        ...formValues,
-        meglevoImplantatumok: implantatumok,
-        meglevoFogak: normalizedFogak,
-      };
-      
-      // Only save if there's at least some data filled in
-      const hasData = Object.values(formData).some(value => {
-        if (value === null || value === undefined || value === '') return false;
-        if (typeof value === 'object' && Object.keys(value).length === 0) return false;
-        if (Array.isArray(value) && value.length === 0) return false;
-        return true;
-      });
-
-      if (hasData) {
-        saveDraft(formData);
-      } else {
-        clearDraft();
-      }
-    }, 500);
-
-    // Cleanup timeout on unmount
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
-  }, [formValues, implantatumok, fogak, isViewOnly, hasRestoredDraft, isNewPatient, isDirty, currentPatient, saveDraft, clearDraft]);
 
   // Automatikus intézet beállítás a kezelőorvos alapján
   useEffect(() => {
-    const currentIntezete = watch('kezeleoorvosIntezete');
     if (kezeleoorvos && !isViewOnly && kezeloorvosOptions.length > 0) {
       // Keresés a kezelőorvos listában
       const selectedDoctor = kezeloorvosOptions.find(
@@ -514,13 +543,14 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       );
       
       if (selectedDoctor && selectedDoctor.intezmeny) {
-        // Csak akkor állítjuk be, ha még nincs érték vagy ha az intézmény változott
-        if (!currentIntezete || currentIntezete !== selectedDoctor.intezmeny) {
-          setValue('kezeleoorvosIntezete', selectedDoctor.intezmeny);
-        }
+        // Automatikusan beállítjuk az intézetet a kiválasztott orvos alapján
+        setValue('kezeleoorvosIntezete', selectedDoctor.intezmeny);
+      } else if (!selectedDoctor || !selectedDoctor.intezmeny) {
+        // Ha az orvosnak nincs intézménye, töröljük az intézet mezőt
+        setValue('kezeleoorvosIntezete', '');
       }
     }
-  }, [kezeleoorvos, kezeloorvosOptions, setValue, isViewOnly, watch]);
+  }, [kezeleoorvos, kezeloorvosOptions, setValue, isViewOnly]);
 
   // Automatikus intézet beállítás a beutaló orvos alapján
   useEffect(() => {
@@ -755,9 +785,6 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         setFogak(savedPatient.meglevoFogak as Record<string, ToothStatus>);
       }
       
-      // Clear draft on successful save (for both new and existing patients)
-      clearDraft();
-      
       // Reset form dirty state with saved patient data
       reset(savedPatient ? {
         ...savedPatient,
@@ -825,9 +852,6 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       setFogak(savedPatient.meglevoFogak as Record<string, ToothStatus>);
     }
     
-    // Clear draft
-    clearDraft();
-    
     // Reset form dirty state
     reset(savedPatient ? {
       ...savedPatient,
@@ -852,7 +876,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     // The patient is saved, but we don't want to show the "Beteg mentve" popup
     
     return savedPatient.id || null;
-  }, [getValues, fogak, implantatumok, currentPatient, clearDraft, reset, setImplantatumok, setFogak, onSave]);
+  }, [getValues, fogak, implantatumok, currentPatient, reset, setImplantatumok, setFogak, onSave]);
 
   // Save patient for booking - used when booking appointment before saving form
   const savePatientForBooking = useCallback(async (): Promise<Patient> => {
@@ -893,9 +917,6 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       setFogak(savedPatient.meglevoFogak as Record<string, ToothStatus>);
     }
     
-    // Clear draft
-    clearDraft();
-    
     // Reset form dirty state - this will mark the form as not dirty
     reset(savedPatient ? {
       ...savedPatient,
@@ -917,13 +938,13 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     } : undefined, { keepDefaultValues: true });
     
     return savedPatient;
-  }, [getValues, fogak, implantatumok, currentPatient, clearDraft, reset, setImplantatumok, setFogak]);
+  }, [getValues, fogak, implantatumok, currentPatient, reset, setImplantatumok, setFogak]);
 
   // Check if form has unsaved changes
   const hasUnsavedChanges = useCallback(() => {
     if (isViewOnly) return false;
     
-    // Use currentPatient for comparison (it gets updated when patient is saved via booking)
+    // Use currentPatient for comparison (it gets updated when patient is saved via booking or auto-save)
     const referencePatient = currentPatient || patient;
     
     // For existing patients: compare current values with original patient data
@@ -935,56 +956,96 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       const implantatumokChanged = JSON.stringify(implantatumok) !== JSON.stringify(originalImplantatumok);
       const fogakChanged = JSON.stringify(fogak) !== JSON.stringify(originalFogak);
       
-      // Only check isDirty if implantatumok and fogak haven't changed
-      // This prevents false positives from form initialization
+      // If implantatumok or fogak changed, there are unsaved changes
       if (implantatumokChanged || fogakChanged) {
         return true;
       }
       
-      // For form fields, only consider it changed if isDirty AND there's actual difference
-      // This prevents false positives when form is initialized
-      if (isDirty) {
-        // Compare key fields that matter
+      // For form fields, check if there's actual difference (don't rely only on isDirty)
+      // Compare all fields with the saved patient data
         const keyFields: (keyof Patient)[] = [
           'nev', 'taj', 'telefonszam', 'email', 'szuletesiDatum', 'nem',
           'beutaloOrvos', 'beutaloIntezmeny', 'beutaloIndokolas',
-          'kezeleoorvos', 'kezeleoorvosIntezete',
-          'kezelesreErkezesIndoka', 'bno', 'diagnozis', 'mutetIdeje'
+        'kezeleoorvos', 'kezeleoorvosIntezete', 'felvetelDatuma',
+        'kezelesreErkezesIndoka', 'bno', 'diagnozis', 'mutetIdeje',
+        'szovettaniDiagnozis', 'nyakiBlokkdisszekcio', 'cim', 'varos', 'iranyitoszam'
         ];
         
         // Check if any key field actually changed
         const hasActualChange = keyFields.some(field => {
           const currentValue = formValues[field];
           const originalValue = referencePatient[field];
+        
+        // Handle null/undefined/empty string comparison
+        const currentNormalized = currentValue === null || currentValue === undefined || currentValue === '' ? null : currentValue;
+        const originalNormalized = originalValue === null || originalValue === undefined || originalValue === '' ? null : originalValue;
           
           // Normalize dates for comparison
           if (field === 'szuletesiDatum' || field === 'mutetIdeje' || field === 'felvetelDatuma') {
-            const currentDate = currentValue ? formatDateForInput(currentValue as string) : null;
-            const originalDate = originalValue ? formatDateForInput(originalValue as string) : null;
+          const currentDate = currentNormalized ? formatDateForInput(currentNormalized as string) : null;
+          const originalDate = originalNormalized ? formatDateForInput(originalNormalized as string) : null;
             return currentDate !== originalDate;
           }
           
           // For arrays and objects, compare JSON
-          if (Array.isArray(currentValue) || Array.isArray(originalValue)) {
-            return JSON.stringify(currentValue) !== JSON.stringify(originalValue);
-          }
-          
-          if (typeof currentValue === 'object' && typeof originalValue === 'object') {
-            return JSON.stringify(currentValue) !== JSON.stringify(originalValue);
-          }
-          
-          return currentValue !== originalValue;
+        if (Array.isArray(currentNormalized) || Array.isArray(originalNormalized)) {
+          return JSON.stringify(currentNormalized || []) !== JSON.stringify(originalNormalized || []);
+        }
+        
+        if (typeof currentNormalized === 'object' && typeof originalNormalized === 'object' && currentNormalized !== null && originalNormalized !== null) {
+          return JSON.stringify(currentNormalized) !== JSON.stringify(originalNormalized);
+        }
+        
+        // For strings, trim and compare
+        if (typeof currentNormalized === 'string' && typeof originalNormalized === 'string') {
+          return currentNormalized.trim() !== originalNormalized.trim();
+        }
+        
+        return currentNormalized !== originalNormalized;
         });
         
         return hasActualChange;
       }
       
-      return false;
-    }
-    
-    // For new patients: check if there's any meaningful data entered
-    if (isNewPatient && !currentPatient?.id) {
-      // Check if any important field has value
+    // For new patients: check if there's any meaningful data entered that hasn't been saved yet
+    if (isNewPatient) {
+      // If patient was already saved (has ID), check if there are changes since last save
+      if (currentPatient?.id) {
+        // Compare with saved patient - same logic as existing patients
+        const keyFields: (keyof Patient)[] = [
+          'nev', 'taj', 'telefonszam', 'email', 'szuletesiDatum', 'nem',
+          'beutaloOrvos', 'beutaloIntezmeny', 'beutaloIndokolas',
+          'kezeleoorvos', 'kezeleoorvosIntezete', 'felvetelDatuma',
+          'kezelesreErkezesIndoka', 'bno', 'diagnozis', 'mutetIdeje'
+        ];
+        
+        const hasActualChange = keyFields.some(field => {
+          const currentValue = formValues[field];
+          const originalValue = currentPatient[field];
+          
+          const currentNormalized = currentValue === null || currentValue === undefined || currentValue === '' ? null : currentValue;
+          const originalNormalized = originalValue === null || originalValue === undefined || originalValue === '' ? null : originalValue;
+          
+          if (field === 'szuletesiDatum' || field === 'mutetIdeje' || field === 'felvetelDatuma') {
+            const currentDate = currentNormalized ? formatDateForInput(currentNormalized as string) : null;
+            const originalDate = originalNormalized ? formatDateForInput(originalNormalized as string) : null;
+            return currentDate !== originalDate;
+          }
+          
+          if (typeof currentNormalized === 'string' && typeof originalNormalized === 'string') {
+            return currentNormalized.trim() !== originalNormalized.trim();
+          }
+          
+          return currentNormalized !== originalNormalized;
+        });
+        
+        const implantatumokChanged = JSON.stringify(implantatumok) !== JSON.stringify(currentPatient.meglevoImplantatumok || {});
+        const fogakChanged = JSON.stringify(fogak) !== JSON.stringify(currentPatient.meglevoFogak || {});
+        
+        return hasActualChange || implantatumokChanged || fogakChanged;
+      }
+      
+      // If patient hasn't been saved yet, check if there's any data
       const importantFields: (keyof Patient)[] = [
         'nev', 'taj', 'telefonszam', 'email', 'szuletesiDatum', 'nem',
         'beutaloOrvos', 'beutaloIntezmeny', 'beutaloIndokolas',
@@ -998,14 +1059,13 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         return true;
       });
       
-      // Also check implantatumok and fogak
       const hasImplantatumokOrFogak = Object.keys(implantatumok).length > 0 || Object.keys(fogak).length > 0;
       
       return hasImportantData || hasImplantatumokOrFogak;
     }
     
     return false;
-  }, [isViewOnly, isDirty, patient, currentPatient, implantatumok, fogak, isNewPatient, formValues]);
+  }, [isViewOnly, patient, currentPatient, implantatumok, fogak, isNewPatient, formValues]);
 
   // Handle form cancellation - check for unsaved changes
   const handleCancel = async () => {
@@ -1014,95 +1074,20 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       return;
     }
     
-    // If patient has been saved (has an ID), don't prompt for draft save
-    // This prevents prompting after patient was saved via booking
-    if (currentPatient?.id && !hasUnsavedChanges()) {
-      // Patient is saved and no changes, just close
-      clearDraft();
-      onCancel();
-      return;
-    }
-    
-    // For existing patients: only prompt if form is dirty (has actual changes)
-    // For new patients: check if there's any data entered
-    if (isNewPatient) {
-      // New patient: check if there's any data
-      // But only if patient hasn't been saved yet
-      if (!currentPatient?.id && hasUnsavedChanges()) {
-        const shouldSave = await confirmDialog(
-          'Van nem mentett változás az űrlapban. Szeretné menteni az eddig beírt adatokat piszkozatként? (A piszkozat később visszatölthető, de az adatok csak a "Beteg mentése" gombbal kerülnek az adatbázisba.)',
-          {
-            title: 'Piszkozat mentése',
-            confirmText: 'Igen, mentem',
-            cancelText: 'Nem',
-            type: 'info'
-          }
-        );
-        
-        if (shouldSave) {
-          // Save draft before closing
-          // Normalizáljuk a fogak adatokat mentés előtt
-          const normalizedFogak: Record<string, { status?: 'D' | 'F' | 'M'; description?: string }> = {};
-          Object.entries(fogak).forEach(([toothNumber, value]) => {
-            const normalizedValue = normalizeToothData(value);
-            if (normalizedValue) {
-              normalizedFogak[toothNumber] = normalizedValue;
-            }
-          });
-          
-          const formData: Partial<Patient> = {
-            ...formValues,
-            meglevoImplantatumok: implantatumok,
-            meglevoFogak: normalizedFogak,
-          };
-          saveDraft(formData);
-        } else {
-          // User chose not to save, clear draft
-          clearDraft();
-        }
-      } else {
-        // Patient has been saved or no changes, clear draft
-        clearDraft();
-      }
-    } else {
-      // Existing patient: only prompt if form is dirty (has actual changes)
-      // The isDirty flag should catch all changes including implantatumok and fogak
-      // since we use setValue to update the form when these change
+    // Check if there are unsaved changes
       if (hasUnsavedChanges()) {
-        const shouldSave = await confirmDialog(
-          'Van nem mentett változás az űrlapban. Szeretné menteni az eddig beírt adatokat piszkozatként? (A piszkozat később visszatölthető, de az adatok csak a "Beteg mentése" gombbal kerülnek az adatbázisba.)',
-          {
-            title: 'Piszkozat mentése',
-            confirmText: 'Igen, mentem',
-            cancelText: 'Nem',
-            type: 'info'
-          }
-        );
-        
-        if (shouldSave) {
-          // Save draft before closing
-          // Normalizáljuk a fogak adatokat mentés előtt
-          const normalizedFogak: Record<string, { status?: 'D' | 'F' | 'M'; description?: string }> = {};
-          Object.entries(fogak).forEach(([toothNumber, value]) => {
-            const normalizedValue = normalizeToothData(value);
-            if (normalizedValue) {
-              normalizedFogak[toothNumber] = normalizedValue;
-            }
-          });
-          
-          const formData: Partial<Patient> = {
-            ...formValues,
-            meglevoImplantatumok: implantatumok,
-            meglevoFogak: normalizedFogak,
-          };
-          saveDraft(formData);
-        } else {
-          // User chose not to save, clear draft
-          clearDraft();
+      const shouldCancel = await confirmDialog(
+        'Van nem mentett változás az űrlapban. Biztosan bezárja az űrlapot? A változások elvesznek.',
+        {
+          title: 'Nem mentett változások',
+          confirmText: 'Igen, bezárom',
+          cancelText: 'Mégse',
+          type: 'warning'
         }
-      } else {
-        // No changes for existing patient, clear any existing draft
-        clearDraft();
+      );
+      
+      if (!shouldCancel) {
+        return; // User chose not to cancel
       }
     }
     
@@ -1253,12 +1238,15 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
               <input
                 {...register('taj')}
                 onChange={handleTAJChange}
-                className="form-input"
+                className={`form-input ${errors.taj ? 'border-red-500' : ''}`}
                 placeholder="000-000-000"
                 readOnly={isViewOnly}
               />
               {errors.taj && (
                 <p className="text-red-500 text-sm mt-1">{errors.taj.message}</p>
+              )}
+              {!errors.taj && (
+                <p className="text-gray-500 text-xs mt-1">Formátum: XXX-XXX-XXX (9 számjegy)</p>
               )}
             </div>
             <div>
@@ -1266,12 +1254,15 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
               <input
                 {...register('telefonszam')}
                 onChange={handlePhoneChange}
-                className="form-input"
+                className={`form-input ${errors.telefonszam ? 'border-red-500' : ''}`}
                 placeholder="+36..."
                 readOnly={isViewOnly}
               />
               {errors.telefonszam && (
                 <p className="text-red-500 text-sm mt-1">{errors.telefonszam.message}</p>
+              )}
+              {!errors.telefonszam && (
+                <p className="text-gray-500 text-xs mt-1">Formátum: +36XXXXXXXXX (pl. +36123456789)</p>
               )}
             </div>
           </div>
@@ -1310,11 +1301,14 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
               <input
                 {...register('email')}
                 type="email"
-                className="form-input"
-                placeholder="Email cím"
+                className={`form-input ${errors.email ? 'border-red-500' : ''}`}
+                placeholder="nev@example.com"
               />
               {errors.email && (
                 <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>
+              )}
+              {!errors.email && (
+                <p className="text-gray-500 text-xs mt-1">Formátum: nev@example.com</p>
               )}
             </div>
             <div>
@@ -2658,7 +2652,6 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                   </h4>
                   <p className="text-sm text-yellow-700">
                     Az adatok csak akkor kerülnek az adatbázisba, ha az <strong>"{patient ? 'Beteg frissítése' : 'Beteg mentése'}"</strong> gombbal menti el az űrlapot. 
-                    A piszkozat csak ideiglenes tárolás, és nem menti az adatokat véglegesen.
                   </p>
                 </div>
               </div>

@@ -7,6 +7,7 @@ import { getAllPatients, savePatient, searchPatients, PaginationInfo } from '@/l
 import { PatientForm } from '@/components/PatientForm';
 import { PatientList } from '@/components/PatientList';
 import { OPImageViewer } from '@/components/OPImageViewer';
+import { FotoImageViewer } from '@/components/FotoImageViewer';
 import { useToast } from '@/contexts/ToastContext';
 import { Plus, Search, Users, LogOut, Shield, Settings, Calendar, Eye } from 'lucide-react';
 import { getCurrentUser, getUserEmail, getUserRole, logout } from '@/lib/auth';
@@ -30,6 +31,7 @@ export default function Home() {
   const [sortField, setSortField] = useState<'nev' | 'idopont' | 'createdAt' | null>('idopont');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [currentPage, setCurrentPage] = useState<number>(1);
+  const [refreshKey, setRefreshKey] = useState<number>(0);
   const [pagination, setPagination] = useState<PaginationInfo>({
     page: 1,
     limit: 50,
@@ -37,6 +39,7 @@ export default function Home() {
     totalPages: 0,
   });
   const [opViewerPatient, setOpViewerPatient] = useState<Patient | null>(null);
+  const [fotoViewerPatient, setFotoViewerPatient] = useState<Patient | null>(null);
   const { showToast, confirm: confirmDialog } = useToast();
   
   // Computed role for display - use viewAsRole if set, otherwise use original role
@@ -128,10 +131,12 @@ export default function Home() {
     };
     
     loadPatientsData();
-  }, [searchQuery, currentPage, sortField, sortDirection]);
+  }, [searchQuery, currentPage, sortField, sortDirection, refreshKey]);
 
   const loadPatients = async () => {
-    // Reload current page
+    // Force reload by incrementing refreshKey
+    // This will trigger the useEffect to reload data
+    setRefreshKey(prev => prev + 1);
     setCurrentPage(1);
   };
 
@@ -143,9 +148,27 @@ export default function Home() {
       // If patient already has an ID, it means it was already saved in PatientForm
       // In that case, we just need to reload the list and show success message
       if (patientData.id) {
+        // Reload patients to get latest data from database
         await loadPatients();
-        // Update editingPatient with the saved patient data
-        setEditingPatient(patientData);
+        // Reload the specific patient to get latest data from database
+        // This ensures we have the most up-to-date data when reopening the form
+        try {
+          const response = await fetch(`/api/patients/${patientData.id}`, {
+            credentials: 'include',
+          });
+          if (response.ok) {
+            const data = await response.json();
+            // Update editingPatient with the latest saved patient data from database
+            setEditingPatient(data.patient);
+          } else {
+            // Fallback: use the provided patient data
+            setEditingPatient(patientData);
+          }
+        } catch (error) {
+          // Fallback: use the provided patient data
+          console.error('Error reloading patient:', error);
+          setEditingPatient(patientData);
+        }
         if (!isSilent) {
           showToast('Betegadat sikeresen mentve', 'success');
         }
@@ -185,117 +208,9 @@ export default function Home() {
   };
 
   const handleNewPatient = () => {
-    // Check for saved drafts - only check for "new" drafts (not existing patient drafts)
-    const drafts: Array<{ key: string; name: string; timestamp: string }> = [];
-    
-    // Only check for "new" draft (new patient drafts, not existing patient modification drafts)
-    const newDraftKey = 'patientFormDraft_new';
-    const newDraftData = localStorage.getItem(newDraftKey);
-    if (newDraftData) {
-      try {
-        const draft = JSON.parse(newDraftData);
-        const timestampKey = 'patientFormDraftTimestamp_new';
-        const timestamp = localStorage.getItem(timestampKey) || '';
-        const patientName = draft.nev || 'Névtelen beteg';
-        drafts.push({
-          key: newDraftKey,
-          name: patientName,
-          timestamp: timestamp
-        });
-      } catch (error) {
-        console.error('Error parsing draft:', error);
-      }
-    }
-    
-    if (drafts.length > 0) {
-      // If there's only one draft, ask directly
-      if (drafts.length === 1) {
-        const draft = drafts[0];
-        const shouldContinue = window.confirm(
-          `Van egy elmentett piszkozat: "${draft.name}". Szeretné folytatni ezt a piszkozatot?\n\n` +
-          `Ha "OK"-t választ, ezt a piszkozatot folytatja.\n` +
-          `Ha "Mégse"-t választ, minden piszkozat törlődik.`
-        );
-        
-        if (shouldContinue) {
-          // Continue with this draft - delete all other drafts
-          drafts.forEach(d => {
-            if (d.key !== draft.key) {
-              const timestampKey = d.key.replace('patientFormDraft_', 'patientFormDraftTimestamp_');
-              localStorage.removeItem(d.key);
-              localStorage.removeItem(timestampKey);
-            }
-          });
-          setEditingPatient(null);
-          setIsViewMode(false);
-          setShowForm(true);
-        } else {
-          // Delete all drafts
-          drafts.forEach(d => {
-            const timestampKey = d.key.replace('patientFormDraft_', 'patientFormDraftTimestamp_');
-            localStorage.removeItem(d.key);
-            localStorage.removeItem(timestampKey);
-          });
-          setEditingPatient(null);
-          setIsViewMode(false);
-          setShowForm(true);
-        }
-      } else {
-        // Multiple drafts - let user choose
-        const draftList = drafts.map((d, index) => {
-          const date = d.timestamp ? new Date(d.timestamp).toLocaleString('hu-HU') : 'Ismeretlen dátum';
-          return `${index + 1}. ${d.name} (${date})`;
-        }).join('\n');
-        
-        const choice = window.prompt(
-          `Több elmentett piszkozat található:\n\n${draftList}\n\n` +
-          `Adja meg a folytatni kívánt piszkozat sorszámát (1-${drafts.length}), vagy nyomjon "Mégse"-t az összes törléséhez:`
-        );
-        
-        if (choice && !isNaN(parseInt(choice))) {
-          const selectedIndex = parseInt(choice) - 1;
-          if (selectedIndex >= 0 && selectedIndex < drafts.length) {
-            const selectedDraft = drafts[selectedIndex];
-            // Delete all other drafts
-            drafts.forEach(d => {
-              if (d.key !== selectedDraft.key) {
-                const timestampKey = d.key.replace('patientFormDraft_', 'patientFormDraftTimestamp_');
-                localStorage.removeItem(d.key);
-                localStorage.removeItem(timestampKey);
-              }
-            });
-            setEditingPatient(null);
-            setIsViewMode(false);
-            setShowForm(true);
-          } else {
-            // Invalid choice - delete all
-            drafts.forEach(d => {
-              const timestampKey = d.key.replace('patientFormDraft_', 'patientFormDraftTimestamp_');
-              localStorage.removeItem(d.key);
-              localStorage.removeItem(timestampKey);
-            });
-            setEditingPatient(null);
-            setIsViewMode(false);
-            setShowForm(true);
-          }
-        } else {
-          // User cancelled or invalid input - delete all drafts
-          drafts.forEach(d => {
-            const timestampKey = d.key.replace('patientFormDraft_', 'patientFormDraftTimestamp_');
-            localStorage.removeItem(d.key);
-            localStorage.removeItem(timestampKey);
-          });
-          setEditingPatient(null);
-          setIsViewMode(false);
-          setShowForm(true);
-        }
-      }
-    } else {
-      // No draft, just open new patient form
-      setEditingPatient(null);
-      setIsViewMode(false);
-      setShowForm(true);
-    }
+    setEditingPatient(null);
+    setIsViewMode(false);
+    setShowForm(true);
   };
 
   const handleViewPatient = (patient: Patient) => {
@@ -308,17 +223,24 @@ export default function Home() {
     setOpViewerPatient(patient);
   };
 
+  const handleViewFoto = (patient: Patient) => {
+    setFotoViewerPatient(patient);
+  };
+
   const handleEditPatient = (patient: Patient) => {
     setEditingPatient(patient);
     setIsViewMode(false);
     setShowForm(true);
   };
 
-  const handleCloseForm = () => {
+  const handleCloseForm = async () => {
     // This will be called by PatientForm's handleCancel after checking for unsaved changes
     setShowForm(false);
     setEditingPatient(null);
     setIsViewMode(false);
+    
+    // Reload patients list to get latest data from database
+    await loadPatients();
   };
 
   const handleLogout = () => {
@@ -596,6 +518,7 @@ export default function Home() {
                 onEdit={handleEditPatient}
                 onDelete={originalUserRole === 'admin' ? handleDeletePatient : undefined}
                 onViewOP={handleViewOP}
+                onViewFoto={handleViewFoto}
                 canEdit={displayRole === 'admin' || displayRole === 'editor' || displayRole === 'fogpótlástanász' || displayRole === 'sebészorvos'}
                 canDelete={originalUserRole === 'admin'}
                 userRole={displayRole}
@@ -656,6 +579,16 @@ export default function Home() {
           patientName={opViewerPatient.nev || undefined}
           isOpen={!!opViewerPatient}
           onClose={() => setOpViewerPatient(null)}
+        />
+      )}
+
+      {/* Foto Image Viewer Modal */}
+      {fotoViewerPatient && fotoViewerPatient.id && (
+        <FotoImageViewer
+          patientId={fotoViewerPatient.id}
+          patientName={fotoViewerPatient.nev || undefined}
+          isOpen={!!fotoViewerPatient}
+          onClose={() => setFotoViewerPatient(null)}
         />
       )}
 

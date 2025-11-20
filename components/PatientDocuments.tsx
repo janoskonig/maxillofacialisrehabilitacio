@@ -160,6 +160,19 @@ export function PatientDocuments({
           return;
         }
       }
+
+      // Check if foto tag is selected and file is not an image
+      const hasFotoTag = tags.some(tag => 
+        tag.toLowerCase() === 'foto'
+      );
+      
+      if (hasFotoTag) {
+        const isImage = file.type && file.type.startsWith('image/');
+        if (!isImage) {
+          showToast('Foto tag-gel csak képfájlok tölthetők fel. Kérjük, válasszon ki egy képfájlt vagy távolítsa el a foto tag-et.', 'error');
+          return;
+        }
+      }
       
       setSelectedFile(file);
       setShowUploadForm(true);
@@ -213,6 +226,19 @@ export function PatientDocuments({
       const isImage = selectedFile.type && selectedFile.type.startsWith('image/');
       if (!isImage) {
         showToast('OP tag-gel csak képfájlok tölthetők fel. Kérjük, válasszon ki egy képfájlt vagy távolítsa el az OP tag-et.', 'error');
+        return;
+      }
+    }
+
+    // Validate: foto tag can only be used with image files
+    const hasFotoTag = tags.some(tag => 
+      tag.toLowerCase() === 'foto'
+    );
+    
+    if (hasFotoTag) {
+      const isImage = selectedFile.type && selectedFile.type.startsWith('image/');
+      if (!isImage) {
+        showToast('Foto tag-gel csak képfájlok tölthetők fel. Kérjük, válasszon ki egy képfájlt vagy távolítsa el a foto tag-et.', 'error');
         return;
       }
     }
@@ -363,6 +389,16 @@ export function PatientDocuments({
         const isImage = selectedFile.type && selectedFile.type.startsWith('image/');
         if (!isImage) {
           showToast('OP tag-gel csak képfájlok tölthetők fel. Kérjük, válasszon ki egy képfájlt vagy távolítsa el a fájlt.', 'error');
+          return;
+        }
+      }
+
+      // Check if adding foto tag and selected file is not an image
+      const isFotoTag = tag.toLowerCase() === 'foto';
+      if (isFotoTag && selectedFile) {
+        const isImage = selectedFile.type && selectedFile.type.startsWith('image/');
+        if (!isImage) {
+          showToast('Foto tag-gel csak képfájlok tölthetők fel. Kérjük, válasszon ki egy képfájlt vagy távolítsa el a fájlt.', 'error');
           return;
         }
       }

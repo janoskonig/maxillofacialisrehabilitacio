@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser, type AuthUser } from '@/lib/auth';
-import { MessageCircle, ChevronDown, ChevronUp, AlertCircle, Bug, Lightbulb, Mail, Send, ArrowUp, ArrowDown } from 'lucide-react';
+import { MessageCircle, ChevronDown, ChevronUp, AlertCircle, Bug, Lightbulb, Mail, Send, ArrowUp, ArrowDown, BarChart3 } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { ConditionalAppointmentBooking } from '@/components/ConditionalAppointmentBooking';
 
@@ -524,9 +524,18 @@ export default function AdminPage() {
               <Logo width={60} height={69} />
               <h1 className="text-2xl font-bold text-medical-primary">Admin felület</h1>
             </div>
-            {currentUser && (
-              <p className="text-sm text-gray-500">Bejelentkezve: {currentUser.email} ({currentUser.role})</p>
-            )}
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => router.push('/admin/stats')}
+                className="flex items-center gap-2 px-4 py-2 bg-medical-primary text-white rounded hover:bg-medical-primary-dark transition-colors"
+              >
+                <BarChart3 className="w-4 h-4" />
+                Statisztikák
+              </button>
+              {currentUser && (
+                <p className="text-sm text-gray-500">Bejelentkezve: {currentUser.email} ({currentUser.role})</p>
+              )}
+            </div>
           </div>
         </div>
       </header>
