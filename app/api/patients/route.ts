@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { Patient, patientSchema } from '@/lib/types';
 import { verifyAuth } from '@/lib/auth-server';
 import { sendPatientCreationNotification } from '@/lib/email';
+import { logActivity, logActivityWithAuth } from '@/lib/activity';
 
 // Patient SELECT lista - közös használatra
 const PATIENT_SELECT_FIELDS = `
@@ -189,26 +190,14 @@ export async function GET(request: NextRequest) {
     const totalPages = Math.ceil(total / limit);
 
     // Activity logging: patients list viewed or searched (csak ha be van jelentkezve)
-    try {
-      const auth = await verifyAuth(request);
-      if (auth) {
-      const ipHeader = request.headers.get('x-forwarded-for') || '';
-      const ipAddress = ipHeader.split(',')[0]?.trim() || null;
+    if (auth) {
       const searchQuery = request.nextUrl.searchParams.get('q');
       const action = searchQuery ? 'patient_search' : 'patients_list_viewed';
       const detail = searchQuery 
         ? `Search query: "${searchQuery}", Results: ${result.rows.length}`
         : `Total patients: ${result.rows.length}`;
       
-      await pool.query(
-        `INSERT INTO activity_logs (user_email, action, detail, ip_address)
-         VALUES ($1, $2, $3, $4)`,
-          [auth.email, action, detail, ipAddress]
-      );
-      }
-    } catch (logError) {
-      console.error('Failed to log activity:', logError);
-      // Don't fail the request if logging fails
+      await logActivityWithAuth(request, auth, action, detail);
     }
 
     return NextResponse.json({ 
@@ -462,18 +451,12 @@ export async function POST(request: NextRequest) {
     console.log('Beteg sikeresen mentve, ID:', result.rows[0].id);
     
     // Activity logging: patient created
-    try {
-      const ipHeader = request.headers.get('x-forwarded-for') || '';
-      const ipAddress = ipHeader.split(',')[0]?.trim() || null;
-      await pool.query(
-        `INSERT INTO activity_logs (user_email, action, detail, ip_address)
-         VALUES ($1, $2, $3, $4)`,
-        [userEmail, 'patient_created', `Patient ID: ${result.rows[0].id}, Name: ${result.rows[0].nev || 'N/A'}`, ipAddress]
-      );
-    } catch (logError) {
-      console.error('Failed to log activity:', logError);
-      // Don't fail the request if logging fails
-    }
+    await logActivity(
+      request,
+      userEmail,
+      'patient_created',
+      `Patient ID: ${result.rows[0].id}, Name: ${result.rows[0].nev || 'N/A'}`
+    );
 
     // Send email notification to admins if surgeon created the patient
     if (role === 'sebészorvos') {

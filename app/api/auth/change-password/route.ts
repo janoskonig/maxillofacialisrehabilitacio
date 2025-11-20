@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import bcrypt from 'bcryptjs';
+import { logActivity } from '@/lib/activity';
 
 // Jelszó validáció
 function isValidPassword(password: string): { valid: boolean; error?: string } {
@@ -93,19 +94,7 @@ export async function POST(request: NextRequest) {
     );
 
     // Activity log
-    try {
-      await pool.query(
-        'INSERT INTO activity_logs (user_email, action, detail, ip_address) VALUES ($1, $2, $3, $4)',
-        [
-          auth.email,
-          'password_change',
-          'success',
-          request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null,
-        ]
-      );
-    } catch (e) {
-      console.error('Failed to log password change activity:', e);
-    }
+    await logActivity(request, auth.email, 'password_change', 'success');
 
     return NextResponse.json({
       success: true,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { downloadFile, deleteFile } from '@/lib/ftp-client';
+import { logActivity, logActivityWithAuth } from '@/lib/activity';
 
 // Download a document
 export async function GET(
@@ -94,17 +95,12 @@ export async function GET(
     const fileBuffer = await downloadFile(document.file_path, patientId);
 
     // Activity logging
-    try {
-      const ipHeader = request.headers.get('x-forwarded-for') || '';
-      const ipAddress = ipHeader.split(',')[0]?.trim() || null;
-      await pool.query(
-        `INSERT INTO activity_logs (user_email, action, detail, ip_address)
-         VALUES ($1, $2, $3, $4)`,
-        [auth.email, 'patient_document_downloaded', `Patient ID: ${patientId}, Document: ${document.filename}`, ipAddress]
-      );
-    } catch (logError) {
-      console.error('Failed to log activity:', logError);
-    }
+    await logActivityWithAuth(
+      request,
+      auth,
+      'patient_document_downloaded',
+      `Patient ID: ${patientId}, Document: ${document.filename}`
+    );
 
     // Check if this is an image - if so, use inline disposition for viewing
     const isImage = document.mime_type && (
@@ -210,17 +206,12 @@ export async function DELETE(
     );
 
     // Activity logging
-    try {
-      const ipHeader = request.headers.get('x-forwarded-for') || '';
-      const ipAddress = ipHeader.split(',')[0]?.trim() || null;
-      await pool.query(
-        `INSERT INTO activity_logs (user_email, action, detail, ip_address)
-         VALUES ($1, $2, $3, $4)`,
-        [userEmail, 'patient_document_deleted', `Patient ID: ${patientId}, Document: ${document.filename}`, ipAddress]
-      );
-    } catch (logError) {
-      console.error('Failed to log activity:', logError);
-    }
+    await logActivity(
+      request,
+      userEmail,
+      'patient_document_deleted',
+      `Patient ID: ${patientId}, Document: ${document.filename}`
+    );
 
     return NextResponse.json(
       { message: 'Dokumentum sikeresen törölve' },

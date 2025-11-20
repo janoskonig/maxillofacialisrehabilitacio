@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { SignJWT } from 'jose';
 import { sendRegistrationNotificationToAdmins } from '@/lib/email';
+import { logActivity } from '@/lib/activity';
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'change-this-to-a-random-secret-in-production'
@@ -143,19 +144,7 @@ export async function POST(request: NextRequest) {
     // NEM hozunk létre JWT tokent - inaktív felhasználó nem jelentkezhet be
 
     // Activity log
-    try {
-      await pool.query(
-        'INSERT INTO activity_logs (user_email, action, detail, ip_address) VALUES ($1, $2, $3, $4)',
-        [
-          user.email,
-          'register',
-          'pending_approval',
-          request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null,
-        ]
-      );
-    } catch (e) {
-      console.error('Failed to log registration activity:', e);
-    }
+    await logActivity(request, user.email, 'register', 'pending_approval');
 
     // Email értesítés küldése az adminoknak
     try {

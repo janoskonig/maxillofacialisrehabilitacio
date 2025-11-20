@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { uploadFile, isFtpConfigured, getMaxFileSize } from '@/lib/ftp-client';
 import { documentSchema } from '@/lib/types';
+import { logActivity, logActivityWithAuth } from '@/lib/activity';
 
 // List all documents for a patient
 export async function GET(
@@ -102,17 +103,12 @@ export async function GET(
     );
 
     // Activity logging
-    try {
-      const ipHeader = request.headers.get('x-forwarded-for') || '';
-      const ipAddress = ipHeader.split(',')[0]?.trim() || null;
-      await pool.query(
-        `INSERT INTO activity_logs (user_email, action, detail, ip_address)
-         VALUES ($1, $2, $3, $4)`,
-        [auth.email, 'patient_documents_listed', `Patient ID: ${patientId}, Documents: ${result.rows.length}`, ipAddress]
-      );
-    } catch (logError) {
-      console.error('Failed to log activity:', logError);
-    }
+    await logActivityWithAuth(
+      request,
+      auth,
+      'patient_documents_listed',
+      `Patient ID: ${patientId}, Documents: ${result.rows.length}`
+    );
 
     return NextResponse.json({ documents: result.rows }, { status: 200 });
   } catch (error) {
@@ -318,17 +314,12 @@ export async function POST(
     const document = result.rows[0];
 
     // Activity logging
-    try {
-      const ipHeader = request.headers.get('x-forwarded-for') || '';
-      const ipAddress = ipHeader.split(',')[0]?.trim() || null;
-      await pool.query(
-        `INSERT INTO activity_logs (user_email, action, detail, ip_address)
-         VALUES ($1, $2, $3, $4)`,
-        [userEmail, 'patient_document_uploaded', `Patient ID: ${patientId}, Document: ${file.name}, Size: ${file.size} bytes`, ipAddress]
-      );
-    } catch (logError) {
-      console.error('Failed to log activity:', logError);
-    }
+    await logActivity(
+      request,
+      userEmail,
+      'patient_document_uploaded',
+      `Patient ID: ${patientId}, Document: ${file.name}, Size: ${file.size} bytes`
+    );
 
     return NextResponse.json({ document }, { status: 201 });
   } catch (error) {

@@ -4,6 +4,7 @@ import { patientSchema } from '@/lib/types';
 import { verifyAuth } from '@/lib/auth-server';
 import { sendAppointmentTimeSlotFreedNotification } from '@/lib/email';
 import { deleteGoogleCalendarEvent, createGoogleCalendarEvent } from '@/lib/google-calendar';
+import { logActivity, logActivityWithAuth } from '@/lib/activity';
 
 // Egy beteg lekérdezése ID alapján
 export async function GET(
@@ -144,20 +145,14 @@ export async function GET(
     // fogpótlástanász, admin, editor, viewer: mindent látnak (nincs szűrés)
 
     // Activity logging: patient viewed (csak ha be van jelentkezve)
-    try {
-      const auth = await verifyAuth(request);
-      if (auth) {
-      const ipHeader = request.headers.get('x-forwarded-for') || '';
-      const ipAddress = ipHeader.split(',')[0]?.trim() || null;
-      await pool.query(
-        `INSERT INTO activity_logs (user_email, action, detail, ip_address)
-         VALUES ($1, $2, $3, $4)`,
-          [auth.email, 'patient_viewed', `Patient ID: ${params.id}, Name: ${result.rows[0].nev || 'N/A'}`, ipAddress]
+    const authForLogging = await verifyAuth(request);
+    if (authForLogging) {
+      await logActivityWithAuth(
+        request,
+        authForLogging,
+        'patient_viewed',
+        `Patient ID: ${params.id}, Name: ${result.rows[0].nev || 'N/A'}`
       );
-      }
-    } catch (logError) {
-      console.error('Failed to log activity:', logError);
-      // Don't fail the request if logging fails
     }
 
     return NextResponse.json({ patient: result.rows[0] }, { status: 200 });
@@ -643,14 +638,10 @@ export async function PUT(
         ? `Patient ID: ${params.id}, Name: ${newPatient.nev || 'N/A'}; Módosítások: ${changes.join('; ')}`
         : `Patient ID: ${params.id}, Name: ${newPatient.nev || 'N/A'}; Nincs változás`;
       
-      await pool.query(
-        `INSERT INTO activity_logs (user_email, action, detail, ip_address)
-         VALUES ($1, $2, $3, $4)`,
-        [userEmail, 'patient_updated', detailText, ipAddress]
-      );
+      await logActivity(request, userEmail, 'patient_updated', detailText);
     } catch (logError) {
+      // Activity logging failed, but don't fail the request
       console.error('Failed to log activity:', logError);
-      // Don't fail the request if logging fails
     }
 
     return NextResponse.json({ patient: result.rows[0] }, { status: 200 });
@@ -871,21 +862,15 @@ export async function DELETE(
       }
 
       // Activity logging: patient deleted
-      try {
-        const ipHeader = request.headers.get('x-forwarded-for') || '';
-        const ipAddress = ipHeader.split(',')[0]?.trim() || null;
-        const appointmentInfo = appointments.length > 0 
-          ? `, ${appointments.length} időpont törölve és felszabadítva`
-          : '';
-        await pool.query(
-          `INSERT INTO activity_logs (user_email, action, detail, ip_address)
-           VALUES ($1, $2, $3, $4)`,
-          [userEmail, 'patient_deleted', `Patient ID: ${params.id}, Name: ${patient.nev || 'N/A'}${appointmentInfo}`, ipAddress]
-        );
-      } catch (logError) {
-        console.error('Failed to log activity:', logError);
-        // Don't fail the request if logging fails
-      }
+      const appointmentInfo = appointments.length > 0 
+        ? `, ${appointments.length} időpont törölve és felszabadítva`
+        : '';
+      await logActivity(
+        request,
+        userEmail,
+        'patient_deleted',
+        `Patient ID: ${params.id}, Name: ${patient.nev || 'N/A'}${appointmentInfo}`
+      );
 
       return NextResponse.json(
         { 
