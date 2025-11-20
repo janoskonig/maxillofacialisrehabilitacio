@@ -103,7 +103,8 @@ export async function GET(request: NextRequest) {
     
     // JOIN szükséges-e a users táblával (sebészorvos szerepkör esetén)
     let needsUserJoin = false;
-    let userInstitution: string | null = null;
+    // Lokális változó a userEmail-hez, amely garantáltan string, ha needsUserJoin igaz
+    let surgeonEmail: string | null = null;
     
     if (role === 'technikus') {
       // Technikus: csak azokat a betegeket látja, akikhez arcot érintő kezelési terv van
@@ -113,6 +114,7 @@ export async function GET(request: NextRequest) {
       // Optimalizálás: JOIN használata a users táblával az intézmény lekérdezéséhez
       // Így egyetlen query-ben megkapjuk az intézményt és a betegeket
       needsUserJoin = true;
+      surgeonEmail = userEmail; // Most már garantáltan string, mert ellenőriztük
       // A JOIN feltételt a FROM részben kezeljük
     }
     // fogpótlástanász, admin, editor, viewer: mindent látnak (nincs szűrés)
@@ -135,10 +137,12 @@ export async function GET(request: NextRequest) {
       let selectFields: string;
       let orderBy: string;
       
-      if (needsUserJoin) {
+      if (needsUserJoin && surgeonEmail) {
         // JOIN esetén prefixeljük a mezőket 'p.'-vel
+        // surgeonEmail garantáltan string, mert csak akkor állítjuk be, ha userEmail nem null
+        const emailForQuery: string = surgeonEmail; // Type assertion: már ellenőriztük, hogy nem null
         fromClause = `FROM patients p JOIN users u ON u.email = $${paramIndex} AND p.beutalo_intezmeny = u.intezmeny AND u.intezmeny IS NOT NULL`;
-        queryParams.push(userEmail);
+        queryParams.push(emailForQuery);
         paramIndex++;
         // SELECT mezők prefixelése
         selectFields = PATIENT_SELECT_FIELDS.split(',').map(f => {
@@ -184,9 +188,11 @@ export async function GET(request: NextRequest) {
       let orderBy: string;
       let finalQueryParams: unknown[];
       
-      if (needsUserJoin) {
+      if (needsUserJoin && surgeonEmail) {
+        // surgeonEmail garantáltan string, mert csak akkor állítjuk be, ha userEmail nem null
+        const emailForQuery: string = surgeonEmail; // Type assertion: már ellenőriztük, hogy nem null
         fromClause = `FROM patients p JOIN users u ON u.email = $1 AND p.beutalo_intezmeny = u.intezmeny AND u.intezmeny IS NOT NULL`;
-        finalQueryParams = [userEmail, ...queryParams];
+        finalQueryParams = [emailForQuery, ...queryParams];
         // SELECT mezők prefixelése
         selectFields = PATIENT_SELECT_FIELDS.split(',').map(f => {
           const trimmed = f.trim();
