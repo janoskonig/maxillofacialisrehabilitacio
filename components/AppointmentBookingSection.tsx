@@ -84,40 +84,21 @@ export function AppointmentBookingSection({
     if (!patientId) return;
     
     try {
-      // Load all appointments paginated to find all appointments for this patient
-      let page = 1;
-      let hasMore = true;
-      const allAppointments: Appointment[] = [];
+      // Optimalizálás: közvetlenül szűrjük a patientId alapján az API-ban
+      const response = await fetch(`/api/appointments?patientId=${patientId}`, {
+        credentials: 'include',
+      });
       
-      while (hasMore) {
-        const response = await fetch(`/api/appointments?page=${page}&limit=50`, {
-          credentials: 'include',
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          const pageAppointments = data.appointments || [];
-          allAppointments.push(...pageAppointments);
-          
-          // Check if there are more pages
-          const pagination = data.pagination;
-          if (pagination && page < pagination.totalPages) {
-            page++;
-          } else {
-            hasMore = false;
-          }
-        } else {
-          hasMore = false;
-        }
+      if (response.ok) {
+        const data = await response.json();
+        setAppointments(data.appointments || []);
+      } else {
+        console.error('Failed to load appointments');
+        setAppointments([]);
       }
-      
-      // Filter appointments for this patient
-      const patientAppointments = allAppointments.filter(
-        (apt: Appointment) => apt.patientId === patientId
-      );
-      setAppointments(patientAppointments);
     } catch (error) {
       console.error('Error loading appointments:', error);
+      setAppointments([]);
     }
   };
 

@@ -101,27 +101,19 @@ export async function GET(request: NextRequest) {
     let queryParams: string[] = [];
     let paramIndex = 1;
     
+    // JOIN szükséges-e a users táblával (sebészorvos szerepkör esetén)
+    let needsUserJoin = false;
+    let userInstitution: string | null = null;
+    
     if (role === 'technikus') {
       // Technikus: csak azokat a betegeket látja, akikhez arcot érintő kezelési terv van
       // Ellenőrizzük, hogy a kezelesi_terv_arcot_erinto mező nem NULL és nem üres tömb (tömb hossza > 0)
       whereConditions.push(`kezelesi_terv_arcot_erinto IS NOT NULL AND jsonb_array_length(kezelesi_terv_arcot_erinto) > 0`);
     } else if (role === 'sebészorvos' && userEmail) {
-      // Sebészorvos: csak azokat a betegeket látja, akik az ő intézményéből származnak
-      // Lekérdezzük a felhasználó intézményét
-      const userResult = await pool.query(
-        `SELECT intezmeny FROM users WHERE email = $1`,
-        [userEmail]
-      );
-      
-      if (userResult.rows.length > 0 && userResult.rows[0].intezmeny) {
-        const userInstitution = userResult.rows[0].intezmeny;
-        whereConditions.push(`beutalo_intezmeny = $${paramIndex}`);
-        queryParams.push(userInstitution);
-        paramIndex++;
-      } else {
-        // Ha nincs intézmény beállítva, ne lásson betegeket
-        whereConditions.push(`1 = 0`);
-      }
+      // Optimalizálás: JOIN használata a users táblával az intézmény lekérdezéséhez
+      // Így egyetlen query-ben megkapjuk az intézményt és a betegeket
+      needsUserJoin = true;
+      // A JOIN feltételt a FROM részben kezeljük
     }
     // fogpótlástanász, admin, editor, viewer: mindent látnak (nincs szűrés)
     
@@ -138,22 +130,46 @@ export async function GET(request: NextRequest) {
         ? `${searchBase} AND ${whereConditions.join(' AND ')}`
         : searchBase;
       
+      // FROM klauzula építése JOIN-nal ha szükséges
+      let fromClause: string;
+      let selectFields: string;
+      let orderBy: string;
+      
+      if (needsUserJoin) {
+        // JOIN esetén prefixeljük a mezőket 'p.'-vel
+        fromClause = `FROM patients p JOIN users u ON u.email = $${paramIndex} AND p.beutalo_intezmeny = u.intezmeny AND u.intezmeny IS NOT NULL`;
+        queryParams.push(userEmail);
+        paramIndex++;
+        // SELECT mezők prefixelése
+        selectFields = PATIENT_SELECT_FIELDS.split(',').map(f => {
+          const trimmed = f.trim();
+          // Ha már van alias (pl. "as something"), ne módosítsuk
+          if (trimmed.includes(' as ')) {
+            const parts = trimmed.split(' as ');
+            return `p.${parts[0].trim()} as ${parts[1].trim()}`;
+          }
+          return `p.${trimmed}`;
+        }).join(', ');
+        orderBy = 'p.created_at';
+      } else {
+        fromClause = `FROM patients`;
+        selectFields = PATIENT_SELECT_FIELDS;
+        orderBy = 'created_at';
+      }
+      
       // Count query
-      countResult = await pool.query(
-        `SELECT COUNT(*) as total
-        FROM patients
-        WHERE ${searchCondition}`,
-        queryParams
-      );
+      const countQuery = `SELECT COUNT(*) as total ${fromClause} WHERE ${searchCondition}`;
+      countResult = await pool.query(countQuery, queryParams);
       
       // Data query with pagination
       queryParams.push(limit.toString(), offset.toString());
+      
       result = await pool.query(
-        `SELECT ${PATIENT_SELECT_FIELDS}
-        FROM patients
-        WHERE ${searchCondition}
-        ORDER BY created_at DESC
-        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+        `SELECT ${selectFields}
+         ${fromClause}
+         WHERE ${searchCondition}
+         ORDER BY ${orderBy} DESC
+         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
         queryParams
       );
     } else {
@@ -162,26 +178,51 @@ export async function GET(request: NextRequest) {
         ? `WHERE ${whereConditions.join(' AND ')}`
         : '';
       
+      // FROM klauzula építése JOIN-nal ha szükséges
+      let fromClause: string;
+      let selectFields: string;
+      let orderBy: string;
+      let finalQueryParams: unknown[];
+      
+      if (needsUserJoin) {
+        fromClause = `FROM patients p JOIN users u ON u.email = $1 AND p.beutalo_intezmeny = u.intezmeny AND u.intezmeny IS NOT NULL`;
+        finalQueryParams = [userEmail, ...queryParams];
+        // SELECT mezők prefixelése
+        selectFields = PATIENT_SELECT_FIELDS.split(',').map(f => {
+          const trimmed = f.trim();
+          // Ha már van alias (pl. "as something"), ne módosítsuk
+          if (trimmed.includes(' as ')) {
+            const parts = trimmed.split(' as ');
+            return `p.${parts[0].trim()} as ${parts[1].trim()}`;
+          }
+          return `p.${trimmed}`;
+        }).join(', ');
+        orderBy = 'p.created_at';
+      } else {
+        fromClause = `FROM patients`;
+        selectFields = PATIENT_SELECT_FIELDS;
+        orderBy = 'created_at';
+        finalQueryParams = queryParams;
+      }
+      
       // Count query
-      const countQuery = whereClause 
-        ? `SELECT COUNT(*) as total FROM patients ${whereClause}`
-        : `SELECT COUNT(*) as total FROM patients`;
+      const countQuery = `SELECT COUNT(*) as total ${fromClause} ${whereClause}`;
       countResult = await pool.query(
         countQuery,
-        whereConditions.length > 0 ? queryParams : []
+        finalQueryParams
       );
       
       // Data query with pagination
-      const countParams = whereConditions.length > 0 ? [...queryParams] : [];
+      const countParams = [...finalQueryParams];
       countParams.push(limit.toString(), offset.toString());
-      const limitParamIndex = whereConditions.length > 0 ? queryParams.length + 1 : 1;
+      const limitParamIndex = finalQueryParams.length + 1;
       
       result = await pool.query(
-        `SELECT ${PATIENT_SELECT_FIELDS}
-        FROM patients
-        ${whereClause}
-        ORDER BY created_at DESC
-        LIMIT $${limitParamIndex} OFFSET $${limitParamIndex + 1}`,
+        `SELECT ${selectFields}
+         ${fromClause}
+         ${whereClause}
+         ORDER BY ${orderBy} DESC
+         LIMIT $${limitParamIndex} OFFSET $${limitParamIndex + 1}`,
         countParams
       );
     }

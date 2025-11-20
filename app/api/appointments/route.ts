@@ -24,17 +24,31 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '50', 10);
     const offset = (page - 1) * limit;
+    const patientId = searchParams.get('patientId');
+
+    // WHERE feltétel építése
+    let whereClause = '';
+    const queryParams: unknown[] = [];
+    let paramIndex = 1;
+
+    if (patientId) {
+      whereClause = `WHERE a.patient_id = $${paramIndex}`;
+      queryParams.push(patientId);
+      paramIndex++;
+    }
 
     // Count query
-    const countResult = await pool.query(`
+    const countQuery = `
       SELECT COUNT(*) as total
       FROM appointments a
       JOIN available_time_slots ats ON a.time_slot_id = ats.id
       JOIN patients p ON a.patient_id = p.id
       LEFT JOIN users u ON a.dentist_email = u.email
-    `);
+      ${whereClause}
+    `;
+    const countResult = await pool.query(countQuery, queryParams);
 
-    // Everyone sees all appointments
+    // Data query with optional patientId filter
     const query = `
       SELECT 
         a.id,
@@ -56,12 +70,13 @@ export async function GET(request: NextRequest) {
       JOIN available_time_slots ats ON a.time_slot_id = ats.id
       JOIN patients p ON a.patient_id = p.id
       LEFT JOIN users u ON a.dentist_email = u.email
+      ${whereClause}
       ORDER BY ats.start_time ASC
-      LIMIT $1 OFFSET $2
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;
-    const params: unknown[] = [limit.toString(), offset.toString()];
+    queryParams.push(limit.toString(), offset.toString());
 
-    const result = await pool.query(query, params);
+    const result = await pool.query(query, queryParams);
     
     const total = parseInt(countResult.rows[0].total, 10);
     const totalPages = Math.ceil(total / limit);

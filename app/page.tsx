@@ -146,29 +146,12 @@ export default function Home() {
       const isSilent = (handleSavePatient as any)._silent;
       
       // If patient already has an ID, it means it was already saved in PatientForm
-      // In that case, we just need to reload the list and show success message
+      // Optimalizálás: ne kérdezzük le újra az adatbázisból, használjuk a kapott adatot
       if (patientData.id) {
         // Reload patients to get latest data from database
         await loadPatients();
-        // Reload the specific patient to get latest data from database
-        // This ensures we have the most up-to-date data when reopening the form
-        try {
-          const response = await fetch(`/api/patients/${patientData.id}`, {
-            credentials: 'include',
-          });
-          if (response.ok) {
-            const data = await response.json();
-            // Update editingPatient with the latest saved patient data from database
-            setEditingPatient(data.patient);
-          } else {
-            // Fallback: use the provided patient data
-            setEditingPatient(patientData);
-          }
-        } catch (error) {
-          // Fallback: use the provided patient data
-          console.error('Error reloading patient:', error);
-          setEditingPatient(patientData);
-        }
+        // Use the provided patient data directly (it's already up-to-date from the save response)
+        setEditingPatient(patientData);
         if (!isSilent) {
           showToast('Betegadat sikeresen mentve', 'success');
         }
@@ -258,34 +241,15 @@ export default function Home() {
       return;
     }
 
-    // Check if patient has appointment by loading appointments
+    // Optimalizálás: egyetlen API hívás az időpont ellenőrzéshez
     let hasAppointment = false;
     try {
-      // Load all appointments paginated to check if patient has any appointments
-      let page = 1;
-      let hasMore = true;
-      
-      while (hasMore && !hasAppointment) {
-        const appointmentsResponse = await fetch(`/api/appointments?page=${page}&limit=50`, {
-          credentials: 'include',
-        });
-        if (appointmentsResponse.ok) {
-          const appointmentsData = await appointmentsResponse.json();
-          const pageAppointments = appointmentsData.appointments || [];
-          hasAppointment = pageAppointments.some(
-            (apt: any) => apt.patientId === patient.id
-          );
-          
-          // Check if there are more pages
-          const pagination = appointmentsData.pagination;
-          if (pagination && page < pagination.totalPages && !hasAppointment) {
-            page++;
-          } else {
-            hasMore = false;
-          }
-        } else {
-          hasMore = false;
-        }
+      const response = await fetch(`/api/patients/${patient.id}/has-appointments`, {
+        credentials: 'include',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        hasAppointment = data.hasAppointments || false;
       }
     } catch (error) {
       console.error('Error checking appointments:', error);

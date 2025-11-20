@@ -48,62 +48,97 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
   const itemsPerPage = pagination?.limit || 50;
 
   // Load appointments for all roles
+  // Optimalizálás: csak akkor töltjük újra, ha a betegek ID-ja változott
+  const patientIdsString = useMemo(() => patients.map(p => p.id).filter(Boolean).join(','), [patients]);
   useEffect(() => {
-    loadAppointments();
-  }, [patients]);
+    if (patientIdsString) {
+      loadAppointments();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patientIdsString]);
 
   // Load OP documents for quick access
+  // Optimalizálás: csak akkor töltjük újra, ha a betegek ID-ja változott
   useEffect(() => {
-    loadOpDocuments();
-  }, [patients]);
+    if (patientIdsString) {
+      loadOpDocuments();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patientIdsString]);
 
   // Load foto documents for quick access
+  // Optimalizálás: csak akkor töltjük újra, ha a betegek ID-ja változott
   useEffect(() => {
-    loadFotoDocuments();
-  }, [patients]);
+    if (patientIdsString) {
+      loadFotoDocuments();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patientIdsString]);
 
   const loadOpDocuments = async () => {
-    const opDocsMap: Record<string, number> = {};
+    // Optimalizálás: batch API hívás minden beteghez egyszerre
+    const patientIds = patients.filter(p => p.id).map(p => p.id!);
     
-    // Load OP documents for each patient
-    const promises = patients.map(async (patient) => {
-      if (!patient.id) return;
-      try {
-        const response = await fetch(`/api/patients/${patient.id}/documents/op`);
-        if (response.ok) {
-          const data = await response.json();
-          opDocsMap[patient.id] = data.documents?.length || 0;
-        }
-      } catch (error) {
-        // Silently fail - not critical
-        console.error(`Failed to load OP documents for patient ${patient.id}:`, error);
-      }
-    });
+    if (patientIds.length === 0) {
+      setOpDocuments({});
+      return;
+    }
 
-    await Promise.all(promises);
-    setOpDocuments(opDocsMap);
+    try {
+      const response = await fetch('/api/patients/documents/batch', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ patientIds }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setOpDocuments(data.opDocuments || {});
+      } else {
+        console.error('Failed to load OP documents batch');
+        setOpDocuments({});
+      }
+    } catch (error) {
+      // Silently fail - not critical
+      console.error('Error loading OP documents batch:', error);
+      setOpDocuments({});
+    }
   };
 
   const loadFotoDocuments = async () => {
-    const fotoDocsMap: Record<string, number> = {};
+    // Optimalizálás: batch API hívás minden beteghez egyszerre
+    const patientIds = patients.filter(p => p.id).map(p => p.id!);
     
-    // Load foto documents for each patient
-    const promises = patients.map(async (patient) => {
-      if (!patient.id) return;
-      try {
-        const response = await fetch(`/api/patients/${patient.id}/documents/foto`);
-        if (response.ok) {
-          const data = await response.json();
-          fotoDocsMap[patient.id] = data.documents?.length || 0;
-        }
-      } catch (error) {
-        // Silently fail - not critical
-        console.error(`Failed to load foto documents for patient ${patient.id}:`, error);
-      }
-    });
+    if (patientIds.length === 0) {
+      setFotoDocuments({});
+      return;
+    }
 
-    await Promise.all(promises);
-    setFotoDocuments(fotoDocsMap);
+    try {
+      const response = await fetch('/api/patients/documents/batch', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ patientIds }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setFotoDocuments(data.fotoDocuments || {});
+      } else {
+        console.error('Failed to load foto documents batch');
+        setFotoDocuments({});
+      }
+    } catch (error) {
+      // Silently fail - not critical
+      console.error('Error loading foto documents batch:', error);
+      setFotoDocuments({});
+    }
   };
 
   // Sort patients by appointment if needed
@@ -150,75 +185,34 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
   const loadAppointments = async () => {
     try {
       setLoadingAppointments(true);
-      const appointmentsMap: Record<string, AppointmentInfo> = {};
-      const now = new Date();
-      const fourHoursFromNow = new Date(now.getTime() - 4 * 60 * 60 * 1000);
       
-      // Load all appointments paginated
-      let page = 1;
-      let hasMore = true;
-      const allAppointments: any[] = [];
+      // Optimalizálás: batch API hívás minden beteghez egyszerre
+      const patientIds = patients.filter(p => p.id).map(p => p.id!);
       
-      while (hasMore) {
-        const response = await fetch(`/api/appointments?page=${page}&limit=50`, {
-          credentials: 'include',
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          const pageAppointments = data.appointments || [];
-          allAppointments.push(...pageAppointments);
-          
-          // Check if there are more pages
-          const pagination = data.pagination;
-          if (pagination && page < pagination.totalPages) {
-            page++;
-          } else {
-            hasMore = false;
-          }
-        } else {
-          hasMore = false;
-        }
+      if (patientIds.length === 0) {
+        setAppointments({});
+        return;
       }
-      
-      // Group appointments by patient ID
-      const patientAppointments: Record<string, any[]> = {};
-      allAppointments.forEach((apt: any) => {
-        if (!patientAppointments[apt.patientId]) {
-          patientAppointments[apt.patientId] = [];
-        }
-        patientAppointments[apt.patientId].push(apt);
+
+      const response = await fetch('/api/appointments/batch', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ patientIds }),
       });
-      
-      // For each patient, find the next (earliest future) appointment
-      // 4 órás késleltetés: csak azokat az időpontokat jelenítjük meg, amelyek kezdete legalább 4 órával a jelenlegi időpont után van
-      Object.keys(patientAppointments).forEach((patientId) => {
-        const apts = patientAppointments[patientId];
-        
-        // Filter appointments with 4 hour delay and sort by start time
-        const futureAppointments = apts
-          .filter((apt: any) => new Date(apt.startTime) >= fourHoursFromNow)
-          .sort((a: any, b: any) => 
-            new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
-          );
-        
-        // Only show appointments with 4 hour delay - don't show appointments that are more than 4 hours past
-        if (futureAppointments.length > 0) {
-          const nextApt = futureAppointments[0];
-          appointmentsMap[patientId] = {
-            id: nextApt.id,
-            startTime: nextApt.startTime,
-            dentistEmail: nextApt.dentistEmail,
-            dentistName: nextApt.dentistName,
-          };
-        }
-        // If no future appointments (with 4 hour delay), don't add anything to appointmentsMap
-        // This way the patient won't show an appointment in the list
-      });
-      
-      setAppointments(appointmentsMap);
+
+      if (response.ok) {
+        const data = await response.json();
+        setAppointments(data.appointments || {});
+      } else {
+        console.error('Failed to load appointments batch');
+        setAppointments({});
+      }
     } catch (error) {
       console.error('Error loading appointments:', error);
+      setAppointments({});
     } finally {
       setLoadingAppointments(false);
     }
