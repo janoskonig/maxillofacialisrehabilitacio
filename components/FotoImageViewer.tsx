@@ -366,3 +366,4 @@ export function FotoImageViewer({ patientId, patientName, isOpen, onClose }: Fot
   );
 }
 
+

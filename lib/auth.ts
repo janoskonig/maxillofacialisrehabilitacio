@@ -4,6 +4,7 @@ export type AuthUser = {
   email: string;
   role: 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
   intezmeny?: string | null;
+  name?: string | null;
 };
 
 let cachedUser: AuthUser | null = null;

@@ -123,15 +123,6 @@ export async function GET(request: NextRequest) {
     let result;
     
     if (query) {
-      // Keresés
-      const searchBase = `(nev ILIKE $${paramIndex} OR taj ILIKE $${paramIndex} OR telefonszam ILIKE $${paramIndex} OR email ILIKE $${paramIndex} OR beutalo_orvos ILIKE $${paramIndex} OR beutalo_intezmeny ILIKE $${paramIndex} OR kezeleoorvos ILIKE $${paramIndex})`;
-      queryParams.push(`%${query}%`);
-      paramIndex++;
-      
-      const searchCondition = whereConditions.length > 0
-        ? `${searchBase} AND ${whereConditions.join(' AND ')}`
-        : searchBase;
-      
       // FROM klauzula építése JOIN-nal ha szükséges
       let fromClause: string;
       let selectFields: string;
@@ -161,6 +152,21 @@ export async function GET(request: NextRequest) {
         orderBy = 'created_at';
       }
       
+      // Keresés - prefixeljük az oszlopokat, ha JOIN van
+      const columnPrefix = needsUserJoin ? 'p.' : '';
+      const searchBase = `(${columnPrefix}nev ILIKE $${paramIndex} OR ${columnPrefix}taj ILIKE $${paramIndex} OR ${columnPrefix}telefonszam ILIKE $${paramIndex} OR ${columnPrefix}email ILIKE $${paramIndex} OR ${columnPrefix}beutalo_orvos ILIKE $${paramIndex} OR ${columnPrefix}beutalo_intezmeny ILIKE $${paramIndex} OR ${columnPrefix}kezeleoorvos ILIKE $${paramIndex})`;
+      queryParams.push(`%${query}%`);
+      paramIndex++;
+      
+      // WHERE feltételek prefixelése, ha JOIN van
+      const prefixedWhereConditions = needsUserJoin
+        ? whereConditions.map(cond => cond.replace(/\b(kezelesi_terv_arcot_erinto)\b/g, 'p.$1'))
+        : whereConditions;
+      
+      const searchCondition = prefixedWhereConditions.length > 0
+        ? `${searchBase} AND ${prefixedWhereConditions.join(' AND ')}`
+        : searchBase;
+      
       // Count query
       const countQuery = `SELECT COUNT(*) as total ${fromClause} WHERE ${searchCondition}`;
       countResult = await pool.query(countQuery, queryParams);
@@ -178,10 +184,6 @@ export async function GET(request: NextRequest) {
       );
     } else {
       // Összes beteg
-      const whereClause = whereConditions.length > 0
-        ? `WHERE ${whereConditions.join(' AND ')}`
-        : '';
-      
       // FROM klauzula építése JOIN-nal ha szükséges
       let fromClause: string;
       let selectFields: string;
@@ -210,6 +212,15 @@ export async function GET(request: NextRequest) {
         orderBy = 'created_at';
         finalQueryParams = queryParams;
       }
+      
+      // WHERE feltételek prefixelése, ha JOIN van
+      const prefixedWhereConditions = needsUserJoin
+        ? whereConditions.map(cond => cond.replace(/\b(kezelesi_terv_arcot_erinto)\b/g, 'p.$1'))
+        : whereConditions;
+      
+      const whereClause = prefixedWhereConditions.length > 0
+        ? `WHERE ${prefixedWhereConditions.join(' AND ')}`
+        : '';
       
       // Count query
       const countQuery = `SELECT COUNT(*) as total ${fromClause} ${whereClause}`;
@@ -290,7 +301,17 @@ export async function POST(request: NextRequest) {
     
     // Sebészorvos esetén automatikusan beállítjuk a beutalo_orvos mezőt
     if (role === 'sebészorvos' && !validatedPatient.beutaloOrvos) {
-      validatedPatient.beutaloOrvos = userEmail;
+      // Lekérdezzük a felhasználó teljes nevét (doktor_neve)
+      const userResult = await pool.query(
+        'SELECT doktor_neve FROM users WHERE id = $1',
+        [auth.userId]
+      );
+      const doktorNeve = userResult.rows[0]?.doktor_neve;
+      // Csak akkor töltjük ki, ha van teljes név (ne az emailt használjuk)
+      if (doktorNeve && doktorNeve.trim() !== '') {
+        validatedPatient.beutaloOrvos = doktorNeve;
+      }
+      // Ha nincs doktor_neve, akkor üresen hagyjuk (a felhasználó tölti ki manuálisan)
     }
     
     // TAJ-szám egyediség ellenőrzése

@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     // Ellenőrizzük, hogy a felhasználó még aktív-e
     const pool = getDbPool();
     const userResult = await pool.query(
-      'SELECT email, role, active, restricted_view, intezmeny FROM users WHERE id = $1',
+      'SELECT email, role, active, restricted_view, intezmeny, doktor_neve FROM users WHERE id = $1',
       [userId]
     );
 
@@ -44,6 +44,7 @@ export async function GET(request: NextRequest) {
         role: userResult.rows[0].role,
         restrictedView: userResult.rows[0].restricted_view || false,
         intezmeny: userResult.rows[0].intezmeny || null,
+        name: userResult.rows[0].doktor_neve || null,
       },
     });
   } catch (error) {
