@@ -22,13 +22,19 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '50', 10);
     const offset = (page - 1) * limit;
+    
+    // Opcionális szűrés csak szabad időpontokra
+    const onlyAvailable = searchParams.get('onlyAvailable') === 'true';
+    const statusFilter = onlyAvailable ? "WHERE ats.status = 'available'" : '';
 
     // Count query
-    const countResult = await pool.query(`
+    const countQuery = `
       SELECT COUNT(*) as total
       FROM available_time_slots ats
       JOIN users u ON ats.user_id = u.id
-    `);
+      ${statusFilter}
+    `;
+    const countResult = await pool.query(countQuery);
 
     // Data query with pagination
     const query = `
@@ -44,6 +50,7 @@ export async function GET(request: NextRequest) {
         u.doktor_neve as "dentistName"
       FROM available_time_slots ats
       JOIN users u ON ats.user_id = u.id
+      ${statusFilter}
       ORDER BY ats.start_time ASC
       LIMIT $1 OFFSET $2
     `;

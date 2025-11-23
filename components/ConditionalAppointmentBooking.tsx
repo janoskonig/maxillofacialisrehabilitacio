@@ -37,20 +37,43 @@ export function ConditionalAppointmentBooking() {
 
   const loadAvailableSlots = useCallback(async () => {
     try {
-      const response = await fetch('/api/time-slots', {
-        credentials: 'include',
-      });
-      if (response.ok) {
-        const data = await response.json();
-        const allSlots = data.timeSlots || [];
-        // Csak a jövőbeli időpontokat jelenítjük meg (4 óra késleltetéssel)
-        const now = new Date();
-        const fourHoursFromNow = new Date(now.getTime() - 4 * 60 * 60 * 1000);
-        const futureSlots = allSlots.filter((slot: TimeSlot) => 
-          new Date(slot.startTime) >= fourHoursFromNow
-        );
-        setAvailableSlots(futureSlots);
+      // Több oldal lekérdezése, hogy minden szabad időpontot megkapjunk
+      let allSlots: TimeSlot[] = [];
+      let page = 1;
+      let hasMore = true;
+      const limit = 100; // Nagyobb limit, hogy kevesebb kérés legyen
+      const maxPages = 100; // Biztonsági limit, hogy ne legyen végtelen ciklus
+      
+      while (hasMore && page <= maxPages) {
+        const response = await fetch(`/api/time-slots?onlyAvailable=true&page=${page}&limit=${limit}`, {
+          credentials: 'include',
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const slots = data.timeSlots || [];
+          allSlots = [...allSlots, ...slots];
+          
+          // Ellenőrizzük a paginációt: ha nincs több oldal, vagy kevesebb elemet kaptunk, akkor vége
+          const pagination = data.pagination;
+          if (pagination && page >= pagination.totalPages) {
+            hasMore = false;
+          } else if (slots.length < limit) {
+            hasMore = false;
+          } else {
+            page++;
+          }
+        } else {
+          hasMore = false;
+        }
       }
+      
+      // Csak a jövőbeli időpontokat jelenítjük meg (4 óra késleltetéssel)
+      const now = new Date();
+      const fourHoursFromNow = new Date(now.getTime() - 4 * 60 * 60 * 1000);
+      const futureSlots = allSlots.filter((slot: TimeSlot) => 
+        new Date(slot.startTime) >= fourHoursFromNow
+      );
+      setAvailableSlots(futureSlots);
     } catch (error) {
       console.error('Error loading time slots:', error);
     }

@@ -91,13 +91,15 @@ export function TimeSlotsManager() {
     try {
       setLoading(true);
       
-      // Load all time slots paginated
+      // Load all time slots paginated - no maximum limit, but with safety check
       let page = 1;
       let hasMore = true;
       const allTimeSlots: TimeSlot[] = [];
+      const maxPages = 1000; // Biztonsági limit, hogy ne legyen végtelen ciklus
+      const limit = 100; // Nagyobb limit, hogy kevesebb kérés legyen
       
-      while (hasMore) {
-        const timeSlotsResponse = await fetch(`/api/time-slots?page=${page}&limit=50`, {
+      while (hasMore && page <= maxPages) {
+        const timeSlotsResponse = await fetch(`/api/time-slots?page=${page}&limit=${limit}`, {
           credentials: 'include',
         });
 
@@ -108,10 +110,18 @@ export function TimeSlotsManager() {
           
           // Check if there are more pages
           const pagination = timeSlotsData.pagination;
-          if (pagination && page < pagination.totalPages) {
-            page++;
-          } else {
+          if (pagination) {
+            if (page < pagination.totalPages && pageTimeSlots.length === limit) {
+              page++;
+            } else {
+              hasMore = false;
+            }
+          } else if (pageTimeSlots.length < limit) {
+            // Ha nincs pagináció info, de kevesebb elemet kaptunk, akkor vége
             hasMore = false;
+          } else {
+            // Ha nincs pagináció info, de limit elemet kaptunk, folytatjuk
+            page++;
           }
         } else {
           console.error('Failed to load time slots');
@@ -122,13 +132,15 @@ export function TimeSlotsManager() {
       // Get ALL time slots (both available and booked) for the current user
       setTimeSlots(allTimeSlots);
 
-      // Load all appointments paginated
+      // Load all appointments paginated - no maximum limit, but with safety check
       let appointmentsPage = 1;
       let hasMoreAppointments = true;
       const allAppointments: any[] = [];
+      const maxAppointmentPages = 1000; // Biztonsági limit
+      const appointmentLimit = 100; // Nagyobb limit
       
-      while (hasMoreAppointments) {
-        const appointmentsResponse = await fetch(`/api/appointments?page=${appointmentsPage}&limit=50`, {
+      while (hasMoreAppointments && appointmentsPage <= maxAppointmentPages) {
+        const appointmentsResponse = await fetch(`/api/appointments?page=${appointmentsPage}&limit=${appointmentLimit}`, {
           credentials: 'include',
         });
         
@@ -139,10 +151,18 @@ export function TimeSlotsManager() {
           
           // Check if there are more pages
           const appointmentsPagination = appointmentsData.pagination;
-          if (appointmentsPagination && appointmentsPage < appointmentsPagination.totalPages) {
-            appointmentsPage++;
-          } else {
+          if (appointmentsPagination) {
+            if (appointmentsPage < appointmentsPagination.totalPages && pageAppointments.length === appointmentLimit) {
+              appointmentsPage++;
+            } else {
+              hasMoreAppointments = false;
+            }
+          } else if (pageAppointments.length < appointmentLimit) {
+            // Ha nincs pagináció info, de kevesebb elemet kaptunk, akkor vége
             hasMoreAppointments = false;
+          } else {
+            // Ha nincs pagináció info, de limit elemet kaptunk, folytatjuk
+            appointmentsPage++;
           }
         } else {
           hasMoreAppointments = false;
