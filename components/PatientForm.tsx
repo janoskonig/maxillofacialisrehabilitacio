@@ -7,6 +7,7 @@ import { Patient, patientSchema, nyakiBlokkdisszekcioOptions, fabianFejerdyProte
 import { formatDateForInput } from '@/lib/dateUtils';
 import { X, Calendar, User, Phone, Mail, MapPin, FileText, AlertTriangle, Plus, Trash2 } from 'lucide-react';
 import { AppointmentBookingSection } from './AppointmentBookingSection';
+import { ConditionalAppointmentBooking } from './ConditionalAppointmentBooking';
 import { getCurrentUser } from '@/lib/auth';
 import { DatePicker } from './DatePicker';
 import { savePatient } from '@/lib/storage';
@@ -2639,6 +2640,14 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
             onSave(savedPatient);
           }}
         />
+
+        {/* Conditional Appointment Booking Section - Only for admins */}
+        {userRole === 'admin' && patientId && (
+          <ConditionalAppointmentBooking 
+            patientId={patientId}
+            patientEmail={currentPatient?.email || null}
+          />
+        )}
 
         {/* Form Actions */}
         <div className="pt-6 border-t space-y-4">

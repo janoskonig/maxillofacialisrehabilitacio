@@ -25,7 +25,12 @@ interface PendingAppointment {
   createdAt: string;
 }
 
-export function ConditionalAppointmentBooking() {
+interface ConditionalAppointmentBookingProps {
+  patientId?: string | null; // If provided, use this patient instead of selecting
+  patientEmail?: string | null; // Patient email for validation
+}
+
+export function ConditionalAppointmentBooking({ patientId, patientEmail }: ConditionalAppointmentBookingProps = {}) {
   const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([]);
   const [pendingAppointments, setPendingAppointments] = useState<PendingAppointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -82,7 +87,10 @@ export function ConditionalAppointmentBooking() {
 
   const loadPendingAppointments = useCallback(async () => {
     try {
-      const response = await fetch('/api/appointments', {
+      const url = patientId 
+        ? `/api/appointments?patientId=${patientId}`
+        : '/api/appointments';
+      const response = await fetch(url, {
         credentials: 'include',
       });
       if (response.ok) {
@@ -97,9 +105,14 @@ export function ConditionalAppointmentBooking() {
     } catch (error) {
       console.error('Error loading pending appointments:', error);
     }
-  }, []);
+  }, [patientId]);
 
   const loadPatients = useCallback(async () => {
+    // If patientId is provided, don't load patients list
+    if (patientId) {
+      return;
+    }
+    
     try {
       const response = await fetch('/api/patients', {
         credentials: 'include',
@@ -115,7 +128,7 @@ export function ConditionalAppointmentBooking() {
     } catch (error) {
       console.error('Error loading patients:', error);
     }
-  }, []);
+  }, [patientId]);
 
   const loadData = useCallback(async () => {
     // Prevent concurrent loads
@@ -137,20 +150,37 @@ export function ConditionalAppointmentBooking() {
     }
   }, [loadAvailableSlots, loadPendingAppointments, loadPatients]);
 
+  // Set selected patient if patientId is provided
+  useEffect(() => {
+    if (patientId) {
+      setSelectedPatient(patientId);
+    }
+  }, [patientId]);
+
   useEffect(() => {
     loadData();
   }, [loadData]);
 
   const handleCreatePendingAppointment = useCallback(async () => {
-    if (!selectedPatient || !selectedSlot) {
+    const effectivePatientId = patientId || selectedPatient;
+    
+    if (!effectivePatientId || !selectedSlot) {
       alert('Kérjük, válasszon beteget és időpontot!');
       return;
     }
 
-    const selectedPatientData = patients.find(p => p.id === selectedPatient);
-    if (!selectedPatientData || !selectedPatientData.email) {
-      alert('A kiválasztott betegnek nincs email címe. A feltételes időpontválasztáshoz email cím szükséges.');
-      return;
+    // If patientId is provided, use patientEmail prop, otherwise check from patients list
+    if (patientId) {
+      if (!patientEmail || patientEmail.trim() === '') {
+        alert('A betegnek nincs email címe. A feltételes időpontválasztáshoz email cím szükséges.');
+        return;
+      }
+    } else {
+      const selectedPatientData = patients.find(p => p.id === selectedPatient);
+      if (!selectedPatientData || !selectedPatientData.email) {
+        alert('A kiválasztott betegnek nincs email címe. A feltételes időpontválasztáshoz email cím szükséges.');
+        return;
+      }
     }
 
     if (!confirm('Biztosan létre szeretné hozni ezt a feltételes időpontot? A páciens emailben értesítést kap és jóváhagyhatja vagy elvetheti az időpontot.')) {
@@ -166,7 +196,7 @@ export function ConditionalAppointmentBooking() {
         },
         credentials: 'include',
         body: JSON.stringify({
-          patientId: selectedPatient,
+          patientId: effectivePatientId,
           timeSlotId: selectedSlot,
           alternativeTimeSlotIds: alternativeSlots.filter(id => id && id !== selectedSlot),
         }),
@@ -174,7 +204,9 @@ export function ConditionalAppointmentBooking() {
 
       if (response.ok) {
         await loadData();
-        setSelectedPatient('');
+        if (!patientId) {
+          setSelectedPatient('');
+        }
         setSelectedSlot('');
         setAlternativeSlots([]);
         alert('Feltételes időpont sikeresen létrehozva! A páciens emailben értesítést kapott.');
@@ -188,7 +220,7 @@ export function ConditionalAppointmentBooking() {
     } finally {
       setCreating(false);
     }
-  }, [selectedPatient, selectedSlot, alternativeSlots, patients, loadData]);
+  }, [patientId, patientEmail, selectedPatient, selectedSlot, alternativeSlots, patients, loadData]);
 
   const addAlternativeSlot = useCallback(() => {
     if (selectedSlot && !alternativeSlots.includes(selectedSlot)) {
@@ -245,30 +277,40 @@ export function ConditionalAppointmentBooking() {
           A páciens új időpontot is kérhet, ha az ajánlott időpont nem megfelelő.
         </p>
         <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Beteg (csak email címmel rendelkező betegek)
-            </label>
-            <select
-              value={selectedPatient}
-              onChange={(e) => setSelectedPatient(e.target.value)}
-              className="form-input w-full"
-              disabled={creating}
-            >
-              <option value="">Válasszon beteget...</option>
-              {patients.map((patient) => (
-                <option key={patient.id} value={patient.id}>
-                  {patient.nev || 'Név nélküli'} {patient.taj ? `(${patient.taj})` : ''} - {patient.email}
-                </option>
-              ))}
-            </select>
-            {patients.length === 0 && (
-              <p className="text-sm text-amber-600 mt-2 flex items-center gap-1">
+          {!patientId && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Beteg (csak email címmel rendelkező betegek)
+              </label>
+              <select
+                value={selectedPatient}
+                onChange={(e) => setSelectedPatient(e.target.value)}
+                className="form-input w-full"
+                disabled={creating}
+              >
+                <option value="">Válasszon beteget...</option>
+                {patients.map((patient) => (
+                  <option key={patient.id} value={patient.id}>
+                    {patient.nev || 'Név nélküli'} {patient.taj ? `(${patient.taj})` : ''} - {patient.email}
+                  </option>
+                ))}
+              </select>
+              {patients.length === 0 && (
+                <p className="text-sm text-amber-600 mt-2 flex items-center gap-1">
+                  <AlertCircle className="w-4 h-4" />
+                  Nincs olyan beteg, akinek email címe lenne. A feltételes időpontválasztáshoz email cím szükséges.
+                </p>
+              )}
+            </div>
+          )}
+          {patientId && (!patientEmail || patientEmail.trim() === '') && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded">
+              <p className="text-sm text-amber-800 flex items-center gap-1">
                 <AlertCircle className="w-4 h-4" />
-                Nincs olyan beteg, akinek email címe lenne. A feltételes időpontválasztáshoz email cím szükséges.
+                A betegnek nincs email címe. A feltételes időpontválasztáshoz email cím szükséges.
               </p>
-            )}
-          </div>
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Szabad időpont
@@ -351,7 +393,7 @@ export function ConditionalAppointmentBooking() {
           
           <button
             onClick={handleCreatePendingAppointment}
-            disabled={!selectedPatient || !selectedSlot || creating || patients.length === 0}
+            disabled={(!patientId && !selectedPatient) || !selectedSlot || creating || (!patientId && patients.length === 0) || (patientId && (!patientEmail || patientEmail.trim() === ''))}
             className="btn-primary w-full"
           >
             {creating ? 'Létrehozás...' : 'Feltételes időpont létrehozása'}
@@ -363,7 +405,9 @@ export function ConditionalAppointmentBooking() {
       <div className="card">
         <div className="flex items-center gap-2 mb-4">
           <Calendar className="w-5 h-5 text-gray-500" />
-          <h3 className="text-xl font-bold text-gray-900">Jóváhagyásra váró időpontok</h3>
+          <h3 className="text-xl font-bold text-gray-900">
+            {patientId ? 'Jóváhagyásra váró időpontok (ehhez a beteghez)' : 'Jóváhagyásra váró időpontok'}
+          </h3>
         </div>
         {pendingAppointments.length === 0 ? (
           <div className="text-center py-8">
