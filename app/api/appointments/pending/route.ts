@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
-import { sendConditionalAppointmentRequestToPatient } from '@/lib/email';
+import { sendConditionalAppointmentRequestToPatient, sendConditionalAppointmentNotificationToAdmin } from '@/lib/email';
 import { handleApiError } from '@/lib/api-error-handler';
 import { randomBytes } from 'crypto';
 
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { patientId, timeSlotId } = body;
+    const { patientId, timeSlotId, alternativeTimeSlotIds } = body;
 
     if (!patientId || !timeSlotId) {
       return NextResponse.json(
@@ -36,6 +36,11 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Validate alternative time slots if provided
+    const alternativeIds = Array.isArray(alternativeTimeSlotIds) 
+      ? alternativeTimeSlotIds.filter((id: string) => id && id.trim() !== '')
+      : [];
 
     const pool = getDbPool();
 
@@ -95,6 +100,45 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate alternative time slots if provided
+    if (alternativeIds.length > 0) {
+      const alternativeSlotsResult = await pool.query(
+        `SELECT ats.id, ats.status, ats.start_time
+         FROM available_time_slots ats
+         WHERE ats.id = ANY($1::uuid[])`,
+        [alternativeIds]
+      );
+
+      if (alternativeSlotsResult.rows.length !== alternativeIds.length) {
+        return NextResponse.json(
+          { error: 'Egy vagy több alternatív időpont nem található' },
+          { status: 400 }
+        );
+      }
+
+      // Check if all alternative slots are available
+      const unavailableAlternatives = alternativeSlotsResult.rows.filter(
+        (slot: { status: string; start_time: Date }) => slot.status !== 'available'
+      );
+      if (unavailableAlternatives.length > 0) {
+        return NextResponse.json(
+          { error: 'Egy vagy több alternatív időpont már le van foglalva' },
+          { status: 400 }
+        );
+      }
+
+      // Check if all alternative slots are in the future
+      const pastAlternatives = alternativeSlotsResult.rows.filter(
+        (slot: { start_time: Date }) => new Date(slot.start_time) <= new Date()
+      );
+      if (pastAlternatives.length > 0) {
+        return NextResponse.json(
+          { error: 'Egy vagy több alternatív időpont már elmúlt' },
+          { status: 400 }
+        );
+      }
+    }
+
     // Generate secure approval token
     const approvalToken = randomBytes(32).toString('hex');
 
@@ -102,10 +146,11 @@ export async function POST(request: NextRequest) {
     await pool.query('BEGIN');
 
     try {
-      // Create pending appointment
+      // Create pending appointment with alternative time slots
+      const alternativeIdsJson = JSON.stringify(alternativeIds);
       const appointmentResult = await pool.query(
-        `INSERT INTO appointments (patient_id, time_slot_id, created_by, dentist_email, approval_status, approval_token)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO appointments (patient_id, time_slot_id, created_by, dentist_email, approval_status, approval_token, alternative_time_slot_ids, current_alternative_index)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, NULL)
          RETURNING 
            id,
            patient_id as "patientId",
@@ -114,8 +159,10 @@ export async function POST(request: NextRequest) {
            dentist_email as "dentistEmail",
            approval_status as "approvalStatus",
            approval_token as "approvalToken",
+           alternative_time_slot_ids as "alternativeTimeSlotIds",
+           current_alternative_index as "currentAlternativeIndex",
            created_at as "createdAt"`,
-        [patientId, timeSlotId, auth.email, timeSlot.dentist_email, 'pending', approvalToken]
+        [patientId, timeSlotId, auth.email, timeSlot.dentist_email, 'pending', approvalToken, alternativeIdsJson]
       );
 
       const appointment = appointmentResult.rows[0];
@@ -128,24 +175,68 @@ export async function POST(request: NextRequest) {
 
       await pool.query('COMMIT');
 
-      // Send email to patient
+      // Get admin emails for notification
+      const adminResult = await pool.query(
+        'SELECT email FROM users WHERE role = $1 AND active = true',
+        ['admin']
+      );
+      const adminEmails = adminResult.rows.map((row: { email: string }) => row.email);
+
+      // Get alternative time slots info if any
+      let alternativeSlots: Array<{ id: string; startTime: Date; cim: string | null; teremszam: string | null }> = [];
+      if (alternativeIds.length > 0) {
+        const altSlotsResult = await pool.query(
+          `SELECT ats.id, ats.start_time, ats.cim, ats.teremszam
+           FROM available_time_slots ats
+           WHERE ats.id = ANY($1::uuid[])
+           ORDER BY ats.start_time ASC`,
+          [alternativeIds]
+        );
+        alternativeSlots = altSlotsResult.rows.map((row: any) => ({
+          id: row.id,
+          startTime: new Date(row.start_time),
+          cim: row.cim,
+          teremszam: row.teremszam,
+        }));
+      }
+
+      // Send emails
       try {
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 
           (request.headers.get('origin') || 'http://localhost:3000');
         
         const dentistFullName = timeSlot.doktor_neve || timeSlot.dentist_email;
 
-        await sendConditionalAppointmentRequestToPatient(
-          patient.email,
-          patient.nev,
-          patient.nem,
-          startTime,
-          dentistFullName,
-          approvalToken,
-          baseUrl
-        );
+        await Promise.all([
+          // Email to patient
+          sendConditionalAppointmentRequestToPatient(
+            patient.email,
+            patient.nev,
+            patient.nem,
+            startTime,
+            dentistFullName,
+            approvalToken,
+            baseUrl,
+            alternativeSlots,
+            timeSlot.cim,
+            timeSlot.teremszam
+          ),
+          // Email to admins
+          adminEmails.length > 0 ? sendConditionalAppointmentNotificationToAdmin(
+            adminEmails,
+            patient.nev,
+            patient.taj,
+            patient.email,
+            startTime,
+            dentistFullName,
+            timeSlot.cim,
+            timeSlot.teremszam,
+            alternativeSlots,
+            auth.email
+          ) : Promise.resolve(),
+        ]);
       } catch (emailError) {
-        console.error('Failed to send conditional appointment request email:', emailError);
+        console.error('Failed to send conditional appointment request emails:', emailError);
         // Don't fail the request if email fails, but log it
       }
 

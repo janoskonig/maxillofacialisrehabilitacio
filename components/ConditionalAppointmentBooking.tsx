@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Calendar, Clock, User, Mail, AlertCircle } from 'lucide-react';
+import { Calendar, Clock, User, Mail, AlertCircle, Plus, X } from 'lucide-react';
 import { Patient } from '@/lib/types';
 
 interface TimeSlot {
@@ -32,6 +32,7 @@ export function ConditionalAppointmentBooking() {
   const [loading, setLoading] = useState(true);
   const [selectedPatient, setSelectedPatient] = useState<string>('');
   const [selectedSlot, setSelectedSlot] = useState<string>('');
+  const [alternativeSlots, setAlternativeSlots] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
   const isLoadingRef = useRef(false);
 
@@ -167,6 +168,7 @@ export function ConditionalAppointmentBooking() {
         body: JSON.stringify({
           patientId: selectedPatient,
           timeSlotId: selectedSlot,
+          alternativeTimeSlotIds: alternativeSlots.filter(id => id && id !== selectedSlot),
         }),
       });
 
@@ -174,6 +176,7 @@ export function ConditionalAppointmentBooking() {
         await loadData();
         setSelectedPatient('');
         setSelectedSlot('');
+        setAlternativeSlots([]);
         alert('Feltételes időpont sikeresen létrehozva! A páciens emailben értesítést kapott.');
       } else {
         const data = await response.json();
@@ -185,7 +188,25 @@ export function ConditionalAppointmentBooking() {
     } finally {
       setCreating(false);
     }
-  }, [selectedPatient, selectedSlot, patients, loadData]);
+  }, [selectedPatient, selectedSlot, alternativeSlots, patients, loadData]);
+
+  const addAlternativeSlot = useCallback(() => {
+    if (selectedSlot && !alternativeSlots.includes(selectedSlot)) {
+      setAlternativeSlots([...alternativeSlots, '']);
+    } else {
+      setAlternativeSlots([...alternativeSlots, '']);
+    }
+  }, [selectedSlot, alternativeSlots]);
+
+  const removeAlternativeSlot = useCallback((index: number) => {
+    setAlternativeSlots(alternativeSlots.filter((_, i) => i !== index));
+  }, [alternativeSlots]);
+
+  const updateAlternativeSlot = useCallback((index: number, slotId: string) => {
+    const newAlternatives = [...alternativeSlots];
+    newAlternatives[index] = slotId;
+    setAlternativeSlots(newAlternatives);
+  }, [alternativeSlots]);
 
   const formatDateTime = useCallback((dateTime: string) => {
     const date = new Date(dateTime);
@@ -273,6 +294,61 @@ export function ConditionalAppointmentBooking() {
               </p>
             )}
           </div>
+          
+          {/* Alternatív időpontok */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Alternatív időpontok (opcionális)
+              </label>
+              <button
+                type="button"
+                onClick={addAlternativeSlot}
+                className="flex items-center gap-1 px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
+                disabled={creating}
+              >
+                <Plus className="w-4 h-4" />
+                Hozzáadás
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mb-2">
+              Ha a beteg elutasítja az első időpontot, automatikusan az első alternatívát fogjuk felajánlani, majd a másodikat stb.
+            </p>
+            {alternativeSlots.length > 0 && (
+              <div className="space-y-2">
+                {alternativeSlots.map((altSlotId, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <select
+                      value={altSlotId}
+                      onChange={(e) => updateAlternativeSlot(index, e.target.value)}
+                      className="form-input flex-1"
+                      disabled={creating}
+                    >
+                      <option value="">Válasszon alternatív időpontot...</option>
+                      {availableSlotsOnly
+                        .filter(slot => slot.id !== selectedSlot && !alternativeSlots.includes(slot.id) || slot.id === altSlotId)
+                        .map((slot) => (
+                          <option key={slot.id} value={slot.id}>
+                            {formatDateTime(slot.startTime)}
+                            {slot.cim ? ` - ${slot.cim}` : ''}
+                            {slot.teremszam ? ` (Terem: ${slot.teremszam})` : ''}
+                          </option>
+                        ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => removeAlternativeSlot(index)}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
+                      disabled={creating}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          
           <button
             onClick={handleCreatePendingAppointment}
             disabled={!selectedPatient || !selectedSlot || creating || patients.length === 0}

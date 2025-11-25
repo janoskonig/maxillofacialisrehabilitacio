@@ -726,7 +726,10 @@ export async function sendConditionalAppointmentRequestToPatient(
   appointmentTime: Date,
   dentistFullName: string,
   approvalToken: string,
-  baseUrl: string
+  baseUrl: string,
+  alternativeSlots?: Array<{ id: string; startTime: Date; cim: string | null; teremszam: string | null }>,
+  cim?: string | null,
+  teremszam?: string | null
 ): Promise<void> {
   // Dátum formátum: 2025. 11. 11. 15:15:00
   const formatter = new Intl.DateTimeFormat('hu-HU', {
@@ -765,9 +768,47 @@ export async function sendConditionalAppointmentRequestToPatient(
     greeting = 'Tisztelt Beteg';
   }
   
+  const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
+  const displayCim = cim || DEFAULT_CIM;
+  const displayTeremszam = teremszam || null;
+  
+  // Format address
+  let formattedAddress = displayCim.replace(/,/g, '');
+  if (displayTeremszam) {
+    formattedAddress = `${formattedAddress.replace(/\.$/, '')}. ${displayTeremszam}. terem`;
+  } else {
+    formattedAddress = formattedAddress.replace(/\.$/, '');
+  }
+
   const approveUrl = `${baseUrl}/api/appointments/approve?token=${approvalToken}`;
   const rejectUrl = `${baseUrl}/api/appointments/reject?token=${approvalToken}`;
   const requestNewUrl = `${baseUrl}/api/appointments/request-new?token=${approvalToken}`;
+  
+  // Format alternative slots if any
+  let alternativeSlotsHtml = '';
+  if (alternativeSlots && alternativeSlots.length > 0) {
+    const altSlotsList = alternativeSlots.map((slot, index) => {
+      const altDate = slot.startTime.toLocaleString('hu-HU', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+      const altCim = slot.cim || DEFAULT_CIM;
+      const altTerem = slot.teremszam ? ` (${slot.teremszam}. terem)` : '';
+      return `<li><strong>Alternatíva ${index + 1}:</strong> ${altDate} - ${altCim.replace(/,/g, '')}${altTerem}</li>`;
+    }).join('');
+    alternativeSlotsHtml = `
+      <p style="margin-top: 20px;"><strong>Alternatív időpontok:</strong></p>
+      <ul style="margin-top: 10px;">
+        ${altSlotsList}
+      </ul>
+      <p style="color: #6b7280; font-size: 14px; margin-top: 10px;">
+        Ha az első időpont nem megfelelő, az elvetés után automatikusan az első alternatívát fogjuk felajánlani.
+      </p>
+    `;
+  }
   
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -776,9 +817,11 @@ export async function sendConditionalAppointmentRequestToPatient(
       <p>Időpontfoglalást javasoltunk Önnek:</p>
       <ul>
         <li><strong>Időpont:</strong> ${formattedDate}</li>
+        <li><strong>Cím:</strong> ${formattedAddress}</li>
         <li><strong>Kezelőorvos:</strong> ${dentistFullName}</li>
       </ul>
-      <p>Kérjük, válassza ki az alábbi lehetőségek közül:</p>
+      ${alternativeSlotsHtml}
+      <p style="margin-top: 20px;">Kérjük, válassza ki az alábbi lehetőségek közül:</p>
       <div style="margin: 30px 0; text-align: center;">
         <a href="${approveUrl}" style="display: inline-block; background-color: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 5px; font-weight: bold;">✓ Elfogadom</a>
         <a href="${rejectUrl}" style="display: inline-block; background-color: #ef4444; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 5px; font-weight: bold;">✗ Elvetem</a>
@@ -797,6 +840,85 @@ export async function sendConditionalAppointmentRequestToPatient(
   await sendEmail({
     to: patientEmail,
     subject: 'Időpontválasztás jóváhagyása - Maxillofaciális Rehabilitáció',
+    html,
+  });
+}
+
+/**
+ * Send notification to admin when conditional appointment is created
+ */
+export async function sendConditionalAppointmentNotificationToAdmin(
+  adminEmails: string[],
+  patientName: string | null,
+  patientTaj: string | null,
+  patientEmail: string | null,
+  appointmentTime: Date,
+  dentistFullName: string,
+  cim: string | null,
+  teremszam: string | null,
+  alternativeSlots: Array<{ id: string; startTime: Date; cim: string | null; teremszam: string | null }>,
+  createdBy: string
+): Promise<void> {
+  if (adminEmails.length === 0) {
+    return;
+  }
+
+  const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
+  const displayCim = cim || DEFAULT_CIM;
+  const displayTeremszam = teremszam || null;
+  
+  let formattedAddress = displayCim.replace(/,/g, '');
+  if (displayTeremszam) {
+    formattedAddress = `${formattedAddress.replace(/\.$/, '')}. ${displayTeremszam}. terem`;
+  } else {
+    formattedAddress = formattedAddress.replace(/\.$/, '');
+  }
+
+  let alternativeSlotsHtml = '';
+  if (alternativeSlots && alternativeSlots.length > 0) {
+    const altSlotsList = alternativeSlots.map((slot, index) => {
+      const altDate = slot.startTime.toLocaleString('hu-HU', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+      const altCim = slot.cim || DEFAULT_CIM;
+      const altTerem = slot.teremszam ? ` (${slot.teremszam}. terem)` : '';
+      return `<li><strong>Alternatíva ${index + 1}:</strong> ${altDate} - ${altCim.replace(/,/g, '')}${altTerem}</li>`;
+    }).join('');
+    alternativeSlotsHtml = `
+      <p style="margin-top: 15px;"><strong>Alternatív időpontok:</strong></p>
+      <ul style="margin-top: 10px;">
+        ${altSlotsList}
+      </ul>
+    `;
+  }
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #2563eb;">Feltételes időpontfoglalás létrehozva</h2>
+      <p>Kedves adminisztrátor,</p>
+      <p>Egy új feltételes időpontfoglalás lett létrehozva:</p>
+      <ul>
+        <li><strong>Beteg neve:</strong> ${patientName || 'Név nélküli'}</li>
+        <li><strong>TAJ szám:</strong> ${patientTaj || 'Nincs megadva'}</li>
+        <li><strong>Email cím:</strong> ${patientEmail || 'Nincs megadva'}</li>
+        <li><strong>Időpont:</strong> ${appointmentTime.toLocaleString('hu-HU')}</li>
+        <li><strong>Cím:</strong> ${formattedAddress}</li>
+        <li><strong>Kezelőorvos:</strong> ${dentistFullName}</li>
+        <li><strong>Létrehozta:</strong> ${createdBy}</li>
+      </ul>
+      ${alternativeSlotsHtml}
+      <p style="margin-top: 20px;">A páciens emailben értesítést kapott és jóváhagyhatja vagy elvetheti az időpontot.</p>
+      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: adminEmails,
+    subject: 'Feltételes időpontfoglalás létrehozva - Maxillofaciális Rehabilitáció',
     html,
   });
 }
