@@ -393,7 +393,13 @@ export function ConditionalAppointmentBooking({ patientId, patientEmail }: Condi
           
           <button
             onClick={handleCreatePendingAppointment}
-            disabled={(!patientId && !selectedPatient) || !selectedSlot || creating || (!patientId && patients.length === 0) || (patientId && (!patientEmail || patientEmail.trim() === ''))}
+            disabled={
+              (!patientId && !selectedPatient) || 
+              !selectedSlot || 
+              creating || 
+              (!patientId && patients.length === 0) || 
+              (patientId ? (!patientEmail || patientEmail.trim() === '') : false)
+            }
             className="btn-primary w-full"
           >
             {creating ? 'Létrehozás...' : 'Feltételes időpont létrehozása'}
