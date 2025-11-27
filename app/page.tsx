@@ -13,6 +13,7 @@ import { Plus, Search, Users, LogOut, Shield, Settings, Calendar, CalendarDays }
 import { getCurrentUser, getUserEmail, getUserRole, logout } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
 import { MobileMenu } from '@/components/MobileMenu';
+import { Dashboard } from '@/components/Dashboard';
 
 type UserRoleType = 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
 
@@ -412,6 +413,11 @@ export default function Home() {
           )}
         </div>
       </div>
+
+          {/* Dashboard Section */}
+          <div className="mb-6">
+            <Dashboard userRole={userRole} />
+          </div>
 
           {/* Patient Management Section - shown for all roles */}
           <>

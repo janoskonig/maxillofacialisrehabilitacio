@@ -34,7 +34,8 @@ export function WeekView({
   const weekEnd = endOfWeek(currentDate, { weekStartsOn: 1 });
   const days = eachDayOfInterval({ start: weekStart, end: weekEnd });
 
-  const hours = Array.from({ length: 24 }, (_, i) => i);
+  // Show hours 07:00-17:00 (08:00-16:00 with buffer)
+  const hours = Array.from({ length: 11 }, (_, i) => i + 7); // 7, 8, 9, ..., 17
 
   const getAppointmentsForDate = (date: Date): Appointment[] => {
     const dateKey = format(date, 'yyyy-MM-dd');

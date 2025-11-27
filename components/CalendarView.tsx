@@ -31,7 +31,7 @@ interface CalendarViewProps {
 
 export function CalendarView({ onAppointmentClick }: CalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewType, setViewType] = useState<ViewType>('month');
+  const [viewType, setViewType] = useState<ViewType>('week');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [appointmentsByDate, setAppointmentsByDate] = useState<Record<string, Appointment[]>>({});
   const [loading, setLoading] = useState(true);
