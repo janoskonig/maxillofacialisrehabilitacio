@@ -729,7 +729,8 @@ export async function sendConditionalAppointmentRequestToPatient(
   baseUrl: string,
   alternativeSlots?: Array<{ id: string; startTime: Date; cim: string | null; teremszam: string | null }>,
   cim?: string | null,
-  teremszam?: string | null
+  teremszam?: string | null,
+  showAlternatives?: boolean // If false, don't show alternative slots to patient
 ): Promise<void> {
   // Dátum formátum: 2025. 11. 11. 15:15:00
   const formatter = new Intl.DateTimeFormat('hu-HU', {
@@ -784,9 +785,9 @@ export async function sendConditionalAppointmentRequestToPatient(
   const rejectUrl = `${baseUrl}/api/appointments/reject?token=${approvalToken}`;
   const requestNewUrl = `${baseUrl}/api/appointments/request-new?token=${approvalToken}`;
   
-  // Format alternative slots if any
+  // Format alternative slots if any - only show if showAlternatives is true
   let alternativeSlotsHtml = '';
-  if (alternativeSlots && alternativeSlots.length > 0) {
+  if (showAlternatives && alternativeSlots && alternativeSlots.length > 0) {
     const altSlotsList = alternativeSlots.map((slot, index) => {
       const altDate = slot.startTime.toLocaleString('hu-HU', {
         year: 'numeric',
@@ -805,7 +806,7 @@ export async function sendConditionalAppointmentRequestToPatient(
         ${altSlotsList}
       </ul>
       <p style="color: #6b7280; font-size: 14px; margin-top: 10px;">
-        Ha az első időpont nem megfelelő, az elvetés után automatikusan az első alternatívát fogjuk felajánlani.
+        Ha ez az időpont sem megfelelő, az elvetés után automatikusan a következő alternatívát fogjuk felajánlani.
       </p>
     `;
   }

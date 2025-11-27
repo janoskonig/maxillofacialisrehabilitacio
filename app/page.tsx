@@ -9,7 +9,7 @@ import { PatientList } from '@/components/PatientList';
 import { OPImageViewer } from '@/components/OPImageViewer';
 import { FotoImageViewer } from '@/components/FotoImageViewer';
 import { useToast } from '@/contexts/ToastContext';
-import { Plus, Search, Users, LogOut, Shield, Settings, Calendar, Eye } from 'lucide-react';
+import { Plus, Search, Users, LogOut, Shield, Settings, Calendar } from 'lucide-react';
 import { getCurrentUser, getUserEmail, getUserRole, logout } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
 
@@ -25,9 +25,7 @@ export default function Home() {
   const [filteredPatients, setFilteredPatients] = useState<Patient[]>([]);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<UserRoleType>('viewer');
-  const [originalUserRole, setOriginalUserRole] = useState<UserRoleType>('viewer');
   const [userInstitution, setUserInstitution] = useState<string | null>(null);
-  const [viewAsRole, setViewAsRole] = useState<UserRoleType | null>(null);
   const [sortField, setSortField] = useState<'nev' | 'idopont' | 'createdAt' | null>('idopont');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -41,9 +39,6 @@ export default function Home() {
   const [opViewerPatient, setOpViewerPatient] = useState<Patient | null>(null);
   const [fotoViewerPatient, setFotoViewerPatient] = useState<Patient | null>(null);
   const { showToast, confirm: confirmDialog } = useToast();
-  
-  // Computed role for display - use viewAsRole if set, otherwise use original role
-  const displayRole = viewAsRole || userRole;
 
   useEffect(() => {
     // Check authentication
@@ -59,7 +54,6 @@ export default function Home() {
       const intezmeny = user.intezmeny || null;
     setUserEmail(email);
       setUserRole(role);
-      setOriginalUserRole(role); // Store original role
       setUserInstitution(intezmeny);
     loadPatients();
 
@@ -231,10 +225,6 @@ export default function Home() {
     router.push('/login');
   };
 
-  const handleViewAsRoleChange = (role: UserRoleType | null) => {
-    setViewAsRole(role);
-  };
-
   const handleDeletePatient = async (patient: Patient) => {
     if (!patient.id) {
       showToast('Hiba: A beteg ID nem található', 'error');
@@ -294,8 +284,6 @@ export default function Home() {
     }
   };
 
-  const availableRoles: UserRoleType[] = ['sebészorvos', 'technikus', 'fogpótlástanász', 'editor', 'viewer'];
-
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm border-b">
@@ -310,53 +298,20 @@ export default function Home() {
                 <p className="text-xs text-gray-600">
                   BETEGREGISZTER ÉS IDŐPONTKEZELŐ
                 </p>
-                {originalUserRole === 'sebészorvos' && userInstitution && (
+                {userRole === 'sebészorvos' && userInstitution && (
                   <p className="text-xs font-semibold text-red-600 mt-0.5">
                     SEBÉSZ MÓD (csak a {userInstitution} páciensei)
                   </p>
                 )}
               </div>
             </div>
-            {/* View As Role Selector - Only for admins */}
-            {originalUserRole === 'admin' && (
-              <div className="flex items-center gap-1.5">
-                <Eye className="w-3.5 h-3.5 text-gray-500" />
-                <label className="text-xs text-gray-700 font-medium">
-                  Nézet mint:
-                </label>
-                <select
-                  value={viewAsRole || ''}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    handleViewAsRoleChange(value === '' ? null : (value as UserRoleType));
-                  }}
-                  className="form-input text-xs py-1 px-2 border-gray-300 rounded"
-                >
-                  <option value="">Admin (eredeti)</option>
-                  {availableRoles.map((role) => (
-                    <option key={role} value={role}>
-                      {role === 'sebészorvos' ? 'Sebészorvos' :
-                       role === 'technikus' ? 'Technikus' :
-                       role === 'fogpótlástanász' ? 'Fogpótlástanász' :
-                       role === 'editor' ? 'Szerkesztő' :
-                       role === 'viewer' ? 'Megtekintő' : role}
-                    </option>
-                  ))}
-                </select>
-                {viewAsRole && (
-                  <span className="text-xs text-amber-600 font-medium bg-amber-50 px-1.5 py-0.5 rounded">
-                    Előnézet mód
-                  </span>
-                )}
-              </div>
-            )}
           </div>
         </div>
       </header>
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         <div className="space-y-3">
           {/* Link to time slots management page for fogpótlástanász and admin */}
-          {(displayRole === 'fogpótlástanász' || displayRole === 'admin') && (
+          {(userRole === 'fogpótlástanász' || userRole === 'admin') && (
             <div className="card p-3">
               <div className="flex justify-between items-center">
                 <div>
@@ -387,8 +342,8 @@ export default function Home() {
           )}
         </div>
         <div className="flex gap-1.5">
-          {/* Admin button - always show for real admins, even in view-as mode */}
-          {originalUserRole === 'admin' && (
+          {/* Admin button */}
+          {userRole === 'admin' && (
             <button
               onClick={() => router.push('/admin')}
               className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
@@ -411,7 +366,7 @@ export default function Home() {
             <LogOut className="w-3.5 h-3.5" />
             Kijelentkezés
           </button>
-          {(displayRole === 'admin' || displayRole === 'editor' || displayRole === 'fogpótlástanász' || displayRole === 'sebészorvos') && (
+          {(userRole === 'admin' || userRole === 'editor' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos') && (
             <button
               onClick={handleNewPatient}
               className="btn-primary flex items-center gap-1.5 text-sm px-3 py-1.5"
@@ -480,12 +435,12 @@ export default function Home() {
                 patients={filteredPatients}
                 onView={handleViewPatient}
                 onEdit={handleEditPatient}
-                onDelete={originalUserRole === 'admin' ? handleDeletePatient : undefined}
+                onDelete={userRole === 'admin' ? handleDeletePatient : undefined}
                 onViewOP={handleViewOP}
                 onViewFoto={handleViewFoto}
-                canEdit={displayRole === 'admin' || displayRole === 'editor' || displayRole === 'fogpótlástanász' || displayRole === 'sebészorvos'}
-                canDelete={originalUserRole === 'admin'}
-                userRole={displayRole}
+                canEdit={userRole === 'admin' || userRole === 'editor' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos'}
+                canDelete={userRole === 'admin'}
+                userRole={userRole}
                 sortField={sortField}
                 sortDirection={sortDirection}
                 onSort={(field: 'nev' | 'idopont' | 'createdAt') => {
