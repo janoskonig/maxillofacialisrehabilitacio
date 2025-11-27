@@ -208,7 +208,7 @@ export async function POST(request: NextRequest) {
         const dentistFullName = timeSlot.doktor_neve || timeSlot.dentist_email;
 
         await Promise.all([
-          // Email to patient
+          // Email to patient - don't show alternatives in first email
           sendConditionalAppointmentRequestToPatient(
             patient.email,
             patient.nev,
@@ -219,7 +219,8 @@ export async function POST(request: NextRequest) {
             baseUrl,
             alternativeSlots,
             timeSlot.cim,
-            timeSlot.teremszam
+            timeSlot.teremszam,
+            false // Don't show alternatives to patient in first email
           ),
           // Email to admins
           adminEmails.length > 0 ? sendConditionalAppointmentNotificationToAdmin(

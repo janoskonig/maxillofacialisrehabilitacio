@@ -36,6 +36,9 @@ export async function POST(request: NextRequest) {
         a.created_by as "createdBy",
         a.dentist_email as "dentistEmail",
         a.created_at as "createdAt",
+        a.appointment_status as "appointmentStatus",
+        a.completion_notes as "completionNotes",
+        a.is_late as "isLate",
         ats.start_time as "startTime",
         ats.status,
         ats.cim,
@@ -78,6 +81,9 @@ export async function POST(request: NextRequest) {
           startTime: nextApt.startTime,
           dentistEmail: nextApt.dentistEmail,
           dentistName: nextApt.dentistName,
+          appointmentStatus: nextApt.appointmentStatus,
+          completionNotes: nextApt.completionNotes,
+          isLate: nextApt.isLate,
         };
       }
     });

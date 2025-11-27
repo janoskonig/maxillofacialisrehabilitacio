@@ -188,7 +188,8 @@ export async function GET(request: NextRequest) {
             baseUrl,
             remainingAlternatives,
             nextAltSlot.cim,
-            nextAltSlot.teremszam
+            nextAltSlot.teremszam,
+            false // Don't show remaining alternatives to patient
           );
         } catch (emailError) {
           console.error('Failed to send alternative appointment email:', emailError);
