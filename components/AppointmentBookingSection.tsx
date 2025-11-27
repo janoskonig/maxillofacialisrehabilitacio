@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Calendar, Clock, Download, CheckCircle2, Plus, X } from 'lucide-react';
+import { Calendar, Clock, Download, CheckCircle2, Plus, X, XCircle, AlertCircle, Clock as ClockIcon, Edit2 } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth';
 import { DateTimePicker } from './DateTimePicker';
 import { Patient } from '@/lib/types';
@@ -23,6 +23,9 @@ interface Appointment {
   dentistEmail: string | null;
   cim?: string | null;
   teremszam?: string | null;
+  appointmentStatus?: 'cancelled_by_doctor' | 'cancelled_by_patient' | 'completed' | 'no_show' | null;
+  completionNotes?: string | null;
+  isLate?: boolean;
 }
 
 interface AppointmentBookingSectionProps {
@@ -54,6 +57,16 @@ export function AppointmentBookingSection({
   const [newSlotCim, setNewSlotCim] = useState<string>('');
   const [customCim, setCustomCim] = useState<string>('');
   const [customTeremszam, setCustomTeremszam] = useState<string>('');
+  const [editingStatus, setEditingStatus] = useState<Appointment | null>(null);
+  const [statusForm, setStatusForm] = useState<{
+    appointmentStatus: 'cancelled_by_doctor' | 'cancelled_by_patient' | 'completed' | 'no_show' | null;
+    completionNotes: string;
+    isLate: boolean;
+  }>({
+    appointmentStatus: null,
+    completionNotes: '',
+    isLate: false,
+  });
   
   // Elérhető címek (egyelőre csak egy, de később bővíthető)
   const availableCims = ['1088 Budapest, Szentkirályi utca 47'];
@@ -61,20 +74,43 @@ export function AppointmentBookingSection({
 
   const loadAvailableSlots = async () => {
     try {
-      const response = await fetch('/api/time-slots', {
-        credentials: 'include',
-      });
-      if (response.ok) {
-        const data = await response.json();
-        const allSlots = data.timeSlots || [];
-        // Csak a jövőbeli időpontokat jelenítjük meg (4 óra késleltetéssel)
-        const now = new Date();
-        const fourHoursFromNow = new Date(now.getTime() - 4 * 60 * 60 * 1000);
-        const futureSlots = allSlots.filter((slot: TimeSlot) => 
-          new Date(slot.startTime) >= fourHoursFromNow
-        );
-        setAvailableSlots(futureSlots);
+      // Több oldal lekérdezése, hogy minden szabad időpontot megkapjunk
+      let allSlots: TimeSlot[] = [];
+      let page = 1;
+      let hasMore = true;
+      const limit = 100; // Nagyobb limit, hogy kevesebb kérés legyen
+      const maxPages = 100; // Biztonsági limit, hogy ne legyen végtelen ciklus
+      
+      while (hasMore && page <= maxPages) {
+        const response = await fetch(`/api/time-slots?page=${page}&limit=${limit}`, {
+          credentials: 'include',
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const slots = data.timeSlots || [];
+          allSlots = [...allSlots, ...slots];
+          
+          // Ellenőrizzük a paginációt: ha nincs több oldal, vagy kevesebb elemet kaptunk, akkor vége
+          const pagination = data.pagination;
+          if (pagination && page >= pagination.totalPages) {
+            hasMore = false;
+          } else if (slots.length < limit) {
+            hasMore = false;
+          } else {
+            page++;
+          }
+        } else {
+          hasMore = false;
+        }
       }
+      
+      // Csak a jövőbeli időpontokat jelenítjük meg (4 óra késleltetéssel)
+      const now = new Date();
+      const fourHoursFromNow = new Date(now.getTime() - 4 * 60 * 60 * 1000);
+      const futureSlots = allSlots.filter((slot: TimeSlot) => 
+        new Date(slot.startTime) >= fourHoursFromNow
+      );
+      setAvailableSlots(futureSlots);
     } catch (error) {
       console.error('Error loading time slots:', error);
     }
@@ -261,6 +297,59 @@ export function AppointmentBookingSection({
     }
   };
 
+  const handleEditStatus = (appointment: Appointment) => {
+    setEditingStatus(appointment);
+    setStatusForm({
+      appointmentStatus: appointment.appointmentStatus || null,
+      completionNotes: appointment.completionNotes || '',
+      isLate: appointment.isLate || false,
+    });
+  };
+
+  const handleSaveStatus = async () => {
+    if (!editingStatus) {
+      return;
+    }
+
+    // Validate: if status is 'completed', completionNotes is required
+    if (statusForm.appointmentStatus === 'completed' && !statusForm.completionNotes.trim()) {
+      alert('A "mi történt?" mező kitöltése kötelező sikeresen teljesült időpont esetén.');
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/appointments/${editingStatus.id}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          appointmentStatus: statusForm.appointmentStatus,
+          completionNotes: statusForm.appointmentStatus === 'completed' ? statusForm.completionNotes : null,
+          isLate: statusForm.isLate,
+        }),
+      });
+
+      if (response.ok) {
+        await loadData();
+        setEditingStatus(null);
+        setStatusForm({
+          appointmentStatus: null,
+          completionNotes: '',
+          isLate: false,
+        });
+        alert('Időpont státusza sikeresen frissítve!');
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Hiba történt az időpont státuszának frissítésekor');
+      }
+    } catch (error) {
+      console.error('Error updating appointment status:', error);
+      alert('Hiba történt az időpont státuszának frissítésekor');
+    }
+  };
+
   const handleCreateAndBookNewSlot = async () => {
     if (!newSlotDateTime) {
       alert('Kérjük, válasszon dátumot és időt!');
@@ -413,6 +502,105 @@ export function AppointmentBookingSection({
 
   return (
     <div className="border-t pt-6 mt-6">
+      {/* Status Edit Modal */}
+      {editingStatus && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-gray-900">Időpont státusz szerkesztése</h3>
+              <button
+                onClick={() => {
+                  setEditingStatus(null);
+                  setStatusForm({
+                    appointmentStatus: null,
+                    completionNotes: '',
+                    isLate: false,
+                  });
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-gray-600 mb-2">
+                  <strong>Időpont:</strong> {formatDateTime(editingStatus.startTime)}
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Státusz
+                </label>
+                <select
+                  value={statusForm.appointmentStatus || ''}
+                  onChange={(e) => {
+                    const value = e.target.value || null;
+                    setStatusForm({
+                      ...statusForm,
+                      appointmentStatus: value as any,
+                      completionNotes: value === 'completed' ? statusForm.completionNotes : '',
+                    });
+                  }}
+                  className="form-input w-full"
+                >
+                  <option value="">Nincs státusz (normál időpont)</option>
+                  <option value="cancelled_by_doctor">Lemondta az orvos</option>
+                  <option value="cancelled_by_patient">Lemondta a beteg</option>
+                  <option value="completed">Sikeresen teljesült</option>
+                  <option value="no_show">Nem jelent meg</option>
+                </select>
+              </div>
+              {statusForm.appointmentStatus === 'completed' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Mi történt? <span className="text-red-600">*</span>
+                  </label>
+                  <textarea
+                    value={statusForm.completionNotes}
+                    onChange={(e) => setStatusForm({ ...statusForm, completionNotes: e.target.value })}
+                    className="form-input w-full"
+                    rows={3}
+                    placeholder="Rövid leírás arról, hogy mi történt az időpont során..."
+                  />
+                </div>
+              )}
+              <div>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={statusForm.isLate}
+                    onChange={(e) => setStatusForm({ ...statusForm, isLate: e.target.checked })}
+                    className="form-checkbox"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Késett a beteg</span>
+                </label>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => {
+                    setEditingStatus(null);
+                    setStatusForm({
+                      appointmentStatus: null,
+                      completionNotes: '',
+                      isLate: false,
+                    });
+                  }}
+                  className="btn-secondary"
+                >
+                  Mégse
+                </button>
+                <button
+                  onClick={handleSaveStatus}
+                  className="btn-primary"
+                >
+                  Mentés
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex items-center gap-2 mb-4">
         <Calendar className="w-5 h-5 text-medical-primary" />
         <h3 className="text-lg font-semibold text-gray-900">Időpont foglalás</h3>
@@ -443,6 +631,58 @@ export function AppointmentBookingSection({
                         <div>Teremszám: {appointment.teremszam}</div>
                       )}
                       <div>Fogpótlástanász: {appointment.dentistEmail || 'Nincs megadva'}</div>
+                      {(() => {
+                        if (appointment.isLate) {
+                          return (
+                            <div className="flex items-center gap-1 mt-1 text-orange-600">
+                              <ClockIcon className="w-3 h-3" />
+                              <span>Késett a beteg</span>
+                            </div>
+                          );
+                        }
+                        if (appointment.appointmentStatus === 'cancelled_by_doctor') {
+                          return (
+                            <div className="flex items-center gap-1 mt-1 text-red-600">
+                              <XCircle className="w-3 h-3" />
+                              <span>Lemondta az orvos</span>
+                            </div>
+                          );
+                        }
+                        if (appointment.appointmentStatus === 'cancelled_by_patient') {
+                          return (
+                            <div className="flex items-center gap-1 mt-1 text-red-600">
+                              <XCircle className="w-3 h-3" />
+                              <span>Lemondta a beteg</span>
+                            </div>
+                          );
+                        }
+                        if (appointment.appointmentStatus === 'completed') {
+                          return (
+                            <div className="mt-1">
+                              <div className="flex items-center gap-1 text-green-600">
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>Sikeresen teljesült</span>
+                              </div>
+                              {appointment.completionNotes && (
+                                <div className="text-xs text-gray-600 mt-0.5" title={appointment.completionNotes}>
+                                  {appointment.completionNotes.length > 50 
+                                    ? `${appointment.completionNotes.substring(0, 50)}...` 
+                                    : appointment.completionNotes}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+                        if (appointment.appointmentStatus === 'no_show') {
+                          return (
+                            <div className="flex items-center gap-1 mt-1 text-red-600">
+                              <AlertCircle className="w-3 h-3" />
+                              <span>Nem jelent meg</span>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -456,14 +696,24 @@ export function AppointmentBookingSection({
                     .ics
                   </button>
                   {!isViewOnly && (userRole === 'sebészorvos' || userRole === 'admin' || userRole === 'fogpótlástanász') && (
-                    <button
-                      onClick={() => handleCancelAppointment(appointment.id)}
-                      className="text-sm text-red-600 hover:text-red-800 flex items-center gap-1"
-                      title="Időpont lemondása"
-                    >
-                      <X className="w-4 h-4" />
-                      Lemondás
-                    </button>
+                    <>
+                      <button
+                        onClick={() => handleEditStatus(appointment)}
+                        className="text-sm text-purple-600 hover:text-purple-800 flex items-center gap-1"
+                        title="Státusz szerkesztése"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                        Státusz
+                      </button>
+                      <button
+                        onClick={() => handleCancelAppointment(appointment.id)}
+                        className="text-sm text-red-600 hover:text-red-800 flex items-center gap-1"
+                        title="Időpont lemondása"
+                      >
+                        <X className="w-4 h-4" />
+                        Lemondás
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
