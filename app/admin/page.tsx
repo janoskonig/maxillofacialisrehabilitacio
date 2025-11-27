@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser, type AuthUser } from '@/lib/auth';
-import { MessageCircle, ChevronDown, ChevronUp, AlertCircle, Bug, Lightbulb, Mail, Send, ArrowUp, ArrowDown, BarChart3 } from 'lucide-react';
+import { MessageCircle, ChevronDown, ChevronUp, AlertCircle, Bug, Lightbulb, Mail, Send, ArrowUp, ArrowDown, BarChart3, User, LogIn } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 
 type UserRole = 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
@@ -52,6 +52,10 @@ export default function AdminPage() {
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [feedbackStatusFilter, setFeedbackStatusFilter] = useState<string>('');
   const [expandedFeedback, setExpandedFeedback] = useState<Set<string>>(new Set());
+  
+  // Impersonate (belépés mint) állapotok
+  const [selectedUserId, setSelectedUserId] = useState<string>('');
+  const [impersonating, setImpersonating] = useState(false);
   
   // E-mail küldés állapotok
   const [emailRoles, setEmailRoles] = useState<string[]>([]);
@@ -490,6 +494,48 @@ export default function AdminPage() {
     }
   };
 
+  const handleImpersonate = async () => {
+    if (!selectedUserId) {
+      alert('Válasszon ki egy felhasználót');
+      return;
+    }
+
+    const selectedUser = users.find(u => u.id === selectedUserId);
+    if (!selectedUser) {
+      alert('Felhasználó nem található');
+      return;
+    }
+
+    if (!confirm(`Biztosan be szeretne lépni mint: ${selectedUser.email}?`)) {
+      return;
+    }
+
+    setImpersonating(true);
+    try {
+      const res = await fetch('/api/auth/impersonate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ userId: selectedUserId }),
+      });
+
+      if (res.ok) {
+        // Átirányítás a főoldalra
+        router.push('/');
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Hiba történt a bejelentkezéskor');
+      }
+    } catch (e) {
+      console.error('Error impersonating user:', e);
+      alert('Hiba történt a bejelentkezéskor');
+    } finally {
+      setImpersonating(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -525,6 +571,12 @@ export default function AdminPage() {
             </div>
             <div className="flex items-center gap-4">
               <button
+                onClick={() => router.push('/')}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+              >
+                Vissza
+              </button>
+              <button
                 onClick={() => router.push('/admin/stats')}
                 className="flex items-center gap-2 px-4 py-2 bg-medical-primary text-white rounded hover:bg-medical-primary-dark transition-colors"
               >
@@ -540,6 +592,55 @@ export default function AdminPage() {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Belépés mint másik felhasználó */}
+        <div className="card mb-6 border-l-4 border-blue-500">
+          <div className="flex items-center gap-2 mb-4">
+            <User className="w-5 h-5 text-blue-600" />
+            <h2 className="text-xl font-semibold">Belépés mint másik felhasználó</h2>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Válasszon felhasználót
+              </label>
+              <select
+                value={selectedUserId}
+                onChange={(e) => setSelectedUserId(e.target.value)}
+                className="form-input w-full"
+                disabled={impersonating}
+              >
+                <option value="">-- Válasszon felhasználót --</option>
+                {users
+                  .filter(u => u.active)
+                  .map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.email} ({user.role})
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <div className="pt-6">
+              <button
+                onClick={handleImpersonate}
+                disabled={!selectedUserId || impersonating}
+                className="btn-primary flex items-center gap-2"
+              >
+                {impersonating ? (
+                  <>
+                    <span className="animate-spin">⏳</span>
+                    Belépés...
+                  </>
+                ) : (
+                  <>
+                    <LogIn className="w-4 h-4" />
+                    Belépés mint...
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+
         {/* Jóváhagyásra váró felhasználók */}
         {users.filter(u => !u.active).length > 0 && (
           <div className="card mb-6 border-l-4 border-yellow-400">
@@ -671,9 +772,6 @@ export default function AdminPage() {
               </table>
             </div>
           )}
-          <div className="mt-6">
-            <button className="btn-secondary" onClick={() => router.push('/')}>Vissza</button>
-          </div>
         </div>
 
         {/* E-mail küldés */}
