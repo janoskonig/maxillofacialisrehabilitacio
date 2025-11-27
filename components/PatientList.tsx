@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, memo } from 'react';
 import { Patient } from '@/lib/types';
-import { Phone, Mail, Calendar, FileText, Eye, Pencil, CheckCircle2, XCircle, Clock, Trash2, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Image, Camera } from 'lucide-react';
+import { Phone, Mail, Calendar, FileText, Eye, Pencil, CheckCircle2, XCircle, Clock, Trash2, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Image, Camera, AlertCircle, Clock as ClockIcon } from 'lucide-react';
 import { formatDateForDisplay, calculateAge } from '@/lib/dateUtils';
 
 interface PaginationInfo {
@@ -34,6 +34,9 @@ interface AppointmentInfo {
   startTime: string;
   dentistEmail: string | null;
   dentistName?: string | null;
+  appointmentStatus?: 'cancelled_by_doctor' | 'cancelled_by_patient' | 'completed' | 'no_show' | null;
+  completionNotes?: string | null;
+  isLate?: boolean;
 }
 
 function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, onViewFoto, canEdit = false, canDelete = false, userRole, sortField, sortDirection = 'asc', onSort, pagination, onPageChange }: PatientListProps) {
@@ -406,6 +409,50 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                           {appointments[patient.id || ''].dentistName || appointments[patient.id || ''].dentistEmail}
                         </div>
                       )}
+                      {(() => {
+                        const apt = appointments[patient.id || ''];
+                        if (apt.isLate) {
+                          return (
+                            <div className="flex items-center gap-0.5 mt-0.5 text-orange-600" title="Késett a beteg">
+                              <ClockIcon className="w-2.5 h-2.5" />
+                              <span className="text-xs">Késett</span>
+                            </div>
+                          );
+                        }
+                        if (apt.appointmentStatus === 'cancelled_by_doctor') {
+                          return (
+                            <div className="flex items-center gap-0.5 mt-0.5 text-red-600" title="Lemondta az orvos">
+                              <XCircle className="w-2.5 h-2.5" />
+                              <span className="text-xs">Lemondta az orvos</span>
+                            </div>
+                          );
+                        }
+                        if (apt.appointmentStatus === 'cancelled_by_patient') {
+                          return (
+                            <div className="flex items-center gap-0.5 mt-0.5 text-red-600" title="Lemondta a beteg">
+                              <XCircle className="w-2.5 h-2.5" />
+                              <span className="text-xs">Lemondta a beteg</span>
+                            </div>
+                          );
+                        }
+                        if (apt.appointmentStatus === 'completed') {
+                          return (
+                            <div className="flex items-center gap-0.5 mt-0.5 text-green-600" title={apt.completionNotes || 'Sikeresen teljesült'}>
+                              <CheckCircle2 className="w-2.5 h-2.5" />
+                              <span className="text-xs">Teljesült</span>
+                            </div>
+                          );
+                        }
+                        if (apt.appointmentStatus === 'no_show') {
+                          return (
+                            <div className="flex items-center gap-0.5 mt-0.5 text-red-600" title="Nem jelent meg">
+                              <AlertCircle className="w-2.5 h-2.5" />
+                              <span className="text-xs">Nem jelent meg</span>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                   ) : (
                     <div className="text-xs text-gray-400">-</div>

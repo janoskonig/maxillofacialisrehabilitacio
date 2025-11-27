@@ -36,6 +36,54 @@ function getToothState(value: ToothStatus | undefined): 'empty' | 'present' | 'm
   return 'present';
 }
 
+// Normalizálási segédfüggvények az összehasonlításhoz
+function normalizeDate(date: string | null | undefined): string | null {
+  if (!date) return null;
+  try {
+    return formatDateForInput(date);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeArray<T>(arr: T[] | null | undefined): string {
+  if (!arr || !Array.isArray(arr)) return JSON.stringify([]);
+  // Rendezzük a tömböt, ha objektumokat tartalmaz, hogy konzisztens legyen
+  const sorted = arr.map(item => {
+    if (typeof item === 'object' && item !== null) {
+      const normalized = Object.keys(item).sort().reduce((acc, key) => {
+        const value = (item as any)[key];
+        // Normalize date fields in objects (like tervezettAtadasDatuma in kezelesiTerv arrays)
+        if (key === 'tervezettAtadasDatuma' || key.includes('datum') || key.includes('Datum')) {
+          acc[key] = normalizeDate(value);
+        } else {
+          acc[key] = value;
+        }
+        return acc;
+      }, {} as any);
+      return normalized;
+    }
+    return item;
+  });
+  return JSON.stringify(sorted);
+}
+
+function normalizeObject(obj: Record<string, any> | null | undefined): string {
+  if (!obj || typeof obj !== 'object') return JSON.stringify({});
+  // Rendezzük a kulcsokat, hogy konzisztens legyen
+  const sorted = Object.keys(obj).sort().reduce((acc, key) => {
+    acc[key] = obj[key];
+    return acc;
+  }, {} as Record<string, any>);
+  return JSON.stringify(sorted);
+}
+
+function normalizeValue(value: any): any {
+  // Handle null/undefined/empty string comparison
+  if (value === null || value === undefined || value === '') return null;
+  return value;
+}
+
 // ToothCheckbox komponens - háromállapotú
 interface ToothCheckboxProps {
   toothNumber: string;
@@ -247,6 +295,13 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     },
   });
 
+  // Update currentPatient when patient prop changes
+  useEffect(() => {
+    if (patient) {
+      setCurrentPatient(patient);
+    }
+  }, [patient?.id]); // Update when patient ID changes
+
   // Reset form to mark as not dirty after initial load for existing patients
   useEffect(() => {
     if (patient && !isViewOnly) {
@@ -268,9 +323,9 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           ...item,
           tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
         })) || [],
-      } : undefined, { keepDefaultValues: true });
+      } : undefined, { keepDirty: false, keepDefaultValues: false });
     }
-  }, [patient?.id]); // Only reset when patient ID changes (when opening a different patient)
+  }, [patient?.id, isViewOnly, reset]); // Only reset when patient ID changes (when opening a different patient)
 
   // Set kezeleoorvos value when options are loaded and patient has a value
   useEffect(() => {
@@ -804,7 +859,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           ...item,
           tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
         })) || [],
-      } : undefined, { keepDefaultValues: true });
+      } : undefined, { keepDirty: false, keepDefaultValues: false });
       
       // Call onSave callback with saved patient
       onSave(savedPatient);
@@ -871,7 +926,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         ...item,
         tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
       })) || [],
-    } : undefined, { keepDefaultValues: true });
+    } : undefined, { keepDirty: false, keepDefaultValues: false });
     
     // Don't call onSave callback to avoid triggering alert
     // The patient is saved, but we don't want to show the "Beteg mentve" popup
@@ -936,10 +991,42 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         ...item,
         tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
       })) || [],
-    } : undefined, { keepDefaultValues: true });
+    } : undefined, { keepDirty: false, keepDefaultValues: false });
     
     return savedPatient;
   }, [getValues, fogak, implantatumok, currentPatient, reset, setImplantatumok, setFogak]);
+
+  // Helper function to compare field values with normalization
+  const compareFieldValues = useCallback((field: keyof Patient, currentValue: any, originalValue: any): boolean => {
+    const currentNormalized = normalizeValue(currentValue);
+    const originalNormalized = normalizeValue(originalValue);
+    
+    // Normalize dates for comparison
+    const dateFields: (keyof Patient)[] = ['szuletesiDatum', 'mutetIdeje', 'felvetelDatuma', 'balesetIdopont'];
+    if (dateFields.includes(field)) {
+      const currentDate = normalizeDate(currentNormalized);
+      const originalDate = normalizeDate(originalNormalized);
+      return currentDate !== originalDate;
+    }
+    
+    // For arrays, use normalized comparison
+    if (Array.isArray(currentNormalized) || Array.isArray(originalNormalized)) {
+      return normalizeArray(currentNormalized) !== normalizeArray(originalNormalized);
+    }
+    
+    // For objects, use normalized comparison
+    if (typeof currentNormalized === 'object' && typeof originalNormalized === 'object' && currentNormalized !== null && originalNormalized !== null) {
+      return normalizeObject(currentNormalized) !== normalizeObject(originalNormalized);
+    }
+    
+    // For strings, trim and compare
+    if (typeof currentNormalized === 'string' && typeof originalNormalized === 'string') {
+      return currentNormalized.trim() !== originalNormalized.trim();
+    }
+    
+    // For booleans and other primitives, direct comparison
+    return currentNormalized !== originalNormalized;
+  }, []);
 
   // Check if form has unsaved changes
   const hasUnsavedChanges = useCallback(() => {
@@ -950,12 +1037,12 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     
     // For existing patients: compare current values with original patient data
     if (!isNewPatient && referencePatient) {
-      // Check if implantatumok or fogak have changed
+      // Check if implantatumok or fogak have changed (using normalized comparison)
       const originalImplantatumok = referencePatient.meglevoImplantatumok || {};
       const originalFogak = referencePatient.meglevoFogak || {};
       
-      const implantatumokChanged = JSON.stringify(implantatumok) !== JSON.stringify(originalImplantatumok);
-      const fogakChanged = JSON.stringify(fogak) !== JSON.stringify(originalFogak);
+      const implantatumokChanged = normalizeObject(implantatumok) !== normalizeObject(originalImplantatumok);
+      const fogakChanged = normalizeObject(fogak) !== normalizeObject(originalFogak);
       
       // If implantatumok or fogak changed, there are unsaved changes
       if (implantatumokChanged || fogakChanged) {
@@ -964,49 +1051,53 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       
       // For form fields, check if there's actual difference (don't rely only on isDirty)
       // Compare all fields with the saved patient data
-        const keyFields: (keyof Patient)[] = [
-          'nev', 'taj', 'telefonszam', 'email', 'szuletesiDatum', 'nem',
-          'beutaloOrvos', 'beutaloIntezmeny', 'beutaloIndokolas',
+      // Complete list of all Patient schema fields that should be checked
+      const keyFields: (keyof Patient)[] = [
+        // Alapadatok
+        'nev', 'taj', 'telefonszam', 'email', 'szuletesiDatum', 'nem',
+        'cim', 'varos', 'iranyitoszam',
+        // Beutaló
+        'beutaloOrvos', 'beutaloIntezmeny', 'beutaloIndokolas', 'mutetIdeje',
+        'szovettaniDiagnozis', 'nyakiBlokkdisszekcio',
+        // Adjuváns terápiák
+        'radioterapia', 'radioterapiaDozis', 'radioterapiaDatumIntervallum',
+        'chemoterapia', 'chemoterapiaLeiras',
+        // Anamnézis és betegvizsgálat
+        'alkoholfogyasztas', 'dohanyzasSzam', 'kezelesreErkezesIndoka',
+        'maxilladefektusVan', 'brownFuggolegesOsztaly', 'brownVizszintesKomponens',
+        'mandibuladefektusVan', 'kovacsDobakOsztaly',
+        'nyelvmozgásokAkadályozottak', 'gombocosBeszed', 'nyalmirigyAllapot',
+        'tnmStaging',
+        // Protézis - felső
+        'felsoFogpotlasVan', 'felsoFogpotlasMikor', 'felsoFogpotlasKeszito',
+        'felsoFogpotlasElegedett', 'felsoFogpotlasProblema', 'felsoFogpotlasTipus',
+        // Protézis - alsó
+        'alsoFogpotlasVan', 'alsoFogpotlasMikor', 'alsoFogpotlasKeszito',
+        'alsoFogpotlasElegedett', 'alsoFogpotlasProblema', 'alsoFogpotlasTipus',
+        // Fogazati státusz
+        'fabianFejerdyProtetikaiOsztalyFelso', 'fabianFejerdyProtetikaiOsztalyAlso',
+        'fabianFejerdyProtetikaiOsztaly',
         'kezeleoorvos', 'kezeleoorvosIntezete', 'felvetelDatuma',
-        'kezelesreErkezesIndoka', 'bno', 'diagnozis', 'mutetIdeje',
-        'szovettaniDiagnozis', 'nyakiBlokkdisszekcio', 'cim', 'varos', 'iranyitoszam'
-        ];
+        'nemIsmertPoziciokbanImplantatum', 'nemIsmertPoziciokbanImplantatumRészletek',
+        // Kezelési terv
+        'kezelesiTervFelso', 'kezelesiTervAlso', 'kezelesiTervArcotErinto',
+        // Trauma
+        'balesetIdopont', 'balesetEtiologiaja', 'balesetEgyeb',
+        // Onkológia
+        'primerMutetLeirasa', 'bno', 'diagnozis',
+        // Veleszületett rendellenesség
+        'veleszuletettRendellenessegek', 'veleszuletettMutetekLeirasa'
+      ];
         
-        // Check if any key field actually changed
-        const hasActualChange = keyFields.some(field => {
-          const currentValue = formValues[field];
-          const originalValue = referencePatient[field];
+      // Check if any key field actually changed
+      const hasActualChange = keyFields.some(field => {
+        const currentValue = formValues[field];
+        const originalValue = referencePatient[field];
+        return compareFieldValues(field, currentValue, originalValue);
+      });
         
-        // Handle null/undefined/empty string comparison
-        const currentNormalized = currentValue === null || currentValue === undefined || currentValue === '' ? null : currentValue;
-        const originalNormalized = originalValue === null || originalValue === undefined || originalValue === '' ? null : originalValue;
-          
-          // Normalize dates for comparison
-          if (field === 'szuletesiDatum' || field === 'mutetIdeje' || field === 'felvetelDatuma') {
-          const currentDate = currentNormalized ? formatDateForInput(currentNormalized as string) : null;
-          const originalDate = originalNormalized ? formatDateForInput(originalNormalized as string) : null;
-            return currentDate !== originalDate;
-          }
-          
-          // For arrays and objects, compare JSON
-        if (Array.isArray(currentNormalized) || Array.isArray(originalNormalized)) {
-          return JSON.stringify(currentNormalized || []) !== JSON.stringify(originalNormalized || []);
-        }
-        
-        if (typeof currentNormalized === 'object' && typeof originalNormalized === 'object' && currentNormalized !== null && originalNormalized !== null) {
-          return JSON.stringify(currentNormalized) !== JSON.stringify(originalNormalized);
-        }
-        
-        // For strings, trim and compare
-        if (typeof currentNormalized === 'string' && typeof originalNormalized === 'string') {
-          return currentNormalized.trim() !== originalNormalized.trim();
-        }
-        
-        return currentNormalized !== originalNormalized;
-        });
-        
-        return hasActualChange;
-      }
+      return hasActualChange;
+    }
       
     // For new patients: check if there's any meaningful data entered that hasn't been saved yet
     if (isNewPatient) {
@@ -1014,34 +1105,50 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       if (currentPatient?.id) {
         // Compare with saved patient - same logic as existing patients
         const keyFields: (keyof Patient)[] = [
+          // Alapadatok
           'nev', 'taj', 'telefonszam', 'email', 'szuletesiDatum', 'nem',
-          'beutaloOrvos', 'beutaloIntezmeny', 'beutaloIndokolas',
+          'cim', 'varos', 'iranyitoszam',
+          // Beutaló
+          'beutaloOrvos', 'beutaloIntezmeny', 'beutaloIndokolas', 'mutetIdeje',
+          'szovettaniDiagnozis', 'nyakiBlokkdisszekcio',
+          // Adjuváns terápiák
+          'radioterapia', 'radioterapiaDozis', 'radioterapiaDatumIntervallum',
+          'chemoterapia', 'chemoterapiaLeiras',
+          // Anamnézis és betegvizsgálat
+          'alkoholfogyasztas', 'dohanyzasSzam', 'kezelesreErkezesIndoka',
+          'maxilladefektusVan', 'brownFuggolegesOsztaly', 'brownVizszintesKomponens',
+          'mandibuladefektusVan', 'kovacsDobakOsztaly',
+          'nyelvmozgásokAkadályozottak', 'gombocosBeszed', 'nyalmirigyAllapot',
+          'tnmStaging',
+          // Protézis - felső
+          'felsoFogpotlasVan', 'felsoFogpotlasMikor', 'felsoFogpotlasKeszito',
+          'felsoFogpotlasElegedett', 'felsoFogpotlasProblema', 'felsoFogpotlasTipus',
+          // Protézis - alsó
+          'alsoFogpotlasVan', 'alsoFogpotlasMikor', 'alsoFogpotlasKeszito',
+          'alsoFogpotlasElegedett', 'alsoFogpotlasProblema', 'alsoFogpotlasTipus',
+          // Fogazati státusz
+          'fabianFejerdyProtetikaiOsztalyFelso', 'fabianFejerdyProtetikaiOsztalyAlso',
+          'fabianFejerdyProtetikaiOsztaly',
           'kezeleoorvos', 'kezeleoorvosIntezete', 'felvetelDatuma',
-          'kezelesreErkezesIndoka', 'bno', 'diagnozis', 'mutetIdeje'
+          'nemIsmertPoziciokbanImplantatum', 'nemIsmertPoziciokbanImplantatumRészletek',
+          // Kezelési terv
+          'kezelesiTervFelso', 'kezelesiTervAlso', 'kezelesiTervArcotErinto',
+          // Trauma
+          'balesetIdopont', 'balesetEtiologiaja', 'balesetEgyeb',
+          // Onkológia
+          'primerMutetLeirasa', 'bno', 'diagnozis',
+          // Veleszületett rendellenesség
+          'veleszuletettRendellenessegek', 'veleszuletettMutetekLeirasa'
         ];
         
         const hasActualChange = keyFields.some(field => {
           const currentValue = formValues[field];
           const originalValue = currentPatient[field];
-          
-          const currentNormalized = currentValue === null || currentValue === undefined || currentValue === '' ? null : currentValue;
-          const originalNormalized = originalValue === null || originalValue === undefined || originalValue === '' ? null : originalValue;
-          
-          if (field === 'szuletesiDatum' || field === 'mutetIdeje' || field === 'felvetelDatuma') {
-            const currentDate = currentNormalized ? formatDateForInput(currentNormalized as string) : null;
-            const originalDate = originalNormalized ? formatDateForInput(originalNormalized as string) : null;
-            return currentDate !== originalDate;
-          }
-          
-          if (typeof currentNormalized === 'string' && typeof originalNormalized === 'string') {
-            return currentNormalized.trim() !== originalNormalized.trim();
-          }
-          
-          return currentNormalized !== originalNormalized;
+          return compareFieldValues(field, currentValue, originalValue);
         });
         
-        const implantatumokChanged = JSON.stringify(implantatumok) !== JSON.stringify(currentPatient.meglevoImplantatumok || {});
-        const fogakChanged = JSON.stringify(fogak) !== JSON.stringify(currentPatient.meglevoFogak || {});
+        const implantatumokChanged = normalizeObject(implantatumok) !== normalizeObject(currentPatient.meglevoImplantatumok || {});
+        const fogakChanged = normalizeObject(fogak) !== normalizeObject(currentPatient.meglevoFogak || {});
         
         return hasActualChange || implantatumokChanged || fogakChanged;
       }
@@ -1066,7 +1173,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     }
     
     return false;
-  }, [isViewOnly, patient, currentPatient, implantatumok, fogak, isNewPatient, formValues]);
+  }, [isViewOnly, patient, currentPatient, implantatumok, fogak, isNewPatient, formValues, compareFieldValues]);
 
   // Handle form cancellation - check for unsaved changes
   const handleCancel = async () => {
@@ -2623,7 +2730,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           canUpload={userRole === 'admin' || userRole === 'editor'}
           canDelete={userRole === 'admin'}
           onSavePatientBeforeUpload={!isViewOnly ? savePatientSilently : undefined}
-          isPatientDirty={!isViewOnly && (isDirty || hasUnsavedChanges())}
+          isPatientDirty={!isViewOnly && hasUnsavedChanges()}
         />
 
         {/* Appointment Booking Section */}
@@ -2632,7 +2739,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           patientId={patientId} 
           isViewOnly={userRole === 'sebészorvos' ? false : isViewOnly}
           onSavePatientBeforeBooking={!isViewOnly ? savePatientForBooking : undefined}
-          isPatientDirty={!isViewOnly && (isDirty || hasUnsavedChanges())}
+          isPatientDirty={!isViewOnly && hasUnsavedChanges()}
           isNewPatient={isNewPatient}
           onPatientSaved={(savedPatient) => {
             setCurrentPatient(savedPatient);
