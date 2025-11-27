@@ -33,6 +33,7 @@ interface ConditionalAppointmentBookingProps {
 export function ConditionalAppointmentBooking({ patientId, patientEmail }: ConditionalAppointmentBookingProps = {}) {
   const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([]);
   const [pendingAppointments, setPendingAppointments] = useState<PendingAppointment[]>([]);
+  const [rejectedAppointments, setRejectedAppointments] = useState<PendingAppointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPatient, setSelectedPatient] = useState<string>('');
@@ -96,14 +97,18 @@ export function ConditionalAppointmentBooking({ patientId, patientEmail }: Condi
       if (response.ok) {
         const data = await response.json();
         const allAppointments = data.appointments || [];
-        // Szűrjük csak a pending státuszú időpontokat
+        // Szűrjük a pending és rejected státuszú időpontokat
         const pending = allAppointments.filter((apt: any) => 
           apt.approvalStatus === 'pending'
         );
+        const rejected = allAppointments.filter((apt: any) => 
+          apt.approvalStatus === 'rejected'
+        );
         setPendingAppointments(pending);
+        setRejectedAppointments(rejected);
       }
     } catch (error) {
-      console.error('Error loading pending appointments:', error);
+      console.error('Error loading appointments:', error);
     }
   }, [patientId]);
 
@@ -493,6 +498,88 @@ export function ConditionalAppointmentBooking({ patientId, patientEmail }: Condi
           </div>
         )}
       </div>
+
+      {/* Rejected Appointments */}
+      {rejectedAppointments.length > 0 && (
+        <div className="card mt-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Calendar className="w-5 h-5 text-gray-500" />
+            <h3 className="text-xl font-bold text-gray-900">
+              {patientId ? 'Elutasított időpontok (ehhez a beteghez)' : 'Elutasított időpontok'}
+            </h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Beteg
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Email
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Időpont
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Létrehozva
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Státusz
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {rejectedAppointments.map((appointment) => (
+                  <tr key={appointment.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <User className="w-4 h-4 text-gray-400 mr-2" />
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {appointment.patientName || 'Név nélküli'}
+                          </div>
+                          {appointment.patientTaj && (
+                            <div className="text-sm text-gray-500">
+                              TAJ: {appointment.patientTaj}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <Mail className="w-4 h-4 text-gray-400 mr-2" />
+                        <span className="text-sm text-gray-900">
+                          {appointment.patientEmail || 'Nincs email'}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <Clock className="w-4 h-4 text-gray-400 mr-2" />
+                        <span className="text-sm text-gray-900">
+                          {formatDateTime(appointment.startTime)}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="text-sm text-gray-500">
+                        {new Date(appointment.createdAt).toLocaleString('hu-HU')}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                        Elutasítva
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

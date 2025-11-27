@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Calendar, Clock, Download, User, Phone, Trash2, Edit2, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, Clock, Download, User, Phone, Trash2, Edit2, X, ChevronLeft, ChevronRight, CheckCircle2, XCircle, AlertCircle, Clock as ClockIcon } from 'lucide-react';
 import { Patient } from '@/lib/types';
 
 interface TimeSlot {
@@ -21,6 +21,9 @@ interface Appointment {
   patientName: string | null;
   patientTaj: string | null;
   dentistEmail: string;
+  appointmentStatus?: 'cancelled_by_doctor' | 'cancelled_by_patient' | 'completed' | 'no_show' | null;
+  completionNotes?: string | null;
+  isLate?: boolean;
 }
 
 interface PaginationInfo {
@@ -41,24 +44,57 @@ export function AppointmentBooking() {
   const [selectedSlot, setSelectedSlot] = useState<string>('');
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [newTimeSlotId, setNewTimeSlotId] = useState<string>('');
+  const [editingStatus, setEditingStatus] = useState<Appointment | null>(null);
+  const [statusForm, setStatusForm] = useState<{
+    appointmentStatus: 'cancelled_by_doctor' | 'cancelled_by_patient' | 'completed' | 'no_show' | null;
+    completionNotes: string;
+    isLate: boolean;
+  }>({
+    appointmentStatus: null,
+    completionNotes: '',
+    isLate: false,
+  });
   const isLoadingRef = useRef(false);
 
   const loadAvailableSlots = useCallback(async () => {
     try {
-      const response = await fetch('/api/time-slots', {
-        credentials: 'include',
-      });
-      if (response.ok) {
-        const data = await response.json();
-        const allSlots = data.timeSlots || [];
-        // Csak a jövőbeli időpontokat jelenítjük meg (4 óra késleltetéssel)
-        const now = new Date();
-        const fourHoursFromNow = new Date(now.getTime() - 4 * 60 * 60 * 1000);
-        const futureSlots = allSlots.filter((slot: TimeSlot) => 
-          new Date(slot.startTime) >= fourHoursFromNow
-        );
-        setAvailableSlots(futureSlots);
+      // Több oldal lekérdezése, hogy minden szabad időpontot megkapjunk
+      let allSlots: TimeSlot[] = [];
+      let page = 1;
+      let hasMore = true;
+      const limit = 100; // Nagyobb limit, hogy kevesebb kérés legyen
+      const maxPages = 100; // Biztonsági limit, hogy ne legyen végtelen ciklus
+      
+      while (hasMore && page <= maxPages) {
+        const response = await fetch(`/api/time-slots?page=${page}&limit=${limit}`, {
+          credentials: 'include',
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const slots = data.timeSlots || [];
+          allSlots = [...allSlots, ...slots];
+          
+          // Ellenőrizzük a paginációt: ha nincs több oldal, vagy kevesebb elemet kaptunk, akkor vége
+          const pagination = data.pagination;
+          if (pagination && page >= pagination.totalPages) {
+            hasMore = false;
+          } else if (slots.length < limit) {
+            hasMore = false;
+          } else {
+            page++;
+          }
+        } else {
+          hasMore = false;
+        }
       }
+      
+      // Csak a jövőbeli időpontokat jelenítjük meg (4 óra késleltetéssel)
+      const now = new Date();
+      const fourHoursFromNow = new Date(now.getTime() - 4 * 60 * 60 * 1000);
+      const futureSlots = allSlots.filter((slot: TimeSlot) => 
+        new Date(slot.startTime) >= fourHoursFromNow
+      );
+      setAvailableSlots(futureSlots);
     } catch (error) {
       console.error('Error loading time slots:', error);
     }
@@ -249,6 +285,77 @@ export function AppointmentBooking() {
     }
   }, [editingAppointment, newTimeSlotId, loadData]);
 
+  const handleEditStatus = useCallback((appointment: Appointment) => {
+    setEditingStatus(appointment);
+    setStatusForm({
+      appointmentStatus: appointment.appointmentStatus || null,
+      completionNotes: appointment.completionNotes || '',
+      isLate: appointment.isLate || false,
+    });
+  }, []);
+
+  const handleSaveStatus = useCallback(async () => {
+    if (!editingStatus) {
+      return;
+    }
+
+    // Validate: if status is 'completed', completionNotes is required
+    if (statusForm.appointmentStatus === 'completed' && !statusForm.completionNotes.trim()) {
+      alert('A "mi történt?" mező kitöltése kötelező sikeresen teljesült időpont esetén.');
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/appointments/${editingStatus.id}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          appointmentStatus: statusForm.appointmentStatus,
+          completionNotes: statusForm.appointmentStatus === 'completed' ? statusForm.completionNotes : null,
+          isLate: statusForm.isLate,
+        }),
+      });
+
+      if (response.ok) {
+        await loadData();
+        setEditingStatus(null);
+        setStatusForm({
+          appointmentStatus: null,
+          completionNotes: '',
+          isLate: false,
+        });
+        alert('Időpont státusza sikeresen frissítve!');
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Hiba történt az időpont státuszának frissítésekor');
+      }
+    } catch (error) {
+      console.error('Error updating appointment status:', error);
+      alert('Hiba történt az időpont státuszának frissítésekor');
+    }
+  }, [editingStatus, statusForm, loadData]);
+
+  const getStatusLabel = useCallback((status: Appointment['appointmentStatus'], isLate?: boolean) => {
+    if (isLate) {
+      return { label: 'Késett', color: 'text-orange-600', bgColor: 'bg-orange-50', icon: ClockIcon };
+    }
+    switch (status) {
+      case 'cancelled_by_doctor':
+        return { label: 'Lemondta az orvos', color: 'text-red-600', bgColor: 'bg-red-50', icon: XCircle };
+      case 'cancelled_by_patient':
+        return { label: 'Lemondta a beteg', color: 'text-red-600', bgColor: 'bg-red-50', icon: XCircle };
+      case 'completed':
+        return { label: 'Sikeresen teljesült', color: 'text-green-600', bgColor: 'bg-green-50', icon: CheckCircle2 };
+      case 'no_show':
+        return { label: 'Nem jelent meg', color: 'text-red-600', bgColor: 'bg-red-50', icon: AlertCircle };
+      default:
+        return null;
+    }
+  }, []);
+
   const formatDateTime = useCallback((dateTime: string) => {
     const date = new Date(dateTime);
     return date.toLocaleString('hu-HU', {
@@ -283,6 +390,108 @@ export function AppointmentBooking() {
 
   return (
     <div className="space-y-6">
+      {/* Status Edit Modal */}
+      {editingStatus && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-gray-900">Időpont státusz szerkesztése</h3>
+              <button
+                onClick={() => {
+                  setEditingStatus(null);
+                  setStatusForm({
+                    appointmentStatus: null,
+                    completionNotes: '',
+                    isLate: false,
+                  });
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-gray-600 mb-2">
+                  <strong>Beteg:</strong> {editingStatus.patientName || 'Név nélküli'}
+                </p>
+                <p className="text-sm text-gray-600 mb-4">
+                  <strong>Időpont:</strong> {formatDateTime(editingStatus.startTime)}
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Státusz
+                </label>
+                <select
+                  value={statusForm.appointmentStatus || ''}
+                  onChange={(e) => {
+                    const value = e.target.value || null;
+                    setStatusForm({
+                      ...statusForm,
+                      appointmentStatus: value as any,
+                      completionNotes: value === 'completed' ? statusForm.completionNotes : '',
+                    });
+                  }}
+                  className="form-input w-full"
+                >
+                  <option value="">Nincs státusz (normál időpont)</option>
+                  <option value="cancelled_by_doctor">Lemondta az orvos</option>
+                  <option value="cancelled_by_patient">Lemondta a beteg</option>
+                  <option value="completed">Sikeresen teljesült</option>
+                  <option value="no_show">Nem jelent meg</option>
+                </select>
+              </div>
+              {statusForm.appointmentStatus === 'completed' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Mi történt? <span className="text-red-600">*</span>
+                  </label>
+                  <textarea
+                    value={statusForm.completionNotes}
+                    onChange={(e) => setStatusForm({ ...statusForm, completionNotes: e.target.value })}
+                    className="form-input w-full"
+                    rows={3}
+                    placeholder="Rövid leírás arról, hogy mi történt az időpont során..."
+                  />
+                </div>
+              )}
+              <div>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={statusForm.isLate}
+                    onChange={(e) => setStatusForm({ ...statusForm, isLate: e.target.checked })}
+                    className="form-checkbox"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Késett a beteg</span>
+                </label>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => {
+                    setEditingStatus(null);
+                    setStatusForm({
+                      appointmentStatus: null,
+                      completionNotes: '',
+                      isLate: false,
+                    });
+                  }}
+                  className="btn-secondary"
+                >
+                  Mégse
+                </button>
+                <button
+                  onClick={handleSaveStatus}
+                  className="btn-primary"
+                >
+                  Mentés
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Modification Modal */}
       {editingAppointment && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -431,6 +640,9 @@ export function AppointmentBooking() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Fogpótlástanász
                   </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Státusz
+                  </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
                     Műveletek
                   </th>
@@ -467,6 +679,30 @@ export function AppointmentBooking() {
                         {appointment.dentistEmail}
                       </span>
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {(() => {
+                        const statusInfo = getStatusLabel(appointment.appointmentStatus, appointment.isLate);
+                        if (statusInfo) {
+                          const StatusIcon = statusInfo.icon;
+                          return (
+                            <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md ${statusInfo.bgColor}`}>
+                              <StatusIcon className={`w-4 h-4 ${statusInfo.color}`} />
+                              <span className={`text-xs font-medium ${statusInfo.color}`}>
+                                {statusInfo.label}
+                              </span>
+                            </div>
+                          );
+                        }
+                        return <span className="text-xs text-gray-400">-</span>;
+                      })()}
+                      {appointment.appointmentStatus === 'completed' && appointment.completionNotes && (
+                        <div className="text-xs text-gray-600 mt-1" title={appointment.completionNotes}>
+                          {appointment.completionNotes.length > 50 
+                            ? `${appointment.completionNotes.substring(0, 50)}...` 
+                            : appointment.completionNotes}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center justify-end gap-3">
                         <button
@@ -476,6 +712,14 @@ export function AppointmentBooking() {
                         >
                           <Download className="w-4 h-4" />
                           .ics
+                        </button>
+                        <button
+                          onClick={() => handleEditStatus(appointment)}
+                          className="text-purple-600 hover:text-purple-900 flex items-center gap-1"
+                          title="Státusz szerkesztése"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                          Státusz
                         </button>
                         <button
                           onClick={() => handleModifyAppointment(appointment)}
