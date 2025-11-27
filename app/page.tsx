@@ -9,7 +9,7 @@ import { PatientList } from '@/components/PatientList';
 import { OPImageViewer } from '@/components/OPImageViewer';
 import { FotoImageViewer } from '@/components/FotoImageViewer';
 import { useToast } from '@/contexts/ToastContext';
-import { Plus, Search, Users, LogOut, Shield, Settings, Calendar } from 'lucide-react';
+import { Plus, Search, Users, LogOut, Shield, Settings, Calendar, CalendarDays } from 'lucide-react';
 import { getCurrentUser, getUserEmail, getUserRole, logout } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
 
@@ -352,6 +352,13 @@ export default function Home() {
               Admin
             </button>
           )}
+          <button
+            onClick={() => router.push('/calendar')}
+            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+          >
+            <CalendarDays className="w-3.5 h-3.5" />
+            Naptár
+          </button>
           <button
             onClick={() => router.push('/settings')}
             className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"

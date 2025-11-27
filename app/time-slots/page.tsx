@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser, logout } from '@/lib/auth';
 import { TimeSlotsManager } from '@/components/TimeSlotsManager';
-import { LogOut, ArrowLeft, Shield, Settings } from 'lucide-react';
+import { LogOut, ArrowLeft, Shield, Settings, CalendarDays } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 
 export default function TimeSlotsPage() {
@@ -86,6 +86,13 @@ export default function TimeSlotsPage() {
                   Admin
                 </button>
               )}
+              <button
+                onClick={() => router.push('/calendar')}
+                className="btn-secondary flex items-center gap-2"
+              >
+                <CalendarDays className="w-4 h-4" />
+                Naptár
+              </button>
               <button
                 onClick={() => router.push('/settings')}
                 className="btn-secondary flex items-center gap-2"
