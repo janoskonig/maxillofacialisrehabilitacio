@@ -4,6 +4,8 @@ import { useState, useEffect, useMemo, memo } from 'react';
 import { Patient } from '@/lib/types';
 import { Phone, Mail, Calendar, FileText, Eye, Pencil, CheckCircle2, XCircle, Clock, Trash2, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Image, Camera, AlertCircle, Clock as ClockIcon } from 'lucide-react';
 import { formatDateForDisplay, calculateAge } from '@/lib/dateUtils';
+import { PatientCard } from './PatientCard';
+import { useIsMobile } from '@/hooks/useMediaQuery';
 
 interface PaginationInfo {
   page: number;
@@ -44,6 +46,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
   const [loadingAppointments, setLoadingAppointments] = useState(false);
   const [opDocuments, setOpDocuments] = useState<Record<string, number>>({});
   const [fotoDocuments, setFotoDocuments] = useState<Record<string, number>>({});
+  const isMobile = useIsMobile();
   
   // Use pagination from props if available, otherwise use client-side pagination as fallback
   const currentPage = pagination?.page || 1;
@@ -259,6 +262,68 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
     );
   }
 
+  // Mobile: Card view
+  if (isMobile) {
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 gap-4">
+          {paginatedPatients.map((patient) => {
+            const appointment = appointments[patient.id || ''];
+            return (
+              <PatientCard
+                key={patient.id}
+                patient={patient}
+                appointment={appointment}
+                opDocumentCount={opDocuments[patient.id || ''] || 0}
+                fotoDocumentCount={fotoDocuments[patient.id || ''] || 0}
+                onView={onView}
+                onEdit={canEdit ? onEdit : undefined}
+                onDelete={canDelete ? onDelete : undefined}
+                onViewOP={onViewOP}
+                onViewFoto={onViewFoto}
+                canEdit={canEdit}
+                canDelete={canDelete}
+                userRole={userRole}
+              />
+            );
+          })}
+        </div>
+        
+        {/* Mobile Pagination */}
+        {pagination && totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 pt-4">
+            <button
+              onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+              disabled={currentPage === 1}
+              className={`px-4 py-2 rounded-md text-sm font-medium ${
+                currentPage === 1
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+              }`}
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="text-sm text-gray-700 px-4">
+              {currentPage} / {totalPages}
+            </span>
+            <button
+              onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+              disabled={currentPage === totalPages}
+              className={`px-4 py-2 rounded-md text-sm font-medium ${
+                currentPage === totalPages
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+              }`}
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Desktop: Table view
   return (
     <div className="card p-0">
       <div className="overflow-x-auto">

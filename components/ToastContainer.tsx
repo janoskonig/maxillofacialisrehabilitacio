@@ -15,7 +15,7 @@ export function ToastContainer() {
           style={{
             bottom: `${20 + index * 80}px`,
           }}
-          className="fixed right-4 z-50"
+          className="fixed right-2 sm:right-4 left-2 sm:left-auto z-50 max-w-sm sm:max-w-md"
         >
           <Toast
             message={toast.message}

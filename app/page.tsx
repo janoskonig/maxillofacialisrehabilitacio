@@ -12,6 +12,7 @@ import { useToast } from '@/contexts/ToastContext';
 import { Plus, Search, Users, LogOut, Shield, Settings, Calendar, CalendarDays } from 'lucide-react';
 import { getCurrentUser, getUserEmail, getUserRole, logout } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
+import { MobileMenu } from '@/components/MobileMenu';
 
 type UserRoleType = 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
 
@@ -289,19 +290,64 @@ export default function Home() {
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-2">
-            <div className="flex items-center gap-3">
-              <Logo width={50} height={58} />
-              <div>
-                <h1 className="text-lg font-bold text-medical-primary">
+            <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0">
+              <Logo width={40} height={46} className="md:w-[50px] md:h-[58px] flex-shrink-0" />
+              <div className="min-w-0 flex-1">
+                <h1 className="text-base md:text-lg font-bold text-medical-primary truncate">
                   Maxillofaciális Rehabilitáció
                 </h1>
-                <p className="text-xs text-gray-600">
+                <p className="text-xs text-gray-600 hidden sm:block">
                   BETEGREGISZTER ÉS IDŐPONTKEZELŐ
                 </p>
                 {userRole === 'sebészorvos' && userInstitution && (
-                  <p className="text-xs font-semibold text-red-600 mt-0.5">
+                  <p className="text-xs font-semibold text-red-600 mt-0.5 truncate">
                     SEBÉSZ MÓD (csak a {userInstitution} páciensei)
                   </p>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <MobileMenu currentPath="/" />
+              {/* Desktop Navigation */}
+              <div className="hidden md:flex gap-1.5">
+                {userRole === 'admin' && (
+                  <button
+                    onClick={() => router.push('/admin')}
+                    className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+                  >
+                    <Shield className="w-3.5 h-3.5" />
+                    Admin
+                  </button>
+                )}
+                <button
+                  onClick={() => router.push('/calendar')}
+                  className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+                >
+                  <CalendarDays className="w-3.5 h-3.5" />
+                  Naptár
+                </button>
+                <button
+                  onClick={() => router.push('/settings')}
+                  className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                  Beállítások
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  Kijelentkezés
+                </button>
+                {(userRole === 'admin' || userRole === 'editor' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos') && (
+                  <button
+                    onClick={handleNewPatient}
+                    className="btn-primary flex items-center gap-1.5 text-sm px-3 py-1.5"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Új beteg
+                  </button>
                 )}
               </div>
             </div>
@@ -313,7 +359,7 @@ export default function Home() {
           {/* Link to time slots management page for fogpótlástanász and admin */}
           {(userRole === 'fogpótlástanász' || userRole === 'admin') && (
             <div className="card p-3">
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                 <div>
                   <h3 className="text-base font-semibold text-gray-900">Időpontkezelés</h3>
                   <p className="text-xs text-gray-600">
@@ -322,9 +368,9 @@ export default function Home() {
                 </div>
                 <button
                   onClick={() => router.push('/time-slots')}
-                  className="btn-primary flex items-center gap-1.5 text-sm px-3 py-1.5"
+                  className="btn-primary w-full sm:w-auto flex items-center justify-center gap-1.5 text-sm px-3 py-2"
                 >
-                  <Calendar className="w-3.5 h-3.5" />
+                  <Calendar className="w-4 h-4" />
                   Időpontok kezelése
                 </button>
               </div>
@@ -332,47 +378,29 @@ export default function Home() {
           )}
 
           {/* Header */}
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">eCRF-katalógus (electronic Case Report Form)</h2>
+          <h2 className="text-lg sm:text-xl font-bold text-gray-900">eCRF-katalógus (electronic Case Report Form)</h2>
           {userEmail && (
-            <p className="text-xs text-gray-500">
-              Bejelentkezve: {userEmail}
+            <p className="text-xs text-gray-500 mt-1">
+              Bejelentkezve: <span className="hidden sm:inline">{userEmail}</span><span className="sm:hidden">{userEmail.split('@')[0]}</span>
             </p>
           )}
         </div>
-        <div className="flex gap-1.5">
-          {/* Admin button */}
-          {userRole === 'admin' && (
+        {/* Mobile: New Patient Button */}
+        <div className="md:hidden">
+          {(userRole === 'admin' || userRole === 'editor' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos') && (
             <button
-              onClick={() => router.push('/admin')}
-              className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+              onClick={handleNewPatient}
+              className="btn-primary w-full flex items-center justify-center gap-1.5 text-sm px-4 py-2.5"
             >
-              <Shield className="w-3.5 h-3.5" />
-              Admin
+              <Plus className="w-4 h-4" />
+              Új beteg
             </button>
           )}
-          <button
-            onClick={() => router.push('/calendar')}
-            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
-          >
-            <CalendarDays className="w-3.5 h-3.5" />
-            Naptár
-          </button>
-          <button
-            onClick={() => router.push('/settings')}
-            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
-          >
-            <Settings className="w-3.5 h-3.5" />
-            Beállítások
-          </button>
-          <button
-            onClick={handleLogout}
-            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            Kijelentkezés
-          </button>
+        </div>
+        {/* Desktop: All buttons */}
+        <div className="hidden md:flex gap-1.5">
           {(userRole === 'admin' || userRole === 'editor' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos') && (
             <button
               onClick={handleNewPatient}
@@ -389,18 +417,18 @@ export default function Home() {
           <>
               {/* Search */}
               <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400 w-3.5 h-3.5" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 sm:w-3.5 sm:h-3.5" />
                 <input
                   type="text"
                   placeholder="Keresés név, TAJ szám vagy telefon alapján..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="form-input pl-9 py-2 text-sm"
+                  className="form-input pl-10 sm:pl-9 py-2.5 sm:py-2 text-base sm:text-sm"
                 />
               </div>
 
               {/* Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="card p-3">
                   <div className="flex items-center">
                     <Users className="w-5 h-5 text-medical-primary" />
@@ -468,7 +496,7 @@ export default function Home() {
       {/* Patient Form Modal */}
       {showForm && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-0 md:p-4 z-50"
           onClick={(e) => {
             // Only close if clicking directly on the background (not on the form)
             if (e.target === e.currentTarget) {
@@ -485,7 +513,7 @@ export default function Home() {
           }}
         >
           <div 
-            className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+            className="bg-white rounded-none md:rounded-lg max-w-4xl w-full h-full md:h-auto max-h-[100vh] md:max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <PatientForm

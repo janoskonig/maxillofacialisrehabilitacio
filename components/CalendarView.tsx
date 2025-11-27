@@ -176,36 +176,36 @@ export function CalendarView({ onAppointmentClick }: CalendarViewProps) {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
           <button
             onClick={() => navigateDate('prev')}
-            className="btn-secondary p-2"
+            className="btn-secondary p-2 flex-shrink-0"
             aria-label="Előző"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
           <button
             onClick={() => navigateDate('next')}
-            className="btn-secondary p-2"
+            className="btn-secondary p-2 flex-shrink-0"
             aria-label="Következő"
           >
             <ChevronRight className="w-5 h-5" />
           </button>
-          <h2 className="text-xl font-bold text-gray-900 min-w-[200px]">
+          <h2 className="text-base sm:text-xl font-bold text-gray-900 min-w-0 flex-1 truncate">
             {getDateLabel()}
           </h2>
           <button
             onClick={goToToday}
-            className="btn-secondary text-sm px-3 py-1.5"
+            className="btn-secondary text-sm px-3 py-1.5 flex-shrink-0"
           >
             Ma
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {/* View type switcher */}
-          <div className="flex rounded-lg border overflow-hidden">
+          <div className="flex rounded-lg border overflow-hidden flex-1 sm:flex-initial">
             <button
               onClick={() => setViewType('month')}
               className={`px-3 py-1.5 text-sm font-medium transition-colors ${

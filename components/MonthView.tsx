@@ -47,13 +47,13 @@ export function MonthView({
   };
 
   return (
-    <div className="bg-white rounded-lg border">
+    <div className="bg-white rounded-lg border overflow-hidden">
       {/* Week day headers */}
       <div className="grid grid-cols-7 border-b">
         {weekDays.map((day, index) => (
           <div
             key={index}
-            className="p-2 text-center text-xs font-semibold text-gray-600 bg-gray-50"
+            className="p-1 sm:p-2 text-center text-xs font-semibold text-gray-600 bg-gray-50"
           >
             {day}
           </div>
@@ -71,23 +71,23 @@ export function MonthView({
           return (
             <div
               key={index}
-              className={`min-h-[100px] border-r border-b p-1 ${
+              className={`min-h-[60px] sm:min-h-[100px] border-r border-b p-0.5 sm:p-1 ${
                 !isCurrentMonth ? 'bg-gray-50' : 'bg-white'
               } ${isWeekend ? 'bg-gray-50' : ''} cursor-pointer hover:bg-blue-50 transition-colors`}
               onClick={() => onDateClick?.(day)}
             >
               <div
-                className={`text-xs font-medium mb-1 ${
+                className={`text-xs font-medium mb-0.5 sm:mb-1 ${
                   isCurrentDay
-                    ? 'bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center'
+                    ? 'bg-blue-600 text-white rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center mx-auto'
                     : isCurrentMonth
-                    ? 'text-gray-900'
-                    : 'text-gray-400'
+                    ? 'text-gray-900 text-center'
+                    : 'text-gray-400 text-center'
                 }`}
               >
                 {format(day, 'd')}
               </div>
-              <div className="space-y-0.5">
+              <div className="space-y-0.5 hidden sm:block">
                 {dayAppointments.slice(0, 3).map((appointment) => (
                   <div
                     key={appointment.id}
@@ -109,6 +109,12 @@ export function MonthView({
                   </div>
                 )}
               </div>
+              {/* Mobile: Show dot indicator */}
+              {dayAppointments.length > 0 && (
+                <div className="sm:hidden flex justify-center mt-0.5">
+                  <div className="w-1.5 h-1.5 bg-blue-600 rounded-full" />
+                </div>
+              )}
             </div>
           );
         })}

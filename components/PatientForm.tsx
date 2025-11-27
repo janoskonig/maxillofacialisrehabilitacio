@@ -102,7 +102,7 @@ function ToothCheckbox({ toothNumber, value, onChange, disabled }: ToothCheckbox
     <div className="flex flex-col items-center gap-1">
       <label 
         htmlFor={`tooth-${toothNumber}`}
-        className="text-xs text-gray-600 font-medium cursor-pointer"
+        className="text-xs sm:text-xs text-gray-600 font-medium cursor-pointer"
       >
         {toothNumber}
       </label>
@@ -120,7 +120,7 @@ function ToothCheckbox({ toothNumber, value, onChange, disabled }: ToothCheckbox
           e.stopPropagation();
         }}
         disabled={disabled}
-          className={`w-7 h-7 rounded border-2 focus:ring-2 focus:ring-medical-primary focus:ring-offset-1 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 appearance-none ${
+          className={`w-8 h-8 sm:w-7 sm:h-7 rounded border-2 focus:ring-2 focus:ring-medical-primary focus:ring-offset-1 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 appearance-none ${
             isMissing 
               ? 'border-gray-400 bg-gray-200' 
               : isPresent 
@@ -129,13 +129,13 @@ function ToothCheckbox({ toothNumber, value, onChange, disabled }: ToothCheckbox
           }`}
           style={{
             backgroundImage: isMissing 
-              ? `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'%3E%3Cpath d='M2 2 L12 12 M12 2 L2 12' stroke='%23333' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E")`
+              ? `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 14 14'%3E%3Cpath d='M2 2 L12 12 M12 2 L2 12' stroke='%23333' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E")`
               : isChecked && !isMissing
-                ? `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'%3E%3Cpath d='M2 7 L6 11 L12 3' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E")`
+                ? `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 14 14'%3E%3Cpath d='M2 7 L6 11 L12 3' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E")`
                 : 'none',
             backgroundRepeat: 'no-repeat',
             backgroundPosition: 'center',
-            backgroundSize: '14px 14px'
+            backgroundSize: '16px 16px'
           }}
         />
       </div>
@@ -1817,9 +1817,9 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           <div className="space-y-4">
             {/* Fogazati státusz */}
             <div className="border-t pt-4 mt-4">
-              <div className="flex items-center justify-between mb-3">
-                <h5 className="text-md font-semibold text-gray-900">Felvételi státusz</h5>
-                <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+                <h5 className="text-base sm:text-md font-semibold text-gray-900">Felvételi státusz</h5>
+                <div className="flex flex-col sm:flex-row gap-2">
                   <button
                     type="button"
                     onClick={() => {
@@ -1851,7 +1851,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                       });
                     }}
                     disabled={isViewOnly}
-                    className="px-3 py-1.5 text-xs rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-4 py-2 sm:px-3 sm:py-1.5 text-sm sm:text-xs rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0"
                     title="Felső állcsont összes fogát hiányzónak jelöli / visszaállítja"
                   >
                     Felső teljes fogatlanság
@@ -1887,7 +1887,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                       });
                     }}
                     disabled={isViewOnly}
-                    className="px-3 py-1.5 text-xs rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-4 py-2 sm:px-3 sm:py-1.5 text-sm sm:text-xs rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0"
                     title="Alsó állcsont összes fogát hiányzónak jelöli / visszaállítja"
                   >
                     Alsó teljes fogatlanság
@@ -1895,10 +1895,10 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                 </div>
               </div>
               <p className="text-sm text-gray-600 mb-3">Kattintás: jelen van → hiányzik → alaphelyzet. Jelen lévő fogaknál D (szuvas) vagy F (tömött) kiválasztható.</p>
-              <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="bg-gray-50 p-3 sm:p-4 rounded-lg overflow-x-auto">
                 {/* Felső sor */}
-                <div className="flex justify-between mb-2">
-                  <div className="flex gap-1">
+                <div className="flex justify-between mb-2 min-w-[600px] sm:min-w-0">
+                  <div className="flex gap-1 sm:gap-1">
                     {[18, 17, 16, 15, 14, 13, 12, 11].map(tooth => {
                       const toothStr = tooth.toString();
                       return (
@@ -1912,7 +1912,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                       );
                     })}
                   </div>
-                  <div className="flex gap-1">
+                  <div className="flex gap-1 sm:gap-1">
                     {[21, 22, 23, 24, 25, 26, 27, 28].map(tooth => {
                       const toothStr = tooth.toString();
                       return (
@@ -1928,8 +1928,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                   </div>
                 </div>
                 {/* Alsó sor */}
-                <div className="flex justify-between">
-                  <div className="flex gap-1">
+                <div className="flex justify-between min-w-[600px] sm:min-w-0">
+                  <div className="flex gap-1 sm:gap-1">
                     {[48, 47, 46, 45, 44, 43, 42, 41].map(tooth => {
                       const toothStr = tooth.toString();
                       return (
@@ -1943,7 +1943,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                       );
                     })}
                   </div>
-                  <div className="flex gap-1">
+                  <div className="flex gap-1 sm:gap-1">
                     {[31, 32, 33, 34, 35, 36, 37, 38].map(tooth => {
                       const toothStr = tooth.toString();
                       return (
@@ -1978,9 +1978,9 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                 const dmft = dCount + fCount + mCount;
                 
                 return (
-                  <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                    <h6 className="font-semibold text-gray-900 mb-2">DMF-T index</h6>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                  <div className="mt-4 p-3 sm:p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <h6 className="font-semibold text-gray-900 mb-2 text-sm sm:text-base">DMF-T index</h6>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 text-sm">
                       <div>
                         <span className="text-gray-600">D (szuvas):</span>
                         <span className="ml-2 font-semibold text-red-700">{dCount}</span>
@@ -2012,8 +2012,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                 });
                 
                 return presentTeeth.length > 0 ? (
-                <div className="space-y-4 mt-4">
-                    <h6 className="font-medium text-gray-700">Fogak állapota (szabadszavas leírás)</h6>
+                <div className="space-y-3 sm:space-y-4 mt-4">
+                    <h6 className="font-medium text-gray-700 text-sm sm:text-base">Fogak állapota (szabadszavas leírás)</h6>
                     {presentTeeth.sort().map(toothNumber => {
                       const value = fogak[toothNumber];
                       const normalized = normalizeToothData(value);
@@ -2021,9 +2021,9 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                       const status = normalized?.status;
                       
                       return (
-                    <div key={toothNumber} className="border border-gray-200 rounded-md p-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <label className="form-label font-medium">
+                    <div key={toothNumber} className="border border-gray-200 rounded-md p-3 sm:p-4">
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+                            <label className="form-label font-medium text-sm sm:text-base">
                               {toothNumber}. fog – állapot
                             </label>
                             {/* D/F gombok amikor a fog jelen van */}
@@ -2032,7 +2032,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                                 <button
                                   type="button"
                                   onClick={() => handleToothStatusSelect(toothNumber, 'D')}
-                                  className={`px-2 py-1 text-xs rounded border ${
+                                  className={`px-3 py-2 sm:px-2 sm:py-1 text-sm sm:text-xs rounded border min-h-[44px] sm:min-h-0 ${
                                     status === 'D'
                                       ? 'bg-red-100 border-red-400 text-red-700 font-semibold'
                                       : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
@@ -2044,7 +2044,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                                 <button
                                   type="button"
                                   onClick={() => handleToothStatusSelect(toothNumber, 'F')}
-                                  className={`px-2 py-1 text-xs rounded border ${
+                                  className={`px-3 py-2 sm:px-2 sm:py-1 text-sm sm:text-xs rounded border min-h-[44px] sm:min-h-0 ${
                                     status === 'F'
                                       ? 'bg-blue-100 border-blue-400 text-blue-700 font-semibold'
                                       : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
@@ -2060,7 +2060,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                             value={description}
                             onChange={(e) => handleToothStatusDetailsChange(toothNumber, e.target.value)}
                             rows={2}
-                            className="form-input"
+                            className="form-input text-base sm:text-sm"
                             placeholder="Pl. korona, hídtag, gyökércsapos felépítmény, egyéb részletek"
                             readOnly={isViewOnly}
                           />
@@ -2328,10 +2328,10 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           
           {/* Zsigmondy-kereszt */}
           <div className="mb-6">
-            <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="bg-gray-50 p-3 sm:p-4 rounded-lg overflow-x-auto">
               {/* Felső sor - 1. kvadráns (bal felső) és 2. kvadráns (jobb felső) */}
-              <div className="flex justify-between mb-2">
-                <div className="flex gap-1">
+              <div className="flex justify-between mb-2 min-w-[600px] sm:min-w-0">
+                <div className="flex gap-1 sm:gap-1">
                   {[18, 17, 16, 15, 14, 13, 12, 11].map(tooth => {
                     const toothStr = tooth.toString();
                     const toothValue = fogak[toothStr];
@@ -2348,7 +2348,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                     );
                   })}
                 </div>
-                <div className="flex gap-1">
+                <div className="flex gap-1 sm:gap-1">
                   {[21, 22, 23, 24, 25, 26, 27, 28].map(tooth => {
                     const toothStr = tooth.toString();
                     const toothValue = fogak[toothStr];
@@ -2368,8 +2368,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
               </div>
               
               {/* Alsó sor - 4. kvadráns (bal alsó) és 3. kvadráns (jobb alsó) */}
-              <div className="flex justify-between">
-                <div className="flex gap-1">
+              <div className="flex justify-between min-w-[600px] sm:min-w-0">
+                <div className="flex gap-1 sm:gap-1">
                   {[48, 47, 46, 45, 44, 43, 42, 41].map(tooth => {
                     const toothStr = tooth.toString();
                     const toothValue = fogak[toothStr];
@@ -2386,7 +2386,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                     );
                   })}
                 </div>
-                <div className="flex gap-1">
+                <div className="flex gap-1 sm:gap-1">
                   {[31, 32, 33, 34, 35, 36, 37, 38].map(tooth => {
                     const toothStr = tooth.toString();
                     const toothValue = fogak[toothStr];
@@ -2409,18 +2409,18 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
 
           {/* Implantátum részletek */}
           {Object.keys(implantatumok).length > 0 && (
-            <div className="space-y-4 mb-4">
-              <h5 className="font-medium text-gray-700 mb-3">Implantátum részletek</h5>
+            <div className="space-y-3 sm:space-y-4 mb-4">
+              <h5 className="font-medium text-gray-700 mb-3 text-sm sm:text-base">Implantátum részletek</h5>
               {Object.keys(implantatumok).sort().map(toothNumber => (
-                <div key={toothNumber} className="border border-gray-200 rounded-md p-4">
-                  <label className="form-label font-medium">
+                <div key={toothNumber} className="border border-gray-200 rounded-md p-3 sm:p-4">
+                  <label className="form-label font-medium text-sm sm:text-base">
                     {toothNumber}. fog - Implantátum típusa, gyári száma, stb.
                   </label>
                   <textarea
                     value={implantatumok[toothNumber] || ''}
                     onChange={(e) => handleImplantatumDetailsChange(toothNumber, e.target.value)}
                     rows={2}
-                    className="form-input"
+                    className="form-input text-base sm:text-sm"
                     placeholder="Pl. Straumann BLT 4.1x10mm, Gyári szám: 028.015, Dátum: 2023.05.15"
                     readOnly={isViewOnly}
                   />

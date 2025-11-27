@@ -57,8 +57,8 @@ export function DayView({
   return (
     <div className="bg-white rounded-lg border">
       {/* Day header */}
-      <div className={`p-4 border-b ${isCurrentDay ? 'bg-blue-50' : 'bg-gray-50'}`}>
-        <div className="text-lg font-bold text-gray-900">
+      <div className={`p-3 sm:p-4 border-b ${isCurrentDay ? 'bg-blue-50' : 'bg-gray-50'}`}>
+        <div className="text-base sm:text-lg font-bold text-gray-900">
           {format(currentDate, 'EEEE, yyyy. MMMM d.', { locale: hu })}
         </div>
         <div className="text-sm text-gray-600 mt-1">
@@ -71,11 +71,11 @@ export function DayView({
         {hours.map((hour) => {
           const hourAppointments = appointmentsByHour[hour] || [];
           return (
-            <div key={hour} className="grid grid-cols-12 gap-4 p-3 hover:bg-gray-50">
-              <div className="col-span-2 text-sm font-medium text-gray-600 text-right pr-4">
+            <div key={hour} className="grid grid-cols-12 gap-2 sm:gap-4 p-2 sm:p-3 hover:bg-gray-50">
+              <div className="col-span-3 sm:col-span-2 text-sm font-medium text-gray-600 text-right pr-2 sm:pr-4">
                 {hour.toString().padStart(2, '0')}:00
               </div>
-              <div className="col-span-10">
+              <div className="col-span-9 sm:col-span-10">
                 {hourAppointments.length > 0 ? (
                   <div className="space-y-2">
                     {hourAppointments.map((appointment) => (

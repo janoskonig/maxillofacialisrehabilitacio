@@ -51,7 +51,7 @@ export function WeekView({
 
   return (
     <div className="bg-white rounded-lg border overflow-x-auto">
-      <div className="min-w-[800px]">
+      <div className="min-w-full sm:min-w-[800px]">
         {/* Day headers */}
         <div className="grid grid-cols-8 border-b sticky top-0 bg-white z-10">
           <div className="p-2 border-r"></div>

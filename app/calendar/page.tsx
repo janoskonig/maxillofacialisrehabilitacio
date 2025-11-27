@@ -7,6 +7,7 @@ import { CalendarView } from '@/components/CalendarView';
 import { Logo } from '@/components/Logo';
 import { LogOut, Shield, Settings, ArrowLeft, Download, Edit2, X } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
+import { MobileMenu } from '@/components/MobileMenu';
 
 interface Appointment {
   id: string;
@@ -100,49 +101,52 @@ export default function CalendarPage() {
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center gap-4">
-              <Logo width={80} height={92} />
-              <div>
-                <h1 className="text-2xl font-bold text-medical-primary">
+          <div className="flex justify-between items-center py-2 md:py-4">
+            <div className="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
+              <Logo width={40} height={46} className="md:w-[80px] md:h-[92px] flex-shrink-0" />
+              <div className="min-w-0 flex-1">
+                <h1 className="text-base md:text-2xl font-bold text-medical-primary truncate">
                   Maxillofaciális Rehabilitáció
                 </h1>
-                <p className="text-sm text-gray-600 mt-1">
+                <p className="text-xs md:text-sm text-gray-600 mt-0.5 hidden sm:block">
                   NAPTÁR
                 </p>
               </div>
             </div>
-            <div className="flex gap-2">
-              {currentUser?.role === 'admin' && (
+            <div className="flex items-center gap-2">
+              <MobileMenu currentPath="/calendar" />
+              <div className="hidden md:flex gap-2">
+                {currentUser?.role === 'admin' && (
+                  <button
+                    onClick={() => router.push('/admin')}
+                    className="btn-secondary flex items-center gap-2"
+                  >
+                    <Shield className="w-4 h-4" />
+                    Admin
+                  </button>
+                )}
                 <button
-                  onClick={() => router.push('/admin')}
+                  onClick={() => router.push('/settings')}
                   className="btn-secondary flex items-center gap-2"
                 >
-                  <Shield className="w-4 h-4" />
-                  Admin
+                  <Settings className="w-4 h-4" />
+                  Beállítások
                 </button>
-              )}
-              <button
-                onClick={() => router.push('/settings')}
-                className="btn-secondary flex items-center gap-2"
-              >
-                <Settings className="w-4 h-4" />
-                Beállítások
-              </button>
-              <button
-                onClick={handleLogout}
-                className="btn-secondary flex items-center gap-2"
-              >
-                <LogOut className="w-4 h-4" />
-                Kijelentkezés
-              </button>
-              <button
-                onClick={() => router.push('/')}
-                className="btn-secondary flex items-center gap-2"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Vissza
-              </button>
+                <button
+                  onClick={handleLogout}
+                  className="btn-secondary flex items-center gap-2"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Kijelentkezés
+                </button>
+                <button
+                  onClick={() => router.push('/')}
+                  className="btn-secondary flex items-center gap-2"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Vissza
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -155,11 +159,11 @@ export default function CalendarPage() {
       {/* Appointment Details Modal */}
       {selectedAppointment && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-0 md:p-4 z-50"
           onClick={() => setSelectedAppointment(null)}
         >
           <div
-            className="bg-white rounded-lg max-w-md w-full p-6"
+            className="bg-white rounded-none md:rounded-lg max-w-md w-full h-full md:h-auto max-h-[100vh] md:max-h-[90vh] overflow-y-auto p-4 md:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
@@ -234,11 +238,11 @@ export default function CalendarPage() {
               )}
             </div>
 
-            <div className="flex gap-2 mt-6">
+            <div className="flex flex-col sm:flex-row gap-2 mt-6">
               {selectedAppointment.patientId && (
                 <button
                   onClick={handleViewPatient}
-                  className="btn-secondary flex-1 flex items-center justify-center gap-2 text-sm"
+                  className="btn-secondary flex-1 flex items-center justify-center gap-2 text-sm py-2.5"
                 >
                   <Edit2 className="w-4 h-4" />
                   Beteg megtekintése
@@ -246,7 +250,7 @@ export default function CalendarPage() {
               )}
               <button
                 onClick={() => handleDownloadCalendar(selectedAppointment.id)}
-                className="btn-secondary flex-1 flex items-center justify-center gap-2 text-sm"
+                className="btn-secondary flex-1 flex items-center justify-center gap-2 text-sm py-2.5"
               >
                 <Download className="w-4 h-4" />
                 Naptár letöltése

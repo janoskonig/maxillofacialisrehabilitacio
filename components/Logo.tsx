@@ -14,7 +14,7 @@ export function Logo({ width = 120, height = 140, className = '' }: LogoProps) {
         alt="Maxillofaciális Rehabilitáció Logo"
         width={width}
         height={height}
-        className="object-contain"
+        className="object-contain flex-shrink-0"
         priority
       />
     </div>
