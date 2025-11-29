@@ -97,6 +97,64 @@ function ToothCheckbox({ toothNumber, value, onChange, disabled }: ToothCheckbox
   const isPresent = state === 'present';
   const isMissing = state === 'missing';
   const isChecked = state !== 'empty';
+  
+  // Ellenőrizzük a szabadszavas leírást az ikon meghatározáshoz
+  const normalized = normalizeToothData(value);
+  const description = normalized?.description || '';
+  const descriptionLower = description.toLowerCase();
+  const hasKerdeses = descriptionLower.includes('kérdéses');
+  const hasRemenytelen = descriptionLower.includes('reménytelen');
+
+  // Meghatározzuk a megjelenítendő ikont és színt
+  let iconElement = null;
+  let borderColor = '';
+  let bgColor = '';
+  
+  if (isMissing) {
+    // Hiányzik → szürke X
+    borderColor = 'border-gray-400';
+    bgColor = 'bg-gray-200';
+    iconElement = (
+      <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4 4L12 12M12 4L4 12" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    );
+  } else if (isPresent) {
+    if (hasRemenytelen) {
+      // Reménytelen → piros felkiáltójel
+      borderColor = 'border-red-500';
+      bgColor = 'bg-red-50';
+      iconElement = (
+        <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M8 2V9M8 11V13" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <circle cx="8" cy="14" r="1" fill="#dc2626"/>
+        </svg>
+      );
+    } else if (hasKerdeses) {
+      // Kérdéses → sárga kérdőjel
+      borderColor = 'border-yellow-500';
+      bgColor = 'bg-yellow-50';
+      iconElement = (
+        <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M6 6C6 4.5 7 3.5 8 3.5C9 3.5 10 4.5 10 6C10 7 9 8 8 8.5V10" stroke="#eab308" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+          <circle cx="8" cy="13" r="1" fill="#eab308"/>
+        </svg>
+      );
+    } else {
+      // Normál → zöld pipa
+      borderColor = 'border-medical-primary';
+      bgColor = 'bg-green-50';
+      iconElement = (
+        <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M3 8L6 11L13 4" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+        </svg>
+      );
+    }
+  } else {
+    // Üres
+    borderColor = 'border-gray-300';
+    bgColor = '';
+  }
 
   return (
     <div className="flex flex-col items-center gap-1">
@@ -107,37 +165,27 @@ function ToothCheckbox({ toothNumber, value, onChange, disabled }: ToothCheckbox
         {toothNumber}
       </label>
       <div className="relative">
-      <input
-        id={`tooth-${toothNumber}`}
-        type="checkbox"
-          checked={isChecked}
-        onChange={() => {
-          if (!disabled) {
-            onChange();
-          }
-        }}
-        onClick={(e) => {
-          e.stopPropagation();
-        }}
-        disabled={disabled}
-          className={`w-8 h-8 sm:w-7 sm:h-7 rounded border-2 focus:ring-2 focus:ring-medical-primary focus:ring-offset-1 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 appearance-none ${
-            isMissing 
-              ? 'border-gray-400 bg-gray-200' 
-              : isPresent 
-                ? 'border-medical-primary text-medical-primary' 
-                : 'border-gray-300 text-medical-primary'
-          }`}
-          style={{
-            backgroundImage: isMissing 
-              ? `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 14 14'%3E%3Cpath d='M2 2 L12 12 M12 2 L2 12' stroke='%23333' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E")`
-              : isChecked && !isMissing
-                ? `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 14 14'%3E%3Cpath d='M2 7 L6 11 L12 3' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E")`
-                : 'none',
-            backgroundRepeat: 'no-repeat',
-            backgroundPosition: 'center',
-            backgroundSize: '16px 16px'
-          }}
-        />
+        <label
+          htmlFor={`tooth-${toothNumber}`}
+          className={`w-8 h-8 sm:w-7 sm:h-7 rounded border-2 flex items-center justify-center focus-within:ring-2 focus-within:ring-medical-primary focus-within:ring-offset-1 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${borderColor} ${bgColor}`}
+        >
+          <input
+            id={`tooth-${toothNumber}`}
+            type="checkbox"
+            checked={isChecked}
+            onChange={() => {
+              if (!disabled) {
+                onChange();
+              }
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+            }}
+            disabled={disabled}
+            className="sr-only"
+          />
+          {iconElement}
+        </label>
       </div>
     </div>
   );

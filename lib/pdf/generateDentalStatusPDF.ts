@@ -120,10 +120,10 @@ export async function generateDentalStatusPDF(patient: Patient): Promise<Buffer>
       const lowerRight = [31, 32, 33, 34, 35, 36, 37, 38];
 
       // Helper function to draw tooth status symbol
-      const drawToothStatus = (doc: PDFKit.PDFDocument, x: number, y: number, cellWidth: number, cellHeight: number, status: 'M' | 'present' | null) => {
+      const drawToothStatus = (doc: PDFKit.PDFDocument, x: number, y: number, cellWidth: number, cellHeight: number, status: 'M' | 'present' | null, description?: string) => {
         const centerX = x + cellWidth / 2;
         const centerY = y + cellHeight / 2;
-        const size = 8; // Symbol size
+        const size = 7; // Symbol size
         
         if (status === 'M') {
           // Draw gray X
@@ -134,12 +134,42 @@ export async function generateDentalStatusPDF(patient: Patient): Promise<Buffer>
             .lineTo(centerX - size, centerY + size)
             .stroke();
         } else if (status === 'present') {
-          // Draw green checkmark
-          doc.strokeColor('#10b981').lineWidth(2.5);
-          doc.moveTo(centerX - size, centerY)
-            .lineTo(centerX - size / 3, centerY + size)
-            .lineTo(centerX + size, centerY - size)
-            .stroke();
+          // Ellenőrizzük a szabadszavas leírást az ikon meghatározáshoz
+          const descriptionLower = (description || '').toLowerCase();
+          const hasKerdeses = descriptionLower.includes('kérdéses');
+          const hasRemenytelen = descriptionLower.includes('reménytelen');
+          
+          if (hasRemenytelen) {
+            // Reménytelen → piros felkiáltójel
+            doc.strokeColor('#dc2626').lineWidth(2.5);
+            doc.fillColor('#dc2626');
+            // Felkiáltójel függőleges vonal
+            doc.moveTo(centerX, centerY - size)
+              .lineTo(centerX, centerY + size / 3)
+              .stroke();
+            // Pont alul
+            doc.circle(centerX, centerY + size * 0.8, 1.8).fill();
+          } else if (hasKerdeses) {
+            // Kérdéses → sárga kérdőjel
+            doc.strokeColor('#eab308').lineWidth(2);
+            doc.fillColor('#eab308');
+            // Kérdőjel felső része (körív)
+            const radius = size / 2.2;
+            doc.circle(centerX, centerY - size / 2, radius).stroke();
+            // Kérdőjel görbe alsó része
+            doc.moveTo(centerX - size / 3, centerY + size / 4)
+              .quadraticCurveTo(centerX, centerY + size / 2, centerX + size / 3, centerY + size / 4)
+              .stroke();
+            // Pont alul
+            doc.circle(centerX, centerY + size * 0.75, 1.5).fill();
+          } else {
+            // Normál → zöld pipa
+            doc.strokeColor('#10b981').lineWidth(2.5);
+            doc.moveTo(centerX - size, centerY)
+              .lineTo(centerX - size / 3, centerY + size)
+              .lineTo(centerX + size, centerY - size)
+              .stroke();
+          }
         }
       };
 
@@ -157,8 +187,8 @@ export async function generateDentalStatusPDF(patient: Patient): Promise<Buffer>
       // Upper jaw - single row with left and right sides
       let xPos = startX;
       
-      // Upper left row (reversed: 18-11)
-      upperLeft.reverse().forEach(tooth => {
+      // Upper left row (18-11, fordítva: 2. kvadráns, 11 az utolsó)
+      upperLeft.forEach(tooth => {
         doc.rect(xPos, tableY, cellWidth, cellHeight).stroke('#000000');
         doc.fontSize(7).font('Helvetica-Bold').fillColor('#000000').text(tooth.toString(), xPos + 1, tableY + 1);
         const toothStr = tooth.toString();
@@ -166,7 +196,7 @@ export async function generateDentalStatusPDF(patient: Patient): Promise<Buffer>
         const normalized = normalizeToothData(value);
         if (normalized) {
           const status = normalized.status === 'M' ? 'M' : 'present';
-          drawToothStatus(doc, xPos, tableY, cellWidth, cellHeight, status);
+          drawToothStatus(doc, xPos, tableY, cellWidth, cellHeight, status, normalized.description);
         }
         xPos += cellWidth + spacing;
       });
@@ -174,7 +204,7 @@ export async function generateDentalStatusPDF(patient: Patient): Promise<Buffer>
       // Space between left and right
       xPos += gapBetweenSides;
       
-      // Upper right row (21-28)
+      // Upper right row (21-28, 1. kvadráns)
       upperRight.forEach(tooth => {
         doc.rect(xPos, tableY, cellWidth, cellHeight).stroke('#000000');
         doc.fontSize(7).font('Helvetica-Bold').fillColor('#000000').text(tooth.toString(), xPos + 1, tableY + 1);
@@ -183,7 +213,7 @@ export async function generateDentalStatusPDF(patient: Patient): Promise<Buffer>
         const normalized = normalizeToothData(value);
         if (normalized) {
           const status = normalized.status === 'M' ? 'M' : 'present';
-          drawToothStatus(doc, xPos, tableY, cellWidth, cellHeight, status);
+          drawToothStatus(doc, xPos, tableY, cellWidth, cellHeight, status, normalized.description);
         }
         xPos += cellWidth + spacing;
       });
@@ -194,8 +224,8 @@ export async function generateDentalStatusPDF(patient: Patient): Promise<Buffer>
       const lowerTableY = doc.y;
       xPos = startX;
       
-      // Lower left row (reversed: 48-41)
-      lowerLeft.reverse().forEach(tooth => {
+      // Lower left row (48-41, fordítva: 4. kvadráns)
+      lowerLeft.forEach(tooth => {
         doc.rect(xPos, lowerTableY, cellWidth, cellHeight).stroke('#000000');
         doc.fontSize(7).font('Helvetica-Bold').fillColor('#000000').text(tooth.toString(), xPos + 1, lowerTableY + 1);
         const toothStr = tooth.toString();
@@ -203,7 +233,7 @@ export async function generateDentalStatusPDF(patient: Patient): Promise<Buffer>
         const normalized = normalizeToothData(value);
         if (normalized) {
           const status = normalized.status === 'M' ? 'M' : 'present';
-          drawToothStatus(doc, xPos, lowerTableY, cellWidth, cellHeight, status);
+          drawToothStatus(doc, xPos, lowerTableY, cellWidth, cellHeight, status, normalized.description);
         }
         xPos += cellWidth + spacing;
       });
@@ -220,7 +250,7 @@ export async function generateDentalStatusPDF(patient: Patient): Promise<Buffer>
         const normalized = normalizeToothData(value);
         if (normalized) {
           const status = normalized.status === 'M' ? 'M' : 'present';
-          drawToothStatus(doc, xPos, lowerTableY, cellWidth, cellHeight, status);
+          drawToothStatus(doc, xPos, lowerTableY, cellWidth, cellHeight, status, normalized.description);
         }
         xPos += cellWidth + spacing;
       });
@@ -229,7 +259,7 @@ export async function generateDentalStatusPDF(patient: Patient): Promise<Buffer>
 
       // Legend
       doc.fontSize(8).font('Helvetica').fillColor('#666666');
-      doc.text('Jelentés: v = Megvan (zöld), X = Hiányzik (szürke)', 50, doc.y, { width: 495 });
+      doc.text('Jelentés: ✓ = Megvan (zöld), ? = Kérdéses (sárga), ! = Reménytelen (piros), X = Hiányzik (szürke)', 50, doc.y, { width: 495 });
       doc.moveDown(1);
 
       // DMF-T Index
