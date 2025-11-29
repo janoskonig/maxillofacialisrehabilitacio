@@ -50,9 +50,9 @@ export function PatientDocumentsList() {
     }
   };
 
-  const handleDownload = async (document: Document) => {
+  const handleDownload = async (doc: Document) => {
     try {
-      const response = await fetch(`/api/patient-portal/documents/${document.id}/download`, {
+      const response = await fetch(`/api/patient-portal/documents/${doc.id}/download`, {
         credentials: 'include',
       });
 
@@ -65,7 +65,7 @@ export function PatientDocumentsList() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = document.filename;
+      a.download = doc.filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

@@ -38,7 +38,11 @@ export async function sendPatientMagicLink(
     </div>
   `;
 
-  await sendEmail(patientEmail, subject, html);
+  await sendEmail({
+    to: patientEmail,
+    subject,
+    html,
+  });
 }
 
 /**
@@ -77,7 +81,11 @@ export async function sendPatientVerificationEmail(
     </div>
   `;
 
-  await sendEmail(patientEmail, subject, html);
+  await sendEmail({
+    to: patientEmail,
+    subject,
+    html,
+  });
 }
 
 /**

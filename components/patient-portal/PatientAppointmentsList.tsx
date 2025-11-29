@@ -275,6 +275,7 @@ function RequestAppointmentForm({
   onSuccess: () => void;
   onCancel: () => void;
 }) {
+  const router = useRouter();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [availableSlots, setAvailableSlots] = useState<any[]>([]);
