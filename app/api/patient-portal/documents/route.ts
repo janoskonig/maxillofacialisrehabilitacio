@@ -1,0 +1,192 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getDbPool } from '@/lib/db';
+import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
+import { isFtpConfigured, uploadFile, getMaxFileSize } from '@/lib/ftp-client';
+
+/**
+ * Get patient's documents
+ * GET /api/patient-portal/documents
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const patientId = await verifyPatientPortalSession(request);
+
+    if (!patientId) {
+      return NextResponse.json(
+        { error: 'Bejelentkezés szükséges' },
+        { status: 401 }
+      );
+    }
+
+    const pool = getDbPool();
+
+    const result = await pool.query(
+      `SELECT 
+        id,
+        patient_id as "patientId",
+        filename,
+        file_path as "filePath",
+        file_size as "fileSize",
+        mime_type as "mimeType",
+        description,
+        tags,
+        uploaded_by as "uploadedBy",
+        uploaded_at as "uploadedAt",
+        created_at as "createdAt"
+      FROM patient_documents
+      WHERE patient_id = $1
+      ORDER BY uploaded_at DESC`,
+      [patientId]
+    );
+
+    return NextResponse.json({
+      documents: result.rows,
+    });
+  } catch (error) {
+    console.error('Error fetching documents:', error);
+    return NextResponse.json(
+      { error: 'Hiba történt a dokumentumok lekérdezésekor' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * Upload document for patient
+ * POST /api/patient-portal/documents
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const patientId = await verifyPatientPortalSession(request);
+
+    if (!patientId) {
+      return NextResponse.json(
+        { error: 'Bejelentkezés szükséges' },
+        { status: 401 }
+      );
+    }
+
+    // Check FTP configuration
+    if (!isFtpConfigured()) {
+      return NextResponse.json(
+        { error: 'Dokumentum feltöltés jelenleg nem elérhető' },
+        { status: 500 }
+      );
+    }
+
+    const pool = getDbPool();
+
+    // Verify patient exists
+    const patientCheck = await pool.query(
+      'SELECT id, nev FROM patients WHERE id = $1',
+      [patientId]
+    );
+
+    if (patientCheck.rows.length === 0) {
+      return NextResponse.json(
+        { error: 'Beteg nem található' },
+        { status: 404 }
+      );
+    }
+
+    // Parse form data
+    const formData = await request.formData();
+    const file = formData.get('file') as File;
+    const description = formData.get('description') as string | null;
+    const tagsStr = formData.get('tags') as string | null;
+
+    if (!file) {
+      return NextResponse.json(
+        { error: 'Fájl kötelező' },
+        { status: 400 }
+      );
+    }
+
+    // Validate file size
+    const maxSize = getMaxFileSize();
+    if (file.size > maxSize) {
+      return NextResponse.json(
+        { error: `Fájlméret túllépi a maximumot (${Math.round(maxSize / 1024 / 1024)}MB)` },
+        { status: 400 }
+      );
+    }
+
+    // Parse tags
+    let tags: string[] = [];
+    if (tagsStr) {
+      try {
+        tags = JSON.parse(tagsStr);
+        if (!Array.isArray(tags)) {
+          tags = [];
+        }
+      } catch {
+        tags = [];
+      }
+    }
+
+    // Generate filename
+    const { generateDocumentFilename } = await import('@/lib/ftp-client');
+    const newFilename = generateDocumentFilename(
+      file.name,
+      tags,
+      patientId,
+      new Date()
+    );
+
+    // Convert file to buffer
+    const arrayBuffer = await file.arrayBuffer();
+    const fileBuffer = Buffer.from(arrayBuffer);
+
+    // Upload to FTP
+    const filePath = await uploadFile(patientId, fileBuffer, newFilename);
+
+    // Save metadata to database
+    const tagsJsonb = JSON.stringify(tags);
+
+    const result = await pool.query(
+      `INSERT INTO patient_documents (
+        patient_id, filename, file_path, file_size, mime_type,
+        description, tags, uploaded_by
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)
+      RETURNING 
+        id,
+        patient_id as "patientId",
+        filename,
+        file_path as "filePath",
+        file_size as "fileSize",
+        mime_type as "mimeType",
+        description,
+        tags,
+        uploaded_by as "uploadedBy",
+        uploaded_at as "uploadedAt",
+        created_at as "createdAt",
+        updated_at as "updatedAt"`,
+      [
+        patientId,
+        newFilename,
+        filePath,
+        file.size,
+        file.type || null,
+        description || null,
+        tagsJsonb,
+        patientId, // Use patient ID as uploaded_by for portal uploads
+      ]
+    );
+
+    const document = result.rows[0];
+
+    return NextResponse.json({
+      success: true,
+      document: document,
+      message: 'Dokumentum sikeresen feltöltve',
+    });
+  } catch (error) {
+    console.error('Error uploading document:', error);
+    return NextResponse.json(
+      { error: 'Hiba történt a dokumentum feltöltésekor' },
+      { status: 500 }
+    );
+  }
+}
+
+
