@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import bnoCodes from '@/lib/bno-codes.json';
 
 interface BNOCode {
   kod: string;
@@ -41,6 +40,8 @@ export function BNOAutocomplete({
 }: BNOAutocompleteProps) {
   const [searchTerm, setSearchTerm] = useState(value || '');
   const [filteredCodes, setFilteredCodes] = useState<BNOCode[]>([]);
+  const [bnoCodes, setBnoCodes] = useState<BNOCode[]>([]);
+  const [isLoadingCodes, setIsLoadingCodes] = useState(true);
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -48,8 +49,35 @@ export function BNOAutocomplete({
   const isSelectingRef = useRef(false);
   const lastSelectedKodRef = useRef<string>('');
 
+  // BNO kódok betöltése az API-ból
+  useEffect(() => {
+    const loadBNOCodes = async () => {
+      try {
+        const response = await fetch('/api/bno-codes');
+        if (response.ok) {
+          const codes = await response.json();
+          console.log(`Loaded ${codes.length} BNO codes from API`);
+          setBnoCodes(codes);
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          console.error('Failed to load BNO codes:', response.status, errorData);
+        }
+      } catch (error) {
+        console.error('Error loading BNO codes:', error);
+      } finally {
+        setIsLoadingCodes(false);
+      }
+    };
+
+    loadBNOCodes();
+  }, []);
+
   // Szűrés a keresési kifejezés alapján
   useEffect(() => {
+    if (isLoadingCodes || bnoCodes.length === 0) {
+      return;
+    }
+
     if (searchTerm.trim() === '') {
       setFilteredCodes([]);
       setShowDropdown(false);
@@ -57,7 +85,7 @@ export function BNOAutocomplete({
     }
 
     const term = searchTerm.toLowerCase();
-    const filtered = (bnoCodes as BNOCode[])
+    const filtered = bnoCodes
       .filter(code => {
         const kodMatch = code.kod.toLowerCase().includes(term);
         const nevMatch = code.nev.toLowerCase().includes(term);
@@ -68,7 +96,7 @@ export function BNOAutocomplete({
     setFilteredCodes(filtered);
     setShowDropdown(filtered.length > 0);
     setSelectedIndex(-1);
-  }, [searchTerm]);
+  }, [searchTerm, bnoCodes, isLoadingCodes]);
 
   // Input érték szinkronizálása a value prop-pal
   // A BNO mezőben csak a kód jelenik meg
@@ -174,7 +202,7 @@ export function BNOAutocomplete({
         
         if (trimmedValue) {
           // Először próbáljuk meg pontos egyezést találni
-          let foundCode = (bnoCodes as BNOCode[]).find(code => 
+          let foundCode = bnoCodes.find(code => 
             code.kod.toUpperCase() === trimmedValue
           );
           
@@ -182,7 +210,7 @@ export function BNOAutocomplete({
           // akkor normalizáljuk és újra keresünk
           if (!foundCode && trimmedValue.length < 5) {
             const normalizedKod = normalizeBNOCode(trimmedValue);
-            foundCode = (bnoCodes as BNOCode[]).find(code => 
+            foundCode = bnoCodes.find(code => 
               code.kod.toUpperCase() === normalizedKod
             );
             
@@ -192,7 +220,7 @@ export function BNOAutocomplete({
               onChange(normalizedKod, foundCode.nev);
             } else {
               // Ha még mindig nem található, próbáljuk meg prefix kereséssel
-              const prefixMatch = (bnoCodes as BNOCode[]).find(code => 
+              const prefixMatch = bnoCodes.find(code => 
                 code.kod.toUpperCase().startsWith(trimmedValue)
               );
               
@@ -312,10 +340,10 @@ export function BNOAutocomplete({
         onFocus={handleFocus}
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
-        placeholder={placeholder}
+        placeholder={isLoadingCodes ? 'BNO kódok betöltése...' : placeholder}
         className={className}
         readOnly={readOnly}
-        disabled={disabled}
+        disabled={disabled || isLoadingCodes}
         autoComplete="off"
         maxLength={5}
       />
