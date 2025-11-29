@@ -38,11 +38,16 @@ function normalizeToothData(value: ToothStatus | undefined): { status?: 'D' | 'F
 
 export async function generateDentalStatusPDF(patient: Patient): Promise<Buffer> {
   return new Promise((resolve, reject) => {
+    // Fix pdfkit font path issue in Next.js
+    const fontDataPath = path.join(process.cwd(), 'node_modules', 'pdfkit', 'js', 'data');
+    const originalReadFileSync = fs.readFileSync;
+    
+    // Helper function to restore original readFileSync
+    const restoreReadFileSync = () => {
+      (fs as any).readFileSync = originalReadFileSync;
+    };
+    
     try {
-      // Fix pdfkit font path issue in Next.js
-      const fontDataPath = path.join(process.cwd(), 'node_modules', 'pdfkit', 'js', 'data');
-      const originalReadFileSync = fs.readFileSync;
-      
       (fs as any).readFileSync = function(filePath: string, ...args: any[]) {
         if (filePath.includes('.afm') && (filePath.includes('vendor-chunks') || filePath.includes('.next'))) {
           const afmFile = path.basename(filePath);
@@ -64,12 +69,12 @@ export async function generateDentalStatusPDF(patient: Patient): Promise<Buffer>
 
       doc.on('data', buffers.push.bind(buffers));
       doc.on('end', () => {
-        (fs as any).readFileSync = originalReadFileSync;
+        restoreReadFileSync();
         const pdfBuffer = Buffer.concat(buffers);
         resolve(pdfBuffer);
       });
       doc.on('error', (error) => {
-        (fs as any).readFileSync = originalReadFileSync;
+        restoreReadFileSync();
         reject(error);
       });
 
@@ -444,7 +449,7 @@ export async function generateDentalStatusPDF(patient: Patient): Promise<Buffer>
 
       doc.end();
     } catch (error) {
-      (fs as any).readFileSync = originalReadFileSync;
+      restoreReadFileSync();
       reject(error);
     }
   });
