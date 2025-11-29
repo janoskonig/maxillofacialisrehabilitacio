@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { patientSchema } from '@/lib/types';
 import { verifyAuth } from '@/lib/auth-server';
+import { sendAppointmentTimeSlotFreedNotification } from '@/lib/email';
+import { deleteGoogleCalendarEvent, createGoogleCalendarEvent } from '@/lib/google-calendar';
+import { logActivity, logActivityWithAuth } from '@/lib/activity';
 
 // Egy beteg lekérdezése ID alapján
 export async function GET(
@@ -31,7 +34,8 @@ export async function GET(
         iranyitoszam,
         beutalo_orvos as "beutaloOrvos",
         beutalo_intezmeny as "beutaloIntezmeny",
-        mutet_rovid_leirasa as "mutetRovidLeirasa",
+        beutalo_indokolas as "beutaloIndokolas",
+        primer_mutet_leirasa as "primerMutetLeirasa",
         mutet_ideje as "mutetIdeje",
         szovettani_diagnozis as "szovettaniDiagnozis",
         nyaki_blokkdisszekcio as "nyakiBlokkdisszekcio",
@@ -74,6 +78,12 @@ export async function GET(
         nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
         nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
         tnm_staging as "tnmStaging",
+        bno, diagnozis, primer_mutet_leirasa as "primerMutetLeirasa",
+        baleset_idopont as "balesetIdopont",
+        baleset_etiologiaja as "balesetEtiologiaja",
+        baleset_egyeb as "balesetEgyeb",
+        veleszuletett_rendellenessegek as "veleszuletettRendellenessegek",
+        veleszuletett_mutetek_leirasa as "veleszuletettMutetekLeirasa",
         kezelesi_terv_felso as "kezelesiTervFelso",
         kezelesi_terv_also as "kezelesiTervAlso",
         kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
@@ -107,10 +117,25 @@ export async function GET(
           { status: 403 }
         );
       }
-    } else if (role === 'sebészorvos') {
-      // Sebészorvos: csak azokat a betegeket látja, akiket ő utalt be
-      // Pontos egyezés: a beutalo_orvos mező pontosan egyezzen az email címmel
-      if (!userEmail || patient.beutaloOrvos !== userEmail) {
+    } else if (role === 'sebészorvos' && userEmail) {
+      // Sebészorvos: csak azokat a betegeket látja, akik az ő intézményéből származnak
+      // Lekérdezzük a felhasználó intézményét
+      const userResult = await pool.query(
+        `SELECT intezmeny FROM users WHERE email = $1`,
+        [userEmail]
+      );
+      
+      if (userResult.rows.length > 0 && userResult.rows[0].intezmeny) {
+        const userInstitution = userResult.rows[0].intezmeny;
+        // Ellenőrizzük, hogy a beteg beutalo_intezmeny mezője egyezik-e a felhasználó intézményével
+        if (patient.beutaloIntezmeny !== userInstitution) {
+          return NextResponse.json(
+            { error: 'Nincs jogosultsága ehhez a beteghez' },
+            { status: 403 }
+          );
+        }
+      } else {
+        // Ha nincs intézmény beállítva, ne lássa a beteget
         return NextResponse.json(
           { error: 'Nincs jogosultsága ehhez a beteghez' },
           { status: 403 }
@@ -120,20 +145,14 @@ export async function GET(
     // fogpótlástanász, admin, editor, viewer: mindent látnak (nincs szűrés)
 
     // Activity logging: patient viewed (csak ha be van jelentkezve)
-    try {
-      const auth = await verifyAuth(request);
-      if (auth) {
-      const ipHeader = request.headers.get('x-forwarded-for') || '';
-      const ipAddress = ipHeader.split(',')[0]?.trim() || null;
-      await pool.query(
-        `INSERT INTO activity_logs (user_email, action, detail, ip_address)
-         VALUES ($1, $2, $3, $4)`,
-          [auth.email, 'patient_viewed', `Patient ID: ${params.id}, Name: ${result.rows[0].nev || 'N/A'}`, ipAddress]
+    const authForLogging = await verifyAuth(request);
+    if (authForLogging) {
+      await logActivityWithAuth(
+        request,
+        authForLogging,
+        'patient_viewed',
+        `Patient ID: ${params.id}, Name: ${result.rows[0].nev || 'N/A'}`
       );
-      }
-    } catch (logError) {
-      console.error('Failed to log activity:', logError);
-      // Don't fail the request if logging fails
     }
 
     return NextResponse.json({ patient: result.rows[0] }, { status: 200 });
@@ -184,24 +203,29 @@ export async function PUT(
     const oldPatient = oldPatientResult.rows[0];
     
     // Szerepkör alapú jogosultság ellenőrzés szerkesztéshez
-    if (role === 'sebészorvos') {
-      // Sebészorvos: csak azokat a betegeket szerkesztheti, akiket ő utalt be
-      if (!userEmail || oldPatient.beutalo_orvos !== userEmail) {
+    if (role === 'sebészorvos' && userEmail) {
+      // Sebészorvos: csak azokat a betegeket szerkesztheti, akik az ő intézményéből származnak
+      // Lekérdezzük a felhasználó intézményét
+      const userResult = await pool.query(
+        `SELECT intezmeny FROM users WHERE email = $1`,
+        [userEmail]
+      );
+      
+      if (userResult.rows.length > 0 && userResult.rows[0].intezmeny) {
+        const userInstitution = userResult.rows[0].intezmeny;
+        // Ellenőrizzük, hogy a beteg beutalo_intezmeny mezője egyezik-e a felhasználó intézményével
+        if (oldPatient.beutalo_intezmeny !== userInstitution) {
+          return NextResponse.json(
+            { error: 'Nincs jogosultsága ehhez a beteg szerkesztéséhez. Csak az adott intézményből származó betegeket szerkesztheti.' },
+            { status: 403 }
+          );
+        }
+      } else {
+        // Ha nincs intézmény beállítva, ne szerkeszthesse a beteget
         return NextResponse.json(
           { error: 'Nincs jogosultsága ehhez a beteg szerkesztéséhez' },
           { status: 403 }
         );
-      }
-      // Sebészorvos esetén biztosítjuk, hogy a beutalo_orvos mező ne változzon meg
-      if (validatedPatient.beutaloOrvos && validatedPatient.beutaloOrvos !== userEmail) {
-        return NextResponse.json(
-          { error: 'Nem módosíthatja a beutaló orvos mezőt' },
-          { status: 403 }
-        );
-      }
-      // Ha nincs beállítva, automatikusan beállítjuk
-      if (!validatedPatient.beutaloOrvos) {
-        validatedPatient.beutaloOrvos = userEmail;
       }
     } else if (role === 'technikus') {
       // Technikus: csak azokat a betegeket szerkesztheti, akikhez epitézist rendeltek
@@ -257,7 +281,7 @@ export async function PUT(
         iranyitoszam = $10,
         beutalo_orvos = $11,
         beutalo_intezmeny = $12,
-        mutet_rovid_leirasa = $13,
+        beutalo_indokolas = $13,
         mutet_ideje = $14,
         szovettani_diagnozis = $15,
         nyaki_blokkdisszekcio = $16,
@@ -302,16 +326,23 @@ export async function PUT(
         tnm_staging = $55,
         bno = $56,
         diagnozis = $57,
-        kezelesi_terv_felso = $58::jsonb,
-        kezelesi_terv_also = $59::jsonb,
-        kezelesi_terv_arcot_erinto = $60::jsonb,
+        primer_mutet_leirasa = $58,
+        baleset_idopont = $59,
+        baleset_etiologiaja = $60,
+        baleset_egyeb = $61,
+        veleszuletett_rendellenessegek = $62::jsonb,
+        veleszuletett_mutetek_leirasa = $63,
+        kezelesi_terv_felso = $64::jsonb,
+        kezelesi_terv_also = $65::jsonb,
+        kezelesi_terv_arcot_erinto = $66::jsonb,
         updated_at = CURRENT_TIMESTAMP,
-        updated_by = $61
+        updated_by = $67
       WHERE id = $1
       RETURNING 
         id, nev, taj, telefonszam, szuletesi_datum as "szuletesiDatum", nem,
         email, cim, varos, iranyitoszam, beutalo_orvos as "beutaloOrvos",
-        beutalo_intezmeny as "beutaloIntezmeny", mutet_rovid_leirasa as "mutetRovidLeirasa",
+        beutalo_intezmeny as "beutaloIntezmeny", beutalo_indokolas as "beutaloIndokolas",
+        primer_mutet_leirasa as "primerMutetLeirasa",
         mutet_ideje as "mutetIdeje", szovettani_diagnozis as "szovettaniDiagnozis",
         nyaki_blokkdisszekcio as "nyakiBlokkdisszekcio", alkoholfogyasztas,
         dohanyzas_szam as "dohanyzasSzam", maxilladefektus_van as "maxilladefektusVan",
@@ -346,7 +377,12 @@ export async function PUT(
         nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
         nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
         tnm_staging as "tnmStaging",
-        bno, diagnozis,
+        bno, diagnozis, primer_mutet_leirasa as "primerMutetLeirasa",
+        baleset_idopont as "balesetIdopont",
+        baleset_etiologiaja as "balesetEtiologiaja",
+        baleset_egyeb as "balesetEgyeb",
+        veleszuletett_rendellenessegek as "veleszuletettRendellenessegek",
+        veleszuletett_mutetek_leirasa as "veleszuletettMutetekLeirasa",
         kezelesi_terv_felso as "kezelesiTervFelso",
         kezelesi_terv_also as "kezelesiTervAlso",
         kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
@@ -365,7 +401,7 @@ export async function PUT(
         validatedPatient.iranyitoszam || null,
         validatedPatient.beutaloOrvos || null,
         validatedPatient.beutaloIntezmeny || null,
-        validatedPatient.mutetRovidLeirasa || null,
+        validatedPatient.beutaloIndokolas || null,
         validatedPatient.mutetIdeje || null,
         validatedPatient.szovettaniDiagnozis || null,
         validatedPatient.nyakiBlokkdisszekcio || null,
@@ -414,6 +450,14 @@ export async function PUT(
         validatedPatient.tnmStaging || null,
         validatedPatient.bno || null,
         validatedPatient.diagnozis || null,
+        validatedPatient.primerMutetLeirasa || null,
+        validatedPatient.balesetIdopont || null,
+        validatedPatient.balesetEtiologiaja || null,
+        validatedPatient.balesetEgyeb || null,
+        validatedPatient.veleszuletettRendellenessegek && Array.isArray(validatedPatient.veleszuletettRendellenessegek)
+          ? JSON.stringify(validatedPatient.veleszuletettRendellenessegek)
+          : '[]',
+        validatedPatient.veleszuletettMutetekLeirasa || null,
         validatedPatient.kezelesiTervFelso && Array.isArray(validatedPatient.kezelesiTervFelso)
           ? JSON.stringify(validatedPatient.kezelesiTervFelso)
           : '[]',
@@ -464,7 +508,8 @@ export async function PUT(
         iranyitoszam: 'Irányítószám',
         beutalo_orvos: 'Beutaló orvos',
         beutalo_intezmeny: 'Beutaló intézmény',
-        mutet_rovid_leirasa: 'Műtét rövid leírása',
+        beutalo_indokolas: 'Beutaló indokolás',
+        primer_mutet_leirasa: 'Primer műtét leírása',
         mutet_ideje: 'Műtét ideje',
         szovettani_diagnozis: 'Szövettani diagnózis',
         nyaki_blokkdisszekcio: 'Nyaki blokkdisszekció',
@@ -519,7 +564,8 @@ export async function PUT(
         if (dbField === 'szuletesi_datum') newVal = normalize(validatedPatient.szuletesiDatum);
         else if (dbField === 'beutalo_orvos') newVal = normalize(validatedPatient.beutaloOrvos);
         else if (dbField === 'beutalo_intezmeny') newVal = normalize(validatedPatient.beutaloIntezmeny);
-        else if (dbField === 'mutet_rovid_leirasa') newVal = normalize(validatedPatient.mutetRovidLeirasa);
+        else if (dbField === 'beutalo_indokolas') newVal = normalize(validatedPatient.beutaloIndokolas);
+        else if (dbField === 'primer_mutet_leirasa') newVal = normalize(validatedPatient.primerMutetLeirasa);
         else if (dbField === 'mutet_ideje') newVal = normalize(validatedPatient.mutetIdeje);
         else if (dbField === 'szovettani_diagnozis') newVal = normalize(validatedPatient.szovettaniDiagnozis);
         else if (dbField === 'nyaki_blokkdisszekcio') newVal = normalize(validatedPatient.nyakiBlokkdisszekcio);
@@ -592,14 +638,10 @@ export async function PUT(
         ? `Patient ID: ${params.id}, Name: ${newPatient.nev || 'N/A'}; Módosítások: ${changes.join('; ')}`
         : `Patient ID: ${params.id}, Name: ${newPatient.nev || 'N/A'}; Nincs változás`;
       
-      await pool.query(
-        `INSERT INTO activity_logs (user_email, action, detail, ip_address)
-         VALUES ($1, $2, $3, $4)`,
-        [userEmail, 'patient_updated', detailText, ipAddress]
-      );
+      await logActivity(request, userEmail, 'patient_updated', detailText);
     } catch (logError) {
+      // Activity logging failed, but don't fail the request
       console.error('Failed to log activity:', logError);
-      // Don't fail the request if logging fails
     }
 
     return NextResponse.json({ patient: result.rows[0] }, { status: 200 });
@@ -620,7 +662,7 @@ export async function PUT(
   }
 }
 
-// Beteg törlése
+// Beteg törlése (csak admin)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -635,13 +677,20 @@ export async function DELETE(
       );
     }
 
+    // Only admin can delete patients
+    if (auth.role !== 'admin') {
+      return NextResponse.json(
+        { error: 'Csak admin törölhet betegeket' },
+        { status: 403 }
+      );
+    }
+
     const pool = getDbPool();
-    const role = auth.role;
     const userEmail = auth.email;
     
-    // Először lekérdezzük a beteget, hogy ellenőrizhessük a jogosultságot
+    // Get patient details
     const patientResult = await pool.query(
-      'SELECT id, beutalo_orvos FROM patients WHERE id = $1',
+      'SELECT id, nev, taj, email FROM patients WHERE id = $1',
       [params.id]
     );
 
@@ -654,47 +703,186 @@ export async function DELETE(
     
     const patient = patientResult.rows[0];
     
-    // Szerepkör alapú jogosultság ellenőrzés törléshez
-    if (role === 'sebészorvos') {
-      // Sebészorvos: csak azokat a betegeket törölheti, akiket ő utalt be
-      if (!userEmail || patient.beutalo_orvos !== userEmail) {
-        return NextResponse.json(
-          { error: 'Nincs jogosultsága ehhez a beteg törléséhez' },
-          { status: 403 }
-        );
-      }
-    } else if (role === 'technikus') {
-      // Technikus: nem törölhet betegeket
-      return NextResponse.json(
-        { error: 'Nincs jogosultsága betegek törléséhez' },
-        { status: 403 }
-      );
-    }
-    
-    const result = await pool.query(
-      'DELETE FROM patients WHERE id = $1 RETURNING id',
+    // Check if patient has appointments
+    const appointmentResult = await pool.query(
+      `SELECT 
+        a.id,
+        a.time_slot_id,
+        a.dentist_email,
+        a.google_calendar_event_id,
+        ats.start_time,
+        ats.user_id as time_slot_user_id,
+        ats.source as time_slot_source,
+        ats.google_calendar_event_id as time_slot_google_calendar_event_id,
+        u.email as time_slot_user_email
+      FROM appointments a
+      JOIN available_time_slots ats ON a.time_slot_id = ats.id
+      JOIN users u ON ats.user_id = u.id
+      WHERE a.patient_id = $1`,
       [params.id]
     );
 
-    // Activity logging: patient deleted
-    try {
-      const userEmail = auth.email;
-      const ipHeader = request.headers.get('x-forwarded-for') || '';
-      const ipAddress = ipHeader.split(',')[0]?.trim() || null;
-      await pool.query(
-        `INSERT INTO activity_logs (user_email, action, detail, ip_address)
-         VALUES ($1, $2, $3, $4)`,
-        [userEmail, 'patient_deleted', `Patient ID: ${params.id}`, ipAddress]
-      );
-    } catch (logError) {
-      console.error('Failed to log activity:', logError);
-      // Don't fail the request if logging fails
-    }
+    const appointments = appointmentResult.rows;
 
-    return NextResponse.json(
-      { message: 'Beteg sikeresen törölve' },
-      { status: 200 }
-    );
+    // Start transaction
+    await pool.query('BEGIN');
+
+    try {
+      // Delete appointments and free up time slots
+      for (const appointment of appointments) {
+        // Delete the appointment
+        await pool.query('DELETE FROM appointments WHERE id = $1', [appointment.id]);
+        
+        // Update time slot status back to available
+        await pool.query(
+          'UPDATE available_time_slots SET status = $1 WHERE id = $2',
+          ['available', appointment.time_slot_id]
+        );
+      }
+
+      // Delete the patient (this will cascade delete appointments due to ON DELETE CASCADE, but we already handled it)
+      await pool.query('DELETE FROM patients WHERE id = $1', [params.id]);
+
+      await pool.query('COMMIT');
+
+      // Send email notifications and handle Google Calendar events for freed time slots
+      for (const appointment of appointments) {
+        const startTime = new Date(appointment.start_time);
+        
+        // Send email to dentist
+        if (appointment.dentist_email) {
+          try {
+            await sendAppointmentTimeSlotFreedNotification(
+              appointment.dentist_email,
+              patient.nev,
+              patient.taj,
+              startTime,
+              userEmail
+            );
+          } catch (emailError) {
+            console.error('Failed to send time slot freed email to dentist:', emailError);
+            // Don't fail the request if email fails
+          }
+        }
+        
+        // Handle Google Calendar events
+        if (appointment.google_calendar_event_id && appointment.time_slot_user_id) {
+          try {
+            // Naptár ID-k lekérése a felhasználó beállításaiból
+            const userCalendarResult = await pool.query(
+              `SELECT google_calendar_source_calendar_id, google_calendar_target_calendar_id 
+               FROM users 
+               WHERE id = $1`,
+              [appointment.time_slot_user_id]
+            );
+            const sourceCalendarId = userCalendarResult.rows[0]?.google_calendar_source_calendar_id || 'primary';
+            const targetCalendarId = userCalendarResult.rows[0]?.google_calendar_target_calendar_id || 'primary';
+            
+            // Töröljük a beteg nevével létrehozott eseményt a cél naptárból
+            await deleteGoogleCalendarEvent(
+              appointment.time_slot_user_id,
+              appointment.google_calendar_event_id,
+              targetCalendarId
+            );
+            console.log('[Patient Deletion] Deleted patient event from target calendar');
+            
+            // Ha a time slot Google Calendar-ból származik, hozzuk vissza a "szabad" eseményt a forrás naptárba
+            const isFromGoogleCalendar = appointment.time_slot_source === 'google_calendar' && appointment.time_slot_google_calendar_event_id;
+            
+            if (isFromGoogleCalendar) {
+              const endTime = new Date(startTime);
+              endTime.setMinutes(endTime.getMinutes() + 30); // 30 minutes duration
+              
+              // Létrehozzuk a "szabad" eseményt a forrás naptárba
+              const szabadEventId = await createGoogleCalendarEvent(
+                appointment.time_slot_user_id,
+                {
+                  summary: 'szabad',
+                  description: 'Szabad időpont',
+                  startTime: startTime,
+                  endTime: endTime,
+                  location: 'Maxillofaciális Rehabilitáció',
+                  calendarId: sourceCalendarId,
+                }
+              );
+              
+              if (szabadEventId) {
+                console.log('[Patient Deletion] Recreated "szabad" event in source calendar');
+                // Frissítjük a time slot google_calendar_event_id mezőjét az új esemény ID-jával
+                await pool.query(
+                  `UPDATE available_time_slots 
+                   SET google_calendar_event_id = $1 
+                   WHERE id = $2`,
+                  [szabadEventId, appointment.time_slot_id]
+                );
+              } else {
+                console.error('[Patient Deletion] Failed to recreate "szabad" event in source calendar');
+              }
+            }
+          } catch (error) {
+            console.error('Failed to handle Google Calendar event during patient deletion:', error);
+            // Nem blokkolja a beteg törlését
+          }
+        }
+      }
+
+      // Send email to all admins about freed time slots
+      if (appointments.length > 0) {
+        try {
+          const adminResult = await pool.query(
+            'SELECT email FROM users WHERE role = $1 AND active = true',
+            ['admin']
+          );
+          
+          if (adminResult.rows.length > 0) {
+            const adminEmails = adminResult.rows.map((row: any) => row.email);
+            
+            // Send notification for each freed appointment
+            for (const appointment of appointments) {
+              const startTime = new Date(appointment.start_time);
+              try {
+                await sendAppointmentTimeSlotFreedNotification(
+                  adminEmails,
+                  patient.nev,
+                  patient.taj,
+                  startTime,
+                  userEmail,
+                  appointment.dentist_email
+                );
+              } catch (emailError) {
+                console.error('Failed to send time slot freed email to admins:', emailError);
+                // Don't fail the request if email fails
+              }
+            }
+          }
+        } catch (emailError) {
+          console.error('Failed to send time slot freed email to admins:', emailError);
+          // Don't fail the request if email fails
+        }
+      }
+
+      // Activity logging: patient deleted
+      const appointmentInfo = appointments.length > 0 
+        ? `, ${appointments.length} időpont törölve és felszabadítva`
+        : '';
+      await logActivity(
+        request,
+        userEmail,
+        'patient_deleted',
+        `Patient ID: ${params.id}, Name: ${patient.nev || 'N/A'}${appointmentInfo}`
+      );
+
+      return NextResponse.json(
+        { 
+          message: 'Beteg sikeresen törölve',
+          appointmentsFreed: appointments.length
+        },
+        { status: 200 }
+      );
+    } catch (error) {
+      await pool.query('ROLLBACK');
+      throw error;
+    }
   } catch (error) {
     console.error('Hiba a beteg törlésekor:', error);
     return NextResponse.json(

@@ -8,20 +8,22 @@ export const patientSchema = z.object({
     .optional()
     .nullable()
     .refine((val) => {
-      if (!val || val === '') return true; // Optional field
+      if (!val || val === '' || val.trim() === '') return true; // Optional field - empty is OK
+      // If value is provided, it must be valid
       // Remove dashes for validation
-      const cleaned = val.replace(/-/g, '');
+      const cleaned = val.replace(/-/g, '').trim();
       // Should be exactly 9 digits
       return /^\d{9}$/.test(cleaned);
     }, {
-      message: 'A TAJ szám formátuma: XXX-XXX-XXX (9 számjegy)'
+      message: 'A TAJ szám formátuma: XXX-XXX-XXX (9 számjegy). Ha nem szeretne megadni, hagyja üresen.'
     })
     .or(z.literal('')),
   telefonszam: z.string()
     .optional()
     .nullable()
     .refine((val) => {
-      if (!val || val === '') return true; // Optional field
+      if (!val || val === '' || val.trim() === '' || val === '+36') return true; // Optional field - empty is OK
+      // If value is provided, it must be valid
       // Should start with +36
       if (!val.startsWith('+36')) return false;
       // After +36, should have maximum 11 digits
@@ -30,14 +32,26 @@ export const patientSchema = z.object({
       const digitsOnly = afterPrefix.replace(/\D/g, '');
       return digitsOnly.length <= 11 && digitsOnly.length > 0;
     }, {
-      message: 'A telefonszám +36-tal kezdődik és maximum 11 számjegyet tartalmaz'
+      message: 'A telefonszám +36-tal kezdődik és maximum 11 számjegyet tartalmaz (pl. +36123456789). Ha nem szeretne megadni, hagyja üresen.'
     })
     .or(z.literal('')),
   
   // SZEMÉLYES ADATOK
   szuletesiDatum: z.string().optional().nullable(),
   nem: z.enum(['ferfi', 'no']).optional().nullable().or(z.literal('')),
-  email: z.string().email('Érvénytelen email cím').optional().nullable().or(z.literal('')),
+  email: z.string()
+    .optional()
+    .nullable()
+    .refine((val) => {
+      if (!val || val === '' || val.trim() === '') return true; // Optional field - empty is OK
+      // If value is provided, it must be valid
+      // Email validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      return emailRegex.test(val.trim());
+    }, {
+      message: 'Érvénytelen email cím formátum. Példa: nev@example.com. Ha nem szeretne megadni, hagyja üresen.'
+    })
+    .or(z.literal('')),
   cim: z.string().optional().nullable(),
   varos: z.string().optional().nullable(),
   iranyitoszam: z.string().optional().nullable(),
@@ -45,7 +59,7 @@ export const patientSchema = z.object({
   // BEUTALÓ
   beutaloOrvos: z.string().optional().nullable(),
   beutaloIntezmeny: z.string().optional().nullable(),
-  mutetRovidLeirasa: z.string().optional().nullable(),
+  beutaloIndokolas: z.string().optional().nullable(),
   mutetIdeje: z.string().optional().nullable(),
   szovettaniDiagnozis: z.string().optional().nullable(),
   nyakiBlokkdisszekcio: z.enum(['nem volt', 'volt, egyoldali', 'volt, kétoldali']).optional().nullable().or(z.literal('')),
@@ -286,3 +300,21 @@ export const kezelesiTervArcotErintoElhorgonyzasOptions = [
   'rúd-lovas rendszer',
   'gömbretenció'
 ];
+
+// Patient Document Schema
+export const documentSchema = z.object({
+  id: z.string().optional(),
+  patientId: z.string(),
+  filename: z.string().min(1, 'Fájlnév kötelező'),
+  filePath: z.string().optional(),
+  fileSize: z.number().int().positive('Fájlméret pozitív szám kell legyen'),
+  mimeType: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  tags: z.array(z.string()).default([]),
+  uploadedBy: z.string().email('Érvénytelen email cím'),
+  uploadedAt: z.string().optional().nullable(),
+  createdAt: z.string().optional().nullable(),
+  updatedAt: z.string().optional().nullable(),
+});
+
+export type PatientDocument = z.infer<typeof documentSchema>;

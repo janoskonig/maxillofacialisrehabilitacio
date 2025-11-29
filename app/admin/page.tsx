@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser, type AuthUser } from '@/lib/auth';
-import { MessageCircle, ChevronDown, ChevronUp, AlertCircle, Bug, Lightbulb } from 'lucide-react';
+import { MessageCircle, ChevronDown, ChevronUp, AlertCircle, Bug, Lightbulb, Mail, Send, ArrowUp, ArrowDown, BarChart3, User, LogIn } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 
 type UserRole = 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
@@ -14,9 +14,14 @@ type User = {
   role: UserRole;
   active: boolean;
   restricted_view: boolean;
+  intezmeny: string | null;
+  hozzaferes_indokolas: string | null;
   created_at: string;
   updated_at: string;
   last_login: string | null;
+  last_activity: string | null;
+  last_activity_action: string | null;
+  last_activity_detail: string | null;
 };
 
 type Feedback = {
@@ -47,6 +52,85 @@ export default function AdminPage() {
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [feedbackStatusFilter, setFeedbackStatusFilter] = useState<string>('');
   const [expandedFeedback, setExpandedFeedback] = useState<Set<string>>(new Set());
+  
+  // Impersonate (belépés mint) állapotok
+  const [selectedUserId, setSelectedUserId] = useState<string>('');
+  const [impersonating, setImpersonating] = useState(false);
+  
+  // E-mail küldés állapotok
+  const [emailRoles, setEmailRoles] = useState<string[]>([]);
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailContent, setEmailContent] = useState('');
+  const [emailPreview, setEmailPreview] = useState<Array<{ email: string; name: string; role: string }>>([]);
+  const [emailPreviewLoading, setEmailPreviewLoading] = useState(false);
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailSuccess, setEmailSuccess] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [emailPreviewData, setEmailPreviewData] = useState<{
+    users: Array<{ email: string; name: string; role: string }>;
+    includeAdmins: boolean;
+    adminCount: number;
+  } | null>(null);
+  
+  // Rendezés a felhasználók táblázathoz
+  const [userSortField, setUserSortField] = useState<'email' | 'role' | 'last_activity' | null>(null);
+  const [userSortDirection, setUserSortDirection] = useState<'asc' | 'desc'>('asc');
+  
+  // Rendezett felhasználók
+  const sortedUsers = useMemo(() => {
+    const activeUsers = users.filter((u) => u.active);
+    if (!userSortField) return activeUsers;
+    
+    return [...activeUsers].sort((a, b) => {
+      let comparison = 0;
+      
+      switch (userSortField) {
+        case 'email':
+          comparison = a.email.localeCompare(b.email, 'hu');
+          break;
+        case 'role':
+          comparison = a.role.localeCompare(b.role, 'hu');
+          break;
+        case 'last_activity':
+          const dateA = a.last_activity ? new Date(a.last_activity).getTime() : 0;
+          const dateB = b.last_activity ? new Date(b.last_activity).getTime() : 0;
+          comparison = dateA - dateB;
+          break;
+      }
+      
+      return userSortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [users, userSortField, userSortDirection]);
+  
+  const handleUserSort = (field: 'email' | 'role' | 'last_activity') => {
+    if (userSortField === field) {
+      setUserSortDirection(userSortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setUserSortField(field);
+      setUserSortDirection('asc');
+    }
+  };
+  
+  const renderSortableHeader = (label: string, field: 'email' | 'role' | 'last_activity') => {
+    const isActive = userSortField === field;
+    const SortIcon = isActive 
+      ? (userSortDirection === 'asc' ? ArrowUp : ArrowDown)
+      : null;
+    
+    return (
+      <th 
+        className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+        onClick={() => handleUserSort(field)}
+      >
+        <div className="flex items-center gap-1">
+          <span>{label}</span>
+          {SortIcon && (
+            <SortIcon className="w-3 h-3 text-blue-600" />
+          )}
+        </div>
+      </th>
+    );
+  };
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -411,6 +495,48 @@ export default function AdminPage() {
     }
   };
 
+  const handleImpersonate = async () => {
+    if (!selectedUserId) {
+      alert('Válasszon ki egy felhasználót');
+      return;
+    }
+
+    const selectedUser = users.find(u => u.id === selectedUserId);
+    if (!selectedUser) {
+      alert('Felhasználó nem található');
+      return;
+    }
+
+    if (!confirm(`Biztosan be szeretne lépni mint: ${selectedUser.email}?`)) {
+      return;
+    }
+
+    setImpersonating(true);
+    try {
+      const res = await fetch('/api/auth/impersonate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ userId: selectedUserId }),
+      });
+
+      if (res.ok) {
+        // Átirányítás a főoldalra
+        router.push('/');
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Hiba történt a bejelentkezéskor');
+      }
+    } catch (e) {
+      console.error('Error impersonating user:', e);
+      alert('Hiba történt a bejelentkezéskor');
+    } finally {
+      setImpersonating(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -444,14 +570,78 @@ export default function AdminPage() {
               <Logo width={60} height={69} />
               <h1 className="text-2xl font-bold text-medical-primary">Admin felület</h1>
             </div>
-            {currentUser && (
-              <p className="text-sm text-gray-500">Bejelentkezve: {currentUser.email} ({currentUser.role})</p>
-            )}
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => router.push('/')}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+              >
+                Vissza
+              </button>
+              <button
+                onClick={() => router.push('/admin/stats')}
+                className="flex items-center gap-2 px-4 py-2 bg-medical-primary text-white rounded hover:bg-medical-primary-dark transition-colors"
+              >
+                <BarChart3 className="w-4 h-4" />
+                Statisztikák
+              </button>
+              {currentUser && (
+                <p className="text-sm text-gray-500">Bejelentkezve: {currentUser.email} ({currentUser.role})</p>
+              )}
+            </div>
           </div>
         </div>
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Belépés mint másik felhasználó */}
+        <div className="card mb-6 border-l-4 border-blue-500">
+          <div className="flex items-center gap-2 mb-4">
+            <User className="w-5 h-5 text-blue-600" />
+            <h2 className="text-xl font-semibold">Belépés mint másik felhasználó</h2>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Válasszon felhasználót
+              </label>
+              <select
+                value={selectedUserId}
+                onChange={(e) => setSelectedUserId(e.target.value)}
+                className="form-input w-full"
+                disabled={impersonating}
+              >
+                <option value="">-- Válasszon felhasználót --</option>
+                {users
+                  .filter(u => u.active)
+                  .map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.email} ({user.role})
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <div className="pt-6">
+              <button
+                onClick={handleImpersonate}
+                disabled={!selectedUserId || impersonating}
+                className="btn-primary flex items-center gap-2"
+              >
+                {impersonating ? (
+                  <>
+                    <span className="animate-spin">⏳</span>
+                    Belépés...
+                  </>
+                ) : (
+                  <>
+                    <LogIn className="w-4 h-4" />
+                    Belépés mint...
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+
         {/* Jóváhagyásra váró felhasználók */}
         {users.filter(u => !u.active).length > 0 && (
           <div className="card mb-6 border-l-4 border-yellow-400">
@@ -463,6 +653,8 @@ export default function AdminPage() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Intézmény</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hozzáférés indokolása</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Regisztráció ideje</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Műveletek</th>
                   </tr>
@@ -473,6 +665,14 @@ export default function AdminPage() {
                     .map((user) => (
                       <tr key={user.id} className="bg-yellow-50">
                         <td className="px-4 py-3 text-sm text-gray-900">{user.email}</td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {user.intezmeny || '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700 max-w-md">
+                          <div className="truncate" title={user.hozzaferes_indokolas || ''}>
+                            {user.hozzaferes_indokolas || '-'}
+                          </div>
+                        </td>
                         <td className="px-4 py-3 text-sm text-gray-700">
                           {user.created_at ? new Date(user.created_at).toLocaleString('hu-HU') : '-'}
                         </td>
@@ -511,23 +711,21 @@ export default function AdminPage() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Szerepkör</th>
+                    {renderSortableHeader('Email', 'email')}
+                    {renderSortableHeader('Szerepkör', 'role')}
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Állapot</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Utolsó bejelentkezés</th>
+                    {renderSortableHeader('Utolsó aktivitás', 'last_activity')}
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {users
-                    .filter((u) => u.active)
-                    .map((user) => (
-                      <tr key={user.id}>
-                        <td className="px-4 py-3 text-sm text-gray-900">{user.email}</td>
+                  {sortedUsers.map((user) => (
+                    <tr key={user.id}>
+                      <td className="px-4 py-3 text-sm text-gray-900">{user.email}</td>
                       <td className="px-4 py-3">
                         <select
                           className="form-input"
-                            value={user.role}
-                            onChange={(e) => updateRole(user.id, e.target.value as UserRole)}
+                          value={user.role}
+                          onChange={(e) => updateRole(user.id, e.target.value as UserRole)}
                         >
                           <option value="admin">admin</option>
                           <option value="fogpótlástanász">fogpótlástanász</option>
@@ -535,24 +733,200 @@ export default function AdminPage() {
                           <option value="sebészorvos">sebészorvos</option>
                         </select>
                       </td>
-                        <td className="px-4 py-3 text-sm">
-                          {user.active ? (
-                            <span className="text-green-600">Aktív</span>
-                          ) : (
-                            <span className="text-red-600">Inaktív</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-700">
-                          {user.last_login ? new Date(user.last_login).toLocaleString('hu-HU') : '-'}
-                        </td>
+                      <td className="px-4 py-3 text-sm">
+                        {user.active ? (
+                          <span className="text-green-600">Aktív</span>
+                        ) : (
+                          <span className="text-red-600">Inaktív</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-700">
+                        {user.last_activity ? (
+                          <div>
+                            <div className="font-medium">
+                              {user.last_activity_action === 'login' && 'Bejelentkezés'}
+                              {user.last_activity_action === 'heartbeat' && 'Oldal megtekintés'}
+                              {user.last_activity_action === 'patient_created' && 'Beteg létrehozása'}
+                              {user.last_activity_action === 'patient_updated' && 'Beteg módosítása'}
+                              {user.last_activity_action === 'patient_deleted' && 'Beteg törlése'}
+                              {user.last_activity_action === 'patient_viewed' && 'Beteg megtekintése'}
+                              {user.last_activity_action === 'register' && 'Regisztráció'}
+                              {user.last_activity_action === 'password_change' && 'Jelszó változtatás'}
+                              {!['login', 'heartbeat', 'patient_created', 'patient_updated', 'patient_deleted', 'patient_viewed', 'register', 'password_change'].includes(user.last_activity_action || '') && (user.last_activity_action || 'Ismeretlen aktivitás')}
+                            </div>
+                            {user.last_activity_detail && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                {user.last_activity_detail}
+                              </div>
+                            )}
+                            <div className="text-xs text-gray-400 mt-1">
+                              {new Date(user.last_activity).toLocaleString('hu-HU')}
+                            </div>
+                          </div>
+                        ) : (
+                          '-'
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           )}
-          <div className="mt-6">
-            <button className="btn-secondary" onClick={() => router.push('/')}>Vissza</button>
+        </div>
+
+        {/* E-mail küldés */}
+        <div className="card mt-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Mail className="w-5 h-5 text-medical-primary" />
+            <h2 className="text-xl font-semibold">E-mail küldés felhasználóknak</h2>
+          </div>
+
+          {/* Szerepkör választás */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Szerepkörök (több választható)
+            </label>
+            <div className="flex flex-wrap gap-3">
+              {['sebészorvos', 'fogpótlástanász', 'technikus', 'admin'].map((role) => (
+                <label key={role} className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={emailRoles.includes(role)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setEmailRoles([...emailRoles, role]);
+                      } else {
+                        setEmailRoles(emailRoles.filter((r) => r !== role));
+                      }
+                    }}
+                    className="mr-2 h-4 w-4 text-medical-primary focus:ring-medical-primary border-gray-300 rounded"
+                  />
+                  <span className="text-sm text-gray-700">
+                    {role === 'sebészorvos' ? 'Sebészorvos' :
+                     role === 'fogpótlástanász' ? 'Fogpótlástanász' :
+                     role === 'technikus' ? 'Technikus' :
+                     role === 'admin' ? 'Adminisztrátor' : role}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Előnézet */}
+          {emailPreviewLoading ? (
+            <div className="mb-4 text-sm text-gray-600">Előnézet betöltése...</div>
+          ) : emailPreview.length > 0 ? (
+            <div className="mb-4 space-y-3">
+              <div className="p-3 bg-blue-50 rounded border border-blue-200">
+                <p className="text-sm font-medium text-blue-900 mb-2">
+                  Címzettek ({emailPreview.length}):
+                </p>
+                <div className="text-sm text-blue-800 space-y-1 max-h-32 overflow-y-auto">
+                  {emailPreview.map((user, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <span className="font-medium">{user.name}</span>
+                      <span className="text-blue-600">({user.email})</span>
+                      <span className="text-xs text-blue-500">- {user.role}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {emailPreviewData?.includeAdmins && emailPreviewData.adminCount > 0 && (
+                <div className="p-3 bg-green-50 rounded border border-green-200">
+                  <p className="text-sm font-medium text-green-900 mb-1">
+                    ℹ️ Admin felhasználók automatikusan kapják az e-mailt másolatként
+                  </p>
+                  <p className="text-xs text-green-700">
+                    ({emailPreviewData.adminCount} admin felhasználó)
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : emailRoles.length > 0 ? (
+            <div className="mb-4 p-3 bg-yellow-50 rounded border border-yellow-200">
+              <p className="text-sm text-yellow-800">Nem található aktív felhasználó a kiválasztott szerepkörökkel.</p>
+            </div>
+          ) : null}
+
+          {/* E-mail tárgy */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              E-mail tárgya
+            </label>
+            <input
+              type="text"
+              value={emailSubject}
+              onChange={(e) => setEmailSubject(e.target.value)}
+              placeholder="Pl: Fontos értesítés"
+              className="form-input w-full"
+            />
+          </div>
+
+          {/* E-mail tartalom */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              E-mail tartalma
+            </label>
+            <textarea
+              value={emailContent}
+              onChange={(e) => setEmailContent(e.target.value)}
+              placeholder="Írja be az e-mail tartalmát..."
+              rows={8}
+              className="form-input w-full"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              A sortörések automatikusan bekerülnek az e-mailbe.
+            </p>
+          </div>
+
+          {/* Hiba/Siker üzenetek */}
+          {emailError && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded">
+              <p className="text-sm text-red-800">{emailError}</p>
+            </div>
+          )}
+
+          {emailSuccess && (
+            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded">
+              <p className="text-sm text-green-800">{emailSuccess}</p>
+            </div>
+          )}
+
+          {/* Küldés gomb */}
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={() => {
+                setEmailSubject('');
+                setEmailContent('');
+                setEmailRoles([]);
+                setEmailPreview([]);
+                setEmailPreviewData(null);
+                setEmailError(null);
+                setEmailSuccess(null);
+              }}
+              className="btn-secondary"
+              disabled={emailSending}
+            >
+              Törlés
+            </button>
+            <button
+              onClick={sendEmailToUsers}
+              disabled={emailSending || emailRoles.length === 0 || !emailSubject.trim() || !emailContent.trim()}
+              className="btn-primary flex items-center gap-2"
+            >
+              {emailSending ? (
+                <>
+                  <span className="animate-spin">⏳</span>
+                  Küldés...
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4" />
+                  E-mail küldése
+                </>
+              )}
+            </button>
           </div>
         </div>
 

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { SignJWT } from 'jose';
+import { sendRegistrationNotificationToAdmins } from '@/lib/email';
+import { logActivity } from '@/lib/activity';
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'change-this-to-a-random-secret-in-production'
@@ -36,7 +38,7 @@ function mapRoleToDatabaseRole(role: string): string | null {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, password, confirmPassword, role } = body;
+    const { email, fullName, password, confirmPassword, role, institution, accessReason } = body;
 
     // Alapvető validációk
     if (!email || !password) {
@@ -46,9 +48,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!fullName || !fullName.trim()) {
+      return NextResponse.json(
+        { error: 'Teljes név megadása kötelező' },
+        { status: 400 }
+      );
+    }
+
     if (!role) {
       return NextResponse.json(
         { error: 'Szerepkör megadása kötelező' },
+        { status: 400 }
+      );
+    }
+
+    if (!institution) {
+      return NextResponse.json(
+        { error: 'Intézmény megadása kötelező' },
+        { status: 400 }
+      );
+    }
+
+    if (!accessReason || !accessReason.trim()) {
+      return NextResponse.json(
+        { error: 'Hozzáférés indokolásának megadása kötelező' },
         { status: 400 }
       );
     }
@@ -105,12 +128,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Név tisztítása (trim és normalizálás)
+    const cleanedName = fullName.trim();
+
     // Felhasználó létrehozása (inaktív, admin jóváhagyásra vár)
     const result = await pool.query(
-      `INSERT INTO users (email, password_hash, role, active)
-       VALUES ($1, $2, $3, false)
-       RETURNING id, email, role, active`,
-      [normalizedEmail, passwordHash, databaseRole]
+      `INSERT INTO users (email, password_hash, role, active, doktor_neve, intezmeny, hozzaferes_indokolas)
+       VALUES ($1, $2, $3, false, $4, $5, $6)
+       RETURNING id, email, role, active, doktor_neve, intezmeny, hozzaferes_indokolas`,
+      [normalizedEmail, passwordHash, databaseRole, cleanedName, institution, accessReason.trim()]
     );
 
     const user = result.rows[0];
@@ -118,18 +144,29 @@ export async function POST(request: NextRequest) {
     // NEM hozunk létre JWT tokent - inaktív felhasználó nem jelentkezhet be
 
     // Activity log
+    await logActivity(request, user.email, 'register', 'pending_approval');
+
+    // Email értesítés küldése az adminoknak
     try {
-      await pool.query(
-        'INSERT INTO activity_logs (user_email, action, detail, ip_address) VALUES ($1, $2, $3, $4)',
-        [
-          user.email,
-          'register',
-          'pending_approval',
-          request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null,
-        ]
+      const adminResult = await pool.query(
+        `SELECT email FROM users WHERE role = 'admin' AND active = true`
       );
-    } catch (e) {
-      console.error('Failed to log registration activity:', e);
+      const adminEmails = adminResult.rows.map((row: { email: string }) => row.email);
+      
+      if (adminEmails.length > 0) {
+        await sendRegistrationNotificationToAdmins(
+          adminEmails,
+          user.email,
+          user.doktor_neve || user.email,
+          user.role,
+          user.intezmeny || institution,
+          user.hozzaferes_indokolas || accessReason.trim(),
+          new Date()
+        );
+      }
+    } catch (emailError) {
+      console.error('Failed to send registration notification email to admins:', emailError);
+      // Nem dobunk hibát, mert a regisztráció sikeres volt
     }
 
     // Visszatérési válasz - NEM jelentkeztetjük be, mert inaktív

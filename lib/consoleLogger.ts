@@ -93,6 +93,11 @@ export function getRecentConsoleLogs(count: number = 50): ConsoleLogEntry[] {
 
 // Initialize console log interceptor
 export function initConsoleLogger(): () => void {
+  // Production-ben ne logoljunk
+  if (process.env.NODE_ENV === 'production') {
+    return () => {}; // Return no-op cleanup function
+  }
+  
   if (typeof window === 'undefined' || typeof console === 'undefined') {
     return () => {}; // Return no-op cleanup function
   }
@@ -193,5 +198,6 @@ export function initConsoleLogger(): () => void {
     }
   };
 }
+
 
 

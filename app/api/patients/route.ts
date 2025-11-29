@@ -2,6 +2,82 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { Patient, patientSchema } from '@/lib/types';
 import { verifyAuth } from '@/lib/auth-server';
+import { sendPatientCreationNotification } from '@/lib/email';
+import { logActivity, logActivityWithAuth } from '@/lib/activity';
+
+// Patient SELECT lista - közös használatra
+const PATIENT_SELECT_FIELDS = `
+  id,
+  nev,
+  taj,
+  telefonszam,
+  szuletesi_datum as "szuletesiDatum",
+  nem,
+  email,
+  cim,
+  varos,
+  iranyitoszam,
+  beutalo_orvos as "beutaloOrvos",
+  beutalo_intezmeny as "beutaloIntezmeny",
+  beutalo_indokolas as "beutaloIndokolas",
+  primer_mutet_leirasa as "primerMutetLeirasa",
+  mutet_ideje as "mutetIdeje",
+  szovettani_diagnozis as "szovettaniDiagnozis",
+  nyaki_blokkdisszekcio as "nyakiBlokkdisszekcio",
+  alkoholfogyasztas,
+  dohanyzas_szam as "dohanyzasSzam",
+  kezelesre_erkezes_indoka as "kezelesreErkezesIndoka",
+  maxilladefektus_van as "maxilladefektusVan",
+  brown_fuggoleges_osztaly as "brownFuggolegesOsztaly",
+  brown_vizszintes_komponens as "brownVizszintesKomponens",
+  mandibuladefektus_van as "mandibuladefektusVan",
+  kovacs_dobak_osztaly as "kovacsDobakOsztaly",
+  nyelvmozgasok_akadalyozottak as "nyelvmozgásokAkadályozottak",
+  gombocos_beszed as "gombocosBeszed",
+  nyalmirigy_allapot as "nyalmirigyAllapot",
+  fabian_fejerdy_protetikai_osztaly_felso as "fabianFejerdyProtetikaiOsztalyFelso",
+  fabian_fejerdy_protetikai_osztaly_also as "fabianFejerdyProtetikaiOsztalyAlso",
+  radioterapia,
+  radioterapia_dozis as "radioterapiaDozis",
+  radioterapia_datum_intervallum as "radioterapiaDatumIntervallum",
+  chemoterapia,
+  chemoterapia_leiras as "chemoterapiaLeiras",
+  fabian_fejerdy_protetikai_osztaly as "fabianFejerdyProtetikaiOsztaly",
+  kezeleoorvos,
+  kezeleoorvos_intezete as "kezeleoorvosIntezete",
+  felvetel_datuma as "felvetelDatuma",
+  felso_fogpotlas_van as "felsoFogpotlasVan",
+  felso_fogpotlas_mikor as "felsoFogpotlasMikor",
+  felso_fogpotlas_keszito as "felsoFogpotlasKeszito",
+  felso_fogpotlas_elegedett as "felsoFogpotlasElegedett",
+  felso_fogpotlas_problema as "felsoFogpotlasProblema",
+  also_fogpotlas_van as "alsoFogpotlasVan",
+  also_fogpotlas_mikor as "alsoFogpotlasMikor",
+  also_fogpotlas_keszito as "alsoFogpotlasKeszito",
+  also_fogpotlas_elegedett as "alsoFogpotlasElegedett",
+  also_fogpotlas_problema as "alsoFogpotlasProblema",
+  meglevo_fogak as "meglevoFogak",
+  felso_fogpotlas_tipus as "felsoFogpotlasTipus",
+  also_fogpotlas_tipus as "alsoFogpotlasTipus",
+  meglevo_implantatumok as "meglevoImplantatumok",
+  nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
+  nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
+  tnm_staging as "tnmStaging",
+  bno,
+  diagnozis,
+  baleset_idopont as "balesetIdopont",
+  baleset_etiologiaja as "balesetEtiologiaja",
+  baleset_egyeb as "balesetEgyeb",
+  veleszuletett_rendellenessegek as "veleszuletettRendellenessegek",
+  veleszuletett_mutetek_leirasa as "veleszuletettMutetekLeirasa",
+  kezelesi_terv_felso as "kezelesiTervFelso",
+  kezelesi_terv_also as "kezelesiTervAlso",
+  kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
+  created_at as "createdAt",
+  updated_at as "updatedAt",
+  created_by as "createdBy",
+  updated_by as "updatedBy"
+`;
 
 // Összes beteg lekérdezése
 export async function GET(request: NextRequest) {
@@ -9,6 +85,11 @@ export async function GET(request: NextRequest) {
     const pool = getDbPool();
     const searchParams = request.nextUrl.searchParams;
     const query = searchParams.get('q');
+    
+    // Pagination paraméterek
+    const page = parseInt(searchParams.get('page') || '1', 10);
+    const limit = parseInt(searchParams.get('limit') || '50', 10);
+    const offset = (page - 1) * limit;
 
     // Ellenőrizzük a felhasználó szerepkörét és jogosultságait
     const auth = await verifyAuth(request);
@@ -17,210 +98,175 @@ export async function GET(request: NextRequest) {
     
     // Szerepkör alapú szűrés meghatározása
     let whereConditions: string[] = [];
-    let queryParams: any[] = [];
+    let queryParams: string[] = [];
     let paramIndex = 1;
     
+    // JOIN szükséges-e a users táblával (sebészorvos szerepkör esetén)
+    let needsUserJoin = false;
+    // Lokális változó a userEmail-hez, amely garantáltan string, ha needsUserJoin igaz
+    let surgeonEmail: string | null = null;
+    
     if (role === 'technikus') {
-      // Technikus: csak azokat a betegeket látja, akikhez epitézist rendeltek
-      whereConditions.push('kezelesi_terv_arcot_erinto IS NOT NULL AND jsonb_array_length(kezelesi_terv_arcot_erinto) > 0');
-    } else if (role === 'sebészorvos') {
-      // Sebészorvos: csak azokat a betegeket látja, akiket ő utalt be
-      // Pontos egyezés: a beutalo_orvos mező pontosan egyezzen az email címmel
-      if (userEmail) {
-        whereConditions.push(`beutalo_orvos = $${paramIndex}`);
-        queryParams.push(userEmail);
-        paramIndex += 1;
-      } else {
-        // Ha nincs email, nem lát semmit
-        whereConditions.push('1 = 0');
-      }
+      // Technikus: csak azokat a betegeket látja, akikhez arcot érintő kezelési terv van
+      // Ellenőrizzük, hogy a kezelesi_terv_arcot_erinto mező nem NULL és nem üres tömb (tömb hossza > 0)
+      whereConditions.push(`kezelesi_terv_arcot_erinto IS NOT NULL AND jsonb_array_length(kezelesi_terv_arcot_erinto) > 0`);
+    } else if (role === 'sebészorvos' && userEmail) {
+      // Optimalizálás: JOIN használata a users táblával az intézmény lekérdezéséhez
+      // Így egyetlen query-ben megkapjuk az intézményt és a betegeket
+      needsUserJoin = true;
+      surgeonEmail = userEmail; // Most már garantáltan string, mert ellenőriztük
+      // A JOIN feltételt a FROM részben kezeljük
     }
     // fogpótlástanász, admin, editor, viewer: mindent látnak (nincs szűrés)
     
+    let countResult;
     let result;
     
     if (query) {
-      // Keresés
-      const searchBase = `(nev ILIKE $${paramIndex} OR taj ILIKE $${paramIndex} OR telefonszam ILIKE $${paramIndex} OR email ILIKE $${paramIndex} OR beutalo_orvos ILIKE $${paramIndex} OR beutalo_intezmeny ILIKE $${paramIndex} OR kezeleoorvos ILIKE $${paramIndex})`;
+      // FROM klauzula építése JOIN-nal ha szükséges
+      let fromClause: string;
+      let selectFields: string;
+      let orderBy: string;
+      
+      if (needsUserJoin && surgeonEmail) {
+        // JOIN esetén prefixeljük a mezőket 'p.'-vel
+        // surgeonEmail garantáltan string, mert csak akkor állítjuk be, ha userEmail nem null
+        const emailForQuery: string = surgeonEmail; // Type assertion: már ellenőriztük, hogy nem null
+        fromClause = `FROM patients p JOIN users u ON u.email = $${paramIndex} AND p.beutalo_intezmeny = u.intezmeny AND u.intezmeny IS NOT NULL`;
+        queryParams.push(emailForQuery);
+        paramIndex++;
+        // SELECT mezők prefixelése
+        selectFields = PATIENT_SELECT_FIELDS.split(',').map(f => {
+          const trimmed = f.trim();
+          // Ha már van alias (pl. "as something"), ne módosítsuk
+          if (trimmed.includes(' as ')) {
+            const parts = trimmed.split(' as ');
+            return `p.${parts[0].trim()} as ${parts[1].trim()}`;
+          }
+          return `p.${trimmed}`;
+        }).join(', ');
+        orderBy = 'p.created_at';
+      } else {
+        fromClause = `FROM patients`;
+        selectFields = PATIENT_SELECT_FIELDS;
+        orderBy = 'created_at';
+      }
+      
+      // Keresés - prefixeljük az oszlopokat, ha JOIN van
+      const columnPrefix = needsUserJoin ? 'p.' : '';
+      const searchBase = `(${columnPrefix}nev ILIKE $${paramIndex} OR ${columnPrefix}taj ILIKE $${paramIndex} OR ${columnPrefix}telefonszam ILIKE $${paramIndex} OR ${columnPrefix}email ILIKE $${paramIndex} OR ${columnPrefix}beutalo_orvos ILIKE $${paramIndex} OR ${columnPrefix}beutalo_intezmeny ILIKE $${paramIndex} OR ${columnPrefix}kezeleoorvos ILIKE $${paramIndex})`;
       queryParams.push(`%${query}%`);
       paramIndex++;
       
-      const searchCondition = whereConditions.length > 0
-        ? `${searchBase} AND ${whereConditions.join(' AND ')}`
+      // WHERE feltételek prefixelése, ha JOIN van
+      const prefixedWhereConditions = needsUserJoin
+        ? whereConditions.map(cond => cond.replace(/\b(kezelesi_terv_arcot_erinto)\b/g, 'p.$1'))
+        : whereConditions;
+      
+      const searchCondition = prefixedWhereConditions.length > 0
+        ? `${searchBase} AND ${prefixedWhereConditions.join(' AND ')}`
         : searchBase;
       
+      // Count query
+      const countQuery = `SELECT COUNT(*) as total ${fromClause} WHERE ${searchCondition}`;
+      countResult = await pool.query(countQuery, queryParams);
+      
+      // Data query with pagination
+      queryParams.push(limit.toString(), offset.toString());
+      
       result = await pool.query(
-        `SELECT 
-          id,
-          nev,
-          taj,
-          telefonszam,
-          szuletesi_datum as "szuletesiDatum",
-          nem,
-          email,
-          cim,
-          varos,
-          iranyitoszam,
-          beutalo_orvos as "beutaloOrvos",
-          beutalo_intezmeny as "beutaloIntezmeny",
-          mutet_rovid_leirasa as "mutetRovidLeirasa",
-          mutet_ideje as "mutetIdeje",
-          szovettani_diagnozis as "szovettaniDiagnozis",
-          nyaki_blokkdisszekcio as "nyakiBlokkdisszekcio",
-          alkoholfogyasztas,
-          dohanyzas_szam as "dohanyzasSzam",
-          kezelesre_erkezes_indoka as "kezelesreErkezesIndoka",
-          maxilladefektus_van as "maxilladefektusVan",
-          brown_fuggoleges_osztaly as "brownFuggolegesOsztaly",
-          brown_vizszintes_komponens as "brownVizszintesKomponens",
-          mandibuladefektus_van as "mandibuladefektusVan",
-          kovacs_dobak_osztaly as "kovacsDobakOsztaly",
-          nyelvmozgasok_akadalyozottak as "nyelvmozgásokAkadályozottak",
-          gombocos_beszed as "gombocosBeszed",
-          nyalmirigy_allapot as "nyalmirigyAllapot",
-          fabian_fejerdy_protetikai_osztaly_felso as "fabianFejerdyProtetikaiOsztalyFelso",
-          fabian_fejerdy_protetikai_osztaly_also as "fabianFejerdyProtetikaiOsztalyAlso",
-          radioterapia,
-          radioterapia_dozis as "radioterapiaDozis",
-          radioterapia_datum_intervallum as "radioterapiaDatumIntervallum",
-          chemoterapia,
-          chemoterapia_leiras as "chemoterapiaLeiras",
-          fabian_fejerdy_protetikai_osztaly as "fabianFejerdyProtetikaiOsztaly",
-          kezeleoorvos,
-          kezeleoorvos_intezete as "kezeleoorvosIntezete",
-          felvetel_datuma as "felvetelDatuma",
-          felso_fogpotlas_van as "felsoFogpotlasVan",
-          felso_fogpotlas_mikor as "felsoFogpotlasMikor",
-          felso_fogpotlas_keszito as "felsoFogpotlasKeszito",
-          felso_fogpotlas_elegedett as "felsoFogpotlasElegedett",
-          felso_fogpotlas_problema as "felsoFogpotlasProblema",
-          also_fogpotlas_van as "alsoFogpotlasVan",
-          also_fogpotlas_mikor as "alsoFogpotlasMikor",
-          also_fogpotlas_keszito as "alsoFogpotlasKeszito",
-          also_fogpotlas_elegedett as "alsoFogpotlasElegedett",
-          also_fogpotlas_problema as "alsoFogpotlasProblema",
-          meglevo_fogak as "meglevoFogak",
-          felso_fogpotlas_tipus as "felsoFogpotlasTipus",
-          also_fogpotlas_tipus as "alsoFogpotlasTipus",
-          meglevo_implantatumok as "meglevoImplantatumok",
-          nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
-          nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
-          tnm_staging as "tnmStaging",
-          bno, diagnozis,
-          kezelesi_terv_felso as "kezelesiTervFelso",
-          kezelesi_terv_also as "kezelesiTervAlso",
-          kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
-          created_at as "createdAt",
-          updated_at as "updatedAt",
-          created_by as "createdBy",
-          updated_by as "updatedBy"
-        FROM patients
-        WHERE ${searchCondition}
-        ORDER BY created_at DESC`,
+        `SELECT ${selectFields}
+         ${fromClause}
+         WHERE ${searchCondition}
+         ORDER BY ${orderBy} DESC
+         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
         queryParams
       );
     } else {
       // Összes beteg
-      const whereClause = whereConditions.length > 0
-        ? `WHERE ${whereConditions.join(' AND ')}`
+      // FROM klauzula építése JOIN-nal ha szükséges
+      let fromClause: string;
+      let selectFields: string;
+      let orderBy: string;
+      let finalQueryParams: unknown[];
+      
+      if (needsUserJoin && surgeonEmail) {
+        // surgeonEmail garantáltan string, mert csak akkor állítjuk be, ha userEmail nem null
+        const emailForQuery: string = surgeonEmail; // Type assertion: már ellenőriztük, hogy nem null
+        fromClause = `FROM patients p JOIN users u ON u.email = $1 AND p.beutalo_intezmeny = u.intezmeny AND u.intezmeny IS NOT NULL`;
+        finalQueryParams = [emailForQuery, ...queryParams];
+        // SELECT mezők prefixelése
+        selectFields = PATIENT_SELECT_FIELDS.split(',').map(f => {
+          const trimmed = f.trim();
+          // Ha már van alias (pl. "as something"), ne módosítsuk
+          if (trimmed.includes(' as ')) {
+            const parts = trimmed.split(' as ');
+            return `p.${parts[0].trim()} as ${parts[1].trim()}`;
+          }
+          return `p.${trimmed}`;
+        }).join(', ');
+        orderBy = 'p.created_at';
+      } else {
+        fromClause = `FROM patients`;
+        selectFields = PATIENT_SELECT_FIELDS;
+        orderBy = 'created_at';
+        finalQueryParams = queryParams;
+      }
+      
+      // WHERE feltételek prefixelése, ha JOIN van
+      const prefixedWhereConditions = needsUserJoin
+        ? whereConditions.map(cond => cond.replace(/\b(kezelesi_terv_arcot_erinto)\b/g, 'p.$1'))
+        : whereConditions;
+      
+      const whereClause = prefixedWhereConditions.length > 0
+        ? `WHERE ${prefixedWhereConditions.join(' AND ')}`
         : '';
       
+      // Count query
+      const countQuery = `SELECT COUNT(*) as total ${fromClause} ${whereClause}`;
+      countResult = await pool.query(
+        countQuery,
+        finalQueryParams
+      );
+      
+      // Data query with pagination
+      const countParams = [...finalQueryParams];
+      countParams.push(limit.toString(), offset.toString());
+      const limitParamIndex = finalQueryParams.length + 1;
+      
       result = await pool.query(
-        `SELECT 
-          id,
-          nev,
-          taj,
-          telefonszam,
-          szuletesi_datum as "szuletesiDatum",
-          nem,
-          email,
-          cim,
-          varos,
-          iranyitoszam,
-          beutalo_orvos as "beutaloOrvos",
-          beutalo_intezmeny as "beutaloIntezmeny",
-          mutet_rovid_leirasa as "mutetRovidLeirasa",
-          mutet_ideje as "mutetIdeje",
-          szovettani_diagnozis as "szovettaniDiagnozis",
-          nyaki_blokkdisszekcio as "nyakiBlokkdisszekcio",
-          alkoholfogyasztas,
-          dohanyzas_szam as "dohanyzasSzam",
-          kezelesre_erkezes_indoka as "kezelesreErkezesIndoka",
-          maxilladefektus_van as "maxilladefektusVan",
-          brown_fuggoleges_osztaly as "brownFuggolegesOsztaly",
-          brown_vizszintes_komponens as "brownVizszintesKomponens",
-          mandibuladefektus_van as "mandibuladefektusVan",
-          kovacs_dobak_osztaly as "kovacsDobakOsztaly",
-          nyelvmozgasok_akadalyozottak as "nyelvmozgásokAkadályozottak",
-          gombocos_beszed as "gombocosBeszed",
-          nyalmirigy_allapot as "nyalmirigyAllapot",
-          fabian_fejerdy_protetikai_osztaly_felso as "fabianFejerdyProtetikaiOsztalyFelso",
-          fabian_fejerdy_protetikai_osztaly_also as "fabianFejerdyProtetikaiOsztalyAlso",
-          radioterapia,
-          radioterapia_dozis as "radioterapiaDozis",
-          radioterapia_datum_intervallum as "radioterapiaDatumIntervallum",
-          chemoterapia,
-          chemoterapia_leiras as "chemoterapiaLeiras",
-          fabian_fejerdy_protetikai_osztaly as "fabianFejerdyProtetikaiOsztaly",
-          kezeleoorvos,
-          kezeleoorvos_intezete as "kezeleoorvosIntezete",
-          felvetel_datuma as "felvetelDatuma",
-          felso_fogpotlas_van as "felsoFogpotlasVan",
-          felso_fogpotlas_mikor as "felsoFogpotlasMikor",
-          felso_fogpotlas_keszito as "felsoFogpotlasKeszito",
-          felso_fogpotlas_elegedett as "felsoFogpotlasElegedett",
-          felso_fogpotlas_problema as "felsoFogpotlasProblema",
-          also_fogpotlas_van as "alsoFogpotlasVan",
-          also_fogpotlas_mikor as "alsoFogpotlasMikor",
-          also_fogpotlas_keszito as "alsoFogpotlasKeszito",
-          also_fogpotlas_elegedett as "alsoFogpotlasElegedett",
-          also_fogpotlas_problema as "alsoFogpotlasProblema",
-          meglevo_fogak as "meglevoFogak",
-          felso_fogpotlas_tipus as "felsoFogpotlasTipus",
-          also_fogpotlas_tipus as "alsoFogpotlasTipus",
-          meglevo_implantatumok as "meglevoImplantatumok",
-          nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
-        nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
-        tnm_staging as "tnmStaging",
-        bno, diagnozis,
-        kezelesi_terv_felso as "kezelesiTervFelso",
-        kezelesi_terv_also as "kezelesiTervAlso",
-        kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
-        created_at as "createdAt",
-        updated_at as "updatedAt",
-        created_by as "createdBy",
-        updated_by as "updatedBy"
-      FROM patients
-      ${whereClause}
-        ORDER BY created_at DESC`,
-        whereConditions.length > 0 ? queryParams : []
+        `SELECT ${selectFields}
+         ${fromClause}
+         ${whereClause}
+         ORDER BY ${orderBy} DESC
+         LIMIT $${limitParamIndex} OFFSET $${limitParamIndex + 1}`,
+        countParams
       );
     }
+    
+    const total = parseInt(countResult.rows[0].total, 10);
+    const totalPages = Math.ceil(total / limit);
 
     // Activity logging: patients list viewed or searched (csak ha be van jelentkezve)
-    try {
-      const auth = await verifyAuth(request);
-      if (auth) {
-      const ipHeader = request.headers.get('x-forwarded-for') || '';
-      const ipAddress = ipHeader.split(',')[0]?.trim() || null;
+    if (auth) {
       const searchQuery = request.nextUrl.searchParams.get('q');
       const action = searchQuery ? 'patient_search' : 'patients_list_viewed';
       const detail = searchQuery 
         ? `Search query: "${searchQuery}", Results: ${result.rows.length}`
         : `Total patients: ${result.rows.length}`;
       
-      await pool.query(
-        `INSERT INTO activity_logs (user_email, action, detail, ip_address)
-         VALUES ($1, $2, $3, $4)`,
-          [auth.email, action, detail, ipAddress]
-      );
-      }
-    } catch (logError) {
-      console.error('Failed to log activity:', logError);
-      // Don't fail the request if logging fails
+      await logActivityWithAuth(request, auth, action, detail);
     }
 
-    return NextResponse.json({ patients: result.rows }, { status: 200 });
+    return NextResponse.json({ 
+      patients: result.rows,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+      }
+    }, { status: 200 });
   } catch (error) {
     console.error('Hiba a betegek lekérdezésekor:', error);
     return NextResponse.json(
@@ -255,7 +301,17 @@ export async function POST(request: NextRequest) {
     
     // Sebészorvos esetén automatikusan beállítjuk a beutalo_orvos mezőt
     if (role === 'sebészorvos' && !validatedPatient.beutaloOrvos) {
-      validatedPatient.beutaloOrvos = userEmail;
+      // Lekérdezzük a felhasználó teljes nevét (doktor_neve)
+      const userResult = await pool.query(
+        'SELECT doktor_neve FROM users WHERE id = $1',
+        [auth.userId]
+      );
+      const doktorNeve = userResult.rows[0]?.doktor_neve;
+      // Csak akkor töltjük ki, ha van teljes név (ne az emailt használjuk)
+      if (doktorNeve && doktorNeve.trim() !== '') {
+        validatedPatient.beutaloOrvos = doktorNeve;
+      }
+      // Ha nincs doktor_neve, akkor üresen hagyjuk (a felhasználó tölti ki manuálisan)
     }
     
     // TAJ-szám egyediség ellenőrzése
@@ -287,7 +343,7 @@ export async function POST(request: NextRequest) {
     const patientId = validatedPatient.id || null;
     
     // Építjük a paraméterek tömbjét és a SQL query-t
-    const values: any[] = [];
+    const values: (string | number | boolean | null | Record<string, unknown>)[] = [];
     let paramIndex = 1;
     
     // Ha van ID, hozzáadjuk
@@ -308,7 +364,7 @@ export async function POST(request: NextRequest) {
       validatedPatient.iranyitoszam || null,
       validatedPatient.beutaloOrvos || null,
       validatedPatient.beutaloIntezmeny || null,
-      validatedPatient.mutetRovidLeirasa || null,
+      validatedPatient.beutaloIndokolas || null,
       validatedPatient.mutetIdeje || null,
       validatedPatient.szovettaniDiagnozis || null,
       validatedPatient.nyakiBlokkdisszekcio || null,
@@ -358,6 +414,14 @@ export async function POST(request: NextRequest) {
       validatedPatient.tnmStaging || null,
       validatedPatient.bno || null,
       validatedPatient.diagnozis || null,
+      validatedPatient.primerMutetLeirasa || null,
+      validatedPatient.balesetIdopont || null,
+      validatedPatient.balesetEtiologiaja || null,
+      validatedPatient.balesetEgyeb || null,
+      validatedPatient.veleszuletettRendellenessegek && Array.isArray(validatedPatient.veleszuletettRendellenessegek)
+        ? JSON.stringify(validatedPatient.veleszuletettRendellenessegek)
+        : '[]',
+      validatedPatient.veleszuletettMutetekLeirasa || null,
       validatedPatient.kezelesiTervFelso && Array.isArray(validatedPatient.kezelesiTervFelso)
         ? JSON.stringify(validatedPatient.kezelesiTervFelso)
         : '[]',
@@ -377,7 +441,7 @@ export async function POST(request: NextRequest) {
     const result = await pool.query(
       `INSERT INTO patients (
         ${idPart}nev, taj, telefonszam, szuletesi_datum, nem, email, cim, varos,
-        iranyitoszam, beutalo_orvos, beutalo_intezmeny, mutet_rovid_leirasa,
+        iranyitoszam, beutalo_orvos, beutalo_intezmeny, beutalo_indokolas,
         mutet_ideje, szovettani_diagnozis, nyaki_blokkdisszekcio,
         alkoholfogyasztas, dohanyzas_szam, kezelesre_erkezes_indoka, maxilladefektus_van,
         brown_fuggoleges_osztaly, brown_vizszintes_komponens,
@@ -392,7 +456,9 @@ export async function POST(request: NextRequest) {
         meglevo_fogak, felso_fogpotlas_tipus, also_fogpotlas_tipus,
         meglevo_implantatumok, nem_ismert_poziciokban_implantatum,
         nem_ismert_poziciokban_implantatum_reszletek,
-        tnm_staging, bno, diagnozis,
+        tnm_staging, bno, diagnozis, primer_mutet_leirasa,
+        baleset_idopont, baleset_etiologiaja, baleset_egyeb,
+        veleszuletett_rendellenessegek, veleszuletett_mutetek_leirasa,
         kezelesi_terv_felso, kezelesi_terv_also, kezelesi_terv_arcot_erinto,
         created_by
       ) VALUES (
@@ -401,7 +467,7 @@ export async function POST(request: NextRequest) {
       RETURNING 
         id, nev, taj, telefonszam, szuletesi_datum as "szuletesiDatum", nem,
         email, cim, varos, iranyitoszam, beutalo_orvos as "beutaloOrvos",
-        beutalo_intezmeny as "beutaloIntezmeny", mutet_rovid_leirasa as "mutetRovidLeirasa",
+        beutalo_intezmeny as "beutaloIntezmeny", beutalo_indokolas as "beutaloIndokolas",
         mutet_ideje as "mutetIdeje", szovettani_diagnozis as "szovettaniDiagnozis",
         nyaki_blokkdisszekcio as "nyakiBlokkdisszekcio", alkoholfogyasztas,
         dohanyzas_szam as "dohanyzasSzam", kezelesre_erkezes_indoka as "kezelesreErkezesIndoka", maxilladefektus_van as "maxilladefektusVan",
@@ -436,7 +502,12 @@ export async function POST(request: NextRequest) {
         nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
         nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
         tnm_staging as "tnmStaging",
-        bno, diagnozis,
+        bno, diagnozis, primer_mutet_leirasa as "primerMutetLeirasa",
+        baleset_idopont as "balesetIdopont",
+        baleset_etiologiaja as "balesetEtiologiaja",
+        baleset_egyeb as "balesetEgyeb",
+        veleszuletett_rendellenessegek as "veleszuletettRendellenessegek",
+        veleszuletett_mutetek_leirasa as "veleszuletettMutetekLeirasa",
         kezelesi_terv_felso as "kezelesiTervFelso",
         kezelesi_terv_also as "kezelesiTervAlso",
         kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
@@ -448,32 +519,59 @@ export async function POST(request: NextRequest) {
     console.log('Beteg sikeresen mentve, ID:', result.rows[0].id);
     
     // Activity logging: patient created
-    try {
-      const ipHeader = request.headers.get('x-forwarded-for') || '';
-      const ipAddress = ipHeader.split(',')[0]?.trim() || null;
-      await pool.query(
-        `INSERT INTO activity_logs (user_email, action, detail, ip_address)
-         VALUES ($1, $2, $3, $4)`,
-        [userEmail, 'patient_created', `Patient ID: ${result.rows[0].id}, Name: ${result.rows[0].nev || 'N/A'}`, ipAddress]
-      );
-    } catch (logError) {
-      console.error('Failed to log activity:', logError);
-      // Don't fail the request if logging fails
+    await logActivity(
+      request,
+      userEmail,
+      'patient_created',
+      `Patient ID: ${result.rows[0].id}, Name: ${result.rows[0].nev || 'N/A'}`
+    );
+
+    // Send email notification to admins if surgeon created the patient
+    if (role === 'sebészorvos') {
+      try {
+        const adminResult = await pool.query(
+          `SELECT email FROM users WHERE role = 'admin' AND active = true`
+        );
+        const adminEmails = adminResult.rows.map((row: { email: string }) => row.email);
+        
+        if (adminEmails.length > 0) {
+          await sendPatientCreationNotification(
+            adminEmails,
+            result.rows[0].nev,
+            result.rows[0].taj,
+            userEmail,
+            result.rows[0].createdAt || new Date().toISOString()
+          );
+        }
+      } catch (emailError) {
+        console.error('Failed to send patient creation notification email:', emailError);
+        // Don't fail the request if email fails
+      }
     }
     
     return NextResponse.json({ patient: result.rows[0] }, { status: 201 });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Hiba a beteg mentésekor:', error);
-    console.error('Hiba részletei:', {
+    const errorDetails = error instanceof Error ? {
       message: error.message,
-      code: error.code,
-      detail: error.detail,
-      constraint: error.constraint
-    });
+      name: error.name,
+      stack: error.stack,
+    } : { error };
+    console.error('Hiba részletei:', errorDetails);
     
-    if (error.name === 'ZodError') {
+    // PostgreSQL hiba kódok ellenőrzése
+    if (error && typeof error === 'object' && 'code' in error) {
+      console.error('PostgreSQL hiba:', {
+        code: (error as { code?: string }).code,
+        detail: (error as { detail?: string }).detail,
+        constraint: (error as { constraint?: string }).constraint,
+      });
+    }
+    
+    // Zod validation error ellenőrzése
+    if (error && typeof error === 'object' && 'name' in error && error.name === 'ZodError' && 'errors' in error) {
       return NextResponse.json(
-        { error: 'Érvénytelen adatok', details: error.errors },
+        { error: 'Érvénytelen adatok', details: (error as { errors: unknown }).errors },
         { status: 400 }
       );
     }

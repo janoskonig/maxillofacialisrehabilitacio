@@ -105,23 +105,39 @@ CREATE TABLE patients (
     
     -- FOGAZATI STÁTUSZ
     meglevo_fogak JSONB DEFAULT '{}'::jsonb,
-    felso_fogpotlas_tipus VARCHAR(100) CHECK (felso_fogpotlas_tipus IN (
-        'teljes akrilátlemezes fogpótlás',
+    felso_fogpotlas_tipus VARCHAR(100) CHECK (felso_fogpotlas_tipus IS NULL OR felso_fogpotlas_tipus IN (
+        'zárólemez',
         'részleges akrilátlemezes fogpótlás',
-        'részleges fémlemezes fogpótlás kapocselhorgonyzással',
-        'kombinált fogpótlás kapocselhorgonyzással',
-        'kombinált fogpótlás rejtett elhorgonyzási eszköz(ök)kel',
+        'teljes akrilátlemezes fogpótlás',  -- old value, kept for backward compatibility
+        'teljes lemezes fogpótlás',
         'fedőlemezes fogpótlás',
-        'rögzített fogpótlás'
+        'részleges fémlemezes fogpótlás kapocselhorgonyzással',  -- old value, kept for backward compatibility
+        'kapocselhorgonyzású részleges fémlemezes fogpótlás',
+        'kombinált fogpótlás kapocselhorgonyzással',
+        'kombinált fogpótlás rejtett elhorgonyzási eszköz(ök)kel',  -- old value, kept for backward compatibility
+        'kombinált fogpótlás rejtett elhorgonyzási eszközzel',
+        'rögzített fogpótlás',  -- old value, kept for backward compatibility
+        'rögzített fogpótlás fogakon elhorgonyozva',
+        'cementezett rögzítésű implantációs korona/híd',
+        'csavarozott rögzítésű implantációs korona/híd',
+        'sebészi sablon készítése'
     )),
-    also_fogpotlas_tipus VARCHAR(100) CHECK (also_fogpotlas_tipus IN (
-        'teljes akrilátlemezes fogpótlás',
+    also_fogpotlas_tipus VARCHAR(100) CHECK (also_fogpotlas_tipus IS NULL OR also_fogpotlas_tipus IN (
+        'zárólemez',
         'részleges akrilátlemezes fogpótlás',
-        'részleges fémlemezes fogpótlás kapocselhorgonyzással',
-        'kombinált fogpótlás kapocselhorgonyzással',
-        'kombinált fogpótlás rejtett elhorgonyzási eszköz(ök)kel',
+        'teljes akrilátlemezes fogpótlás',  -- old value, kept for backward compatibility
+        'teljes lemezes fogpótlás',
         'fedőlemezes fogpótlás',
-        'rögzített fogpótlás'
+        'részleges fémlemezes fogpótlás kapocselhorgonyzással',  -- old value, kept for backward compatibility
+        'kapocselhorgonyzású részleges fémlemezes fogpótlás',
+        'kombinált fogpótlás kapocselhorgonyzással',
+        'kombinált fogpótlás rejtett elhorgonyzási eszköz(ök)kel',  -- old value, kept for backward compatibility
+        'kombinált fogpótlás rejtett elhorgonyzási eszközzel',
+        'rögzített fogpótlás',  -- old value, kept for backward compatibility
+        'rögzített fogpótlás fogakon elhorgonyozva',
+        'cementezett rögzítésű implantációs korona/híd',
+        'csavarozott rögzítésű implantációs korona/híd',
+        'sebészi sablon készítése'
     )),
     
     -- IMPLANTÁTUMOK

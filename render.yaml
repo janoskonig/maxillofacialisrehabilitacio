@@ -12,6 +12,25 @@ services:
           name: maxillofacial-rehab-db
           property: connectionString
 
+  - type: cron
+    name: google-calendar-sync
+    env: node
+    schedule: "* * * * *"  # 1 percenként futtatás
+    buildCommand: npm install
+    startCommand: node scripts/cron-sync.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: maxillofacial-rehab-db
+          property: connectionString
+      # A következő környezeti változókat a Render Dashboard-ban kell beállítani:
+      # - GOOGLE_CALENDAR_SYNC_API_KEY: API kulcs a cron endpoint védelméhez
+      # - APP_URL: A web service URL-je (pl. https://maxillofacial-rehab.onrender.com)
+      #   Megjegyzés: A RENDER_EXTERNAL_URL automatikusan be lesz állítva, de ha nem működik,
+      #   akkor manuálisan állítsd be az APP_URL-t a web service URL-jére
+
 databases:
   - name: maxillofacial-rehab-db
     databaseName: maxillofacial_rehab

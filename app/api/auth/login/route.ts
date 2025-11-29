@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { SignJWT } from 'jose';
+import { logActivity } from '@/lib/activity';
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'change-this-to-a-random-secret-in-production'
@@ -77,20 +78,7 @@ export async function POST(request: NextRequest) {
     );
 
     // Activity log
-    try {
-      await pool.query(
-        'INSERT INTO activity_logs (user_email, action, detail, ip_address) VALUES ($1, $2, $3, $4)',
-        [
-          user.email,
-          'login',
-          'success',
-          request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null,
-        ]
-      );
-    } catch (e) {
-      // Nem kritikus hiba, csak logoljuk
-      console.error('Failed to log login activity:', e);
-    }
+    await logActivity(request, user.email, 'login', 'success');
 
     // Cookie beállítása
     const response = NextResponse.json({

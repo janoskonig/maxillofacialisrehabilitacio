@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { jwtVerify } from 'jose';
 import bcrypt from 'bcryptjs';
+import { sendApprovalEmail } from '@/lib/email';
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'change-this-to-a-random-secret-in-production'
@@ -38,12 +39,12 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { email, password, role, active, restricted_view } = body;
+    const { email, password, role, active, restricted_view, doktor_neve } = body;
 
     const pool = getDbPool();
 
     // Ellenőrizzük, hogy a felhasználó létezik-e
-    const userResult = await pool.query('SELECT id, email FROM users WHERE id = $1', [params.id]);
+    const userResult = await pool.query('SELECT id, email, active FROM users WHERE id = $1', [params.id]);
     if (userResult.rows.length === 0) {
       return NextResponse.json(
         { error: 'Felhasználó nem található' },
@@ -52,6 +53,7 @@ export async function PUT(
     }
 
     const user = userResult.rows[0];
+    const wasInactive = !user.active;
 
     // Csak admin módosíthat más felhasználókat, vagy saját email/jelszót
     const isOwnProfile = auth.userId === params.id;
@@ -134,6 +136,19 @@ export async function PUT(
       paramIndex++;
     }
 
+    if (doktor_neve !== undefined) {
+      // Admin módosíthatja bárki nevét, vagy saját nevét
+      if (!canModifyRole && !isOwnProfile) {
+        return NextResponse.json(
+          { error: 'Nincs jogosultsága a név módosításához' },
+          { status: 403 }
+        );
+      }
+      updates.push(`doktor_neve = $${paramIndex}`);
+      values.push(doktor_neve);
+      paramIndex++;
+    }
+
     if (updates.length === 0) {
       return NextResponse.json(
         { error: 'Nincs módosítandó mező' },
@@ -142,11 +157,22 @@ export async function PUT(
     }
 
     values.push(params.id);
-    const query = `UPDATE users SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramIndex} RETURNING id, email, role, active, restricted_view, updated_at`;
+    const query = `UPDATE users SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramIndex} RETURNING id, email, doktor_neve, role, active, restricted_view, updated_at`;
 
     const result = await pool.query(query, values);
+    const updatedUser = result.rows[0];
 
-    return NextResponse.json({ user: result.rows[0] });
+    // Send approval email if user was just activated
+    if (active === true && wasInactive && updatedUser.email) {
+      try {
+        await sendApprovalEmail(updatedUser.email);
+      } catch (emailError) {
+        console.error('Failed to send approval email:', emailError);
+        // Don't fail the request if email fails
+      }
+    }
+
+    return NextResponse.json({ user: updatedUser });
   } catch (error) {
     console.error('Error updating user:', error);
     return NextResponse.json(

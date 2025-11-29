@@ -14,3 +14,7 @@ SET nem = 'nem_ismert'
 WHERE nem = 'egyeb';
 
 
+
+
+
+

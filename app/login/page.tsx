@@ -56,7 +56,7 @@ export default function Login() {
           Maxillofaciális Rehabilitáció
         </h2>
         <p className="mt-2 text-center text-sm text-gray-600">
-          BETEGREGISZTER
+          BETEGREGISZTER ÉS IDŐPONTKEZELŐ
         </p>
       </div>
 
