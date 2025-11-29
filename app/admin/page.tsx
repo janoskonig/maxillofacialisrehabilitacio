@@ -242,6 +242,146 @@ export default function AdminPage() {
     });
   };
 
+  // E-mail előnézet betöltése
+  const loadEmailPreview = async () => {
+    if (emailRoles.length === 0) {
+      setEmailPreview([]);
+      setEmailPreviewData(null);
+      return;
+    }
+
+    setEmailPreviewLoading(true);
+    setEmailError(null);
+    try {
+      const rolesParam = emailRoles.join(',');
+      const res = await fetch(`/api/users/send-email?roles=${encodeURIComponent(rolesParam)}`, {
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setEmailPreview(data.users || []);
+        setEmailPreviewData({
+          users: data.users || [],
+          includeAdmins: data.includeAdmins || false,
+          adminCount: data.adminCount || 0,
+        });
+      } else {
+        const data = await res.json();
+        setEmailError(data.error || 'Hiba történt az előnézet betöltésekor');
+        setEmailPreview([]);
+        setEmailPreviewData(null);
+      }
+    } catch (e) {
+      console.error('Error loading email preview:', e);
+      setEmailError('Hiba történt az előnézet betöltésekor');
+      setEmailPreview([]);
+      setEmailPreviewData(null);
+    } finally {
+      setEmailPreviewLoading(false);
+    }
+  };
+
+  // E-mail küldése
+  const sendEmailToUsers = async () => {
+    if (emailRoles.length === 0) {
+      setEmailError('Válasszon ki legalább egy szerepkört');
+      return;
+    }
+
+    if (!emailSubject.trim()) {
+      setEmailError('Az e-mail tárgyának megadása kötelező');
+      return;
+    }
+
+    if (!emailContent.trim()) {
+      setEmailError('Az e-mail tartalmának megadása kötelező');
+      return;
+    }
+
+    setEmailSending(true);
+    setEmailError(null);
+    setEmailSuccess(null);
+
+    try {
+      const res = await fetch('/api/users/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          roles: emailRoles,
+          subject: emailSubject,
+          html: emailContent.replace(/\n/g, '<br>'),
+          text: emailContent,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setEmailSuccess(data.message || 'E-mail sikeresen elküldve');
+        setEmailSubject('');
+        setEmailContent('');
+        setEmailRoles([]);
+        setEmailPreview([]);
+        setEmailPreviewData(null);
+      } else {
+        const data = await res.json();
+        setEmailError(data.error || 'Hiba történt az e-mail küldésekor');
+      }
+    } catch (e) {
+      console.error('Error sending email:', e);
+      setEmailError('Hiba történt az e-mail küldésekor');
+    } finally {
+      setEmailSending(false);
+    }
+  };
+
+  // E-mail előnézet automatikus frissítése, amikor a szerepkörök változnak
+  useEffect(() => {
+    if (emailRoles.length === 0) {
+      setEmailPreview([]);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      const loadPreview = async () => {
+        setEmailPreviewLoading(true);
+        setEmailError(null);
+        try {
+          const rolesParam = emailRoles.join(',');
+          const res = await fetch(`/api/users/send-email?roles=${encodeURIComponent(rolesParam)}`, {
+            credentials: 'include',
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setEmailPreview(data.users || []);
+            setEmailPreviewData({
+              users: data.users || [],
+              includeAdmins: data.includeAdmins || false,
+              adminCount: data.adminCount || 0,
+            });
+          } else {
+            const data = await res.json();
+            setEmailError(data.error || 'Hiba történt az előnézet betöltésekor');
+            setEmailPreview([]);
+            setEmailPreviewData(null);
+          }
+        } catch (e) {
+          console.error('Error loading email preview:', e);
+          setEmailError('Hiba történt az előnézet betöltésekor');
+          setEmailPreview([]);
+          setEmailPreviewData(null);
+        } finally {
+          setEmailPreviewLoading(false);
+        }
+      };
+      loadPreview();
+    }, 500); // Debounce: 500ms késleltetés
+
+    return () => clearTimeout(timer);
+  }, [emailRoles]);
+
   const getTypeIcon = (type: string) => {
     switch (type) {
       case 'bug':
