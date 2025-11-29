@@ -74,8 +74,8 @@ export async function GET(
     // Generate PDF (this can take time, so we do it after releasing the DB connection)
     const pdfBuffer = await generateDentalStatusPDF(patient);
 
-    // Return PDF
-    return new NextResponse(pdfBuffer, {
+    // Return PDF - convert Buffer to Uint8Array for NextResponse
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
