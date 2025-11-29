@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Patient, patientSchema, nyakiBlokkdisszekcioOptions, fabianFejerdyProtetikaiOsztalyOptions, kezelesiTervOptions, kezelesiTervArcotErintoTipusOptions, kezelesiTervArcotErintoElhorgonyzasOptions } from '@/lib/types';
 import { formatDateForInput } from '@/lib/dateUtils';
-import { X, Calendar, User, Phone, Mail, MapPin, FileText, AlertTriangle, Plus, Trash2 } from 'lucide-react';
+import { X, Calendar, User, Phone, Mail, MapPin, FileText, AlertTriangle, Plus, Trash2, Download } from 'lucide-react';
 import { AppointmentBookingSection } from './AppointmentBookingSection';
 import { ConditionalAppointmentBooking } from './ConditionalAppointmentBooking';
 import { getCurrentUser } from '@/lib/auth';
@@ -151,7 +151,7 @@ interface PatientFormProps {
 }
 
 export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: PatientFormProps) {
-  const { confirm: confirmDialog } = useToast();
+  const { confirm: confirmDialog, showToast } = useToast();
   const [userRole, setUserRole] = useState<string>('');
   const [kezeloorvosOptions, setKezeloorvosOptions] = useState<Array<{ name: string; intezmeny: string | null }>>([]);
   const [doctorOptions, setDoctorOptions] = useState<Array<{ name: string; intezmeny: string | null }>>([]);
@@ -2070,6 +2070,43 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                 </div>
                 ) : null;
               })()}
+
+              {/* Export PDF button */}
+              {patientId && (Object.keys(fogak).length > 0 || patient?.felsoFogpotlasVan || patient?.alsoFogpotlasVan || (patient?.meglevoImplantatumok && Object.keys(patient.meglevoImplantatumok).length > 0)) && (
+                <div className="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const response = await fetch(`/api/patients/${patientId}/dental-status-export`);
+                        if (!response.ok) {
+                          const errorData = await response.json().catch(() => ({}));
+                          throw new Error(errorData.error || 'PDF generálás sikertelen');
+                        }
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `fogazati-status-${patientId}.pdf`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        window.URL.revokeObjectURL(url);
+                        showToast('PDF sikeresen letöltve', 'success');
+                      } catch (error) {
+                        console.error('Hiba a PDF exportálásakor:', error);
+                        const errorMessage = error instanceof Error ? error.message : 'Hiba történt a PDF exportálásakor';
+                        alert(errorMessage);
+                      }
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-medical-primary text-white rounded-lg hover:bg-medical-primary-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={!patientId}
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Fog. st. exportálása</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Fogpótlások – felső és alsó állcsont külön */}
