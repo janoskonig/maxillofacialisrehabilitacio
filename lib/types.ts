@@ -238,6 +238,20 @@ export const patientSchema = z.object({
   szakorvosiVelemény: z.string().optional().nullable(),
 });
 
+// Lab Quote Request Schema (külön táblában tárolva)
+export const labQuoteRequestSchema = z.object({
+  id: z.string().optional(),
+  patientId: z.string().min(1, 'Beteg ID kötelező'),
+  szoveg: z.string().min(1, 'Árajánlatkérő szöveg kötelező'),
+  datuma: z.string().min(1, 'Árajánlatkérő dátuma kötelező'),
+  createdAt: z.string().optional().nullable(),
+  updatedAt: z.string().optional().nullable(),
+  createdBy: z.string().optional().nullable(),
+  updatedBy: z.string().optional().nullable(),
+});
+
+export type LabQuoteRequest = z.infer<typeof labQuoteRequestSchema>;
+
 export type Patient = z.infer<typeof patientSchema>;
 
 export const beutaloIntezmenyOptions = [

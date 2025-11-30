@@ -566,6 +566,8 @@ export async function PUT(
         kortorteneti_osszefoglalo: 'Kórtörténeti összefoglaló',
         kezelesi_terv_melleklet: 'Kezelési terv melléklet',
         szakorvosi_velemeny: 'Szakorvosi vélemény',
+        arajanlatkero_szoveg: 'Árajánlatkérő szöveg',
+        arajanlatkero_datuma: 'Árajánlatkérő dátuma',
         kezelesi_terv_also: 'Kezelési terv (alsó)',
         kezelesi_terv_arcot_erinto: 'Kezelési terv (arcot érintő rehabilitáció)',
       };
