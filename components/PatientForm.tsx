@@ -2905,10 +2905,15 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                         </div>
                       );
                     })()}
-                    {(!watch('kezelesiTervFelso') || !Array.isArray(watch('kezelesiTervFelso')) || watch('kezelesiTervFelso').length === 0) &&
-                     (!watch('kezelesiTervAlso') || !Array.isArray(watch('kezelesiTervAlso')) || watch('kezelesiTervAlso').length === 0) && (
-                      <div className="text-gray-500 italic">Nincs megadva kezelési terv</div>
-                    )}
+                    {(() => {
+                      const felso = watch('kezelesiTervFelso');
+                      const also = watch('kezelesiTervAlso');
+                      const felsoEmpty = !felso || !Array.isArray(felso) || felso.length === 0;
+                      const alsoEmpty = !also || !Array.isArray(also) || also.length === 0;
+                      return felsoEmpty && alsoEmpty && (
+                        <div className="text-gray-500 italic">Nincs megadva kezelési terv</div>
+                      );
+                    })()}
                     <div className="mt-2 text-sm text-gray-600">
                       <em>(lásd melléklet)</em>
                     </div>
