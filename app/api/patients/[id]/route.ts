@@ -87,6 +87,9 @@ export async function GET(
         kezelesi_terv_felso as "kezelesiTervFelso",
         kezelesi_terv_also as "kezelesiTervAlso",
         kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
+        kortorteneti_osszefoglalo as "kortortenetiOsszefoglalo",
+        kezelesi_terv_melleklet as "kezelesiTervMelleklet",
+        szakorvosi_velemeny as "szakorvosiVelemény",
         created_at as "createdAt",
         updated_at as "updatedAt",
         created_by as "createdBy",
@@ -335,8 +338,11 @@ export async function PUT(
         kezelesi_terv_felso = $64::jsonb,
         kezelesi_terv_also = $65::jsonb,
         kezelesi_terv_arcot_erinto = $66::jsonb,
+        kortorteneti_osszefoglalo = $67,
+        kezelesi_terv_melleklet = $68,
+        szakorvosi_velemeny = $69,
         updated_at = CURRENT_TIMESTAMP,
-        updated_by = $67
+        updated_by = $70
       WHERE id = $1
       RETURNING 
         id, nev, taj, telefonszam, szuletesi_datum as "szuletesiDatum", nem,
@@ -386,6 +392,9 @@ export async function PUT(
         kezelesi_terv_felso as "kezelesiTervFelso",
         kezelesi_terv_also as "kezelesiTervAlso",
         kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
+        kortorteneti_osszefoglalo as "kortortenetiOsszefoglalo",
+        kezelesi_terv_melleklet as "kezelesiTervMelleklet",
+        szakorvosi_velemeny as "szakorvosiVelemény",
         created_at as "createdAt", updated_at as "updatedAt",
         created_by as "createdBy", updated_by as "updatedBy"`,
       [
@@ -467,6 +476,9 @@ export async function PUT(
         validatedPatient.kezelesiTervArcotErinto && Array.isArray(validatedPatient.kezelesiTervArcotErinto)
           ? JSON.stringify(validatedPatient.kezelesiTervArcotErinto)
           : '[]',
+        validatedPatient.kortortenetiOsszefoglalo || null,
+        validatedPatient.kezelesiTervMelleklet || null,
+        validatedPatient.szakorvosiVelemény || null,
         userEmail
       ]
     );
@@ -551,6 +563,9 @@ export async function PUT(
         bno: 'BNO',
         diagnozis: 'Diagnózis',
         kezelesi_terv_felso: 'Kezelési terv (felső)',
+        kortorteneti_osszefoglalo: 'Kórtörténeti összefoglaló',
+        kezelesi_terv_melleklet: 'Kezelési terv melléklet',
+        szakorvosi_velemeny: 'Szakorvosi vélemény',
         kezelesi_terv_also: 'Kezelési terv (alsó)',
         kezelesi_terv_arcot_erinto: 'Kezelési terv (arcot érintő rehabilitáció)',
       };
@@ -605,6 +620,9 @@ export async function PUT(
         else if (dbField === 'kezelesi_terv_felso') newVal = normalize(validatedPatient.kezelesiTervFelso);
         else if (dbField === 'kezelesi_terv_also') newVal = normalize(validatedPatient.kezelesiTervAlso);
         else if (dbField === 'kezelesi_terv_arcot_erinto') newVal = normalize(validatedPatient.kezelesiTervArcotErinto);
+        else if (dbField === 'kortorteneti_osszefoglalo') newVal = normalize(validatedPatient.kortortenetiOsszefoglalo);
+        else if (dbField === 'kezelesi_terv_melleklet') newVal = normalize(validatedPatient.kezelesiTervMelleklet);
+        else if (dbField === 'szakorvosi_velemeny') newVal = normalize(validatedPatient.szakorvosiVelemény);
         else {
           // Direct field name mapping (camelCase to snake_case handled above)
           const camelField = dbField.replace(/_([a-z])/g, (_, c) => c.toUpperCase());

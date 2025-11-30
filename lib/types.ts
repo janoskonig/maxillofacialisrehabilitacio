@@ -231,6 +231,11 @@ export const patientSchema = z.object({
     'ajakhasadék',
   ])).optional().nullable(),
   veleszuletettMutetekLeirasa: z.string().optional().nullable(),
+
+  // MÉLTÁNYOSSÁGI KÉRELEMHEZ SZÜKSÉGES ADATOK
+  kortortenetiOsszefoglalo: z.string().optional().nullable(),
+  kezelesiTervMelleklet: z.string().optional().nullable(),
+  szakorvosiVelemény: z.string().optional().nullable(),
 });
 
 export type Patient = z.infer<typeof patientSchema>;

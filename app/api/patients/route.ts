@@ -73,6 +73,9 @@ const PATIENT_SELECT_FIELDS = `
   kezelesi_terv_felso as "kezelesiTervFelso",
   kezelesi_terv_also as "kezelesiTervAlso",
   kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
+  kortorteneti_osszefoglalo as "kortortenetiOsszefoglalo",
+  kezelesi_terv_melleklet as "kezelesiTervMelleklet",
+  szakorvosi_velemeny as "szakorvosiVelemény",
   created_at as "createdAt",
   updated_at as "updatedAt",
   created_by as "createdBy",
@@ -431,6 +434,9 @@ export async function POST(request: NextRequest) {
       validatedPatient.kezelesiTervArcotErinto && Array.isArray(validatedPatient.kezelesiTervArcotErinto)
         ? JSON.stringify(validatedPatient.kezelesiTervArcotErinto)
         : '[]',
+      validatedPatient.kortortenetiOsszefoglalo || null,
+      validatedPatient.kezelesiTervMelleklet || null,
+      validatedPatient.szakorvosiVelemény || null,
       userEmail
     );
     
@@ -460,6 +466,7 @@ export async function POST(request: NextRequest) {
         baleset_idopont, baleset_etiologiaja, baleset_egyeb,
         veleszuletett_rendellenessegek, veleszuletett_mutetek_leirasa,
         kezelesi_terv_felso, kezelesi_terv_also, kezelesi_terv_arcot_erinto,
+        kortorteneti_osszefoglalo, kezelesi_terv_melleklet, szakorvosi_velemeny,
         created_by
       ) VALUES (
         ${paramPlaceholders}
@@ -511,6 +518,9 @@ export async function POST(request: NextRequest) {
         kezelesi_terv_felso as "kezelesiTervFelso",
         kezelesi_terv_also as "kezelesiTervAlso",
         kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
+        kortorteneti_osszefoglalo as "kortortenetiOsszefoglalo",
+        kezelesi_terv_melleklet as "kezelesiTervMelleklet",
+        szakorvosi_velemeny as "szakorvosiVelemény",
         created_at as "createdAt", updated_at as "updatedAt",
         created_by as "createdBy", updated_by as "updatedBy"`,
       values
