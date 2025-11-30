@@ -121,7 +121,8 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
           (field as any).setText(String(value));
           filledFields++;
         } else if (field.constructor.name === 'PDFCheckBox') {
-          if (value === true || value === 'Igen' || value === 'igen') {
+          const stringValue = String(value);
+          if (stringValue === 'Igen' || stringValue === 'igen' || stringValue.toLowerCase() === 'true') {
             (field as any).check();
             filledFields++;
           }
@@ -148,7 +149,7 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
         if (fieldNameLower.includes(key.toLowerCase()) || key.toLowerCase().includes(fieldNameLower)) {
           try {
             if (field.constructor.name === 'PDFTextField') {
-              field.setText(String(value), { updateAppearances: false });
+              (field as any).setText(String(value), { updateAppearances: false });
               filledFields++;
             }
             break;
