@@ -3067,8 +3067,13 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                           type="button"
                           onClick={async () => {
                             const confirmed = await confirmDialog(
-                              'Email küldése',
-                              'Biztosan elküldi az árajánlatkérőt emailben a laboratóriumnak?'
+                              'Biztosan elküldi az árajánlatkérőt emailben a laboratóriumnak?',
+                              {
+                                title: 'Email küldése',
+                                confirmText: 'Igen, elküldöm',
+                                cancelText: 'Mégse',
+                                type: 'info'
+                              }
                             );
                             if (!confirmed) return;
 
@@ -3104,8 +3109,13 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                             type="button"
                             onClick={async () => {
                               const confirmed = await confirmDialog(
-                                'Árajánlatkérő törlése',
-                                'Biztosan törölni szeretné ezt az árajánlatkérőt?'
+                                'Biztosan törölni szeretné ezt az árajánlatkérőt?',
+                                {
+                                  title: 'Árajánlatkérő törlése',
+                                  confirmText: 'Igen, törlöm',
+                                  cancelText: 'Mégse',
+                                  type: 'warning'
+                                }
                               );
                               if (!confirmed) return;
 
