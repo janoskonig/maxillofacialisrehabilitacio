@@ -78,6 +78,44 @@ export async function generateDentalStatusPDF(patient: Patient): Promise<Buffer>
         reject(error);
       });
 
+      // Logo betöltése és hozzáadása (ha létezik PNG verzió) - logo_1 balra, logo_2 jobbra
+      const margin = 50;
+      const logoWidth = 60;
+      const logoHeight = 60;
+      const docPageWidth = doc.page.width;
+      let hasLogo = false;
+      
+      try {
+        const logo1Path = path.join(process.cwd(), 'public', 'logo_1.png');
+        if (fs.existsSync(logo1Path)) {
+          // Logo 1 hozzáadása balra igazítva
+          doc.image(logo1Path, margin, doc.y, {
+            fit: [logoWidth, logoHeight],
+          });
+          hasLogo = true;
+        }
+      } catch (error) {
+        console.warn('Logo 1 betöltése sikertelen:', error);
+      }
+      
+      try {
+        const logo2Path = path.join(process.cwd(), 'public', 'logo_2.png');
+        if (fs.existsSync(logo2Path)) {
+          // Logo 2 hozzáadása jobbra igazítva
+          const logo2X = docPageWidth - logoWidth - margin;
+          doc.image(logo2Path, logo2X, doc.y, {
+            fit: [logoWidth, logoHeight],
+          });
+          hasLogo = true;
+        }
+      } catch (error) {
+        console.warn('Logo 2 betöltése sikertelen:', error);
+      }
+      
+      if (hasLogo) {
+        doc.moveDown(1);
+      }
+
       // Header
       doc.fontSize(18).font('Helvetica-Bold').fillColor('#000000').text('SEMMELWEIS EGYETEM', { align: 'center' });
       doc.moveDown(0.3);

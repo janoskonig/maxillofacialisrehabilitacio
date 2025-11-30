@@ -53,6 +53,28 @@ export async function generateLabQuoteRequestPDF(
   const margin = 50;
   let yPosition = page.getSize().height - margin;
   
+  // Logo betöltése (ha létezik PNG verzió)
+  let logoImage1 = null; // Balra igazított logo
+  let logoImage2 = null; // Jobbra igazított logo
+  try {
+    const logo1Path = path.join(process.cwd(), 'public', 'logo_1.png');
+    if (fs.existsSync(logo1Path)) {
+      const logoBytes = fs.readFileSync(logo1Path);
+      logoImage1 = await pdfDoc.embedPng(logoBytes);
+    }
+  } catch (error) {
+    console.warn('Logo 1 betöltése sikertelen:', error);
+  }
+  try {
+    const logo2Path = path.join(process.cwd(), 'public', 'logo_2.png');
+    if (fs.existsSync(logo2Path)) {
+      const logoBytes = fs.readFileSync(logo2Path);
+      logoImage2 = await pdfDoc.embedPng(logoBytes);
+    }
+  } catch (error) {
+    console.warn('Logo 2 betöltése sikertelen:', error);
+  }
+  
   // Helper függvény középre igazított szöveghez
   const addCenteredText = (text: string, fontSize: number, isBold: boolean = false) => {
     const currentFont = isBold ? boldFont : font;
@@ -388,6 +410,45 @@ export async function generateLabQuoteRequestPDF(
   };
   
   // Fejléc (hasonló a fog státusz PDF-hez)
+  // Logo hozzáadása (ha van) - logo_1 balra, logo_2 jobbra, ugyanabban a sorban mint a fejléc szöveg
+  const logoWidth = 60;
+  let logo1Height = 0;
+  let logo2Height = 0;
+  
+  if (logoImage1) {
+    logo1Height = (logoImage1.height / logoImage1.width) * logoWidth;
+  }
+  if (logoImage2) {
+    logo2Height = (logoImage2.height / logoImage2.width) * logoWidth;
+  }
+  
+  // Fejléc szöveg középre igazítva
+  // Az első sor magassága (18pt + 10pt spacing)
+  const firstLineHeight = 18 + 10;
+  const headerCenterY = yPosition - (firstLineHeight / 2);
+  
+  // Logók rajzolása ugyanabban a sorban, mint a fejléc szöveg
+  // Függőlegesen középre igazítva a fejléc szöveghez képest
+  if (logoImage1) {
+    const logo1Y = headerCenterY - (logo1Height / 2);
+    page.drawImage(logoImage1, {
+      x: margin, // Balra igazítva
+      y: logo1Y,
+      width: logoWidth,
+      height: logo1Height,
+    });
+  }
+  if (logoImage2) {
+    const logo2Y = headerCenterY - (logo2Height / 2);
+    page.drawImage(logoImage2, {
+      x: pageWidth - logoWidth - margin, // Jobbra igazítva
+      y: logo2Y,
+      width: logoWidth,
+      height: logo2Height,
+    });
+  }
+  
+  // Fejléc szöveg középre igazítva (ugyanabban a sorban, mint a logók)
   addCenteredText('SEMMELWEIS EGYETEM', 18, true);
   addCenteredText('Fogorvostudományi Kar', 15);
   addCenteredText('Fogpótlástani Klinika', 14);

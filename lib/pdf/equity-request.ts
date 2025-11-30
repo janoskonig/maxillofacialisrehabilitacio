@@ -20,6 +20,52 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
   const existingPdfBytes = fs.readFileSync(templatePath);
   const pdfDoc = await PDFDocument.load(existingPdfBytes);
   
+  // Logo betöltése és hozzáadása az első oldalhoz (ha létezik PNG verzió) - logo_1 balra, logo_2 jobbra
+  const pages = pdfDoc.getPages();
+  if (pages.length > 0) {
+    const firstPage = pages[0];
+    const pageWidth = firstPage.getSize().width;
+    const margin = 50;
+    const logoWidth = 50;
+    const topMargin = 30;
+    
+    try {
+      const logo1Path = path.join(process.cwd(), 'public', 'logo_1.png');
+      if (fs.existsSync(logo1Path)) {
+        const logoBytes = fs.readFileSync(logo1Path);
+        const logoImage1 = await pdfDoc.embedPng(logoBytes);
+        const logoHeight1 = (logoImage1.height / logoImage1.width) * logoWidth;
+        // Logo 1 hozzáadása balra igazítva
+        firstPage.drawImage(logoImage1, {
+          x: margin,
+          y: firstPage.getSize().height - logoHeight1 - topMargin,
+          width: logoWidth,
+          height: logoHeight1,
+        });
+      }
+    } catch (error) {
+      console.warn('Logo 1 betöltése sikertelen:', error);
+    }
+    
+    try {
+      const logo2Path = path.join(process.cwd(), 'public', 'logo_2.png');
+      if (fs.existsSync(logo2Path)) {
+        const logoBytes = fs.readFileSync(logo2Path);
+        const logoImage2 = await pdfDoc.embedPng(logoBytes);
+        const logoHeight2 = (logoImage2.height / logoImage2.width) * logoWidth;
+        // Logo 2 hozzáadása jobbra igazítva
+        firstPage.drawImage(logoImage2, {
+          x: pageWidth - logoWidth - margin,
+          y: firstPage.getSize().height - logoHeight2 - topMargin,
+          width: logoWidth,
+          height: logoHeight2,
+        });
+      }
+    } catch (error) {
+      console.warn('Logo 2 betöltése sikertelen:', error);
+    }
+  }
+  
   // Form mezők lekérése
   const form = pdfDoc.getForm();
   const formFields = form.getFields();

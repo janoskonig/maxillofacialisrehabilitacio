@@ -9,7 +9,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "convert-logo": "node scripts/convert-logo.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.3.2",
@@ -48,6 +49,7 @@
   "devDependencies": {
     "@types/xlsx": "^0.0.35",
     "eslint": "^8",
-    "eslint-config-next": "14.0.4"
+    "eslint-config-next": "14.0.4",
+    "sharp": "^0.34.5"
   }
 }
