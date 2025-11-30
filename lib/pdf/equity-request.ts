@@ -116,12 +116,13 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
     if (fieldMapping.hasOwnProperty(fieldName)) {
       const value = fieldMapping[fieldName];
       try {
+        // Type guard használata a típus ellenőrzéshez
         if (field.constructor.name === 'PDFTextField') {
-          field.setText(String(value));
+          (field as any).setText(String(value));
           filledFields++;
         } else if (field.constructor.name === 'PDFCheckBox') {
           if (value === true || value === 'Igen' || value === 'igen') {
-            field.check();
+            (field as any).check();
             filledFields++;
           }
         }
