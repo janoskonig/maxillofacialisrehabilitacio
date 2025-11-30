@@ -35,3 +35,5 @@ COMMENT ON COLUMN appointments.is_late IS 'Igaz, ha a beteg késett az időpontr
 COMMIT;
 
 
+
+

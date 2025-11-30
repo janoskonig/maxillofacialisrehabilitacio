@@ -35,3 +35,5 @@ COMMENT ON COLUMN patient_portal_tokens.token_type IS 'Type: magic_link (for log
 COMMENT ON COLUMN patient_portal_tokens.expires_at IS 'Token expiration time (typically 48 hours for magic_link, 7 days for email_verification)';
 
 
+
+
