@@ -2877,28 +2877,34 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                 <label className="form-label">Kezelési terv</label>
                 <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
                   <div className="space-y-2">
-                    {watch('kezelesiTervFelso') && Array.isArray(watch('kezelesiTervFelso')) && watch('kezelesiTervFelso').length > 0 && (
-                      <div>
-                        <span className="font-medium">Felső: </span>
-                        {watch('kezelesiTervFelso').map((t: any, idx: number) => (
-                          <span key={idx}>
-                            {t.tipus}
-                            {idx < watch('kezelesiTervFelso').length - 1 ? ', ' : ''}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    {watch('kezelesiTervAlso') && Array.isArray(watch('kezelesiTervAlso')) && watch('kezelesiTervAlso').length > 0 && (
-                      <div>
-                        <span className="font-medium">Alsó: </span>
-                        {watch('kezelesiTervAlso').map((t: any, idx: number) => (
-                          <span key={idx}>
-                            {t.tipus}
-                            {idx < watch('kezelesiTervAlso').length - 1 ? ', ' : ''}
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                    {(() => {
+                      const felso = watch('kezelesiTervFelso');
+                      return felso && Array.isArray(felso) && felso.length > 0 && (
+                        <div>
+                          <span className="font-medium">Felső: </span>
+                          {felso.map((t: any, idx: number) => (
+                            <span key={idx}>
+                              {t.tipus || t}
+                              {idx < felso.length - 1 ? ', ' : ''}
+                            </span>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                    {(() => {
+                      const also = watch('kezelesiTervAlso');
+                      return also && Array.isArray(also) && also.length > 0 && (
+                        <div>
+                          <span className="font-medium">Alsó: </span>
+                          {also.map((t: any, idx: number) => (
+                            <span key={idx}>
+                              {t.tipus || t}
+                              {idx < also.length - 1 ? ', ' : ''}
+                            </span>
+                          ))}
+                        </div>
+                      );
+                    })()}
                     {(!watch('kezelesiTervFelso') || !Array.isArray(watch('kezelesiTervFelso')) || watch('kezelesiTervFelso').length === 0) &&
                      (!watch('kezelesiTervAlso') || !Array.isArray(watch('kezelesiTervAlso')) || watch('kezelesiTervAlso').length === 0) && (
                       <div className="text-gray-500 italic">Nincs megadva kezelési terv</div>
