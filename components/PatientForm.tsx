@@ -23,7 +23,36 @@ type ToothStatus = { status?: 'D' | 'F' | 'M'; description?: string } | string;
 function normalizeToothData(value: ToothStatus | undefined): { status?: 'D' | 'F' | 'M'; description?: string } | null {
   if (!value) return null;
   if (typeof value === 'string') {
+    // Üres string esetén null-t adunk vissza
+    if (value.trim() === '') return null;
     return { description: value };
+  }
+  // Ha objektum, akkor ellenőrizzük
+  if (typeof value === 'object' && value !== null) {
+    const hasStatus = value.status !== undefined && value.status !== null;
+    const hasDescription = value.description !== undefined; // Van description kulcs (akár üres is)
+    const hasNonEmptyDescription = value.description && value.description.trim() !== '';
+    
+    // Ha van status (D, F, vagy M), akkor érvényes objektum, még akkor is, ha nincs description
+    if (hasStatus) {
+      return value;
+    }
+    
+    // Ha van description kulcs (akár üres is), akkor érvényes objektum
+    // Ez az implantátumok esetében fontos: { description: '' } azt jelenti, hogy be van jelölve
+    if (hasDescription) {
+      return value;
+    }
+    
+    // Üres objektum ({}) - ez érvényes állapot a fog státuszban (jelen van, de még nincs kiválasztva D/F)
+    // Csak akkor null, ha valóban nincs semmi
+    // Az üres objektumot visszaadjuk, mert ez azt jelenti, hogy a fog "present" állapotban van
+    if (Object.keys(value).length === 0) {
+      return value; // Üres objektum = jelen van, de még nincs kiválasztva D/F
+    }
+    
+    // Ha az objektum nem üres, de nincs benne semmi hasznos, akkor null
+    return null;
   }
   return value;
 }
@@ -90,9 +119,10 @@ interface ToothCheckboxProps {
   value: ToothStatus | undefined;
   onChange: () => void;
   disabled?: boolean;
+  idPrefix?: string; // Egyedi ID prefix az elkerülésére, hogy ugyanaz az ID legyen több helyen
 }
 
-function ToothCheckbox({ toothNumber, value, onChange, disabled }: ToothCheckboxProps) {
+function ToothCheckbox({ toothNumber, value, onChange, disabled, idPrefix = 'tooth' }: ToothCheckboxProps) {
   const state = getToothState(value);
   const isPresent = state === 'present';
   const isMissing = state === 'missing';
@@ -156,24 +186,27 @@ function ToothCheckbox({ toothNumber, value, onChange, disabled }: ToothCheckbox
     bgColor = '';
   }
 
+  const checkboxId = `${idPrefix}-${toothNumber}`;
+  
   return (
     <div className="flex flex-col items-center gap-1">
       <label 
-        htmlFor={`tooth-${toothNumber}`}
+        htmlFor={checkboxId}
         className="text-xs sm:text-xs text-gray-600 font-medium cursor-pointer"
       >
         {toothNumber}
       </label>
       <div className="relative">
         <label
-          htmlFor={`tooth-${toothNumber}`}
+          htmlFor={checkboxId}
           className={`w-8 h-8 sm:w-7 sm:h-7 rounded border-2 flex items-center justify-center focus-within:ring-2 focus-within:ring-medical-primary focus-within:ring-offset-1 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${borderColor} ${bgColor}`}
         >
           <input
-            id={`tooth-${toothNumber}`}
+            id={checkboxId}
             type="checkbox"
             checked={isChecked}
-            onChange={() => {
+            onChange={(e) => {
+              e.stopPropagation();
               if (!disabled) {
                 onChange();
               }
@@ -829,7 +862,15 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
 
   const handleImplantatumDetailsChange = (toothNumber: string, details: string) => {
     if (isViewOnly) return;
-    setImplantatumok(prev => ({ ...prev, [toothNumber]: details }));
+    setImplantatumok(prev => {
+      // Ha üres a leírás, töröljük a kulcsot
+      if (!details || details.trim() === '') {
+        const newState = { ...prev };
+        delete newState[toothNumber];
+        return newState;
+      }
+      return { ...prev, [toothNumber]: details };
+    });
   };
 
   // Háromállapotú toggle: üres → jelen → hiányzik → üres
@@ -2448,16 +2489,17 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                 <div className="flex gap-1 sm:gap-1">
                   {[18, 17, 16, 15, 14, 13, 12, 11].map(tooth => {
                     const toothStr = tooth.toString();
-                    const toothValue = fogak[toothStr];
-                    const toothState = getToothState(toothValue);
-                    const hasPresentTooth = toothState === 'present'; // Csak ha jelen van, ne lehessen implantátum
+                    const implantValue = toothStr in implantatumok
+                      ? { description: implantatumok[toothStr] || '' } 
+                      : undefined;
                     return (
                       <ToothCheckbox
                         key={tooth}
                         toothNumber={toothStr}
-                        value={toothStr in implantatumok ? { description: implantatumok[toothStr] } : undefined}
+                        value={implantValue}
                         onChange={() => handleToothToggle(toothStr)}
-                        disabled={isViewOnly || hasPresentTooth}
+                        disabled={isViewOnly}
+                        idPrefix="implant"
                       />
                     );
                   })}
@@ -2465,16 +2507,17 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                 <div className="flex gap-1 sm:gap-1">
                   {[21, 22, 23, 24, 25, 26, 27, 28].map(tooth => {
                     const toothStr = tooth.toString();
-                    const toothValue = fogak[toothStr];
-                    const toothState = getToothState(toothValue);
-                    const hasPresentTooth = toothState === 'present'; // Csak ha jelen van, ne lehessen implantátum
+                    const implantValue = toothStr in implantatumok
+                      ? { description: implantatumok[toothStr] || '' } 
+                      : undefined;
                     return (
                       <ToothCheckbox
                         key={tooth}
                         toothNumber={toothStr}
-                        value={toothStr in implantatumok ? { description: implantatumok[toothStr] } : undefined}
+                        value={implantValue}
                         onChange={() => handleToothToggle(toothStr)}
-                        disabled={isViewOnly || hasPresentTooth}
+                        disabled={isViewOnly}
+                        idPrefix="implant"
                       />
                     );
                   })}
@@ -2486,16 +2529,17 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                 <div className="flex gap-1 sm:gap-1">
                   {[48, 47, 46, 45, 44, 43, 42, 41].map(tooth => {
                     const toothStr = tooth.toString();
-                    const toothValue = fogak[toothStr];
-                    const toothState = getToothState(toothValue);
-                    const hasPresentTooth = toothState === 'present'; // Csak ha jelen van, ne lehessen implantátum
+                    const implantValue = toothStr in implantatumok
+                      ? { description: implantatumok[toothStr] || '' } 
+                      : undefined;
                     return (
                       <ToothCheckbox
                         key={tooth}
                         toothNumber={toothStr}
-                        value={toothStr in implantatumok ? { description: implantatumok[toothStr] } : undefined}
+                        value={implantValue}
                         onChange={() => handleToothToggle(toothStr)}
-                        disabled={isViewOnly || hasPresentTooth}
+                        disabled={isViewOnly}
+                        idPrefix="implant"
                       />
                     );
                   })}
@@ -2503,16 +2547,17 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                 <div className="flex gap-1 sm:gap-1">
                   {[31, 32, 33, 34, 35, 36, 37, 38].map(tooth => {
                     const toothStr = tooth.toString();
-                    const toothValue = fogak[toothStr];
-                    const toothState = getToothState(toothValue);
-                    const hasPresentTooth = toothState === 'present'; // Csak ha jelen van, ne lehessen implantátum
+                    const implantValue = toothStr in implantatumok
+                      ? { description: implantatumok[toothStr] || '' } 
+                      : undefined;
                     return (
                       <ToothCheckbox
                         key={tooth}
                         toothNumber={toothStr}
-                        value={toothStr in implantatumok ? { description: implantatumok[toothStr] } : undefined}
+                        value={implantValue}
                         onChange={() => handleToothToggle(toothStr)}
-                        disabled={isViewOnly || hasPresentTooth}
+                        disabled={isViewOnly}
+                        idPrefix="implant"
                       />
                     );
                   })}
@@ -2525,7 +2570,9 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           {Object.keys(implantatumok).length > 0 && (
             <div className="space-y-3 sm:space-y-4 mb-4">
               <h5 className="font-medium text-gray-700 mb-3 text-sm sm:text-base">Implantátum részletek</h5>
-              {Object.keys(implantatumok).sort().map(toothNumber => (
+              {Object.keys(implantatumok)
+                .sort()
+                .map(toothNumber => (
                 <div key={toothNumber} className="border border-gray-200 rounded-md p-3 sm:p-4">
                   <label className="form-label font-medium text-sm sm:text-base">
                     {toothNumber}. fog - Implantátum típusa, gyári száma, stb.

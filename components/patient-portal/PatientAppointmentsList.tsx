@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Calendar, Clock, MapPin, Plus, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Calendar, Clock, MapPin, Plus, CheckCircle, XCircle, AlertCircle, Edit2, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
+import { DateTimePicker } from '@/components/DateTimePicker';
 
 interface Appointment {
   id: string;
@@ -16,6 +17,15 @@ interface Appointment {
   dentistEmail: string | null;
   appointmentStatus: string | null;
   approvalStatus: string | null;
+  timeSlotId?: string;
+}
+
+interface TimeSlot {
+  id: string;
+  startTime: string;
+  status?: 'available' | 'booked';
+  cim: string | null;
+  teremszam: string | null;
 }
 
 export function PatientAppointmentsList() {
@@ -24,6 +34,9 @@ export function PatientAppointmentsList() {
   const [loading, setLoading] = useState(true);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [showRequestForm, setShowRequestForm] = useState(false);
+  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
+  const [newDateTime, setNewDateTime] = useState<Date | null>(null);
+  const [newTeremszam, setNewTeremszam] = useState<string>('');
 
   useEffect(() => {
     fetchAppointments();
@@ -99,6 +112,89 @@ export function PatientAppointmentsList() {
     return new Date(startTime) < new Date();
   };
 
+  const handleModifyAppointment = async (appointment: Appointment) => {
+    // Only allow modification of approved, future appointments
+    if (appointment.approvalStatus === 'pending') {
+      showToast('A jóváhagyásra váró időpontot nem lehet módosítani', 'error');
+      return;
+    }
+    if (appointment.approvalStatus === 'rejected') {
+      showToast('Az elutasított időpontot nem lehet módosítani', 'error');
+      return;
+    }
+    if (isPast(appointment.startTime)) {
+      showToast('Csak jövőbeli időpontot lehet módosítani', 'error');
+      return;
+    }
+    
+    setEditingAppointment(appointment);
+    setNewDateTime(null);
+    setNewTeremszam('');
+  };
+
+  const handleSaveModification = async () => {
+    if (!editingAppointment || !newDateTime) {
+      showToast('Kérjük, válasszon dátumot és időt!', 'error');
+      return;
+    }
+
+    // Check if date is in the future
+    if (newDateTime <= new Date()) {
+      showToast('Az időpont csak jövőbeli dátum lehet!', 'error');
+      return;
+    }
+
+    try {
+      // Convert Date to ISO format with timezone offset
+      const offset = -newDateTime.getTimezoneOffset();
+      const offsetHours = Math.floor(Math.abs(offset) / 60);
+      const offsetMinutes = Math.abs(offset) % 60;
+      const offsetSign = offset >= 0 ? '+' : '-';
+      const offsetString = `${offsetSign}${String(offsetHours).padStart(2, '0')}:${String(offsetMinutes).padStart(2, '0')}`;
+      
+      const year = newDateTime.getFullYear();
+      const month = String(newDateTime.getMonth() + 1).padStart(2, '0');
+      const day = String(newDateTime.getDate()).padStart(2, '0');
+      const hours = String(newDateTime.getHours()).padStart(2, '0');
+      const minutes = String(newDateTime.getMinutes()).padStart(2, '0');
+      const seconds = String(newDateTime.getSeconds()).padStart(2, '0');
+      const isoDateTime = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetString}`;
+
+      const response = await fetch(`/api/patient-portal/appointments/${editingAppointment.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          startTime: isoDateTime,
+          teremszam: newTeremszam.trim() || null,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Hiba történt az időpont módosításakor');
+      }
+
+      showToast(
+        'Időpont sikeresen módosítva! A fogpótlástanász és Ön értesítést kapott.',
+        'success'
+      );
+      setEditingAppointment(null);
+      setNewDateTime(null);
+      setNewTeremszam('');
+      await fetchAppointments();
+    } catch (error) {
+      console.error('Error modifying appointment:', error);
+      showToast(
+        error instanceof Error ? error.message : 'Hiba történt az időpont módosításakor',
+        'error'
+      );
+    }
+  };
+
   const upcomingAppointments = appointments.filter((apt) => !isPast(apt.startTime));
   const pastAppointments = appointments.filter((apt) => isPast(apt.startTime));
 
@@ -113,6 +209,77 @@ export function PatientAppointmentsList() {
 
   return (
     <div className="space-y-6">
+      {/* Modification Modal */}
+      {editingAppointment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-gray-900">Időpont módosítása</h3>
+              <button
+                onClick={() => {
+                  setEditingAppointment(null);
+                  setNewDateTime(null);
+                  setNewTeremszam('');
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-gray-600 mb-2">
+                  <strong>Jelenlegi időpont:</strong>{' '}
+                  {format(new Date(editingAppointment.startTime), 'yyyy. MMMM d. EEEE, HH:mm', { locale: hu })}
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Új dátum és idő megadása
+                </label>
+                <DateTimePicker
+                  selected={newDateTime}
+                  onChange={(date: Date | null) => setNewDateTime(date)}
+                  minDate={new Date()}
+                  placeholder="Válasszon dátumot és időt"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Teremszám (opcionális)
+                </label>
+                <input
+                  type="text"
+                  value={newTeremszam}
+                  onChange={(e) => setNewTeremszam(e.target.value)}
+                  className="form-input w-full"
+                  placeholder="Pl. 611"
+                />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => {
+                    setEditingAppointment(null);
+                    setNewDateTime(null);
+                    setNewTeremszam('');
+                  }}
+                  className="btn-secondary"
+                >
+                  Mégse
+                </button>
+                <button
+                  onClick={handleSaveModification}
+                  disabled={!newDateTime}
+                  className="btn-primary"
+                >
+                  Módosítás mentése
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2">
@@ -188,6 +355,21 @@ export function PatientAppointmentsList() {
                             {appointment.teremszam && ` • ${appointment.teremszam}. terem`}
                           </span>
                         </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 mt-2">
+                      {appointment.approvalStatus === 'approved' && 
+                       !isPast(appointment.startTime) &&
+                       appointment.appointmentStatus !== 'cancelled_by_doctor' &&
+                       appointment.appointmentStatus !== 'cancelled_by_patient' && (
+                        <button
+                          onClick={() => handleModifyAppointment(appointment)}
+                          className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 px-2 py-1 rounded hover:bg-blue-50"
+                          title="Időpont módosítása"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                          Módosítás
+                        </button>
                       )}
                     </div>
                   </div>

@@ -28,11 +28,12 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { timeSlotId } = body;
+    const { timeSlotId, startTime, teremszam } = body;
 
-    if (!timeSlotId) {
+    // Either timeSlotId or startTime must be provided
+    if (!timeSlotId && !startTime) {
       return NextResponse.json(
-        { error: 'Időpont ID megadása kötelező' },
+        { error: 'Időpont ID vagy dátum/idő megadása kötelező' },
         { status: 400 }
       );
     }
@@ -89,44 +90,108 @@ export async function PUT(
       );
     }
 
-    // Check if new time slot exists and is available
-    const newTimeSlotResult = await pool.query(
-      `SELECT ats.*, u.email as dentist_email, u.id as dentist_user_id
-       FROM available_time_slots ats
-       JOIN users u ON ats.user_id = u.id
-       WHERE ats.id = $1`,
-      [timeSlotId]
-    );
+    let newTimeSlot: any;
+    let newStartTime: Date;
+    let finalTimeSlotId: string;
 
-    if (newTimeSlotResult.rows.length === 0) {
-      return NextResponse.json(
-        { error: 'Új időpont nem található' },
-        { status: 404 }
+    // If startTime is provided, create a new time slot
+    if (startTime) {
+      const startDate = new Date(startTime);
+      const now = new Date();
+
+      // Validate that start time is in the future
+      if (startDate <= now) {
+        return NextResponse.json(
+          { error: 'Az időpont csak jövőbeli dátum lehet' },
+          { status: 400 }
+        );
+      }
+
+      newStartTime = startDate;
+
+      // Get the dentist user ID from the current appointment's time slot
+      const dentistUserResult = await pool.query(
+        `SELECT ats.user_id, u.email as dentist_email
+         FROM available_time_slots ats
+         LEFT JOIN users u ON ats.user_id = u.id
+         WHERE ats.id = $1`,
+        [appointment.old_time_slot_id]
       );
-    }
 
-    const newTimeSlot = newTimeSlotResult.rows[0];
+      if (dentistUserResult.rows.length === 0) {
+        return NextResponse.json(
+          { error: 'Nem található fogpótlástanász az időponthoz' },
+          { status: 404 }
+        );
+      }
 
-    if (newTimeSlot.status !== 'available') {
-      return NextResponse.json(
-        { error: 'Az új időpont már le van foglalva' },
-        { status: 400 }
+      const dentistUserId = dentistUserResult.rows[0].user_id;
+      const dentistEmail = dentistUserResult.rows[0].dentist_email;
+      const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
+
+      // Create new time slot
+      const newSlotResult = await pool.query(
+        `INSERT INTO available_time_slots (user_id, start_time, status, cim, teremszam)
+         VALUES ($1, $2, 'booked', $3, $4)
+         RETURNING id, start_time, cim, teremszam`,
+        [dentistUserId, startTime, DEFAULT_CIM, teremszam || null]
       );
-    }
 
-    // Check if new time slot is in the future
-    const newStartTime = new Date(newTimeSlot.start_time);
-    if (newStartTime <= new Date()) {
-      return NextResponse.json(
-        { error: 'Csak jövőbeli időpontra lehet módosítani' },
-        { status: 400 }
+      finalTimeSlotId = newSlotResult.rows[0].id;
+      newTimeSlot = {
+        id: finalTimeSlotId,
+        start_time: startTime,
+        dentist_email: dentistEmail,
+        dentist_user_id: dentistUserId,
+        cim: DEFAULT_CIM,
+        teremszam: teremszam || null,
+      };
+    } else if (timeSlotId) {
+      // Use existing time slot (legacy support)
+      const newTimeSlotResult = await pool.query(
+        `SELECT ats.*, u.email as dentist_email, u.id as dentist_user_id
+         FROM available_time_slots ats
+         JOIN users u ON ats.user_id = u.id
+         WHERE ats.id = $1`,
+        [timeSlotId]
       );
-    }
 
-    // Don't allow changing to the same time slot
-    if (appointment.old_time_slot_id === timeSlotId) {
+      if (newTimeSlotResult.rows.length === 0) {
+        return NextResponse.json(
+          { error: 'Új időpont nem található' },
+          { status: 404 }
+        );
+      }
+
+      newTimeSlot = newTimeSlotResult.rows[0];
+      newStartTime = new Date(newTimeSlot.start_time);
+      finalTimeSlotId = timeSlotId;
+
+      if (newTimeSlot.status !== 'available') {
+        return NextResponse.json(
+          { error: 'Az új időpont már le van foglalva' },
+          { status: 400 }
+        );
+      }
+
+      // Check if new time slot is in the future
+      if (newStartTime <= new Date()) {
+        return NextResponse.json(
+          { error: 'Csak jövőbeli időpontra lehet módosítani' },
+          { status: 400 }
+        );
+      }
+
+      // Don't allow changing to the same time slot
+      if (appointment.old_time_slot_id === timeSlotId) {
+        return NextResponse.json(
+          { error: 'Az új időpont megegyezik a régi időponttal' },
+          { status: 400 }
+        );
+      }
+    } else {
       return NextResponse.json(
-        { error: 'Az új időpont megegyezik a régi időponttal' },
+        { error: 'Időpont ID vagy dátum/idő megadása kötelező' },
         { status: 400 }
       );
     }
@@ -149,7 +214,7 @@ export async function PUT(
            created_by as "createdBy",
            dentist_email as "dentistEmail",
            created_at as "createdAt"`,
-        [timeSlotId, newTimeSlot.dentist_email, params.id]
+        [finalTimeSlotId, newTimeSlot.dentist_email, params.id]
       );
 
       // Update old time slot status back to available
@@ -158,11 +223,14 @@ export async function PUT(
         ['available', appointment.old_time_slot_id]
       );
 
-      // Update new time slot status to booked
-      await pool.query(
-        'UPDATE available_time_slots SET status = $1 WHERE id = $2',
-        ['booked', timeSlotId]
-      );
+      // New time slot is already booked (created as booked or updated to booked)
+      if (!startTime) {
+        // Only update status if using existing time slot
+        await pool.query(
+          'UPDATE available_time_slots SET status = $1 WHERE id = $2',
+          ['booked', finalTimeSlotId]
+        );
+      }
 
       await pool.query('COMMIT');
 

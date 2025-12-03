@@ -57,6 +57,9 @@ export function AppointmentBookingSection({
   const [newSlotCim, setNewSlotCim] = useState<string>('');
   const [customCim, setCustomCim] = useState<string>('');
   const [customTeremszam, setCustomTeremszam] = useState<string>('');
+  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
+  const [newModifyDateTime, setNewModifyDateTime] = useState<Date | null>(null);
+  const [newModifyTeremszam, setNewModifyTeremszam] = useState<string>('');
   const [editingStatus, setEditingStatus] = useState<Appointment | null>(null);
   const [statusForm, setStatusForm] = useState<{
     appointmentStatus: 'cancelled_by_doctor' | 'cancelled_by_patient' | 'completed' | 'no_show' | null;
@@ -297,6 +300,72 @@ export function AppointmentBookingSection({
     }
   };
 
+  const handleModifyAppointment = (appointment: Appointment) => {
+    setEditingAppointment(appointment);
+    setNewModifyDateTime(null);
+    setNewModifyTeremszam('');
+  };
+
+  const handleSaveModification = async () => {
+    if (!editingAppointment || !newModifyDateTime) {
+      alert('Kérjük, válasszon dátumot és időt!');
+      return;
+    }
+
+    // Check if date is in the future
+    if (newModifyDateTime <= new Date()) {
+      alert('Az időpont csak jövőbeli dátum lehet!');
+      return;
+    }
+
+    if (!confirm('Biztosan módosítani szeretné ezt az időpontot? A fogpótlástanász és a beteg értesítést kap.')) {
+      return;
+    }
+
+    try {
+      // Convert Date to ISO format with timezone offset
+      const offset = -newModifyDateTime.getTimezoneOffset();
+      const offsetHours = Math.floor(Math.abs(offset) / 60);
+      const offsetMinutes = Math.abs(offset) % 60;
+      const offsetSign = offset >= 0 ? '+' : '-';
+      const offsetString = `${offsetSign}${String(offsetHours).padStart(2, '0')}:${String(offsetMinutes).padStart(2, '0')}`;
+      
+      const year = newModifyDateTime.getFullYear();
+      const month = String(newModifyDateTime.getMonth() + 1).padStart(2, '0');
+      const day = String(newModifyDateTime.getDate()).padStart(2, '0');
+      const hours = String(newModifyDateTime.getHours()).padStart(2, '0');
+      const minutes = String(newModifyDateTime.getMinutes()).padStart(2, '0');
+      const seconds = String(newModifyDateTime.getSeconds()).padStart(2, '0');
+      const isoDateTime = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetString}`;
+
+      const response = await fetch(`/api/appointments/${editingAppointment.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          startTime: isoDateTime,
+          teremszam: newModifyTeremszam.trim() || null,
+        }),
+      });
+
+      if (response.ok) {
+        await loadData();
+        setEditingAppointment(null);
+        setNewModifyDateTime(null);
+        setNewModifyTeremszam('');
+        alert('Időpont sikeresen módosítva! A fogpótlástanász és a beteg (ha van email-címe) értesítést kapott.');
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Hiba történt az időpont módosításakor');
+      }
+    } catch (error) {
+      console.error('Error modifying appointment:', error);
+      alert('Hiba történt az időpont módosításakor');
+    }
+  };
+
   const handleEditStatus = (appointment: Appointment) => {
     setEditingStatus(appointment);
     setStatusForm({
@@ -502,6 +571,75 @@ export function AppointmentBookingSection({
 
   return (
     <div className="border-t pt-6 mt-6">
+      {/* Modification Modal */}
+      {editingAppointment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-gray-900">Időpont módosítása</h3>
+              <button
+                onClick={() => {
+                  setEditingAppointment(null);
+                  setNewModifyDateTime(null);
+                  setNewModifyTeremszam('');
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-gray-600 mb-2">
+                  <strong>Jelenlegi időpont:</strong> {formatDateTime(editingAppointment.startTime)}
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Új dátum és idő megadása
+                </label>
+                <DateTimePicker
+                  selected={newModifyDateTime}
+                  onChange={(date: Date | null) => setNewModifyDateTime(date)}
+                  minDate={new Date()}
+                  placeholder="Válasszon dátumot és időt"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Teremszám (opcionális)
+                </label>
+                <input
+                  type="text"
+                  value={newModifyTeremszam}
+                  onChange={(e) => setNewModifyTeremszam(e.target.value)}
+                  className="form-input w-full"
+                  placeholder="Pl. 611"
+                />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => {
+                    setEditingAppointment(null);
+                    setNewModifyDateTime(null);
+                    setNewModifyTeremszam('');
+                  }}
+                  className="btn-secondary"
+                >
+                  Mégse
+                </button>
+                <button
+                  onClick={handleSaveModification}
+                  disabled={!newModifyDateTime}
+                  className="btn-primary"
+                >
+                  Módosítás mentése
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Status Edit Modal */}
       {editingStatus && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -697,6 +835,14 @@ export function AppointmentBookingSection({
                   </button>
                   {!isViewOnly && (userRole === 'sebészorvos' || userRole === 'admin' || userRole === 'fogpótlástanász') && (
                     <>
+                      <button
+                        onClick={() => handleModifyAppointment(appointment)}
+                        className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                        title="Időpont módosítása"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                        Módosítás
+                      </button>
                       <button
                         onClick={() => handleEditStatus(appointment)}
                         className="text-sm text-purple-600 hover:text-purple-800 flex items-center gap-1"

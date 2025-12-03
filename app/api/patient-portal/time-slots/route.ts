@@ -19,14 +19,15 @@ export async function GET(request: NextRequest) {
 
     const pool = getDbPool();
     const searchParams = request.nextUrl.searchParams;
-    const status = searchParams.get('status') || 'available';
+    const status = searchParams.get('status'); // null means all statuses
     const futureOnly = searchParams.get('future') === 'true';
 
     let whereConditions: string[] = [];
     const queryParams: unknown[] = [];
     let paramIndex = 1;
 
-    if (status) {
+    // Only filter by status if explicitly provided and not 'all'
+    if (status && status !== 'all') {
       whereConditions.push(`ats.status = $${paramIndex}`);
       queryParams.push(status);
       paramIndex++;
@@ -69,6 +70,7 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
 
 
 
