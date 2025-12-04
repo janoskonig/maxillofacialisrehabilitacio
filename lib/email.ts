@@ -72,6 +72,60 @@ function htmlToText(html: string): string {
 }
 
 /**
+ * Format date for email notifications
+ * Uses Europe/Budapest timezone consistently to avoid timezone issues
+ * Returns formatted date in format: YYYY. MM. DD. HH:mm:ss
+ */
+function formatDateForEmail(date: Date): string {
+  const formatter = new Intl.DateTimeFormat('hu-HU', {
+    timeZone: 'Europe/Budapest',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+  
+  const parts = formatter.formatToParts(date);
+  const year = parts.find(p => p.type === 'year')?.value || '';
+  const month = parts.find(p => p.type === 'month')?.value || '';
+  const day = parts.find(p => p.type === 'day')?.value || '';
+  const hours = parts.find(p => p.type === 'hour')?.value || '';
+  const minutes = parts.find(p => p.type === 'minute')?.value || '';
+  const seconds = parts.find(p => p.type === 'second')?.value || '';
+  
+  return `${year}. ${month}. ${day}. ${hours}:${minutes}:${seconds}`;
+}
+
+/**
+ * Format date for email notifications (without seconds)
+ * Uses Europe/Budapest timezone consistently
+ * Returns formatted date in format: YYYY. MM. DD. HH:mm
+ */
+function formatDateForEmailShort(date: Date): string {
+  const formatter = new Intl.DateTimeFormat('hu-HU', {
+    timeZone: 'Europe/Budapest',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+  
+  const parts = formatter.formatToParts(date);
+  const year = parts.find(p => p.type === 'year')?.value || '';
+  const month = parts.find(p => p.type === 'month')?.value || '';
+  const day = parts.find(p => p.type === 'day')?.value || '';
+  const hours = parts.find(p => p.type === 'hour')?.value || '';
+  const minutes = parts.find(p => p.type === 'minute')?.value || '';
+  
+  return `${year}. ${month}. ${day}. ${hours}:${minutes}`;
+}
+
+/**
  * Send an email using the configured SMTP settings
  * Includes spam prevention best practices:
  * - Reply-To header
@@ -243,7 +297,7 @@ export async function sendPatientCreationNotification(
         <li><strong>Beteg neve:</strong> ${patientName || 'Név nélküli'}</li>
         <li><strong>TAJ szám:</strong> ${taj || 'Nincs megadva'}</li>
         <li><strong>Beutaló orvos:</strong> ${surgeonName}</li>
-        <li><strong>Létrehozás dátuma:</strong> ${new Date(creationDate).toLocaleString('hu-HU')}</li>
+        <li><strong>Létrehozás dátuma:</strong> ${formatDateForEmail(new Date(creationDate))}</li>
       </ul>
       <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
     </div>
@@ -282,7 +336,7 @@ export async function sendAppointmentBookingNotification(
       <ul>
         <li><strong>Beteg neve:</strong> ${patientName || 'Név nélküli'}</li>
         <li><strong>TAJ szám:</strong> ${patientTaj || 'Nincs megadva'}</li>
-        <li><strong>Időpont:</strong> ${appointmentTime.toLocaleString('hu-HU')}</li>
+        <li><strong>Időpont:</strong> ${formatDateForEmail(appointmentTime)}</li>
         <li><strong>Cím:</strong> ${displayCim}</li>
         ${teremszam ? `<li><strong>Teremszám:</strong> ${teremszam}</li>` : ''}
         <li><strong>Beutaló orvos:</strong> ${surgeonName}</li>
@@ -327,25 +381,7 @@ export async function sendAppointmentBookingNotificationToPatient(
   // Dátum formátum: 2025. 11. 11. 15:15:00
   // Az appointmentTime Date objektum, ami az adatbázisból jön
   // Explicit módon használjuk a Europe/Budapest időzónát, hogy független legyen a szerver időzónájától
-  const formatter = new Intl.DateTimeFormat('hu-HU', {
-    timeZone: 'Europe/Budapest',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false
-  });
-  
-  const parts = formatter.formatToParts(appointmentTime);
-  const year = parts.find(p => p.type === 'year')?.value || '';
-  const month = parts.find(p => p.type === 'month')?.value || '';
-  const day = parts.find(p => p.type === 'day')?.value || '';
-  const hours = parts.find(p => p.type === 'hour')?.value || '';
-  const minutes = parts.find(p => p.type === 'minute')?.value || '';
-  const seconds = parts.find(p => p.type === 'second')?.value || '';
-  const formattedDate = `${year}. ${month}. ${day}. ${hours}:${minutes}:${seconds}`;
+  const formattedDate = formatDateForEmail(appointmentTime);
   
   // Cím formátum: 1088 Budapest Szentkirályi utca 47. 611. terem
   // Eltávolítjuk a vesszőt a címből, ha van
@@ -455,7 +491,7 @@ export async function sendAppointmentBookingNotificationToAdmins(
       <ul>
         <li><strong>Beteg neve:</strong> ${patientName || 'Név nélküli'}</li>
         <li><strong>TAJ szám:</strong> ${patientTaj || 'Nincs megadva'}</li>
-        <li><strong>Időpont:</strong> ${appointmentTime.toLocaleString('hu-HU')}</li>
+        <li><strong>Időpont:</strong> ${formatDateForEmail(appointmentTime)}</li>
         <li><strong>Cím:</strong> ${displayCim}</li>
         ${teremszam ? `<li><strong>Teremszám:</strong> ${teremszam}</li>` : ''}
         <li><strong>Fogpótlástanász:</strong> ${dentistName}</li>
@@ -498,7 +534,7 @@ export async function sendAppointmentCancellationNotification(
       <ul>
         <li><strong>Beteg neve:</strong> ${patientName || 'Név nélküli'}</li>
         <li><strong>TAJ szám:</strong> ${patientTaj || 'Nincs megadva'}</li>
-        <li><strong>Időpont:</strong> ${appointmentTime.toLocaleString('hu-HU')}</li>
+        <li><strong>Időpont:</strong> ${formatDateForEmail(appointmentTime)}</li>
         <li><strong>Lemondta:</strong> ${cancelledBy}</li>
       </ul>
       <p>Az időpont újra elérhetővé vált a rendszerben.</p>
@@ -528,7 +564,7 @@ export async function sendAppointmentCancellationNotificationToPatient(
       <p>Kedves ${patientName || 'Beteg'}!</p>
       <p>Időpontfoglalását lemondtuk:</p>
       <ul>
-        <li><strong>Időpont:</strong> ${appointmentTime.toLocaleString('hu-HU')}</li>
+        <li><strong>Időpont:</strong> ${formatDateForEmail(appointmentTime)}</li>
         <li><strong>Fogpótlástanász:</strong> ${dentistName}</li>
       </ul>
       <p>Ha új időpontot szeretne foglalni, kérjük, lépjen kapcsolatba velünk.</p>
@@ -563,8 +599,8 @@ export async function sendAppointmentModificationNotification(
       <ul>
         <li><strong>Beteg neve:</strong> ${patientName || 'Név nélküli'}</li>
         <li><strong>TAJ szám:</strong> ${patientTaj || 'Nincs megadva'}</li>
-        <li><strong>Régi időpont:</strong> ${oldAppointmentTime.toLocaleString('hu-HU')}</li>
-        <li><strong>Új időpont:</strong> ${newAppointmentTime.toLocaleString('hu-HU')}</li>
+        <li><strong>Régi időpont:</strong> ${formatDateForEmail(oldAppointmentTime)}</li>
+        <li><strong>Új időpont:</strong> ${formatDateForEmail(newAppointmentTime)}</li>
         <li><strong>Módosította:</strong> ${modifiedBy}</li>
       </ul>
       <p>Az új időpont részleteit a mellékelt naptár fájlban találja, amelyet importálhat naptárkezelő alkalmazásába.</p>
@@ -603,8 +639,8 @@ export async function sendAppointmentModificationNotificationToPatient(
       <p>Kedves ${patientName || 'Beteg'}!</p>
       <p>Időpontfoglalását módosítottuk:</p>
       <ul>
-        <li><strong>Régi időpont:</strong> ${oldAppointmentTime.toLocaleString('hu-HU')}</li>
-        <li><strong>Új időpont:</strong> ${newAppointmentTime.toLocaleString('hu-HU')}</li>
+        <li><strong>Régi időpont:</strong> ${formatDateForEmail(oldAppointmentTime)}</li>
+        <li><strong>Új időpont:</strong> ${formatDateForEmail(newAppointmentTime)}</li>
         <li><strong>Fogpótlástanász:</strong> ${dentistName}</li>
       </ul>
       <p>Kérjük, hogy az új időpontot tartsa be. Ha bármilyen kérdése van, kérjük, lépjen kapcsolatba velünk.</p>
@@ -647,7 +683,7 @@ export async function sendAppointmentTimeSlotFreedNotification(
       <ul>
         <li><strong>Beteg neve:</strong> ${patientName || 'Név nélküli'}</li>
         <li><strong>TAJ szám:</strong> ${patientTaj || 'Nincs megadva'}</li>
-        <li><strong>Időpont:</strong> ${appointmentTime.toLocaleString('hu-HU')}</li>
+        <li><strong>Időpont:</strong> ${formatDateForEmail(appointmentTime)}</li>
         ${dentistEmail ? `<li><strong>Fogpótlástanász:</strong> ${dentistEmail}</li>` : ''}
         <li><strong>Törölte:</strong> ${deletedBy}</li>
       </ul>
@@ -701,7 +737,7 @@ export async function sendRegistrationNotificationToAdmins(
         <li><strong>Szerepkör:</strong> ${roleDisplayName}</li>
         <li><strong>Intézmény:</strong> ${institution}</li>
         <li><strong>Hozzáférés indoklása:</strong> ${accessReason}</li>
-        <li><strong>Regisztráció dátuma:</strong> ${registrationDate.toLocaleString('hu-HU')}</li>
+        <li><strong>Regisztráció dátuma:</strong> ${formatDateForEmail(registrationDate)}</li>
       </ul>
       <p>Kérjük, jelentkezzen be az adminisztrációs felületre, hogy jóváhagyja vagy elutasítsa a regisztrációt.</p>
       <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
@@ -733,25 +769,8 @@ export async function sendConditionalAppointmentRequestToPatient(
   showAlternatives?: boolean // If false, don't show alternative slots to patient
 ): Promise<void> {
   // Dátum formátum: 2025. 11. 11. 15:15:00
-  const formatter = new Intl.DateTimeFormat('hu-HU', {
-    timeZone: 'Europe/Budapest',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false
-  });
-  
-  const parts = formatter.formatToParts(appointmentTime);
-  const year = parts.find(p => p.type === 'year')?.value || '';
-  const month = parts.find(p => p.type === 'month')?.value || '';
-  const day = parts.find(p => p.type === 'day')?.value || '';
-  const hours = parts.find(p => p.type === 'hour')?.value || '';
-  const minutes = parts.find(p => p.type === 'minute')?.value || '';
-  const seconds = parts.find(p => p.type === 'second')?.value || '';
-  const formattedDate = `${year}. ${month}. ${day}. ${hours}:${minutes}:${seconds}`;
+  // Explicit módon használjuk a Europe/Budapest időzónát, hogy független legyen a szerver időzónájától
+  const formattedDate = formatDateForEmail(appointmentTime);
   
   // Üdvözlés: Tisztelt Vezetknév Keresztnév Úr/Hölgy
   let greeting = 'Tisztelt';
@@ -789,13 +808,7 @@ export async function sendConditionalAppointmentRequestToPatient(
   let alternativeSlotsHtml = '';
   if (showAlternatives && alternativeSlots && alternativeSlots.length > 0) {
     const altSlotsList = alternativeSlots.map((slot, index) => {
-      const altDate = slot.startTime.toLocaleString('hu-HU', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
+      const altDate = formatDateForEmailShort(slot.startTime);
       const altCim = slot.cim || DEFAULT_CIM;
       const altTerem = slot.teremszam ? ` (${slot.teremszam}. terem)` : '';
       return `<li><strong>Alternatíva ${index + 1}:</strong> ${altDate} - ${altCim.replace(/,/g, '')}${altTerem}</li>`;
@@ -878,13 +891,7 @@ export async function sendConditionalAppointmentNotificationToAdmin(
   let alternativeSlotsHtml = '';
   if (alternativeSlots && alternativeSlots.length > 0) {
     const altSlotsList = alternativeSlots.map((slot, index) => {
-      const altDate = slot.startTime.toLocaleString('hu-HU', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
+      const altDate = formatDateForEmailShort(slot.startTime);
       const altCim = slot.cim || DEFAULT_CIM;
       const altTerem = slot.teremszam ? ` (${slot.teremszam}. terem)` : '';
       return `<li><strong>Alternatíva ${index + 1}:</strong> ${altDate} - ${altCim.replace(/,/g, '')}${altTerem}</li>`;
@@ -906,7 +913,7 @@ export async function sendConditionalAppointmentNotificationToAdmin(
         <li><strong>Beteg neve:</strong> ${patientName || 'Név nélküli'}</li>
         <li><strong>TAJ szám:</strong> ${patientTaj || 'Nincs megadva'}</li>
         <li><strong>Email cím:</strong> ${patientEmail || 'Nincs megadva'}</li>
-        <li><strong>Időpont:</strong> ${appointmentTime.toLocaleString('hu-HU')}</li>
+        <li><strong>Időpont:</strong> ${formatDateForEmail(appointmentTime)}</li>
         <li><strong>Cím:</strong> ${formattedAddress}</li>
         <li><strong>Kezelőorvos:</strong> ${dentistFullName}</li>
         <li><strong>Létrehozta:</strong> ${createdBy}</li>
@@ -948,7 +955,7 @@ export async function sendNewAppointmentRequestToAdmin(
         <li><strong>Beteg neve:</strong> ${patientName || 'Név nélküli'}</li>
         <li><strong>TAJ szám:</strong> ${patientTaj || 'Nincs megadva'}</li>
         <li><strong>Email cím:</strong> ${patientEmail || 'Nincs megadva'}</li>
-        <li><strong>Eredeti időpont:</strong> ${oldAppointmentTime.toLocaleString('hu-HU')}</li>
+        <li><strong>Eredeti időpont:</strong> ${formatDateForEmail(oldAppointmentTime)}</li>
         <li><strong>Időpont ID:</strong> ${appointmentId}</li>
       </ul>
       <p>Kérjük, jelentkezzen be a rendszerbe és válasszon új időpontot a páciens számára.</p>
