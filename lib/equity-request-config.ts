@@ -4,9 +4,11 @@
  */
 
 export const EQUITY_REQUEST_CONFIG = {
-  szolgaltatoNeve: 'SE KK Fogpótlástani Klinika',
-  cim: '1088 Szentkirályi utca 47.',
-  varmegyeKod: 'NA9',
-  neakKod: 'NA9999',
+  szolgaltatoNeve: 'Semmelweis Egyetem Klinikai Központ',
+  cim: 'Budapest Üllői út 26 1085',
+  varmegyeKod: 'U915',
+  neakKod: 'U915',
+  megbizottNeve: 'Dr. Schmidt Péter',
+  pecsetszam: '59147',
 } as const;
 

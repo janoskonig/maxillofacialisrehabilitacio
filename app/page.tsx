@@ -434,41 +434,38 @@ export default function Home() {
               </div>
 
               {/* Stats */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className={`grid gap-3 ${searchQuery.trim() ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
                 <div className="card p-3">
                   <div className="flex items-center">
                     <Users className="w-5 h-5 text-medical-primary" />
                     <div className="ml-2">
-                      <p className="text-xs font-medium text-gray-500">Összes beteg</p>
-                      <p className="text-xl font-bold text-gray-900">{pagination?.total ?? patients.length}</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="card p-3">
-                  <div className="flex items-center">
-                    <Search className="w-5 h-5 text-medical-accent" />
-                    <div className="ml-2">
-                      <p className="text-xs font-medium text-gray-500">Keresési eredmények</p>
-                      <p className="text-xl font-bold text-gray-900">{filteredPatients.length}</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="card p-3">
-                  <div className="flex items-center">
-                    <Plus className="w-5 h-5 text-medical-success" />
-                    <div className="ml-2">
-                      <p className="text-xs font-medium text-gray-500">Új ebben a hónapban</p>
+                      <p className="text-xs font-medium text-gray-500">
+                        {searchQuery.trim() ? 'Keresési eredmények' : 'Összes beteg'}
+                      </p>
                       <p className="text-xl font-bold text-gray-900">
-                        {patients.filter(p => {
-                          const created = new Date(p.createdAt || '');
-                          const now = new Date();
-                          return created.getMonth() === now.getMonth() && 
-                                 created.getFullYear() === now.getFullYear();
-                        }).length}
+                        {searchQuery.trim() ? (pagination?.total ?? filteredPatients.length) : (pagination?.total ?? patients.length)}
                       </p>
                     </div>
                   </div>
                 </div>
+                {!searchQuery.trim() && (
+                  <div className="card p-3">
+                    <div className="flex items-center">
+                      <Plus className="w-5 h-5 text-medical-success" />
+                      <div className="ml-2">
+                        <p className="text-xs font-medium text-gray-500">Új ebben a hónapban</p>
+                        <p className="text-xl font-bold text-gray-900">
+                          {patients.filter(p => {
+                            const created = new Date(p.createdAt || '');
+                            const now = new Date();
+                            return created.getMonth() === now.getMonth() && 
+                                   created.getFullYear() === now.getFullYear();
+                          }).length}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Patient List */}
@@ -496,6 +493,7 @@ export default function Home() {
                 }}
                 pagination={pagination}
                 onPageChange={(page: number) => setCurrentPage(page)}
+                searchQuery={searchQuery}
               />
             </>
 

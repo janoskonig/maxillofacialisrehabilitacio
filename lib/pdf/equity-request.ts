@@ -89,8 +89,8 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
 
   // Nyilatkozat generálása
   const nyilatkozat = patient.kezeleoorvos
-    ? `Alulírott, ${patient.kezeleoorvos} a kezelési tervben foglaltak elvégzését vállalom.`
-    : 'Alulírott, a kezelési tervben foglaltak elvégzését vállalom.';
+    ? `${EQUITY_REQUEST_CONFIG.megbizottNeve} megbízásából alulírott, ${patient.kezeleoorvos} a kezelési tervben leírtakat vállalom.`
+    : `${EQUITY_REQUEST_CONFIG.megbizottNeve} megbízásából alulírott, a kezelési tervben leírtakat vállalom.`;
 
   // Kórtörténeti összefoglaló összeállítása
   const kortortenetiParts: string[] = [];
@@ -138,6 +138,9 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
     'Szolgáltató címe': EQUITY_REQUEST_CONFIG.cim,
     'Vármegyekód': EQUITY_REQUEST_CONFIG.varmegyeKod,
     'NEAK kód': EQUITY_REQUEST_CONFIG.neakKod,
+    'Pecsétszám': EQUITY_REQUEST_CONFIG.pecsetszam,
+    'pecsétszám': EQUITY_REQUEST_CONFIG.pecsetszam,
+    'Pecsét': EQUITY_REQUEST_CONFIG.pecsetszam,
     
     // Dátum mezők (mai dátum)
     'kelt_helység': patient.varos || 'Budapest',

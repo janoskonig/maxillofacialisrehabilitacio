@@ -29,6 +29,7 @@ interface PatientListProps {
   onSort?: (field: 'nev' | 'idopont' | 'createdAt') => void;
   pagination?: PaginationInfo;
   onPageChange?: (page: number) => void;
+  searchQuery?: string;
 }
 
 interface AppointmentInfo {
@@ -41,7 +42,7 @@ interface AppointmentInfo {
   isLate?: boolean;
 }
 
-function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, onViewFoto, canEdit = false, canDelete = false, userRole, sortField, sortDirection = 'asc', onSort, pagination, onPageChange }: PatientListProps) {
+function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, onViewFoto, canEdit = false, canDelete = false, userRole, sortField, sortDirection = 'asc', onSort, pagination, onPageChange, searchQuery = '' }: PatientListProps) {
   const [appointments, setAppointments] = useState<Record<string, AppointmentInfo>>({});
   const [loadingAppointments, setLoadingAppointments] = useState(false);
   const [opDocuments, setOpDocuments] = useState<Record<string, number>>({});
@@ -330,7 +331,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              {renderSortableHeader('Beteg', 'nev')}
+              {renderSortableHeader(searchQuery.trim() ? 'Keresési eredmény' : 'Beteg', 'nev')}
               <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20">
                 Foto
               </th>
