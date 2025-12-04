@@ -1703,6 +1703,30 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                 readOnly={isViewOnly}
               />
             </div>
+            {/* BNO mező - mindenkitől kérjük */}
+            <div>
+              <label className="form-label">BNO</label>
+              <BNOAutocomplete
+                value={watch('bno') || ''}
+                onChange={(kod, nev) => {
+                  setValue('bno', kod, { shouldDirty: true, shouldValidate: true });
+                  setValue('diagnozis', nev, { shouldDirty: true, shouldValidate: true });
+                }}
+                placeholder="Kezdjen el gépelni a BNO kód vagy név alapján..."
+                readOnly={isViewOnly}
+                disabled={isViewOnly}
+              />
+            </div>
+            {/* Diagnózis mező - mindenkitől kérjük */}
+            <div>
+              <label className="form-label">Diagnózis</label>
+              <input
+                {...register('diagnozis')}
+                className="form-input"
+                placeholder="Diagnózis"
+                readOnly={isViewOnly}
+              />
+            </div>
 
             {/* TRAUMA kérdések */}
             {selectedIndok === 'traumás sérülés' && (
@@ -1746,30 +1770,6 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
             {/* ONKOLOGIA kérdések */}
             {selectedIndok === 'onkológiai kezelés utáni állapot' && (
               <>
-                {/* BNO mező */}
-                <div>
-                  <label className="form-label">BNO</label>
-                  <BNOAutocomplete
-                    value={watch('bno') || ''}
-                    onChange={(kod, nev) => {
-                      setValue('bno', kod, { shouldDirty: true, shouldValidate: true });
-                      setValue('diagnozis', nev, { shouldDirty: true, shouldValidate: true });
-                    }}
-                    placeholder="Kezdjen el gépelni a BNO kód vagy név alapján..."
-                    readOnly={isViewOnly}
-                    disabled={isViewOnly}
-                  />
-                </div>
-                {/* Diagnózis mező */}
-                <div>
-                  <label className="form-label">Diagnózis</label>
-                  <input
-                    {...register('diagnozis')}
-                    className="form-input"
-                    placeholder="Diagnózis"
-                    readOnly={isViewOnly}
-                  />
-                </div>
                 <div>
                   <label className="form-label">Tumor szövettani típusa</label>
                   <input

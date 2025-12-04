@@ -440,7 +440,7 @@ export default function Home() {
                     <Users className="w-5 h-5 text-medical-primary" />
                     <div className="ml-2">
                       <p className="text-xs font-medium text-gray-500">Összes beteg</p>
-                      <p className="text-xl font-bold text-gray-900">{patients.length}</p>
+                      <p className="text-xl font-bold text-gray-900">{pagination?.total ?? patients.length}</p>
                     </div>
                   </div>
                 </div>
