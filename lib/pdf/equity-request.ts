@@ -3,6 +3,14 @@ import fs from 'fs';
 import path from 'path';
 import { Patient } from '@/lib/types';
 import { EQUITY_REQUEST_CONFIG } from '@/lib/equity-request-config';
+import bnoCodesData from '@/lib/bno-codes.json';
+
+interface BNOCode {
+  kod: string;
+  nev: string;
+}
+
+const bnoCodes = bnoCodesData as BNOCode[];
 
 /**
  * Méltányossági kérelem PDF generálása beteg adataiból
@@ -89,8 +97,8 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
 
   // Nyilatkozat generálása
   const nyilatkozat = patient.kezeleoorvos
-    ? `${EQUITY_REQUEST_CONFIG.megbizottNeve} megbízásából alulírott, ${patient.kezeleoorvos} a kezelési tervben leírtakat vállalom.`
-    : `${EQUITY_REQUEST_CONFIG.megbizottNeve} megbízásából alulírott, a kezelési tervben leírtakat vállalom.`;
+    ? `${EQUITY_REQUEST_CONFIG.megbizottNeve} megbízásából alulírott, ${patient.kezeleoorvos} a kezelési tervben foglaltak elvégzését vállalom.`
+    : `${EQUITY_REQUEST_CONFIG.megbizottNeve} megbízásából alulírott, a kezelési tervben foglaltak elvégzését vállalom.`;
 
   // Kórtörténeti összefoglaló összeállítása
   const kortortenetiParts: string[] = [];
@@ -101,6 +109,26 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
   const kortortenetiOsszefoglalo = patient.kortortenetiOsszefoglalo 
     ? patient.kortortenetiOsszefoglalo
     : kortortenetiParts.join('\n');
+
+  // BNO kód szöveges leírásának lekérdezése a beteg BNO kódjából
+  let bnoNev = '';
+  if (patient.bno) {
+    const bnoKod = patient.bno.trim().toUpperCase();
+    // Először pontos egyezést keresünk
+    let foundBnoCode = bnoCodes.find(code => code.kod.toUpperCase() === bnoKod);
+    
+    // Ha nem találunk pontos egyezést, próbáljuk meg prefix egyezést
+    if (!foundBnoCode) {
+      foundBnoCode = bnoCodes.find(code => 
+        code.kod.toUpperCase().startsWith(bnoKod) || 
+        bnoKod.startsWith(code.kod.toUpperCase())
+      );
+    }
+    
+    if (foundBnoCode) {
+      bnoNev = foundBnoCode.nev;
+    }
+  }
 
   // Field mapping
   const fieldMapping: Record<string, string> = {
@@ -115,16 +143,28 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
       patient.iranyitoszam || ''
     ].filter(Boolean).join(', '),
     
-    // Diagnózis
-    'Diagnózis': patient.diagnozis || '',
+    // Diagnózis - beteg BNO kódjához tartozó szöveges leírás
+    'Diagnózis': bnoNev || '',
+    // BNO kód - beteg BNO kódja
     'BNO kód': patient.bno || '',
-    'Társbetegségek': patient.szovettaniDiagnozis || '',
+    // Társbetegségek - mindig "K0000 Foghiány"
+    'Társbetegségek': 'K0000 Foghiány',
+    'Társbetegség': 'K0000 Foghiány',
+    'társbetegségek': 'K0000 Foghiány',
+    'társbetegség': 'K0000 Foghiány',
     
     // Kórtörténeti összefoglaló
     'Kórtörténeti összefoglaló 3 hónapnál nem régebbi': kortortenetiOsszefoglalo,
     
     // Kezelési terv
     'Kezelési_terv': kezelesiTerv,
+    
+    // Részletes árajánlat - mindig "Lásd melléklet"
+    'Részletes árajánlat (kezelési tervnek megfelelő, fogorvosi munkadíjra vonatkozó, állcsontonként/foganként)': 'Lásd melléklet',
+    'Részletes árajánlat': 'Lásd melléklet',
+    'Részletes árajánlat kezelési tervnek megfelelő': 'Lásd melléklet',
+    'Részletes árajánlat fogorvosi munkadíjra vonatkozó': 'Lásd melléklet',
+    'árajánlat': 'Lásd melléklet',
     
     // Szakorvosi vélemény
     'Szakorvosi vélemény': patient.szakorvosiVelemény || '',
@@ -133,7 +173,7 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
     'Nyilatkozat': nyilatkozat,
     
     // Szolgáltató információk
-    'Fogorvos neve': patient.kezeleoorvos || '',
+    'Fogorvos neve': 'Schmidt Péter Dr.',
     'Szolgáltató neve': EQUITY_REQUEST_CONFIG.szolgaltatoNeve,
     'Szolgáltató címe': EQUITY_REQUEST_CONFIG.cim,
     'Vármegyekód': EQUITY_REQUEST_CONFIG.varmegyeKod,
@@ -143,7 +183,7 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
     'Pecsét': EQUITY_REQUEST_CONFIG.pecsetszam,
     
     // Dátum mezők (mai dátum)
-    'kelt_helység': patient.varos || 'Budapest',
+    'kelt_helység': 'Budapest',
     'kelt_év': new Date().getFullYear().toString(),
     'kelt_hónap': (new Date().getMonth() + 1).toString().padStart(2, '0'),
     'kelt_nap': new Date().getDate().toString().padStart(2, '0'),
@@ -153,6 +193,27 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
   for (let i = 1; i <= 9; i++) {
     fieldMapping[`TAJ száma ${i}`] = tajNumber[i - 1] || '';
   }
+  
+  // Munkahely azonosító karakterenkénti kitöltése (9 karakter: 01H7213LV)
+  const munkahelyAzonosito = EQUITY_REQUEST_CONFIG.munkahelyAzonosito;
+  // Próbáljuk meg több variációval is - karakterenkénti kitöltés
+  for (let i = 1; i <= 9; i++) {
+    fieldMapping[`munkahely 9 jegyű azonosító ${i}`] = munkahelyAzonosito[i - 1] || '';
+    fieldMapping[`munkahely 9jegyű azonosító ${i}`] = munkahelyAzonosito[i - 1] || '';
+    fieldMapping[`Munkahely 9 jegyű azonosító ${i}`] = munkahelyAzonosito[i - 1] || '';
+    fieldMapping[`Munkahely 9jegyű azonosító ${i}`] = munkahelyAzonosito[i - 1] || '';
+    fieldMapping[`Munkahely azonosítója ${i}`] = munkahelyAzonosito[i - 1] || '';
+    fieldMapping[`Munkahely 9jegyű azonosítója ${i}`] = munkahelyAzonosito[i - 1] || '';
+    fieldMapping[`9jegyű azonosító ${i}`] = munkahelyAzonosito[i - 1] || '';
+  }
+  // Ha egyetlen mezőbe kell írni - több variáció
+  fieldMapping['munkahely 9 jegyű azonosító'] = munkahelyAzonosito;
+  fieldMapping['munkahely 9jegyű azonosító'] = munkahelyAzonosito;
+  fieldMapping['Munkahely 9 jegyű azonosító'] = munkahelyAzonosito;
+  fieldMapping['Munkahely 9jegyű azonosító'] = munkahelyAzonosito;
+  fieldMapping['Munkahely 9jegyű azonosítója'] = munkahelyAzonosito;
+  fieldMapping['Munkahely azonosítója'] = munkahelyAzonosito;
+  fieldMapping['9jegyű azonosító'] = munkahelyAzonosito;
   
   // Form mezők kitöltése
   let filledFields = 0;

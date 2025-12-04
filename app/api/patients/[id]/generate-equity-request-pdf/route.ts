@@ -3,6 +3,8 @@ import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { generateEquityRequestPDF } from '@/lib/pdf/equity-request';
 import { Patient, patientSchema } from '@/lib/types';
+import { uploadFile, isFtpConfigured, generateDocumentFilename } from '@/lib/ftp-client';
+import { logActivity } from '@/lib/activity';
 
 /**
  * Méltányossági kérelem PDF generálása beteg adataiból
@@ -135,6 +137,53 @@ export async function GET(
     const patientName = patient.nev || 'Beteg';
     const sanitizedName = patientName.replace(/[^a-zA-Z0-9áéíóöőúüűÁÉÍÓÖŐÚÜŰ\s]/g, '').trim().replace(/\s+/g, '_');
     const filename = `Meltanyossagi_kerelm_${sanitizedName}_${Date.now()}.pdf`;
+
+    // Feltöltés szerverre "méltányossági" tag-gel, ha FTP konfigurálva van
+    if (isFtpConfigured()) {
+      try {
+        const tags = ['méltányossági'];
+        const uploadFilename = generateDocumentFilename(
+          filename,
+          tags,
+          patientId,
+          new Date()
+        );
+        
+        // Feltöltés FTP-re
+        const filePath = await uploadFile(patientId, pdfBuffer, uploadFilename);
+        
+        // Mentés adatbázisba
+        const tagsJsonb = JSON.stringify(tags);
+        await pool.query(
+          `INSERT INTO patient_documents (
+            patient_id, filename, file_path, file_size, mime_type,
+            description, tags, uploaded_by
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)`,
+          [
+            patientId,
+            uploadFilename,
+            filePath,
+            pdfBuffer.length,
+            'application/pdf',
+            'Méltányossági kérelem PDF',
+            tagsJsonb,
+            auth.email
+          ]
+        );
+
+        // Activity logging
+        await logActivity(
+          request,
+          auth.email,
+          'patient_document_uploaded',
+          `Patient ID: ${patientId}, Document: ${uploadFilename}, Type: Méltányossági kérelem, Size: ${pdfBuffer.length} bytes`
+        );
+      } catch (uploadError) {
+        // Ha a feltöltés sikertelen, csak logoljuk, de ne akadályozzuk meg a PDF letöltését
+        console.error('Hiba a PDF feltöltésekor:', uploadError);
+        // Folytatjuk a PDF visszaadásával
+      }
+    }
 
     // PDF válasz visszaadása
     return new NextResponse(new Uint8Array(pdfBuffer), {

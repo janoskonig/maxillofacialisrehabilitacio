@@ -14,6 +14,7 @@ import { savePatient } from '@/lib/storage';
 import { BNOAutocomplete } from './BNOAutocomplete';
 import { PatientDocuments } from './PatientDocuments';
 import { useToast } from '@/contexts/ToastContext';
+import { EQUITY_REQUEST_CONFIG } from '@/lib/equity-request-config';
 
 
 // Fog állapot típus
@@ -2991,8 +2992,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                 <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
                   <p className="text-gray-700">
                     {watch('kezeleoorvos')
-                      ? `Alulírott, ${watch('kezeleoorvos')} a kezelési tervben foglaltak elvégzését vállalom.`
-                      : 'Alulírott, a kezelési tervben foglaltak elvégzését vállalom.'}
+                      ? `${EQUITY_REQUEST_CONFIG.megbizottNeve} megbízásából alulírott, ${watch('kezeleoorvos')} a kezelési tervben foglaltak elvégzését vállalom.`
+                      : `${EQUITY_REQUEST_CONFIG.megbizottNeve} megbízásából alulírott, a kezelési tervben foglaltak elvégzését vállalom.`}
                   </p>
                 </div>
               </div>

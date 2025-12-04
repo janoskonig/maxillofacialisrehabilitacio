@@ -10,5 +10,6 @@ export const EQUITY_REQUEST_CONFIG = {
   neakKod: 'U915',
   megbizottNeve: 'Dr. Schmidt Péter',
   pecsetszam: '59147',
+  munkahelyAzonosito: '01H7213LV',
 } as const;
 
