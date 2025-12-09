@@ -6,6 +6,25 @@ import { sendAppointmentTimeSlotFreedNotification } from '@/lib/email';
 import { deleteGoogleCalendarEvent, createGoogleCalendarEvent } from '@/lib/google-calendar';
 import { logActivity, logActivityWithAuth } from '@/lib/activity';
 
+// Safe error serialization to avoid circular reference issues
+function safeErrorSerialize(error: unknown): string {
+  if (error instanceof Error) {
+    return JSON.stringify({
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    }, null, 2);
+  }
+  if (typeof error === 'object' && error !== null) {
+    try {
+      return JSON.stringify(error, null, 2);
+    } catch (e) {
+      return String(error);
+    }
+  }
+  return String(error);
+}
+
 // Egy beteg lekérdezése ID alapján
 export async function GET(
   request: NextRequest,
@@ -160,7 +179,7 @@ export async function GET(
 
     return NextResponse.json({ patient: result.rows[0] }, { status: 200 });
   } catch (error) {
-    console.error('Hiba a beteg lekérdezésekor:', error);
+    console.error('Hiba a beteg lekérdezésekor:', safeErrorSerialize(error));
     return NextResponse.json(
       { error: 'Hiba történt a beteg lekérdezésekor' },
       { status: 500 }
@@ -661,16 +680,16 @@ export async function PUT(
       await logActivity(request, userEmail, 'patient_updated', detailText);
     } catch (logError) {
       // Activity logging failed, but don't fail the request
-      console.error('Failed to log activity:', logError);
+      console.error('Failed to log activity:', safeErrorSerialize(logError));
     }
 
     return NextResponse.json({ patient: result.rows[0] }, { status: 200 });
   } catch (error: any) {
-    console.error('Hiba a beteg frissítésekor:', error);
+    console.error('Hiba a beteg frissítésekor:', safeErrorSerialize(error));
     
-    if (error.name === 'ZodError') {
+    if (error && typeof error === 'object' && 'name' in error && error.name === 'ZodError') {
       return NextResponse.json(
-        { error: 'Érvénytelen adatok', details: error.errors },
+        { error: 'Érvénytelen adatok', details: 'errors' in error ? error.errors : undefined },
         { status: 400 }
       );
     }
@@ -780,7 +799,7 @@ export async function DELETE(
               userEmail
             );
           } catch (emailError) {
-            console.error('Failed to send time slot freed email to dentist:', emailError);
+            console.error('Failed to send time slot freed email to dentist:', safeErrorSerialize(emailError));
             // Don't fail the request if email fails
           }
         }
@@ -840,7 +859,7 @@ export async function DELETE(
               }
             }
           } catch (error) {
-            console.error('Failed to handle Google Calendar event during patient deletion:', error);
+            console.error('Failed to handle Google Calendar event during patient deletion:', safeErrorSerialize(error));
             // Nem blokkolja a beteg törlését
           }
         }
@@ -870,13 +889,13 @@ export async function DELETE(
                   appointment.dentist_email
                 );
               } catch (emailError) {
-                console.error('Failed to send time slot freed email to admins:', emailError);
+                console.error('Failed to send time slot freed email to admins:', safeErrorSerialize(emailError));
                 // Don't fail the request if email fails
               }
             }
           }
         } catch (emailError) {
-          console.error('Failed to send time slot freed email to admins:', emailError);
+          console.error('Failed to send time slot freed email to admins:', safeErrorSerialize(emailError));
           // Don't fail the request if email fails
         }
       }
@@ -904,7 +923,7 @@ export async function DELETE(
       throw error;
     }
   } catch (error) {
-    console.error('Hiba a beteg törlésekor:', error);
+    console.error('Hiba a beteg törlésekor:', safeErrorSerialize(error));
     return NextResponse.json(
       { error: 'Hiba történt a beteg törlésekor' },
       { status: 500 }
