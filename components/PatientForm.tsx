@@ -1153,7 +1153,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
   const compareFieldValues = useCallback((field: keyof Patient, currentValue: any, originalValue: any): boolean => {
     const currentNormalized = normalizeValue(currentValue);
     const originalNormalized = normalizeValue(originalValue);
-    
+
     // Normalize dates for comparison
     const dateFields: (keyof Patient)[] = ['szuletesiDatum', 'mutetIdeje', 'felvetelDatuma', 'balesetIdopont'];
     if (dateFields.includes(field)) {
@@ -1161,22 +1161,26 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       const originalDate = normalizeDate(originalNormalized);
       return currentDate !== originalDate;
     }
-    
+
     // For arrays, use normalized comparison
     if (Array.isArray(currentNormalized) || Array.isArray(originalNormalized)) {
-      return normalizeArray(currentNormalized) !== normalizeArray(originalNormalized);
+      const currentNormalizedStr = normalizeArray(currentNormalized);
+      const originalNormalizedStr = normalizeArray(originalNormalized);
+      return currentNormalizedStr !== originalNormalizedStr;
     }
-    
+
     // For objects, use normalized comparison
     if (typeof currentNormalized === 'object' && typeof originalNormalized === 'object' && currentNormalized !== null && originalNormalized !== null) {
-      return normalizeObject(currentNormalized) !== normalizeObject(originalNormalized);
+      const currentNormalizedStr = normalizeObject(currentNormalized);
+      const originalNormalizedStr = normalizeObject(originalNormalized);
+      return currentNormalizedStr !== originalNormalizedStr;
     }
-    
+
     // For strings, trim and compare
     if (typeof currentNormalized === 'string' && typeof originalNormalized === 'string') {
       return currentNormalized.trim() !== originalNormalized.trim();
     }
-    
+
     // For booleans and other primitives, direct comparison
     return currentNormalized !== originalNormalized;
   }, []);
@@ -1336,7 +1340,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     }
     
     // Check if there are unsaved changes
-      if (hasUnsavedChanges()) {
+    if (hasUnsavedChanges()) {
       const shouldCancel = await confirmDialog(
         'Van nem mentett változás az űrlapban. Biztosan bezárja az űrlapot? A változások elvesznek.',
         {
