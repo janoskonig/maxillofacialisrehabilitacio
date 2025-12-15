@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 
-// Get dashboard data for current user - only next 3 appointments today and pending appointments
+// Get dashboard data for current user - all appointments today and pending appointments
 export async function GET(request: NextRequest) {
   try {
     const auth = await verifyAuth(request);
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     }
     // Admin sees all (no WHERE clause)
 
-    // 1. NEXT 3 APPOINTMENTS TODAY (upcoming, not past)
+    // 1. ALL APPOINTMENTS TODAY (show all appointments from today until midnight)
     const nextAppointmentsQuery = `
       SELECT 
         a.id,
@@ -49,17 +49,17 @@ export async function GET(request: NextRequest) {
         p.taj as "patientTaj",
         ats.cim,
         ats.teremszam,
-        a.appointment_status as "appointmentStatus"
+        a.appointment_status as "appointmentStatus",
+        a.completion_notes as "completionNotes",
+        a.is_late as "isLate"
       FROM appointments a
       JOIN available_time_slots ats ON a.time_slot_id = ats.id
       JOIN patients p ON a.patient_id = p.id
       ${appointmentWhereClause}
       ${appointmentWhereClause ? 'AND' : 'WHERE'} ats.start_time >= $${appointmentParamIndex}
       AND ats.start_time <= $${appointmentParamIndex + 1}
-      AND ats.start_time >= NOW()
       AND (a.appointment_status IS NULL OR a.appointment_status != 'cancelled_by_doctor' AND a.appointment_status != 'cancelled_by_patient')
       ORDER BY ats.start_time ASC
-      LIMIT 3
     `;
     const nextAppointmentsParams = [...appointmentParams, todayStart.toISOString(), todayEnd.toISOString()];
     const nextAppointmentsResult = await pool.query(nextAppointmentsQuery, nextAppointmentsParams);

@@ -100,7 +100,23 @@ export function Dashboard({ userRole }: DashboardProps) {
       {!isCollapsed && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Next 3 Appointments Today */}
-          <TodaysAppointmentsWidget appointments={data.nextAppointments} />
+          <TodaysAppointmentsWidget 
+            appointments={data.nextAppointments} 
+            onUpdate={async () => {
+              // Refresh dashboard data
+              try {
+                const response = await fetch('/api/dashboard', {
+                  credentials: 'include',
+                });
+                if (response.ok) {
+                  const dashboardData = await response.json();
+                  setData(dashboardData);
+                }
+              } catch (err) {
+                console.error('Error refreshing dashboard data:', err);
+              }
+            }}
+          />
 
           {/* Pending Appointments */}
           {data.pendingAppointments.length > 0 && (
