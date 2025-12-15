@@ -8,11 +8,19 @@ import { deleteGoogleCalendarEvent, createGoogleCalendarEvent } from '@/lib/goog
 /**
  * Modify patient's appointment (change time slot)
  * PUT /api/patient-portal/appointments/[id]
+ * DISABLED: Patients are not allowed to modify appointments
  */
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  // Patients are not allowed to modify appointments
+  return NextResponse.json(
+    { error: 'Az időpontok módosítása nem engedélyezett' },
+    { status: 403 }
+  );
+  
+  /* DISABLED CODE - Patients cannot modify appointments
   try {
     const patientId = await verifyPatientPortalSession(request);
 
@@ -385,5 +393,6 @@ export async function PUT(
       { status: 500 }
     );
   }
+  */
 }
 

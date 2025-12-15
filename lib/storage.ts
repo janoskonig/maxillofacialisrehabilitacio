@@ -197,6 +197,27 @@ export async function searchPatients(query: string, page: number = 1, limit: num
   }
 }
 
+// Beteg lekérdezése ID alapján (friss adatok az adatbázisból)
+export async function getPatientById(id: string): Promise<Patient> {
+  try {
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/${id}`,
+      {
+        credentials: 'include',
+      },
+      30000 // 30 másodperc timeout
+    );
+    const data = await handleApiResponse<{ patient: Patient }>(response);
+    return data.patient;
+  } catch (error: any) {
+    console.error('Hiba a beteg lekérdezésekor:', error);
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error('Hiba történt a beteg lekérdezésekor. Kérjük, próbálja újra.');
+  }
+}
+
 // Beteg törlése
 export async function deletePatient(id: string): Promise<void> {
   try {

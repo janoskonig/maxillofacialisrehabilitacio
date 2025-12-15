@@ -11,17 +11,34 @@ const JWT_SECRET = new TextEncoder().encode(
 const PORTAL_SESSION_EXPIRES_IN = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 /**
+ * Get base URL for redirects - use request origin for local dev, env var for production
+ */
+function getBaseUrl(request: NextRequest): string {
+  const envBaseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+  const requestOrigin = request.nextUrl.origin;
+  
+  // If we're in development (localhost) or the request origin is localhost, use request origin
+  if (requestOrigin.includes('localhost') || requestOrigin.includes('127.0.0.1')) {
+    return requestOrigin;
+  }
+  
+  // Otherwise use the environment variable or default to production URL
+  return envBaseUrl || 'https://rehabilitacios-protetika.hu';
+}
+
+/**
  * Verify email verification token and activate patient account
  * GET /api/patient-portal/auth/verify-email?token=xxx
  */
 export async function GET(request: NextRequest) {
   try {
+    const baseUrl = getBaseUrl(request);
     const searchParams = request.nextUrl.searchParams;
     const token = searchParams.get('token');
 
     if (!token) {
       return NextResponse.redirect(
-        new URL('/patient-portal/register?error=missing_token', request.url)
+        new URL('/patient-portal?error=missing_token', baseUrl)
       );
     }
 
@@ -30,7 +47,7 @@ export async function GET(request: NextRequest) {
 
     if (!verification) {
       return NextResponse.redirect(
-        new URL('/patient-portal/register?error=invalid_token', request.url)
+        new URL('/patient-portal?error=invalid_token', baseUrl)
       );
     }
 
@@ -46,7 +63,7 @@ export async function GET(request: NextRequest) {
 
     if (patientResult.rows.length === 0) {
       return NextResponse.redirect(
-        new URL('/patient-portal/register?error=patient_not_found', request.url)
+        new URL('/patient-portal?error=patient_not_found', baseUrl)
       );
     }
 
@@ -77,18 +94,13 @@ export async function GET(request: NextRequest) {
 
     // Redirect to portal dashboard with success message
     return NextResponse.redirect(
-      new URL('/patient-portal/dashboard?verified=true', request.url)
+      new URL('/patient-portal/dashboard?verified=true', baseUrl)
     );
   } catch (error) {
     console.error('Error verifying email:', error);
+    const baseUrl = getBaseUrl(request);
     return NextResponse.redirect(
-      new URL('/patient-portal/register?error=verification_failed', request.url)
+      new URL('/patient-portal?error=verification_failed', baseUrl)
     );
   }
 }
-
-
-
-
-
-

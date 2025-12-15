@@ -50,8 +50,12 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
 
   const handleEditStatus = useCallback((appointment: Appointment) => {
     setEditingId(appointment.id);
+    const validStatuses = ['cancelled_by_doctor', 'cancelled_by_patient', 'completed', 'no_show'] as const;
+    const status = appointment.appointmentStatus && validStatuses.includes(appointment.appointmentStatus as any)
+      ? appointment.appointmentStatus as 'cancelled_by_doctor' | 'cancelled_by_patient' | 'completed' | 'no_show'
+      : null;
     setStatusForm({
-      appointmentStatus: appointment.appointmentStatus || null,
+      appointmentStatus: status,
       completionNotes: appointment.completionNotes || '',
       isLate: appointment.isLate || false,
     });

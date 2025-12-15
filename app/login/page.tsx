@@ -60,6 +60,26 @@ export default function Login() {
         </p>
       </div>
 
+      {/* Messages */}
+      <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-md space-y-4">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <p className="text-sm text-blue-900 font-medium mb-2">
+            Ha Ön beküldő orvos, kérem regisztráljon vagy lépjen be.
+          </p>
+        </div>
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <p className="text-sm text-green-900 font-medium mb-2">
+            Ha Ön páciens, kérem kattintson az alábbi linkre és kövesse az utasításokat.
+          </p>
+          <Link
+            href="/patient-portal"
+            className="btn-primary w-full mt-3 text-center inline-block"
+          >
+            Páciens portál
+          </Link>
+        </div>
+      </div>
+
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
           <form className="space-y-6" onSubmit={handleSubmit}>

@@ -11,7 +11,7 @@ export async function sendPatientMagicLink(
   patientName: string | null,
   token: string
 ): Promise<void> {
-  const magicLink = `${PORTAL_BASE_URL}/patient-portal/verify?token=${token}`;
+  const magicLink = `${PORTAL_BASE_URL}/api/patient-portal/auth/verify?token=${token}`;
 
   const subject = 'Bejelentkezés a páciens portálra';
   const html = `
@@ -53,7 +53,7 @@ export async function sendPatientVerificationEmail(
   patientName: string | null,
   token: string
 ): Promise<void> {
-  const verificationLink = `${PORTAL_BASE_URL}/patient-portal/verify-email?token=${token}`;
+  const verificationLink = `${PORTAL_BASE_URL}/api/patient-portal/auth/verify-email?token=${token}`;
 
   const subject = 'Email cím megerősítése - Páciens portál';
   const html = `

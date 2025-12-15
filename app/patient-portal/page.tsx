@@ -1,16 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { PortalLogin } from '@/components/patient-portal/PortalLogin';
-import { PortalRegister } from '@/components/patient-portal/PortalRegister';
 import { Logo } from '@/components/Logo';
 import { useToast } from '@/contexts/ToastContext';
 
 export default function PatientPortalPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [isLogin, setIsLogin] = useState(true);
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -28,6 +26,9 @@ export default function PatientPortalPage() {
           break;
         case 'verification_failed':
           showToast('Email megerősítés sikertelen', 'error');
+          break;
+        case 'database_error':
+          showToast('Adatbázis hiba. Kérjük, lépjen kapcsolatba az adminisztrációval.', 'error');
           break;
         default:
           showToast('Hiba történt', 'error');
@@ -55,32 +56,17 @@ export default function PatientPortalPage() {
       {/* Main Content */}
       <main className="flex-1 flex items-center justify-center py-8 px-4 sm:px-6 lg:px-8">
         <div className="w-full max-w-md">
-          {/* Toggle between login and register */}
-          <div className="flex rounded-lg border border-gray-200 bg-white mb-6 overflow-hidden">
-            <button
-              onClick={() => setIsLogin(true)}
-              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-                isLogin
-                  ? 'bg-medical-primary text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              Bejelentkezés
-            </button>
-            <button
-              onClick={() => setIsLogin(false)}
-              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors border-l ${
-                !isLogin
-                  ? 'bg-medical-primary text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              Regisztráció
-            </button>
+          {/* Message */}
+          <div className="mb-6">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <p className="text-sm text-green-900 font-medium">
+                Ha Ön páciens, kérem kattintson az alábbi linkre és kövesse az utasításokat.
+              </p>
+            </div>
           </div>
 
-          {/* Login or Register Form */}
-          {isLogin ? <PortalLogin /> : <PortalRegister />}
+          {/* Magic Link Form */}
+          <PortalLogin />
 
           {/* Info */}
           <div className="mt-6 text-center text-sm text-gray-600">
@@ -100,6 +86,8 @@ export default function PatientPortalPage() {
     </div>
   );
 }
+
+
 
 
 

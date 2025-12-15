@@ -410,10 +410,13 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
   useEffect(() => {
     if (patient) {
       setCurrentPatient(patient);
+    } else {
+      setCurrentPatient(null);
     }
-  }, [patient?.id]); // Update when patient ID changes
+  }, [patient?.id, patient?.updatedAt]); // Update when patient ID or updatedAt changes
 
   // Reset form to mark as not dirty after initial load for existing patients
+  // Also reset when patient data changes (e.g., after save or refresh)
   useEffect(() => {
     if (patient && !isViewOnly) {
       // Reset form with current values to clear dirty state
@@ -435,8 +438,22 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
         })) || [],
       } : undefined, { keepDirty: false, keepDefaultValues: false });
+    } else if (!patient && !isViewOnly) {
+      // Reset to default values for new patient
+      reset({
+        radioterapia: false,
+        chemoterapia: false,
+        nemIsmertPoziciokbanImplantatum: false,
+        felsoFogpotlasVan: false,
+        felsoFogpotlasElegedett: true,
+        alsoFogpotlasVan: false,
+        alsoFogpotlasElegedett: true,
+        kezelesiTervFelso: [],
+        kezelesiTervAlso: [],
+        kezelesiTervArcotErinto: [],
+      }, { keepDirty: false, keepDefaultValues: false });
     }
-  }, [patient?.id, isViewOnly, reset]); // Only reset when patient ID changes (when opening a different patient)
+  }, [patient?.id, patient?.updatedAt, isViewOnly, reset]); // Reset when patient ID or updatedAt changes
 
   // Set kezeleoorvos value when options are loaded and patient has a value
   useEffect(() => {
@@ -464,6 +481,23 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     const initial = patient?.meglevoFogak || {};
     return initial as Record<string, ToothStatus>;
   });
+
+  // Update implantatumok and fogak when patient data changes
+  useEffect(() => {
+    if (patient?.meglevoImplantatumok) {
+      setImplantatumok(patient.meglevoImplantatumok);
+    } else {
+      setImplantatumok({});
+    }
+  }, [patient?.id, patient?.updatedAt, patient?.meglevoImplantatumok]);
+
+  useEffect(() => {
+    if (patient?.meglevoFogak) {
+      setFogak(patient.meglevoFogak as Record<string, ToothStatus>);
+    } else {
+      setFogak({});
+    }
+  }, [patient?.id, patient?.updatedAt, patient?.meglevoFogak]);
   const kezelesiTervFelso = watch('kezelesiTervFelso') || [];
   const kezelesiTervAlso = watch('kezelesiTervAlso') || [];
   const kezelesiTervArcotErinto = watch('kezelesiTervArcotErinto') || [];

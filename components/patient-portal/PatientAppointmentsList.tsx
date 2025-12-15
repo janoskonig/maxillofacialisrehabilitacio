@@ -2,11 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Calendar, Clock, MapPin, Plus, CheckCircle, XCircle, AlertCircle, Edit2, X } from 'lucide-react';
+import { Calendar, Clock, MapPin, Plus, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
-import { DateTimePicker } from '@/components/DateTimePicker';
 
 interface Appointment {
   id: string;
@@ -20,23 +19,12 @@ interface Appointment {
   timeSlotId?: string;
 }
 
-interface TimeSlot {
-  id: string;
-  startTime: string;
-  status?: 'available' | 'booked';
-  cim: string | null;
-  teremszam: string | null;
-}
-
 export function PatientAppointmentsList() {
   const router = useRouter();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [showRequestForm, setShowRequestForm] = useState(false);
-  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
-  const [newDateTime, setNewDateTime] = useState<Date | null>(null);
-  const [newTeremszam, setNewTeremszam] = useState<string>('');
 
   useEffect(() => {
     fetchAppointments();
@@ -112,89 +100,6 @@ export function PatientAppointmentsList() {
     return new Date(startTime) < new Date();
   };
 
-  const handleModifyAppointment = async (appointment: Appointment) => {
-    // Only allow modification of approved, future appointments
-    if (appointment.approvalStatus === 'pending') {
-      showToast('A jóváhagyásra váró időpontot nem lehet módosítani', 'error');
-      return;
-    }
-    if (appointment.approvalStatus === 'rejected') {
-      showToast('Az elutasított időpontot nem lehet módosítani', 'error');
-      return;
-    }
-    if (isPast(appointment.startTime)) {
-      showToast('Csak jövőbeli időpontot lehet módosítani', 'error');
-      return;
-    }
-    
-    setEditingAppointment(appointment);
-    setNewDateTime(null);
-    setNewTeremszam('');
-  };
-
-  const handleSaveModification = async () => {
-    if (!editingAppointment || !newDateTime) {
-      showToast('Kérjük, válasszon dátumot és időt!', 'error');
-      return;
-    }
-
-    // Check if date is in the future
-    if (newDateTime <= new Date()) {
-      showToast('Az időpont csak jövőbeli dátum lehet!', 'error');
-      return;
-    }
-
-    try {
-      // Convert Date to ISO format with timezone offset
-      const offset = -newDateTime.getTimezoneOffset();
-      const offsetHours = Math.floor(Math.abs(offset) / 60);
-      const offsetMinutes = Math.abs(offset) % 60;
-      const offsetSign = offset >= 0 ? '+' : '-';
-      const offsetString = `${offsetSign}${String(offsetHours).padStart(2, '0')}:${String(offsetMinutes).padStart(2, '0')}`;
-      
-      const year = newDateTime.getFullYear();
-      const month = String(newDateTime.getMonth() + 1).padStart(2, '0');
-      const day = String(newDateTime.getDate()).padStart(2, '0');
-      const hours = String(newDateTime.getHours()).padStart(2, '0');
-      const minutes = String(newDateTime.getMinutes()).padStart(2, '0');
-      const seconds = String(newDateTime.getSeconds()).padStart(2, '0');
-      const isoDateTime = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetString}`;
-
-      const response = await fetch(`/api/patient-portal/appointments/${editingAppointment.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          startTime: isoDateTime,
-          teremszam: newTeremszam.trim() || null,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Hiba történt az időpont módosításakor');
-      }
-
-      showToast(
-        'Időpont sikeresen módosítva! A fogpótlástanász és Ön értesítést kapott.',
-        'success'
-      );
-      setEditingAppointment(null);
-      setNewDateTime(null);
-      setNewTeremszam('');
-      await fetchAppointments();
-    } catch (error) {
-      console.error('Error modifying appointment:', error);
-      showToast(
-        error instanceof Error ? error.message : 'Hiba történt az időpont módosításakor',
-        'error'
-      );
-    }
-  };
-
   const upcomingAppointments = appointments.filter((apt) => !isPast(apt.startTime));
   const pastAppointments = appointments.filter((apt) => isPast(apt.startTime));
 
@@ -209,77 +114,6 @@ export function PatientAppointmentsList() {
 
   return (
     <div className="space-y-6">
-      {/* Modification Modal */}
-      {editingAppointment && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold text-gray-900">Időpont módosítása</h3>
-              <button
-                onClick={() => {
-                  setEditingAppointment(null);
-                  setNewDateTime(null);
-                  setNewTeremszam('');
-                }}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm text-gray-600 mb-2">
-                  <strong>Jelenlegi időpont:</strong>{' '}
-                  {format(new Date(editingAppointment.startTime), 'yyyy. MMMM d. EEEE, HH:mm', { locale: hu })}
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Új dátum és idő megadása
-                </label>
-                <DateTimePicker
-                  selected={newDateTime}
-                  onChange={(date: Date | null) => setNewDateTime(date)}
-                  minDate={new Date()}
-                  placeholder="Válasszon dátumot és időt"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Teremszám (opcionális)
-                </label>
-                <input
-                  type="text"
-                  value={newTeremszam}
-                  onChange={(e) => setNewTeremszam(e.target.value)}
-                  className="form-input w-full"
-                  placeholder="Pl. 611"
-                />
-              </div>
-              <div className="flex gap-2 justify-end">
-                <button
-                  onClick={() => {
-                    setEditingAppointment(null);
-                    setNewDateTime(null);
-                    setNewTeremszam('');
-                  }}
-                  className="btn-secondary"
-                >
-                  Mégse
-                </button>
-                <button
-                  onClick={handleSaveModification}
-                  disabled={!newDateTime}
-                  className="btn-primary"
-                >
-                  Módosítás mentése
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2">
@@ -307,7 +141,7 @@ export function PatientAppointmentsList() {
             Új időpont kérése
           </h2>
           <p className="text-sm text-gray-600 mb-4">
-            Az időpont kérése után emailben értesítést kap a jóváhagyásról.
+            Kérjen időpontot. Az adminisztráció felveszi Önnel a kapcsolatot az időpont egyeztetéséhez.
           </p>
           <RequestAppointmentForm
             onSuccess={() => {
@@ -355,21 +189,6 @@ export function PatientAppointmentsList() {
                             {appointment.teremszam && ` • ${appointment.teremszam}. terem`}
                           </span>
                         </div>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 mt-2">
-                      {appointment.approvalStatus === 'approved' && 
-                       !isPast(appointment.startTime) &&
-                       appointment.appointmentStatus !== 'cancelled_by_doctor' &&
-                       appointment.appointmentStatus !== 'cancelled_by_patient' && (
-                        <button
-                          onClick={() => handleModifyAppointment(appointment)}
-                          className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 px-2 py-1 rounded hover:bg-blue-50"
-                          title="Időpont módosítása"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                          Módosítás
-                        </button>
                       )}
                     </div>
                   </div>
@@ -460,46 +279,11 @@ function RequestAppointmentForm({
   const router = useRouter();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [availableSlots, setAvailableSlots] = useState<any[]>([]);
-  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
-  const [loadingSlots, setLoadingSlots] = useState(true);
-
-  useEffect(() => {
-    fetchAvailableSlots();
-  }, []);
-
-  const fetchAvailableSlots = async () => {
-    try {
-      setLoadingSlots(true);
-      const response = await fetch('/api/patient-portal/time-slots?status=available&future=true', {
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          router.push('/patient-portal');
-          return;
-        }
-        throw new Error('Nem sikerült betölteni az elérhető időpontokat');
-      }
-
-      const data = await response.json();
-      setAvailableSlots(data.timeSlots || []);
-    } catch (error) {
-      console.error('Hiba az elérhető időpontok betöltésekor:', error);
-      showToast('Hiba történt az elérhető időpontok betöltésekor', 'error');
-    } finally {
-      setLoadingSlots(false);
-    }
-  };
+  const [beutaloOrvos, setBeutaloOrvos] = useState('');
+  const [beutaloIndokolas, setBeutaloIndokolas] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!selectedSlot) {
-      showToast('Kérjük, válasszon időpontot', 'error');
-      return;
-    }
 
     setLoading(true);
 
@@ -511,7 +295,8 @@ function RequestAppointmentForm({
         },
         credentials: 'include',
         body: JSON.stringify({
-          timeSlotId: selectedSlot,
+          beutaloOrvos: beutaloOrvos.trim() || undefined,
+          beutaloIndokolas: beutaloIndokolas.trim() || undefined,
         }),
       });
 
@@ -522,9 +307,11 @@ function RequestAppointmentForm({
       }
 
       showToast(
-        'Időpont kérés sikeresen elküldve. Emailben értesítést kap a jóváhagyásról.',
+        'Időpont kérés sikeresen elküldve. Az adminisztráció hamarosan felveszi Önnel a kapcsolatot.',
         'success'
       );
+      setBeutaloOrvos('');
+      setBeutaloIndokolas('');
       onSuccess();
     } catch (error) {
       console.error('Hiba az időpont kérésekor:', error);
@@ -540,52 +327,35 @@ function RequestAppointmentForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label className="form-label">Válasszon elérhető időpontot</label>
-        {loadingSlots ? (
-          <div className="text-center py-4 text-gray-500">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-medical-primary mx-auto"></div>
-            <p className="mt-2 text-sm">Elérhető időpontok betöltése...</p>
-          </div>
-        ) : availableSlots.length === 0 ? (
-          <div className="text-center py-4 text-gray-500">
-            <p className="text-sm">Jelenleg nincs elérhető időpont</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-60 overflow-y-auto p-2 border border-gray-200 rounded">
-            {availableSlots.map((slot) => {
-              const startTime = new Date(slot.startTime);
-              return (
-                <label
-                  key={slot.id}
-                  className={`p-3 rounded border cursor-pointer transition-colors ${
-                    selectedSlot === slot.id
-                      ? 'border-medical-primary bg-blue-50'
-                      : 'border-gray-200 hover:bg-gray-50'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="timeSlot"
-                    value={slot.id}
-                    checked={selectedSlot === slot.id}
-                    onChange={(e) => setSelectedSlot(e.target.value)}
-                    className="sr-only"
-                  />
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium text-gray-900">
-                        {format(startTime, 'yyyy. MMMM d. EEEE, HH:mm', { locale: hu })}
-                      </p>
-                      {slot.cim && (
-                        <p className="text-xs text-gray-600">{slot.cim}</p>
-                      )}
-                    </div>
-                  </div>
-                </label>
-              );
-            })}
-          </div>
-        )}
+        <label htmlFor="beutalo-orvos" className="form-label flex items-center gap-2">
+          <Calendar className="w-4 h-4" />
+          Beutaló orvos neve (opcionális)
+        </label>
+        <input
+          id="beutalo-orvos"
+          type="text"
+          value={beutaloOrvos}
+          onChange={(e) => setBeutaloOrvos(e.target.value)}
+          className="form-input"
+          placeholder="Dr. Kovács János"
+          disabled={loading}
+        />
+      </div>
+
+      <div>
+        <label htmlFor="beutalo-indokolas" className="form-label flex items-center gap-2">
+          <Calendar className="w-4 h-4" />
+          Beutalás indoka (opcionális)
+        </label>
+        <textarea
+          id="beutalo-indokolas"
+          value={beutaloIndokolas}
+          onChange={(e) => setBeutaloIndokolas(e.target.value)}
+          className="form-input"
+          placeholder="Beutalás indokának leírása..."
+          rows={4}
+          disabled={loading}
+        />
       </div>
 
       <div className="flex gap-3">
@@ -600,7 +370,7 @@ function RequestAppointmentForm({
         <button
           type="submit"
           className="btn-primary flex-1"
-          disabled={loading || !selectedSlot || loadingSlots}
+          disabled={loading}
         >
           {loading ? 'Küldés...' : 'Időpont kérése'}
         </button>
@@ -608,4 +378,3 @@ function RequestAppointmentForm({
     </form>
   );
 }
-

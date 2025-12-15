@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Patient, patientSchema } from '@/lib/types';
-import { getAllPatients, savePatient, searchPatients, PaginationInfo } from '@/lib/storage';
+import { getAllPatients, savePatient, searchPatients, PaginationInfo, getPatientById } from '@/lib/storage';
 import { PatientForm } from '@/components/PatientForm';
 import { PatientList } from '@/components/PatientList';
 import { OPImageViewer } from '@/components/OPImageViewer';
@@ -192,10 +192,25 @@ export default function Home() {
     setShowForm(true);
   };
 
-  const handleViewPatient = (patient: Patient) => {
-    setEditingPatient(patient);
-    setIsViewMode(true);
-    setShowForm(true);
+  const handleViewPatient = async (patient: Patient) => {
+    if (!patient.id) {
+      showToast('Hiba: A beteg ID nem található', 'error');
+      return;
+    }
+    try {
+      // Fetch fresh data from database
+      const freshPatient = await getPatientById(patient.id);
+      setEditingPatient(freshPatient);
+      setIsViewMode(true);
+      setShowForm(true);
+    } catch (error) {
+      console.error('Error loading patient:', error);
+      showToast('Hiba történt a beteg adatok betöltésekor', 'error');
+      // Fallback to cached data
+      setEditingPatient(patient);
+      setIsViewMode(true);
+      setShowForm(true);
+    }
   };
 
   const handleViewOP = (patient: Patient) => {
@@ -206,10 +221,25 @@ export default function Home() {
     setFotoViewerPatient(patient);
   };
 
-  const handleEditPatient = (patient: Patient) => {
-    setEditingPatient(patient);
-    setIsViewMode(false);
-    setShowForm(true);
+  const handleEditPatient = async (patient: Patient) => {
+    if (!patient.id) {
+      showToast('Hiba: A beteg ID nem található', 'error');
+      return;
+    }
+    try {
+      // Fetch fresh data from database
+      const freshPatient = await getPatientById(patient.id);
+      setEditingPatient(freshPatient);
+      setIsViewMode(false);
+      setShowForm(true);
+    } catch (error) {
+      console.error('Error loading patient:', error);
+      showToast('Hiba történt a beteg adatok betöltésekor', 'error');
+      // Fallback to cached data
+      setEditingPatient(patient);
+      setIsViewMode(false);
+      setShowForm(true);
+    }
   };
 
   const handleCloseForm = async () => {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
+import { sendEmail } from '@/lib/email';
 
 /**
  * Get patient's appointments
@@ -54,7 +55,7 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * Request new appointment
+ * Request new appointment (without time slot selection)
  * POST /api/patient-portal/appointments
  */
 export async function POST(request: NextRequest) {
@@ -69,20 +70,13 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { timeSlotId, alternativeTimeSlotIds } = body;
-
-    if (!timeSlotId) {
-      return NextResponse.json(
-        { error: 'Időpont kiválasztása kötelező' },
-        { status: 400 }
-      );
-    }
+    const { beutaloOrvos, beutaloIndokolas } = body;
 
     const pool = getDbPool();
 
-    // Verify patient exists and has email
+    // Get patient info
     const patientResult = await pool.query(
-      'SELECT id, email, nev FROM patients WHERE id = $1',
+      'SELECT id, email, nev, taj FROM patients WHERE id = $1',
       [patientId]
     );
 
@@ -102,126 +96,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if time slot exists and is available
-    const timeSlotResult = await pool.query(
-      `SELECT ats.*, u.email as dentist_email
-       FROM available_time_slots ats
-       LEFT JOIN users u ON ats.user_id = u.id
-       WHERE ats.id = $1`,
-      [timeSlotId]
-    );
+    // Update patient's referring doctor information if provided
+    if (beutaloOrvos || beutaloIndokolas) {
+      const updateFields: string[] = [];
+      const updateValues: (string | null)[] = [];
+      let paramIndex = 1;
 
-    if (timeSlotResult.rows.length === 0) {
-      return NextResponse.json(
-        { error: 'Időpont nem található' },
-        { status: 404 }
-      );
-    }
-
-    const timeSlot = timeSlotResult.rows[0];
-
-    if (timeSlot.status !== 'available') {
-      return NextResponse.json(
-        { error: 'Ez az időpont már nem elérhető' },
-        { status: 400 }
-      );
-    }
-
-    if (new Date(timeSlot.start_time) < new Date()) {
-      return NextResponse.json(
-        { error: 'Múltbeli időpontot nem lehet lefoglalni' },
-        { status: 400 }
-      );
-    }
-
-    // Validate alternative time slots if provided
-    const alternativeIds = Array.isArray(alternativeTimeSlotIds)
-      ? alternativeTimeSlotIds.filter((id: string) => id && id.trim() !== '' && id !== timeSlotId)
-      : [];
-
-    // Create pending appointment (similar to admin flow)
-    const { randomBytes } = await import('crypto');
-    const approvalToken = randomBytes(32).toString('hex');
-
-    const alternativeIdsJson = JSON.stringify(alternativeIds);
-
-    const appointmentResult = await pool.query(
-      `INSERT INTO appointments (
-        patient_id, time_slot_id, created_by, dentist_email, 
-        approval_status, approval_token, alternative_time_slot_ids
-      )
-      VALUES ($1, $2, $3, $4, 'pending', $5, $6::jsonb)
-      RETURNING id, patient_id as "patientId", time_slot_id as "timeSlotId",
-                approval_status as "approvalStatus", created_at as "createdAt"`,
-      [
-        patientId,
-        timeSlotId,
-        patient.email, // Use patient email as created_by for portal requests
-        timeSlot.dentist_email,
-        approvalToken,
-        alternativeIdsJson,
-      ]
-    );
-
-    const appointment = appointmentResult.rows[0];
-
-    // Mark time slot as booked
-    await pool.query(
-      'UPDATE available_time_slots SET status = $1 WHERE id = $2',
-      ['booked', timeSlotId]
-    );
-
-    // Send notification emails (reuse existing email functions)
-    try {
-      const { sendConditionalAppointmentRequestToPatient, sendConditionalAppointmentNotificationToAdmin } = await import('@/lib/email');
-      
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 
-        (request.headers.get('origin') || 'http://localhost:3000');
-      
-      const dentistFullName = timeSlot.dentistName || timeSlot.dentist_email || 'Orvos';
-      const startTime = new Date(timeSlot.start_time);
-
-      // Get alternative slots info if any
-      let alternativeSlots: Array<{ id: string; startTime: Date; cim: string | null; teremszam: string | null }> = [];
-      if (alternativeIds.length > 0) {
-        const altSlotsResult = await pool.query(
-          `SELECT ats.id, ats.start_time, ats.cim, ats.teremszam
-           FROM available_time_slots ats
-           WHERE ats.id = ANY($1::uuid[])
-           ORDER BY ats.start_time ASC`,
-          [alternativeIds]
-        );
-        alternativeSlots = altSlotsResult.rows.map((row: any) => ({
-          id: row.id,
-          startTime: new Date(row.start_time),
-          cim: row.cim,
-          teremszam: row.teremszam,
-        }));
+      if (beutaloOrvos !== undefined) {
+        updateFields.push(`beutalo_orvos = $${paramIndex}`);
+        updateValues.push(beutaloOrvos?.trim() || null);
+        paramIndex++;
       }
 
-      // Get patient gender for proper greeting
-      const patientResultForGender = await pool.query(
-        'SELECT nem FROM patients WHERE id = $1',
-        [patientId]
-      );
-      const patientNem = patientResultForGender.rows[0]?.nem || null;
+      if (beutaloIndokolas !== undefined) {
+        updateFields.push(`beutalo_indokolas = $${paramIndex}`);
+        updateValues.push(beutaloIndokolas?.trim() || null);
+        paramIndex++;
+      }
 
-      // Send to patient
-      await sendConditionalAppointmentRequestToPatient(
-        patient.email,
-        patient.nev || null,
-        patientNem,
-        startTime,
-        dentistFullName,
-        approvalToken,
-        baseUrl,
-        alternativeSlots,
-        timeSlot.cim || null,
-        timeSlot.teremszam || null,
-        false // Don't show alternatives in first email
-      );
+      if (updateFields.length > 0) {
+        updateValues.push(patientId);
+        await pool.query(
+          `UPDATE patients 
+           SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP
+           WHERE id = $${paramIndex}`,
+          updateValues
+        );
+      }
+    }
 
-      // Send to admins
+    // Send notification email to admins
+    try {
       const adminResult = await pool.query(
         'SELECT email FROM users WHERE role = $1 AND active = true',
         ['admin']
@@ -229,28 +134,37 @@ export async function POST(request: NextRequest) {
       const adminEmails = adminResult.rows.map((row: { email: string }) => row.email);
 
       if (adminEmails.length > 0) {
-        await sendConditionalAppointmentNotificationToAdmin(
-          adminEmails,
-          patient.nev || null,
-          patient.taj,
-          patient.email,
-          startTime,
-          dentistFullName,
-          timeSlot.cim || null,
-          timeSlot.teremszam || null,
-          alternativeSlots,
-          patient.email // createdBy for portal requests
-        );
+        const html = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #2563eb;">Új időpont kérés a páciens portálról</h2>
+            <p>Kedves adminisztrátor,</p>
+            <p>Egy páciens új időpontot kért a páciens portálon keresztül:</p>
+            <ul>
+              <li><strong>Beteg neve:</strong> ${patient.nev || 'Név nélküli'}</li>
+              <li><strong>TAJ szám:</strong> ${patient.taj || 'Nincs megadva'}</li>
+              <li><strong>Email cím:</strong> ${patient.email}</li>
+              ${beutaloOrvos ? `<li><strong>Beutaló orvos:</strong> ${beutaloOrvos}</li>` : ''}
+              ${beutaloIndokolas ? `<li><strong>Beutalás indoka:</strong> ${beutaloIndokolas}</li>` : ''}
+            </ul>
+            <p>Kérjük, jelentkezzen be a rendszerbe és válasszon időpontot a páciens számára.</p>
+            <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
+          </div>
+        `;
+
+        await sendEmail({
+          to: adminEmails,
+          subject: 'Új időpont kérés a páciens portálról - Maxillofaciális Rehabilitáció',
+          html,
+        });
       }
     } catch (emailError) {
-      console.error('Hiba az értesítő emailek küldésekor:', emailError);
+      console.error('Hiba az értesítő email küldésekor:', emailError);
       // Don't fail the request if email fails
     }
 
     return NextResponse.json({
       success: true,
-      appointment: appointment,
-      message: 'Időpont kérés elküldve. Emailben értesítést kap a jóváhagyásról.',
+      message: 'Időpont kérés sikeresen elküldve. Az adminisztráció hamarosan felveszi Önnel a kapcsolatot.',
     });
   } catch (error) {
     console.error('Error requesting appointment:', error);
@@ -260,4 +174,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

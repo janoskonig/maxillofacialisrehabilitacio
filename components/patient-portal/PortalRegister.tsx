@@ -1,14 +1,21 @@
 'use client';
 
 import { useState } from 'react';
-import { Mail, CreditCard, User, Loader2 } from 'lucide-react';
+import { Mail, CreditCard, User, Loader2, Phone, Calendar, MapPin } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
 
 export function PortalRegister() {
   const [email, setEmail] = useState('');
   const [taj, setTaj] = useState('');
-  const [surgeonName, setSurgeonName] = useState('');
-  const [surgeonEmail, setSurgeonEmail] = useState('');
+  const [nev, setNev] = useState('');
+  const [telefonszam, setTelefonszam] = useState('');
+  const [szuletesiDatum, setSzuletesiDatum] = useState('');
+  const [nem, setNem] = useState<'ferfi' | 'no' | ''>('');
+  const [cim, setCim] = useState('');
+  const [varos, setVaros] = useState('');
+  const [iranyitoszam, setIranyitoszam] = useState('');
+  const [beutaloOrvos, setBeutaloOrvos] = useState('');
+  const [beutaloIndokolas, setBeutaloIndokolas] = useState('');
   const [loading, setLoading] = useState(false);
   const { showToast } = useToast();
 
@@ -17,6 +24,11 @@ export function PortalRegister() {
 
     if (!email.trim() || !taj.trim()) {
       showToast('Kérjük, töltse ki az email címet és TAJ számot', 'error');
+      return;
+    }
+
+    if (!nev.trim()) {
+      showToast('Kérjük, töltse ki a nevet', 'error');
       return;
     }
 
@@ -31,8 +43,15 @@ export function PortalRegister() {
         body: JSON.stringify({
           email: email.trim(),
           taj: taj.trim(),
-          surgeonName: surgeonName.trim() || undefined,
-          surgeonEmail: surgeonEmail.trim() || undefined,
+          nev: nev.trim() || undefined,
+          telefonszam: telefonszam.trim() || undefined,
+          szuletesiDatum: szuletesiDatum.trim() || undefined,
+          nem: nem || undefined,
+          cim: cim.trim() || undefined,
+          varos: varos.trim() || undefined,
+          iranyitoszam: iranyitoszam.trim() || undefined,
+          beutaloOrvos: beutaloOrvos.trim() || undefined,
+          beutaloIndokolas: beutaloIndokolas.trim() || undefined,
         }),
       });
 
@@ -46,10 +65,18 @@ export function PortalRegister() {
         'Regisztráció sikeres! Kérjük, ellenőrizze email címét a megerősítő linkhez.',
         'success'
       );
+      // Reset form
       setEmail('');
       setTaj('');
-      setSurgeonName('');
-      setSurgeonEmail('');
+      setNev('');
+      setTelefonszam('');
+      setSzuletesiDatum('');
+      setNem('');
+      setCim('');
+      setVaros('');
+      setIranyitoszam('');
+      setBeutaloOrvos('');
+      setBeutaloIndokolas('');
     } catch (error) {
       console.error('Error registering:', error);
       showToast(
@@ -71,6 +98,7 @@ export function PortalRegister() {
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Required Fields */}
         <div>
           <label htmlFor="reg-email" className="form-label flex items-center gap-2">
             <Mail className="w-4 h-4" />
@@ -109,22 +137,146 @@ export function PortalRegister() {
           </p>
         </div>
 
+        <div>
+          <label htmlFor="reg-nev" className="form-label flex items-center gap-2">
+            <User className="w-4 h-4" />
+            Név *
+          </label>
+          <input
+            id="reg-nev"
+            type="text"
+            value={nev}
+            onChange={(e) => setNev(e.target.value)}
+            className="form-input"
+            placeholder="Kovács János"
+            required
+            disabled={loading}
+          />
+        </div>
+
+        {/* Optional Personal Information */}
         <div className="border-t pt-4">
-          <p className="text-sm text-gray-600 mb-3">
-            Beutaló orvos adatai (opcionális, de ajánlott):
+          <p className="text-sm font-medium text-gray-700 mb-3">
+            Személyes adatok (opcionális):
           </p>
 
           <div className="space-y-4">
             <div>
-              <label htmlFor="surgeon-name" className="form-label flex items-center gap-2">
+              <label htmlFor="reg-telefon" className="form-label flex items-center gap-2">
+                <Phone className="w-4 h-4" />
+                Telefonszám
+              </label>
+              <input
+                id="reg-telefon"
+                type="tel"
+                value={telefonszam}
+                onChange={(e) => setTelefonszam(e.target.value)}
+                className="form-input"
+                placeholder="+36123456789"
+                disabled={loading}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="reg-szuletesi" className="form-label flex items-center gap-2">
+                <Calendar className="w-4 h-4" />
+                Születési dátum
+              </label>
+              <input
+                id="reg-szuletesi"
+                type="date"
+                value={szuletesiDatum}
+                onChange={(e) => setSzuletesiDatum(e.target.value)}
+                className="form-input"
+                disabled={loading}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="reg-nem" className="form-label flex items-center gap-2">
+                <User className="w-4 h-4" />
+                Nem
+              </label>
+              <select
+                id="reg-nem"
+                value={nem}
+                onChange={(e) => setNem(e.target.value as 'ferfi' | 'no' | '')}
+                className="form-input"
+                disabled={loading}
+              >
+                <option value="">Válasszon...</option>
+                <option value="ferfi">Férfi</option>
+                <option value="no">Nő</option>
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="reg-cim" className="form-label flex items-center gap-2">
+                <MapPin className="w-4 h-4" />
+                Cím
+              </label>
+              <input
+                id="reg-cim"
+                type="text"
+                value={cim}
+                onChange={(e) => setCim(e.target.value)}
+                className="form-input"
+                placeholder="Utca, házszám"
+                disabled={loading}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="reg-varos" className="form-label">
+                  Város
+                </label>
+                <input
+                  id="reg-varos"
+                  type="text"
+                  value={varos}
+                  onChange={(e) => setVaros(e.target.value)}
+                  className="form-input"
+                  placeholder="Budapest"
+                  disabled={loading}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="reg-iranyitoszam" className="form-label">
+                  Irányítószám
+                </label>
+                <input
+                  id="reg-iranyitoszam"
+                  type="text"
+                  value={iranyitoszam}
+                  onChange={(e) => setIranyitoszam(e.target.value)}
+                  className="form-input"
+                  placeholder="1088"
+                  disabled={loading}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Referring Doctor Information */}
+        <div className="border-t pt-4">
+          <p className="text-sm font-medium text-gray-700 mb-3">
+            Beutaló orvos adatai (opcionális):
+          </p>
+
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="reg-beutalo-orvos" className="form-label flex items-center gap-2">
                 <User className="w-4 h-4" />
                 Beutaló orvos neve
               </label>
               <input
-                id="surgeon-name"
+                id="reg-beutalo-orvos"
                 type="text"
-                value={surgeonName}
-                onChange={(e) => setSurgeonName(e.target.value)}
+                value={beutaloOrvos}
+                onChange={(e) => setBeutaloOrvos(e.target.value)}
                 className="form-input"
                 placeholder="Dr. Kovács János"
                 disabled={loading}
@@ -132,17 +284,17 @@ export function PortalRegister() {
             </div>
 
             <div>
-              <label htmlFor="surgeon-email" className="form-label flex items-center gap-2">
-                <Mail className="w-4 h-4" />
-                Beutaló orvos email címe
+              <label htmlFor="reg-beutalo-indokolas" className="form-label flex items-center gap-2">
+                <User className="w-4 h-4" />
+                Beutalás indoka
               </label>
-              <input
-                id="surgeon-email"
-                type="email"
-                value={surgeonEmail}
-                onChange={(e) => setSurgeonEmail(e.target.value)}
+              <textarea
+                id="reg-beutalo-indokolas"
+                value={beutaloIndokolas}
+                onChange={(e) => setBeutaloIndokolas(e.target.value)}
                 className="form-input"
-                placeholder="orvos@email.hu"
+                placeholder="Beutalás indokának leírása..."
+                rows={3}
                 disabled={loading}
               />
             </div>
@@ -170,6 +322,8 @@ export function PortalRegister() {
     </div>
   );
 }
+
+
 
 
 

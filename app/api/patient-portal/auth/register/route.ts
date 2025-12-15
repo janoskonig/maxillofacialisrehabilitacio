@@ -11,11 +11,30 @@ import { Patient, patientSchema } from '@/lib/types';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, taj, surgeonName, surgeonEmail } = body;
+    const { 
+      email, 
+      taj, 
+      nev,
+      telefonszam,
+      szuletesiDatum,
+      nem,
+      cim,
+      varos,
+      iranyitoszam,
+      beutaloOrvos,
+      beutaloIndokolas
+    } = body;
 
     if (!email || !taj) {
       return NextResponse.json(
         { error: 'Email cím és TAJ szám megadása kötelező' },
+        { status: 400 }
+      );
+    }
+
+    if (!nev || !nev.trim()) {
+      return NextResponse.json(
+        { error: 'Név megadása kötelező' },
         { status: 400 }
       );
     }
@@ -78,47 +97,41 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Find surgeon if surgeon info provided
-    let surgeonUserId: string | null = null;
-    if (surgeonEmail || surgeonName) {
-      let surgeonQuery = '';
-      const surgeonParams: unknown[] = [];
-
-      if (surgeonEmail) {
-        surgeonQuery = 'SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND role = $2';
-        surgeonParams.push(surgeonEmail.trim(), 'sebészorvos');
-      } else if (surgeonName) {
-        surgeonQuery = 'SELECT id FROM users WHERE doktor_neve ILIKE $1 AND role = $2';
-        surgeonParams.push(`%${surgeonName.trim()}%`, 'sebészorvos');
-      }
-
-      if (surgeonQuery) {
-        const surgeonResult = await pool.query(surgeonQuery, surgeonParams);
-        if (surgeonResult.rows.length > 0) {
-          surgeonUserId = surgeonResult.rows[0].id;
-        }
-        // If surgeon not found, we'll still create the patient but without surgeon link
-      }
-    }
-
     // Format TAJ with dashes for storage
     const formattedTaj = `${cleanTaj.slice(0, 3)}-${cleanTaj.slice(3, 6)}-${cleanTaj.slice(6)}`;
 
-    // Create patient record (minimal data)
-    const patientData: Partial<Patient> = {
-      email: email.trim(),
-      taj: formattedTaj,
-      // Other fields will be null/empty, can be filled later
-    };
-
-    // If surgeon found, set created_by
-    const createdBy = surgeonUserId || null;
-
+    // Prepare patient data
     const insertResult = await pool.query(
-      `INSERT INTO patients (email, taj, created_by, created_at, updated_at)
-       VALUES ($1, $2, $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-       RETURNING id, email, nev, taj`,
-      [patientData.email, patientData.taj, createdBy]
+      `INSERT INTO patients (
+        email, 
+        taj, 
+        nev,
+        telefonszam,
+        szuletesi_datum,
+        nem,
+        cim,
+        varos,
+        iranyitoszam,
+        beutalo_orvos,
+        beutalo_indokolas,
+        created_at, 
+        updated_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      RETURNING id, email, nev, taj`,
+      [
+        email.trim(),
+        formattedTaj,
+        nev.trim() || null,
+        telefonszam?.trim() || null,
+        szuletesiDatum?.trim() || null,
+        nem || null,
+        cim?.trim() || null,
+        varos?.trim() || null,
+        iranyitoszam?.trim() || null,
+        beutaloOrvos?.trim() || null,
+        beutaloIndokolas?.trim() || null,
+      ]
     );
 
     const newPatient = insertResult.rows[0];
@@ -146,6 +159,8 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+
 
 
 

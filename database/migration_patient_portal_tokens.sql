@@ -39,3 +39,5 @@ COMMENT ON COLUMN patient_portal_tokens.expires_at IS 'Token expiration time (ty
 
 
 
+
+
