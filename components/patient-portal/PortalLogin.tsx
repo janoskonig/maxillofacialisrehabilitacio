@@ -24,6 +24,29 @@ export function PortalLogin() {
   
   const { showToast } = useToast();
 
+  // Format TAJ number: xxx-xxx-xxx (max 9 digits)
+  const formatTaj = (value: string): string => {
+    // Remove all non-digit characters
+    const digits = value.replace(/\D/g, '');
+    
+    // Limit to 9 digits
+    const limitedDigits = digits.slice(0, 9);
+    
+    // Format: xxx-xxx-xxx
+    if (limitedDigits.length <= 3) {
+      return limitedDigits;
+    } else if (limitedDigits.length <= 6) {
+      return `${limitedDigits.slice(0, 3)}-${limitedDigits.slice(3)}`;
+    } else {
+      return `${limitedDigits.slice(0, 3)}-${limitedDigits.slice(3, 6)}-${limitedDigits.slice(6)}`;
+    }
+  };
+
+  const handleTajChange = (value: string) => {
+    const formatted = formatTaj(value);
+    setTaj(formatted);
+  };
+
   const handleCheckPatient = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -36,12 +59,14 @@ export function PortalLogin() {
 
     try {
       // Check if patient exists
+      // Remove dashes from TAJ before sending
+      const tajClean = taj.replace(/-/g, '');
       const response = await fetch('/api/patient-portal/auth/check-patient', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email: email.trim(), taj: taj.trim() }),
+        body: JSON.stringify({ email: email.trim(), taj: tajClean }),
       });
 
       const data = await response.json();
@@ -72,6 +97,8 @@ export function PortalLogin() {
     setLoading(true);
 
     try {
+      // Remove dashes from TAJ before sending
+      const tajClean = taj.replace(/-/g, '');
       const response = await fetch('/api/patient-portal/auth/request-link', {
         method: 'POST',
         headers: {
@@ -79,7 +106,7 @@ export function PortalLogin() {
         },
         body: JSON.stringify({
           email: email.trim(),
-          taj: taj.trim(),
+          taj: tajClean,
           // Include registration data if this is a new patient
           ...(step === 'register' ? {
             nev: nev.trim() || undefined,
@@ -177,7 +204,7 @@ export function PortalLogin() {
                   id="taj"
                   type="text"
                   value={taj}
-                  onChange={(e) => setTaj(e.target.value)}
+                  onChange={(e) => handleTajChange(e.target.value)}
                   className="form-input"
                   placeholder="123-456-789"
                   required
@@ -425,7 +452,7 @@ export function PortalLogin() {
             id="taj-check"
             type="text"
             value={taj}
-            onChange={(e) => setTaj(e.target.value)}
+            onChange={(e) => handleTajChange(e.target.value)}
             className="form-input"
             placeholder="123-456-789"
             required
