@@ -318,20 +318,22 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm border-b">
+      <header className="bg-white shadow-soft border-b border-gray-200/60 sticky top-0 z-40 backdrop-blur-sm bg-white/95">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-2">
-            <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0">
-              <Logo width={40} height={46} className="md:w-[50px] md:h-[58px] flex-shrink-0" />
+          <div className="flex justify-between items-center py-3">
+            <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
+              <div className="flex-shrink-0">
+                <Logo width={40} height={46} className="md:w-[50px] md:h-[58px]" />
+              </div>
               <div className="min-w-0 flex-1">
-                <h1 className="text-base md:text-lg font-bold text-medical-primary truncate">
+                <h1 className="text-heading-3 text-medical-primary truncate">
                   Maxillofaciális Rehabilitáció
                 </h1>
-                <p className="text-xs text-gray-600 hidden sm:block">
+                <p className="text-xs text-gray-500 hidden sm:block font-medium mt-0.5">
                   BETEGREGISZTER ÉS IDŐPONTKEZELŐ
                 </p>
                 {userRole === 'sebészorvos' && userInstitution && (
-                  <p className="text-xs font-semibold text-red-600 mt-0.5 truncate">
+                  <p className="text-xs font-semibold text-medical-error mt-0.5 truncate badge badge-error inline-block px-2 py-0.5 mt-1">
                     SEBÉSZ MÓD (csak a {userInstitution} páciensei)
                   </p>
                 )}
@@ -340,11 +342,11 @@ export default function Home() {
             <div className="flex items-center gap-2">
               <MobileMenu currentPath="/" />
               {/* Desktop Navigation */}
-              <div className="hidden md:flex gap-1.5">
+              <div className="hidden md:flex gap-2">
                 {userRole === 'admin' && (
                   <button
                     onClick={() => router.push('/admin')}
-                    className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+                    className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2"
                   >
                     <Shield className="w-3.5 h-3.5" />
                     Admin
@@ -352,21 +354,21 @@ export default function Home() {
                 )}
                 <button
                   onClick={() => router.push('/calendar')}
-                  className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+                  className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2"
                 >
                   <CalendarDays className="w-3.5 h-3.5" />
                   Naptár
                 </button>
                 <button
                   onClick={() => router.push('/settings')}
-                  className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+                  className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2"
                 >
                   <Settings className="w-3.5 h-3.5" />
                   Beállítások
                 </button>
                 <button
                   onClick={handleLogout}
-                  className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+                  className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                   Kijelentkezés
@@ -374,7 +376,7 @@ export default function Home() {
                 {(userRole === 'admin' || userRole === 'editor' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos') && (
                   <button
                     onClick={handleNewPatient}
-                    className="btn-primary flex items-center gap-1.5 text-sm px-3 py-1.5"
+                    className="btn-primary flex items-center gap-1.5 text-sm px-3 py-2"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     Új beteg
@@ -389,17 +391,17 @@ export default function Home() {
         <div className="space-y-3">
           {/* Link to time slots management page for fogpótlástanász and admin */}
           {(userRole === 'fogpótlástanász' || userRole === 'admin') && (
-            <div className="card p-3">
+            <div className="card card-hover p-4 bg-gradient-to-r from-medical-primary/5 to-medical-accent/5 border-medical-primary/20">
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                 <div>
-                  <h3 className="text-base font-semibold text-gray-900">Időpontkezelés</h3>
-                  <p className="text-xs text-gray-600">
+                  <h3 className="text-heading-4">Időpontkezelés</h3>
+                  <p className="text-body-sm mt-1">
                     Hozzon létre és kezeljen szabad időpontokat
                   </p>
                 </div>
                 <button
                   onClick={() => router.push('/time-slots')}
-                  className="btn-primary w-full sm:w-auto flex items-center justify-center gap-1.5 text-sm px-3 py-2"
+                  className="btn-primary w-full sm:w-auto flex items-center justify-center gap-1.5 text-sm px-4 py-2.5"
                 >
                   <Calendar className="w-4 h-4" />
                   Időpontok kezelése
@@ -409,12 +411,12 @@ export default function Home() {
           )}
 
           {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div>
-          <h2 className="text-lg sm:text-xl font-bold text-gray-900">eCRF-katalógus (electronic Case Report Form)</h2>
+          <h2 className="text-heading-2">eCRF-katalógus (electronic Case Report Form)</h2>
           {userEmail && (
-            <p className="text-xs text-gray-500 mt-1">
-              Bejelentkezve: <span className="hidden sm:inline">{userEmail}</span><span className="sm:hidden">{userEmail.split('@')[0]}</span>
+            <p className="text-body-sm mt-1.5">
+              Bejelentkezve: <span className="font-medium text-medical-primary hidden sm:inline">{userEmail}</span><span className="font-medium text-medical-primary sm:hidden">{userEmail.split('@')[0]}</span>
             </p>
           )}
         </div>
@@ -453,38 +455,42 @@ export default function Home() {
           <>
               {/* Search */}
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 z-10" />
                 <input
                   type="text"
                   placeholder="Keresés név, TAJ szám vagy telefon alapján..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="form-input pl-10 sm:pl-9 py-2.5 sm:py-2 text-base sm:text-sm"
+                  className="form-input pl-12 py-3 text-base"
                 />
               </div>
 
               {/* Stats */}
-              <div className={`grid gap-3 ${searchQuery.trim() ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
-                <div className="card p-3">
-                  <div className="flex items-center">
-                    <Users className="w-5 h-5 text-medical-primary" />
-                    <div className="ml-2">
-                      <p className="text-xs font-medium text-gray-500">
+              <div className={`grid gap-4 ${searchQuery.trim() ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
+                <div className="card card-hover p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-medical-primary/10 rounded-lg">
+                      <Users className="w-5 h-5 text-medical-primary" />
+                    </div>
+                    <div>
+                      <p className="text-body-sm text-gray-500">
                         {searchQuery.trim() ? 'Keresési eredmények' : 'Összes beteg'}
                       </p>
-                      <p className="text-xl font-bold text-gray-900">
+                      <p className="text-2xl font-bold text-gray-900 mt-0.5">
                         {searchQuery.trim() ? (pagination?.total ?? filteredPatients.length) : (pagination?.total ?? patients.length)}
                       </p>
                     </div>
                   </div>
                 </div>
                 {!searchQuery.trim() && (
-                  <div className="card p-3">
-                    <div className="flex items-center">
-                      <Plus className="w-5 h-5 text-medical-success" />
-                      <div className="ml-2">
-                        <p className="text-xs font-medium text-gray-500">Új ebben a hónapban</p>
-                        <p className="text-xl font-bold text-gray-900">
+                  <div className="card card-hover p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-medical-success/10 rounded-lg">
+                        <Plus className="w-5 h-5 text-medical-success" />
+                      </div>
+                      <div>
+                        <p className="text-body-sm text-gray-500">Új ebben a hónapban</p>
+                        <p className="text-2xl font-bold text-gray-900 mt-0.5">
                           {patients.filter(p => {
                             const created = new Date(p.createdAt || '');
                             const now = new Date();
@@ -530,7 +536,7 @@ export default function Home() {
       {/* Patient Form Modal */}
       {showForm && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-0 md:p-4 z-50"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-0 md:p-4 z-50 animate-fade-in"
           onClick={(e) => {
             // Only close if clicking directly on the background (not on the form)
             if (e.target === e.currentTarget) {
@@ -547,7 +553,7 @@ export default function Home() {
           }}
         >
           <div 
-            className="bg-white rounded-none md:rounded-lg max-w-4xl w-full h-full md:h-auto max-h-[100vh] md:max-h-[90vh] overflow-y-auto"
+            className="bg-white rounded-none md:rounded-xl max-w-4xl w-full h-full md:h-auto max-h-[100vh] md:max-h-[90vh] overflow-y-auto shadow-soft-xl animate-slide-up"
             onClick={(e) => e.stopPropagation()}
           >
             <PatientForm

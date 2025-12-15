@@ -225,8 +225,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Get base URL from request
+    const requestOrigin = request.nextUrl.origin;
+    const baseUrl = requestOrigin.includes('localhost') || requestOrigin.includes('127.0.0.1')
+      ? requestOrigin
+      : process.env.NEXT_PUBLIC_BASE_URL || 'https://rehabilitacios-protetika.hu';
+
     // Send magic link email
-    await sendPatientMagicLink(patientInfo.email, patientInfo.name, token);
+    await sendPatientMagicLink(patientInfo.email, patientInfo.name, token, baseUrl);
 
     return NextResponse.json({
       success: true,

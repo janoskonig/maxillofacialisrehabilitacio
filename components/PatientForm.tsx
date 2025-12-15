@@ -1460,7 +1460,29 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
   const selectedIndok = watch('kezelesreErkezesIndoka');
 
   return (
-    <div className="p-6">
+    <div className="p-6 relative pb-24">
+      {/* Floating Save Button */}
+      {!isViewOnly && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 pt-4 pb-4 bg-white border-t border-gray-200 shadow-soft-xl px-6 md:px-8">
+          <div className="max-w-4xl mx-auto flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="btn-secondary"
+              data-patient-form-cancel
+            >
+              Mégse
+            </button>
+            <button
+              type="submit"
+              form="patient-form"
+              className="btn-primary"
+            >
+              {patient ? 'Beteg frissítése' : 'Beteg mentése'}
+            </button>
+          </div>
+        </div>
+      )}
       <div className="flex justify-between items-center mb-6">
         <h3 className="text-2xl font-bold text-gray-900">
           {isViewOnly ? 'Beteg megtekintése' : patient ? 'Beteg szerkesztése' : 'Új beteg'}
@@ -1474,7 +1496,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         </button>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+      <form id="patient-form" onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         {/* ALAPADATOK */}
         <div className="card">
           <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
@@ -3364,9 +3386,9 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           />
         )}
 
-        {/* Form Actions */}
-        <div className="pt-6 border-t space-y-4">
-          {!isViewOnly && (
+        {/* Form Actions - Warning message only, buttons are in floating bar */}
+        {!isViewOnly && (
+          <div className="pt-6 border-t border-gray-200">
             <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-md">
               <div className="flex items-start">
                 <AlertTriangle className="w-5 h-5 text-yellow-600 mr-3 mt-0.5 flex-shrink-0" />
@@ -3380,26 +3402,23 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                 </div>
               </div>
             </div>
-          )}
-          <div className="flex justify-end space-x-4">
-            <button
-              type="button"
-              onClick={handleCancel}
-              className="btn-secondary"
-              data-patient-form-cancel
-            >
-              {isViewOnly ? 'Bezárás' : 'Mégse'}
-            </button>
-            {!isViewOnly && (
-              <button
-                type="submit"
-                className="btn-primary"
-              >
-                {patient ? 'Beteg frissítése' : 'Beteg mentése'}
-              </button>
-            )}
           </div>
-        </div>
+        )}
+        {/* View-only mode close button */}
+        {isViewOnly && (
+          <div className="pt-6 border-t border-gray-200">
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={handleCancel}
+                className="btn-secondary"
+                data-patient-form-cancel
+              >
+                Bezárás
+              </button>
+            </div>
+          </div>
+        )}
       </form>
     </div>
   );

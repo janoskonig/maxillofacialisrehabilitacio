@@ -48,10 +48,10 @@ export function Dashboard({ userRole }: DashboardProps) {
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
+      <div className="card">
         <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-medical-primary"></div>
-          <span className="ml-3 text-gray-600">Dashboard betöltése...</span>
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-medical-primary/20 border-t-medical-primary"></div>
+          <span className="ml-3 text-body-sm">Dashboard betöltése...</span>
         </div>
       </div>
     );
@@ -59,9 +59,9 @@ export function Dashboard({ userRole }: DashboardProps) {
 
   if (error) {
     return (
-      <div className="bg-white rounded-lg border border-red-200 shadow-sm p-6">
+      <div className="card border-medical-error/20 bg-medical-error/5">
         <div className="text-center py-4">
-          <p className="text-red-600">Hiba: {error}</p>
+          <p className="text-medical-error font-medium">Hiba: {error}</p>
         </div>
       </div>
     );
@@ -75,13 +75,15 @@ export function Dashboard({ userRole }: DashboardProps) {
     <div className="space-y-4">
       {/* Dashboard Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <LayoutDashboard className="w-5 h-5 text-medical-primary" />
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Dashboard</h2>
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-medical-primary/10 rounded-lg">
+            <LayoutDashboard className="w-5 h-5 text-medical-primary" />
+          </div>
+          <h2 className="text-heading-2">Dashboard</h2>
         </div>
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900 p-2"
+          className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 p-2 rounded-lg hover:bg-gray-100 transition-all duration-200"
         >
           {isCollapsed ? (
             <>

@@ -4,14 +4,26 @@ import { getDbPool } from './db';
 const PORTAL_BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://rehabilitacios-protetika.hu';
 
 /**
+ * Get base URL - use provided baseUrl or fallback to env/default
+ */
+function getBaseUrl(baseUrl?: string): string {
+  if (baseUrl) {
+    return baseUrl;
+  }
+  return PORTAL_BASE_URL;
+}
+
+/**
  * Send magic link email to existing patient
  */
 export async function sendPatientMagicLink(
   patientEmail: string,
   patientName: string | null,
-  token: string
+  token: string,
+  baseUrl?: string
 ): Promise<void> {
-  const magicLink = `${PORTAL_BASE_URL}/api/patient-portal/auth/verify?token=${token}`;
+  const portalBaseUrl = getBaseUrl(baseUrl);
+  const magicLink = `${portalBaseUrl}/api/patient-portal/auth/verify?token=${token}`;
 
   const subject = 'Bejelentkezés a páciens portálra';
   const html = `
@@ -51,9 +63,11 @@ export async function sendPatientMagicLink(
 export async function sendPatientVerificationEmail(
   patientEmail: string,
   patientName: string | null,
-  token: string
+  token: string,
+  baseUrl?: string
 ): Promise<void> {
-  const verificationLink = `${PORTAL_BASE_URL}/api/patient-portal/auth/verify-email?token=${token}`;
+  const portalBaseUrl = getBaseUrl(baseUrl);
+  const verificationLink = `${portalBaseUrl}/api/patient-portal/auth/verify-email?token=${token}`;
 
   const subject = 'Email cím megerősítése - Páciens portál';
   const html = `

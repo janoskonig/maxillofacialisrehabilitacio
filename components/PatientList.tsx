@@ -233,15 +233,15 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
     
     return (
       <th 
-        className={`px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none ${
-          isActive ? 'bg-gray-100' : ''
+        className={`px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-200/50 select-none transition-colors duration-150 ${
+          isActive ? 'bg-medical-primary/10 text-medical-primary' : ''
         } ${className || ''}`}
         onClick={() => onSort?.(field)}
       >
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
           <span>{label}</span>
           {SortIcon && (
-            <SortIcon className="w-3 h-3 text-medical-primary" />
+            <SortIcon className={`w-3.5 h-3.5 ${isActive ? 'text-medical-primary' : 'text-gray-400'}`} />
           )}
         </div>
       </th>
@@ -326,64 +326,71 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
 
   // Desktop: Table view
   return (
-    <div className="card p-0">
+    <div className="card p-0 overflow-hidden">
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+          <thead className="bg-gradient-to-r from-gray-50 to-gray-100/50">
             <tr>
               {renderSortableHeader(searchQuery.trim() ? 'Keresési eredmény' : 'Beteg', 'nev')}
-              <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20">
+              <th className="px-3 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider w-20">
                 Foto
               </th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 TAJ szám
               </th>
-              <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
+              <th className="px-2 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-32">
                 Kapcsolat
               </th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 Kezelőorvos
               </th>
               {renderSortableHeader('Időpont', 'idopont', 'w-32')}
-              <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20">
+              <th className="px-3 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider w-20">
                 OP
               </th>
               {userRole !== 'sebészorvos' && (
                 <>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Tervezett fogpótlás (felső)
                   </th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Tervezett fogpótlás (alsó)
                   </th>
                 </>
               )}
               {renderSortableHeader('Létrehozva', 'createdAt')}
-              <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 Műveletek
               </th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {paginatedPatients.map((patient) => {
+          <tbody className="bg-white divide-y divide-gray-100">
+            {paginatedPatients.map((patient, index) => {
               const hasNoDoctor = !patient.kezeleoorvos;
+              const isEven = index % 2 === 0;
               return (
               <tr 
                 key={patient.id} 
-                className={hasNoDoctor ? "bg-red-50 hover:bg-red-100" : "hover:bg-gray-50"}
+                className={`transition-all duration-150 ${
+                  hasNoDoctor 
+                    ? "bg-red-50/50 hover:bg-red-100/70 border-l-2 border-l-medical-error" 
+                    : isEven 
+                      ? "bg-white hover:bg-gray-50/80" 
+                      : "bg-gray-50/30 hover:bg-gray-100/60"
+                }`}
               >
-                <td className="px-3 py-2 whitespace-nowrap">
+                <td className="px-3 py-3 whitespace-nowrap">
                   <div className="flex items-center">
-                    <div className="flex-shrink-0 h-8 w-8">
-                      <div className="h-8 w-8 rounded-full bg-medical-primary flex items-center justify-center">
-                        <span className="text-xs font-medium text-white">
+                    <div className="flex-shrink-0 h-9 w-9">
+                      <div className="h-9 w-9 rounded-full bg-gradient-to-br from-medical-primary to-medical-primary-light flex items-center justify-center shadow-soft">
+                        <span className="text-xs font-semibold text-white">
                           {patient.nev ? patient.nev.split(' ').map(n => n.charAt(0)).join('').substring(0, 2) : '??'}
                         </span>
                       </div>
                     </div>
-                    <div className="ml-2">
+                    <div className="ml-3">
                       <div
-                        className="text-xs font-medium text-gray-900 cursor-pointer text-medical-primary hover:underline"
+                        className="text-sm font-semibold text-gray-900 cursor-pointer text-medical-primary hover:text-medical-primary-dark hover:underline transition-colors"
                         onClick={() => {
                           // Ha van szerkesztési jogosultság, akkor szerkesztés, különben csak megtekintés
                           if (canEdit && onEdit) {
@@ -396,7 +403,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                       >
                         {patient.nev}
                       </div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-gray-500 mt-0.5">
                         {patient.nem === 'ferfi' ? 'Férfi' : patient.nem === 'no' ? 'Nő' : ''} 
                         {patient.nem && (() => {
                           const age = calculateAge(patient.szuletesiDatum);
@@ -417,7 +424,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                           onView(patient);
                         }
                       }}
-                      className="inline-flex items-center justify-center p-1.5 rounded-full bg-green-100 text-green-700 hover:bg-green-200 transition-colors"
+                      className="inline-flex items-center justify-center p-1.5 rounded-full bg-medical-success/10 text-medical-success border border-medical-success/20 hover:bg-medical-success/20 transition-all duration-200"
                       title={`${fotoDocuments[patient.id || '']} foto dokumentum`}
                     >
                       <Camera className="w-4 h-4" />
@@ -535,7 +542,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                           onView(patient);
                         }
                       }}
-                      className="inline-flex items-center justify-center p-1.5 rounded-full bg-medical-primary/10 text-medical-primary hover:bg-medical-primary/20 transition-colors"
+                      className="inline-flex items-center justify-center p-1.5 rounded-full bg-medical-primary/10 text-medical-primary border border-medical-primary/20 hover:bg-medical-primary/20 transition-all duration-200"
                       title={`${opDocuments[patient.id || '']} OP dokumentum`}
                     >
                       <Image className="w-4 h-4" />
@@ -653,18 +660,18 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
       
       {/* Pagináció */}
       {totalPages > 1 && (
-        <div className="mt-4 px-4 py-3 flex items-center justify-between border-t border-gray-200">
-          <div className="text-sm text-gray-600">
-            Oldal {currentPage} / {totalPages} (összesen {pagination?.total ?? sortedPatients.length} beteg)
+        <div className="mt-4 px-6 py-4 flex items-center justify-between border-t border-gray-200 bg-gray-50/50">
+          <div className="text-sm text-gray-600 font-medium">
+            Oldal <span className="text-medical-primary font-semibold">{currentPage}</span> / {totalPages} (összesen <span className="text-medical-primary font-semibold">{pagination?.total ?? sortedPatients.length}</span> beteg)
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
               disabled={currentPage === 1}
-              className={`px-3 py-2 rounded-md text-sm font-medium ${
+              className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                 currentPage === 1
                   ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300 hover:border-medical-primary/30 hover:shadow-soft'
               }`}
             >
               <ChevronLeft className="w-4 h-4" />
@@ -685,10 +692,10 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                   <button
                     key={pageNum}
                     onClick={() => handlePageChange(pageNum)}
-                    className={`px-3 py-2 rounded-md text-sm font-medium ${
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                       currentPage === pageNum
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                        ? 'bg-gradient-to-r from-medical-primary to-medical-primary-light text-white shadow-soft-md'
+                        : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300 hover:border-medical-primary/30 hover:shadow-soft'
                     }`}
                   >
                     {pageNum}
@@ -699,10 +706,10 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
             <button
               onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
               disabled={currentPage === totalPages}
-              className={`px-3 py-2 rounded-md text-sm font-medium ${
+              className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                 currentPage === totalPages
                   ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300 hover:border-medical-primary/30 hover:shadow-soft'
               }`}
             >
               <ChevronRight className="w-4 h-4" />

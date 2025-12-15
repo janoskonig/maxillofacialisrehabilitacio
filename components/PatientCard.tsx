@@ -64,7 +64,7 @@ export function PatientCard({
   const StatusIcon = statusInfo?.icon;
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3">
+    <div className="card card-interactive space-y-3 animate-fade-in">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
@@ -115,7 +115,7 @@ export function PatientCard({
 
       {/* Appointment Info */}
       {appointment && (
-        <div className={`${statusInfo?.bgColor || 'bg-gray-50'} rounded-md p-2.5`}>
+        <div className={`${statusInfo?.bgColor || 'bg-gray-50'} rounded-lg p-3 border border-gray-200/50`}>
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-gray-600" />
             <div className="flex-1 min-w-0">
@@ -161,7 +161,7 @@ export function PatientCard({
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-2 pt-2 border-t">
+      <div className="flex items-center gap-2 pt-3 border-t border-gray-100">
         <button
           onClick={() => onView(patient)}
           className="flex-1 btn-secondary flex items-center justify-center gap-2 text-sm py-2"
@@ -181,7 +181,7 @@ export function PatientCard({
         {canDelete && (
           <button
             onClick={() => onDelete?.(patient)}
-            className="p-2 text-red-600 hover:bg-red-50 rounded"
+            className="p-2 text-medical-error hover:bg-medical-error/10 rounded-lg transition-all duration-200"
             title="Törlés"
           >
             <Trash2 className="w-4 h-4" />

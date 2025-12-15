@@ -5,28 +5,160 @@
 @layer base {
   html {
     font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  body {
+    @apply text-gray-900 bg-gray-50;
   }
 }
 
 @layer components {
+  /* Form Inputs */
   .form-input {
-    @apply block w-full rounded-md border-gray-300 shadow-sm focus:border-medical-primary focus:ring-medical-primary sm:text-sm;
+    @apply block w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 shadow-soft;
+    @apply transition-all duration-200 ease-smooth;
+    @apply focus:border-medical-primary focus:ring-2 focus:ring-medical-primary/20 focus:outline-none;
+    @apply hover:border-gray-400;
+  }
+  
+  .form-input:disabled {
+    @apply bg-gray-50 text-gray-500 cursor-not-allowed;
+  }
+  
+  .form-input-error {
+    @apply border-medical-error focus:border-medical-error focus:ring-medical-error/20;
   }
   
   .form-label {
-    @apply block text-sm font-medium text-gray-700 mb-1;
+    @apply block text-sm font-semibold text-gray-700 mb-1.5;
   }
   
+  .form-label-required::after {
+    content: ' *';
+    @apply text-medical-error;
+  }
+  
+  /* Buttons */
   .btn-primary {
-    @apply bg-medical-primary text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-medical-primary focus:ring-offset-2 transition-colors;
+    @apply bg-gradient-to-r from-medical-primary to-medical-primary-light text-white px-5 py-2.5 rounded-lg;
+    @apply font-medium text-sm shadow-soft-md;
+    @apply transition-all duration-200 ease-smooth;
+    @apply hover:from-medical-primary-dark hover:to-medical-primary hover:shadow-soft-lg hover:-translate-y-0.5;
+    @apply focus:outline-none focus:ring-2 focus:ring-medical-primary focus:ring-offset-2;
+    @apply active:translate-y-0 active:shadow-soft;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0;
   }
   
   .btn-secondary {
-    @apply bg-gray-200 text-gray-900 px-4 py-2 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors;
+    @apply bg-white text-gray-700 px-5 py-2.5 rounded-lg border border-gray-300;
+    @apply font-medium text-sm shadow-soft;
+    @apply transition-all duration-200 ease-smooth;
+    @apply hover:bg-gray-50 hover:border-gray-400 hover:shadow-soft-md hover:-translate-y-0.5;
+    @apply focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2;
+    @apply active:translate-y-0 active:shadow-soft;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0;
   }
   
+  .btn-danger {
+    @apply bg-gradient-to-r from-medical-error to-medical-error-light text-white px-5 py-2.5 rounded-lg;
+    @apply font-medium text-sm shadow-soft-md;
+    @apply transition-all duration-200 ease-smooth;
+    @apply hover:from-medical-error-dark hover:to-medical-error hover:shadow-soft-lg hover:-translate-y-0.5;
+    @apply focus:outline-none focus:ring-2 focus:ring-medical-error focus:ring-offset-2;
+    @apply active:translate-y-0 active:shadow-soft;
+  }
+  
+  .btn-success {
+    @apply bg-gradient-to-r from-medical-success to-medical-success-light text-white px-5 py-2.5 rounded-lg;
+    @apply font-medium text-sm shadow-soft-md;
+    @apply transition-all duration-200 ease-smooth;
+    @apply hover:from-medical-success-dark hover:to-medical-success hover:shadow-soft-lg hover:-translate-y-0.5;
+    @apply focus:outline-none focus:ring-2 focus:ring-medical-success focus:ring-offset-2;
+    @apply active:translate-y-0 active:shadow-soft;
+  }
+  
+  /* Cards */
   .card {
-    @apply bg-white rounded-lg shadow-sm border border-gray-200 p-6;
+    @apply bg-white rounded-xl shadow-soft border border-gray-200/60 p-6;
+    @apply transition-all duration-200 ease-smooth;
+  }
+  
+  .card-hover {
+    @apply hover:shadow-soft-md hover:border-gray-300;
+  }
+  
+  .card-interactive {
+    @apply cursor-pointer hover:shadow-soft-md hover:border-medical-primary/20 hover:-translate-y-0.5;
+    @apply transition-all duration-200 ease-smooth;
+  }
+  
+  /* Badges */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium;
+  }
+  
+  .badge-primary {
+    @apply bg-medical-primary/10 text-medical-primary border border-medical-primary/20;
+  }
+  
+  .badge-success {
+    @apply bg-medical-success/10 text-medical-success border border-medical-success/20;
+  }
+  
+  .badge-warning {
+    @apply bg-medical-warning/10 text-medical-warning border border-medical-warning/20;
+  }
+  
+  .badge-error {
+    @apply bg-medical-error/10 text-medical-error border border-medical-error/20;
+  }
+  
+  .badge-gray {
+    @apply bg-gray-100 text-gray-700 border border-gray-200;
+  }
+  
+  /* Typography Utilities */
+  .text-heading-1 {
+    @apply text-3xl font-bold text-gray-900 tracking-tight;
+  }
+  
+  .text-heading-2 {
+    @apply text-2xl font-bold text-gray-900 tracking-tight;
+  }
+  
+  .text-heading-3 {
+    @apply text-xl font-semibold text-gray-900 tracking-tight;
+  }
+  
+  .text-heading-4 {
+    @apply text-lg font-semibold text-gray-900;
+  }
+  
+  .text-body {
+    @apply text-base text-gray-700 leading-relaxed;
+  }
+  
+  .text-body-sm {
+    @apply text-sm text-gray-600 leading-relaxed;
+  }
+  
+  .text-caption {
+    @apply text-xs text-gray-500 leading-normal;
+  }
+  
+  /* Spacing Utilities */
+  .section-spacing {
+    @apply py-6 sm:py-8 lg:py-10;
+  }
+  
+  .container-spacing {
+    @apply px-4 sm:px-6 lg:px-8;
+  }
+  
+  .card-spacing {
+    @apply p-4 sm:p-6;
   }
 }
 
@@ -41,8 +173,49 @@
   }
 }
 
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes pulse-soft {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
 .animate-slide-up {
   animation: slide-up 0.3s ease-out;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 /* React DatePicker custom styles */

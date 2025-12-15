@@ -199,9 +199,11 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
   if (appointments.length === 0) {
     return (
       <DashboardWidget title="Következő időpontok (ma)" icon={<Calendar className="w-5 h-5" />}>
-        <div className="text-center py-6 text-gray-500">
-          <Calendar className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-          <p className="text-sm">Nincsenek mai időpontok</p>
+        <div className="text-center py-8 text-gray-500">
+          <div className="p-4 bg-gray-100 rounded-full w-16 h-16 mx-auto mb-3 flex items-center justify-center">
+            <Calendar className="w-8 h-8 text-gray-400" />
+          </div>
+          <p className="text-body-sm">Nincsenek mai időpontok</p>
         </div>
       </DashboardWidget>
     );
@@ -219,37 +221,39 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
           return (
             <div
               key={appointment.id}
-              className={`p-3 rounded-lg border transition-colors ${
+              className={`p-4 rounded-xl border transition-all duration-200 animate-fade-in ${
                 isUpcoming
-                  ? 'border-blue-200 bg-blue-50'
-                  : 'border-gray-200 bg-gray-50'
+                  ? 'border-medical-primary/30 bg-gradient-to-br from-medical-primary/5 to-medical-accent/5 hover:shadow-soft'
+                  : 'border-gray-200 bg-gray-50/50 hover:shadow-soft'
               }`}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Clock className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                    <span className="font-semibold text-sm sm:text-base text-gray-900">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className={`p-1.5 rounded-lg ${isUpcoming ? 'bg-medical-primary/10' : 'bg-gray-200'}`}>
+                      <Clock className={`w-4 h-4 ${isUpcoming ? 'text-medical-primary' : 'text-gray-500'} flex-shrink-0`} />
+                    </div>
+                    <span className="font-bold text-base text-gray-900">
                       {format(startTime, 'HH:mm', { locale: hu })}
                     </span>
                     {!isUpcoming && (
-                      <span className="text-xs text-gray-500">(már elmúlt)</span>
+                      <span className="badge badge-gray text-xs">(már elmúlt)</span>
                     )}
                   </div>
                   <div
                     onClick={() => handleAppointmentClick(appointment.patientId)}
-                    className="font-medium text-sm sm:text-base text-blue-600 hover:text-blue-800 hover:underline cursor-pointer truncate transition-colors"
+                    className="font-semibold text-base text-medical-primary hover:text-medical-primary-dark hover:underline cursor-pointer truncate transition-colors mb-1"
                   >
                     {appointment.patientName || 'Névtelen beteg'}
                   </div>
                   {appointment.patientTaj && (
-                    <div className="text-xs text-gray-600 mt-0.5">
+                    <div className="text-body-sm text-gray-600 mt-0.5">
                       TAJ: {appointment.patientTaj}
                     </div>
                   )}
                   {(appointment.cim || appointment.teremszam) && (
-                    <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
-                      <MapPin className="w-3 h-3" />
+                    <div className="flex items-center gap-1.5 mt-2 text-body-sm text-gray-500">
+                      <MapPin className="w-3.5 h-3.5" />
                       {appointment.cim && <span>{appointment.cim}</span>}
                       {appointment.teremszam && <span>• {appointment.teremszam}. terem</span>}
                     </div>
@@ -257,25 +261,25 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
                   
                   {/* Status display */}
                   {!isEditing && statusInfo && (
-                    <div className={`flex items-center gap-1 mt-2 px-2 py-1 rounded text-xs ${statusInfo.bgColor} ${statusInfo.color}`}>
-                      <statusInfo.icon className="w-3 h-3" />
+                    <div className={`badge mt-2 ${statusInfo.bgColor.includes('green') ? 'badge-success' : statusInfo.bgColor.includes('red') ? 'badge-error' : statusInfo.bgColor.includes('orange') ? 'badge-warning' : 'badge-primary'}`}>
+                      <statusInfo.icon className="w-3 h-3 mr-1" />
                       <span>{statusInfo.label}</span>
                     </div>
                   )}
                   
                   {/* Quick action buttons */}
                   {!isEditing && !appointment.appointmentStatus && (
-                    <div className="flex gap-1 mt-2">
+                    <div className="flex gap-2 mt-3">
                       <button
                         onClick={() => handleEditStatus(appointment)}
-                        className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors"
+                        className="text-xs px-3 py-1.5 bg-medical-success/10 text-medical-success border border-medical-success/20 rounded-lg hover:bg-medical-success/20 transition-all duration-200 font-medium"
                         title="Sikeresen teljesült (megjegyzéssel)"
                       >
                         ✓ Teljesült
                       </button>
                       <button
                         onClick={() => handleQuickStatus(appointment.id, 'no_show')}
-                        className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+                        className="text-xs px-3 py-1.5 bg-medical-error/10 text-medical-error border border-medical-error/20 rounded-lg hover:bg-medical-error/20 transition-all duration-200 font-medium"
                         title="Nem jelent meg"
                       >
                         ✗ Nem jelent meg
@@ -285,16 +289,16 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
                   
                   {/* Completion notes display */}
                   {!isEditing && appointment.completionNotes && (
-                    <div className="text-xs text-gray-600 mt-1 px-2 py-1 bg-gray-100 rounded">
+                    <div className="text-body-sm text-gray-700 mt-2 px-3 py-2 bg-gray-100 rounded-lg border border-gray-200">
                       {appointment.completionNotes}
                     </div>
                   )}
 
                   {/* Edit form */}
                   {isEditing && (
-                    <div className="mt-3 space-y-2 pt-2 border-t border-gray-200">
+                    <div className="mt-4 space-y-3 pt-3 border-t border-gray-200">
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                        <label className="form-label text-xs">
                           Státusz
                         </label>
                         <select
@@ -307,7 +311,7 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
                               completionNotes: value === 'completed' ? statusForm.completionNotes : '',
                             });
                           }}
-                          className="w-full text-xs border border-gray-300 rounded px-2 py-1"
+                          className="form-input text-xs"
                         >
                           <option value="">Nincs státusz (normál időpont)</option>
                           <option value="cancelled_by_doctor">Lemondta az orvos</option>
@@ -318,39 +322,39 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
                       </div>
                       {(statusForm.appointmentStatus === 'completed' || statusForm.appointmentStatus) && (
                         <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">
-                            Megjegyzés {statusForm.appointmentStatus === 'completed' && <span className="text-red-600">*</span>}
+                          <label className="form-label text-xs">
+                            Megjegyzés {statusForm.appointmentStatus === 'completed' && <span className="text-medical-error">*</span>}
                           </label>
                           <textarea
                             value={statusForm.completionNotes}
                             onChange={(e) => setStatusForm({ ...statusForm, completionNotes: e.target.value })}
-                            className="w-full text-xs border border-gray-300 rounded px-2 py-1"
+                            className="form-input text-xs"
                             rows={2}
                             placeholder="Rövid leírás arról, hogy mi történt..."
                           />
                         </div>
                       )}
                       <div>
-                        <label className="flex items-center gap-2">
+                        <label className="flex items-center gap-2 cursor-pointer">
                           <input
                             type="checkbox"
                             checked={statusForm.isLate}
                             onChange={(e) => setStatusForm({ ...statusForm, isLate: e.target.checked })}
-                            className="w-3 h-3"
+                            className="w-4 h-4 rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
                           />
                           <span className="text-xs font-medium text-gray-700">Késett a beteg</span>
                         </label>
                       </div>
-                      <div className="flex gap-2 justify-end">
+                      <div className="flex gap-2 justify-end pt-2">
                         <button
                           onClick={handleCancelEdit}
-                          className="text-xs px-2 py-1 text-gray-600 hover:text-gray-800"
+                          className="btn-secondary text-xs px-3 py-1.5"
                         >
                           Mégse
                         </button>
                         <button
                           onClick={() => handleSaveStatus(appointment.id)}
-                          className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                          className="btn-primary text-xs px-3 py-1.5"
                         >
                           Mentés
                         </button>
@@ -363,7 +367,7 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
                 {!isEditing && (
                   <button
                     onClick={() => handleEditStatus(appointment)}
-                    className="flex-shrink-0 p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                    className="flex-shrink-0 p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all duration-200"
                     title="Státusz szerkesztése"
                   >
                     <Edit2 className="w-4 h-4" />

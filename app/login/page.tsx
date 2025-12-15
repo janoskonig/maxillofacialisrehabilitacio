@@ -61,15 +61,15 @@ export default function Login() {
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-            <p className="text-sm text-blue-900 font-medium mb-2">
+        <div className="card py-8 px-4 sm:px-10 shadow-soft-lg">
+          <div className="bg-medical-primary/10 border border-medical-primary/20 rounded-lg p-4 mb-6">
+            <p className="text-sm text-medical-primary-dark font-medium mb-2">
               Ha Ön beküldő orvos, kérem regisztráljon vagy lépjen be.
             </p>
           </div>
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="email" className="form-label">
                 Felhasználónév
               </label>
               <div className="mt-1 relative">
@@ -89,7 +89,7 @@ export default function Login() {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="password" className="form-label">
                 Jelszó
               </label>
               <div className="mt-1 relative">
@@ -107,7 +107,7 @@ export default function Login() {
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <button
                   type="button"
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                   onClick={() => setShowPassword(!showPassword)}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -116,7 +116,7 @@ export default function Login() {
             </div>
 
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md text-sm">
+              <div className="bg-medical-error/10 border border-medical-error/20 text-medical-error px-4 py-3 rounded-lg text-sm font-medium">
                 {error}
               </div>
             )}
@@ -152,8 +152,8 @@ export default function Login() {
 
       {/* Páciens portál */}
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <p className="text-sm text-green-900 font-medium mb-2">
+        <div className="bg-medical-success/10 border border-medical-success/20 rounded-lg p-4">
+          <p className="text-sm text-medical-success-dark font-medium mb-2">
             Ha Ön páciens, kérem kattintson az alábbi linkre és kövesse az utasításokat.
           </p>
           <Link
