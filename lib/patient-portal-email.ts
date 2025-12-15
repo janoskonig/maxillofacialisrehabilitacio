@@ -125,4 +125,63 @@ export async function getPatientEmailInfo(patientId: string): Promise<{
   };
 }
 
+/**
+ * Send login notification email to patient after successful magic link login
+ */
+export async function sendPatientLoginNotification(
+  patientEmail: string,
+  patientName: string | null,
+  loginTime: Date,
+  ipAddress: string | null
+): Promise<void> {
+  // Import formatDateForEmail from email.ts
+  // We'll format the date manually to avoid circular dependency
+  const formatter = new Intl.DateTimeFormat('hu-HU', {
+    timeZone: 'Europe/Budapest',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+  
+  const parts = formatter.formatToParts(loginTime);
+  const year = parts.find(p => p.type === 'year')?.value || '';
+  const month = parts.find(p => p.type === 'month')?.value || '';
+  const day = parts.find(p => p.type === 'day')?.value || '';
+  const hours = parts.find(p => p.type === 'hour')?.value || '';
+  const minutes = parts.find(p => p.type === 'minute')?.value || '';
+  const seconds = parts.find(p => p.type === 'second')?.value || '';
+  
+  const formattedDate = `${year}. ${month}. ${day}. ${hours}:${minutes}:${seconds}`;
+
+  const subject = 'Sikeres bejelentkezés - Páciens portál';
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #2563eb;">Sikeres bejelentkezés</h2>
+      <p>Kedves ${patientName || 'Páciens'}!</p>
+      <p>Sikeresen bejelentkezett a páciens portálra.</p>
+      <ul>
+        <li><strong>Bejelentkezés ideje:</strong> ${formattedDate}</li>
+        ${ipAddress ? `<li><strong>IP cím:</strong> ${ipAddress}</li>` : ''}
+      </ul>
+      <p style="color: #666; font-size: 12px; margin-top: 30px;">
+        Ha nem Ön jelentkezett be, kérjük, azonnal lépjen kapcsolatba velünk.
+      </p>
+      <p style="color: #666; font-size: 12px;">
+        Maxillofaciális Rehabilitáció<br>
+        1088 Budapest, Szentkirályi utca 47. VI. emelet 611.
+      </p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: patientEmail,
+    subject,
+    html,
+  });
+}
+
 

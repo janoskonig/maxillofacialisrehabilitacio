@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyPortalToken } from '@/lib/patient-portal-auth';
 import { SignJWT } from 'jose';
 import { cookies } from 'next/headers';
+import { getPatientEmailInfo, sendPatientLoginNotification } from '@/lib/patient-portal-email';
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'change-this-to-a-random-secret-in-production'
@@ -63,6 +64,29 @@ export async function GET(request: NextRequest) {
     }
 
     console.log('Token verified successfully, creating session for patient:', verification.patientId);
+
+    // Get IP address from request for login notification
+    const ipHeader = request.headers.get('x-forwarded-for') || '';
+    const ipAddress = ipHeader.split(',')[0]?.trim() || null;
+
+    // Get patient email info and send login notification
+    try {
+      const patientInfo = await getPatientEmailInfo(verification.patientId);
+      if (patientInfo && patientInfo.email) {
+        await sendPatientLoginNotification(
+          patientInfo.email,
+          patientInfo.name,
+          new Date(),
+          ipAddress
+        );
+        console.log('Login notification email sent to:', patientInfo.email);
+      } else {
+        console.warn('Could not send login notification: patient email not found');
+      }
+    } catch (emailError) {
+      // Don't fail the login if email sending fails
+      console.error('Error sending login notification email:', emailError);
+    }
 
     // Create portal session JWT
     const sessionToken = await new SignJWT({
