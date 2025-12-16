@@ -28,6 +28,8 @@ export default function Home() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<UserRoleType>('viewer');
   const [userInstitution, setUserInstitution] = useState<string | null>(null);
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [sortField, setSortField] = useState<'nev' | 'idopont' | 'createdAt' | null>('idopont');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -47,35 +49,47 @@ export default function Home() {
   useEffect(() => {
     // Check authentication
     const checkAuth = async () => {
-      const user = await getCurrentUser();
-      if (!user) {
-      router.push('/login');
-      return;
-    }
-    
-      const email = user.email;
-      const role = user.role;
-      const intezmeny = user.intezmeny || null;
-    setUserEmail(email);
-      setUserRole(role);
-      setUserInstitution(intezmeny);
-    loadPatients();
+      setIsCheckingAuth(true);
+      try {
+        const user = await getCurrentUser();
+        if (!user) {
+          setIsAuthorized(false);
+          setIsCheckingAuth(false);
+          router.replace('/login');
+          return;
+        }
+        
+        const email = user.email;
+        const role = user.role;
+        const intezmeny = user.intezmeny || null;
+        setUserEmail(email);
+        setUserRole(role);
+        setUserInstitution(intezmeny);
+        setIsAuthorized(true);
+        setIsCheckingAuth(false);
+        loadPatients();
 
-    // Send heartbeat only once per session
-    try {
-      const heartbeatKey = 'activityHeartbeatSent';
-      if (!sessionStorage.getItem(heartbeatKey) && email) {
-        fetch('/api/activity', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-            credentials: 'include',
-          body: JSON.stringify({ action: 'heartbeat', detail: 'home' })
-        }).catch(() => {});
-        sessionStorage.setItem(heartbeatKey, 'true');
+        // Send heartbeat only once per session
+        try {
+          const heartbeatKey = 'activityHeartbeatSent';
+          if (!sessionStorage.getItem(heartbeatKey) && email) {
+            fetch('/api/activity', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              credentials: 'include',
+              body: JSON.stringify({ action: 'heartbeat', detail: 'home' })
+            }).catch(() => {});
+            sessionStorage.setItem(heartbeatKey, 'true');
+          }
+        } catch {}
+      } catch (error) {
+        console.error('Auth check error:', error);
+        setIsAuthorized(false);
+        setIsCheckingAuth(false);
+        router.replace('/login');
       }
-    } catch {}
     };
     checkAuth();
   }, [router]);
@@ -338,6 +352,18 @@ export default function Home() {
       showToast('Hiba történt a beteg törlésekor', 'error');
     }
   };
+
+  // Ha még nincs autentikálva vagy az ellenőrzés folyamatban van, ne mutassuk a tartalmat
+  if (isCheckingAuth || !isAuthorized) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-medical-primary mx-auto mb-4"></div>
+          <p className="text-gray-500">Betöltés...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">

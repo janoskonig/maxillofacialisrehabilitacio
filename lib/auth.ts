@@ -57,6 +57,12 @@ export const logout = async (): Promise<void> => {
     console.error('Logout error:', error);
   }
   cachedUser = null;
+  // SessionStorage törlése biztonsági okokból
+  try {
+    sessionStorage.clear();
+  } catch (e) {
+    // sessionStorage nem elérhető (pl. SSR környezetben)
+  }
 };
 
 // Synchronous getter (kliens oldali cache-ből, ha van)
