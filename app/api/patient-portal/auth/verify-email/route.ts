@@ -11,19 +11,19 @@ const JWT_SECRET = new TextEncoder().encode(
 const PORTAL_SESSION_EXPIRES_IN = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 /**
- * Get base URL for redirects - use request origin for local dev, env var for production
+ * Get base URL for redirects - always use production URL, never localhost
  */
 function getBaseUrl(request: NextRequest): string {
   const envBaseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-  const requestOrigin = request.nextUrl.origin;
   
-  // If we're in development (localhost) or the request origin is localhost, use request origin
-  if (requestOrigin.includes('localhost') || requestOrigin.includes('127.0.0.1')) {
-    return requestOrigin;
+  // Always use production URL, ignore request origin (could be localhost due to reverse proxy)
+  // Only use env var if it's not localhost
+  if (envBaseUrl && !envBaseUrl.includes('localhost') && !envBaseUrl.includes('127.0.0.1')) {
+    return envBaseUrl;
   }
   
-  // Otherwise use the environment variable or default to production URL
-  return envBaseUrl || 'https://rehabilitacios-protetika.hu';
+  // Default to production URL
+  return 'https://rehabilitacios-protetika.hu';
 }
 
 /**
