@@ -75,10 +75,25 @@ export async function sendPatientVerificationEmail(
   patientEmail: string,
   patientName: string | null,
   token: string,
-  baseUrl?: string
+  baseUrl?: string,
+  waitingTimeStats?: { atlagNapokban: number; szorasNapokban: number } | null
 ): Promise<void> {
   const portalBaseUrl = getBaseUrl(baseUrl);
   const verificationLink = `${portalBaseUrl}/api/patient-portal/auth/verify-email?token=${token}`;
+
+  // Format waiting time info if available
+  let waitingTimeInfo = '';
+  if (waitingTimeStats && waitingTimeStats.atlagNapokban) {
+    const atlag = waitingTimeStats.atlagNapokban.toFixed(1);
+    const szoras = waitingTimeStats.szorasNapokban ? ` ± ${waitingTimeStats.szorasNapokban.toFixed(1)}` : '';
+    waitingTimeInfo = `
+      <div style="background-color: #f0f9ff; border-left: 4px solid #2563eb; padding: 12px; margin: 20px 0; border-radius: 4px;">
+        <p style="margin: 0; color: #1e40af; font-weight: 500;">
+          Az első konzultáció várók átlagos várakozási ideje: <strong>${atlag}${szoras} nap</strong>
+        </p>
+      </div>
+    `;
+  }
 
   const subject = 'Email cím megerősítése - Páciens portál';
   const html = `
@@ -86,6 +101,7 @@ export async function sendPatientVerificationEmail(
       <h2 style="color: #2563eb;">Email cím megerősítése</h2>
       <p>Kedves ${patientName || 'Páciens'}!</p>
       <p>Köszönjük, hogy regisztrált a páciens portálra!</p>
+      ${waitingTimeInfo}
       <p>Az aktiváláshoz kérjük, erősítse meg az email címét az alábbi linkre kattintva:</p>
       <p style="margin: 20px 0;">
         <a href="${verificationLink}" 

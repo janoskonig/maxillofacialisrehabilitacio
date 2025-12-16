@@ -136,6 +136,41 @@ export async function POST(request: NextRequest) {
 
     const newPatient = insertResult.rows[0];
 
+    // Get average waiting time statistics for first consultation
+    let waitingTimeStats = null;
+    try {
+      const waitingTimeResult = await pool.query(`
+        WITH first_appointments AS (
+          SELECT 
+            p.id as patient_id,
+            p.created_at as beteg_letrehozva,
+            MIN(ats.start_time) FILTER (WHERE a.appointment_type IS NULL OR a.appointment_type = 'elso_konzultacio') as elso_idopont,
+            EXTRACT(EPOCH FROM (MIN(ats.start_time) FILTER (WHERE a.appointment_type IS NULL OR a.appointment_type = 'elso_konzultacio') - p.created_at)) / 86400 as varakozasi_ido_napokban
+          FROM patients p
+          JOIN appointments a ON p.id = a.patient_id
+          JOIN available_time_slots ats ON a.time_slot_id = ats.id
+          WHERE ats.start_time > p.created_at
+            AND (a.appointment_type IS NULL OR a.appointment_type = 'elso_konzultacio')
+          GROUP BY p.id, p.created_at
+          HAVING MIN(ats.start_time) FILTER (WHERE a.appointment_type IS NULL OR a.appointment_type = 'elso_konzultacio') IS NOT NULL
+        )
+        SELECT 
+          ROUND(AVG(varakozasi_ido_napokban)::numeric, 1) as atlag_varakozasi_ido_napokban,
+          ROUND(STDDEV_POP(varakozasi_ido_napokban)::numeric, 1) as szoras_varakozasi_ido_napokban
+        FROM first_appointments
+      `);
+      
+      if (waitingTimeResult.rows.length > 0 && waitingTimeResult.rows[0].atlag_varakozasi_ido_napokban) {
+        waitingTimeStats = {
+          atlagNapokban: parseFloat(waitingTimeResult.rows[0].atlag_varakozasi_ido_napokban),
+          szorasNapokban: parseFloat(waitingTimeResult.rows[0].szoras_varakozasi_ido_napokban) || 0,
+        };
+      }
+    } catch (error) {
+      // Don't fail registration if waiting time query fails
+      console.error('Error fetching waiting time stats:', error);
+    }
+
     // Create email verification token
     const token = await createEmailVerificationToken(newPatient.id, ipAddress);
 
@@ -147,7 +182,8 @@ export async function POST(request: NextRequest) {
       newPatient.email,
       newPatient.nev,
       token,
-      baseUrl
+      baseUrl,
+      waitingTimeStats
     );
 
     return NextResponse.json({
