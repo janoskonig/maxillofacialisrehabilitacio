@@ -89,6 +89,7 @@ export async function GET(request: NextRequest) {
         a.appointment_status as "appointmentStatus",
         a.completion_notes as "completionNotes",
         a.is_late as "isLate",
+        a.appointment_type as "appointmentType",
         ats.start_time as "startTime",
         ats.status as "slotStatus",
         ats.cim,

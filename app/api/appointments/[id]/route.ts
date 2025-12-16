@@ -28,7 +28,7 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { timeSlotId, startTime, teremszam } = body;
+    const { timeSlotId, startTime, teremszam, appointmentType } = body;
 
     // Either timeSlotId or startTime must be provided
     if (!timeSlotId && !startTime) {
@@ -203,18 +203,32 @@ export async function PUT(
 
     try {
       // Update appointment to new time slot
+      // Build update query dynamically to handle optional appointmentType
+      const updateFields: string[] = ['time_slot_id = $1', 'dentist_email = $2'];
+      const updateValues: unknown[] = [finalTimeSlotId, newTimeSlot.dentist_email];
+      let paramIndex = 3;
+      
+      if (appointmentType !== undefined) {
+        updateFields.push(`appointment_type = $${paramIndex}`);
+        updateValues.push(appointmentType || null);
+        paramIndex++;
+      }
+      
+      updateValues.push(params.id);
+      
       const updateResult = await pool.query(
         `UPDATE appointments 
-         SET time_slot_id = $1, dentist_email = $2
-         WHERE id = $3
+         SET ${updateFields.join(', ')}
+         WHERE id = $${paramIndex}
          RETURNING 
            id,
            patient_id as "patientId",
            time_slot_id as "timeSlotId",
            created_by as "createdBy",
            dentist_email as "dentistEmail",
-           created_at as "createdAt"`,
-        [finalTimeSlotId, newTimeSlot.dentist_email, params.id]
+           created_at as "createdAt",
+           appointment_type as "appointmentType"`,
+        updateValues
       );
 
       // Update old time slot status back to available

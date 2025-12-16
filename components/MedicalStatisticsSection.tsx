@@ -102,6 +102,7 @@ export function MedicalStatisticsSection() {
         <WaitingTimeChart
           atlagNapokban={stats.waitingTime.atlagNapokban}
           medianNapokban={stats.waitingTime.medianNapokban}
+          szorasNapokban={stats.waitingTime.szorasNapokban}
           minNapokban={stats.waitingTime.minNapokban}
           maxNapokban={stats.waitingTime.maxNapokban}
           betegSzamaIdoponttal={stats.waitingTime.betegSzamaIdoponttal}

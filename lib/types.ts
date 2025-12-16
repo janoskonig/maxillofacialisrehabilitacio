@@ -374,6 +374,7 @@ export type MedicalStats = {
   waitingTime: {
     atlagNapokban: number;
     medianNapokban: number;
+    szorasNapokban: number;
     minNapokban: number;
     maxNapokban: number;
     betegSzamaIdoponttal: number;

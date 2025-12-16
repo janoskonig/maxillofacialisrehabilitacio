@@ -26,6 +26,7 @@ interface Appointment {
   appointmentStatus?: 'cancelled_by_doctor' | 'cancelled_by_patient' | 'completed' | 'no_show' | null;
   completionNotes?: string | null;
   isLate?: boolean;
+  appointmentType?: 'elso_konzultacio' | 'munkafazis' | 'kontroll' | null;
 }
 
 interface AppointmentBookingSectionProps {
@@ -57,18 +58,22 @@ export function AppointmentBookingSection({
   const [newSlotCim, setNewSlotCim] = useState<string>('');
   const [customCim, setCustomCim] = useState<string>('');
   const [customTeremszam, setCustomTeremszam] = useState<string>('');
+  const [selectedAppointmentType, setSelectedAppointmentType] = useState<'elso_konzultacio' | 'munkafazis' | 'kontroll' | null>(null);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [newModifyDateTime, setNewModifyDateTime] = useState<Date | null>(null);
   const [newModifyTeremszam, setNewModifyTeremszam] = useState<string>('');
+  const [newModifyAppointmentType, setNewModifyAppointmentType] = useState<'elso_konzultacio' | 'munkafazis' | 'kontroll' | null>(null);
   const [editingStatus, setEditingStatus] = useState<Appointment | null>(null);
   const [statusForm, setStatusForm] = useState<{
     appointmentStatus: 'cancelled_by_doctor' | 'cancelled_by_patient' | 'completed' | 'no_show' | null;
     completionNotes: string;
     isLate: boolean;
+    appointmentType: 'elso_konzultacio' | 'munkafazis' | 'kontroll' | null;
   }>({
     appointmentStatus: null,
     completionNotes: '',
     isLate: false,
+    appointmentType: null,
   });
   
   // Elérhető címek (egyelőre csak egy, de később bővíthető)
@@ -233,6 +238,7 @@ export function AppointmentBookingSection({
           timeSlotId: selectedSlot,
           cim: customCim || (availableCims.length === 1 ? DEFAULT_CIM : null),
           teremszam: customTeremszam.trim() || null,
+          appointmentType: selectedAppointmentType || null,
         }),
       });
 
@@ -241,6 +247,7 @@ export function AppointmentBookingSection({
         setSelectedSlot('');
         setCustomCim('');
         setCustomTeremszam('');
+        setSelectedAppointmentType(null);
         alert('Időpont sikeresen lefoglalva! A fogpótlástanász értesítést kapott.');
       } else {
         const data = await response.json();
@@ -304,6 +311,7 @@ export function AppointmentBookingSection({
     setEditingAppointment(appointment);
     setNewModifyDateTime(null);
     setNewModifyTeremszam('');
+    setNewModifyAppointmentType(appointment.appointmentType || null);
   };
 
   const handleSaveModification = async () => {
@@ -347,6 +355,7 @@ export function AppointmentBookingSection({
         body: JSON.stringify({
           startTime: isoDateTime,
           teremszam: newModifyTeremszam.trim() || null,
+          appointmentType: newModifyAppointmentType || null,
         }),
       });
 
@@ -372,6 +381,7 @@ export function AppointmentBookingSection({
       appointmentStatus: appointment.appointmentStatus || null,
       completionNotes: appointment.completionNotes || '',
       isLate: appointment.isLate || false,
+      appointmentType: appointment.appointmentType || null,
     });
   };
 
@@ -397,6 +407,7 @@ export function AppointmentBookingSection({
           appointmentStatus: statusForm.appointmentStatus,
           completionNotes: statusForm.appointmentStatus === 'completed' ? statusForm.completionNotes : null,
           isLate: statusForm.isLate,
+          appointmentType: statusForm.appointmentType,
         }),
       });
 
@@ -407,6 +418,7 @@ export function AppointmentBookingSection({
           appointmentStatus: null,
           completionNotes: '',
           isLate: false,
+          appointmentType: null,
         });
         alert('Időpont státusza sikeresen frissítve!');
       } else {
@@ -617,12 +629,28 @@ export function AppointmentBookingSection({
                   placeholder="Pl. 611"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Időpont típusa
+                </label>
+                <select
+                  value={newModifyAppointmentType || ''}
+                  onChange={(e) => setNewModifyAppointmentType(e.target.value as any || null)}
+                  className="form-input w-full"
+                >
+                  <option value="">Nincs megadva</option>
+                  <option value="elso_konzultacio">Első konzultáció</option>
+                  <option value="munkafazis">Munkafázis</option>
+                  <option value="kontroll">Kontroll</option>
+                </select>
+              </div>
               <div className="flex gap-2 justify-end">
                 <button
                   onClick={() => {
                     setEditingAppointment(null);
                     setNewModifyDateTime(null);
                     setNewModifyTeremszam('');
+                    setNewModifyAppointmentType(null);
                   }}
                   className="btn-secondary"
                 >
@@ -653,6 +681,7 @@ export function AppointmentBookingSection({
                     appointmentStatus: null,
                     completionNotes: '',
                     isLate: false,
+                    appointmentType: null,
                   });
                 }}
                 className="text-gray-400 hover:text-gray-600"
@@ -704,6 +733,21 @@ export function AppointmentBookingSection({
                 </div>
               )}
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Időpont típusa
+                </label>
+                <select
+                  value={statusForm.appointmentType || ''}
+                  onChange={(e) => setStatusForm({ ...statusForm, appointmentType: e.target.value as any || null })}
+                  className="form-input w-full"
+                >
+                  <option value="">Nincs megadva</option>
+                  <option value="elso_konzultacio">Első konzultáció</option>
+                  <option value="munkafazis">Munkafázis</option>
+                  <option value="kontroll">Kontroll</option>
+                </select>
+              </div>
+              <div>
                 <label className="flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -722,6 +766,7 @@ export function AppointmentBookingSection({
                       appointmentStatus: null,
                       completionNotes: '',
                       isLate: false,
+                      appointmentType: null,
                     });
                   }}
                   className="btn-secondary"
@@ -769,6 +814,16 @@ export function AppointmentBookingSection({
                         <div>Teremszám: {appointment.teremszam}</div>
                       )}
                       <div>Fogpótlástanász: {appointment.dentistEmail || 'Nincs megadva'}</div>
+                      {appointment.appointmentType && (
+                        <div className="mt-1">
+                          <span className="text-xs font-medium text-gray-600">Típus: </span>
+                          <span className="text-xs text-gray-700">
+                            {appointment.appointmentType === 'elso_konzultacio' && 'Első konzultáció'}
+                            {appointment.appointmentType === 'munkafazis' && 'Munkafázis'}
+                            {appointment.appointmentType === 'kontroll' && 'Kontroll'}
+                          </span>
+                        </div>
+                      )}
                       {(() => {
                         if (appointment.isLate) {
                           return (
@@ -1059,6 +1114,21 @@ export function AppointmentBookingSection({
                       className="form-input w-full text-sm"
                       placeholder={availableSlotsOnly.find(s => s.id === selectedSlot)?.teremszam || 'Pl. 611'}
                     />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      Időpont típusa
+                    </label>
+                    <select
+                      value={selectedAppointmentType || ''}
+                      onChange={(e) => setSelectedAppointmentType(e.target.value as any || null)}
+                      className="form-input w-full text-sm"
+                    >
+                      <option value="">Nincs megadva</option>
+                      <option value="elso_konzultacio">Első konzultáció</option>
+                      <option value="munkafazis">Munkafázis</option>
+                      <option value="kontroll">Kontroll</option>
+                    </select>
                   </div>
                 </div>
               </div>

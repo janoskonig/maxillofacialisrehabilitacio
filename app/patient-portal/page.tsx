@@ -22,7 +22,7 @@ export default function PatientPortalPage() {
           showToast('Érvénytelen vagy lejárt token', 'error');
           break;
         case 'token_used':
-          showToast('Ez a bejelentkezési link már felhasználva lett', 'error');
+          showToast('Ez a bejelentkezési link már felhasználva lett. Kérjük, jelentkezzen be újra.', 'error');
           break;
         case 'verification_failed':
           showToast('Email megerősítés sikertelen', 'error');

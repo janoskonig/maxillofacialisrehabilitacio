@@ -168,22 +168,26 @@ export async function GET(request: NextRequest) {
     }
 
     // 6. Átlagos első időpontra való várakozási idő
+    // Csak az első konzultációkat számoljuk (appointment_type = 'elso_konzultacio' vagy NULL a kompatibilitásért)
     const waitingTimeResult = await pool.query(`
       WITH first_appointments AS (
         SELECT 
           p.id as patient_id,
           p.created_at as beteg_letrehozva,
-          MIN(ats.start_time) as elso_idopont,
-          EXTRACT(EPOCH FROM (MIN(ats.start_time) - p.created_at)) / 86400 as varakozasi_ido_napokban
+          MIN(ats.start_time) FILTER (WHERE a.appointment_type IS NULL OR a.appointment_type = 'elso_konzultacio') as elso_idopont,
+          EXTRACT(EPOCH FROM (MIN(ats.start_time) FILTER (WHERE a.appointment_type IS NULL OR a.appointment_type = 'elso_konzultacio') - p.created_at)) / 86400 as varakozasi_ido_napokban
         FROM patients p
         JOIN appointments a ON p.id = a.patient_id
         JOIN available_time_slots ats ON a.time_slot_id = ats.id
         WHERE ats.start_time > p.created_at
+          AND (a.appointment_type IS NULL OR a.appointment_type = 'elso_konzultacio')
         GROUP BY p.id, p.created_at
+        HAVING MIN(ats.start_time) FILTER (WHERE a.appointment_type IS NULL OR a.appointment_type = 'elso_konzultacio') IS NOT NULL
       )
       SELECT 
         ROUND(AVG(varakozasi_ido_napokban)::numeric, 1) as atlag_varakozasi_ido_napokban,
         ROUND((PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY varakozasi_ido_napokban))::numeric, 1) as median_varakozasi_ido_napokban,
+        ROUND(STDDEV_POP(varakozasi_ido_napokban)::numeric, 1) as szoras_varakozasi_ido_napokban,
         ROUND(MIN(varakozasi_ido_napokban)::numeric, 1) as min_varakozasi_ido_napokban,
         ROUND(MAX(varakozasi_ido_napokban)::numeric, 1) as max_varakozasi_ido_napokban,
         COUNT(*) as beteg_szama_idoponttal
@@ -216,6 +220,7 @@ export async function GET(request: NextRequest) {
         WHERE ats.start_time > NOW() 
           AND (a.approval_status IS NULL OR a.approval_status = 'approved')
           AND (a.appointment_status IS NULL OR a.appointment_status NOT IN ('cancelled_by_doctor', 'cancelled_by_patient'))
+          AND (a.appointment_type IS NULL OR a.appointment_type = 'elso_konzultacio')
       ),
       waiting_patients AS (
         SELECT 
@@ -303,6 +308,7 @@ export async function GET(request: NextRequest) {
       waitingTime: {
         atlagNapokban: parseFloat(waitingTime.atlag_varakozasi_ido_napokban) || 0,
         medianNapokban: parseFloat(waitingTime.median_varakozasi_ido_napokban) || 0,
+        szorasNapokban: parseFloat(waitingTime.szoras_varakozasi_ido_napokban) || 0,
         minNapokban: parseFloat(waitingTime.min_varakozasi_ido_napokban) || 0,
         maxNapokban: parseFloat(waitingTime.max_varakozasi_ido_napokban) || 0,
         betegSzamaIdoponttal: parseInt(waitingTime.beteg_szama_idoponttal) || 0

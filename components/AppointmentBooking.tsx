@@ -24,6 +24,7 @@ interface Appointment {
   appointmentStatus?: 'cancelled_by_doctor' | 'cancelled_by_patient' | 'completed' | 'no_show' | null;
   completionNotes?: string | null;
   isLate?: boolean;
+  appointmentType?: 'elso_konzultacio' | 'munkafazis' | 'kontroll' | null;
 }
 
 interface PaginationInfo {

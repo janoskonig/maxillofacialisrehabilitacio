@@ -22,6 +22,7 @@ interface AppointmentInfo {
   patientName: string | null;
   patientTaj: string | null;
   bookedBy: string; // Email of surgeon/admin who booked
+  appointmentType?: 'elso_konzultacio' | 'munkafazis' | 'kontroll' | null;
 }
 
 interface User {
@@ -40,6 +41,12 @@ export function TimeSlotsManager() {
   const [newTeremszam, setNewTeremszam] = useState<string>('');
   const [modifyingAppointment, setModifyingAppointment] = useState<{ appointmentId: string; timeSlotId: string; startTime: string } | null>(null);
   const [newTimeSlotId, setNewTimeSlotId] = useState<string>('');
+  const [editingAppointmentType, setEditingAppointmentType] = useState<{ appointmentId: string; currentType: 'elso_konzultacio' | 'munkafazis' | 'kontroll' | null } | null>(null);
+  const [newAppointmentType, setNewAppointmentType] = useState<'elso_konzultacio' | 'munkafazis' | 'kontroll' | null>(null);
+  const [selectedAppointmentIds, setSelectedAppointmentIds] = useState<Set<string>>(new Set());
+  const [showBulkEditModal, setShowBulkEditModal] = useState(false);
+  const [bulkAppointmentType, setBulkAppointmentType] = useState<'elso_konzultacio' | 'munkafazis' | 'kontroll' | null>(null);
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
   const [userRole, setUserRole] = useState<string>('');
   const [users, setUsers] = useState<User[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
@@ -177,6 +184,7 @@ export function TimeSlotsManager() {
           patientName: apt.patientName,
           patientTaj: apt.patientTaj,
           bookedBy: apt.createdBy,
+          appointmentType: apt.appointmentType || null,
         };
       });
       setAppointments(appointmentsMap);
@@ -345,6 +353,147 @@ export function TimeSlotsManager() {
     }
   };
 
+  const handleEditAppointmentType = (appointmentId: string, currentType: 'elso_konzultacio' | 'munkafazis' | 'kontroll' | null) => {
+    setEditingAppointmentType({ appointmentId, currentType });
+    setNewAppointmentType(currentType);
+  };
+
+  const handleSaveAppointmentType = async () => {
+    if (!editingAppointmentType) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/appointments/${editingAppointmentType.appointmentId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          appointmentType: newAppointmentType,
+        }),
+      });
+
+      if (response.ok) {
+        await loadTimeSlots();
+        setEditingAppointmentType(null);
+        setNewAppointmentType(null);
+        alert('Időpont típusa sikeresen módosítva!');
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Hiba történt az időpont típusának módosításakor');
+      }
+    } catch (error) {
+      console.error('Error updating appointment type:', error);
+      alert('Hiba történt az időpont típusának módosításakor');
+    }
+  };
+
+  const handleToggleAppointmentSelection = (appointmentId: string) => {
+    const newSelection = new Set(selectedAppointmentIds);
+    if (newSelection.has(appointmentId)) {
+      newSelection.delete(appointmentId);
+    } else {
+      newSelection.add(appointmentId);
+    }
+    setSelectedAppointmentIds(newSelection);
+  };
+
+  const handleSelectAllAppointments = (slots: TimeSlot[]) => {
+    const allBookedAppointmentIds = new Set<string>();
+    slots.forEach(slot => {
+      if (slot.status === 'booked' && appointments[slot.id]) {
+        allBookedAppointmentIds.add(appointments[slot.id].id);
+      }
+    });
+    
+    // Check if all visible appointments are selected
+    const allSelected = allBookedAppointmentIds.size > 0 && 
+                        Array.from(allBookedAppointmentIds).every(id => selectedAppointmentIds.has(id));
+    
+    if (allSelected) {
+      // Deselect all visible
+      const newSelection = new Set(selectedAppointmentIds);
+      allBookedAppointmentIds.forEach(id => newSelection.delete(id));
+      setSelectedAppointmentIds(newSelection);
+    } else {
+      // Select all visible
+      const newSelection = new Set(selectedAppointmentIds);
+      allBookedAppointmentIds.forEach(id => newSelection.add(id));
+      setSelectedAppointmentIds(newSelection);
+    }
+  };
+
+  const handleBulkUpdateAppointmentType = async () => {
+    if (selectedAppointmentIds.size === 0) {
+      alert('Kérjük, válasszon ki legalább egy időpontot!');
+      return;
+    }
+
+    if (!confirm(`Biztosan módosítani szeretné ${selectedAppointmentIds.size} időpont típusát?`)) {
+      return;
+    }
+
+    setIsBulkUpdating(true);
+    const appointmentIdsArray = Array.from(selectedAppointmentIds);
+    let successCount = 0;
+    let errorCount = 0;
+
+    try {
+      // Update all selected appointments in parallel
+      const updatePromises = appointmentIdsArray.map(async (appointmentId) => {
+        try {
+          const response = await fetch(`/api/appointments/${appointmentId}/status`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+              appointmentType: bulkAppointmentType,
+            }),
+          });
+
+          if (response.ok) {
+            successCount++;
+            return { success: true };
+          } else {
+            errorCount++;
+            const data = await response.json();
+            console.error(`Error updating appointment ${appointmentId}:`, data.error);
+            return { success: false, error: data.error };
+          }
+        } catch (error) {
+          errorCount++;
+          console.error(`Error updating appointment ${appointmentId}:`, error);
+          return { success: false, error: error };
+        }
+      });
+
+      await Promise.all(updatePromises);
+
+      // Reload data
+      await loadTimeSlots();
+
+      // Clear selection and close modal
+      setSelectedAppointmentIds(new Set());
+      setShowBulkEditModal(false);
+      setBulkAppointmentType(null);
+
+      if (errorCount === 0) {
+        alert(`${successCount} időpont típusa sikeresen módosítva!`);
+      } else {
+        alert(`${successCount} időpont sikeresen módosítva, ${errorCount} hiba történt.`);
+      }
+    } catch (error) {
+      console.error('Error in bulk update:', error);
+      alert('Hiba történt a tömeges módosítás során');
+    } finally {
+      setIsBulkUpdating(false);
+    }
+  };
+
   const formatDateTime = (dateTime: string) => {
     const date = new Date(dateTime);
     return date.toLocaleString('hu-HU', {
@@ -430,11 +579,7 @@ export function TimeSlotsManager() {
     return filtered;
   }, [timeSlots, filterCim, filterTeremszam, filterDentistName, filterStatus, sortField, sortDirection]);
   
-  // Pagináció
-  const totalPages = Math.ceil(filteredAndSortedSlots.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedSlots = filteredAndSortedSlots.slice(startIndex, endIndex);
+  // Pagináció - most már nem használjuk közvetlenül, mert külön pagináljuk a jövőbeli és elmúlt időpontokat
   
   // Egyedi értékek a szűrőkhöz
   const uniqueCims = useMemo(() => {
@@ -467,12 +612,30 @@ export function TimeSlotsManager() {
     return Array.from(dentists).sort();
   }, [timeSlots]);
   
-  // Szétválasztjuk a jövőbeli és elmúlt időpontokat (paginált listákból)
+  // Szétválasztjuk a jövőbeli és elmúlt időpontokat (SZŰRÉS UTÁN, de PAGINÁCIÓ ELŐTT)
   // 4 órás késleltetés: ne vedd elmúlt időpontnak 4 óráig
   const now = new Date();
   const fourHoursBeforeNow = new Date(now.getTime() - 4 * 60 * 60 * 1000);
-  const futureSlots = paginatedSlots.filter(slot => new Date(slot.startTime) >= fourHoursBeforeNow);
-  const pastSlots = paginatedSlots.filter(slot => new Date(slot.startTime) < fourHoursBeforeNow);
+  const allFutureSlots = filteredAndSortedSlots.filter(slot => new Date(slot.startTime) >= fourHoursBeforeNow);
+  const allPastSlots = filteredAndSortedSlots.filter(slot => new Date(slot.startTime) < fourHoursBeforeNow);
+  
+  // Automatikusan mutassuk az elmúlt időpontokat, ha nincs jövőbeli
+  useEffect(() => {
+    if (allFutureSlots.length === 0 && allPastSlots.length > 0) {
+      setShowPastSlots(true);
+    }
+  }, [allFutureSlots.length, allPastSlots.length]);
+  
+  // Pagináció külön a jövőbeli és elmúlt időpontokra
+  const futureTotalPages = Math.ceil(allFutureSlots.length / itemsPerPage);
+  const futureStartIndex = (currentPage - 1) * itemsPerPage;
+  const futureEndIndex = futureStartIndex + itemsPerPage;
+  const futureSlots = allFutureSlots.slice(futureStartIndex, futureEndIndex);
+  
+  const pastTotalPages = Math.ceil(allPastSlots.length / itemsPerPage);
+  const pastStartIndex = (currentPage - 1) * itemsPerPage;
+  const pastEndIndex = pastStartIndex + itemsPerPage;
+  const pastSlots = allPastSlots.slice(pastStartIndex, pastEndIndex);
 
   const availableSlotsForModification = filteredAndSortedSlots.filter(
     slot => {
@@ -530,11 +693,26 @@ export function TimeSlotsManager() {
       return null;
     }
 
+    const bookedSlotsInTable = slots.filter(s => s.status === 'booked' && appointments[s.id]);
+    const allSelected = bookedSlotsInTable.length > 0 && 
+                        bookedSlotsInTable.every(s => selectedAppointmentIds.has(appointments[s.id].id));
+
     return (
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className={isPast ? "bg-gray-100" : "bg-gray-50"}>
             <tr>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-12">
+                {bookedSlotsInTable.length > 0 && (
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={() => handleSelectAllAppointments(slots)}
+                    className="form-checkbox"
+                    title="Összes kijelölése"
+                  />
+                )}
+              </th>
               {renderSortableHeader('Időpont', 'startTime')}
               {renderSortableHeader('Cím', 'cim')}
               {renderSortableHeader('Teremszám', 'teremszam')}
@@ -558,6 +736,19 @@ export function TimeSlotsManager() {
                     slot.status === 'booked' ? 'bg-red-50' : ''
                   }`}
                 >
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    {slot.status === 'booked' && appointment ? (
+                      <input
+                        type="checkbox"
+                        checked={selectedAppointmentIds.has(appointment.id)}
+                        onChange={() => handleToggleAppointmentSelection(appointment.id)}
+                        className="form-checkbox"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    ) : (
+                      <span className="w-4"></span>
+                    )}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <Clock className={`w-4 h-4 mr-2 ${isPast ? 'text-gray-400' : 'text-gray-400'}`} />
@@ -616,6 +807,16 @@ export function TimeSlotsManager() {
                             {appointment.bookedBy}
                           </div>
                         </div>
+                        {appointment.appointmentType && (
+                          <div className="pt-1 border-t border-gray-200">
+                            <span className="text-xs font-medium text-gray-500 uppercase">Típus:</span>
+                            <div className={`text-xs mt-0.5 ${isPast ? 'text-gray-500' : 'text-gray-700'}`}>
+                              {appointment.appointmentType === 'elso_konzultacio' && 'Első konzultáció'}
+                              {appointment.appointmentType === 'munkafazis' && 'Munkafázis'}
+                              {appointment.appointmentType === 'kontroll' && 'Kontroll'}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ) : slot.status === 'booked' ? (
                       <span className={`text-sm ${isPast ? 'text-gray-500' : 'text-gray-500'}`}>Lefoglalva (adatok betöltése...)</span>
@@ -636,6 +837,14 @@ export function TimeSlotsManager() {
                       )}
                       {slot.status === 'booked' && appointment && (
                         <>
+                          <button
+                            onClick={() => handleEditAppointmentType(appointment.id, appointment.appointmentType || null)}
+                            className={`${isPast ? 'text-gray-500 hover:text-gray-700' : 'text-blue-600 hover:text-blue-900'} flex items-center gap-1 text-xs`}
+                            title="Időpont típusa módosítása"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                            Típus
+                          </button>
                           <button
                             onClick={() => handleModifyAppointment(appointment.id, slot.id, slot.startTime)}
                             className={`${isPast ? 'text-gray-500 hover:text-gray-700' : 'text-amber-600 hover:text-amber-900'} flex items-center gap-1`}
@@ -667,6 +876,119 @@ export function TimeSlotsManager() {
 
   return (
     <div className="space-y-4">
+      {/* Bulk Edit Modal */}
+      {showBulkEditModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-gray-900">Tömeges módosítás</h3>
+              <button
+                onClick={() => {
+                  setShowBulkEditModal(false);
+                  setBulkAppointmentType(null);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-gray-600 mb-4">
+                  <strong>{selectedAppointmentIds.size} időpont</strong> kijelölve
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Időpont típusa
+                </label>
+                <select
+                  value={bulkAppointmentType || ''}
+                  onChange={(e) => setBulkAppointmentType(e.target.value as any || null)}
+                  className="form-input w-full"
+                >
+                  <option value="">Nincs megadva</option>
+                  <option value="elso_konzultacio">Első konzultáció</option>
+                  <option value="munkafazis">Munkafázis</option>
+                  <option value="kontroll">Kontroll</option>
+                </select>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => {
+                    setShowBulkEditModal(false);
+                    setBulkAppointmentType(null);
+                  }}
+                  className="btn-secondary"
+                  disabled={isBulkUpdating}
+                >
+                  Mégse
+                </button>
+                <button
+                  onClick={handleBulkUpdateAppointmentType}
+                  disabled={isBulkUpdating}
+                  className="btn-primary"
+                >
+                  {isBulkUpdating ? 'Módosítás...' : `Módosítás (${selectedAppointmentIds.size})`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Appointment Type Edit Modal */}
+      {editingAppointmentType && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-gray-900">Időpont típusa módosítása</h3>
+              <button
+                onClick={() => {
+                  setEditingAppointmentType(null);
+                  setNewAppointmentType(null);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Időpont típusa
+                </label>
+                <select
+                  value={newAppointmentType || ''}
+                  onChange={(e) => setNewAppointmentType(e.target.value as any || null)}
+                  className="form-input w-full"
+                >
+                  <option value="">Nincs megadva</option>
+                  <option value="elso_konzultacio">Első konzultáció</option>
+                  <option value="munkafazis">Munkafázis</option>
+                  <option value="kontroll">Kontroll</option>
+                </select>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => {
+                    setEditingAppointmentType(null);
+                    setNewAppointmentType(null);
+                  }}
+                  className="btn-secondary"
+                >
+                  Mégse
+                </button>
+                <button
+                  onClick={handleSaveAppointmentType}
+                  className="btn-primary"
+                >
+                  Mentés
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Modification Modal */}
       {modifyingAppointment && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -923,41 +1245,140 @@ export function TimeSlotsManager() {
       )}
 
       {/* Jövőbeli időpontok */}
-      <div className="card">
-        <h4 className="text-lg font-semibold mb-4">Jövőbeli időpontok</h4>
-        {futureSlots.length === 0 ? (
-          <div className="text-center py-8">
-            <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500">Nincs jövőbeli időpont.</p>
+      {(allFutureSlots.length > 0 || allPastSlots.length === 0) && (
+        <div className="card">
+          <div className="flex justify-between items-center mb-4">
+            <h4 className="text-lg font-semibold">Jövőbeli időpontok</h4>
+            {selectedAppointmentIds.size > 0 && (
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-gray-600">
+                  {selectedAppointmentIds.size} időpont kijelölve
+                </span>
+                <button
+                  onClick={() => {
+                    setShowBulkEditModal(true);
+                    setBulkAppointmentType(null);
+                  }}
+                  className="btn-primary flex items-center gap-2 text-sm"
+                >
+                  <Edit2 className="w-4 h-4" />
+                  Kijelöltek módosítása
+                </button>
+                <button
+                  onClick={() => setSelectedAppointmentIds(new Set())}
+                  className="btn-secondary text-sm"
+                >
+                  Kijelölés törlése
+                </button>
+              </div>
+            )}
           </div>
-        ) : (
-          renderTimeSlotTable(futureSlots, false)
-        )}
-      </div>
+          {futureSlots.length === 0 ? (
+            <div className="text-center py-8">
+              <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500">Nincs jövőbeli időpont.</p>
+            </div>
+          ) : (
+            renderTimeSlotTable(futureSlots, false)
+          )}
+        </div>
+      )}
 
       {/* Elmúlt időpontok */}
-      {pastSlots.length > 0 && (
+      {allPastSlots.length > 0 && (
         <div className="card">
           <button
             onClick={() => setShowPastSlots(!showPastSlots)}
             className="flex items-center justify-between w-full mb-4 text-left"
           >
-            <h4 className="text-lg font-semibold text-gray-600">Elmúlt időpontok</h4>
+            <h4 className="text-lg font-semibold text-gray-600">
+              Elmúlt időpontok ({allPastSlots.length})
+            </h4>
             {showPastSlots ? (
               <ChevronUp className="w-5 h-5 text-gray-400" />
             ) : (
               <ChevronDown className="w-5 h-5 text-gray-400" />
             )}
           </button>
-          {showPastSlots && renderTimeSlotTable(pastSlots, true)}
+          {showPastSlots && (
+            <>
+              {pastSlots.length === 0 ? (
+                <div className="text-center py-8">
+                  <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500">Nincs elmúlt időpont ezen az oldalon.</p>
+                </div>
+              ) : (
+                renderTimeSlotTable(pastSlots, true)
+              )}
+              {/* Pagináció elmúlt időpontokhoz */}
+              {pastTotalPages > 1 && (
+                <div className="mt-6 flex items-center justify-between">
+                  <div className="text-sm text-gray-600">
+                    Oldal {currentPage} / {pastTotalPages} (összesen {allPastSlots.length} elmúlt időpont)
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      className={`px-3 py-2 rounded-md text-sm font-medium ${
+                        currentPage === 1
+                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                          : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                      }`}
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: Math.min(5, pastTotalPages) }, (_, i) => {
+                        let pageNum: number;
+                        if (pastTotalPages <= 5) {
+                          pageNum = i + 1;
+                        } else if (currentPage <= 3) {
+                          pageNum = i + 1;
+                        } else if (currentPage >= pastTotalPages - 2) {
+                          pageNum = pastTotalPages - 4 + i;
+                        } else {
+                          pageNum = currentPage - 2 + i;
+                        }
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => setCurrentPage(pageNum)}
+                            className={`px-3 py-2 rounded-md text-sm font-medium ${
+                              currentPage === pageNum
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(pastTotalPages, prev + 1))}
+                      disabled={currentPage === pastTotalPages}
+                      className={`px-3 py-2 rounded-md text-sm font-medium ${
+                        currentPage === pastTotalPages
+                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                          : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                      }`}
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
 
-      {/* Pagináció */}
-      {totalPages > 1 && (
+      {/* Pagináció - csak jövőbeli időpontokra */}
+      {futureTotalPages > 1 && (
         <div className="mt-6 flex items-center justify-between">
           <div className="text-sm text-gray-600">
-            Oldal {currentPage} / {totalPages} (összesen {filteredAndSortedSlots.length} időpont)
+            Oldal {currentPage} / {futureTotalPages} (összesen {allFutureSlots.length} jövőbeli időpont)
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -972,14 +1393,14 @@ export function TimeSlotsManager() {
               <ChevronLeft className="w-4 h-4" />
             </button>
             <div className="flex items-center gap-1">
-              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              {Array.from({ length: Math.min(5, futureTotalPages) }, (_, i) => {
                 let pageNum: number;
-                if (totalPages <= 5) {
+                if (futureTotalPages <= 5) {
                   pageNum = i + 1;
                 } else if (currentPage <= 3) {
                   pageNum = i + 1;
-                } else if (currentPage >= totalPages - 2) {
-                  pageNum = totalPages - 4 + i;
+                } else if (currentPage >= futureTotalPages - 2) {
+                  pageNum = futureTotalPages - 4 + i;
                 } else {
                   pageNum = currentPage - 2 + i;
                 }
@@ -999,10 +1420,10 @@ export function TimeSlotsManager() {
               })}
             </div>
             <button
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage(prev => Math.min(futureTotalPages, prev + 1))}
+              disabled={currentPage === futureTotalPages}
               className={`px-3 py-2 rounded-md text-sm font-medium ${
-                currentPage === totalPages
+                currentPage === futureTotalPages
                   ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                   : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
               }`}

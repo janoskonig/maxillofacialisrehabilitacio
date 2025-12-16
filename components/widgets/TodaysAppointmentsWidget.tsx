@@ -44,8 +44,16 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
     isLate: false,
   });
 
-  const handleAppointmentClick = (patientId: string) => {
-    router.push(`/?patientId=${patientId}`);
+  const handleAppointmentClick = (patientId: string | null | undefined, e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (patientId) {
+      router.push(`/?patientId=${patientId}`);
+    } else {
+      console.warn('Patient ID is missing for appointment');
+    }
   };
 
   const handleEditStatus = useCallback((appointment: Appointment) => {
@@ -241,8 +249,7 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
                     )}
                   </div>
                   <div
-                    onClick={() => handleAppointmentClick(appointment.patientId)}
-                    className="font-semibold text-base text-medical-primary hover:text-medical-primary-dark hover:underline cursor-pointer truncate transition-colors mb-1"
+                    className="font-semibold text-base text-gray-900 truncate mb-1"
                   >
                     {appointment.patientName || 'Névtelen beteg'}
                   </div>

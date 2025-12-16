@@ -27,7 +27,7 @@ export async function PATCH(
 
     const appointmentId = params.id;
     const body = await request.json();
-    const { appointmentStatus, completionNotes, isLate } = body;
+    const { appointmentStatus, completionNotes, isLate, appointmentType } = body;
 
     // Validate appointmentStatus if provided
     if (appointmentStatus !== null && appointmentStatus !== undefined) {
@@ -86,6 +86,22 @@ export async function PATCH(
       paramIndex++;
     }
 
+    if (appointmentType !== undefined) {
+      // Validate appointmentType if provided
+      if (appointmentType !== null && appointmentType !== undefined) {
+        const validTypes = ['elso_konzultacio', 'munkafazis', 'kontroll'];
+        if (!validTypes.includes(appointmentType)) {
+          return NextResponse.json(
+            { error: 'Érvénytelen időpont típus érték' },
+            { status: 400 }
+          );
+        }
+      }
+      updateFields.push(`appointment_type = $${paramIndex}`);
+      updateValues.push(appointmentType || null);
+      paramIndex++;
+    }
+
     if (updateFields.length === 0) {
       return NextResponse.json(
         { error: 'Nincs módosítandó mező' },
@@ -105,7 +121,8 @@ export async function PATCH(
          id,
          appointment_status as "appointmentStatus",
          completion_notes as "completionNotes",
-         is_late as "isLate"`,
+         is_late as "isLate",
+         appointment_type as "appointmentType"`,
       updateValues
     );
 

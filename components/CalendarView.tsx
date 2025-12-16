@@ -23,6 +23,7 @@ interface Appointment {
   isLate?: boolean;
   cim?: string | null;
   teremszam?: string | null;
+  appointmentType?: 'elso_konzultacio' | 'munkafazis' | 'kontroll' | null;
 }
 
 interface CalendarViewProps {

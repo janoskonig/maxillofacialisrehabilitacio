@@ -62,6 +62,7 @@ export async function GET(request: NextRequest) {
         a.appointment_status as "appointmentStatus",
         a.completion_notes as "completionNotes",
         a.is_late as "isLate",
+        a.appointment_type as "appointmentType",
         ats.start_time as "startTime",
         ats.status,
         ats.cim,
@@ -121,7 +122,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { patientId, timeSlotId, cim, teremszam } = body;
+    const { patientId, timeSlotId, cim, teremszam, appointmentType } = body;
 
     if (!patientId || !timeSlotId) {
       return NextResponse.json(
@@ -196,16 +197,17 @@ export async function POST(request: NextRequest) {
       // created_by: surgeon/admin who booked the appointment
       // dentist_email: dentist who created the time slot
       const appointmentResult = await pool.query(
-        `INSERT INTO appointments (patient_id, time_slot_id, created_by, dentist_email)
-         VALUES ($1, $2, $3, $4)
+        `INSERT INTO appointments (patient_id, time_slot_id, created_by, dentist_email, appointment_type)
+         VALUES ($1, $2, $3, $4, $5)
          RETURNING 
            id,
            patient_id as "patientId",
            time_slot_id as "timeSlotId",
            created_by as "createdBy",
            dentist_email as "dentistEmail",
-           created_at as "createdAt"`,
-        [patientId, timeSlotId, auth.email, timeSlot.dentist_email]
+           created_at as "createdAt",
+           appointment_type as "appointmentType"`,
+        [patientId, timeSlotId, auth.email, timeSlot.dentist_email, appointmentType || null]
       );
 
       const appointment = appointmentResult.rows[0];

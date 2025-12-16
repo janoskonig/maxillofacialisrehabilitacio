@@ -40,6 +40,8 @@ export default function Home() {
   });
   const [opViewerPatient, setOpViewerPatient] = useState<Patient | null>(null);
   const [fotoViewerPatient, setFotoViewerPatient] = useState<Patient | null>(null);
+  const [averageWaitingTime, setAverageWaitingTime] = useState<number | null>(null);
+  const [waitingTimeSD, setWaitingTimeSD] = useState<number | null>(null);
   const { showToast, confirm: confirmDialog } = useToast();
 
   useEffect(() => {
@@ -82,6 +84,27 @@ export default function Home() {
     // Reset to first page when search query changes
     setCurrentPage(1);
   }, [searchQuery]);
+
+  useEffect(() => {
+    // Load average waiting time for first consultation
+    const loadAverageWaitingTime = async () => {
+      if (userRole === 'fogpótlástanász' || userRole === 'admin') {
+        try {
+          const response = await fetch('/api/admin/stats/medical', {
+            credentials: 'include',
+          });
+          if (response.ok) {
+            const data = await response.json();
+            setAverageWaitingTime(data.waitingTime?.atlagNapokban || null);
+            setWaitingTimeSD(data.waitingTime?.szorasNapokban || null);
+          }
+        } catch (error) {
+          console.error('Error loading average waiting time:', error);
+        }
+      }
+    };
+    loadAverageWaitingTime();
+  }, [userRole]);
 
   useEffect(() => {
     // Load patients with pagination
@@ -398,6 +421,11 @@ export default function Home() {
                   <p className="text-body-sm mt-1">
                     Hozzon létre és kezeljen szabad időpontokat
                   </p>
+                  {averageWaitingTime !== null && (
+                    <p className="text-body-sm mt-2 text-gray-600">
+                      Az első konzultáció várók átlagos várakozási ideje: <span className="font-semibold text-medical-primary">{averageWaitingTime.toFixed(1)} {waitingTimeSD !== null ? `± ${waitingTimeSD.toFixed(1)}` : ''} nap</span>
+                    </p>
+                  )}
                 </div>
                 <button
                   onClick={() => router.push('/time-slots')}

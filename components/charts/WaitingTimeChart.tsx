@@ -3,6 +3,7 @@
 interface WaitingTimeChartProps {
   atlagNapokban: number;
   medianNapokban: number;
+  szorasNapokban?: number;
   minNapokban: number;
   maxNapokban: number;
   betegSzamaIdoponttal: number;
@@ -11,6 +12,7 @@ interface WaitingTimeChartProps {
 export function WaitingTimeChart({
   atlagNapokban,
   medianNapokban,
+  szorasNapokban,
   minNapokban,
   maxNapokban,
   betegSzamaIdoponttal
@@ -26,7 +28,13 @@ export function WaitingTimeChart({
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
           <p className="text-sm text-blue-600 font-medium">Átlagos várakozási idő</p>
-          <p className="text-2xl font-bold text-blue-900">{atlagNapokban.toFixed(1)} nap</p>
+          <p className="text-2xl font-bold text-blue-900">
+            {atlagNapokban.toFixed(1)}
+            {szorasNapokban !== undefined && szorasNapokban !== null && (
+              <span className="text-lg font-normal"> ± {szorasNapokban.toFixed(1)}</span>
+            )}
+            <span className="text-base font-normal"> nap</span>
+          </p>
         </div>
         <div className="bg-green-50 p-4 rounded-lg border border-green-200">
           <p className="text-sm text-green-600 font-medium">Medián várakozási idő</p>
