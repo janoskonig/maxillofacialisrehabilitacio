@@ -100,13 +100,16 @@ export async function GET(request: NextRequest) {
 
     // Set HTTP-only cookie
     const cookieStore = await cookies();
+    // Always use secure cookies in production (HTTPS), check if baseUrl is HTTPS
+    const isSecure = baseUrl.startsWith('https://');
     cookieStore.set('patient_portal_session', sessionToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isSecure,
       sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60, // 7 days in seconds
       path: '/',
     });
+    console.log('Cookie set with secure:', isSecure, 'baseUrl:', baseUrl);
 
     console.log('Session created, redirecting to dashboard');
     // Redirect to portal dashboard
