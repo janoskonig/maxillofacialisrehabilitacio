@@ -15,6 +15,7 @@ import {
   TrendingUp,
   ArrowLeft
 } from 'lucide-react';
+import { MedicalStatisticsSection } from '@/components/MedicalStatisticsSection';
 
 type Stats = {
   betegek: {
@@ -524,6 +525,15 @@ export default function StatsPage() {
                   <p className="text-2xl font-bold">{stats.dokumentumok.utolso30Napban}</p>
                 </div>
               </div>
+            </div>
+
+            {/* Szakmai statisztikák */}
+            <div className="mt-8">
+              <div className="flex items-center gap-2 mb-6">
+                <TrendingUp className="w-6 h-6 text-medical-primary" />
+                <h2 className="text-2xl font-bold">Szakmai statisztikák</h2>
+              </div>
+              <MedicalStatisticsSection />
             </div>
           </div>
         ) : null}
