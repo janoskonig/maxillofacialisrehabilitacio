@@ -1,13 +1,19 @@
 import { sendEmail } from './email';
 import { getDbPool } from './db';
 
-const PORTAL_BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://rehabilitacios-protetika.hu';
+// Always use production URL, never localhost
+const PORTAL_BASE_URL = (process.env.NEXT_PUBLIC_BASE_URL && 
+  !process.env.NEXT_PUBLIC_BASE_URL.includes('localhost') && 
+  !process.env.NEXT_PUBLIC_BASE_URL.includes('127.0.0.1'))
+  ? process.env.NEXT_PUBLIC_BASE_URL 
+  : 'https://rehabilitacios-protetika.hu';
 
 /**
- * Get base URL - use provided baseUrl or fallback to env/default
+ * Get base URL - always use production URL, never localhost
  */
 function getBaseUrl(baseUrl?: string): string {
-  if (baseUrl) {
+  // Always use production URL, ignore any localhost URLs
+  if (baseUrl && !baseUrl.includes('localhost') && !baseUrl.includes('127.0.0.1')) {
     return baseUrl;
   }
   return PORTAL_BASE_URL;
@@ -23,7 +29,11 @@ export async function sendPatientMagicLink(
   baseUrl?: string
 ): Promise<void> {
   const portalBaseUrl = getBaseUrl(baseUrl);
+  // Ensure we always use production URL, never localhost
   const magicLink = `${portalBaseUrl}/api/patient-portal/auth/verify?token=${token}`;
+  
+  // Log for debugging
+  console.log('[Email] Sending magic link:', magicLink, 'baseUrl param:', baseUrl, 'final baseUrl:', portalBaseUrl);
 
   const subject = 'Bejelentkezés a páciens portálra';
   const html = `
@@ -33,6 +43,7 @@ export async function sendPatientMagicLink(
       <p>Kattintson az alábbi linkre a páciens portálhoz való bejelentkezéshez:</p>
       <p style="margin: 20px 0;">
         <a href="${magicLink}" 
+           clicktracking="off"
            style="background-color: #2563eb; color: white; padding: 12px 24px; 
                   text-decoration: none; border-radius: 5px; display: inline-block;">
           Bejelentkezés
@@ -78,6 +89,7 @@ export async function sendPatientVerificationEmail(
       <p>Az aktiváláshoz kérjük, erősítse meg az email címét az alábbi linkre kattintva:</p>
       <p style="margin: 20px 0;">
         <a href="${verificationLink}" 
+           clicktracking="off"
            style="background-color: #2563eb; color: white; padding: 12px 24px; 
                   text-decoration: none; border-radius: 5px; display: inline-block;">
           Email cím megerősítése
