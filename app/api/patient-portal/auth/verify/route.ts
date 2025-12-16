@@ -36,18 +36,23 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const token = searchParams.get('token');
 
-    console.log('Verifying token, baseUrl:', baseUrl, 'token length:', token?.length);
+    console.log('[verify] Starting verification, baseUrl:', baseUrl, 'token length:', token?.length, 'token first 20 chars:', token?.substring(0, 20));
 
     if (!token) {
-      console.log('No token provided');
+      console.log('[verify] No token provided');
       return NextResponse.redirect(
         new URL('/patient-portal?error=missing_token', baseUrl)
       );
     }
 
     // Verify token
+    console.log('[verify] Calling verifyPortalToken...');
     const verification = await verifyPortalToken(token, 'magic_link');
-    console.log('Verification result:', verification ? 'success' : 'failed');
+    console.log('[verify] Verification result:', verification ? {
+      success: true,
+      patientId: verification.patientId,
+      isUsed: verification.isUsed,
+    } : 'failed');
 
     if (!verification) {
       console.log('Token verification failed - token not found, expired, or invalid');

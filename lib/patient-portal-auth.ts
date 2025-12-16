@@ -24,13 +24,31 @@ export async function createMagicLinkToken(
   const expiresAt = new Date();
   expiresAt.setHours(expiresAt.getHours() + MAGIC_LINK_EXPIRY_HOURS);
 
+  console.log('[createMagicLinkToken] Creating token:', {
+    patientId,
+    tokenLength: token.length,
+    tokenFirst10: token.substring(0, 10),
+    expiresAt: expiresAt.toISOString(),
+    ipAddress,
+  });
+
   try {
-    await pool.query(
+    const result = await pool.query(
       `INSERT INTO patient_portal_tokens (patient_id, token, token_type, expires_at, ip_address)
-       VALUES ($1, $2, 'magic_link', $3, $4)`,
+       VALUES ($1, $2, 'magic_link', $3, $4)
+       RETURNING id, created_at`,
       [patientId, token, expiresAt, ipAddress || null]
     );
+    console.log('[createMagicLinkToken] Token created successfully:', {
+      id: result.rows[0].id,
+      createdAt: result.rows[0].created_at,
+    });
   } catch (error: any) {
+    console.error('[createMagicLinkToken] Error creating token:', {
+      message: error?.message,
+      code: error?.code,
+      detail: error?.detail,
+    });
     if (error?.code === '42P01') {
       throw new Error('patient_portal_tokens table does not exist. Please run the migration: database/migration_patient_portal_tokens.sql');
     }
@@ -78,42 +96,81 @@ export async function verifyPortalToken(
 ): Promise<{ patientId: string; isUsed: boolean } | null> {
   const pool = getDbPool();
 
+  console.log('[verifyPortalToken] Starting verification, tokenType:', tokenType, 'token length:', token?.length, 'token first 10 chars:', token?.substring(0, 10));
+
   try {
     const result = await pool.query(
-      `SELECT patient_id, expires_at, used_at, token_type
+      `SELECT patient_id, expires_at, used_at, token_type, created_at
        FROM patient_portal_tokens
        WHERE token = $1 AND token_type = $2`,
       [token, tokenType]
     );
 
+    console.log('[verifyPortalToken] Query result rows:', result.rows.length);
+    
     if (result.rows.length === 0) {
+      console.log('[verifyPortalToken] Token not found in database');
+      // Let's also check if token exists with different type
+      const checkOtherType = await pool.query(
+        `SELECT token_type FROM patient_portal_tokens WHERE token = $1`,
+        [token]
+      );
+      if (checkOtherType.rows.length > 0) {
+        console.log('[verifyPortalToken] Token found but with different type:', checkOtherType.rows[0].token_type, 'expected:', tokenType);
+      }
       return null;
     }
 
     const row = result.rows[0];
+    console.log('[verifyPortalToken] Token found:', {
+      patientId: row.patient_id,
+      expiresAt: row.expires_at,
+      usedAt: row.used_at,
+      tokenType: row.token_type,
+      createdAt: row.created_at,
+      now: new Date(),
+    });
 
     // Check if expired
-    if (new Date(row.expires_at) < new Date()) {
+    const expiresAt = new Date(row.expires_at);
+    const now = new Date();
+    console.log('[verifyPortalToken] Expiry check:', {
+      expiresAt: expiresAt.toISOString(),
+      now: now.toISOString(),
+      isExpired: expiresAt < now,
+    });
+    
+    if (expiresAt < now) {
+      console.log('[verifyPortalToken] Token expired');
       return null;
     }
 
     // Check if already used (for magic_link tokens)
     if (tokenType === 'magic_link' && row.used_at) {
+      console.log('[verifyPortalToken] Token already used at:', row.used_at);
       return { patientId: row.patient_id, isUsed: true };
     }
 
     // Mark as used if it's a magic_link token
     if (tokenType === 'magic_link') {
+      console.log('[verifyPortalToken] Marking token as used');
       await pool.query(
         `UPDATE patient_portal_tokens 
          SET used_at = CURRENT_TIMESTAMP 
          WHERE token = $1`,
         [token]
       );
+      console.log('[verifyPortalToken] Token marked as used');
     }
 
+    console.log('[verifyPortalToken] Token verified successfully, patientId:', row.patient_id);
     return { patientId: row.patient_id, isUsed: false };
   } catch (error: any) {
+    console.error('[verifyPortalToken] Error:', {
+      message: error?.message,
+      code: error?.code,
+      stack: error?.stack,
+    });
     if (error?.code === '42P01') {
       console.error('patient_portal_tokens table does not exist. Please run the migration: database/migration_patient_portal_tokens.sql');
       throw new Error('Database table missing. Please contact administrator.');
