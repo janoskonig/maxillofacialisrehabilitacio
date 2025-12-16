@@ -31,12 +31,17 @@ function getBaseUrl(request: NextRequest): string {
  * GET /api/patient-portal/auth/verify?token=xxx
  */
 export async function GET(request: NextRequest) {
+  console.log('[verify] ===== VERIFY ROUTE CALLED =====');
+  console.log('[verify] Request URL:', request.url);
+  console.log('[verify] Request method:', request.method);
+  
   try {
     const baseUrl = getBaseUrl(request);
     const searchParams = request.nextUrl.searchParams;
     const token = searchParams.get('token');
 
     console.log('[verify] Starting verification, baseUrl:', baseUrl, 'token length:', token?.length, 'token first 20 chars:', token?.substring(0, 20));
+    console.log('[verify] Full token:', token);
 
     if (!token) {
       console.log('[verify] No token provided');
@@ -120,16 +125,24 @@ export async function GET(request: NextRequest) {
     // Redirect to portal dashboard
     return NextResponse.redirect(new URL('/patient-portal/dashboard', baseUrl));
   } catch (error: any) {
-    console.error('Error verifying token:', error);
+    console.error('[verify] ===== ERROR IN VERIFY ROUTE =====');
+    console.error('[verify] Error type:', error?.constructor?.name);
+    console.error('[verify] Error message:', error?.message);
+    console.error('[verify] Error code:', error?.code);
+    console.error('[verify] Error stack:', error?.stack);
+    console.error('[verify] Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    
     const baseUrl = getBaseUrl(request);
     
     // Check if it's a database table missing error
-    if (error?.message?.includes('table does not exist')) {
+    if (error?.message?.includes('table does not exist') || error?.code === '42P01') {
+      console.error('[verify] Database table missing error');
       return NextResponse.redirect(
         new URL('/patient-portal?error=database_error', baseUrl)
       );
     }
     
+    console.error('[verify] Redirecting to error page: verification_failed');
     return NextResponse.redirect(
       new URL('/patient-portal?error=verification_failed', baseUrl)
     );
