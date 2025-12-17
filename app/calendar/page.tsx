@@ -8,6 +8,7 @@ import { Logo } from '@/components/Logo';
 import { LogOut, Shield, Settings, ArrowLeft, Download, Edit2, X } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
 import { MobileMenu } from '@/components/MobileMenu';
+import { FeedbackButtonTrigger } from '@/components/FeedbackButton';
 
 interface Appointment {
   id: string;
@@ -125,6 +126,7 @@ export default function CalendarPage() {
                     Admin
                   </button>
                 )}
+                <FeedbackButtonTrigger />
                 <button
                   onClick={() => router.push('/settings')}
                   className="btn-secondary flex items-center gap-2"

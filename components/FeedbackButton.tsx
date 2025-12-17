@@ -4,9 +4,36 @@ import { useState, useEffect } from 'react';
 import { MessageCircle, X, Send, AlertCircle } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth';
 import { getStoredErrors, formatErrorLog, clearStoredErrors, ErrorLog } from '@/lib/errorLogger';
+import { useFeedback } from './FeedbackContext';
 
-export default function FeedbackButton() {
-  const [isOpen, setIsOpen] = useState(false);
+export function FeedbackButtonTrigger() {
+  const { openModal } = useFeedback();
+  const [hasStoredErrors, setHasStoredErrors] = useState(false);
+
+  useEffect(() => {
+    const errors = getStoredErrors();
+    setHasStoredErrors(errors.length > 0);
+  }, []);
+
+  return (
+    <button
+      onClick={openModal}
+      className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2 relative"
+      aria-label="Visszajelzés küldése"
+    >
+      <MessageCircle className="w-3.5 h-3.5" />
+      <span className="hidden md:inline-block">Visszajelzés</span>
+      {hasStoredErrors && (
+        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+          !
+        </span>
+      )}
+    </button>
+  );
+}
+
+export function FeedbackModal() {
+  const { isOpen, closeModal } = useFeedback();
   const [type, setType] = useState<'bug' | 'error' | 'crash' | 'suggestion' | 'other'>('bug');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -16,28 +43,22 @@ export default function FeedbackButton() {
   const [storedErrors, setStoredErrors] = useState<ErrorLog[]>([]);
 
   useEffect(() => {
-    // Check for stored errors
-    const errors = getStoredErrors();
-    setHasStoredErrors(errors.length > 0);
-    setStoredErrors(errors);
-    
-    // If there are errors, suggest error type
-    if (errors.length > 0 && !isOpen) {
-      setType('error');
+    if (isOpen) {
+      setSubmitStatus('idle');
+      // Refresh stored errors when opening
+      const errors = getStoredErrors();
+      setHasStoredErrors(errors.length > 0);
+      setStoredErrors(errors);
+      
+      // If there are errors, suggest error type
+      if (errors.length > 0) {
+        setType('error');
+      }
     }
   }, [isOpen]);
 
-  const handleOpen = () => {
-    setIsOpen(true);
-    setSubmitStatus('idle');
-    // Refresh stored errors when opening
-    const errors = getStoredErrors();
-    setHasStoredErrors(errors.length > 0);
-    setStoredErrors(errors);
-  };
-
   const handleClose = () => {
-    setIsOpen(false);
+    closeModal();
     setTitle('');
     setDescription('');
     setSubmitStatus('idle');
@@ -113,25 +134,11 @@ export default function FeedbackButton() {
 
   const includeErrorLog = type === 'error' || type === 'crash';
 
+  if (!isOpen) return null;
+
   return (
     <>
-      {/* Feedback Button - Fixed bottom left */}
-      <button
-        onClick={handleOpen}
-        className="fixed bottom-6 left-6 z-40 bg-medical-primary hover:bg-medical-primary/90 text-white rounded-full p-4 shadow-lg transition-all duration-200 hover:scale-110 flex items-center gap-2 group"
-        aria-label="Visszajelzés küldése"
-      >
-        <MessageCircle className="w-5 h-5" />
-        {hasStoredErrors && (
-          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-            !
-          </span>
-        )}
-        <span className="hidden md:inline-block text-sm font-medium">Visszajelzés</span>
-      </button>
-
       {/* Feedback Modal */}
-      {isOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl">
             <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center">
@@ -258,7 +265,16 @@ export default function FeedbackButton() {
             </form>
           </div>
         </div>
-      )}
+    </>
+  );
+}
+
+// Default export for backward compatibility (renders both button and modal)
+export default function FeedbackButton() {
+  return (
+    <>
+      <FeedbackButtonTrigger />
+      <FeedbackModal />
     </>
   );
 }

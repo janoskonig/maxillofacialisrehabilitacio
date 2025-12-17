@@ -3,7 +3,8 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import GlobalErrorHandler from '@/components/GlobalErrorHandler'
-import FeedbackButton from '@/components/FeedbackButton'
+import { FeedbackProvider } from '@/components/FeedbackContext'
+import { FeedbackModal } from '@/components/FeedbackButton'
 import { ToastProvider } from '@/contexts/ToastContext'
 import { ToastContainer } from '@/components/ToastContainer'
 
@@ -24,10 +25,12 @@ export default function RootLayout({
       <body className={inter.className}>
         <ErrorBoundary>
           <ToastProvider>
-            <GlobalErrorHandler />
-            {children}
-            <FeedbackButton />
-            <ToastContainer />
+            <FeedbackProvider>
+              <GlobalErrorHandler />
+              {children}
+              <FeedbackModal />
+              <ToastContainer />
+            </FeedbackProvider>
           </ToastProvider>
         </ErrorBoundary>
       </body>

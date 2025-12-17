@@ -2,17 +2,10 @@
 
 import { useState, useEffect, useMemo, memo } from 'react';
 import { Patient } from '@/lib/types';
-import { Phone, Mail, Calendar, FileText, Eye, Pencil, CheckCircle2, XCircle, Clock, Trash2, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Image, Camera, AlertCircle, Clock as ClockIcon } from 'lucide-react';
+import { Phone, Mail, Calendar, FileText, Eye, Pencil, CheckCircle2, XCircle, Clock, Trash2, ArrowUp, ArrowDown, Image, Camera, AlertCircle, Clock as ClockIcon } from 'lucide-react';
 import { formatDateForDisplay, calculateAge } from '@/lib/dateUtils';
 import { PatientCard } from './PatientCard';
 import { useIsMobile } from '@/hooks/useMediaQuery';
-
-interface PaginationInfo {
-  page: number;
-  limit: number;
-  total: number;
-  totalPages: number;
-}
 
 interface PatientListProps {
   patients: Patient[];
@@ -27,8 +20,6 @@ interface PatientListProps {
   sortField?: 'nev' | 'idopont' | 'createdAt' | null;
   sortDirection?: 'asc' | 'desc';
   onSort?: (field: 'nev' | 'idopont' | 'createdAt') => void;
-  pagination?: PaginationInfo;
-  onPageChange?: (page: number) => void;
   searchQuery?: string;
 }
 
@@ -42,17 +33,12 @@ interface AppointmentInfo {
   isLate?: boolean;
 }
 
-function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, onViewFoto, canEdit = false, canDelete = false, userRole, sortField, sortDirection = 'asc', onSort, pagination, onPageChange, searchQuery = '' }: PatientListProps) {
+function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, onViewFoto, canEdit = false, canDelete = false, userRole, sortField, sortDirection = 'asc', onSort, searchQuery = '' }: PatientListProps) {
   const [appointments, setAppointments] = useState<Record<string, AppointmentInfo>>({});
   const [loadingAppointments, setLoadingAppointments] = useState(false);
   const [opDocuments, setOpDocuments] = useState<Record<string, number>>({});
   const [fotoDocuments, setFotoDocuments] = useState<Record<string, number>>({});
   const isMobile = useIsMobile();
-  
-  // Use pagination from props if available, otherwise use client-side pagination as fallback
-  const currentPage = pagination?.page || 1;
-  const totalPages = pagination?.totalPages || Math.ceil(patients.length / 25);
-  const itemsPerPage = pagination?.limit || 25;
 
   // Load appointments for all roles
   // Optimalizálás: csak akkor töltjük újra, ha a betegek ID-ja változott
@@ -177,17 +163,6 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
     }
     return patients;
   }, [patients, appointments, sortField, sortDirection]);
-  
-  // Pagináció - csak ha nincs server-side pagination
-  const paginatedPatients = pagination 
-    ? sortedPatients // Server-side pagination esetén már paginated az adat
-    : sortedPatients.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-  
-  const handlePageChange = (page: number) => {
-    if (onPageChange) {
-      onPageChange(page);
-    }
-  };
 
   const loadAppointments = async () => {
     try {
@@ -268,7 +243,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
     return (
       <div className="space-y-4">
         <div className="grid grid-cols-1 gap-4">
-          {paginatedPatients.map((patient) => {
+          {sortedPatients.map((patient) => {
             const appointment = appointments[patient.id || ''];
             return (
               <PatientCard
@@ -289,37 +264,6 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
             );
           })}
         </div>
-        
-        {/* Mobile Pagination */}
-        {pagination && totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 pt-4">
-            <button
-              onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-              disabled={currentPage === 1}
-              className={`px-4 py-2 rounded-md text-sm font-medium ${
-                currentPage === 1
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-              }`}
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <span className="text-sm text-gray-700 px-4">
-              {currentPage} / {totalPages}
-            </span>
-            <button
-              onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
-              disabled={currentPage === totalPages}
-              className={`px-4 py-2 rounded-md text-sm font-medium ${
-                currentPage === totalPages
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-              }`}
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        )}
       </div>
     );
   }
@@ -365,7 +309,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-100">
-            {paginatedPatients.map((patient, index) => {
+            {sortedPatients.map((patient, index) => {
               const hasNoDoctor = !patient.kezeleoorvos;
               const isEven = index % 2 === 0;
               return (
@@ -657,66 +601,6 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
           </tbody>
         </table>
       </div>
-      
-      {/* Pagináció */}
-      {totalPages > 1 && (
-        <div className="mt-4 px-6 py-4 flex items-center justify-between border-t border-gray-200 bg-gray-50/50">
-          <div className="text-sm text-gray-600 font-medium">
-            Oldal <span className="text-medical-primary font-semibold">{currentPage}</span> / {totalPages} (összesen <span className="text-medical-primary font-semibold">{pagination?.total ?? sortedPatients.length}</span> beteg)
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-              disabled={currentPage === 1}
-              className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                currentPage === 1
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300 hover:border-medical-primary/30 hover:shadow-soft'
-              }`}
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <div className="flex items-center gap-1">
-              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                let pageNum: number;
-                if (totalPages <= 5) {
-                  pageNum = i + 1;
-                } else if (currentPage <= 3) {
-                  pageNum = i + 1;
-                } else if (currentPage >= totalPages - 2) {
-                  pageNum = totalPages - 4 + i;
-                } else {
-                  pageNum = currentPage - 2 + i;
-                }
-                return (
-                  <button
-                    key={pageNum}
-                    onClick={() => handlePageChange(pageNum)}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                      currentPage === pageNum
-                        ? 'bg-gradient-to-r from-medical-primary to-medical-primary-light text-white shadow-soft-md'
-                        : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300 hover:border-medical-primary/30 hover:shadow-soft'
-                    }`}
-                  >
-                    {pageNum}
-                  </button>
-                );
-              })}
-            </div>
-            <button
-              onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
-              disabled={currentPage === totalPages}
-              className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                currentPage === totalPages
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300 hover:border-medical-primary/30 hover:shadow-soft'
-              }`}
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

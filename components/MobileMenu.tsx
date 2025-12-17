@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Menu, CalendarDays, Settings, LogOut, Shield, Home, Users } from 'lucide-react';
+import { X, Menu, CalendarDays, Settings, LogOut, Shield, Home, Users, MessageCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser, logout, type AuthUser } from '@/lib/auth';
+import { useFeedback } from '@/components/FeedbackContext';
+import { getStoredErrors } from '@/lib/errorLogger';
 
 interface MobileMenuProps {
   currentPath?: string;
@@ -12,7 +14,9 @@ interface MobileMenuProps {
 export function MobileMenu({ currentPath }: MobileMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [hasStoredErrors, setHasStoredErrors] = useState(false);
   const router = useRouter();
+  const { openModal } = useFeedback();
 
   useEffect(() => {
     const loadUser = async () => {
@@ -20,6 +24,10 @@ export function MobileMenu({ currentPath }: MobileMenuProps) {
       setUser(currentUser);
     };
     loadUser();
+    
+    // Check for stored errors
+    const errors = getStoredErrors();
+    setHasStoredErrors(errors.length > 0);
   }, []);
 
   const handleLogout = () => {
@@ -136,6 +144,22 @@ export function MobileMenu({ currentPath }: MobileMenuProps) {
                   >
                     <Settings className="w-5 h-5" />
                     <span className="font-medium">Beállítások</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setIsOpen(false);
+                      openModal();
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left text-gray-700 hover:bg-gray-100 transition-colors relative"
+                  >
+                    <MessageCircle className="w-5 h-5" />
+                    <span className="font-medium">Visszajelzés</span>
+                    {hasStoredErrors && (
+                      <span className="ml-auto bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                        !
+                      </span>
+                    )}
                   </button>
                 </div>
               </nav>

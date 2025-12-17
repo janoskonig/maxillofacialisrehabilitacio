@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Patient, patientSchema } from '@/lib/types';
-import { getAllPatients, savePatient, searchPatients, PaginationInfo, getPatientById } from '@/lib/storage';
+import { getAllPatients, savePatient, searchPatients, getPatientById } from '@/lib/storage';
 import { PatientForm } from '@/components/PatientForm';
 import { PatientList } from '@/components/PatientList';
 import { OPImageViewer } from '@/components/OPImageViewer';
@@ -14,6 +14,7 @@ import { getCurrentUser, getUserEmail, getUserRole, logout } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
 import { MobileMenu } from '@/components/MobileMenu';
 import { Dashboard } from '@/components/Dashboard';
+import { FeedbackButtonTrigger } from '@/components/FeedbackButton';
 
 type UserRoleType = 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
 
@@ -32,14 +33,7 @@ export default function Home() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [sortField, setSortField] = useState<'nev' | 'idopont' | 'createdAt' | null>('idopont');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-  const [currentPage, setCurrentPage] = useState<number>(1);
   const [refreshKey, setRefreshKey] = useState<number>(0);
-  const [pagination, setPagination] = useState<PaginationInfo>({
-    page: 1,
-    limit: 25,
-    total: 0,
-    totalPages: 0,
-  });
   const [opViewerPatient, setOpViewerPatient] = useState<Patient | null>(null);
   const [fotoViewerPatient, setFotoViewerPatient] = useState<Patient | null>(null);
   const [averageWaitingTime, setAverageWaitingTime] = useState<number | null>(null);
@@ -95,11 +89,6 @@ export default function Home() {
   }, [router]);
 
   useEffect(() => {
-    // Reset to first page when search query changes
-    setCurrentPage(1);
-  }, [searchQuery]);
-
-  useEffect(() => {
     // Load average waiting time for first consultation
     const loadAverageWaitingTime = async () => {
       if (userRole === 'fogpótlástanász' || userRole === 'admin') {
@@ -121,21 +110,20 @@ export default function Home() {
   }, [userRole]);
 
   useEffect(() => {
-    // Load patients with pagination
+    // Load all patients without pagination
     const loadPatientsData = async () => {
       try {
-        let data;
+        let allPatients;
         if (searchQuery.trim()) {
-          data = await searchPatients(searchQuery, currentPage, 25);
+          allPatients = await searchPatients(searchQuery);
         } else {
-          data = await getAllPatients(currentPage, 25);
+          allPatients = await getAllPatients();
         }
         
-        setPatients(data.patients);
-        setPagination(data.pagination);
+        setPatients(allPatients);
         
         // Apply sorting (only for fields that don't need appointment data)
-        let sortedResults = [...data.patients];
+        let sortedResults = [...allPatients];
         if (sortField === 'nev' || sortField === 'createdAt') {
           sortedResults = sortedResults.sort((a, b) => {
             let comparison = 0;
@@ -164,13 +152,12 @@ export default function Home() {
     };
     
     loadPatientsData();
-  }, [searchQuery, currentPage, sortField, sortDirection, refreshKey]);
+  }, [searchQuery, sortField, sortDirection, refreshKey]);
 
   const loadPatients = async () => {
     // Force reload by incrementing refreshKey
     // This will trigger the useEffect to reload data
     setRefreshKey(prev => prev + 1);
-    setCurrentPage(1);
   };
 
   const handleSavePatient = async (patientData: Patient) => {
@@ -408,6 +395,7 @@ export default function Home() {
                   <CalendarDays className="w-3.5 h-3.5" />
                   Naptár
                 </button>
+                <FeedbackButtonTrigger />
                 <button
                   onClick={() => router.push('/settings')}
                   className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2"
@@ -531,7 +519,7 @@ export default function Home() {
                         {searchQuery.trim() ? 'Keresési eredmények' : 'Összes beteg'}
                       </p>
                       <p className="text-2xl font-bold text-gray-900 mt-0.5">
-                        {searchQuery.trim() ? (pagination?.total ?? filteredPatients.length) : (pagination?.total ?? patients.length)}
+                        {filteredPatients.length}
                       </p>
                     </div>
                   </div>
@@ -581,8 +569,6 @@ export default function Home() {
                     setSortDirection('asc');
                   }
                 }}
-                pagination={pagination}
-                onPageChange={(page: number) => setCurrentPage(page)}
                 searchQuery={searchQuery}
               />
             </>

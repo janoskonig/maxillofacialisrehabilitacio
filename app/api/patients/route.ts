@@ -88,11 +88,6 @@ export async function GET(request: NextRequest) {
     const pool = getDbPool();
     const searchParams = request.nextUrl.searchParams;
     const query = searchParams.get('q');
-    
-    // Pagination paraméterek
-    const page = parseInt(searchParams.get('page') || '1', 10);
-    const limit = parseInt(searchParams.get('limit') || '25', 10);
-    const offset = (page - 1) * limit;
 
     // Ellenőrizzük a felhasználó szerepkörét és jogosultságait
     const auth = await verifyAuth(request);
@@ -174,15 +169,12 @@ export async function GET(request: NextRequest) {
       const countQuery = `SELECT COUNT(*) as total ${fromClause} WHERE ${searchCondition}`;
       countResult = await pool.query(countQuery, queryParams);
       
-      // Data query with pagination
-      queryParams.push(limit.toString(), offset.toString());
-      
+      // Data query without pagination - get all results
       result = await pool.query(
         `SELECT ${selectFields}
          ${fromClause}
          WHERE ${searchCondition}
-         ORDER BY ${orderBy} DESC
-         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+         ORDER BY ${orderBy} DESC`,
         queryParams
       );
     } else {
@@ -232,23 +224,17 @@ export async function GET(request: NextRequest) {
         finalQueryParams
       );
       
-      // Data query with pagination
-      const countParams = [...finalQueryParams];
-      countParams.push(limit.toString(), offset.toString());
-      const limitParamIndex = finalQueryParams.length + 1;
-      
+      // Data query without pagination - get all results
       result = await pool.query(
         `SELECT ${selectFields}
          ${fromClause}
          ${whereClause}
-         ORDER BY ${orderBy} DESC
-         LIMIT $${limitParamIndex} OFFSET $${limitParamIndex + 1}`,
-        countParams
+         ORDER BY ${orderBy} DESC`,
+        finalQueryParams
       );
     }
     
     const total = parseInt(countResult.rows[0].total, 10);
-    const totalPages = Math.ceil(total / limit);
 
     // Activity logging: patients list viewed or searched (csak ha be van jelentkezve)
     if (auth) {
@@ -262,13 +248,7 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({ 
-      patients: result.rows,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages,
-      }
+      patients: result.rows
     }, { status: 200 });
   } catch (error) {
     console.error('Hiba a betegek lekérdezésekor:', error);
