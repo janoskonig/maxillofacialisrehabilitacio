@@ -752,6 +752,81 @@ export async function sendRegistrationNotificationToAdmins(
 }
 
 /**
+ * Send patient registration notification to admins
+ */
+export async function sendPatientRegistrationNotificationToAdmins(
+  adminEmails: string[],
+  patientEmail: string,
+  patientName: string | null,
+  patientTaj: string | null,
+  registrationDate: Date
+): Promise<void> {
+  if (adminEmails.length === 0) {
+    return;
+  }
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #2563eb;">Új beteg regisztráció a páciens portálon</h2>
+      <p>Kedves adminisztrátor,</p>
+      <p>Egy új beteg regisztrált a páciens portálon:</p>
+      <ul>
+        <li><strong>Beteg neve:</strong> ${patientName || 'Név nélküli'}</li>
+        <li><strong>Email cím:</strong> ${patientEmail}</li>
+        <li><strong>TAJ szám:</strong> ${patientTaj || 'Nincs megadva'}</li>
+        <li><strong>Regisztráció dátuma:</strong> ${formatDateForEmail(registrationDate)}</li>
+      </ul>
+      <p>A beteg email címének megerősítésére vár, majd be tud jelentkezni a portálra.</p>
+      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: adminEmails,
+    subject: 'Új beteg regisztráció a páciens portálon - Maxillofaciális Rehabilitáció',
+    html,
+  });
+}
+
+/**
+ * Send patient login notification to admins
+ */
+export async function sendPatientLoginNotificationToAdmins(
+  adminEmails: string[],
+  patientEmail: string,
+  patientName: string | null,
+  patientTaj: string | null,
+  loginTime: Date,
+  ipAddress: string | null
+): Promise<void> {
+  if (adminEmails.length === 0) {
+    return;
+  }
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #2563eb;">Beteg bejelentkezés a páciens portálra</h2>
+      <p>Kedves adminisztrátor,</p>
+      <p>Egy beteg bejelentkezett a páciens portálra:</p>
+      <ul>
+        <li><strong>Beteg neve:</strong> ${patientName || 'Név nélküli'}</li>
+        <li><strong>Email cím:</strong> ${patientEmail}</li>
+        <li><strong>TAJ szám:</strong> ${patientTaj || 'Nincs megadva'}</li>
+        <li><strong>Bejelentkezés ideje:</strong> ${formatDateForEmail(loginTime)}</li>
+        ${ipAddress ? `<li><strong>IP cím:</strong> ${ipAddress}</li>` : ''}
+      </ul>
+      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: adminEmails,
+    subject: 'Beteg bejelentkezés a páciens portálra - Maxillofaciális Rehabilitáció',
+    html,
+  });
+}
+
+/**
  * Send conditional appointment request to patient
  * Patient can approve, reject, or request a new time slot
  */

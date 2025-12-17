@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { createEmailVerificationToken, checkRegistrationRateLimit } from '@/lib/patient-portal-auth';
 import { sendPatientVerificationEmail } from '@/lib/patient-portal-email';
+import { sendPatientRegistrationNotificationToAdmins } from '@/lib/email';
 import { Patient, patientSchema } from '@/lib/types';
 
 /**
@@ -185,6 +186,27 @@ export async function POST(request: NextRequest) {
       baseUrl,
       waitingTimeStats
     );
+
+    // Send admin notification
+    try {
+      const adminResult = await pool.query(
+        `SELECT email FROM users WHERE role = 'admin' AND active = true`
+      );
+      const adminEmails = adminResult.rows.map((row: { email: string }) => row.email);
+      
+      if (adminEmails.length > 0) {
+        await sendPatientRegistrationNotificationToAdmins(
+          adminEmails,
+          newPatient.email,
+          newPatient.nev,
+          newPatient.taj,
+          new Date()
+        );
+      }
+    } catch (emailError) {
+      console.error('Failed to send patient registration notification email to admins:', emailError);
+      // Don't fail the registration if email fails
+    }
 
     return NextResponse.json({
       success: true,

@@ -3,6 +3,8 @@ import { verifyPortalToken } from '@/lib/patient-portal-auth';
 import { SignJWT } from 'jose';
 import { cookies } from 'next/headers';
 import { getPatientEmailInfo, sendPatientLoginNotification } from '@/lib/patient-portal-email';
+import { sendPatientLoginNotificationToAdmins } from '@/lib/email';
+import { getDbPool } from '@/lib/db';
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'change-this-to-a-random-secret-in-production'
@@ -79,25 +81,6 @@ export async function GET(request: NextRequest) {
     const ipHeader = request.headers.get('x-forwarded-for') || '';
     const ipAddress = ipHeader.split(',')[0]?.trim() || null;
 
-    // Get patient email info and send login notification
-    try {
-      const patientInfo = await getPatientEmailInfo(verification.patientId);
-      if (patientInfo && patientInfo.email) {
-        await sendPatientLoginNotification(
-          patientInfo.email,
-          patientInfo.name,
-          new Date(),
-          ipAddress
-        );
-        console.log('Login notification email sent to:', patientInfo.email);
-      } else {
-        console.warn('Could not send login notification: patient email not found');
-      }
-    } catch (emailError) {
-      // Don't fail the login if email sending fails
-      console.error('Error sending login notification email:', emailError);
-    }
-
     // Create portal session JWT
     const sessionToken = await new SignJWT({
       patientId: verification.patientId,
@@ -120,6 +103,58 @@ export async function GET(request: NextRequest) {
       path: '/',
     });
     console.log('Cookie set with secure:', isSecure, 'baseUrl:', baseUrl);
+
+    // Session successfully created - now send login notifications
+    // Only send emails if login was successful (session created)
+    try {
+      const patientInfo = await getPatientEmailInfo(verification.patientId);
+      if (patientInfo && patientInfo.email) {
+        // Send notification to patient
+        await sendPatientLoginNotification(
+          patientInfo.email,
+          patientInfo.name,
+          new Date(),
+          ipAddress
+        );
+        console.log('Login notification email sent to:', patientInfo.email);
+
+        // Send notification to admins (only after successful login)
+        try {
+          const pool = getDbPool();
+          const adminResult = await pool.query(
+            `SELECT email FROM users WHERE role = 'admin' AND active = true`
+          );
+          const adminEmails = adminResult.rows.map((row: { email: string }) => row.email);
+          
+          if (adminEmails.length > 0) {
+            // Get patient TAJ for admin notification
+            const patientResult = await pool.query(
+              'SELECT taj FROM patients WHERE id = $1',
+              [verification.patientId]
+            );
+            const patientTaj = patientResult.rows.length > 0 ? patientResult.rows[0].taj : null;
+
+            await sendPatientLoginNotificationToAdmins(
+              adminEmails,
+              patientInfo.email,
+              patientInfo.name,
+              patientTaj,
+              new Date(),
+              ipAddress
+            );
+            console.log('Login notification email sent to admins');
+          }
+        } catch (adminEmailError) {
+          // Don't fail the login if admin email sending fails
+          console.error('Error sending login notification email to admins:', adminEmailError);
+        }
+      } else {
+        console.warn('Could not send login notification: patient email not found');
+      }
+    } catch (emailError) {
+      // Don't fail the login if email sending fails
+      console.error('Error sending login notification email:', emailError);
+    }
 
     console.log('Session created, redirecting to dashboard');
     // Redirect to portal dashboard
