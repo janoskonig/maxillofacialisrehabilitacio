@@ -36,7 +36,7 @@ export default function Home() {
   const [refreshKey, setRefreshKey] = useState<number>(0);
   const [pagination, setPagination] = useState<PaginationInfo>({
     page: 1,
-    limit: 50,
+    limit: 25,
     total: 0,
     totalPages: 0,
   });
@@ -126,9 +126,9 @@ export default function Home() {
       try {
         let data;
         if (searchQuery.trim()) {
-          data = await searchPatients(searchQuery, currentPage, 50);
+          data = await searchPatients(searchQuery, currentPage, 25);
         } else {
-          data = await getAllPatients(currentPage, 50);
+          data = await getAllPatients(currentPage, 25);
         }
         
         setPatients(data.patients);

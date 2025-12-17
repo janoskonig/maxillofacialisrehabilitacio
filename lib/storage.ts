@@ -142,7 +142,7 @@ export interface PatientsResponse {
 }
 
 // Összes beteg lekérdezése (pagination támogatással)
-export async function getAllPatients(page: number = 1, limit: number = 50): Promise<PatientsResponse> {
+export async function getAllPatients(page: number = 1, limit: number = 25): Promise<PatientsResponse> {
   try {
     const response = await fetchWithTimeout(
       `${API_BASE_URL}?page=${page}&limit=${limit}`,
@@ -159,7 +159,7 @@ export async function getAllPatients(page: number = 1, limit: number = 50): Prom
       patients: [],
       pagination: {
         page: 1,
-        limit: 50,
+        limit: 25,
         total: 0,
         totalPages: 0,
       },
@@ -168,7 +168,7 @@ export async function getAllPatients(page: number = 1, limit: number = 50): Prom
 }
 
 // Beteg keresése (pagination támogatással)
-export async function searchPatients(query: string, page: number = 1, limit: number = 50): Promise<PatientsResponse> {
+export async function searchPatients(query: string, page: number = 1, limit: number = 25): Promise<PatientsResponse> {
   try {
     if (!query.trim()) {
       return getAllPatients(page, limit);
@@ -189,7 +189,7 @@ export async function searchPatients(query: string, page: number = 1, limit: num
       patients: [],
       pagination: {
         page: 1,
-        limit: 50,
+        limit: 25,
         total: 0,
         totalPages: 0,
       },

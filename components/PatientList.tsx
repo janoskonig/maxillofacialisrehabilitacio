@@ -51,8 +51,8 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
   
   // Use pagination from props if available, otherwise use client-side pagination as fallback
   const currentPage = pagination?.page || 1;
-  const totalPages = pagination?.totalPages || Math.ceil(patients.length / 50);
-  const itemsPerPage = pagination?.limit || 50;
+  const totalPages = pagination?.totalPages || Math.ceil(patients.length / 25);
+  const itemsPerPage = pagination?.limit || 25;
 
   // Load appointments for all roles
   // Optimalizálás: csak akkor töltjük újra, ha a betegek ID-ja változott

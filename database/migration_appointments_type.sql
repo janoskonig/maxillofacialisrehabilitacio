@@ -18,3 +18,4 @@ WHERE appointment_type IS NOT NULL;
 COMMENT ON COLUMN appointments.appointment_type IS 'Időpont típusa: elso_konzultacio (első konzultáció), munkafazis (munkafázis - valami készül, ez a vizit egy lépcsője), kontroll (már kész van minden vagy legalábbis egy milestone-on túl vagyunk), NULL (nincs megadva)';
 
 COMMIT;
+
