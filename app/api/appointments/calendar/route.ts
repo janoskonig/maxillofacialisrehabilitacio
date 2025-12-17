@@ -59,19 +59,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Role-based filtering
-    if (auth.role === 'sebészorvos') {
-      // Surgeons see appointments for their patients only
-      whereConditions.push(`p.created_by = $${paramIndex}`);
-      queryParams.push(auth.email);
-      paramIndex++;
-    } else if (auth.role === 'fogpótlástanász') {
-      // Dentists see their own appointments and available slots
-      whereConditions.push(`(a.dentist_email = $${paramIndex} OR ats.user_id = (SELECT id FROM users WHERE email = $${paramIndex}))`);
-      queryParams.push(auth.email);
-      paramIndex++;
-    }
-    // Admin sees all (no additional filter)
+    // No role-based filtering - everyone sees all appointments in calendar view
 
     const whereClause = whereConditions.length > 0 
       ? `WHERE ${whereConditions.join(' AND ')}`

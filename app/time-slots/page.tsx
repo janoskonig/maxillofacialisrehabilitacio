@@ -111,52 +111,22 @@ export default function TimeSlotsPage() {
       </header>
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="space-y-6">
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
-            <div>
-              <h2 className="text-xl sm:text-3xl font-bold text-gray-900">Szabad időpontok kezelése</h2>
-              <p className="text-sm sm:text-base text-gray-600 mt-1">
-                Hozzon létre és kezeljen szabad időpontokat a betegfogadáshoz
-              </p>
-            </div>
-            <div className="hidden md:flex gap-2">
-              {userRole === 'admin' && (
-                <button
-                  onClick={() => router.push('/admin')}
-                  className="btn-secondary flex items-center gap-2"
-                >
-                  <Shield className="w-4 h-4" />
-                  Admin
-                </button>
-              )}
-              <button
-                onClick={() => router.push('/calendar')}
-                className="btn-secondary flex items-center gap-2"
-              >
-                <CalendarDays className="w-4 h-4" />
-                Naptár
-              </button>
-              <button
-                onClick={() => router.push('/settings')}
-                className="btn-secondary flex items-center gap-2"
-              >
-                <Settings className="w-4 h-4" />
-                Beállítások
-              </button>
-              <button
-                onClick={handleLogout}
-                className="btn-secondary flex items-center gap-2"
-              >
-                <LogOut className="w-4 h-4" />
-                Kijelentkezés
-              </button>
-              <button
-                onClick={() => router.push('/')}
-                className="btn-secondary flex items-center gap-2"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Vissza
-              </button>
+          {/* Google Calendar Settings Info */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <CalendarDays className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm text-blue-900">
+                  A Google Naptár beállítása a{' '}
+                  <button
+                    onClick={() => router.push('/settings')}
+                    className="text-blue-700 hover:text-blue-900 underline font-medium"
+                  >
+                    Beállítások
+                  </button>
+                  {' '}oldalon érhető el.
+                </p>
+              </div>
             </div>
           </div>
 

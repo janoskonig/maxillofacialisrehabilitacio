@@ -87,13 +87,20 @@ export function CalendarEvent({ appointment, onClick, compact = false }: Calenda
       <div
         onClick={onClick}
         className={`${statusInfo.bgColor} ${statusInfo.borderColor} border-l-2 px-2 py-1 text-xs cursor-pointer hover:opacity-80 transition-opacity`}
-        title={`${appointment.patientName || 'Név nélküli'} - ${timeString}`}
+        title={`${appointment.patientName || 'Név nélküli'} - ${timeString}${appointment.dentistName ? ` - ${appointment.dentistName}` : ''}`}
       >
         <div className="flex items-center gap-1">
           {StatusIcon && <StatusIcon className={`w-3 h-3 ${statusInfo.color}`} />}
-          <span className={`font-medium ${statusInfo.color} truncate`}>
-            {timeString} {appointment.patientName || 'Név nélküli'}
-          </span>
+          <div className="flex-1 min-w-0">
+            <div className={`font-medium ${statusInfo.color} truncate`}>
+              {timeString} {appointment.patientName || 'Név nélküli'}
+            </div>
+            {appointment.dentistName && (
+              <div className="text-gray-600 truncate text-[10px] mt-0.5">
+                {appointment.dentistName}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -115,14 +122,14 @@ export function CalendarEvent({ appointment, onClick, compact = false }: Calenda
           <div className="font-medium text-gray-900 truncate">
             {appointment.patientName || 'Név nélküli'}
           </div>
+          {appointment.dentistName && (
+            <div className="text-xs font-medium text-gray-700 mt-0.5">
+              Orvos: {appointment.dentistName}
+            </div>
+          )}
           {appointment.patientTaj && (
             <div className="text-xs text-gray-600 mt-0.5">
               TAJ: {appointment.patientTaj}
-            </div>
-          )}
-          {appointment.dentistName && (
-            <div className="text-xs text-gray-600 mt-0.5">
-              {appointment.dentistName}
             </div>
           )}
           {appointment.teremszam && (
