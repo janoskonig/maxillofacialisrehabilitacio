@@ -11,6 +11,7 @@ interface TimeSlot {
   cim?: string | null;
   teremszam?: string | null;
   userEmail?: string;
+  dentistName?: string | null;
 }
 
 interface PendingAppointment {
@@ -327,13 +328,19 @@ export function ConditionalAppointmentBooking({ patientId, patientEmail }: Condi
               disabled={creating}
             >
               <option value="">Válasszon időpontot...</option>
-              {availableSlotsOnly.map((slot) => (
-                <option key={slot.id} value={slot.id}>
-                  {formatDateTime(slot.startTime)}
-                  {slot.cim ? ` - ${slot.cim}` : ''}
-                  {slot.teremszam ? ` (Terem: ${slot.teremszam})` : ''}
-                </option>
-              ))}
+              {availableSlotsOnly.map((slot) => {
+                const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
+                const displayCim = slot.cim || DEFAULT_CIM;
+                return (
+                  <option key={slot.id} value={slot.id}>
+                    {formatDateTime(slot.startTime)}
+                    {slot.dentistName ? ` - ${slot.dentistName}` : ''}
+                    {` - ${displayCim}`}
+                    {slot.teremszam ? ` (Terem: ${slot.teremszam})` : ''}
+                    {slot.userEmail ? ` - ${slot.userEmail}` : ''}
+                  </option>
+                );
+              })}
             </select>
             {availableSlotsOnly.length === 0 && (
               <p className="text-sm text-gray-500 mt-2">
@@ -374,13 +381,19 @@ export function ConditionalAppointmentBooking({ patientId, patientEmail }: Condi
                       <option value="">Válasszon alternatív időpontot...</option>
                       {availableSlotsOnly
                         .filter(slot => slot.id !== selectedSlot && !alternativeSlots.includes(slot.id) || slot.id === altSlotId)
-                        .map((slot) => (
-                          <option key={slot.id} value={slot.id}>
-                            {formatDateTime(slot.startTime)}
-                            {slot.cim ? ` - ${slot.cim}` : ''}
-                            {slot.teremszam ? ` (Terem: ${slot.teremszam})` : ''}
-                          </option>
-                        ))}
+                        .map((slot) => {
+                          const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
+                          const displayCim = slot.cim || DEFAULT_CIM;
+                          return (
+                            <option key={slot.id} value={slot.id}>
+                              {formatDateTime(slot.startTime)}
+                              {slot.dentistName ? ` - ${slot.dentistName}` : ''}
+                              {` - ${displayCim}`}
+                              {slot.teremszam ? ` (Terem: ${slot.teremszam})` : ''}
+                              {slot.userEmail ? ` - ${slot.userEmail}` : ''}
+                            </option>
+                          );
+                        })}
                     </select>
                     <button
                       type="button"

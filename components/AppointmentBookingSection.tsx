@@ -13,6 +13,7 @@ interface TimeSlot {
   cim?: string | null;
   teremszam?: string | null;
   userEmail?: string;
+  dentistName?: string | null;
 }
 
 interface Appointment {
@@ -1030,6 +1031,7 @@ export function AppointmentBookingSection({
                   return (
                     <option key={slot.id} value={slot.id}>
                       {formatDateTime(slot.startTime)}
+                      {slot.dentistName ? ` - ${slot.dentistName}` : ''}
                       {` - ${displayCim}`}
                       {slot.teremszam ? ` (Terem: ${slot.teremszam})` : ''}
                       {slot.userEmail ? ` - ${slot.userEmail}` : ''}

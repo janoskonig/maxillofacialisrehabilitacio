@@ -241,6 +241,13 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
   const isNewPatient = !patient && !isViewOnly;
   const [currentPatient, setCurrentPatient] = useState<Patient | null | undefined>(patient);
   const patientId = currentPatient?.id || null;
+
+  // Refs az auto-save követésére és utolsó mentett adatokhoz
+  const isAutoSavingRef = useRef(false);
+  const lastSavedPatientRef = useRef<{ id: string | null; updatedAt: string | null }>({ 
+    id: patient?.id || null, 
+    updatedAt: patient?.updatedAt || null 
+  });
   const [labQuoteRequests, setLabQuoteRequests] = useState<Array<{ id: string; szoveg: string; datuma: string }>>([]);
   const [newQuoteSzoveg, setNewQuoteSzoveg] = useState<string>('');
   const [newQuoteDatuma, setNewQuoteDatuma] = useState<Date | null>(null);
@@ -406,21 +413,37 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     },
   });
 
-  // Update currentPatient when patient prop changes
-  useEffect(() => {
-    if (patient) {
-      setCurrentPatient(patient);
-    } else {
-      setCurrentPatient(null);
-    }
-  }, [patient?.id, patient?.updatedAt]); // Update when patient ID or updatedAt changes
-
+  // Update currentPatient when patient prop changes (but not from auto-save)
   // Reset form to mark as not dirty after initial load for existing patients
   // Also reset when patient data changes (e.g., after save or refresh)
+  // BUT: Don't reset if the change came from auto-save to prevent flickering
   useEffect(() => {
-    if (patient && !isViewOnly) {
+    if (!patient || isViewOnly) {
+      if (!patient && !isViewOnly) {
+        // Reset to default values for new patient
+        reset({
+          radioterapia: false,
+          chemoterapia: false,
+          nemIsmertPoziciokbanImplantatum: false,
+          felsoFogpotlasVan: false,
+          felsoFogpotlasElegedett: true,
+          alsoFogpotlasVan: false,
+          alsoFogpotlasElegedett: true,
+          kezelesiTervFelso: [],
+          kezelesiTervAlso: [],
+          kezelesiTervArcotErinto: [],
+        }, { keepDirty: false, keepDefaultValues: false });
+      }
+      setCurrentPatient(patient || null);
+      return;
+    }
+
+    // Ha az id változott, biztosan külső betöltés
+    if (lastSavedPatientRef.current.id !== patient.id) {
+      lastSavedPatientRef.current = { id: patient.id || null, updatedAt: patient.updatedAt || null };
+      setCurrentPatient(patient);
       // Reset form with current values to clear dirty state
-      reset(patient ? {
+      reset({
         ...patient,
         szuletesiDatum: formatDateForInput(patient.szuletesiDatum),
         mutetIdeje: formatDateForInput(patient.mutetIdeje),
@@ -437,23 +460,56 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           ...item,
           tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
         })) || [],
-      } : undefined, { keepDirty: false, keepDefaultValues: false });
-    } else if (!patient && !isViewOnly) {
-      // Reset to default values for new patient
-      reset({
-        radioterapia: false,
-        chemoterapia: false,
-        nemIsmertPoziciokbanImplantatum: false,
-        felsoFogpotlasVan: false,
-        felsoFogpotlasElegedett: true,
-        alsoFogpotlasVan: false,
-        alsoFogpotlasElegedett: true,
-        kezelesiTervFelso: [],
-        kezelesiTervAlso: [],
-        kezelesiTervArcotErinto: [],
       }, { keepDirty: false, keepDefaultValues: false });
+      return;
     }
-  }, [patient?.id, patient?.updatedAt, isViewOnly, reset]); // Reset when patient ID or updatedAt changes
+
+    // Ha az id megegyezik és auto-save flag aktív, ne fusson reset
+    if (isAutoSavingRef.current && lastSavedPatientRef.current.id === patient.id) {
+      // Frissítsük a ref-et, de ne fusson reset
+      lastSavedPatientRef.current.updatedAt = patient.updatedAt || null;
+      setCurrentPatient(patient);
+      return;
+    }
+
+    // Ha az updatedAt jelentősen eltér (>2 másodperc), külső változás
+    if (lastSavedPatientRef.current.updatedAt && patient.updatedAt) {
+      const lastUpdated = new Date(lastSavedPatientRef.current.updatedAt).getTime();
+      const currentUpdated = new Date(patient.updatedAt).getTime();
+      if (Math.abs(currentUpdated - lastUpdated) > 2000) {
+        // Külső változás, frissítsük
+        lastSavedPatientRef.current = { id: patient.id || null, updatedAt: patient.updatedAt || null };
+        setCurrentPatient(patient);
+        reset({
+          ...patient,
+          szuletesiDatum: formatDateForInput(patient.szuletesiDatum),
+          mutetIdeje: formatDateForInput(patient.mutetIdeje),
+          felvetelDatuma: formatDateForInput(patient.felvetelDatuma),
+          kezelesiTervFelso: patient.kezelesiTervFelso?.map(item => ({
+            ...item,
+            tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+          })) || [],
+          kezelesiTervAlso: patient.kezelesiTervAlso?.map(item => ({
+            ...item,
+            tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+          })) || [],
+          kezelesiTervArcotErinto: patient.kezelesiTervArcotErinto?.map(item => ({
+            ...item,
+            tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+          })) || [],
+        }, { keepDirty: false, keepDefaultValues: false });
+        return;
+      }
+    }
+
+    // Egyébként ne fusson reset (valószínűleg auto-save vagy első betöltés)
+    // Csak frissítsük a currentPatient-et és a ref-et
+    setCurrentPatient(patient);
+    if (!lastSavedPatientRef.current.id) {
+      // Első betöltés
+      lastSavedPatientRef.current = { id: patient.id || null, updatedAt: patient.updatedAt || null };
+    }
+  }, [patient?.id, patient?.updatedAt, isViewOnly, reset]);
 
   // Set kezeleoorvos value when options are loaded and patient has a value
   useEffect(() => {
@@ -482,22 +538,69 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     return initial as Record<string, ToothStatus>;
   });
 
-  // Update implantatumok and fogak when patient data changes
+  // Update implantatumok and fogak when patient data changes (but not from auto-save)
+  // Only update if it's an external change (different patient ID or significant time difference)
   useEffect(() => {
-    if (patient?.meglevoImplantatumok) {
-      setImplantatumok(patient.meglevoImplantatumok);
-    } else {
+    if (!patient) {
       setImplantatumok({});
-    }
-  }, [patient?.id, patient?.updatedAt, patient?.meglevoImplantatumok]);
-
-  useEffect(() => {
-    if (patient?.meglevoFogak) {
-      setFogak(patient.meglevoFogak as Record<string, ToothStatus>);
-    } else {
       setFogak({});
+      return;
     }
-  }, [patient?.id, patient?.updatedAt, patient?.meglevoFogak]);
+
+    // Ha az id változott, biztosan külső betöltés
+    if (lastSavedPatientRef.current.id !== patient.id) {
+      if (patient.meglevoImplantatumok) {
+        setImplantatumok(patient.meglevoImplantatumok);
+      } else {
+        setImplantatumok({});
+      }
+      if (patient.meglevoFogak) {
+        setFogak(patient.meglevoFogak as Record<string, ToothStatus>);
+      } else {
+        setFogak({});
+      }
+      return;
+    }
+
+    // Ha auto-save flag aktív, ne frissítsük (a form értékei már helyesek)
+    if (isAutoSavingRef.current && lastSavedPatientRef.current.id === patient.id) {
+      return;
+    }
+
+    // Ha az updatedAt jelentősen eltér (>2 másodperc), külső változás
+    if (lastSavedPatientRef.current.updatedAt && patient.updatedAt) {
+      const lastUpdated = new Date(lastSavedPatientRef.current.updatedAt).getTime();
+      const currentUpdated = new Date(patient.updatedAt).getTime();
+      if (Math.abs(currentUpdated - lastUpdated) > 2000) {
+        // Külső változás, frissítsük
+        if (patient.meglevoImplantatumok) {
+          setImplantatumok(patient.meglevoImplantatumok);
+        } else {
+          setImplantatumok({});
+        }
+        if (patient.meglevoFogak) {
+          setFogak(patient.meglevoFogak as Record<string, ToothStatus>);
+        } else {
+          setFogak({});
+        }
+        return;
+      }
+    }
+
+    // Első betöltés esetén frissítsük
+    if (!lastSavedPatientRef.current.id && patient.id) {
+      if (patient.meglevoImplantatumok) {
+        setImplantatumok(patient.meglevoImplantatumok);
+      } else {
+        setImplantatumok({});
+      }
+      if (patient.meglevoFogak) {
+        setFogak(patient.meglevoFogak as Record<string, ToothStatus>);
+      } else {
+        setFogak({});
+      }
+    }
+  }, [patient?.id, patient?.updatedAt, patient?.meglevoImplantatumok, patient?.meglevoFogak]);
   const kezelesiTervFelso = watch('kezelesiTervFelso') || [];
   const kezelesiTervAlso = watch('kezelesiTervAlso') || [];
   const kezelesiTervArcotErinto = watch('kezelesiTervArcotErinto') || [];
@@ -641,6 +744,15 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           const savedPatient = await savePatient(patientToSave);
           setCurrentPatient(savedPatient);
           
+          // Frissítsük a ref-et az utolsó mentett adatokkal
+          lastSavedPatientRef.current = { 
+            id: savedPatient.id || null, 
+            updatedAt: savedPatient.updatedAt || null 
+          };
+          
+          // Jelöljük, hogy auto-save okozta
+          isAutoSavingRef.current = true;
+          
           // Update parent component
           try {
             (onSave as any)._silent = true;
@@ -649,6 +761,11 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           } catch (error) {
             console.error('Error calling onSave callback after auto-save:', error);
           }
+          
+          // Visszaállítjuk a flag-et késleltetve
+          setTimeout(() => {
+            isAutoSavingRef.current = false;
+          }, 500);
           
           return;
         }
@@ -661,13 +778,18 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         // Update local state
         setCurrentPatient(savedPatient);
         
-        // Update implantatumok and fogak state with saved values
-        if (savedPatient.meglevoImplantatumok) {
-          setImplantatumok(savedPatient.meglevoImplantatumok);
-        }
-        if (savedPatient.meglevoFogak) {
-          setFogak(savedPatient.meglevoFogak as Record<string, ToothStatus>);
-        }
+        // Frissítsük a ref-et az utolsó mentett adatokkal
+        lastSavedPatientRef.current = {
+          id: savedPatient.id || null,
+          updatedAt: savedPatient.updatedAt || null
+        };
+        
+        // Jelöljük, hogy auto-save okozta
+        isAutoSavingRef.current = true;
+        
+        // Don't update implantatumok and fogak state after auto-save
+        // The form values are already correct, updating state would cause flickering
+        // Only update on external changes (handled by the separate useEffect)
         
         // Notify parent component about the save (silently, without alert)
         // This ensures the parent component's editingPatient state is updated
@@ -681,6 +803,11 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           // Ignore errors in callback
           console.error('Error in onSave callback:', error);
         }
+        
+        // Visszaállítjuk a flag-et késleltetve
+        setTimeout(() => {
+          isAutoSavingRef.current = false;
+        }, 500);
         
         // Don't reset form after auto-save - keep current form values intact
         // The form values are already correct, we just need to update currentPatient
@@ -703,36 +830,9 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     cimValue, varosValue, iranyitoszamValue, beutaloOrvosValue, beutaloIntezmenyValue,
     beutaloIndokolasValue, mutetIdejeValue, szovettaniDiagnozisValue, nyakiBlokkdisszekcioValue,
     kezeleoorvosValue, kezeleoorvosIntezeteValue, felvetelDatumaValue, kezelesreErkezesIndokaValue,
-    implantatumok, fogak, isViewOnly, isNewPatient, currentPatient, reset, setImplantatumok, setFogak, onSave
+    implantatumok, fogak, isViewOnly, isNewPatient, currentPatient, onSave
   ]);
 
-  // Update currentPatient when patient prop changes (but not from auto-save)
-  useEffect(() => {
-    // Only update if patient prop actually changed (not from auto-save)
-    // This prevents overwriting currentPatient after auto-save
-    if (patient && (!currentPatient || patient.id !== currentPatient.id)) {
-    setCurrentPatient(patient);
-    }
-  }, [patient, currentPatient]);
-
-  // Implantátumok frissítése amikor patient prop changes (but not from auto-save)
-  useEffect(() => {
-    // Only update if patient prop actually changed (not from auto-save)
-    // This prevents overwriting implantatumok/fogak after auto-save
-    if (patient && (!currentPatient || patient.id !== currentPatient.id)) {
-    if (patient?.meglevoImplantatumok) {
-      setImplantatumok(patient.meglevoImplantatumok);
-    } else {
-      setImplantatumok({});
-    }
-    if (patient?.meglevoFogak) {
-      // Visszafelé kompatibilitás: elfogadjuk string és objektum formátumot is
-      setFogak(patient.meglevoFogak as Record<string, ToothStatus>);
-    } else {
-      setFogak({});
-    }
-    }
-  }, [patient, currentPatient]);
 
 
   // Automatikus intézet beállítás a kezelőorvos alapján

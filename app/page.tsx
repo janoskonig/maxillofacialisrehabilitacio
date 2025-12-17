@@ -490,7 +490,13 @@ export default function Home() {
 
           {/* Dashboard Section */}
           <div className="mb-6">
-            <Dashboard userRole={userRole} />
+            <Dashboard 
+              userRole={userRole} 
+              onViewPatient={handleViewPatient}
+              onEditPatient={handleEditPatient}
+              onViewOP={handleViewOP}
+              onViewFoto={handleViewFoto}
+            />
           </div>
 
           {/* Patient Management Section - shown for all roles */}

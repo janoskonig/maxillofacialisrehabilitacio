@@ -85,9 +85,36 @@ export async function GET(request: NextRequest) {
     `;
     const pendingAppointmentsResult = await pool.query(pendingAppointmentsQuery, appointmentParams);
 
+    // 3. NEW REGISTRATIONS (patients without kezeleoorvos who registered themselves)
+    // These are patients where created_by IS NULL (self-registered via patient portal)
+    // and kezeleoorvos IS NULL or empty
+    const newRegistrationsQuery = `
+      SELECT 
+        id,
+        nev,
+        taj,
+        email,
+        telefonszam,
+        szuletesi_datum,
+        nem,
+        cim,
+        varos,
+        iranyitoszam,
+        beutalo_orvos,
+        beutalo_indokolas,
+        created_at,
+        created_by
+      FROM patients
+      WHERE (kezeleoorvos IS NULL OR kezeleoorvos = '')
+      AND created_by IS NULL
+      ORDER BY created_at ASC
+    `;
+    const newRegistrationsResult = await pool.query(newRegistrationsQuery);
+
     return NextResponse.json({
       nextAppointments: nextAppointmentsResult.rows,
       pendingAppointments: pendingAppointmentsResult.rows,
+      newRegistrations: newRegistrationsResult.rows,
     });
   } catch (error) {
     console.error('Error fetching dashboard data:', error);

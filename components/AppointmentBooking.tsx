@@ -11,6 +11,7 @@ interface TimeSlot {
   cim?: string | null;
   teremszam?: string | null;
   userEmail?: string;
+  dentistName?: string | null;
 }
 
 interface Appointment {
@@ -598,6 +599,7 @@ export function AppointmentBooking() {
               {availableSlotsOnly.map((slot) => (
                 <option key={slot.id} value={slot.id}>
                   {formatDateTime(slot.startTime)}
+                  {slot.dentistName ? ` - ${slot.dentistName}` : ''}
                   {slot.cim ? ` - ${slot.cim}` : ''}
                   {slot.teremszam ? ` (Terem: ${slot.teremszam})` : ''}
                 </option>
