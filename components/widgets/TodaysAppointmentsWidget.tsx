@@ -18,6 +18,8 @@ interface Appointment {
   appointmentStatus?: string | null;
   completionNotes?: string | null;
   isLate?: boolean | null;
+  dentistEmail?: string | null;
+  dentistName?: string | null;
 }
 
 interface TodaysAppointmentsWidgetProps {
@@ -253,6 +255,11 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
                   >
                     {appointment.patientName || 'Névtelen beteg'}
                   </div>
+                  {appointment.dentistName && (
+                    <div className="text-body-sm text-gray-700 font-medium mt-0.5">
+                      {appointment.dentistName}
+                    </div>
+                  )}
                   {appointment.patientTaj && (
                     <div className="text-body-sm text-gray-600 mt-0.5">
                       TAJ: {appointment.patientTaj}

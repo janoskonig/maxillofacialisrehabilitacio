@@ -13,6 +13,8 @@ interface PendingApproval {
   patientName: string | null;
   patientTaj: string | null;
   createdBy: string;
+  dentistEmail?: string | null;
+  dentistName?: string | null;
 }
 
 interface PendingApprovalsWidgetProps {
@@ -60,6 +62,11 @@ export function PendingApprovalsWidget({ approvals }: PendingApprovalsWidgetProp
                   <div className="font-semibold text-base text-gray-900 truncate mb-1">
                     {approval.patientName || 'Névtelen beteg'}
                   </div>
+                  {approval.dentistName && (
+                    <div className="text-body-sm text-gray-700 font-medium mt-0.5">
+                      {approval.dentistName}
+                    </div>
+                  )}
                   {approval.patientTaj && (
                     <div className="text-body-sm text-gray-600 mt-0.5">
                       TAJ: {approval.patientTaj}
