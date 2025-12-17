@@ -156,6 +156,11 @@ export function PatientCard({
           <div>
             <span className="font-medium">Létrehozva: </span>
             <span>{formatDateForDisplay(patient.createdAt)}</span>
+            {patient.createdBy ? (
+              <span className="text-gray-500 ml-1">({patient.createdBy.split('@')[0]})</span>
+            ) : (
+              <span className="text-gray-500 ml-1">(A beteg regisztrált)</span>
+            )}
           </div>
         )}
       </div>

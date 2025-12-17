@@ -279,6 +279,9 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
               <th className="px-3 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider w-20">
                 Foto
               </th>
+              <th className="px-3 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider w-20">
+                OP
+              </th>
               <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 TAJ szám
               </th>
@@ -288,20 +291,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
               <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 Kezelőorvos
               </th>
-              {renderSortableHeader('Időpont', 'idopont', 'w-32')}
-              <th className="px-3 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider w-20">
-                OP
-              </th>
-              {userRole !== 'sebészorvos' && (
-                <>
-                  <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    Tervezett fogpótlás (felső)
-                  </th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    Tervezett fogpótlás (alsó)
-                  </th>
-                </>
-              )}
+              {renderSortableHeader('Következő időpont', 'idopont', 'w-32')}
               {renderSortableHeader('Létrehozva', 'createdAt')}
               <th className="px-3 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 Műveletek
@@ -378,6 +368,27 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                     <span className="text-xs text-gray-300">-</span>
                   )}
                 </td>
+                <td className="px-3 py-2 text-center">
+                  {opDocuments[patient.id || ''] > 0 ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onViewOP) {
+                          onViewOP(patient);
+                        } else {
+                          onView(patient);
+                        }
+                      }}
+                      className="inline-flex items-center justify-center p-1.5 rounded-full bg-medical-primary/10 text-medical-primary border border-medical-primary/20 hover:bg-medical-primary/20 transition-all duration-200"
+                      title={`${opDocuments[patient.id || '']} OP dokumentum`}
+                    >
+                      <Image className="w-4 h-4" />
+                      <span className="ml-1 text-xs font-medium">{opDocuments[patient.id || '']}</span>
+                    </button>
+                  ) : (
+                    <span className="text-xs text-gray-300">-</span>
+                  )}
+                </td>
                 <td className="px-3 py-2 whitespace-nowrap">
                   <div className="text-xs text-gray-900">{patient.taj || '-'}</div>
                 </td>
@@ -418,7 +429,22 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                       <div className="flex items-center text-gray-900 mb-0.5">
                         <Clock className="w-3 h-3 mr-0.5 text-medical-primary flex-shrink-0" />
                         <span className="font-medium">
-                          {formatDateForDisplay(appointments[patient.id || ''].startTime)}
+                          {(() => {
+                            const dateStr = appointments[patient.id || ''].startTime;
+                            if (!dateStr) return formatDateForDisplay(dateStr);
+                            try {
+                              const date = new Date(dateStr);
+                              if (isNaN(date.getTime())) return formatDateForDisplay(dateStr);
+                              const year = date.getFullYear();
+                              const month = String(date.getMonth() + 1).padStart(2, '0');
+                              const day = String(date.getDate()).padStart(2, '0');
+                              const hours = String(date.getHours()).padStart(2, '0');
+                              const minutes = String(date.getMinutes()).padStart(2, '0');
+                              return `${year}-${month}-${day} ${hours}:${minutes}`;
+                            } catch {
+                              return formatDateForDisplay(dateStr);
+                            }
+                          })()}
                         </span>
                       </div>
                       {appointments[patient.id || ''].dentistEmail && (
@@ -475,95 +501,23 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                     <div className="text-xs text-gray-400">-</div>
                   )}
                 </td>
-                <td className="px-3 py-2 text-center">
-                  {opDocuments[patient.id || ''] > 0 ? (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (onViewOP) {
-                          onViewOP(patient);
-                        } else {
-                          onView(patient);
-                        }
-                      }}
-                      className="inline-flex items-center justify-center p-1.5 rounded-full bg-medical-primary/10 text-medical-primary border border-medical-primary/20 hover:bg-medical-primary/20 transition-all duration-200"
-                      title={`${opDocuments[patient.id || '']} OP dokumentum`}
-                    >
-                      <Image className="w-4 h-4" />
-                      <span className="ml-1 text-xs font-medium">{opDocuments[patient.id || '']}</span>
-                    </button>
-                  ) : (
-                    <span className="text-xs text-gray-300">-</span>
-                  )}
-                </td>
-                {userRole !== 'sebészorvos' && (
-                  <>
-                    <td className="px-3 py-2">
-                      <div className="text-xs text-gray-900">
-                        {patient.kezelesiTervFelso && Array.isArray(patient.kezelesiTervFelso) && patient.kezelesiTervFelso.length > 0 ? (
-                          <div className="space-y-1">
-                            {patient.kezelesiTervFelso.map((terv: any, idx: number) => (
-                              <div key={idx} className="border-b border-gray-100 pb-1 last:border-0 last:pb-0">
-                                <div className="font-medium text-xs">{terv.tipus || '-'}</div>
-                                {terv.tervezettAtadasDatuma && (
-                                  <div className="text-xs text-gray-500 flex items-center mt-0.5">
-                                    <Calendar className="w-2.5 h-2.5 mr-0.5" />
-                                    {formatDateForDisplay(terv.tervezettAtadasDatuma)}
-                                  </div>
-                                )}
-                                <div className="mt-0.5">
-                                  {terv.elkeszult ? (
-                                    <span className="inline" title="Elkészült">
-                                      <CheckCircle2 className="w-2.5 h-2.5 text-green-600" />
-                                    </span>
-                                  ) : (
-                                    <span className="inline" title="Nincs elkészítve">
-                                      <XCircle className="w-2.5 h-2.5 text-gray-400" />
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : '-'}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="text-xs text-gray-900">
-                        {patient.kezelesiTervAlso && Array.isArray(patient.kezelesiTervAlso) && patient.kezelesiTervAlso.length > 0 ? (
-                          <div className="space-y-1">
-                            {patient.kezelesiTervAlso.map((terv: any, idx: number) => (
-                              <div key={idx} className="border-b border-gray-100 pb-1 last:border-0 last:pb-0">
-                                <div className="font-medium text-xs">{terv.tipus || '-'}</div>
-                                {terv.tervezettAtadasDatuma && (
-                                  <div className="text-xs text-gray-500 flex items-center mt-0.5">
-                                    <Calendar className="w-2.5 h-2.5 mr-0.5" />
-                                    {formatDateForDisplay(terv.tervezettAtadasDatuma)}
-                                  </div>
-                                )}
-                                <div className="mt-0.5">
-                                  {terv.elkeszult ? (
-                                    <span className="inline" title="Elkészült">
-                                      <CheckCircle2 className="w-2.5 h-2.5 text-green-600" />
-                                    </span>
-                                  ) : (
-                                    <span className="inline" title="Nincs elkészítve">
-                                      <XCircle className="w-2.5 h-2.5 text-gray-400" />
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : '-'}
-                      </div>
-                    </td>
-                  </>
-                )}
                 <td className="px-3 py-2 whitespace-nowrap">
-                  <div className="flex items-center text-xs text-gray-500">
-                    <Calendar className="w-3 h-3 mr-1 text-gray-400" />
-                    {patient.createdAt && formatDateForDisplay(patient.createdAt)}
+                  <div className="text-xs text-gray-500">
+                    {patient.createdAt && (
+                      <div className="flex items-center mb-0.5">
+                        <Calendar className="w-3 h-3 mr-1 text-gray-400" />
+                        {formatDateForDisplay(patient.createdAt)}
+                      </div>
+                    )}
+                    {patient.createdBy ? (
+                      <div className="text-xs text-gray-600 truncate" title={patient.createdBy}>
+                        {patient.createdBy.split('@')[0]}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-gray-600">
+                        A beteg regisztrált
+                      </div>
+                    )}
                   </div>
                 </td>
                 <td className="px-3 py-2 whitespace-nowrap text-right text-xs font-medium">
