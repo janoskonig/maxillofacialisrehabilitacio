@@ -6,6 +6,7 @@ import { Calendar, Clock, MapPin, Plus, CheckCircle, XCircle, AlertCircle } from
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
+import { BookingModal } from './BookingModal';
 
 interface Appointment {
   id: string;
@@ -19,15 +20,29 @@ interface Appointment {
   timeSlotId?: string;
 }
 
+interface TimeSlot {
+  id: string;
+  startTime: string;
+  cim: string | null;
+  teremszam: string | null;
+  dentistName: string | null;
+  dentistEmail: string | null;
+}
+
 export function PatientAppointmentsList() {
   const router = useRouter();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
   const [showRequestForm, setShowRequestForm] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
+  const [bookingLoading, setBookingLoading] = useState(false);
 
   useEffect(() => {
     fetchAppointments();
+    fetchAvailableSlots();
   }, []);
 
   const fetchAppointments = async () => {
@@ -49,6 +64,68 @@ export function PatientAppointmentsList() {
       showToast('Hiba történt az időpontok betöltésekor', 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAvailableSlots = async () => {
+    try {
+      setLoadingSlots(true);
+      const response = await fetch('/api/patient-portal/time-slots', {
+        credentials: 'include',
+      });
+
+      if (!response.ok || response.status === 401) {
+        return;
+      }
+
+      const data = await response.json();
+      setAvailableSlots(data.timeSlots || []);
+    } catch (error) {
+      console.error('Hiba a szabad időpontok betöltésekor:', error);
+      showToast('Hiba történt a szabad időpontok betöltésekor', 'error');
+    } finally {
+      setLoadingSlots(false);
+    }
+  };
+
+  const handleBookSlot = (slot: TimeSlot) => {
+    setSelectedSlot(slot);
+  };
+
+  const handleConfirmBooking = async () => {
+    if (!selectedSlot) return;
+
+    setBookingLoading(true);
+    try {
+      const response = await fetch('/api/patient-portal/appointments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          timeSlotId: selectedSlot.id,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Hiba történt az időpont foglalásakor');
+      }
+
+      showToast('Időpont sikeresen lefoglalva!', 'success');
+      setSelectedSlot(null);
+      // Refresh both appointments and available slots
+      await Promise.all([fetchAppointments(), fetchAvailableSlots()]);
+    } catch (error) {
+      console.error('Hiba az időpont foglalásakor:', error);
+      showToast(
+        error instanceof Error ? error.message : 'Hiba történt az időpont foglalásakor',
+        'error'
+      );
+    } finally {
+      setBookingLoading(false);
     }
   };
 
@@ -121,7 +198,7 @@ export function PatientAppointmentsList() {
             Időpontok
           </h1>
           <p className="text-gray-600 mt-2">
-            Itt találhatja az összes időpontját és kérhet új időpontot.
+            Itt találhatja az összes időpontját és foglalhat új időpontot.
           </p>
         </div>
         <button
@@ -132,6 +209,69 @@ export function PatientAppointmentsList() {
           <span className="hidden sm:inline">Új időpont kérése</span>
           <span className="sm:hidden">Új</span>
         </button>
+      </div>
+
+      {/* Available Time Slots Section */}
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">
+          Szabad időpontok
+        </h2>
+        {loadingSlots ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-medical-primary"></div>
+            <span className="ml-3 text-gray-600">Betöltés...</span>
+          </div>
+        ) : availableSlots.length > 0 ? (
+          <div className="space-y-3">
+            {availableSlots.map((slot) => {
+              const startTime = new Date(slot.startTime);
+              const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
+              const displayCim = slot.cim || DEFAULT_CIM;
+              return (
+                <div
+                  key={slot.id}
+                  className="p-4 rounded-lg border-l-4 border-green-500 bg-white hover:bg-green-50 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Clock className="w-4 h-4 text-green-600" />
+                        <span className="font-semibold text-gray-900">
+                          {format(startTime, 'yyyy. MMMM d. EEEE, HH:mm', { locale: hu })}
+                        </span>
+                      </div>
+                      {slot.dentistName && (
+                        <p className="text-sm text-gray-600 mb-1">
+                          Orvos: {slot.dentistName}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-1 text-sm text-gray-600">
+                        <MapPin className="w-3 h-3" />
+                        <span>
+                          {displayCim}
+                          {slot.teremszam && ` • ${slot.teremszam}. terem`}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleBookSlot(slot)}
+                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex-shrink-0"
+                    >
+                      Foglalás
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <Calendar className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+            <p className="text-gray-600">
+              Jelenleg nincs elérhető szabad időpont.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Request Appointment Form */}
@@ -263,6 +403,16 @@ export function PatientAppointmentsList() {
             Új időpont kérése
           </button>
         </div>
+      )}
+
+      {/* Booking Modal */}
+      {selectedSlot && (
+        <BookingModal
+          timeSlot={selectedSlot}
+          onConfirm={handleConfirmBooking}
+          onCancel={() => setSelectedSlot(null)}
+          loading={bookingLoading}
+        />
       )}
     </div>
   );

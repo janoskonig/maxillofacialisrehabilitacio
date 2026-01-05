@@ -18,28 +18,10 @@ export async function GET(request: NextRequest) {
     }
 
     const pool = getDbPool();
-    const searchParams = request.nextUrl.searchParams;
-    const status = searchParams.get('status'); // null means all statuses
-    const futureOnly = searchParams.get('future') === 'true';
 
-    let whereConditions: string[] = [];
+    // Always filter for future and available time slots only
+    const whereClause = `WHERE ats.start_time >= NOW() AND ats.status = 'available'`;
     const queryParams: unknown[] = [];
-    let paramIndex = 1;
-
-    // Only filter by status if explicitly provided and not 'all'
-    if (status && status !== 'all') {
-      whereConditions.push(`ats.status = $${paramIndex}`);
-      queryParams.push(status);
-      paramIndex++;
-    }
-
-    if (futureOnly) {
-      whereConditions.push(`ats.start_time > NOW()`);
-    }
-
-    const whereClause = whereConditions.length > 0
-      ? `WHERE ${whereConditions.join(' AND ')}`
-      : '';
 
     const query = `
       SELECT 

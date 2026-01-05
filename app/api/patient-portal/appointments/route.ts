@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
-import { sendEmail } from '@/lib/email';
+import { sendEmail, sendAppointmentBookingNotification, sendAppointmentBookingNotificationToPatient, sendAppointmentBookingNotificationToAdmins } from '@/lib/email';
+import { generateIcsFile } from '@/lib/calendar';
 
 /**
  * Get patient's appointments
@@ -55,7 +56,7 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * Request new appointment (without time slot selection)
+ * Request new appointment (without time slot selection) OR book appointment directly (with timeSlotId)
  * POST /api/patient-portal/appointments
  */
 export async function POST(request: NextRequest) {
@@ -70,7 +71,14 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { beutaloOrvos, beutaloIndokolas } = body;
+    const { beutaloOrvos, beutaloIndokolas, timeSlotId } = body;
+
+    // If timeSlotId is provided, this is a direct booking
+    if (timeSlotId) {
+      return await handleDirectBooking(patientId, timeSlotId);
+    }
+
+    // Otherwise, this is a request for appointment (existing functionality)
 
     const pool = getDbPool();
 
@@ -170,6 +178,180 @@ export async function POST(request: NextRequest) {
     console.error('Error requesting appointment:', error);
     return NextResponse.json(
       { error: 'Hiba történt az időpont kérésekor' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * Handle direct booking of an appointment
+ */
+async function handleDirectBooking(patientId: string, timeSlotId: string) {
+  const pool = getDbPool();
+  const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
+
+  // Start transaction
+  await pool.query('BEGIN');
+
+  try {
+    // Get patient info
+    const patientResult = await pool.query(
+      'SELECT id, email, nev, taj, nem FROM patients WHERE id = $1',
+      [patientId]
+    );
+
+    if (patientResult.rows.length === 0) {
+      await pool.query('ROLLBACK');
+      return NextResponse.json(
+        { error: 'Beteg nem található' },
+        { status: 404 }
+      );
+    }
+
+    const patient = patientResult.rows[0];
+
+    // Check if time slot exists and is available
+    const timeSlotResult = await pool.query(
+      `SELECT ats.*, u.email as dentist_email, u.id as dentist_user_id, u.doktor_neve as dentist_name
+       FROM available_time_slots ats
+       JOIN users u ON ats.user_id = u.id
+       WHERE ats.id = $1`,
+      [timeSlotId]
+    );
+
+    if (timeSlotResult.rows.length === 0) {
+      await pool.query('ROLLBACK');
+      return NextResponse.json(
+        { error: 'Időpont nem található' },
+        { status: 404 }
+      );
+    }
+
+    const timeSlot = timeSlotResult.rows[0];
+
+    if (timeSlot.status !== 'available') {
+      await pool.query('ROLLBACK');
+      return NextResponse.json(
+        { error: 'Ez az időpont már le van foglalva' },
+        { status: 400 }
+      );
+    }
+
+    // Check if time slot is in the future
+    const startTime = new Date(timeSlot.start_time);
+    if (startTime <= new Date()) {
+      await pool.query('ROLLBACK');
+      return NextResponse.json(
+        { error: 'Csak jövőbeli időpontot lehet foglalni' },
+        { status: 400 }
+      );
+    }
+
+    // Create appointment
+    const appointmentResult = await pool.query(
+      `INSERT INTO appointments (patient_id, time_slot_id, created_by, dentist_email)
+       VALUES ($1, $2, $3, $4)
+       RETURNING 
+         id,
+         patient_id as "patientId",
+         time_slot_id as "timeSlotId",
+         created_by as "createdBy",
+         dentist_email as "dentistEmail",
+         created_at as "createdAt"`,
+      [patientId, timeSlotId, 'patient-portal', timeSlot.dentist_email]
+    );
+
+    const appointment = appointmentResult.rows[0];
+
+    // Update time slot status to booked
+    await pool.query(
+      `UPDATE available_time_slots SET status = 'booked' WHERE id = $1`,
+      [timeSlotId]
+    );
+
+    await pool.query('COMMIT');
+
+    // Get appointment details for email
+    const appointmentCim = timeSlot.cim || DEFAULT_CIM;
+    const appointmentTeremszam = timeSlot.teremszam || null;
+    const dentistFullName = timeSlot.dentist_name || timeSlot.dentist_email;
+
+    // Generate ICS file
+    const icsFileData = {
+      patientName: patient.nev,
+      patientTaj: patient.taj,
+      startTime: startTime,
+      surgeonName: 'Páciens portál',
+      dentistName: dentistFullName,
+    };
+    const icsFile = await generateIcsFile(icsFileData);
+
+    // Send email notifications
+    try {
+      const [adminResult] = await Promise.all([
+        pool.query('SELECT email FROM users WHERE role = $1 AND active = true', ['admin']),
+      ]);
+
+      const adminEmails = adminResult.rows.map((row: { email: string }) => row.email);
+      const adminEmail = adminEmails.length > 0 ? adminEmails[0] : '';
+
+      await Promise.all([
+        // Email to dentist
+        sendAppointmentBookingNotification(
+          timeSlot.dentist_email,
+          patient.nev,
+          patient.taj,
+          startTime,
+          'Páciens portál',
+          icsFile,
+          appointmentCim,
+          appointmentTeremszam
+        ),
+        // Email to patient if email is available
+        patient.email && patient.email.trim() !== ''
+          ? sendAppointmentBookingNotificationToPatient(
+              patient.email,
+              patient.nev,
+              patient.nem,
+              startTime,
+              dentistFullName,
+              timeSlot.dentist_email,
+              icsFile,
+              appointmentCim,
+              appointmentTeremszam,
+              adminEmail
+            )
+          : Promise.resolve(),
+        // Email to admins
+        adminEmails.length > 0
+          ? sendAppointmentBookingNotificationToAdmins(
+              adminEmails,
+              patient.nev,
+              patient.taj,
+              startTime,
+              'Páciens portál',
+              timeSlot.dentist_email,
+              icsFile,
+              appointmentCim,
+              appointmentTeremszam
+            )
+          : Promise.resolve(),
+      ]);
+    } catch (emailError) {
+      console.error('Hiba az értesítő email küldésekor:', emailError);
+      // Don't fail the request if email fails
+    }
+
+    return NextResponse.json({
+      success: true,
+      appointment,
+      message: 'Időpont sikeresen lefoglalva!',
+    });
+  } catch (error) {
+    await pool.query('ROLLBACK');
+    console.error('Error booking appointment:', error);
+    return NextResponse.json(
+      { error: 'Hiba történt az időpont foglalásakor' },
       { status: 500 }
     );
   }
