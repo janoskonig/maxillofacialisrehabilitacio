@@ -524,7 +524,8 @@ export async function sendAppointmentCancellationNotification(
   patientName: string | null,
   patientTaj: string | null,
   appointmentTime: Date,
-  cancelledBy: string
+  cancelledBy: string,
+  cancellationReason?: string | null
 ): Promise<void> {
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -536,6 +537,7 @@ export async function sendAppointmentCancellationNotification(
         <li><strong>TAJ szám:</strong> ${patientTaj || 'Nincs megadva'}</li>
         <li><strong>Időpont:</strong> ${formatDateForEmail(appointmentTime)}</li>
         <li><strong>Lemondta:</strong> ${cancelledBy}</li>
+        ${cancellationReason ? `<li><strong>Lemondás indoka:</strong> ${cancellationReason}</li>` : ''}
       </ul>
       <p>Az időpont újra elérhetővé vált a rendszerben.</p>
       <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>

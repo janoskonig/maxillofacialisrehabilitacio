@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
-import { sendAppointmentModificationNotification, sendAppointmentModificationNotificationToPatient } from '@/lib/email';
+import { sendAppointmentModificationNotification, sendAppointmentModificationNotificationToPatient, sendAppointmentCancellationNotification, sendEmail } from '@/lib/email';
 import { generateIcsFile } from '@/lib/calendar';
 import { deleteGoogleCalendarEvent, createGoogleCalendarEvent } from '@/lib/google-calendar';
 
@@ -394,5 +394,242 @@ export async function PUT(
     );
   }
   */
+}
+
+/**
+ * Cancel patient's appointment
+ * DELETE /api/patient-portal/appointments/[id]
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const patientId = await verifyPatientPortalSession(request);
+
+    if (!patientId) {
+      return NextResponse.json(
+        { error: 'Bejelentkezés szükséges' },
+        { status: 401 }
+      );
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const { cancellationReason } = body;
+
+    // Validate cancellation reason
+    if (!cancellationReason || typeof cancellationReason !== 'string' || cancellationReason.trim().length === 0) {
+      return NextResponse.json(
+        { error: 'A lemondás indokának megadása kötelező' },
+        { status: 400 }
+      );
+    }
+
+    const pool = getDbPool();
+
+    // Get appointment details and verify it belongs to this patient
+    const appointmentResult = await pool.query(
+      `SELECT 
+        a.id,
+        a.patient_id,
+        a.time_slot_id,
+        a.created_by,
+        a.dentist_email,
+        a.google_calendar_event_id,
+        a.appointment_status,
+        ats.start_time,
+        ats.user_id as time_slot_user_id,
+        ats.source as time_slot_source,
+        ats.google_calendar_event_id as time_slot_google_calendar_event_id,
+        p.nev as patient_name,
+        p.taj as patient_taj,
+        p.email as patient_email,
+        u.doktor_neve as dentist_name
+      FROM appointments a
+      JOIN available_time_slots ats ON a.time_slot_id = ats.id
+      JOIN patients p ON a.patient_id = p.id
+      LEFT JOIN users u ON a.dentist_email = u.email
+      WHERE a.id = $1 AND a.patient_id = $2`,
+      [params.id, patientId]
+    );
+
+    if (appointmentResult.rows.length === 0) {
+      return NextResponse.json(
+        { error: 'Időpont nem található vagy nincs jogosultsága lemondani' },
+        { status: 404 }
+      );
+    }
+
+    const appointment = appointmentResult.rows[0];
+
+    // Check if appointment is already cancelled
+    if (appointment.appointment_status === 'cancelled_by_patient' || appointment.appointment_status === 'cancelled_by_doctor') {
+      return NextResponse.json(
+        { error: 'Ez az időpont már le van mondva' },
+        { status: 400 }
+      );
+    }
+
+    // Check if appointment is in the future (can only cancel future appointments)
+    const startTime = new Date(appointment.start_time);
+    if (startTime <= new Date()) {
+      return NextResponse.json(
+        { error: 'Csak jövőbeli időpontot lehet lemondani' },
+        { status: 400 }
+      );
+    }
+
+    // Start transaction
+    await pool.query('BEGIN');
+
+    try {
+      // Update appointment status to cancelled_by_patient and save cancellation reason
+      await pool.query(
+        `UPDATE appointments 
+         SET appointment_status = $1, completion_notes = $2
+         WHERE id = $3`,
+        ['cancelled_by_patient', cancellationReason.trim(), params.id]
+      );
+
+      // Update time slot status back to available
+      await pool.query(
+        'UPDATE available_time_slots SET status = $1 WHERE id = $2',
+        ['available', appointment.time_slot_id]
+      );
+
+      await pool.query('COMMIT');
+
+      // Send cancellation email notifications and handle Google Calendar event (parallel)
+      try {
+        const dentistFullName = appointment.dentist_name || appointment.dentist_email;
+
+        await Promise.all([
+          // Email to dentist
+          sendAppointmentCancellationNotification(
+            appointment.dentist_email,
+            appointment.patient_name,
+            appointment.patient_taj,
+            startTime,
+            'Páciens portál',
+            cancellationReason.trim()
+          ),
+          // Google Calendar event handling (if exists)
+          (async () => {
+            if (appointment.google_calendar_event_id && appointment.time_slot_user_id) {
+              try {
+                // Get calendar IDs from user settings
+                const userCalendarResult = await pool.query(
+                  `SELECT google_calendar_source_calendar_id, google_calendar_target_calendar_id 
+                   FROM users 
+                   WHERE id = $1`,
+                  [appointment.time_slot_user_id]
+                );
+                const sourceCalendarId = userCalendarResult.rows[0]?.google_calendar_source_calendar_id || 'primary';
+                const targetCalendarId = userCalendarResult.rows[0]?.google_calendar_target_calendar_id || 'primary';
+                
+                // Delete the patient event from target calendar
+                await deleteGoogleCalendarEvent(
+                  appointment.time_slot_user_id,
+                  appointment.google_calendar_event_id,
+                  targetCalendarId
+                );
+                console.log('[Patient Portal Cancellation] Deleted patient event from target calendar');
+                
+                // If time slot came from Google Calendar, recreate "szabad" event in source calendar
+                const isFromGoogleCalendar = appointment.time_slot_source === 'google_calendar' && appointment.time_slot_google_calendar_event_id;
+                
+                if (isFromGoogleCalendar) {
+                  const endTime = new Date(startTime);
+                  endTime.setMinutes(endTime.getMinutes() + 30); // 30 minutes duration
+                  
+                  // Create "szabad" event in source calendar
+                  const szabadEventId = await createGoogleCalendarEvent(
+                    appointment.time_slot_user_id,
+                    {
+                      summary: 'szabad',
+                      description: 'Szabad időpont',
+                      startTime: startTime,
+                      endTime: endTime,
+                      location: 'Maxillofaciális Rehabilitáció',
+                      calendarId: sourceCalendarId,
+                    }
+                  );
+                  
+                  if (szabadEventId) {
+                    console.log('[Patient Portal Cancellation] Recreated "szabad" event in source calendar');
+                    // Update time slot google_calendar_event_id with new event ID
+                    await pool.query(
+                      `UPDATE available_time_slots 
+                       SET google_calendar_event_id = $1 
+                       WHERE id = $2`,
+                      [szabadEventId, appointment.time_slot_id]
+                    );
+                  }
+                }
+              } catch (error) {
+                console.error('Failed to handle Google Calendar event:', error);
+                // Don't block cancellation if Google Calendar fails
+              }
+            }
+          })(),
+        ]);
+      } catch (emailError) {
+        console.error('Failed to send cancellation email:', emailError);
+        // Don't fail the request if email fails
+      }
+
+      // Send email to admins
+      try {
+        const adminResult = await pool.query(
+          'SELECT email FROM users WHERE role = $1 AND active = true',
+          ['admin']
+        );
+        const adminEmails = adminResult.rows.map((row: { email: string }) => row.email);
+
+        if (adminEmails.length > 0) {
+          const dentistFullName = appointment.dentist_name || appointment.dentist_email;
+          const html = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #dc2626;">Időpont lemondva - Páciens portál</h2>
+              <p>Kedves adminisztrátor,</p>
+              <p>Egy páciens lemondta az időpontját a páciens portálon keresztül:</p>
+              <ul>
+                <li><strong>Beteg neve:</strong> ${appointment.patient_name || 'Név nélküli'}</li>
+                <li><strong>TAJ szám:</strong> ${appointment.patient_taj || 'Nincs megadva'}</li>
+                <li><strong>Időpont:</strong> ${startTime.toLocaleString('hu-HU')}</li>
+                <li><strong>Fogpótlástanász:</strong> ${dentistFullName}</li>
+                <li><strong>Lemondás indoka:</strong> ${cancellationReason.trim()}</li>
+              </ul>
+              <p>Az időpont újra elérhetővé vált a rendszerben.</p>
+              <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
+            </div>
+          `;
+
+          await sendEmail({
+            to: adminEmails,
+            subject: 'Időpont lemondva - Páciens portál - Maxillofaciális Rehabilitáció',
+            html,
+          });
+        }
+      } catch (adminEmailError) {
+        console.error('Failed to send cancellation email to admins:', adminEmailError);
+        // Don't fail the request if email fails
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: 'Időpont sikeresen lemondva!',
+      });
+    } catch (error) {
+      await pool.query('ROLLBACK');
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error cancelling appointment:', error);
+    return NextResponse.json(
+      { error: 'Hiba történt az időpont lemondásakor' },
+      { status: 500 }
+    );
+  }
 }
 

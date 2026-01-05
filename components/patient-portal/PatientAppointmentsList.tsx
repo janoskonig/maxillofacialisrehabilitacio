@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Calendar, Clock, MapPin, Plus, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Calendar, Clock, MapPin, Plus, CheckCircle, XCircle, AlertCircle, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
 import { BookingModal } from './BookingModal';
+import { CancellationModal } from './CancellationModal';
 
 interface Appointment {
   id: string;
@@ -39,6 +40,8 @@ export function PatientAppointmentsList() {
   const [showRequestForm, setShowRequestForm] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
   const [bookingLoading, setBookingLoading] = useState(false);
+  const [cancellingAppointment, setCancellingAppointment] = useState<Appointment | null>(null);
+  const [cancellationLoading, setCancellationLoading] = useState(false);
 
   useEffect(() => {
     fetchAppointments();
@@ -129,6 +132,47 @@ export function PatientAppointmentsList() {
     }
   };
 
+  const handleCancelAppointment = (appointment: Appointment) => {
+    setCancellingAppointment(appointment);
+  };
+
+  const handleConfirmCancellation = async (cancellationReason: string) => {
+    if (!cancellingAppointment) return;
+
+    setCancellationLoading(true);
+    try {
+      const response = await fetch(`/api/patient-portal/appointments/${cancellingAppointment.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          cancellationReason,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Hiba történt az időpont lemondásakor');
+      }
+
+      showToast('Időpont sikeresen lemondva!', 'success');
+      setCancellingAppointment(null);
+      // Refresh appointments list
+      await fetchAppointments();
+    } catch (error) {
+      console.error('Hiba az időpont lemondásakor:', error);
+      showToast(
+        error instanceof Error ? error.message : 'Hiba történt az időpont lemondásakor',
+        'error'
+      );
+    } finally {
+      setCancellationLoading(false);
+    }
+  };
+
   const getStatusBadge = (appointment: Appointment) => {
     if (appointment.approvalStatus === 'pending') {
       return (
@@ -179,6 +223,17 @@ export function PatientAppointmentsList() {
 
   const upcomingAppointments = appointments.filter((apt) => !isPast(apt.startTime));
   const pastAppointments = appointments.filter((apt) => isPast(apt.startTime));
+
+  const canCancelAppointment = (appointment: Appointment) => {
+    // Can cancel if:
+    // 1. Appointment is in the future
+    // 2. Not already cancelled
+    return (
+      !isPast(appointment.startTime) &&
+      appointment.appointmentStatus !== 'cancelled_by_patient' &&
+      appointment.appointmentStatus !== 'cancelled_by_doctor'
+    );
+  };
 
   if (loading) {
     return (
@@ -331,6 +386,16 @@ export function PatientAppointmentsList() {
                         </div>
                       )}
                     </div>
+                    {canCancelAppointment(appointment) && (
+                      <button
+                        onClick={() => handleCancelAppointment(appointment)}
+                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 flex-shrink-0"
+                      >
+                        <X className="w-4 h-4" />
+                        <span className="hidden sm:inline">Lemondás</span>
+                        <span className="sm:hidden">Lemond</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -412,6 +477,16 @@ export function PatientAppointmentsList() {
           onConfirm={handleConfirmBooking}
           onCancel={() => setSelectedSlot(null)}
           loading={bookingLoading}
+        />
+      )}
+
+      {/* Cancellation Modal */}
+      {cancellingAppointment && (
+        <CancellationModal
+          appointment={cancellingAppointment}
+          onConfirm={handleConfirmCancellation}
+          onCancel={() => setCancellingAppointment(null)}
+          loading={cancellationLoading}
         />
       )}
     </div>
