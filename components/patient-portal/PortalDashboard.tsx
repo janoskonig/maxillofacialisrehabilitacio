@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Calendar, FileText, Clock, User, Plus } from 'lucide-react';
+import { Calendar, FileText, Clock, User, Plus, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
@@ -87,6 +87,60 @@ export function PortalDashboard() {
       </div>
     );
   }
+
+  // Get status badge for appointment
+  const getStatusBadge = (appointment: Appointment) => {
+    if (appointment.approvalStatus === 'pending') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-orange-100 text-orange-700 rounded">
+          <AlertCircle className="w-3 h-3" />
+          Jóváhagyásra vár
+        </span>
+      );
+    }
+    if (appointment.approvalStatus === 'rejected') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-red-100 text-red-700 rounded">
+          <XCircle className="w-3 h-3" />
+          Elutasítva
+        </span>
+      );
+    }
+    if (appointment.approvalStatus === 'approved') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded">
+          <CheckCircle className="w-3 h-3" />
+          Jóváhagyva
+        </span>
+      );
+    }
+    if (appointment.appointmentStatus === 'completed') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded">
+          <CheckCircle className="w-3 h-3" />
+          Lezárva
+        </span>
+      );
+    }
+    if (appointment.appointmentStatus === 'cancelled_by_doctor' || appointment.appointmentStatus === 'cancelled_by_patient') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded">
+          <XCircle className="w-3 h-3" />
+          Lemondva
+        </span>
+      );
+    }
+    // If approved and no appointment status, show as active
+    if (appointment.approvalStatus === 'approved' && !appointment.appointmentStatus) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded">
+          <CheckCircle className="w-3 h-3" />
+          Élő
+        </span>
+      );
+    }
+    return null;
+  };
 
   // Get upcoming appointments (next 3)
   const now = new Date();
@@ -190,6 +244,7 @@ export function PortalDashboard() {
             {upcomingAppointments.map((appointment) => {
               const startTime = new Date(appointment.startTime);
               const isPending = appointment.approvalStatus === 'pending';
+              const isCancelled = appointment.appointmentStatus === 'cancelled_by_doctor' || appointment.appointmentStatus === 'cancelled_by_patient';
 
               return (
                 <div
@@ -197,21 +252,19 @@ export function PortalDashboard() {
                   className={`p-4 rounded-lg border ${
                     isPending
                       ? 'border-orange-200 bg-orange-50'
+                      : isCancelled
+                      ? 'border-gray-200 bg-gray-50 opacity-75'
                       : 'border-gray-200 bg-gray-50'
                   }`}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <Clock className="w-4 h-4 text-gray-500" />
                         <span className="font-semibold text-gray-900">
                           {format(startTime, 'yyyy. MMMM d. HH:mm', { locale: hu })}
                         </span>
-                        {isPending && (
-                          <span className="text-xs px-2 py-1 bg-orange-100 text-orange-700 rounded">
-                            Jóváhagyásra vár
-                          </span>
-                        )}
+                        {getStatusBadge(appointment)}
                       </div>
                       {appointment.dentistName && (
                         <p className="text-sm text-gray-600">
