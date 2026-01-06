@@ -1426,8 +1426,14 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       ];
       
       keyFields.forEach(field => {
-        const currentValue = currentFormValues[field];
+        let currentValue = currentFormValues[field];
         const originalValue = referencePatient[field];
+        
+        // If vanBeutalo is false, treat beutaló fields as null for comparison
+        if (!vanBeutalo && (field === 'beutaloOrvos' || field === 'beutaloIntezmeny' || field === 'beutaloIndokolas')) {
+          currentValue = null;
+        }
+        
         if (compareFieldValues(field, currentValue, originalValue)) {
           const fieldName = fieldNames[field] || field;
           changes.push(fieldName);
@@ -1477,8 +1483,14 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       }
       
       keyFields.forEach(field => {
-        const currentValue = currentFormValues[field];
+        let currentValue = currentFormValues[field];
         const originalValue = currentPatient[field];
+        
+        // If vanBeutalo is false, treat beutaló fields as null for comparison
+        if (!vanBeutalo && (field === 'beutaloOrvos' || field === 'beutaloIntezmeny' || field === 'beutaloIndokolas')) {
+          currentValue = null;
+        }
+        
         if (compareFieldValues(field, currentValue, originalValue)) {
           const fieldName = fieldNames[field] || field;
           changes.push(fieldName);
