@@ -388,6 +388,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       szuletesiDatum: formatDateForInput(patient.szuletesiDatum),
       mutetIdeje: formatDateForInput(patient.mutetIdeje),
       felvetelDatuma: formatDateForInput(patient.felvetelDatuma),
+      // Normalize kezelesreErkezesIndoka: null/undefined -> empty string for select consistency
+      kezelesreErkezesIndoka: patient.kezelesreErkezesIndoka || '',
       kezelesiTervFelso: patient.kezelesiTervFelso?.map(item => ({
         ...item,
         tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
@@ -1111,6 +1113,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         szuletesiDatum: formatDateForInput(savedPatient.szuletesiDatum),
         mutetIdeje: formatDateForInput(savedPatient.mutetIdeje),
         felvetelDatuma: formatDateForInput(savedPatient.felvetelDatuma),
+        // Normalize kezelesreErkezesIndoka: null/undefined -> empty string for select consistency
+        kezelesreErkezesIndoka: savedPatient.kezelesreErkezesIndoka || '',
         kezelesiTervFelso: savedPatient.kezelesiTervFelso?.map(item => ({
           ...item,
           tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
@@ -1200,6 +1204,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       szuletesiDatum: formatDateForInput(savedPatient.szuletesiDatum),
       mutetIdeje: formatDateForInput(savedPatient.mutetIdeje),
       felvetelDatuma: formatDateForInput(savedPatient.felvetelDatuma),
+      // Normalize kezelesreErkezesIndoka: null/undefined -> empty string for select consistency
+      kezelesreErkezesIndoka: savedPatient.kezelesreErkezesIndoka || '',
       kezelesiTervFelso: savedPatient.kezelesiTervFelso?.map(item => ({
         ...item,
         tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
@@ -1274,6 +1280,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       szuletesiDatum: formatDateForInput(savedPatient.szuletesiDatum),
       mutetIdeje: formatDateForInput(savedPatient.mutetIdeje),
       felvetelDatuma: formatDateForInput(savedPatient.felvetelDatuma),
+      // Normalize kezelesreErkezesIndoka: null/undefined -> empty string for select consistency
+      kezelesreErkezesIndoka: savedPatient.kezelesreErkezesIndoka || '',
       kezelesiTervFelso: savedPatient.kezelesiTervFelso?.map(item => ({
         ...item,
         tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
