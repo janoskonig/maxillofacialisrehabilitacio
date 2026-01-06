@@ -179,6 +179,8 @@ export default function Home() {
       }
       
       // For new patients or if save failed in PatientForm, save here
+      // Note: If save failed in PatientForm, onSubmit already handled the error
+      // This should only be called for truly new patients (without ID)
       const validatedPatient = patientSchema.parse(patientData);
       await savePatient(validatedPatient);
       await loadPatients();

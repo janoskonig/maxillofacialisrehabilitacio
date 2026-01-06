@@ -1117,8 +1117,21 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       // Call onSave callback with saved patient
       onSave(savedPatient);
     } catch (error) {
-      // Error handling is done in onSave callback
-      onSave(data);
+      // Log error for debugging
+      console.error('Hiba a beteg mentésekor:', error);
+      
+      // Handle error locally - show toast message to user
+      let errorMessage = 'Hiba történt a beteg mentésekor. Kérjük, próbálja újra.';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      // Show error toast to user
+      showToast(`Hiba a mentés során: ${errorMessage}`, 'error');
+      
+      // DO NOT call onSave with invalid data
+      // The form will not be reset, so user data is preserved
+      // The parent component will not be notified (which is correct behavior for failed saves)
     }
   };
 
