@@ -1325,6 +1325,167 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     return currentNormalized !== originalNormalized;
   }, []);
 
+  // Get list of unsaved changes with field names
+  const getUnsavedChangesList = useCallback((): string[] => {
+    if (isViewOnly) return [];
+    
+    const referencePatient = currentPatient || patient;
+    const changes: string[] = [];
+    
+    // Field name mapping (camelCase to Hungarian display name)
+    const fieldNames: Record<string, string> = {
+      nev: 'Név',
+      taj: 'TAJ szám',
+      telefonszam: 'Telefonszám',
+      szuletesiDatum: 'Születési dátum',
+      nem: 'Nem',
+      email: 'Email',
+      cim: 'Cím',
+      varos: 'Város',
+      iranyitoszam: 'Irányítószám',
+      beutaloOrvos: 'Beutaló orvos',
+      beutaloIntezmeny: 'Beutaló intézmény',
+      beutaloIndokolas: 'Beutaló indokolás',
+      mutetIdeje: 'Műtét ideje',
+      szovettaniDiagnozis: 'Szövettani diagnózis',
+      nyakiBlokkdisszekcio: 'Nyaki blokkdisszekció',
+      alkoholfogyasztas: 'Alkoholfogyasztás',
+      dohanyzasSzam: 'Dohányzás',
+      kezelesreErkezesIndoka: 'Kezelésre érkezés indoka',
+      maxilladefektusVan: 'Maxilladefektus',
+      brownFuggolegesOsztaly: 'Brown függőleges osztály',
+      brownVizszintesKomponens: 'Brown vízszintes komponens',
+      mandibuladefektusVan: 'Mandibuladefektus',
+      kovacsDobakOsztaly: 'Kovács-Dobák osztály',
+      nyelvmozgásokAkadályozottak: 'Nyelvmozgások akadályozottak',
+      gombocosBeszed: 'Gombócos beszéd',
+      nyalmirigyAllapot: 'Nyálmirigy állapot',
+      radioterapia: 'Radioterápia',
+      radioterapiaDozis: 'Radioterápia dózis',
+      radioterapiaDatumIntervallum: 'Radioterápia dátumintervallum',
+      chemoterapia: 'Kemoterápia',
+      chemoterapiaLeiras: 'Kemoterápia leírás',
+      kezeleoorvos: 'Kezelőorvos',
+      kezeleoorvosIntezete: 'Kezelőorvos intézete',
+      felvetelDatuma: 'Felvétel dátuma',
+      felsoFogpotlasVan: 'Felső fogpótlás van',
+      alsoFogpotlasVan: 'Alsó fogpótlás van',
+      meglevoImplantatumok: 'Meglévő implantátumok',
+      meglevoFogak: 'Meglévő fogak',
+      vanBeutalo: 'Van beutaló',
+    };
+    
+    if (!isNewPatient && referencePatient) {
+      // Check vanBeutalo state
+      const savedVanBeutalo = !!(referencePatient.beutaloOrvos || referencePatient.beutaloIntezmeny || referencePatient.kezelesreErkezesIndoka);
+      if (vanBeutalo !== savedVanBeutalo) {
+        changes.push(fieldNames.vanBeutalo || 'Van beutaló');
+      }
+      
+      // Check implantatumok and fogak
+      const originalImplantatumok = referencePatient.meglevoImplantatumok || {};
+      const originalFogak = referencePatient.meglevoFogak || {};
+      const implantatumokChanged = normalizeObject(implantatumok) !== normalizeObject(originalImplantatumok);
+      const fogakChanged = normalizeObject(fogak) !== normalizeObject(originalFogak);
+      
+      if (implantatumokChanged) {
+        changes.push(fieldNames.meglevoImplantatumok || 'Meglévő implantátumok');
+      }
+      if (fogakChanged) {
+        changes.push(fieldNames.meglevoFogak || 'Meglévő fogak');
+      }
+      
+      // Check form fields
+      const keyFields: (keyof Patient)[] = [
+        'nev', 'taj', 'telefonszam', 'email', 'szuletesiDatum', 'nem',
+        'cim', 'varos', 'iranyitoszam',
+        'beutaloOrvos', 'beutaloIntezmeny', 'beutaloIndokolas', 'mutetIdeje',
+        'szovettaniDiagnozis', 'nyakiBlokkdisszekcio',
+        'radioterapia', 'radioterapiaDozis', 'radioterapiaDatumIntervallum',
+        'chemoterapia', 'chemoterapiaLeiras',
+        'alkoholfogyasztas', 'dohanyzasSzam', 'kezelesreErkezesIndoka',
+        'maxilladefektusVan', 'brownFuggolegesOsztaly', 'brownVizszintesKomponens',
+        'mandibuladefektusVan', 'kovacsDobakOsztaly',
+        'nyelvmozgásokAkadályozottak', 'gombocosBeszed', 'nyalmirigyAllapot',
+        'tnmStaging',
+        'felsoFogpotlasVan', 'felsoFogpotlasMikor', 'felsoFogpotlasKeszito',
+        'felsoFogpotlasElegedett', 'felsoFogpotlasProblema', 'felsoFogpotlasTipus',
+        'alsoFogpotlasVan', 'alsoFogpotlasMikor', 'alsoFogpotlasKeszito',
+        'alsoFogpotlasElegedett', 'alsoFogpotlasProblema', 'alsoFogpotlasTipus',
+        'fabianFejerdyProtetikaiOsztalyFelso', 'fabianFejerdyProtetikaiOsztalyAlso',
+        'fabianFejerdyProtetikaiOsztaly',
+        'kezeleoorvos', 'kezeleoorvosIntezete', 'felvetelDatuma',
+        'nemIsmertPoziciokbanImplantatum', 'nemIsmertPoziciokbanImplantatumRészletek',
+        'kezelesiTervFelso', 'kezelesiTervAlso', 'kezelesiTervArcotErinto',
+        'balesetIdopont', 'balesetEtiologiaja', 'balesetEgyeb',
+        'primerMutetLeirasa', 'bno', 'diagnozis',
+        'veleszuletettRendellenessegek', 'veleszuletettMutetekLeirasa'
+      ];
+      
+      keyFields.forEach(field => {
+        const currentValue = formValues[field];
+        const originalValue = referencePatient[field];
+        if (compareFieldValues(field, currentValue, originalValue)) {
+          const fieldName = fieldNames[field] || field;
+          changes.push(fieldName);
+        }
+      });
+    } else if (isNewPatient && currentPatient?.id) {
+      // For new patients that have been saved, check changes since last save
+      const keyFields: (keyof Patient)[] = [
+        'nev', 'taj', 'telefonszam', 'email', 'szuletesiDatum', 'nem',
+        'cim', 'varos', 'iranyitoszam',
+        'beutaloOrvos', 'beutaloIntezmeny', 'beutaloIndokolas', 'mutetIdeje',
+        'szovettaniDiagnozis', 'nyakiBlokkdisszekcio',
+        'radioterapia', 'radioterapiaDozis', 'radioterapiaDatumIntervallum',
+        'chemoterapia', 'chemoterapiaLeiras',
+        'alkoholfogyasztas', 'dohanyzasSzam', 'kezelesreErkezesIndoka',
+        'maxilladefektusVan', 'brownFuggolegesOsztaly', 'brownVizszintesKomponens',
+        'mandibuladefektusVan', 'kovacsDobakOsztaly',
+        'nyelvmozgásokAkadályozottak', 'gombocosBeszed', 'nyalmirigyAllapot',
+        'tnmStaging',
+        'felsoFogpotlasVan', 'felsoFogpotlasMikor', 'felsoFogpotlasKeszito',
+        'felsoFogpotlasElegedett', 'felsoFogpotlasProblema', 'felsoFogpotlasTipus',
+        'alsoFogpotlasVan', 'alsoFogpotlasMikor', 'alsoFogpotlasKeszito',
+        'alsoFogpotlasElegedett', 'alsoFogpotlasProblema', 'alsoFogpotlasTipus',
+        'fabianFejerdyProtetikaiOsztalyFelso', 'fabianFejerdyProtetikaiOsztalyAlso',
+        'fabianFejerdyProtetikaiOsztaly',
+        'kezeleoorvos', 'kezeleoorvosIntezete', 'felvetelDatuma',
+        'nemIsmertPoziciokbanImplantatum', 'nemIsmertPoziciokbanImplantatumRészletek',
+        'kezelesiTervFelso', 'kezelesiTervAlso', 'kezelesiTervArcotErinto',
+        'balesetIdopont', 'balesetEtiologiaja', 'balesetEgyeb',
+        'primerMutetLeirasa', 'bno', 'diagnozis',
+        'veleszuletettRendellenessegek', 'veleszuletettMutetekLeirasa'
+      ];
+      
+      const savedVanBeutalo = !!(currentPatient.beutaloOrvos || currentPatient.beutaloIntezmeny || currentPatient.kezelesreErkezesIndoka);
+      if (vanBeutalo !== savedVanBeutalo) {
+        changes.push(fieldNames.vanBeutalo || 'Van beutaló');
+      }
+      
+      const implantatumokChanged = normalizeObject(implantatumok) !== normalizeObject(currentPatient.meglevoImplantatumok || {});
+      const fogakChanged = normalizeObject(fogak) !== normalizeObject(currentPatient.meglevoFogak || {});
+      
+      if (implantatumokChanged) {
+        changes.push(fieldNames.meglevoImplantatumok || 'Meglévő implantátumok');
+      }
+      if (fogakChanged) {
+        changes.push(fieldNames.meglevoFogak || 'Meglévő fogak');
+      }
+      
+      keyFields.forEach(field => {
+        const currentValue = formValues[field];
+        const originalValue = currentPatient[field];
+        if (compareFieldValues(field, currentValue, originalValue)) {
+          const fieldName = fieldNames[field] || field;
+          changes.push(fieldName);
+        }
+      });
+    }
+    
+    return changes;
+  }, [isViewOnly, patient, currentPatient, implantatumok, fogak, isNewPatient, formValues, compareFieldValues, vanBeutalo]);
+
   // Check if form has unsaved changes
   const hasUnsavedChanges = useCallback(() => {
     if (isViewOnly) return false;
@@ -1491,8 +1652,17 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     
     // Check if there are unsaved changes
     if (hasUnsavedChanges()) {
+      const changes = getUnsavedChangesList();
+      let message = 'Van nem mentett változás az űrlapban. Biztosan bezárja az űrlapot? A változások elvesznek.';
+      
+      if (changes.length > 0) {
+        const changesList = changes.slice(0, 10).join(', '); // Limit to 10 items
+        const moreText = changes.length > 10 ? ` és még ${changes.length - 10} további` : '';
+        message = `Van nem mentett változás az űrlapban:\n\n${changesList}${moreText}\n\nBiztosan bezárja az űrlapot? A változások elvesznek.`;
+      }
+      
       const shouldCancel = await confirmDialog(
-        'Van nem mentett változás az űrlapban. Biztosan bezárja az űrlapot? A változások elvesznek.',
+        message,
         {
           title: 'Nem mentett változások',
           confirmText: 'Igen, bezárom',
