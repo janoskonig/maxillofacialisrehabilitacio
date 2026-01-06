@@ -1073,11 +1073,16 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       });
       
       // Prepare patient data with normalized fogak
+      // If vanBeutalo is false, clear beutaló fields
       const patientData: Patient = {
         ...data,
         id: currentPatient?.id,
         meglevoImplantatumok: implantatumok,
         meglevoFogak: normalizedFogak,
+        // Clear beutaló fields if vanBeutalo is false
+        beutaloOrvos: vanBeutalo ? data.beutaloOrvos : null,
+        beutaloIntezmeny: vanBeutalo ? data.beutaloIntezmeny : null,
+        beutaloIndokolas: vanBeutalo ? data.beutaloIndokolas : null,
       };
       
       // Save patient and get the saved patient back
@@ -1085,6 +1090,10 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       
       // Update currentPatient with saved patient data
       setCurrentPatient(savedPatient);
+      
+      // Update vanBeutalo state based on saved patient data
+      const savedVanBeutalo = !!(savedPatient.beutaloOrvos || savedPatient.beutaloIntezmeny || savedPatient.kezelesreErkezesIndoka);
+      setVanBeutalo(savedVanBeutalo);
       
       // Update implantatumok and fogak state with saved values
       if (savedPatient.meglevoImplantatumok) {
@@ -1150,11 +1159,16 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     });
     
     // Prepare patient data
+    // If vanBeutalo is false, clear beutaló fields
     const patientData: Patient = {
       ...formData,
       id: currentPatient?.id,
       meglevoImplantatumok: implantatumok,
       meglevoFogak: normalizedFogak,
+      // Clear beutaló fields if vanBeutalo is false
+      beutaloOrvos: vanBeutalo ? formData.beutaloOrvos : null,
+      beutaloIntezmeny: vanBeutalo ? formData.beutaloIntezmeny : null,
+      beutaloIndokolas: vanBeutalo ? formData.beutaloIndokolas : null,
     };
     
     // Validate using schema
@@ -1165,6 +1179,10 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     
     // Update local state
     setCurrentPatient(savedPatient);
+    
+    // Update vanBeutalo state based on saved patient data
+    const savedVanBeutalo = !!(savedPatient.beutaloOrvos || savedPatient.beutaloIntezmeny || savedPatient.kezelesreErkezesIndoka);
+    setVanBeutalo(savedVanBeutalo);
     
     // Update implantatumok and fogak state with saved values
     if (savedPatient.meglevoImplantatumok) {
@@ -1198,7 +1216,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     // The patient is saved, but we don't want to show the "Beteg mentve" popup
     
     return savedPatient.id || null;
-  }, [getValues, fogak, implantatumok, currentPatient, reset, setImplantatumok, setFogak, onSave]);
+  }, [getValues, fogak, implantatumok, currentPatient, reset, setImplantatumok, setFogak, onSave, vanBeutalo, setVanBeutalo]);
 
   // Save patient for booking - used when booking appointment before saving form
   const savePatientForBooking = useCallback(async (): Promise<Patient> => {
@@ -1215,11 +1233,16 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     });
     
     // Prepare patient data
+    // If vanBeutalo is false, clear beutaló fields
     const patientData: Patient = {
       ...formData,
       id: currentPatient?.id,
       meglevoImplantatumok: implantatumok,
       meglevoFogak: normalizedFogak,
+      // Clear beutaló fields if vanBeutalo is false
+      beutaloOrvos: vanBeutalo ? formData.beutaloOrvos : null,
+      beutaloIntezmeny: vanBeutalo ? formData.beutaloIntezmeny : null,
+      beutaloIndokolas: vanBeutalo ? formData.beutaloIndokolas : null,
     };
     
     // Validate using schema
@@ -1230,6 +1253,10 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     
     // Update local state
     setCurrentPatient(savedPatient);
+    
+    // Update vanBeutalo state based on saved patient data
+    const savedVanBeutalo = !!(savedPatient.beutaloOrvos || savedPatient.beutaloIntezmeny || savedPatient.kezelesreErkezesIndoka);
+    setVanBeutalo(savedVanBeutalo);
     
     // Update implantatumok and fogak state with saved values
     if (savedPatient.meglevoImplantatumok) {
@@ -1260,7 +1287,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     } : undefined, { keepDirty: false, keepDefaultValues: false });
     
     return savedPatient;
-  }, [getValues, fogak, implantatumok, currentPatient, reset, setImplantatumok, setFogak]);
+  }, [getValues, fogak, implantatumok, currentPatient, reset, setImplantatumok, setFogak, vanBeutalo, setVanBeutalo]);
 
   // Helper function to compare field values with normalization
   const compareFieldValues = useCallback((field: keyof Patient, currentValue: any, originalValue: any): boolean => {
@@ -1316,6 +1343,12 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       
       // If implantatumok or fogak changed, there are unsaved changes
       if (implantatumokChanged || fogakChanged) {
+        return true;
+      }
+      
+      // Check if vanBeutalo state matches saved patient data
+      const savedVanBeutalo = !!(referencePatient.beutaloOrvos || referencePatient.beutaloIntezmeny || referencePatient.kezelesreErkezesIndoka);
+      if (vanBeutalo !== savedVanBeutalo) {
         return true;
       }
       
@@ -1420,7 +1453,11 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         const implantatumokChanged = normalizeObject(implantatumok) !== normalizeObject(currentPatient.meglevoImplantatumok || {});
         const fogakChanged = normalizeObject(fogak) !== normalizeObject(currentPatient.meglevoFogak || {});
         
-        return hasActualChange || implantatumokChanged || fogakChanged;
+        // Check if vanBeutalo state matches saved patient data
+        const savedVanBeutalo = !!(currentPatient.beutaloOrvos || currentPatient.beutaloIntezmeny || currentPatient.kezelesreErkezesIndoka);
+        const vanBeutaloChanged = vanBeutalo !== savedVanBeutalo;
+        
+        return hasActualChange || implantatumokChanged || fogakChanged || vanBeutaloChanged;
       }
       
       // If patient hasn't been saved yet, check if there's any data
@@ -1443,7 +1480,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     }
     
     return false;
-  }, [isViewOnly, patient, currentPatient, implantatumok, fogak, isNewPatient, formValues, compareFieldValues]);
+  }, [isViewOnly, patient, currentPatient, implantatumok, fogak, isNewPatient, formValues, compareFieldValues, vanBeutalo]);
 
   // Handle form cancellation - check for unsaved changes
   const handleCancel = async () => {
