@@ -254,7 +254,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
 
   // State for "vanBeutalo" toggle (default true if bármely beutaló-adat van, or always true for new patients if surgeon role)
   // Note: userRole might not be loaded yet, so we'll update it in useEffect
-  const initialVanBeutalo = !!(patient?.beutaloOrvos || patient?.beutaloIntezmeny || patient?.kezelesreErkezesIndoka);
+  // Note: kezelesreErkezesIndoka can be "nincs beutaló", so we don't count it as having beutaló
+  const initialVanBeutalo = !!(patient?.beutaloOrvos || patient?.beutaloIntezmeny || (patient?.kezelesreErkezesIndoka && patient.kezelesreErkezesIndoka !== 'nincs beutaló'));
   const [vanBeutalo, setVanBeutalo] = useState(initialVanBeutalo);
 
   // Get user role and load kezelőorvos options
@@ -1083,8 +1084,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         beutaloOrvos: vanBeutalo ? data.beutaloOrvos : null,
         beutaloIntezmeny: vanBeutalo ? data.beutaloIntezmeny : null,
         beutaloIndokolas: vanBeutalo ? data.beutaloIndokolas : null,
-        // Clear kezelesreErkezesIndoka if vanBeutalo is false (it's part of the beutaló section)
-        kezelesreErkezesIndoka: vanBeutalo ? data.kezelesreErkezesIndoka : null,
+        // Set kezelesreErkezesIndoka to "nincs beutaló" if vanBeutalo is false
+        kezelesreErkezesIndoka: vanBeutalo ? data.kezelesreErkezesIndoka : 'nincs beutaló',
       };
       
       // Save patient and get the saved patient back
@@ -1094,7 +1095,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       setCurrentPatient(savedPatient);
       
       // Update vanBeutalo state based on saved patient data
-      const savedVanBeutalo = !!(savedPatient.beutaloOrvos || savedPatient.beutaloIntezmeny || savedPatient.kezelesreErkezesIndoka);
+      // Note: kezelesreErkezesIndoka can be "nincs beutaló", so we don't count it as having beutaló
+      const savedVanBeutalo = !!(savedPatient.beutaloOrvos || savedPatient.beutaloIntezmeny || (savedPatient.kezelesreErkezesIndoka && savedPatient.kezelesreErkezesIndoka !== 'nincs beutaló'));
       setVanBeutalo(savedVanBeutalo);
       
       // Update implantatumok and fogak state with saved values
@@ -1171,8 +1173,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       beutaloOrvos: vanBeutalo ? formData.beutaloOrvos : null,
       beutaloIntezmeny: vanBeutalo ? formData.beutaloIntezmeny : null,
       beutaloIndokolas: vanBeutalo ? formData.beutaloIndokolas : null,
-      // Clear kezelesreErkezesIndoka if vanBeutalo is false (it's part of the beutaló section)
-      kezelesreErkezesIndoka: vanBeutalo ? formData.kezelesreErkezesIndoka : null,
+      // Set kezelesreErkezesIndoka to "nincs beutaló" if vanBeutalo is false
+      kezelesreErkezesIndoka: vanBeutalo ? formData.kezelesreErkezesIndoka : 'nincs beutaló',
     };
     
     // Validate using schema
@@ -1247,8 +1249,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       beutaloOrvos: vanBeutalo ? formData.beutaloOrvos : null,
       beutaloIntezmeny: vanBeutalo ? formData.beutaloIntezmeny : null,
       beutaloIndokolas: vanBeutalo ? formData.beutaloIndokolas : null,
-      // Clear kezelesreErkezesIndoka if vanBeutalo is false (it's part of the beutaló section)
-      kezelesreErkezesIndoka: vanBeutalo ? formData.kezelesreErkezesIndoka : null,
+      // Set kezelesreErkezesIndoka to "nincs beutaló" if vanBeutalo is false
+      kezelesreErkezesIndoka: vanBeutalo ? formData.kezelesreErkezesIndoka : 'nincs beutaló',
     };
     
     // Validate using schema
@@ -1435,9 +1437,13 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         let currentValue = currentFormValues[field];
         const originalValue = referencePatient[field];
         
-        // If vanBeutalo is false, treat beutaló fields and kezelesreErkezesIndoka as null for comparison
-        if (!vanBeutalo && (field === 'beutaloOrvos' || field === 'beutaloIntezmeny' || field === 'beutaloIndokolas' || field === 'kezelesreErkezesIndoka')) {
-          currentValue = null;
+        // If vanBeutalo is false, treat beutaló fields as null and kezelesreErkezesIndoka as "nincs beutaló" for comparison
+        if (!vanBeutalo) {
+          if (field === 'beutaloOrvos' || field === 'beutaloIntezmeny' || field === 'beutaloIndokolas') {
+            currentValue = null;
+          } else if (field === 'kezelesreErkezesIndoka') {
+            currentValue = 'nincs beutaló';
+          }
         }
         
         if (compareFieldValues(field, currentValue, originalValue)) {
@@ -1473,7 +1479,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         'veleszuletettRendellenessegek', 'veleszuletettMutetekLeirasa'
       ];
       
-      const savedVanBeutalo = !!(currentPatient.beutaloOrvos || currentPatient.beutaloIntezmeny || currentPatient.kezelesreErkezesIndoka);
+      // Note: kezelesreErkezesIndoka can be "nincs beutaló", so we don't count it as having beutaló
+      const savedVanBeutalo = !!(currentPatient.beutaloOrvos || currentPatient.beutaloIntezmeny || (currentPatient.kezelesreErkezesIndoka && currentPatient.kezelesreErkezesIndoka !== 'nincs beutaló'));
       if (vanBeutalo !== savedVanBeutalo) {
         changes.push(fieldNames.vanBeutalo || 'Van beutaló');
       }
@@ -1492,9 +1499,13 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         let currentValue = currentFormValues[field];
         const originalValue = currentPatient[field];
         
-        // If vanBeutalo is false, treat beutaló fields and kezelesreErkezesIndoka as null for comparison
-        if (!vanBeutalo && (field === 'beutaloOrvos' || field === 'beutaloIntezmeny' || field === 'beutaloIndokolas' || field === 'kezelesreErkezesIndoka')) {
-          currentValue = null;
+        // If vanBeutalo is false, treat beutaló fields as null and kezelesreErkezesIndoka as "nincs beutaló" for comparison
+        if (!vanBeutalo) {
+          if (field === 'beutaloOrvos' || field === 'beutaloIntezmeny' || field === 'beutaloIndokolas') {
+            currentValue = null;
+          } else if (field === 'kezelesreErkezesIndoka') {
+            currentValue = 'nincs beutaló';
+          }
         }
         
         if (compareFieldValues(field, currentValue, originalValue)) {
@@ -1529,7 +1540,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       }
       
       // Check if vanBeutalo state matches saved patient data
-      const savedVanBeutalo = !!(referencePatient.beutaloOrvos || referencePatient.beutaloIntezmeny || referencePatient.kezelesreErkezesIndoka);
+      // Note: kezelesreErkezesIndoka can be "nincs beutaló", so we don't count it as having beutaló
+      const savedVanBeutalo = !!(referencePatient.beutaloOrvos || referencePatient.beutaloIntezmeny || (referencePatient.kezelesreErkezesIndoka && referencePatient.kezelesreErkezesIndoka !== 'nincs beutaló'));
       if (vanBeutalo !== savedVanBeutalo) {
         return true;
       }
@@ -1636,7 +1648,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         const fogakChanged = normalizeObject(fogak) !== normalizeObject(currentPatient.meglevoFogak || {});
         
         // Check if vanBeutalo state matches saved patient data
-        const savedVanBeutalo = !!(currentPatient.beutaloOrvos || currentPatient.beutaloIntezmeny || currentPatient.kezelesreErkezesIndoka);
+        // Note: kezelesreErkezesIndoka can be "nincs beutaló", so we don't count it as having beutaló
+        const savedVanBeutalo = !!(currentPatient.beutaloOrvos || currentPatient.beutaloIntezmeny || (currentPatient.kezelesreErkezesIndoka && currentPatient.kezelesreErkezesIndoka !== 'nincs beutaló'));
         const vanBeutaloChanged = vanBeutalo !== savedVanBeutalo;
         
         return hasActualChange || implantatumokChanged || fogakChanged || vanBeutaloChanged;
@@ -1981,7 +1994,20 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
               id="beutalo-toggle"
               type="checkbox"
               checked={vanBeutalo}
-              onChange={() => setVanBeutalo((prev) => !prev)}
+              onChange={() => {
+                const newValue = !vanBeutalo;
+                setVanBeutalo(newValue);
+                // If checkbox is unchecked, set kezelesreErkezesIndoka to "nincs beutaló"
+                if (!newValue) {
+                  setValue('kezelesreErkezesIndoka', 'nincs beutaló', { shouldValidate: true });
+                } else {
+                  // If checkbox is checked, clear the value to allow selection
+                  const currentValue = watch('kezelesreErkezesIndoka');
+                  if (currentValue === 'nincs beutaló') {
+                    setValue('kezelesreErkezesIndoka', '', { shouldValidate: true });
+                  }
+                }
+              }}
               className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
               disabled={isViewOnly}
             />
@@ -2081,11 +2107,27 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           <div className="space-y-4">
             <div>
               <label className="form-label">Kezelésre érkezés indoka</label>
-              <select {...register('kezelesreErkezesIndoka')} className="form-input" disabled={isViewOnly}>
-                <option value="">Válasszon...</option>
-                <option value="traumás sérülés">traumás sérülés</option>
-                <option value="veleszületett rendellenesség">veleszületett rendellenesség</option>
-                <option value="onkológiai kezelés utáni állapot">onkológiai kezelés utáni állapot</option>
+              <select 
+                {...register('kezelesreErkezesIndoka')} 
+                className="form-input" 
+                disabled={isViewOnly || !vanBeutalo}
+                value={!vanBeutalo ? 'nincs beutaló' : watch('kezelesreErkezesIndoka') || ''}
+                onChange={(e) => {
+                  if (vanBeutalo) {
+                    setValue('kezelesreErkezesIndoka', e.target.value, { shouldValidate: true });
+                  }
+                }}
+              >
+                {!vanBeutalo ? (
+                  <option value="nincs beutaló">nincs beutaló</option>
+                ) : (
+                  <>
+                    <option value="">Válasszon...</option>
+                    <option value="traumás sérülés">traumás sérülés</option>
+                    <option value="veleszületett rendellenesség">veleszületett rendellenesség</option>
+                    <option value="onkológiai kezelés utáni állapot">onkológiai kezelés utáni állapot</option>
+                  </>
+                )}
               </select>
             </div>
             {/* Ezeket mindig mutatjuk, conditionaltól függetlenül */}
