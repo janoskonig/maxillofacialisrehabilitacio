@@ -1073,7 +1073,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       });
       
       // Prepare patient data with normalized fogak
-      // If vanBeutalo is false, clear beutaló fields
+      // If vanBeutalo is false, clear beutaló fields and kezelesreErkezesIndoka
       const patientData: Patient = {
         ...data,
         id: currentPatient?.id,
@@ -1083,6 +1083,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         beutaloOrvos: vanBeutalo ? data.beutaloOrvos : null,
         beutaloIntezmeny: vanBeutalo ? data.beutaloIntezmeny : null,
         beutaloIndokolas: vanBeutalo ? data.beutaloIndokolas : null,
+        // Clear kezelesreErkezesIndoka if vanBeutalo is false (it's part of the beutaló section)
+        kezelesreErkezesIndoka: vanBeutalo ? data.kezelesreErkezesIndoka : null,
       };
       
       // Save patient and get the saved patient back
@@ -1429,8 +1431,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         let currentValue = currentFormValues[field];
         const originalValue = referencePatient[field];
         
-        // If vanBeutalo is false, treat beutaló fields as null for comparison
-        if (!vanBeutalo && (field === 'beutaloOrvos' || field === 'beutaloIntezmeny' || field === 'beutaloIndokolas')) {
+        // If vanBeutalo is false, treat beutaló fields and kezelesreErkezesIndoka as null for comparison
+        if (!vanBeutalo && (field === 'beutaloOrvos' || field === 'beutaloIntezmeny' || field === 'beutaloIndokolas' || field === 'kezelesreErkezesIndoka')) {
           currentValue = null;
         }
         
@@ -1486,8 +1488,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         let currentValue = currentFormValues[field];
         const originalValue = currentPatient[field];
         
-        // If vanBeutalo is false, treat beutaló fields as null for comparison
-        if (!vanBeutalo && (field === 'beutaloOrvos' || field === 'beutaloIntezmeny' || field === 'beutaloIndokolas')) {
+        // If vanBeutalo is false, treat beutaló fields and kezelesreErkezesIndoka as null for comparison
+        if (!vanBeutalo && (field === 'beutaloOrvos' || field === 'beutaloIntezmeny' || field === 'beutaloIndokolas' || field === 'kezelesreErkezesIndoka')) {
           currentValue = null;
         }
         
