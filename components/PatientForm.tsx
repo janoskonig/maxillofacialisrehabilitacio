@@ -1450,9 +1450,30 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         'veleszuletettRendellenessegek', 'veleszuletettMutetekLeirasa'
       ];
       
+      // Normalize referencePatient dates before comparison
+      const normalizedReferencePatient: Partial<Patient> = {
+        ...referencePatient,
+        szuletesiDatum: formatDateForInput(referencePatient.szuletesiDatum || null),
+        mutetIdeje: formatDateForInput(referencePatient.mutetIdeje || null),
+        felvetelDatuma: formatDateForInput(referencePatient.felvetelDatuma || null),
+        balesetIdopont: formatDateForInput(referencePatient.balesetIdopont || null),
+        kezelesiTervFelso: referencePatient.kezelesiTervFelso?.map(item => ({
+          ...item,
+          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+        })) || [],
+        kezelesiTervAlso: referencePatient.kezelesiTervAlso?.map(item => ({
+          ...item,
+          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+        })) || [],
+        kezelesiTervArcotErinto: referencePatient.kezelesiTervArcotErinto?.map(item => ({
+          ...item,
+          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+        })) || [],
+      };
+      
       keyFields.forEach(field => {
         let currentValue = currentFormValues[field];
-        let originalValue = referencePatient[field];
+        let originalValue = normalizedReferencePatient[field];
         
         // If vanBeutalo is false, treat beutaló fields as null and kezelesreErkezesIndoka as "nincs beutaló" for comparison
         if (!vanBeutalo) {
@@ -1517,9 +1538,30 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         changes.push(fieldNames.meglevoFogak || 'Meglévő fogak');
       }
       
+      // Normalize currentPatient dates before comparison
+      const normalizedCurrentPatient: Partial<Patient> = {
+        ...currentPatient,
+        szuletesiDatum: formatDateForInput(currentPatient.szuletesiDatum || null),
+        mutetIdeje: formatDateForInput(currentPatient.mutetIdeje || null),
+        felvetelDatuma: formatDateForInput(currentPatient.felvetelDatuma || null),
+        balesetIdopont: formatDateForInput(currentPatient.balesetIdopont || null),
+        kezelesiTervFelso: currentPatient.kezelesiTervFelso?.map(item => ({
+          ...item,
+          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+        })) || [],
+        kezelesiTervAlso: currentPatient.kezelesiTervAlso?.map(item => ({
+          ...item,
+          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+        })) || [],
+        kezelesiTervArcotErinto: currentPatient.kezelesiTervArcotErinto?.map(item => ({
+          ...item,
+          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+        })) || [],
+      };
+      
       keyFields.forEach(field => {
         let currentValue = currentFormValues[field];
-        let originalValue = currentPatient[field];
+        let originalValue = normalizedCurrentPatient[field];
         
         // If vanBeutalo is false, treat beutaló fields as null and kezelesreErkezesIndoka as "nincs beutaló" for comparison
         if (!vanBeutalo) {
@@ -1614,9 +1656,30 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       ];
         
       // Check if any key field actually changed
+      // Normalize referencePatient dates before comparison
+      const normalizedReferencePatient: Partial<Patient> = {
+        ...referencePatient,
+        szuletesiDatum: formatDateForInput(referencePatient.szuletesiDatum || null),
+        mutetIdeje: formatDateForInput(referencePatient.mutetIdeje || null),
+        felvetelDatuma: formatDateForInput(referencePatient.felvetelDatuma || null),
+        balesetIdopont: formatDateForInput(referencePatient.balesetIdopont || null),
+        kezelesiTervFelso: referencePatient.kezelesiTervFelso?.map(item => ({
+          ...item,
+          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+        })) || [],
+        kezelesiTervAlso: referencePatient.kezelesiTervAlso?.map(item => ({
+          ...item,
+          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+        })) || [],
+        kezelesiTervArcotErinto: referencePatient.kezelesiTervArcotErinto?.map(item => ({
+          ...item,
+          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+        })) || [],
+      };
+      
       const hasActualChange = keyFields.some(field => {
         let currentValue = formValues[field];
-        let originalValue = referencePatient[field];
+        let originalValue = normalizedReferencePatient[field];
         
         // If vanBeutalo is false, treat beutaló fields as null and kezelesreErkezesIndoka as "nincs beutaló" for comparison
         if (!vanBeutalo) {
