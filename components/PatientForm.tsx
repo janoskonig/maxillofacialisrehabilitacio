@@ -1161,7 +1161,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     });
     
     // Prepare patient data
-    // If vanBeutalo is false, clear beutaló fields
+    // If vanBeutalo is false, clear beutaló fields and kezelesreErkezesIndoka
     const patientData: Patient = {
       ...formData,
       id: currentPatient?.id,
@@ -1171,6 +1171,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       beutaloOrvos: vanBeutalo ? formData.beutaloOrvos : null,
       beutaloIntezmeny: vanBeutalo ? formData.beutaloIntezmeny : null,
       beutaloIndokolas: vanBeutalo ? formData.beutaloIndokolas : null,
+      // Clear kezelesreErkezesIndoka if vanBeutalo is false (it's part of the beutaló section)
+      kezelesreErkezesIndoka: vanBeutalo ? formData.kezelesreErkezesIndoka : null,
     };
     
     // Validate using schema
@@ -1235,7 +1237,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     });
     
     // Prepare patient data
-    // If vanBeutalo is false, clear beutaló fields
+    // If vanBeutalo is false, clear beutaló fields and kezelesreErkezesIndoka
     const patientData: Patient = {
       ...formData,
       id: currentPatient?.id,
@@ -1245,6 +1247,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       beutaloOrvos: vanBeutalo ? formData.beutaloOrvos : null,
       beutaloIntezmeny: vanBeutalo ? formData.beutaloIntezmeny : null,
       beutaloIndokolas: vanBeutalo ? formData.beutaloIndokolas : null,
+      // Clear kezelesreErkezesIndoka if vanBeutalo is false (it's part of the beutaló section)
+      kezelesreErkezesIndoka: vanBeutalo ? formData.kezelesreErkezesIndoka : null,
     };
     
     // Validate using schema
