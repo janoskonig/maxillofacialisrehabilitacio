@@ -1668,12 +1668,15 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     // Check if there are unsaved changes
     if (hasUnsavedChanges()) {
       const changes = getUnsavedChangesList();
+      console.log('Unsaved changes detected:', changes); // Debug log
       let message = 'Van nem mentett változás az űrlapban. Biztosan bezárja az űrlapot? A változások elvesznek.';
       
       if (changes.length > 0) {
         const changesList = changes.slice(0, 10).join(', '); // Limit to 10 items
         const moreText = changes.length > 10 ? ` és még ${changes.length - 10} további` : '';
         message = `Van nem mentett változás az űrlapban:\n\n${changesList}${moreText}\n\nBiztosan bezárja az űrlapot? A változások elvesznek.`;
+      } else {
+        console.warn('hasUnsavedChanges returned true but getUnsavedChangesList returned empty array'); // Debug log
       }
       
       const shouldCancel = await confirmDialog(
