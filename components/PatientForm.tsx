@@ -273,6 +273,18 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     checkRole();
   }, [isNewPatient, initialVanBeutalo]);
 
+  // Sync kezelesreErkezesIndoka field with vanBeutalo state
+  useEffect(() => {
+    if (!vanBeutalo) {
+      // If checkbox is unchecked, set kezelesreErkezesIndoka to "nincs beutaló"
+      const currentValue = getValues('kezelesreErkezesIndoka');
+      if (currentValue !== 'nincs beutaló') {
+        setValue('kezelesreErkezesIndoka', 'nincs beutaló', { shouldValidate: false, shouldDirty: false });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vanBeutalo]);
+
   // Load kezelőorvos options from API
   useEffect(() => {
     const loadKezeloorvosOptions = async () => {
@@ -1127,6 +1139,11 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         })) || [],
       } : undefined, { keepDirty: false, keepDefaultValues: false });
       
+      // Ensure kezelesreErkezesIndoka is set correctly after reset
+      if (!savedVanBeutalo) {
+        setValue('kezelesreErkezesIndoka', 'nincs beutaló', { shouldValidate: false });
+      }
+      
       // Call onSave callback with saved patient
       onSave(savedPatient);
     } catch (error) {
@@ -1435,14 +1452,19 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       
       keyFields.forEach(field => {
         let currentValue = currentFormValues[field];
-        const originalValue = referencePatient[field];
+        let originalValue = referencePatient[field];
         
         // If vanBeutalo is false, treat beutaló fields as null and kezelesreErkezesIndoka as "nincs beutaló" for comparison
         if (!vanBeutalo) {
           if (field === 'beutaloOrvos' || field === 'beutaloIntezmeny' || field === 'beutaloIndokolas') {
             currentValue = null;
+            originalValue = null; // Also normalize original value
           } else if (field === 'kezelesreErkezesIndoka') {
             currentValue = 'nincs beutaló';
+            // Normalize original value: if it's null or empty, treat as "nincs beutaló"
+            if (!originalValue || originalValue === '') {
+              originalValue = 'nincs beutaló';
+            }
           }
         }
         
@@ -1497,14 +1519,19 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       
       keyFields.forEach(field => {
         let currentValue = currentFormValues[field];
-        const originalValue = currentPatient[field];
+        let originalValue = currentPatient[field];
         
         // If vanBeutalo is false, treat beutaló fields as null and kezelesreErkezesIndoka as "nincs beutaló" for comparison
         if (!vanBeutalo) {
           if (field === 'beutaloOrvos' || field === 'beutaloIntezmeny' || field === 'beutaloIndokolas') {
             currentValue = null;
+            originalValue = null; // Also normalize original value
           } else if (field === 'kezelesreErkezesIndoka') {
             currentValue = 'nincs beutaló';
+            // Normalize original value: if it's null or empty, treat as "nincs beutaló"
+            if (!originalValue || originalValue === '') {
+              originalValue = 'nincs beutaló';
+            }
           }
         }
         
@@ -1588,8 +1615,23 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         
       // Check if any key field actually changed
       const hasActualChange = keyFields.some(field => {
-        const currentValue = formValues[field];
-        const originalValue = referencePatient[field];
+        let currentValue = formValues[field];
+        let originalValue = referencePatient[field];
+        
+        // If vanBeutalo is false, treat beutaló fields as null and kezelesreErkezesIndoka as "nincs beutaló" for comparison
+        if (!vanBeutalo) {
+          if (field === 'beutaloOrvos' || field === 'beutaloIntezmeny' || field === 'beutaloIndokolas') {
+            currentValue = null;
+            originalValue = null; // Also normalize original value
+          } else if (field === 'kezelesreErkezesIndoka') {
+            currentValue = 'nincs beutaló';
+            // Normalize original value: if it's null or empty, treat as "nincs beutaló"
+            if (!originalValue || originalValue === '') {
+              originalValue = 'nincs beutaló';
+            }
+          }
+        }
+        
         return compareFieldValues(field, currentValue, originalValue);
       });
         
@@ -2111,11 +2153,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                 {...register('kezelesreErkezesIndoka')} 
                 className="form-input" 
                 disabled={isViewOnly || !vanBeutalo}
-                value={!vanBeutalo ? 'nincs beutaló' : watch('kezelesreErkezesIndoka') || ''}
                 onChange={(e) => {
-                  if (vanBeutalo) {
-                    setValue('kezelesreErkezesIndoka', e.target.value, { shouldValidate: true });
-                  }
+                  setValue('kezelesreErkezesIndoka', e.target.value, { shouldValidate: true });
                 }}
               >
                 {!vanBeutalo ? (
