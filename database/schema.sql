@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS patients (
     -- REHABILITÁCIÓS ADATOK - ANAMNÉZIS ÉS BETEGVIZSGÁLAT
     alkoholfogyasztas TEXT,                                    -- Alkoholfogyasztás
     dohanyzas_szam VARCHAR(50),                                -- Dohányzás (n szál/nap)
-    kezelesre_erkezes_indoka VARCHAR(100) CHECK (kezelesre_erkezes_indoka IN ('traumás sérülés', 'veleszületett rendellenesség', 'onkológiai kezelés utáni állapot')),
+    kezelesre_erkezes_indoka VARCHAR(100) CHECK (kezelesre_erkezes_indoka IS NULL OR kezelesre_erkezes_indoka IN ('traumás sérülés', 'veleszületett rendellenesség', 'onkológiai kezelés utáni állapot', 'nincs beutaló')),
     maxilladefektus_van BOOLEAN DEFAULT false,                 -- Maxilladefektus van
     brown_fuggoleges_osztaly VARCHAR(1) CHECK (brown_fuggoleges_osztaly IN ('1', '2', '3', '4')),  -- Brown-féle klasszifikáció - függőleges komponens
     brown_vizszintes_komponens VARCHAR(1) CHECK (brown_vizszintes_komponens IN ('a', 'b', 'c')),    -- Brown - vízszintes/palatinalis komponens
