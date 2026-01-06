@@ -1332,6 +1332,9 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     const referencePatient = currentPatient || patient;
     const changes: string[] = [];
     
+    // Get current form values - use getValues() to ensure we have the latest values
+    const currentFormValues = getValues();
+    
     // Field name mapping (camelCase to Hungarian display name)
     const fieldNames: Record<string, string> = {
       nev: 'Név',
@@ -1423,7 +1426,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       ];
       
       keyFields.forEach(field => {
-        const currentValue = formValues[field];
+        const currentValue = currentFormValues[field];
         const originalValue = referencePatient[field];
         if (compareFieldValues(field, currentValue, originalValue)) {
           const fieldName = fieldNames[field] || field;
@@ -1474,7 +1477,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       }
       
       keyFields.forEach(field => {
-        const currentValue = formValues[field];
+        const currentValue = currentFormValues[field];
         const originalValue = currentPatient[field];
         if (compareFieldValues(field, currentValue, originalValue)) {
           const fieldName = fieldNames[field] || field;
@@ -1484,7 +1487,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     }
     
     return changes;
-  }, [isViewOnly, patient, currentPatient, implantatumok, fogak, isNewPatient, formValues, compareFieldValues, vanBeutalo]);
+  }, [isViewOnly, patient, currentPatient, implantatumok, fogak, isNewPatient, getValues, compareFieldValues, vanBeutalo]);
 
   // Check if form has unsaved changes
   const hasUnsavedChanges = useCallback(() => {
