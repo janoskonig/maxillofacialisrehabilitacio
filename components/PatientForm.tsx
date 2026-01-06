@@ -254,7 +254,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
 
   // State for "vanBeutalo" toggle (default true if bármely beutaló-adat van, or always true for new patients if surgeon role)
   // Note: userRole might not be loaded yet, so we'll update it in useEffect
-  const initialVanBeutalo = !!(patient?.beutaloOrvos || patient?.beutaloIntezmeny || patient?.kezelesreErkezesIndoka);
+  // Note: kezelesreErkezesIndoka is independent, not part of beutaló
+  const initialVanBeutalo = !!(patient?.beutaloOrvos || patient?.beutaloIntezmeny);
   const [vanBeutalo, setVanBeutalo] = useState(initialVanBeutalo);
 
   // Get user role and load kezelőorvos options
@@ -1073,7 +1074,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       });
       
       // Prepare patient data with normalized fogak
-      // If vanBeutalo is false, clear beutaló fields
+      // If vanBeutalo is false, clear beutaló fields (but NOT kezelesreErkezesIndoka - it's independent)
       const patientData: Patient = {
         ...data,
         id: currentPatient?.id,
@@ -1092,7 +1093,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       setCurrentPatient(savedPatient);
       
       // Update vanBeutalo state based on saved patient data
-      const savedVanBeutalo = !!(savedPatient.beutaloOrvos || savedPatient.beutaloIntezmeny || savedPatient.kezelesreErkezesIndoka);
+      // Note: kezelesreErkezesIndoka is independent, not part of beutaló
+      const savedVanBeutalo = !!(savedPatient.beutaloOrvos || savedPatient.beutaloIntezmeny);
       setVanBeutalo(savedVanBeutalo);
       
       // Update implantatumok and fogak state with saved values
@@ -1385,7 +1387,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     
     if (!isNewPatient && referencePatient) {
       // Check vanBeutalo state
-      const savedVanBeutalo = !!(referencePatient.beutaloOrvos || referencePatient.beutaloIntezmeny || referencePatient.kezelesreErkezesIndoka);
+      // Note: kezelesreErkezesIndoka is independent, not part of beutaló
+      const savedVanBeutalo = !!(referencePatient.beutaloOrvos || referencePatient.beutaloIntezmeny);
       if (vanBeutalo !== savedVanBeutalo) {
         changes.push(fieldNames.vanBeutalo || 'Van beutaló');
       }
@@ -1466,7 +1469,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         'veleszuletettRendellenessegek', 'veleszuletettMutetekLeirasa'
       ];
       
-      const savedVanBeutalo = !!(currentPatient.beutaloOrvos || currentPatient.beutaloIntezmeny || currentPatient.kezelesreErkezesIndoka);
+      // Note: kezelesreErkezesIndoka is independent, not part of beutaló
+      const savedVanBeutalo = !!(currentPatient.beutaloOrvos || currentPatient.beutaloIntezmeny);
       if (vanBeutalo !== savedVanBeutalo) {
         changes.push(fieldNames.vanBeutalo || 'Van beutaló');
       }
@@ -1516,7 +1520,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       }
       
       // Check if vanBeutalo state matches saved patient data
-      const savedVanBeutalo = !!(referencePatient.beutaloOrvos || referencePatient.beutaloIntezmeny || referencePatient.kezelesreErkezesIndoka);
+      // Note: kezelesreErkezesIndoka is independent, not part of beutaló
+      const savedVanBeutalo = !!(referencePatient.beutaloOrvos || referencePatient.beutaloIntezmeny);
       if (vanBeutalo !== savedVanBeutalo) {
         return true;
       }
@@ -1623,7 +1628,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         const fogakChanged = normalizeObject(fogak) !== normalizeObject(currentPatient.meglevoFogak || {});
         
         // Check if vanBeutalo state matches saved patient data
-        const savedVanBeutalo = !!(currentPatient.beutaloOrvos || currentPatient.beutaloIntezmeny || currentPatient.kezelesreErkezesIndoka);
+        // Note: kezelesreErkezesIndoka is independent, not part of beutaló
+        const savedVanBeutalo = !!(currentPatient.beutaloOrvos || currentPatient.beutaloIntezmeny);
         const vanBeutaloChanged = vanBeutalo !== savedVanBeutalo;
         
         return hasActualChange || implantatumokChanged || fogakChanged || vanBeutaloChanged;
