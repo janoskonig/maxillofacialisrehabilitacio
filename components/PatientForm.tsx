@@ -254,8 +254,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
 
   // State for "vanBeutalo" toggle (default true if bármely beutaló-adat van, or always true for new patients if surgeon role)
   // Note: userRole might not be loaded yet, so we'll update it in useEffect
-  // Note: kezelesreErkezesIndoka can be "nincs beutaló", so we don't count it as having beutaló
-  const initialVanBeutalo = !!(patient?.beutaloOrvos || patient?.beutaloIntezmeny || (patient?.kezelesreErkezesIndoka && patient.kezelesreErkezesIndoka !== 'nincs beutaló'));
+  const initialVanBeutalo = !!(patient?.beutaloOrvos || patient?.beutaloIntezmeny || patient?.kezelesreErkezesIndoka);
   const [vanBeutalo, setVanBeutalo] = useState(initialVanBeutalo);
 
   // Get user role and load kezelőorvos options
@@ -272,18 +271,6 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     };
     checkRole();
   }, [isNewPatient, initialVanBeutalo]);
-
-  // Sync kezelesreErkezesIndoka field with vanBeutalo state
-  useEffect(() => {
-    if (!vanBeutalo) {
-      // If checkbox is unchecked, set kezelesreErkezesIndoka to "nincs beutaló"
-      const currentValue = getValues('kezelesreErkezesIndoka');
-      if (currentValue !== 'nincs beutaló') {
-        setValue('kezelesreErkezesIndoka', 'nincs beutaló', { shouldValidate: false, shouldDirty: false });
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vanBeutalo]);
 
   // Load kezelőorvos options from API
   useEffect(() => {
@@ -1086,7 +1073,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       });
       
       // Prepare patient data with normalized fogak
-      // If vanBeutalo is false, clear beutaló fields and kezelesreErkezesIndoka
+      // If vanBeutalo is false, clear beutaló fields
       const patientData: Patient = {
         ...data,
         id: currentPatient?.id,
@@ -1096,8 +1083,6 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         beutaloOrvos: vanBeutalo ? data.beutaloOrvos : null,
         beutaloIntezmeny: vanBeutalo ? data.beutaloIntezmeny : null,
         beutaloIndokolas: vanBeutalo ? data.beutaloIndokolas : null,
-        // Set kezelesreErkezesIndoka to "nincs beutaló" if vanBeutalo is false
-        kezelesreErkezesIndoka: vanBeutalo ? data.kezelesreErkezesIndoka : 'nincs beutaló',
       };
       
       // Save patient and get the saved patient back
@@ -1107,8 +1092,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       setCurrentPatient(savedPatient);
       
       // Update vanBeutalo state based on saved patient data
-      // Note: kezelesreErkezesIndoka can be "nincs beutaló", so we don't count it as having beutaló
-      const savedVanBeutalo = !!(savedPatient.beutaloOrvos || savedPatient.beutaloIntezmeny || (savedPatient.kezelesreErkezesIndoka && savedPatient.kezelesreErkezesIndoka !== 'nincs beutaló'));
+      const savedVanBeutalo = !!(savedPatient.beutaloOrvos || savedPatient.beutaloIntezmeny || savedPatient.kezelesreErkezesIndoka);
       setVanBeutalo(savedVanBeutalo);
       
       // Update implantatumok and fogak state with saved values
@@ -1138,11 +1122,6 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
         })) || [],
       } : undefined, { keepDirty: false, keepDefaultValues: false });
-      
-      // Ensure kezelesreErkezesIndoka is set correctly after reset
-      if (!savedVanBeutalo) {
-        setValue('kezelesreErkezesIndoka', 'nincs beutaló', { shouldValidate: false });
-      }
       
       // Call onSave callback with saved patient
       onSave(savedPatient);
@@ -1180,7 +1159,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     });
     
     // Prepare patient data
-    // If vanBeutalo is false, clear beutaló fields and kezelesreErkezesIndoka
+    // If vanBeutalo is false, clear beutaló fields
     const patientData: Patient = {
       ...formData,
       id: currentPatient?.id,
@@ -1190,8 +1169,6 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       beutaloOrvos: vanBeutalo ? formData.beutaloOrvos : null,
       beutaloIntezmeny: vanBeutalo ? formData.beutaloIntezmeny : null,
       beutaloIndokolas: vanBeutalo ? formData.beutaloIndokolas : null,
-      // Set kezelesreErkezesIndoka to "nincs beutaló" if vanBeutalo is false
-      kezelesreErkezesIndoka: vanBeutalo ? formData.kezelesreErkezesIndoka : 'nincs beutaló',
     };
     
     // Validate using schema
@@ -1256,7 +1233,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     });
     
     // Prepare patient data
-    // If vanBeutalo is false, clear beutaló fields and kezelesreErkezesIndoka
+    // If vanBeutalo is false, clear beutaló fields
     const patientData: Patient = {
       ...formData,
       id: currentPatient?.id,
@@ -1266,8 +1243,6 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       beutaloOrvos: vanBeutalo ? formData.beutaloOrvos : null,
       beutaloIntezmeny: vanBeutalo ? formData.beutaloIntezmeny : null,
       beutaloIndokolas: vanBeutalo ? formData.beutaloIndokolas : null,
-      // Set kezelesreErkezesIndoka to "nincs beutaló" if vanBeutalo is false
-      kezelesreErkezesIndoka: vanBeutalo ? formData.kezelesreErkezesIndoka : 'nincs beutaló',
     };
     
     // Validate using schema
@@ -1316,18 +1291,26 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
 
   // Helper function to compare field values with normalization
   const compareFieldValues = useCallback((field: keyof Patient, currentValue: any, originalValue: any): boolean => {
-    const currentNormalized = normalizeValue(currentValue);
-    const originalNormalized = normalizeValue(originalValue);
-
-    // Normalize dates for comparison
+    // Normalize dates for comparison - do this BEFORE normalizeValue
     const dateFields: (keyof Patient)[] = ['szuletesiDatum', 'mutetIdeje', 'felvetelDatuma', 'balesetIdopont'];
     if (dateFields.includes(field)) {
-      const currentDate = normalizeDate(currentNormalized);
-      const originalDate = normalizeDate(originalNormalized);
+      const currentDate = normalizeDate(currentValue);
+      const originalDate = normalizeDate(originalValue);
       return currentDate !== originalDate;
     }
 
-    // For arrays, use normalized comparison
+    // For arrays (like kezelesiTervFelso, kezelesiTervAlso, kezelesiTervArcotErinto), normalize dates inside
+    const arrayFields: (keyof Patient)[] = ['kezelesiTervFelso', 'kezelesiTervAlso', 'kezelesiTervArcotErinto'];
+    if (arrayFields.includes(field)) {
+      const currentNormalizedStr = normalizeArray(currentValue);
+      const originalNormalizedStr = normalizeArray(originalValue);
+      return currentNormalizedStr !== originalNormalizedStr;
+    }
+
+    const currentNormalized = normalizeValue(currentValue);
+    const originalNormalized = normalizeValue(originalValue);
+
+    // For other arrays, use normalized comparison
     if (Array.isArray(currentNormalized) || Array.isArray(originalNormalized)) {
       const currentNormalizedStr = normalizeArray(currentNormalized);
       const originalNormalizedStr = normalizeArray(originalNormalized);
@@ -1356,9 +1339,6 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     
     const referencePatient = currentPatient || patient;
     const changes: string[] = [];
-    
-    // Get current form values - use getValues() to ensure we have the latest values
-    const currentFormValues = getValues();
     
     // Field name mapping (camelCase to Hungarian display name)
     const fieldNames: Record<string, string> = {
@@ -1450,45 +1430,9 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         'veleszuletettRendellenessegek', 'veleszuletettMutetekLeirasa'
       ];
       
-      // Normalize referencePatient dates before comparison
-      const normalizedReferencePatient: Partial<Patient> = {
-        ...referencePatient,
-        szuletesiDatum: formatDateForInput(referencePatient.szuletesiDatum || null),
-        mutetIdeje: formatDateForInput(referencePatient.mutetIdeje || null),
-        felvetelDatuma: formatDateForInput(referencePatient.felvetelDatuma || null),
-        balesetIdopont: formatDateForInput(referencePatient.balesetIdopont || null),
-        kezelesiTervFelso: referencePatient.kezelesiTervFelso?.map(item => ({
-          ...item,
-          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-        })) || [],
-        kezelesiTervAlso: referencePatient.kezelesiTervAlso?.map(item => ({
-          ...item,
-          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-        })) || [],
-        kezelesiTervArcotErinto: referencePatient.kezelesiTervArcotErinto?.map(item => ({
-          ...item,
-          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-        })) || [],
-      };
-      
       keyFields.forEach(field => {
-        let currentValue = currentFormValues[field];
-        let originalValue = normalizedReferencePatient[field];
-        
-        // If vanBeutalo is false, treat beutaló fields as null and kezelesreErkezesIndoka as "nincs beutaló" for comparison
-        if (!vanBeutalo) {
-          if (field === 'beutaloOrvos' || field === 'beutaloIntezmeny' || field === 'beutaloIndokolas') {
-            currentValue = null;
-            originalValue = null; // Also normalize original value
-          } else if (field === 'kezelesreErkezesIndoka') {
-            currentValue = 'nincs beutaló';
-            // Normalize original value: if it's null or empty, treat as "nincs beutaló"
-            if (!originalValue || originalValue === '') {
-              originalValue = 'nincs beutaló';
-            }
-          }
-        }
-        
+        const currentValue = formValues[field];
+        const originalValue = referencePatient[field];
         if (compareFieldValues(field, currentValue, originalValue)) {
           const fieldName = fieldNames[field] || field;
           changes.push(fieldName);
@@ -1522,8 +1466,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         'veleszuletettRendellenessegek', 'veleszuletettMutetekLeirasa'
       ];
       
-      // Note: kezelesreErkezesIndoka can be "nincs beutaló", so we don't count it as having beutaló
-      const savedVanBeutalo = !!(currentPatient.beutaloOrvos || currentPatient.beutaloIntezmeny || (currentPatient.kezelesreErkezesIndoka && currentPatient.kezelesreErkezesIndoka !== 'nincs beutaló'));
+      const savedVanBeutalo = !!(currentPatient.beutaloOrvos || currentPatient.beutaloIntezmeny || currentPatient.kezelesreErkezesIndoka);
       if (vanBeutalo !== savedVanBeutalo) {
         changes.push(fieldNames.vanBeutalo || 'Van beutaló');
       }
@@ -1538,45 +1481,9 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         changes.push(fieldNames.meglevoFogak || 'Meglévő fogak');
       }
       
-      // Normalize currentPatient dates before comparison
-      const normalizedCurrentPatient: Partial<Patient> = {
-        ...currentPatient,
-        szuletesiDatum: formatDateForInput(currentPatient.szuletesiDatum || null),
-        mutetIdeje: formatDateForInput(currentPatient.mutetIdeje || null),
-        felvetelDatuma: formatDateForInput(currentPatient.felvetelDatuma || null),
-        balesetIdopont: formatDateForInput(currentPatient.balesetIdopont || null),
-        kezelesiTervFelso: currentPatient.kezelesiTervFelso?.map(item => ({
-          ...item,
-          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-        })) || [],
-        kezelesiTervAlso: currentPatient.kezelesiTervAlso?.map(item => ({
-          ...item,
-          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-        })) || [],
-        kezelesiTervArcotErinto: currentPatient.kezelesiTervArcotErinto?.map(item => ({
-          ...item,
-          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-        })) || [],
-      };
-      
       keyFields.forEach(field => {
-        let currentValue = currentFormValues[field];
-        let originalValue = normalizedCurrentPatient[field];
-        
-        // If vanBeutalo is false, treat beutaló fields as null and kezelesreErkezesIndoka as "nincs beutaló" for comparison
-        if (!vanBeutalo) {
-          if (field === 'beutaloOrvos' || field === 'beutaloIntezmeny' || field === 'beutaloIndokolas') {
-            currentValue = null;
-            originalValue = null; // Also normalize original value
-          } else if (field === 'kezelesreErkezesIndoka') {
-            currentValue = 'nincs beutaló';
-            // Normalize original value: if it's null or empty, treat as "nincs beutaló"
-            if (!originalValue || originalValue === '') {
-              originalValue = 'nincs beutaló';
-            }
-          }
-        }
-        
+        const currentValue = formValues[field];
+        const originalValue = currentPatient[field];
         if (compareFieldValues(field, currentValue, originalValue)) {
           const fieldName = fieldNames[field] || field;
           changes.push(fieldName);
@@ -1585,7 +1492,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     }
     
     return changes;
-  }, [isViewOnly, patient, currentPatient, implantatumok, fogak, isNewPatient, getValues, compareFieldValues, vanBeutalo]);
+  }, [isViewOnly, patient, currentPatient, implantatumok, fogak, isNewPatient, formValues, compareFieldValues, vanBeutalo]);
 
   // Check if form has unsaved changes
   const hasUnsavedChanges = useCallback(() => {
@@ -1609,8 +1516,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       }
       
       // Check if vanBeutalo state matches saved patient data
-      // Note: kezelesreErkezesIndoka can be "nincs beutaló", so we don't count it as having beutaló
-      const savedVanBeutalo = !!(referencePatient.beutaloOrvos || referencePatient.beutaloIntezmeny || (referencePatient.kezelesreErkezesIndoka && referencePatient.kezelesreErkezesIndoka !== 'nincs beutaló'));
+      const savedVanBeutalo = !!(referencePatient.beutaloOrvos || referencePatient.beutaloIntezmeny || referencePatient.kezelesreErkezesIndoka);
       if (vanBeutalo !== savedVanBeutalo) {
         return true;
       }
@@ -1656,45 +1562,9 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       ];
         
       // Check if any key field actually changed
-      // Normalize referencePatient dates before comparison
-      const normalizedReferencePatient: Partial<Patient> = {
-        ...referencePatient,
-        szuletesiDatum: formatDateForInput(referencePatient.szuletesiDatum || null),
-        mutetIdeje: formatDateForInput(referencePatient.mutetIdeje || null),
-        felvetelDatuma: formatDateForInput(referencePatient.felvetelDatuma || null),
-        balesetIdopont: formatDateForInput(referencePatient.balesetIdopont || null),
-        kezelesiTervFelso: referencePatient.kezelesiTervFelso?.map(item => ({
-          ...item,
-          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-        })) || [],
-        kezelesiTervAlso: referencePatient.kezelesiTervAlso?.map(item => ({
-          ...item,
-          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-        })) || [],
-        kezelesiTervArcotErinto: referencePatient.kezelesiTervArcotErinto?.map(item => ({
-          ...item,
-          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-        })) || [],
-      };
-      
       const hasActualChange = keyFields.some(field => {
-        let currentValue = formValues[field];
-        let originalValue = normalizedReferencePatient[field];
-        
-        // If vanBeutalo is false, treat beutaló fields as null and kezelesreErkezesIndoka as "nincs beutaló" for comparison
-        if (!vanBeutalo) {
-          if (field === 'beutaloOrvos' || field === 'beutaloIntezmeny' || field === 'beutaloIndokolas') {
-            currentValue = null;
-            originalValue = null; // Also normalize original value
-          } else if (field === 'kezelesreErkezesIndoka') {
-            currentValue = 'nincs beutaló';
-            // Normalize original value: if it's null or empty, treat as "nincs beutaló"
-            if (!originalValue || originalValue === '') {
-              originalValue = 'nincs beutaló';
-            }
-          }
-        }
-        
+        const currentValue = formValues[field];
+        const originalValue = referencePatient[field];
         return compareFieldValues(field, currentValue, originalValue);
       });
         
@@ -1753,8 +1623,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         const fogakChanged = normalizeObject(fogak) !== normalizeObject(currentPatient.meglevoFogak || {});
         
         // Check if vanBeutalo state matches saved patient data
-        // Note: kezelesreErkezesIndoka can be "nincs beutaló", so we don't count it as having beutaló
-        const savedVanBeutalo = !!(currentPatient.beutaloOrvos || currentPatient.beutaloIntezmeny || (currentPatient.kezelesreErkezesIndoka && currentPatient.kezelesreErkezesIndoka !== 'nincs beutaló'));
+        const savedVanBeutalo = !!(currentPatient.beutaloOrvos || currentPatient.beutaloIntezmeny || currentPatient.kezelesreErkezesIndoka);
         const vanBeutaloChanged = vanBeutalo !== savedVanBeutalo;
         
         return hasActualChange || implantatumokChanged || fogakChanged || vanBeutaloChanged;
@@ -1792,15 +1661,12 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     // Check if there are unsaved changes
     if (hasUnsavedChanges()) {
       const changes = getUnsavedChangesList();
-      console.log('Unsaved changes detected:', changes); // Debug log
       let message = 'Van nem mentett változás az űrlapban. Biztosan bezárja az űrlapot? A változások elvesznek.';
       
       if (changes.length > 0) {
         const changesList = changes.slice(0, 10).join(', '); // Limit to 10 items
         const moreText = changes.length > 10 ? ` és még ${changes.length - 10} további` : '';
         message = `Van nem mentett változás az űrlapban:\n\n${changesList}${moreText}\n\nBiztosan bezárja az űrlapot? A változások elvesznek.`;
-      } else {
-        console.warn('hasUnsavedChanges returned true but getUnsavedChangesList returned empty array'); // Debug log
       }
       
       const shouldCancel = await confirmDialog(
@@ -2099,20 +1965,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
               id="beutalo-toggle"
               type="checkbox"
               checked={vanBeutalo}
-              onChange={() => {
-                const newValue = !vanBeutalo;
-                setVanBeutalo(newValue);
-                // If checkbox is unchecked, set kezelesreErkezesIndoka to "nincs beutaló"
-                if (!newValue) {
-                  setValue('kezelesreErkezesIndoka', 'nincs beutaló', { shouldValidate: true });
-                } else {
-                  // If checkbox is checked, clear the value to allow selection
-                  const currentValue = watch('kezelesreErkezesIndoka');
-                  if (currentValue === 'nincs beutaló') {
-                    setValue('kezelesreErkezesIndoka', '', { shouldValidate: true });
-                  }
-                }
-              }}
+              onChange={() => setVanBeutalo((prev) => !prev)}
               className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
               disabled={isViewOnly}
             />
@@ -2212,24 +2065,11 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           <div className="space-y-4">
             <div>
               <label className="form-label">Kezelésre érkezés indoka</label>
-              <select 
-                {...register('kezelesreErkezesIndoka')} 
-                className="form-input" 
-                disabled={isViewOnly || !vanBeutalo}
-                onChange={(e) => {
-                  setValue('kezelesreErkezesIndoka', e.target.value, { shouldValidate: true });
-                }}
-              >
-                {!vanBeutalo ? (
-                  <option value="nincs beutaló">nincs beutaló</option>
-                ) : (
-                  <>
-                    <option value="">Válasszon...</option>
-                    <option value="traumás sérülés">traumás sérülés</option>
-                    <option value="veleszületett rendellenesség">veleszületett rendellenesség</option>
-                    <option value="onkológiai kezelés utáni állapot">onkológiai kezelés utáni állapot</option>
-                  </>
-                )}
+              <select {...register('kezelesreErkezesIndoka')} className="form-input" disabled={isViewOnly}>
+                <option value="">Válasszon...</option>
+                <option value="traumás sérülés">traumás sérülés</option>
+                <option value="veleszületett rendellenesség">veleszületett rendellenesség</option>
+                <option value="onkológiai kezelés utáni állapot">onkológiai kezelés utáni állapot</option>
               </select>
             </div>
             {/* Ezeket mindig mutatjuk, conditionaltól függetlenül */}
