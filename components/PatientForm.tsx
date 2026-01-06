@@ -1327,8 +1327,15 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     }
 
     // For strings, trim and compare
-    if (typeof currentNormalized === 'string' && typeof originalNormalized === 'string') {
-      return currentNormalized.trim() !== originalNormalized.trim();
+    // normalizeValue already converts empty strings to null, but we need to handle string vs null comparison
+    if (typeof currentNormalized === 'string' || typeof originalNormalized === 'string') {
+      // If one is string and the other is null/undefined, they're different (unless string is empty)
+      const currentStr = typeof currentNormalized === 'string' ? currentNormalized.trim() : null;
+      const originalStr = typeof originalNormalized === 'string' ? originalNormalized.trim() : null;
+      // Both normalizeValue and this comparison treat empty strings as null
+      const currentFinal = currentStr === '' || currentStr === null ? null : currentStr;
+      const originalFinal = originalStr === '' || originalStr === null ? null : originalStr;
+      return currentFinal !== originalFinal;
     }
 
     // For booleans and other primitives, direct comparison
