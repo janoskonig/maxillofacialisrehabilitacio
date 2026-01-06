@@ -75,7 +75,7 @@ export const patientSchema = z.object({
   // ANAMNÉZIS ÉS BETEGVIZSGÁLAT – új kezdeti mezők
   alkoholfogyasztas: z.string().optional().nullable(),
   dohanyzasSzam: z.string().optional().nullable(), // n szál/nap formátumban
-  kezelesreErkezesIndoka: z.enum(['traumás sérülés', 'veleszületett rendellenesség', 'onkológiai kezelés utáni állapot', 'nincs beutaló']).optional().nullable().or(z.literal('')),
+  kezelesreErkezesIndoka: z.enum(['traumás sérülés', 'veleszületett rendellenesség', 'onkológiai kezelés utáni állapot']).optional().nullable().or(z.literal('')),
   maxilladefektusVan: z.boolean().default(false),
   brownFuggolegesOsztaly: z.enum(['1', '2', '3', '4']).optional().nullable().or(z.literal('')),
   brownVizszintesKomponens: z.enum(['a', 'b', 'c']).optional().nullable().or(z.literal('')),

@@ -19,3 +19,7 @@ COMMENT ON COLUMN appointments.appointment_type IS 'Időpont típusa: elso_konzu
 
 COMMIT;
 
+
+
+
+

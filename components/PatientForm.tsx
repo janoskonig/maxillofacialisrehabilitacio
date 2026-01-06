@@ -248,6 +248,14 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     id: patient?.id || null, 
     updatedAt: patient?.updatedAt || null 
   });
+  // Ref for immediate access to current patient (for hasUnsavedChanges)
+  const currentPatientRef = useRef<Patient | null | undefined>(patient);
+  
+  // Wrapper function to update both state and ref
+  const updateCurrentPatient = useCallback((newPatient: Patient | null | undefined) => {
+    currentPatientRef.current = newPatient;
+    setCurrentPatient(newPatient);
+  }, []);
   const [labQuoteRequests, setLabQuoteRequests] = useState<Array<{ id: string; szoveg: string; datuma: string }>>([]);
   const [newQuoteSzoveg, setNewQuoteSzoveg] = useState<string>('');
   const [newQuoteDatuma, setNewQuoteDatuma] = useState<Date | null>(null);
@@ -388,8 +396,6 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       szuletesiDatum: formatDateForInput(patient.szuletesiDatum),
       mutetIdeje: formatDateForInput(patient.mutetIdeje),
       felvetelDatuma: formatDateForInput(patient.felvetelDatuma),
-      // Normalize kezelesreErkezesIndoka: null/undefined -> empty string for select consistency
-      kezelesreErkezesIndoka: patient.kezelesreErkezesIndoka || '',
       kezelesiTervFelso: patient.kezelesiTervFelso?.map(item => ({
         ...item,
         tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
@@ -421,6 +427,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
   // Also reset when patient data changes (e.g., after save or refresh)
   // BUT: Don't reset if the change came from auto-save to prevent flickering
   useEffect(() => {
+    
     if (!patient || isViewOnly) {
       if (!patient && !isViewOnly) {
         // Reset to default values for new patient
@@ -437,14 +444,19 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           kezelesiTervArcotErinto: [],
         }, { keepDirty: false, keepDefaultValues: false });
       }
-      setCurrentPatient(patient || null);
+      updateCurrentPatient(patient || null);
       return;
     }
 
     // Ha az id változott, biztosan külső betöltés
     if (lastSavedPatientRef.current.id !== patient.id) {
       lastSavedPatientRef.current = { id: patient.id || null, updatedAt: patient.updatedAt || null };
-      setCurrentPatient(patient);
+      // Note: If backend doesn't return kezelesreErkezesIndoka, preserve it from currentPatientRef
+      const patientWithPreservedKezelesreErkezesIndoka = {
+        ...patient,
+        kezelesreErkezesIndoka: patient.kezelesreErkezesIndoka ?? currentPatientRef.current?.kezelesreErkezesIndoka ?? null,
+      };
+      updateCurrentPatient(patientWithPreservedKezelesreErkezesIndoka);
       // Reset form with current values to clear dirty state
       reset({
         ...patient,
@@ -471,7 +483,12 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     if (isAutoSavingRef.current && lastSavedPatientRef.current.id === patient.id) {
       // Frissítsük a ref-et, de ne fusson reset
       lastSavedPatientRef.current.updatedAt = patient.updatedAt || null;
-      setCurrentPatient(patient);
+      // Note: If backend doesn't return kezelesreErkezesIndoka, preserve it from currentPatientRef
+      const patientWithPreservedKezelesreErkezesIndoka = {
+        ...patient,
+        kezelesreErkezesIndoka: patient.kezelesreErkezesIndoka ?? currentPatientRef.current?.kezelesreErkezesIndoka ?? null,
+      };
+      updateCurrentPatient(patientWithPreservedKezelesreErkezesIndoka);
       return;
     }
 
@@ -482,7 +499,12 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       if (Math.abs(currentUpdated - lastUpdated) > 2000) {
         // Külső változás, frissítsük
         lastSavedPatientRef.current = { id: patient.id || null, updatedAt: patient.updatedAt || null };
-        setCurrentPatient(patient);
+        // Note: If backend doesn't return kezelesreErkezesIndoka, preserve it from currentPatientRef
+        const patientWithPreservedKezelesreErkezesIndoka = {
+          ...patient,
+          kezelesreErkezesIndoka: patient.kezelesreErkezesIndoka ?? currentPatientRef.current?.kezelesreErkezesIndoka ?? null,
+        };
+        updateCurrentPatient(patientWithPreservedKezelesreErkezesIndoka);
         reset({
           ...patient,
           szuletesiDatum: formatDateForInput(patient.szuletesiDatum),
@@ -507,7 +529,12 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
 
     // Egyébként ne fusson reset (valószínűleg auto-save vagy első betöltés)
     // Csak frissítsük a currentPatient-et és a ref-et
-    setCurrentPatient(patient);
+    // Note: If backend doesn't return kezelesreErkezesIndoka, preserve it from currentPatientRef
+    const patientWithPreservedKezelesreErkezesIndoka = {
+      ...patient,
+      kezelesreErkezesIndoka: patient.kezelesreErkezesIndoka ?? currentPatientRef.current?.kezelesreErkezesIndoka ?? null,
+    };
+    updateCurrentPatient(patientWithPreservedKezelesreErkezesIndoka);
     if (!lastSavedPatientRef.current.id) {
       // Első betöltés
       lastSavedPatientRef.current = { id: patient.id || null, updatedAt: patient.updatedAt || null };
@@ -745,7 +772,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           
           // Save patient with corrected data (invalid fields reverted to original)
           const savedPatient = await savePatient(patientToSave);
-          setCurrentPatient(savedPatient);
+          updateCurrentPatient(savedPatient);
           
           // Frissítsük a ref-et az utolsó mentett adatokkal
           lastSavedPatientRef.current = { 
@@ -778,8 +805,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         // Save patient silently (without alert)
         const savedPatient = await savePatient(patientToSave);
         
-        // Update local state
-        setCurrentPatient(savedPatient);
+        // Update local state (both state and ref)
+        updateCurrentPatient(savedPatient);
         
         // Frissítsük a ref-et az utolsó mentett adatokkal
         lastSavedPatientRef.current = {
@@ -1091,8 +1118,16 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       // Save patient and get the saved patient back
       const savedPatient = await savePatient(patientData);
       
+      
       // Update currentPatient with saved patient data
-      setCurrentPatient(savedPatient);
+      // Note: If backend doesn't return kezelesreErkezesIndoka, use the value from patientData
+      const updatedSavedPatient = {
+        ...savedPatient,
+        kezelesreErkezesIndoka: savedPatient.kezelesreErkezesIndoka ?? patientData.kezelesreErkezesIndoka ?? null,
+      };
+      // Update currentPatient (both state and ref)
+      updateCurrentPatient(updatedSavedPatient);
+      
       
       // Update vanBeutalo state based on saved patient data
       // Note: kezelesreErkezesIndoka is independent, not part of beutaló
@@ -1108,13 +1143,14 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       }
       
       // Reset form dirty state with saved patient data
-      reset(savedPatient ? {
+      // Note: If backend doesn't return kezelesreErkezesIndoka, use the value from patientData
+      const resetData = savedPatient ? {
         ...savedPatient,
+        // Ensure kezelesreErkezesIndoka is included (backend might not return it)
+        kezelesreErkezesIndoka: savedPatient.kezelesreErkezesIndoka ?? patientData.kezelesreErkezesIndoka ?? null,
         szuletesiDatum: formatDateForInput(savedPatient.szuletesiDatum),
         mutetIdeje: formatDateForInput(savedPatient.mutetIdeje),
         felvetelDatuma: formatDateForInput(savedPatient.felvetelDatuma),
-        // Normalize kezelesreErkezesIndoka: null/undefined -> empty string for select consistency
-        kezelesreErkezesIndoka: savedPatient.kezelesreErkezesIndoka || '',
         kezelesiTervFelso: savedPatient.kezelesiTervFelso?.map(item => ({
           ...item,
           tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
@@ -1127,7 +1163,11 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           ...item,
           tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
         })) || [],
-      } : undefined, { keepDirty: false, keepDefaultValues: false });
+      } : undefined;
+      
+      
+      reset(resetData, { keepDirty: false, keepDefaultValues: false });
+      
       
       // Call onSave callback with saved patient
       onSave(savedPatient);
@@ -1183,8 +1223,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     // Save patient directly via API (bypassing onSave callback to avoid alert)
     const savedPatient = await savePatient(validatedPatient);
     
-    // Update local state
-    setCurrentPatient(savedPatient);
+    // Update local state (both state and ref)
+    updateCurrentPatient(savedPatient);
     
     // Update vanBeutalo state based on saved patient data
     const savedVanBeutalo = !!(savedPatient.beutaloOrvos || savedPatient.beutaloIntezmeny || savedPatient.kezelesreErkezesIndoka);
@@ -1204,8 +1244,6 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       szuletesiDatum: formatDateForInput(savedPatient.szuletesiDatum),
       mutetIdeje: formatDateForInput(savedPatient.mutetIdeje),
       felvetelDatuma: formatDateForInput(savedPatient.felvetelDatuma),
-      // Normalize kezelesreErkezesIndoka: null/undefined -> empty string for select consistency
-      kezelesreErkezesIndoka: savedPatient.kezelesreErkezesIndoka || '',
       kezelesiTervFelso: savedPatient.kezelesiTervFelso?.map(item => ({
         ...item,
         tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
@@ -1259,8 +1297,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     // Save patient
     const savedPatient = await savePatient(validatedPatient);
     
-    // Update local state
-    setCurrentPatient(savedPatient);
+    // Update local state (both state and ref)
+    updateCurrentPatient(savedPatient);
     
     // Update vanBeutalo state based on saved patient data
     const savedVanBeutalo = !!(savedPatient.beutaloOrvos || savedPatient.beutaloIntezmeny || savedPatient.kezelesreErkezesIndoka);
@@ -1280,8 +1318,6 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       szuletesiDatum: formatDateForInput(savedPatient.szuletesiDatum),
       mutetIdeje: formatDateForInput(savedPatient.mutetIdeje),
       felvetelDatuma: formatDateForInput(savedPatient.felvetelDatuma),
-      // Normalize kezelesreErkezesIndoka: null/undefined -> empty string for select consistency
-      kezelesreErkezesIndoka: savedPatient.kezelesreErkezesIndoka || '',
       kezelesiTervFelso: savedPatient.kezelesiTervFelso?.map(item => ({
         ...item,
         tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
@@ -1335,15 +1371,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     }
 
     // For strings, trim and compare
-    // normalizeValue already converts empty strings to null, but we need to handle string vs null comparison
-    if (typeof currentNormalized === 'string' || typeof originalNormalized === 'string') {
-      // If one is string and the other is null/undefined, they're different (unless string is empty)
-      const currentStr = typeof currentNormalized === 'string' ? currentNormalized.trim() : null;
-      const originalStr = typeof originalNormalized === 'string' ? originalNormalized.trim() : null;
-      // Both normalizeValue and this comparison treat empty strings as null
-      const currentFinal = currentStr === '' || currentStr === null ? null : currentStr;
-      const originalFinal = originalStr === '' || originalStr === null ? null : originalStr;
-      return currentFinal !== originalFinal;
+    if (typeof currentNormalized === 'string' && typeof originalNormalized === 'string') {
+      return currentNormalized.trim() !== originalNormalized.trim();
     }
 
     // For booleans and other primitives, direct comparison
@@ -1354,7 +1383,9 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
   const getUnsavedChangesList = useCallback((): string[] => {
     if (isViewOnly) return [];
     
-    const referencePatient = currentPatient || patient;
+    // Use currentPatientRef for immediate access (updated synchronously after save)
+    // Fall back to currentPatient state or patient prop
+    const referencePatient = currentPatientRef.current || currentPatient || patient;
     const changes: string[] = [];
     
     // Field name mapping (camelCase to Hungarian display name)
@@ -1517,8 +1548,9 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
   const hasUnsavedChanges = useCallback(() => {
     if (isViewOnly) return false;
     
-    // Use currentPatient for comparison (it gets updated when patient is saved via booking or auto-save)
-    const referencePatient = currentPatient || patient;
+    // Use currentPatientRef for immediate access (updated synchronously after save)
+    // Fall back to currentPatient state or patient prop
+    const referencePatient = currentPatientRef.current || currentPatient || patient;
     
     // For existing patients: compare current values with original patient data
     if (!isNewPatient && referencePatient) {
@@ -1581,11 +1613,19 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         'veleszuletettRendellenessegek', 'veleszuletettMutetekLeirasa'
       ];
         
+      // Special handling for kezelesreErkezesIndoka: if referencePatient doesn't have it,
+      // use form value as reference (because if form has it, it's saved)
+      const referenceKezelesreErkezesIndoka = referencePatient.kezelesreErkezesIndoka ?? formValues.kezelesreErkezesIndoka ?? null;
+        
       // Check if any key field actually changed
       const hasActualChange = keyFields.some(field => {
         const currentValue = formValues[field];
-        const originalValue = referencePatient[field];
-        return compareFieldValues(field, currentValue, originalValue);
+        // For kezelesreErkezesIndoka, use the special reference value
+        const originalValue = field === 'kezelesreErkezesIndoka' 
+          ? referenceKezelesreErkezesIndoka 
+          : referencePatient[field];
+        const result = compareFieldValues(field, currentValue, originalValue);
+        return result;
       });
         
       return hasActualChange;
@@ -3725,7 +3765,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           isPatientDirty={!isViewOnly && hasUnsavedChanges()}
           isNewPatient={isNewPatient}
           onPatientSaved={(savedPatient) => {
-            setCurrentPatient(savedPatient);
+            updateCurrentPatient(savedPatient);
             // Also notify parent component
             onSave(savedPatient);
           }}
