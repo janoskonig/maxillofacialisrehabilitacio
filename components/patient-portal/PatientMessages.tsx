@@ -275,18 +275,22 @@ export function PatientMessages() {
           </div>
         ) : (
           messages.map((message) => {
-            const isPatient = message.senderType === 'patient';
-            const isUnread = !message.readAt && message.senderType === 'doctor';
+            // A beteg oldalon: beteg üzenetei jobbra zöld, orvos üzenetei balra fehér/kék
+            // senderType === 'patient' = beteg küldte (jobbra zöld)
+            // senderType === 'doctor' = orvos küldte (balra fehér/kék)
+            const isFromPatient = message.senderType === 'patient';
+            const isFromDoctor = message.senderType === 'doctor';
+            const isUnread = !message.readAt && isFromDoctor;
             const isPending = message.pending === true;
             const isRead = message.readAt !== null;
             
-            // Csak a saját üzeneteinknek mutatjuk a státuszt
-            const showStatus = isPatient;
+            // Csak a saját üzeneteinknek mutatjuk a státuszt (beteg üzenetei)
+            const showStatus = isFromPatient;
 
             return (
               <div
                 key={message.id}
-                className={`flex ${isPatient ? 'justify-end' : 'justify-start'}`}
+                className={`flex ${isFromPatient ? 'justify-end' : 'justify-start'}`}
                 onClick={() => {
                   if (isUnread) {
                     handleMarkAsRead(message.id);
@@ -295,7 +299,7 @@ export function PatientMessages() {
               >
                 <div
                   className={`max-w-[75%] rounded-lg px-4 py-2 ${
-                    isPatient
+                    isFromPatient
                       ? 'bg-green-600 text-white'
                       : isUnread
                       ? 'bg-blue-100 text-gray-900 border-2 border-blue-300'
@@ -306,7 +310,7 @@ export function PatientMessages() {
                     {message.message}
                   </div>
                   <div className={`text-xs mt-1 flex items-center gap-1.5 ${
-                    isPatient ? 'text-green-100' : 'text-gray-500'
+                    isFromPatient ? 'text-green-100' : 'text-gray-500'
                   }`}>
                     <Clock className="w-3 h-3" />
                     <span>{format(new Date(message.createdAt), 'HH:mm', { locale: hu })}</span>

@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Calendar, Clock, User, Mail, AlertCircle, Plus, X } from 'lucide-react';
 import { Patient } from '@/lib/types';
+import { DateTimePicker } from './DateTimePicker';
 
 interface TimeSlot {
   id: string;
@@ -41,6 +42,10 @@ export function ConditionalAppointmentBooking({ patientId, patientEmail }: Condi
   const [selectedSlot, setSelectedSlot] = useState<string>('');
   const [alternativeSlots, setAlternativeSlots] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
+  const [showNewSlotForm, setShowNewSlotForm] = useState(false);
+  const [newSlotDateTime, setNewSlotDateTime] = useState<Date | null>(null);
+  const [newSlotTeremszam, setNewSlotTeremszam] = useState<string>('');
+  const [creatingNewSlot, setCreatingNewSlot] = useState(false);
   const isLoadingRef = useRef(false);
 
   const loadAvailableSlots = useCallback(async () => {
@@ -246,6 +251,78 @@ export function ConditionalAppointmentBooking({ patientId, patientEmail }: Condi
     setAlternativeSlots(newAlternatives);
   }, [alternativeSlots]);
 
+  const handleCreateNewTimeSlot = useCallback(async () => {
+    if (!newSlotDateTime) {
+      alert('Kérjük, válasszon dátumot és időt!');
+      return;
+    }
+
+    // Check if date is in the future
+    if (newSlotDateTime <= new Date()) {
+      alert('Az időpont csak jövőbeli dátum lehet!');
+      return;
+    }
+
+    // Convert Date to ISO format with timezone offset
+    const offset = -newSlotDateTime.getTimezoneOffset();
+    const offsetHours = Math.floor(Math.abs(offset) / 60);
+    const offsetMinutes = Math.abs(offset) % 60;
+    const offsetSign = offset >= 0 ? '+' : '-';
+    const offsetString = `${offsetSign}${String(offsetHours).padStart(2, '0')}:${String(offsetMinutes).padStart(2, '0')}`;
+    
+    const year = newSlotDateTime.getFullYear();
+    const month = String(newSlotDateTime.getMonth() + 1).padStart(2, '0');
+    const day = String(newSlotDateTime.getDate()).padStart(2, '0');
+    const hours = String(newSlotDateTime.getHours()).padStart(2, '0');
+    const minutes = String(newSlotDateTime.getMinutes()).padStart(2, '0');
+    const seconds = String(newSlotDateTime.getSeconds()).padStart(2, '0');
+    const isoDateTime = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetString}`;
+
+    const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
+
+    try {
+      setCreatingNewSlot(true);
+      const response = await fetch('/api/time-slots', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          startTime: isoDateTime,
+          cim: DEFAULT_CIM,
+          teremszam: newSlotTeremszam.trim() || null,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const newTimeSlotId = data.timeSlot.id;
+        
+        // Reload available slots
+        await loadAvailableSlots();
+        
+        // Automatically select the newly created slot
+        setSelectedSlot(newTimeSlotId);
+        
+        // Reset form
+        setNewSlotDateTime(null);
+        setNewSlotTeremszam('');
+        setShowNewSlotForm(false);
+        
+        alert('Új időpont sikeresen létrehozva és kiválasztva!');
+      } else {
+        const errorData = await response.json();
+        alert(errorData.error || 'Hiba történt az időpont létrehozásakor');
+      }
+    } catch (error) {
+      console.error('Error creating new time slot:', error);
+      alert('Hiba történt az időpont létrehozásakor');
+    } finally {
+      setCreatingNewSlot(false);
+    }
+  }, [newSlotDateTime, newSlotTeremszam, loadAvailableSlots]);
+
   const formatDateTime = useCallback((dateTime: string) => {
     const date = new Date(dateTime);
     return date.toLocaleString('hu-HU', {
@@ -318,14 +395,63 @@ export function ConditionalAppointmentBooking({ patientId, patientEmail }: Condi
             </div>
           )}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Szabad időpont
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Szabad időpont
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowNewSlotForm(!showNewSlotForm)}
+                className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                disabled={creating || creatingNewSlot}
+              >
+                <Plus className="w-4 h-4" />
+                {showNewSlotForm ? 'Mégse' : 'Új időpont létrehozása'}
+              </button>
+            </div>
+            {showNewSlotForm && (
+              <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Dátum és idő
+                  </label>
+                  <DateTimePicker
+                    selected={newSlotDateTime}
+                    onChange={(date: Date | null) => setNewSlotDateTime(date)}
+                    minDate={new Date()}
+                    placeholder="Válasszon dátumot és időt"
+                    className="form-input w-full"
+                    disabled={creatingNewSlot}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Teremszám (opcionális)
+                  </label>
+                  <input
+                    type="text"
+                    value={newSlotTeremszam}
+                    onChange={(e) => setNewSlotTeremszam(e.target.value)}
+                    placeholder="Pl. 101"
+                    className="form-input w-full"
+                    disabled={creatingNewSlot}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCreateNewTimeSlot}
+                  disabled={!newSlotDateTime || creatingNewSlot}
+                  className="btn-primary w-full"
+                >
+                  {creatingNewSlot ? 'Létrehozás...' : 'Időpont létrehozása'}
+                </button>
+              </div>
+            )}
             <select
               value={selectedSlot}
               onChange={(e) => setSelectedSlot(e.target.value)}
               className="form-input w-full"
-              disabled={creating}
+              disabled={creating || creatingNewSlot}
             >
               <option value="">Válasszon időpontot...</option>
               {availableSlotsOnly.map((slot) => {
@@ -342,7 +468,7 @@ export function ConditionalAppointmentBooking({ patientId, patientEmail }: Condi
                 );
               })}
             </select>
-            {availableSlotsOnly.length === 0 && (
+            {availableSlotsOnly.length === 0 && !showNewSlotForm && (
               <p className="text-sm text-gray-500 mt-2">
                 Jelenleg nincs elérhető szabad időpont.
               </p>
@@ -415,6 +541,7 @@ export function ConditionalAppointmentBooking({ patientId, patientEmail }: Condi
               (!patientId && !selectedPatient) || 
               !selectedSlot || 
               creating || 
+              creatingNewSlot ||
               (!patientId && patients.length === 0) || 
               (patientId ? (!patientEmail || patientEmail.trim() === '') : false)
             }
