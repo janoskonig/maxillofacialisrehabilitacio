@@ -24,6 +24,7 @@ export function PatientMessages() {
   const { showToast } = useToast();
   const [patientId, setPatientId] = useState<string | null>(null);
   const [patientName, setPatientName] = useState<string | null>(null);
+  const [doctorName, setDoctorName] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -60,6 +61,7 @@ export function PatientMessages() {
       if (data.patient) {
         setPatientId(data.patient.id);
         setPatientName(data.patient.nev);
+        setDoctorName(data.patient.kezeleoorvos || null);
       }
     } catch (error) {
       console.error('Hiba a beteg adatok betöltésekor:', error);
@@ -208,7 +210,14 @@ export function PatientMessages() {
       <div className="flex items-center justify-between pb-4 border-b">
         <div className="flex items-center gap-2">
           <MessageCircle className="w-5 h-5 text-blue-600" />
-          <h2 className="text-xl font-semibold text-gray-900">Üzenetek</h2>
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900">Üzenetek</h2>
+            {doctorName && (
+              <p className="text-sm text-gray-600 mt-0.5">
+                Üzenet küldése: <span className="font-medium text-gray-900">{doctorName}</span>
+              </p>
+            )}
+          </div>
           {unreadCount > 0 && (
             <span className="px-2 py-1 text-xs font-semibold text-white bg-red-500 rounded-full">
               {unreadCount} olvasatlan

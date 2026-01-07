@@ -34,7 +34,8 @@ export async function GET(request: NextRequest) {
         iranyitoszam,
         felvetel_datuma as "felvetelDatuma",
         beutalo_orvos as "beutaloOrvos",
-        beutalo_indokolas as "beutaloIndokolas"
+        beutalo_indokolas as "beutaloIndokolas",
+        kezeleoorvos
       FROM patients
       WHERE id = $1`,
       [patientId]

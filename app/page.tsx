@@ -388,6 +388,7 @@ export default function Home() {
               <MobileMenu currentPath="/" />
               {/* Desktop Navigation */}
               <div className="hidden md:flex gap-2">
+                <FeedbackButtonTrigger />
                 {userRole === 'admin' && (
                   <button
                     onClick={() => router.push('/admin')}
@@ -411,7 +412,6 @@ export default function Home() {
                   <MessageCircle className="w-3.5 h-3.5" />
                   Üzenet
                 </button>
-                <FeedbackButtonTrigger />
                 <button
                   onClick={() => router.push('/settings')}
                   className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2"

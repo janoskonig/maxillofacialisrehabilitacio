@@ -117,6 +117,7 @@ export default function CalendarPage() {
             <div className="flex items-center gap-2">
               <MobileMenu currentPath="/calendar" />
               <div className="hidden md:flex gap-2">
+                <FeedbackButtonTrigger />
                 {currentUser?.role === 'admin' && (
                   <button
                     onClick={() => router.push('/admin')}
@@ -126,7 +127,6 @@ export default function CalendarPage() {
                     Admin
                   </button>
                 )}
-                <FeedbackButtonTrigger />
                 <button
                   onClick={() => router.push('/settings')}
                   className="btn-secondary flex items-center gap-2"
