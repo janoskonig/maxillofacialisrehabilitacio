@@ -1,7 +1,7 @@
 'use client';
 
 import { Patient } from '@/lib/types';
-import { Phone, Mail, Calendar, Eye, Pencil, Trash2, Image, Camera, CheckCircle2, XCircle, Clock, Clock as ClockIcon, History } from 'lucide-react';
+import { Phone, Mail, Calendar, Eye, Pencil, Trash2, Image, Camera, CheckCircle2, XCircle, Clock, Clock as ClockIcon, History, MessageCircle } from 'lucide-react';
 import { formatDateForDisplay, calculateAge } from '@/lib/dateUtils';
 import { useRouter } from 'next/navigation';
 
@@ -50,6 +50,11 @@ export function PatientCard({
     router.push(`/patients/${patient.id}/history`);
   };
 
+  const handleMessagesClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    router.push(`/patients/${patient.id}`);
+  };
+
   const getStatusInfo = (status?: AppointmentInfo['appointmentStatus'], isLate?: boolean) => {
     if (isLate) {
       return { label: 'Késett', color: 'text-orange-600', bgColor: 'bg-orange-50', icon: ClockIcon };
@@ -85,13 +90,22 @@ export function PatientCard({
         </div>
         <div className="flex items-center gap-1 ml-2">
           {patient.id && (
-            <button
-              onClick={handleHistoryClick}
-              className="p-1.5 text-purple-600 hover:bg-purple-50 rounded"
-              title="Életút megtekintése"
-            >
-              <History className="w-4 h-4" />
-            </button>
+            <>
+              <button
+                onClick={handleMessagesClick}
+                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
+                title="Üzenetek és érintkezési napló"
+              >
+                <MessageCircle className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleHistoryClick}
+                className="p-1.5 text-purple-600 hover:bg-purple-50 rounded"
+                title="Életút megtekintése"
+              >
+                <History className="w-4 h-4" />
+              </button>
+            </>
           )}
           {opDocumentCount > 0 && (
             <button

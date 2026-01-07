@@ -1046,3 +1046,77 @@ export async function sendNewAppointmentRequestToAdmin(
     html,
   });
 }
+
+/**
+ * Send new message notification to recipient
+ * Called when a new message is sent (doctor to patient or patient to doctor)
+ */
+export async function sendNewMessageNotification(
+  recipientEmail: string,
+  recipientName: string | null,
+  recipientNem: string | null,
+  senderName: string | null,
+  senderType: 'doctor' | 'patient',
+  messageSubject: string | null,
+  messagePreview: string,
+  baseUrl: string
+): Promise<void> {
+  // Üdvözlés: Tisztelt Vezetknév Keresztnév Úr/Hölgy
+  let greeting = 'Tisztelt';
+  if (recipientName) {
+    const nameParts = recipientName.trim().split(/\s+/);
+    if (nameParts.length >= 2) {
+      const vezeteknev = nameParts[0];
+      const keresztnev = nameParts.slice(1).join(' ');
+      const title = recipientNem === 'no' ? 'Hölgy' : recipientNem === 'ferfi' ? 'Úr' : '';
+      greeting = `Tisztelt ${vezeteknev} ${keresztnev} ${title}`.trim();
+    } else {
+      greeting = `Tisztelt ${recipientName}`;
+    }
+  } else {
+    greeting = senderType === 'doctor' ? 'Tisztelt Beteg' : 'Tisztelt Orvos';
+  }
+
+  const senderLabel = senderType === 'doctor' ? 'orvosától' : 'betegétől';
+  const portalLink = senderType === 'doctor' 
+    ? `${baseUrl}/patient-portal/messages`
+    : `${baseUrl}/patients`;
+
+  // Üzenet előnézet (első 200 karakter)
+  const preview = messagePreview.length > 200 
+    ? messagePreview.substring(0, 200) + '...' 
+    : messagePreview;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #2563eb;">Új üzenet érkezett</h2>
+      <p>${greeting}!</p>
+      <p>Új üzenetet kaptak ${senderLabel}:</p>
+      ${messageSubject ? `<p><strong>Tárgy:</strong> ${messageSubject}</p>` : ''}
+      <div style="background-color: #f9fafb; border-left: 4px solid #2563eb; padding: 15px; margin: 20px 0; border-radius: 4px;">
+        <p style="margin: 0; color: #6b7280; font-size: 14px; font-style: italic;">
+          ${senderName ? `<strong>${senderName}</strong> írta:` : 'Üzenet:'}
+        </p>
+        <p style="margin: 10px 0 0 0; color: #111827; white-space: pre-wrap;">${preview}</p>
+      </div>
+      <p style="margin-top: 20px;">
+        <a href="${portalLink}" style="display: inline-block; background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+          Üzenet megtekintése
+        </a>
+      </p>
+      <p style="color: #6b7280; font-size: 14px; margin-top: 20px;">
+        Ha a gomb nem működik, másolja be az alábbi linket a böngészőjébe:<br>
+        <a href="${portalLink}" style="color: #3b82f6;">${portalLink}</a>
+      </p>
+      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: recipientEmail,
+    subject: messageSubject 
+      ? `Új üzenet: ${messageSubject} - Maxillofaciális Rehabilitáció`
+      : 'Új üzenet - Maxillofaciális Rehabilitáció',
+    html,
+  });
+}

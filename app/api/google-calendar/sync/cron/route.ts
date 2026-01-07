@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
     );
 
     const results = [];
+    let hasErrors = false;
     
     for (const user of usersResult.rows) {
       try {
@@ -39,10 +40,16 @@ export async function GET(request: NextRequest) {
           ...syncResult,
         });
       } catch (error) {
+        hasErrors = true;
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error(`[cron sync] Error syncing user ${user.id} (${user.email}):`, errorMessage);
         results.push({
           userId: user.id,
           email: user.email,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: errorMessage,
+          created: 0,
+          updated: 0,
+          deleted: 0,
         });
       }
     }
@@ -51,8 +58,10 @@ export async function GET(request: NextRequest) {
     const totalUpdated = results.reduce((sum, r) => sum + ('updated' in r ? (r.updated || 0) : 0), 0);
     const totalDeleted = results.reduce((sum, r) => sum + ('deleted' in r ? (r.deleted || 0) : 0), 0);
 
+    // Ne dobjunk 500-as hibát, ha csak részleges sikertelenség van
+    // Visszaadjuk a részleges eredményeket is
     return NextResponse.json({
-      success: true,
+      success: !hasErrors, // false ha voltak hibák
       timestamp: new Date().toISOString(),
       usersProcessed: results.length,
       summary: {
@@ -61,6 +70,9 @@ export async function GET(request: NextRequest) {
         totalDeleted,
       },
       details: results,
+      warnings: hasErrors ? 'Some users failed to sync, check details' : undefined,
+    }, {
+      status: hasErrors ? 207 : 200 // 207 Multi-Status ha voltak hibák
     });
   } catch (error) {
     console.error('Error in cron sync:', error);

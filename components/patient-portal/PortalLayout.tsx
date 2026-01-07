@@ -3,7 +3,7 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Logo } from '@/components/Logo';
-import { LogOut, LayoutDashboard, Calendar, FileText, User } from 'lucide-react';
+import { LogOut, LayoutDashboard, Calendar, FileText, User, MessageCircle } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
 
 interface PortalLayoutProps {
@@ -116,6 +116,17 @@ export function PortalLayout({ children }: PortalLayoutProps) {
             >
               <FileText className="w-4 h-4" />
               Dokumentumok
+            </a>
+            <a
+              href="/patient-portal/messages"
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                pathname === '/patient-portal/messages'
+                  ? 'text-medical-primary border-medical-primary'
+                  : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
+              }`}
+            >
+              <MessageCircle className="w-4 h-4" />
+              Üzenetek
             </a>
             <a
               href="/patient-portal/profile"

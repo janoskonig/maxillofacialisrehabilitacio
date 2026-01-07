@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useMemo, memo } from 'react';
 import { Patient } from '@/lib/types';
-import { Phone, Mail, Calendar, FileText, Eye, Pencil, CheckCircle2, XCircle, Clock, Trash2, ArrowUp, ArrowDown, Image, Camera, AlertCircle, Clock as ClockIcon } from 'lucide-react';
+import { Phone, Mail, Calendar, FileText, Eye, Pencil, CheckCircle2, XCircle, Clock, Trash2, ArrowUp, ArrowDown, Image, Camera, AlertCircle, Clock as ClockIcon, MessageCircle } from 'lucide-react';
 import { formatDateForDisplay, calculateAge } from '@/lib/dateUtils';
 import { PatientCard } from './PatientCard';
 import { useIsMobile } from '@/hooks/useMediaQuery';
+import { useRouter } from 'next/navigation';
 
 interface PatientListProps {
   patients: Patient[];
@@ -34,6 +35,7 @@ interface AppointmentInfo {
 }
 
 function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, onViewFoto, canEdit = false, canDelete = false, userRole, sortField, sortDirection = 'asc', onSort, searchQuery = '' }: PatientListProps) {
+  const router = useRouter();
   const [appointments, setAppointments] = useState<Record<string, AppointmentInfo>>({});
   const [loadingAppointments, setLoadingAppointments] = useState(false);
   const [opDocuments, setOpDocuments] = useState<Record<string, number>>({});
@@ -522,6 +524,18 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                 </td>
                 <td className="px-3 py-2 whitespace-nowrap text-right text-xs font-medium">
                   <div className="flex justify-end space-x-1.5">
+                    {patient.id && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(`/patients/${patient.id}`);
+                        }}
+                        className="text-blue-600 hover:text-blue-800"
+                        title="Üzenetek és érintkezési napló"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     <button
                       onClick={() => onView(patient)}
                       className="text-medical-primary hover:text-blue-700"

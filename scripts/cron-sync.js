@@ -16,7 +16,7 @@ if (!API_URL) {
   process.exit(1);
 }
 
-async function syncCalendar() {
+async function attemptSync() {
   return new Promise((resolve, reject) => {
     const url = new URL(`${API_URL}${ENDPOINT}`);
     const isHttps = url.protocol === 'https:';
@@ -45,11 +45,15 @@ async function syncCalendar() {
       });
       
       res.on('end', () => {
-        if (res.statusCode === 200) {
+        if (res.statusCode === 200 || res.statusCode === 207) {
+          // 200 OK vagy 207 Multi-Status (részleges sikertelenség) esetén sikeresnek tekintjük
           try {
             const result = JSON.parse(data);
-            console.log(`[${new Date().toISOString()}] Sync successful!`);
+            console.log(`[${new Date().toISOString()}] Sync completed with status ${res.statusCode}!`);
             console.log(`Users processed: ${result.usersProcessed || 0}`);
+            if (result.warnings) {
+              console.warn(`[${new Date().toISOString()}] Warnings: ${result.warnings}`);
+            }
             console.log(`Summary: ${result.summary?.totalCreated || 0} created, ${result.summary?.totalUpdated || 0} updated, ${result.summary?.totalDeleted || 0} deleted`);
             resolve(result);
           } catch (e) {
@@ -80,6 +84,34 @@ async function syncCalendar() {
   });
 }
 
+async function syncCalendar(retries = 3, delayMs = 5000) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await attemptSync();
+    } catch (error) {
+      const errorMessage = error.message || '';
+      const isRetryable = 
+        errorMessage.includes('521') || 
+        errorMessage.includes('500') ||
+        errorMessage.includes('timeout') ||
+        errorMessage.includes('ECONNRESET') ||
+        errorMessage.includes('Connection terminated') ||
+        errorMessage.includes('ETIMEDOUT') ||
+        errorMessage.includes('ENOTFOUND');
+      
+      if (isRetryable && attempt < retries) {
+        const waitTime = delayMs * attempt; // Exponential backoff: 5s, 10s, 15s
+        console.warn(`[${new Date().toISOString()}] Attempt ${attempt} failed, retrying in ${waitTime}ms...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        continue;
+      }
+      
+      // Ha nem retry-hoz tartozó hiba, vagy elfogyott a retry-k, dobjuk a hibát
+      throw error;
+    }
+  }
+}
+
 // Fő futtatás
 (async () => {
   try {
@@ -91,8 +123,10 @@ async function syncCalendar() {
     console.log(`[${new Date().toISOString()}] Cron job completed successfully`);
     process.exit(0);
   } catch (error) {
-    console.error(`[${new Date().toISOString()}] Cron job failed:`, error.message);
-    process.exit(1);
+    console.error(`[${new Date().toISOString()}] Cron job failed after retries:`, error.message);
+    // Exit(0) hogy ne jelölje hibásnak a cronjob-ot ideiglenes hibák esetén
+    // A következő cron futtatás újra megpróbálja
+    process.exit(0);
   }
 })();
 

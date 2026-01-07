@@ -225,22 +225,50 @@ export async function refreshAccessTokenIfNeeded(userId: string): Promise<string
     });
     
     return credentials.access_token;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error refreshing access token:', error);
     
-    // Ha a refresh token invalid, letiltjuk a Google Calendar integrációt
-    const pool = getDbPool();
-    await pool.query(
-      `UPDATE users 
-       SET google_calendar_enabled = false,
-           google_calendar_access_token = NULL,
-           google_calendar_token_expires_at = NULL
-       WHERE id = $1`,
-      [userId]
-    );
+    // Ellenőrizzük, hogy valóban invalid token hiba-e, vagy csak ideiglenes hálózati probléma
+    const isInvalidTokenError = 
+      error?.code === 'invalid_grant' ||
+      error?.message?.includes('invalid_grant') ||
+      error?.message?.includes('invalid_token') ||
+      error?.response?.status === 400 ||
+      (error?.response?.status >= 400 && error?.response?.status < 500 && 
+       !error?.response?.status?.toString().startsWith('5')); // 4xx hibák (kivéve 5xx)
     
-    // Cache törlése
-    tokenCache.delete(userId);
+    const isNetworkError = 
+      error?.code === 'ECONNRESET' ||
+      error?.code === 'ETIMEDOUT' ||
+      error?.code === 'ENOTFOUND' ||
+      error?.code === 'ECONNREFUSED' ||
+      error?.message?.includes('Connection terminated') ||
+      error?.message?.includes('timeout') ||
+      error?.message?.includes('ECONNRESET') ||
+      error?.message?.includes('ETIMEDOUT') ||
+      error?.response?.status >= 500; // 5xx hibák
+    
+    // Csak akkor tiltsuk le, ha valóban invalid token hiba van
+    // Ideiglenes hálózati hibák esetén ne tiltsuk le
+    if (isInvalidTokenError && !isNetworkError) {
+      console.error(`[refreshAccessTokenIfNeeded] Invalid refresh token detected for user ${userId}, disabling Google Calendar`);
+      const pool = getDbPool();
+      await pool.query(
+        `UPDATE users 
+         SET google_calendar_enabled = false,
+             google_calendar_access_token = NULL,
+             google_calendar_token_expires_at = NULL
+         WHERE id = $1`,
+        [userId]
+      );
+      
+      // Cache törlése
+      tokenCache.delete(userId);
+    } else {
+      // Ideiglenes hiba esetén csak logoljuk és null-t adunk vissza
+      // A következő próbálkozás újra megpróbálja
+      console.warn(`[refreshAccessTokenIfNeeded] Temporary error refreshing token for user ${userId}, will retry later. Error: ${error?.message || 'Unknown error'}`);
+    }
     
     return null;
   }
