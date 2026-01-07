@@ -499,12 +499,86 @@ export async function PUT(
       const changes: string[] = [];
       const newPatient = result.rows[0];
       
-      // Helper function to normalize values for comparison
-      const normalize = (val: any): string => {
+      // Helper function to normalize dates to YYYY-MM-DD format
+      const normalizeDate = (val: any): string => {
+        if (!val) return '';
+        try {
+          const date = new Date(val);
+          if (isNaN(date.getTime())) return String(val).trim();
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+        } catch {
+          return String(val).trim();
+        }
+      };
+
+      // Helper function to normalize JSON objects with sorted keys
+      const normalizeJSON = (val: any): string => {
+        if (!val) return '{}';
+        try {
+          if (typeof val === 'string') {
+            // Try to parse if it's a JSON string
+            const parsed = JSON.parse(val);
+            return normalizeJSON(parsed);
+          }
+          if (Array.isArray(val)) {
+            // Sort array items if they are objects
+            const sorted = val.map(item => {
+              if (typeof item === 'object' && item !== null) {
+                return Object.keys(item).sort().reduce((acc, key) => {
+                  acc[key] = item[key];
+                  return acc;
+                }, {} as any);
+              }
+              return item;
+            });
+            return JSON.stringify(sorted);
+          }
+          if (typeof val === 'object' && val !== null) {
+            // Sort object keys
+            const sorted = Object.keys(val).sort().reduce((acc, key) => {
+              acc[key] = val[key];
+              return acc;
+            }, {} as any);
+            return JSON.stringify(sorted);
+          }
+          return JSON.stringify(val);
+        } catch {
+          return JSON.stringify(val);
+        }
+      };
+
+      // Helper function to normalize values for comparison and storage
+      const normalize = (val: any, fieldName?: string): string => {
         if (val === null || val === undefined) return '';
         if (typeof val === 'boolean') return val ? 'true' : 'false';
-        if (typeof val === 'object') return JSON.stringify(val);
+        
+        // Handle date fields
+        const dateFields = ['szuletesi_datum', 'mutet_ideje', 'felvetel_datuma', 'felso_fogpotlas_mikor', 
+                           'also_fogpotlas_mikor', 'baleset_idopont', 'arajanlatkero_datuma'];
+        if (fieldName && dateFields.includes(fieldName)) {
+          return normalizeDate(val);
+        }
+        
+        // Handle JSON array fields (kezelesi_terv fields)
+        const jsonArrayFields = ['kezelesi_terv_felso', 'kezelesi_terv_also', 'kezelesi_terv_arcot_erinto',
+                                 'veleszuletett_rendellenessegek'];
+        if (fieldName && jsonArrayFields.includes(fieldName)) {
+          return normalizeJSON(val);
+        }
+        
+        if (typeof val === 'object') {
+          return normalizeJSON(val);
+        }
+        
         return String(val).trim();
+      };
+      
+      // Helper function to get display value (for showing in UI)
+      const getDisplayValue = (val: string): string => {
+        return val || '(üres)';
       };
       
       // Field mapping: database field -> display name
@@ -572,69 +646,85 @@ export async function PUT(
         kezelesi_terv_arcot_erinto: 'Kezelési terv (arcot érintő rehabilitáció)',
       };
       
+      // Track changes for structured logging
+      const structuredChanges: Array<{
+        fieldName: string;
+        fieldDisplayName: string;
+        oldValue: string;
+        newValue: string;
+      }> = [];
+      
       // Check all fields for changes
       for (const [dbField, displayName] of Object.entries(fieldNames)) {
-        const oldVal = normalize(oldPatient[dbField]);
+        const oldVal = normalize(oldPatient[dbField], dbField);
         let newVal: string;
         
         // Map validated patient fields back to database field names
-        if (dbField === 'szuletesi_datum') newVal = normalize(validatedPatient.szuletesiDatum);
-        else if (dbField === 'beutalo_orvos') newVal = normalize(validatedPatient.beutaloOrvos);
-        else if (dbField === 'beutalo_intezmeny') newVal = normalize(validatedPatient.beutaloIntezmeny);
-        else if (dbField === 'beutalo_indokolas') newVal = normalize(validatedPatient.beutaloIndokolas);
-        else if (dbField === 'primer_mutet_leirasa') newVal = normalize(validatedPatient.primerMutetLeirasa);
-        else if (dbField === 'mutet_ideje') newVal = normalize(validatedPatient.mutetIdeje);
-        else if (dbField === 'szovettani_diagnozis') newVal = normalize(validatedPatient.szovettaniDiagnozis);
-        else if (dbField === 'nyaki_blokkdisszekcio') newVal = normalize(validatedPatient.nyakiBlokkdisszekcio);
-        else if (dbField === 'dohanyzas_szam') newVal = normalize(validatedPatient.dohanyzasSzam);
-        else if (dbField === 'kezelesre_erkezes_indoka') newVal = normalize(validatedPatient.kezelesreErkezesIndoka);
-        else if (dbField === 'maxilladefektus_van') newVal = normalize(validatedPatient.maxilladefektusVan);
-        else if (dbField === 'brown_fuggoleges_osztaly') newVal = normalize(validatedPatient.brownFuggolegesOsztaly);
-        else if (dbField === 'brown_vizszintes_komponens') newVal = normalize(validatedPatient.brownVizszintesKomponens);
-        else if (dbField === 'mandibuladefektus_van') newVal = normalize(validatedPatient.mandibuladefektusVan);
-        else if (dbField === 'kovacs_dobak_osztaly') newVal = normalize(validatedPatient.kovacsDobakOsztaly);
-        else if (dbField === 'nyelvmozgasok_akadalyozottak') newVal = normalize(validatedPatient.nyelvmozgásokAkadályozottak);
-        else if (dbField === 'gombocos_beszed') newVal = normalize(validatedPatient.gombocosBeszed);
-        else if (dbField === 'nyalmirigy_allapot') newVal = normalize(validatedPatient.nyalmirigyAllapot);
-        else if (dbField === 'fabian_fejerdy_protetikai_osztaly_felso') newVal = normalize(validatedPatient.fabianFejerdyProtetikaiOsztalyFelso);
-        else if (dbField === 'fabian_fejerdy_protetikai_osztaly_also') newVal = normalize(validatedPatient.fabianFejerdyProtetikaiOsztalyAlso);
-        else if (dbField === 'radioterapia_dozis') newVal = normalize(validatedPatient.radioterapiaDozis);
-        else if (dbField === 'radioterapia_datum_intervallum') newVal = normalize(validatedPatient.radioterapiaDatumIntervallum);
-        else if (dbField === 'chemoterapia_leiras') newVal = normalize(validatedPatient.chemoterapiaLeiras);
-        else if (dbField === 'fabian_fejerdy_protetikai_osztaly') newVal = normalize(validatedPatient.fabianFejerdyProtetikaiOsztaly);
-        else if (dbField === 'kezeleoorvos_intezete') newVal = normalize(validatedPatient.kezeleoorvosIntezete);
-        else if (dbField === 'felvetel_datuma') newVal = normalize(validatedPatient.felvetelDatuma);
-        else if (dbField === 'felso_fogpotlas_van') newVal = normalize(validatedPatient.felsoFogpotlasVan);
-        else if (dbField === 'felso_fogpotlas_mikor') newVal = normalize(validatedPatient.felsoFogpotlasMikor);
-        else if (dbField === 'felso_fogpotlas_keszito') newVal = normalize(validatedPatient.felsoFogpotlasKeszito);
-        else if (dbField === 'felso_fogpotlas_elegedett') newVal = normalize(validatedPatient.felsoFogpotlasElegedett);
-        else if (dbField === 'felso_fogpotlas_problema') newVal = normalize(validatedPatient.felsoFogpotlasProblema);
-        else if (dbField === 'also_fogpotlas_van') newVal = normalize(validatedPatient.alsoFogpotlasVan);
-        else if (dbField === 'also_fogpotlas_mikor') newVal = normalize(validatedPatient.alsoFogpotlasMikor);
-        else if (dbField === 'also_fogpotlas_keszito') newVal = normalize(validatedPatient.alsoFogpotlasKeszito);
-        else if (dbField === 'also_fogpotlas_elegedett') newVal = normalize(validatedPatient.alsoFogpotlasElegedett);
-        else if (dbField === 'also_fogpotlas_problema') newVal = normalize(validatedPatient.alsoFogpotlasProblema);
-        else if (dbField === 'felso_fogpotlas_tipus') newVal = normalize(validatedPatient.felsoFogpotlasTipus);
-        else if (dbField === 'also_fogpotlas_tipus') newVal = normalize(validatedPatient.alsoFogpotlasTipus);
-        else if (dbField === 'tnm_staging') newVal = normalize(validatedPatient.tnmStaging);
-        else if (dbField === 'bno') newVal = normalize(validatedPatient.bno);
-        else if (dbField === 'diagnozis') newVal = normalize(validatedPatient.diagnozis);
-        else if (dbField === 'kezelesi_terv_felso') newVal = normalize(validatedPatient.kezelesiTervFelso);
-        else if (dbField === 'kezelesi_terv_also') newVal = normalize(validatedPatient.kezelesiTervAlso);
-        else if (dbField === 'kezelesi_terv_arcot_erinto') newVal = normalize(validatedPatient.kezelesiTervArcotErinto);
-        else if (dbField === 'kortorteneti_osszefoglalo') newVal = normalize(validatedPatient.kortortenetiOsszefoglalo);
-        else if (dbField === 'kezelesi_terv_melleklet') newVal = normalize(validatedPatient.kezelesiTervMelleklet);
-        else if (dbField === 'szakorvosi_velemeny') newVal = normalize(validatedPatient.szakorvosiVelemény);
+        if (dbField === 'szuletesi_datum') newVal = normalize(validatedPatient.szuletesiDatum, dbField);
+        else if (dbField === 'beutalo_orvos') newVal = normalize(validatedPatient.beutaloOrvos, dbField);
+        else if (dbField === 'beutalo_intezmeny') newVal = normalize(validatedPatient.beutaloIntezmeny, dbField);
+        else if (dbField === 'beutalo_indokolas') newVal = normalize(validatedPatient.beutaloIndokolas, dbField);
+        else if (dbField === 'primer_mutet_leirasa') newVal = normalize(validatedPatient.primerMutetLeirasa, dbField);
+        else if (dbField === 'mutet_ideje') newVal = normalize(validatedPatient.mutetIdeje, dbField);
+        else if (dbField === 'szovettani_diagnozis') newVal = normalize(validatedPatient.szovettaniDiagnozis, dbField);
+        else if (dbField === 'nyaki_blokkdisszekcio') newVal = normalize(validatedPatient.nyakiBlokkdisszekcio, dbField);
+        else if (dbField === 'dohanyzas_szam') newVal = normalize(validatedPatient.dohanyzasSzam, dbField);
+        else if (dbField === 'kezelesre_erkezes_indoka') newVal = normalize(validatedPatient.kezelesreErkezesIndoka, dbField);
+        else if (dbField === 'maxilladefektus_van') newVal = normalize(validatedPatient.maxilladefektusVan, dbField);
+        else if (dbField === 'brown_fuggoleges_osztaly') newVal = normalize(validatedPatient.brownFuggolegesOsztaly, dbField);
+        else if (dbField === 'brown_vizszintes_komponens') newVal = normalize(validatedPatient.brownVizszintesKomponens, dbField);
+        else if (dbField === 'mandibuladefektus_van') newVal = normalize(validatedPatient.mandibuladefektusVan, dbField);
+        else if (dbField === 'kovacs_dobak_osztaly') newVal = normalize(validatedPatient.kovacsDobakOsztaly, dbField);
+        else if (dbField === 'nyelvmozgasok_akadalyozottak') newVal = normalize(validatedPatient.nyelvmozgásokAkadályozottak, dbField);
+        else if (dbField === 'gombocos_beszed') newVal = normalize(validatedPatient.gombocosBeszed, dbField);
+        else if (dbField === 'nyalmirigy_allapot') newVal = normalize(validatedPatient.nyalmirigyAllapot, dbField);
+        else if (dbField === 'fabian_fejerdy_protetikai_osztaly_felso') newVal = normalize(validatedPatient.fabianFejerdyProtetikaiOsztalyFelso, dbField);
+        else if (dbField === 'fabian_fejerdy_protetikai_osztaly_also') newVal = normalize(validatedPatient.fabianFejerdyProtetikaiOsztalyAlso, dbField);
+        else if (dbField === 'radioterapia_dozis') newVal = normalize(validatedPatient.radioterapiaDozis, dbField);
+        else if (dbField === 'radioterapia_datum_intervallum') newVal = normalize(validatedPatient.radioterapiaDatumIntervallum, dbField);
+        else if (dbField === 'chemoterapia_leiras') newVal = normalize(validatedPatient.chemoterapiaLeiras, dbField);
+        else if (dbField === 'fabian_fejerdy_protetikai_osztaly') newVal = normalize(validatedPatient.fabianFejerdyProtetikaiOsztaly, dbField);
+        else if (dbField === 'kezeleoorvos_intezete') newVal = normalize(validatedPatient.kezeleoorvosIntezete, dbField);
+        else if (dbField === 'felvetel_datuma') newVal = normalize(validatedPatient.felvetelDatuma, dbField);
+        else if (dbField === 'felso_fogpotlas_van') newVal = normalize(validatedPatient.felsoFogpotlasVan, dbField);
+        else if (dbField === 'felso_fogpotlas_mikor') newVal = normalize(validatedPatient.felsoFogpotlasMikor, dbField);
+        else if (dbField === 'felso_fogpotlas_keszito') newVal = normalize(validatedPatient.felsoFogpotlasKeszito, dbField);
+        else if (dbField === 'felso_fogpotlas_elegedett') newVal = normalize(validatedPatient.felsoFogpotlasElegedett, dbField);
+        else if (dbField === 'felso_fogpotlas_problema') newVal = normalize(validatedPatient.felsoFogpotlasProblema, dbField);
+        else if (dbField === 'also_fogpotlas_van') newVal = normalize(validatedPatient.alsoFogpotlasVan, dbField);
+        else if (dbField === 'also_fogpotlas_mikor') newVal = normalize(validatedPatient.alsoFogpotlasMikor, dbField);
+        else if (dbField === 'also_fogpotlas_keszito') newVal = normalize(validatedPatient.alsoFogpotlasKeszito, dbField);
+        else if (dbField === 'also_fogpotlas_elegedett') newVal = normalize(validatedPatient.alsoFogpotlasElegedett, dbField);
+        else if (dbField === 'also_fogpotlas_problema') newVal = normalize(validatedPatient.alsoFogpotlasProblema, dbField);
+        else if (dbField === 'felso_fogpotlas_tipus') newVal = normalize(validatedPatient.felsoFogpotlasTipus, dbField);
+        else if (dbField === 'also_fogpotlas_tipus') newVal = normalize(validatedPatient.alsoFogpotlasTipus, dbField);
+        else if (dbField === 'tnm_staging') newVal = normalize(validatedPatient.tnmStaging, dbField);
+        else if (dbField === 'bno') newVal = normalize(validatedPatient.bno, dbField);
+        else if (dbField === 'diagnozis') newVal = normalize(validatedPatient.diagnozis, dbField);
+        else if (dbField === 'kezelesi_terv_felso') newVal = normalize(validatedPatient.kezelesiTervFelso, dbField);
+        else if (dbField === 'kezelesi_terv_also') newVal = normalize(validatedPatient.kezelesiTervAlso, dbField);
+        else if (dbField === 'kezelesi_terv_arcot_erinto') newVal = normalize(validatedPatient.kezelesiTervArcotErinto, dbField);
+        else if (dbField === 'kortorteneti_osszefoglalo') newVal = normalize(validatedPatient.kortortenetiOsszefoglalo, dbField);
+        else if (dbField === 'kezelesi_terv_melleklet') newVal = normalize(validatedPatient.kezelesiTervMelleklet, dbField);
+        else if (dbField === 'szakorvosi_velemeny') newVal = normalize(validatedPatient.szakorvosiVelemény, dbField);
         else {
           // Direct field name mapping (camelCase to snake_case handled above)
           const camelField = dbField.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
-          newVal = normalize((validatedPatient as any)[camelField] ?? (validatedPatient as any)[dbField]);
+          newVal = normalize((validatedPatient as any)[camelField] ?? (validatedPatient as any)[dbField], dbField);
         }
         
         if (oldVal !== newVal) {
-          const oldDisplay = oldVal || '(üres)';
-          const newDisplay = newVal || '(üres)';
+          const oldDisplay = getDisplayValue(oldVal);
+          const newDisplay = getDisplayValue(newVal);
           changes.push(`${displayName}: "${oldDisplay}" → "${newDisplay}"`);
+          
+          // Store structured change
+          structuredChanges.push({
+            fieldName: dbField,
+            fieldDisplayName: displayName,
+            oldValue: oldVal,
+            newValue: newVal,
+          });
         }
       }
       
@@ -645,15 +735,48 @@ export async function PUT(
       ];
       
       for (const { db, patient, name } of jsonbFields) {
-        const oldJson = oldPatient[db] ? JSON.stringify(oldPatient[db]) : '{}';
+        const oldJson = oldPatient[db] ? normalizeJSON(oldPatient[db]) : '{}';
         const newJson = (validatedPatient as any)[patient] 
-          ? JSON.stringify((validatedPatient as any)[patient]) 
+          ? normalizeJSON((validatedPatient as any)[patient]) 
           : '{}';
         if (oldJson !== newJson) {
           changes.push(`${name}: módosítva`);
+          
+          // Store structured change for JSONB fields
+          structuredChanges.push({
+            fieldName: db,
+            fieldDisplayName: name,
+            oldValue: oldJson,
+            newValue: newJson,
+          });
         }
       }
       
+      // Log structured changes to patient_changes table
+      if (structuredChanges.length > 0) {
+        for (const change of structuredChanges) {
+          try {
+            await pool.query(
+              `INSERT INTO patient_changes (patient_id, field_name, field_display_name, old_value, new_value, changed_by, ip_address)
+               VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+              [
+                params.id,
+                change.fieldName,
+                change.fieldDisplayName,
+                change.oldValue || null,
+                change.newValue || null,
+                userEmail,
+                ipAddress
+              ]
+            );
+          } catch (changeLogError) {
+            // Log error but don't fail the request
+            console.error('Failed to log structured change:', changeLogError);
+          }
+        }
+      }
+      
+      // Keep existing activity_logs for compatibility
       const detailText = changes.length > 0 
         ? `Patient ID: ${params.id}, Name: ${newPatient.nev || 'N/A'}; Módosítások: ${changes.join('; ')}`
         : `Patient ID: ${params.id}, Name: ${newPatient.nev || 'N/A'}; Nincs változás`;

@@ -54,7 +54,7 @@ export function ConfirmDialog({
           }`} />
           <div className="flex-1">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">{title}</h3>
-            <p className="text-sm text-gray-700 mb-4">{message}</p>
+            <div className="text-sm text-gray-700 mb-4 whitespace-pre-line">{message}</div>
             <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
               <button
                 onClick={onCancel}

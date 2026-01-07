@@ -5,7 +5,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Patient, patientSchema, nyakiBlokkdisszekcioOptions, fabianFejerdyProtetikaiOsztalyOptions, kezelesiTervOptions, kezelesiTervArcotErintoTipusOptions, kezelesiTervArcotErintoElhorgonyzasOptions } from '@/lib/types';
 import { formatDateForInput } from '@/lib/dateUtils';
-import { X, Calendar, User, Phone, Mail, MapPin, FileText, AlertTriangle, Plus, Trash2, Download, Send } from 'lucide-react';
+import { X, Calendar, User, Phone, Mail, MapPin, FileText, AlertTriangle, Plus, Trash2, Download, Send, History } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { AppointmentBookingSection } from './AppointmentBookingSection';
 import { ConditionalAppointmentBooking } from './ConditionalAppointmentBooking';
 import { getCurrentUser } from '@/lib/auth';
@@ -233,6 +234,7 @@ interface PatientFormProps {
 }
 
 export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: PatientFormProps) {
+  const router = useRouter();
   const { confirm: confirmDialog, showToast } = useToast();
   const [userRole, setUserRole] = useState<string>('');
   const [kezeloorvosOptions, setKezeloorvosOptions] = useState<Array<{ name: string; intezmeny: string | null }>>([]);
@@ -248,13 +250,22 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     id: patient?.id || null, 
     updatedAt: patient?.updatedAt || null 
   });
+  // Ref for immediate access to current patient (for hasUnsavedChanges)
+  const currentPatientRef = useRef<Patient | null | undefined>(patient);
+  
+  // Wrapper function to update both state and ref
+  const updateCurrentPatient = useCallback((newPatient: Patient | null | undefined) => {
+    currentPatientRef.current = newPatient;
+    setCurrentPatient(newPatient);
+  }, []);
   const [labQuoteRequests, setLabQuoteRequests] = useState<Array<{ id: string; szoveg: string; datuma: string }>>([]);
   const [newQuoteSzoveg, setNewQuoteSzoveg] = useState<string>('');
   const [newQuoteDatuma, setNewQuoteDatuma] = useState<Date | null>(null);
 
   // State for "vanBeutalo" toggle (default true if bármely beutaló-adat van, or always true for new patients if surgeon role)
   // Note: userRole might not be loaded yet, so we'll update it in useEffect
-  const initialVanBeutalo = !!(patient?.beutaloOrvos || patient?.beutaloIntezmeny || patient?.kezelesreErkezesIndoka);
+  // Note: kezelesreErkezesIndoka is independent, not part of beutaló
+  const initialVanBeutalo = !!(patient?.beutaloOrvos || patient?.beutaloIntezmeny);
   const [vanBeutalo, setVanBeutalo] = useState(initialVanBeutalo);
 
   // Get user role and load kezelőorvos options
@@ -418,6 +429,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
   // Also reset when patient data changes (e.g., after save or refresh)
   // BUT: Don't reset if the change came from auto-save to prevent flickering
   useEffect(() => {
+    
     if (!patient || isViewOnly) {
       if (!patient && !isViewOnly) {
         // Reset to default values for new patient
@@ -434,14 +446,19 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           kezelesiTervArcotErinto: [],
         }, { keepDirty: false, keepDefaultValues: false });
       }
-      setCurrentPatient(patient || null);
+      updateCurrentPatient(patient || null);
       return;
     }
 
     // Ha az id változott, biztosan külső betöltés
     if (lastSavedPatientRef.current.id !== patient.id) {
       lastSavedPatientRef.current = { id: patient.id || null, updatedAt: patient.updatedAt || null };
-      setCurrentPatient(patient);
+      // Note: If backend doesn't return kezelesreErkezesIndoka, preserve it from currentPatientRef
+      const patientWithPreservedKezelesreErkezesIndoka = {
+        ...patient,
+        kezelesreErkezesIndoka: patient.kezelesreErkezesIndoka ?? currentPatientRef.current?.kezelesreErkezesIndoka ?? null,
+      };
+      updateCurrentPatient(patientWithPreservedKezelesreErkezesIndoka);
       // Reset form with current values to clear dirty state
       reset({
         ...patient,
@@ -468,7 +485,12 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     if (isAutoSavingRef.current && lastSavedPatientRef.current.id === patient.id) {
       // Frissítsük a ref-et, de ne fusson reset
       lastSavedPatientRef.current.updatedAt = patient.updatedAt || null;
-      setCurrentPatient(patient);
+      // Note: If backend doesn't return kezelesreErkezesIndoka, preserve it from currentPatientRef
+      const patientWithPreservedKezelesreErkezesIndoka = {
+        ...patient,
+        kezelesreErkezesIndoka: patient.kezelesreErkezesIndoka ?? currentPatientRef.current?.kezelesreErkezesIndoka ?? null,
+      };
+      updateCurrentPatient(patientWithPreservedKezelesreErkezesIndoka);
       return;
     }
 
@@ -479,7 +501,12 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       if (Math.abs(currentUpdated - lastUpdated) > 2000) {
         // Külső változás, frissítsük
         lastSavedPatientRef.current = { id: patient.id || null, updatedAt: patient.updatedAt || null };
-        setCurrentPatient(patient);
+        // Note: If backend doesn't return kezelesreErkezesIndoka, preserve it from currentPatientRef
+        const patientWithPreservedKezelesreErkezesIndoka = {
+          ...patient,
+          kezelesreErkezesIndoka: patient.kezelesreErkezesIndoka ?? currentPatientRef.current?.kezelesreErkezesIndoka ?? null,
+        };
+        updateCurrentPatient(patientWithPreservedKezelesreErkezesIndoka);
         reset({
           ...patient,
           szuletesiDatum: formatDateForInput(patient.szuletesiDatum),
@@ -504,7 +531,12 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
 
     // Egyébként ne fusson reset (valószínűleg auto-save vagy első betöltés)
     // Csak frissítsük a currentPatient-et és a ref-et
-    setCurrentPatient(patient);
+    // Note: If backend doesn't return kezelesreErkezesIndoka, preserve it from currentPatientRef
+    const patientWithPreservedKezelesreErkezesIndoka = {
+      ...patient,
+      kezelesreErkezesIndoka: patient.kezelesreErkezesIndoka ?? currentPatientRef.current?.kezelesreErkezesIndoka ?? null,
+    };
+    updateCurrentPatient(patientWithPreservedKezelesreErkezesIndoka);
     if (!lastSavedPatientRef.current.id) {
       // Első betöltés
       lastSavedPatientRef.current = { id: patient.id || null, updatedAt: patient.updatedAt || null };
@@ -742,7 +774,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           
           // Save patient with corrected data (invalid fields reverted to original)
           const savedPatient = await savePatient(patientToSave);
-          setCurrentPatient(savedPatient);
+          updateCurrentPatient(savedPatient);
           
           // Frissítsük a ref-et az utolsó mentett adatokkal
           lastSavedPatientRef.current = { 
@@ -775,8 +807,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         // Save patient silently (without alert)
         const savedPatient = await savePatient(patientToSave);
         
-        // Update local state
-        setCurrentPatient(savedPatient);
+        // Update local state (both state and ref)
+        updateCurrentPatient(savedPatient);
         
         // Frissítsük a ref-et az utolsó mentett adatokkal
         lastSavedPatientRef.current = {
@@ -1073,18 +1105,36 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       });
       
       // Prepare patient data with normalized fogak
+      // If vanBeutalo is false, clear beutaló fields (but NOT kezelesreErkezesIndoka - it's independent)
       const patientData: Patient = {
         ...data,
         id: currentPatient?.id,
         meglevoImplantatumok: implantatumok,
         meglevoFogak: normalizedFogak,
+        // Clear beutaló fields if vanBeutalo is false
+        beutaloOrvos: vanBeutalo ? data.beutaloOrvos : null,
+        beutaloIntezmeny: vanBeutalo ? data.beutaloIntezmeny : null,
+        beutaloIndokolas: vanBeutalo ? data.beutaloIndokolas : null,
       };
       
       // Save patient and get the saved patient back
       const savedPatient = await savePatient(patientData);
       
+      
       // Update currentPatient with saved patient data
-      setCurrentPatient(savedPatient);
+      // Note: If backend doesn't return kezelesreErkezesIndoka, use the value from patientData
+      const updatedSavedPatient = {
+        ...savedPatient,
+        kezelesreErkezesIndoka: savedPatient.kezelesreErkezesIndoka ?? patientData.kezelesreErkezesIndoka ?? null,
+      };
+      // Update currentPatient (both state and ref)
+      updateCurrentPatient(updatedSavedPatient);
+      
+      
+      // Update vanBeutalo state based on saved patient data
+      // Note: kezelesreErkezesIndoka is independent, not part of beutaló
+      const savedVanBeutalo = !!(savedPatient.beutaloOrvos || savedPatient.beutaloIntezmeny);
+      setVanBeutalo(savedVanBeutalo);
       
       // Update implantatumok and fogak state with saved values
       if (savedPatient.meglevoImplantatumok) {
@@ -1095,8 +1145,11 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       }
       
       // Reset form dirty state with saved patient data
-      reset(savedPatient ? {
+      // Note: If backend doesn't return kezelesreErkezesIndoka, use the value from patientData
+      const resetData = savedPatient ? {
         ...savedPatient,
+        // Ensure kezelesreErkezesIndoka is included (backend might not return it)
+        kezelesreErkezesIndoka: savedPatient.kezelesreErkezesIndoka ?? patientData.kezelesreErkezesIndoka ?? null,
         szuletesiDatum: formatDateForInput(savedPatient.szuletesiDatum),
         mutetIdeje: formatDateForInput(savedPatient.mutetIdeje),
         felvetelDatuma: formatDateForInput(savedPatient.felvetelDatuma),
@@ -1112,13 +1165,30 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           ...item,
           tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
         })) || [],
-      } : undefined, { keepDirty: false, keepDefaultValues: false });
+      } : undefined;
+      
+      
+      reset(resetData, { keepDirty: false, keepDefaultValues: false });
+      
       
       // Call onSave callback with saved patient
       onSave(savedPatient);
     } catch (error) {
-      // Error handling is done in onSave callback
-      onSave(data);
+      // Log error for debugging
+      console.error('Hiba a beteg mentésekor:', error);
+      
+      // Handle error locally - show toast message to user
+      let errorMessage = 'Hiba történt a beteg mentésekor. Kérjük, próbálja újra.';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      // Show error toast to user
+      showToast(`Hiba a mentés során: ${errorMessage}`, 'error');
+      
+      // DO NOT call onSave with invalid data
+      // The form will not be reset, so user data is preserved
+      // The parent component will not be notified (which is correct behavior for failed saves)
     }
   };
 
@@ -1137,11 +1207,16 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     });
     
     // Prepare patient data
+    // If vanBeutalo is false, clear beutaló fields
     const patientData: Patient = {
       ...formData,
       id: currentPatient?.id,
       meglevoImplantatumok: implantatumok,
       meglevoFogak: normalizedFogak,
+      // Clear beutaló fields if vanBeutalo is false
+      beutaloOrvos: vanBeutalo ? formData.beutaloOrvos : null,
+      beutaloIntezmeny: vanBeutalo ? formData.beutaloIntezmeny : null,
+      beutaloIndokolas: vanBeutalo ? formData.beutaloIndokolas : null,
     };
     
     // Validate using schema
@@ -1150,8 +1225,12 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     // Save patient directly via API (bypassing onSave callback to avoid alert)
     const savedPatient = await savePatient(validatedPatient);
     
-    // Update local state
-    setCurrentPatient(savedPatient);
+    // Update local state (both state and ref)
+    updateCurrentPatient(savedPatient);
+    
+    // Update vanBeutalo state based on saved patient data
+    const savedVanBeutalo = !!(savedPatient.beutaloOrvos || savedPatient.beutaloIntezmeny || savedPatient.kezelesreErkezesIndoka);
+    setVanBeutalo(savedVanBeutalo);
     
     // Update implantatumok and fogak state with saved values
     if (savedPatient.meglevoImplantatumok) {
@@ -1185,7 +1264,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     // The patient is saved, but we don't want to show the "Beteg mentve" popup
     
     return savedPatient.id || null;
-  }, [getValues, fogak, implantatumok, currentPatient, reset, setImplantatumok, setFogak, onSave]);
+  }, [getValues, fogak, implantatumok, currentPatient, reset, setImplantatumok, setFogak, onSave, vanBeutalo, setVanBeutalo]);
 
   // Save patient for booking - used when booking appointment before saving form
   const savePatientForBooking = useCallback(async (): Promise<Patient> => {
@@ -1202,11 +1281,16 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     });
     
     // Prepare patient data
+    // If vanBeutalo is false, clear beutaló fields
     const patientData: Patient = {
       ...formData,
       id: currentPatient?.id,
       meglevoImplantatumok: implantatumok,
       meglevoFogak: normalizedFogak,
+      // Clear beutaló fields if vanBeutalo is false
+      beutaloOrvos: vanBeutalo ? formData.beutaloOrvos : null,
+      beutaloIntezmeny: vanBeutalo ? formData.beutaloIntezmeny : null,
+      beutaloIndokolas: vanBeutalo ? formData.beutaloIndokolas : null,
     };
     
     // Validate using schema
@@ -1215,8 +1299,12 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     // Save patient
     const savedPatient = await savePatient(validatedPatient);
     
-    // Update local state
-    setCurrentPatient(savedPatient);
+    // Update local state (both state and ref)
+    updateCurrentPatient(savedPatient);
+    
+    // Update vanBeutalo state based on saved patient data
+    const savedVanBeutalo = !!(savedPatient.beutaloOrvos || savedPatient.beutaloIntezmeny || savedPatient.kezelesreErkezesIndoka);
+    setVanBeutalo(savedVanBeutalo);
     
     // Update implantatumok and fogak state with saved values
     if (savedPatient.meglevoImplantatumok) {
@@ -1247,22 +1335,30 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     } : undefined, { keepDirty: false, keepDefaultValues: false });
     
     return savedPatient;
-  }, [getValues, fogak, implantatumok, currentPatient, reset, setImplantatumok, setFogak]);
+  }, [getValues, fogak, implantatumok, currentPatient, reset, setImplantatumok, setFogak, vanBeutalo, setVanBeutalo]);
 
   // Helper function to compare field values with normalization
   const compareFieldValues = useCallback((field: keyof Patient, currentValue: any, originalValue: any): boolean => {
-    const currentNormalized = normalizeValue(currentValue);
-    const originalNormalized = normalizeValue(originalValue);
-
-    // Normalize dates for comparison
+    // Normalize dates for comparison - do this BEFORE normalizeValue
     const dateFields: (keyof Patient)[] = ['szuletesiDatum', 'mutetIdeje', 'felvetelDatuma', 'balesetIdopont'];
     if (dateFields.includes(field)) {
-      const currentDate = normalizeDate(currentNormalized);
-      const originalDate = normalizeDate(originalNormalized);
+      const currentDate = normalizeDate(currentValue);
+      const originalDate = normalizeDate(originalValue);
       return currentDate !== originalDate;
     }
 
-    // For arrays, use normalized comparison
+    // For arrays (like kezelesiTervFelso, kezelesiTervAlso, kezelesiTervArcotErinto), normalize dates inside
+    const arrayFields: (keyof Patient)[] = ['kezelesiTervFelso', 'kezelesiTervAlso', 'kezelesiTervArcotErinto'];
+    if (arrayFields.includes(field)) {
+      const currentNormalizedStr = normalizeArray(currentValue);
+      const originalNormalizedStr = normalizeArray(originalValue);
+      return currentNormalizedStr !== originalNormalizedStr;
+    }
+
+    const currentNormalized = normalizeValue(currentValue);
+    const originalNormalized = normalizeValue(originalValue);
+
+    // For other arrays, use normalized comparison
     if (Array.isArray(currentNormalized) || Array.isArray(originalNormalized)) {
       const currentNormalizedStr = normalizeArray(currentNormalized);
       const originalNormalizedStr = normalizeArray(originalNormalized);
@@ -1285,12 +1381,178 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     return currentNormalized !== originalNormalized;
   }, []);
 
+  // Get list of unsaved changes with field names
+  const getUnsavedChangesList = useCallback((): string[] => {
+    if (isViewOnly) return [];
+    
+    // Use currentPatientRef for immediate access (updated synchronously after save)
+    // Fall back to currentPatient state or patient prop
+    const referencePatient = currentPatientRef.current || currentPatient || patient;
+    const changes: string[] = [];
+    
+    // Field name mapping (camelCase to Hungarian display name)
+    const fieldNames: Record<string, string> = {
+      nev: 'Név',
+      taj: 'TAJ szám',
+      telefonszam: 'Telefonszám',
+      szuletesiDatum: 'Születési dátum',
+      nem: 'Nem',
+      email: 'Email',
+      cim: 'Cím',
+      varos: 'Város',
+      iranyitoszam: 'Irányítószám',
+      beutaloOrvos: 'Beutaló orvos',
+      beutaloIntezmeny: 'Beutaló intézmény',
+      beutaloIndokolas: 'Beutaló indokolás',
+      mutetIdeje: 'Műtét ideje',
+      szovettaniDiagnozis: 'Szövettani diagnózis',
+      nyakiBlokkdisszekcio: 'Nyaki blokkdisszekció',
+      alkoholfogyasztas: 'Alkoholfogyasztás',
+      dohanyzasSzam: 'Dohányzás',
+      kezelesreErkezesIndoka: 'Kezelésre érkezés indoka',
+      maxilladefektusVan: 'Maxilladefektus',
+      brownFuggolegesOsztaly: 'Brown függőleges osztály',
+      brownVizszintesKomponens: 'Brown vízszintes komponens',
+      mandibuladefektusVan: 'Mandibuladefektus',
+      kovacsDobakOsztaly: 'Kovács-Dobák osztály',
+      nyelvmozgásokAkadályozottak: 'Nyelvmozgások akadályozottak',
+      gombocosBeszed: 'Gombócos beszéd',
+      nyalmirigyAllapot: 'Nyálmirigy állapot',
+      radioterapia: 'Radioterápia',
+      radioterapiaDozis: 'Radioterápia dózis',
+      radioterapiaDatumIntervallum: 'Radioterápia dátumintervallum',
+      chemoterapia: 'Kemoterápia',
+      chemoterapiaLeiras: 'Kemoterápia leírás',
+      kezeleoorvos: 'Kezelőorvos',
+      kezeleoorvosIntezete: 'Kezelőorvos intézete',
+      felvetelDatuma: 'Felvétel dátuma',
+      felsoFogpotlasVan: 'Felső fogpótlás van',
+      alsoFogpotlasVan: 'Alsó fogpótlás van',
+      meglevoImplantatumok: 'Meglévő implantátumok',
+      meglevoFogak: 'Meglévő fogak',
+      vanBeutalo: 'Van beutaló',
+    };
+    
+    if (!isNewPatient && referencePatient) {
+      // Check vanBeutalo state
+      // Note: kezelesreErkezesIndoka is independent, not part of beutaló
+      const savedVanBeutalo = !!(referencePatient.beutaloOrvos || referencePatient.beutaloIntezmeny);
+      if (vanBeutalo !== savedVanBeutalo) {
+        changes.push(fieldNames.vanBeutalo || 'Van beutaló');
+      }
+      
+      // Check implantatumok and fogak
+      const originalImplantatumok = referencePatient.meglevoImplantatumok || {};
+      const originalFogak = referencePatient.meglevoFogak || {};
+      const implantatumokChanged = normalizeObject(implantatumok) !== normalizeObject(originalImplantatumok);
+      const fogakChanged = normalizeObject(fogak) !== normalizeObject(originalFogak);
+      
+      if (implantatumokChanged) {
+        changes.push(fieldNames.meglevoImplantatumok || 'Meglévő implantátumok');
+      }
+      if (fogakChanged) {
+        changes.push(fieldNames.meglevoFogak || 'Meglévő fogak');
+      }
+      
+      // Check form fields
+      const keyFields: (keyof Patient)[] = [
+        'nev', 'taj', 'telefonszam', 'email', 'szuletesiDatum', 'nem',
+        'cim', 'varos', 'iranyitoszam',
+        'beutaloOrvos', 'beutaloIntezmeny', 'beutaloIndokolas', 'mutetIdeje',
+        'szovettaniDiagnozis', 'nyakiBlokkdisszekcio',
+        'radioterapia', 'radioterapiaDozis', 'radioterapiaDatumIntervallum',
+        'chemoterapia', 'chemoterapiaLeiras',
+        'alkoholfogyasztas', 'dohanyzasSzam', 'kezelesreErkezesIndoka',
+        'maxilladefektusVan', 'brownFuggolegesOsztaly', 'brownVizszintesKomponens',
+        'mandibuladefektusVan', 'kovacsDobakOsztaly',
+        'nyelvmozgásokAkadályozottak', 'gombocosBeszed', 'nyalmirigyAllapot',
+        'tnmStaging',
+        'felsoFogpotlasVan', 'felsoFogpotlasMikor', 'felsoFogpotlasKeszito',
+        'felsoFogpotlasElegedett', 'felsoFogpotlasProblema', 'felsoFogpotlasTipus',
+        'alsoFogpotlasVan', 'alsoFogpotlasMikor', 'alsoFogpotlasKeszito',
+        'alsoFogpotlasElegedett', 'alsoFogpotlasProblema', 'alsoFogpotlasTipus',
+        'fabianFejerdyProtetikaiOsztalyFelso', 'fabianFejerdyProtetikaiOsztalyAlso',
+        'fabianFejerdyProtetikaiOsztaly',
+        'kezeleoorvos', 'kezeleoorvosIntezete', 'felvetelDatuma',
+        'nemIsmertPoziciokbanImplantatum', 'nemIsmertPoziciokbanImplantatumRészletek',
+        'kezelesiTervFelso', 'kezelesiTervAlso', 'kezelesiTervArcotErinto',
+        'balesetIdopont', 'balesetEtiologiaja', 'balesetEgyeb',
+        'primerMutetLeirasa', 'bno', 'diagnozis',
+        'veleszuletettRendellenessegek', 'veleszuletettMutetekLeirasa'
+      ];
+      
+      keyFields.forEach(field => {
+        const currentValue = formValues[field];
+        const originalValue = referencePatient[field];
+        if (compareFieldValues(field, currentValue, originalValue)) {
+          const fieldName = fieldNames[field] || field;
+          changes.push(fieldName);
+        }
+      });
+    } else if (isNewPatient && currentPatient?.id) {
+      // For new patients that have been saved, check changes since last save
+      const keyFields: (keyof Patient)[] = [
+        'nev', 'taj', 'telefonszam', 'email', 'szuletesiDatum', 'nem',
+        'cim', 'varos', 'iranyitoszam',
+        'beutaloOrvos', 'beutaloIntezmeny', 'beutaloIndokolas', 'mutetIdeje',
+        'szovettaniDiagnozis', 'nyakiBlokkdisszekcio',
+        'radioterapia', 'radioterapiaDozis', 'radioterapiaDatumIntervallum',
+        'chemoterapia', 'chemoterapiaLeiras',
+        'alkoholfogyasztas', 'dohanyzasSzam', 'kezelesreErkezesIndoka',
+        'maxilladefektusVan', 'brownFuggolegesOsztaly', 'brownVizszintesKomponens',
+        'mandibuladefektusVan', 'kovacsDobakOsztaly',
+        'nyelvmozgásokAkadályozottak', 'gombocosBeszed', 'nyalmirigyAllapot',
+        'tnmStaging',
+        'felsoFogpotlasVan', 'felsoFogpotlasMikor', 'felsoFogpotlasKeszito',
+        'felsoFogpotlasElegedett', 'felsoFogpotlasProblema', 'felsoFogpotlasTipus',
+        'alsoFogpotlasVan', 'alsoFogpotlasMikor', 'alsoFogpotlasKeszito',
+        'alsoFogpotlasElegedett', 'alsoFogpotlasProblema', 'alsoFogpotlasTipus',
+        'fabianFejerdyProtetikaiOsztalyFelso', 'fabianFejerdyProtetikaiOsztalyAlso',
+        'fabianFejerdyProtetikaiOsztaly',
+        'kezeleoorvos', 'kezeleoorvosIntezete', 'felvetelDatuma',
+        'nemIsmertPoziciokbanImplantatum', 'nemIsmertPoziciokbanImplantatumRészletek',
+        'kezelesiTervFelso', 'kezelesiTervAlso', 'kezelesiTervArcotErinto',
+        'balesetIdopont', 'balesetEtiologiaja', 'balesetEgyeb',
+        'primerMutetLeirasa', 'bno', 'diagnozis',
+        'veleszuletettRendellenessegek', 'veleszuletettMutetekLeirasa'
+      ];
+      
+      // Note: kezelesreErkezesIndoka is independent, not part of beutaló
+      const savedVanBeutalo = !!(currentPatient.beutaloOrvos || currentPatient.beutaloIntezmeny);
+      if (vanBeutalo !== savedVanBeutalo) {
+        changes.push(fieldNames.vanBeutalo || 'Van beutaló');
+      }
+      
+      const implantatumokChanged = normalizeObject(implantatumok) !== normalizeObject(currentPatient.meglevoImplantatumok || {});
+      const fogakChanged = normalizeObject(fogak) !== normalizeObject(currentPatient.meglevoFogak || {});
+      
+      if (implantatumokChanged) {
+        changes.push(fieldNames.meglevoImplantatumok || 'Meglévő implantátumok');
+      }
+      if (fogakChanged) {
+        changes.push(fieldNames.meglevoFogak || 'Meglévő fogak');
+      }
+      
+      keyFields.forEach(field => {
+        const currentValue = formValues[field];
+        const originalValue = currentPatient[field];
+        if (compareFieldValues(field, currentValue, originalValue)) {
+          const fieldName = fieldNames[field] || field;
+          changes.push(fieldName);
+        }
+      });
+    }
+    
+    return changes;
+  }, [isViewOnly, patient, currentPatient, implantatumok, fogak, isNewPatient, formValues, compareFieldValues, vanBeutalo]);
+
   // Check if form has unsaved changes
   const hasUnsavedChanges = useCallback(() => {
     if (isViewOnly) return false;
     
-    // Use currentPatient for comparison (it gets updated when patient is saved via booking or auto-save)
-    const referencePatient = currentPatient || patient;
+    // Use currentPatientRef for immediate access (updated synchronously after save)
+    // Fall back to currentPatient state or patient prop
+    const referencePatient = currentPatientRef.current || currentPatient || patient;
     
     // For existing patients: compare current values with original patient data
     if (!isNewPatient && referencePatient) {
@@ -1303,6 +1565,13 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
       
       // If implantatumok or fogak changed, there are unsaved changes
       if (implantatumokChanged || fogakChanged) {
+        return true;
+      }
+      
+      // Check if vanBeutalo state matches saved patient data
+      // Note: kezelesreErkezesIndoka is independent, not part of beutaló
+      const savedVanBeutalo = !!(referencePatient.beutaloOrvos || referencePatient.beutaloIntezmeny);
+      if (vanBeutalo !== savedVanBeutalo) {
         return true;
       }
       
@@ -1346,11 +1615,19 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         'veleszuletettRendellenessegek', 'veleszuletettMutetekLeirasa'
       ];
         
+      // Special handling for kezelesreErkezesIndoka: if referencePatient doesn't have it,
+      // use form value as reference (because if form has it, it's saved)
+      const referenceKezelesreErkezesIndoka = referencePatient.kezelesreErkezesIndoka ?? formValues.kezelesreErkezesIndoka ?? null;
+        
       // Check if any key field actually changed
       const hasActualChange = keyFields.some(field => {
         const currentValue = formValues[field];
-        const originalValue = referencePatient[field];
-        return compareFieldValues(field, currentValue, originalValue);
+        // For kezelesreErkezesIndoka, use the special reference value
+        const originalValue = field === 'kezelesreErkezesIndoka' 
+          ? referenceKezelesreErkezesIndoka 
+          : referencePatient[field];
+        const result = compareFieldValues(field, currentValue, originalValue);
+        return result;
       });
         
       return hasActualChange;
@@ -1407,7 +1684,12 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         const implantatumokChanged = normalizeObject(implantatumok) !== normalizeObject(currentPatient.meglevoImplantatumok || {});
         const fogakChanged = normalizeObject(fogak) !== normalizeObject(currentPatient.meglevoFogak || {});
         
-        return hasActualChange || implantatumokChanged || fogakChanged;
+        // Check if vanBeutalo state matches saved patient data
+        // Note: kezelesreErkezesIndoka is independent, not part of beutaló
+        const savedVanBeutalo = !!(currentPatient.beutaloOrvos || currentPatient.beutaloIntezmeny);
+        const vanBeutaloChanged = vanBeutalo !== savedVanBeutalo;
+        
+        return hasActualChange || implantatumokChanged || fogakChanged || vanBeutaloChanged;
       }
       
       // If patient hasn't been saved yet, check if there's any data
@@ -1430,7 +1712,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     }
     
     return false;
-  }, [isViewOnly, patient, currentPatient, implantatumok, fogak, isNewPatient, formValues, compareFieldValues]);
+  }, [isViewOnly, patient, currentPatient, implantatumok, fogak, isNewPatient, formValues, compareFieldValues, vanBeutalo]);
 
   // Handle form cancellation - check for unsaved changes
   const handleCancel = async () => {
@@ -1441,8 +1723,17 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
     
     // Check if there are unsaved changes
     if (hasUnsavedChanges()) {
+      const changes = getUnsavedChangesList();
+      let message = 'Van nem mentett változás az űrlapban. Biztosan bezárja az űrlapot? A változások elvesznek.';
+      
+      if (changes.length > 0) {
+        const changesList = changes.slice(0, 10).join(', '); // Limit to 10 items
+        const moreText = changes.length > 10 ? ` és még ${changes.length - 10} további` : '';
+        message = `Van nem mentett változás az űrlapban:\n\n${changesList}${moreText}\n\nBiztosan bezárja az űrlapot? A változások elvesznek.`;
+      }
+      
       const shouldCancel = await confirmDialog(
-        'Van nem mentett változás az űrlapban. Biztosan bezárja az űrlapot? A változások elvesznek.',
+        message,
         {
           title: 'Nem mentett változások',
           confirmText: 'Igen, bezárom',
@@ -1588,9 +1879,21 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         </div>
       )}
       <div className="flex justify-between items-center mb-6">
-        <h3 className="text-2xl font-bold text-gray-900">
-          {isViewOnly ? 'Beteg megtekintése' : patient ? 'Beteg szerkesztése' : 'Új beteg'}
-        </h3>
+        <div className="flex items-center gap-4">
+          <h3 className="text-2xl font-bold text-gray-900">
+            {isViewOnly ? 'Beteg megtekintése' : patient ? 'Beteg szerkesztése' : 'Új beteg'}
+          </h3>
+          {patient?.id && (
+            <button
+              onClick={() => router.push(`/patients/${patient.id}/history`)}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-colors"
+              title="Változások megtekintése"
+            >
+              <History className="w-4 h-4" />
+              <span className="hidden sm:inline">Életút</span>
+            </button>
+          )}
+        </div>
         <button
           onClick={handleCancel}
           className="text-gray-400 hover:text-gray-600"
@@ -3476,7 +3779,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           isPatientDirty={!isViewOnly && hasUnsavedChanges()}
           isNewPatient={isNewPatient}
           onPatientSaved={(savedPatient) => {
-            setCurrentPatient(savedPatient);
+            updateCurrentPatient(savedPatient);
             // Also notify parent component
             onSave(savedPatient);
           }}

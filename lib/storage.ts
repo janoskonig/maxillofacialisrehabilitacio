@@ -117,6 +117,12 @@ export async function savePatient(patient: Patient): Promise<Patient> {
     );
 
     const data = await handleApiResponse<{ patient: Patient }>(response);
+    
+    // Validate response format
+    if (!data || !data.patient) {
+      throw new Error('Érvénytelen válasz a szervertől: hiányzó beteg adatok');
+    }
+    
     return data.patient;
   } catch (error: any) {
     console.error('Hiba a beteg mentésekor:', error);

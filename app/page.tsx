@@ -168,10 +168,15 @@ export default function Home() {
       // If patient already has an ID, it means it was already saved in PatientForm
       // Optimalizálás: ne kérdezzük le újra az adatbázisból, használjuk a kapott adatot
       if (patientData.id) {
-        // Reload patients to get latest data from database
-        await loadPatients();
         // Use the provided patient data directly (it's already up-to-date from the save response)
+        // Set editing patient FIRST to ensure patient prop is updated with all fields (including kezelesreErkezesIndoka)
+        // before any useEffect runs that might reload patient data
         setEditingPatient(patientData);
+        // Reload patients list in background (but patient prop is already updated with complete data)
+        // Use setTimeout to ensure setEditingPatient completes before loadPatients triggers useEffect
+        setTimeout(() => {
+          loadPatients();
+        }, 0);
         if (!isSilent) {
           showToast('Betegadat sikeresen mentve', 'success');
         }
@@ -179,6 +184,8 @@ export default function Home() {
       }
       
       // For new patients or if save failed in PatientForm, save here
+      // Note: If save failed in PatientForm, onSubmit already handled the error
+      // This should only be called for truly new patients (without ID)
       const validatedPatient = patientSchema.parse(patientData);
       await savePatient(validatedPatient);
       await loadPatients();

@@ -1,8 +1,9 @@
 'use client';
 
 import { Patient } from '@/lib/types';
-import { Phone, Mail, Calendar, Eye, Pencil, Trash2, Image, Camera, CheckCircle2, XCircle, Clock, Clock as ClockIcon } from 'lucide-react';
+import { Phone, Mail, Calendar, Eye, Pencil, Trash2, Image, Camera, CheckCircle2, XCircle, Clock, Clock as ClockIcon, History } from 'lucide-react';
 import { formatDateForDisplay, calculateAge } from '@/lib/dateUtils';
+import { useRouter } from 'next/navigation';
 
 interface AppointmentInfo {
   id: string;
@@ -42,6 +43,13 @@ export function PatientCard({
   canDelete = false,
   userRole,
 }: PatientCardProps) {
+  const router = useRouter();
+
+  const handleHistoryClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    router.push(`/patients/${patient.id}/history`);
+  };
+
   const getStatusInfo = (status?: AppointmentInfo['appointmentStatus'], isLate?: boolean) => {
     if (isLate) {
       return { label: 'Késett', color: 'text-orange-600', bgColor: 'bg-orange-50', icon: ClockIcon };
@@ -76,6 +84,15 @@ export function PatientCard({
           )}
         </div>
         <div className="flex items-center gap-1 ml-2">
+          {patient.id && (
+            <button
+              onClick={handleHistoryClick}
+              className="p-1.5 text-purple-600 hover:bg-purple-50 rounded"
+              title="Életút megtekintése"
+            >
+              <History className="w-4 h-4" />
+            </button>
+          )}
           {opDocumentCount > 0 && (
             <button
               onClick={() => onViewOP?.(patient)}
