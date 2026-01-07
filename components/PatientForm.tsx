@@ -5,7 +5,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Patient, patientSchema, nyakiBlokkdisszekcioOptions, fabianFejerdyProtetikaiOsztalyOptions, kezelesiTervOptions, kezelesiTervArcotErintoTipusOptions, kezelesiTervArcotErintoElhorgonyzasOptions } from '@/lib/types';
 import { formatDateForInput } from '@/lib/dateUtils';
-import { X, Calendar, User, Phone, Mail, MapPin, FileText, AlertTriangle, Plus, Trash2, Download, Send } from 'lucide-react';
+import { X, Calendar, User, Phone, Mail, MapPin, FileText, AlertTriangle, Plus, Trash2, Download, Send, History } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { AppointmentBookingSection } from './AppointmentBookingSection';
 import { ConditionalAppointmentBooking } from './ConditionalAppointmentBooking';
 import { getCurrentUser } from '@/lib/auth';
@@ -233,6 +234,7 @@ interface PatientFormProps {
 }
 
 export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: PatientFormProps) {
+  const router = useRouter();
   const { confirm: confirmDialog, showToast } = useToast();
   const [userRole, setUserRole] = useState<string>('');
   const [kezeloorvosOptions, setKezeloorvosOptions] = useState<Array<{ name: string; intezmeny: string | null }>>([]);
@@ -1877,9 +1879,21 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         </div>
       )}
       <div className="flex justify-between items-center mb-6">
-        <h3 className="text-2xl font-bold text-gray-900">
-          {isViewOnly ? 'Beteg megtekintése' : patient ? 'Beteg szerkesztése' : 'Új beteg'}
-        </h3>
+        <div className="flex items-center gap-4">
+          <h3 className="text-2xl font-bold text-gray-900">
+            {isViewOnly ? 'Beteg megtekintése' : patient ? 'Beteg szerkesztése' : 'Új beteg'}
+          </h3>
+          {patient?.id && (
+            <button
+              onClick={() => router.push(`/patients/${patient.id}/history`)}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-colors"
+              title="Változások megtekintése"
+            >
+              <History className="w-4 h-4" />
+              <span className="hidden sm:inline">Életút</span>
+            </button>
+          )}
+        </div>
         <button
           onClick={handleCancel}
           className="text-gray-400 hover:text-gray-600"
