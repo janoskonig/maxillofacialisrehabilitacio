@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { TodaysAppointmentsWidget } from './widgets/TodaysAppointmentsWidget';
 import { PendingApprovalsWidget } from './widgets/PendingApprovalsWidget';
+import { SendMessageWidget } from './widgets/SendMessageWidget';
 import { ChevronDown, ChevronUp, LayoutDashboard, UserPlus } from 'lucide-react';
 import { PatientList } from './PatientList';
 import { Patient } from '@/lib/types';
@@ -203,7 +204,10 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
 
           {/* Tab Content */}
           {activeTab === 'overview' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* Send Message Widget */}
+              <SendMessageWidget />
+
               {/* Next 3 Appointments Today */}
               <TodaysAppointmentsWidget 
                 appointments={data.nextAppointments} 

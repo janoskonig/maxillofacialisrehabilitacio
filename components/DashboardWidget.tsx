@@ -11,6 +11,7 @@ interface DashboardWidgetProps {
   onClose?: () => void;
   collapsible?: boolean;
   defaultCollapsed?: boolean;
+  onClick?: () => void;
 }
 
 export function DashboardWidget({
@@ -21,11 +22,15 @@ export function DashboardWidget({
   onClose,
   collapsible = false,
   defaultCollapsed = false,
+  onClick,
 }: DashboardWidgetProps) {
   const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
 
   return (
-    <div className={`card card-hover ${className} animate-fade-in`}>
+    <div 
+      className={`card card-hover ${className} animate-fade-in ${onClick ? 'cursor-pointer' : ''}`}
+      onClick={onClick}
+    >
       <div className="flex items-center justify-between p-4 border-b border-gray-100">
         <div className="flex items-center gap-3">
           {icon && <div className="text-medical-primary flex-shrink-0">{icon}</div>}

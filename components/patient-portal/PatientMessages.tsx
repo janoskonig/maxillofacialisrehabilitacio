@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { MessageCircle, Send, Clock, User, Mail } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
@@ -28,9 +28,9 @@ export function PatientMessages() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [newMessage, setNewMessage] = useState('');
-  const [newSubject, setNewSubject] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchPatientInfo();
@@ -84,7 +84,9 @@ export function PatientMessages() {
       }
 
       const data = await response.json();
-      setMessages(data.messages || []);
+      // Reverse to show oldest first (for chat view)
+      const messages = (data.messages || []).reverse();
+      setMessages(messages);
       
       // Olvasatlan üzenetek száma (beteg számára csak az orvostól érkező olvasatlan üzenetek)
       const unread = (data.messages || []).filter(
@@ -98,6 +100,13 @@ export function PatientMessages() {
       setLoading(false);
     }
   };
+
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
 
   const handleSendMessage = async () => {
     if (!patientId || !newMessage.trim()) {
@@ -115,7 +124,7 @@ export function PatientMessages() {
         credentials: 'include',
         body: JSON.stringify({
           patientId,
-          subject: newSubject.trim() || null,
+          subject: null,
           message: newMessage.trim(),
         }),
       });
@@ -130,9 +139,9 @@ export function PatientMessages() {
       }
 
       const data = await response.json();
-      setMessages([data.message, ...messages]);
+      // Add new message to the end (oldest first order)
+      setMessages([...messages, data.message]);
       setNewMessage('');
-      setNewSubject('');
       setShowForm(false);
       showToast('Üzenet sikeresen elküldve', 'success');
       
@@ -194,8 +203,9 @@ export function PatientMessages() {
   }
 
   return (
-    <div className="card space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="card flex flex-col h-[calc(100vh-200px)] min-h-[600px]">
+      {/* Header */}
+      <div className="flex items-center justify-between pb-4 border-b">
         <div className="flex items-center gap-2">
           <MessageCircle className="w-5 h-5 text-blue-600" />
           <h2 className="text-xl font-semibold text-gray-900">Üzenetek</h2>
@@ -205,61 +215,10 @@ export function PatientMessages() {
             </span>
           )}
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Send className="w-4 h-4" />
-          Új üzenet
-        </button>
       </div>
 
-      {showForm && (
-        <div className="border-t pt-4 space-y-3">
-          <div>
-            <label className="form-label">Tárgy (opcionális)</label>
-            <input
-              type="text"
-              value={newSubject}
-              onChange={(e) => setNewSubject(e.target.value)}
-              className="form-input"
-              placeholder="Üzenet tárgya..."
-            />
-          </div>
-          <div>
-            <label className="form-label">Üzenet</label>
-            <textarea
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              className="form-input"
-              rows={4}
-              placeholder="Írja be üzenetét az orvosnak..."
-            />
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={handleSendMessage}
-              disabled={sending || !newMessage.trim()}
-              className="btn-primary flex items-center gap-2"
-            >
-              <Send className="w-4 h-4" />
-              {sending ? 'Küldés...' : 'Küldés'}
-            </button>
-            <button
-              onClick={() => {
-                setShowForm(false);
-                setNewMessage('');
-                setNewSubject('');
-              }}
-              className="btn-secondary"
-            >
-              Mégse
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="space-y-3 max-h-96 overflow-y-auto">
+      {/* Chat Messages */}
+      <div className="flex-1 overflow-y-auto p-4 bg-gray-50 space-y-3">
         {messages.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <MessageCircle className="w-12 h-12 mx-auto mb-2 text-gray-300" />
@@ -274,47 +233,72 @@ export function PatientMessages() {
             return (
               <div
                 key={message.id}
-                className={`border rounded-lg p-4 ${
-                  isUnread ? 'bg-blue-50 border-blue-200' : 'bg-white'
-                } ${isPatient ? 'border-l-4 border-l-green-500' : 'border-l-4 border-l-blue-500'}`}
+                className={`flex ${isPatient ? 'justify-end' : 'justify-start'}`}
                 onClick={() => {
                   if (isUnread) {
                     handleMarkAsRead(message.id);
                   }
                 }}
               >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    {isPatient ? (
-                      <User className="w-4 h-4 text-green-600" />
-                    ) : (
-                      <Mail className="w-4 h-4 text-blue-600" />
-                    )}
-                    <span className="font-semibold text-gray-900">
-                      {isPatient ? 'Ön' : 'Orvos'}
-                    </span>
+                <div
+                  className={`max-w-[75%] rounded-lg px-4 py-2 ${
+                    isPatient
+                      ? 'bg-green-600 text-white'
+                      : isUnread
+                      ? 'bg-blue-100 text-gray-900 border-2 border-blue-300'
+                      : 'bg-white text-gray-900 border border-gray-200'
+                  }`}
+                >
+                  <div className="text-sm whitespace-pre-wrap break-words">
+                    {message.message}
+                  </div>
+                  <div className={`text-xs mt-1 flex items-center gap-1 ${
+                    isPatient ? 'text-green-100' : 'text-gray-500'
+                  }`}>
+                    <Clock className="w-3 h-3" />
+                    {format(new Date(message.createdAt), 'HH:mm', { locale: hu })}
                     {isUnread && (
-                      <span className="px-2 py-0.5 text-xs font-semibold text-white bg-red-500 rounded">
+                      <span className="ml-2 px-1.5 py-0.5 text-xs font-semibold text-white bg-red-500 rounded">
                         Olvasatlan
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-gray-500">
-                    <Clock className="w-3 h-3" />
-                    {format(new Date(message.createdAt), 'yyyy. MM. dd. HH:mm', { locale: hu })}
-                  </div>
                 </div>
-                {message.subject && (
-                  <div className="mb-2">
-                    <span className="text-sm font-medium text-gray-700">Tárgy: </span>
-                    <span className="text-sm text-gray-900">{message.subject}</span>
-                  </div>
-                )}
-                <div className="text-gray-700 whitespace-pre-wrap">{message.message}</div>
               </div>
             );
           })
         )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Message Input */}
+      <div className="border-t bg-white p-4">
+        <div className="flex gap-2">
+          <textarea
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            className="form-input flex-1 resize-none"
+            rows={2}
+            placeholder="Írja be üzenetét az orvosnak..."
+            disabled={sending}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (newMessage.trim() && !sending) {
+                  handleSendMessage();
+                }
+              }
+            }}
+          />
+          <button
+            onClick={handleSendMessage}
+            disabled={sending || !newMessage.trim()}
+            className="btn-primary flex items-center gap-2 px-4 self-end"
+          >
+            <Send className="w-4 h-4" />
+            {sending ? '...' : 'Küldés'}
+          </button>
+        </div>
       </div>
     </div>
   );

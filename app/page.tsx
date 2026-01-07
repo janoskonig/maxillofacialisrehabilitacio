@@ -9,12 +9,13 @@ import { PatientList } from '@/components/PatientList';
 import { OPImageViewer } from '@/components/OPImageViewer';
 import { FotoImageViewer } from '@/components/FotoImageViewer';
 import { useToast } from '@/contexts/ToastContext';
-import { Plus, Search, Users, LogOut, Shield, Settings, Calendar, CalendarDays } from 'lucide-react';
+import { Plus, Search, Users, LogOut, Shield, Settings, Calendar, CalendarDays, MessageCircle } from 'lucide-react';
 import { getCurrentUser, getUserEmail, getUserRole, logout } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
 import { MobileMenu } from '@/components/MobileMenu';
 import { Dashboard } from '@/components/Dashboard';
 import { FeedbackButtonTrigger } from '@/components/FeedbackButton';
+import { SendMessageModal } from '@/components/SendMessageModal';
 
 type UserRoleType = 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
 
@@ -38,6 +39,7 @@ export default function Home() {
   const [fotoViewerPatient, setFotoViewerPatient] = useState<Patient | null>(null);
   const [averageWaitingTime, setAverageWaitingTime] = useState<number | null>(null);
   const [waitingTimeSD, setWaitingTimeSD] = useState<number | null>(null);
+  const [showMessageModal, setShowMessageModal] = useState(false);
   const { showToast, confirm: confirmDialog } = useToast();
 
   useEffect(() => {
@@ -402,6 +404,13 @@ export default function Home() {
                   <CalendarDays className="w-3.5 h-3.5" />
                   Naptár
                 </button>
+                <button
+                  onClick={() => setShowMessageModal(true)}
+                  className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2"
+                >
+                  <MessageCircle className="w-3.5 h-3.5" />
+                  Üzenet
+                </button>
                 <FeedbackButtonTrigger />
                 <button
                   onClick={() => router.push('/settings')}
@@ -641,6 +650,12 @@ export default function Home() {
 
         </div>
       </main>
+
+      {/* Send Message Modal */}
+      <SendMessageModal
+        isOpen={showMessageModal}
+        onClose={() => setShowMessageModal(false)}
+      />
     </div>
   );
 }
