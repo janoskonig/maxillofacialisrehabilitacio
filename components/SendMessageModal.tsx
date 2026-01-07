@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { MessageCircle, Send, X, Search, User, Clock, Mail, ArrowLeft } from 'lucide-react';
+import { MessageCircle, Send, X, Search, User, Clock, Mail, ArrowLeft, Check, CheckCheck, Loader2 } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
@@ -24,6 +24,7 @@ interface RecentMessage {
   message: string;
   readAt: Date | null;
   createdAt: Date;
+  pending?: boolean; // Küldés alatt
 }
 
 interface SendMessageModalProps {
@@ -46,6 +47,7 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
   const [loading, setLoading] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [activeTab, setActiveTab] = useState<'send' | 'recent'>('send');
+  const [pendingMessageId, setPendingMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -66,6 +68,13 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
   useEffect(() => {
     if (selectedPatient && activeTab === 'send') {
       fetchConversation(selectedPatient.id);
+      
+      // Periodikus frissítés az üzenetek státuszának követéséhez
+      const interval = setInterval(() => {
+        fetchConversation(selectedPatient.id);
+      }, 5000); // 5 másodpercenként
+      
+      return () => clearInterval(interval);
     }
   }, [selectedPatient, activeTab]);
 
@@ -90,7 +99,10 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
       const data = await response.json();
       // Reverse to show oldest first (for chat view)
       const messages = (data.messages || []).reverse();
-      setConversationMessages(messages);
+      
+      // Eltávolítjuk a pending üzeneteket, mert most már vannak valódi üzenetek
+      // A pending üzeneteket a handleSendMessage kezeli, és ott cseréli le a valódi üzenetre
+      setConversationMessages(messages.filter((m: RecentMessage) => !m.pending));
     } catch (error) {
       console.error('Hiba a beszélgetés betöltésekor:', error);
       showToast('Hiba történt a beszélgetés betöltésekor', 'error');
@@ -199,6 +211,25 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
 
     try {
       setSending(true);
+      
+      // Hozzáadunk egy pending üzenetet azonnal
+      const tempId = `pending-${Date.now()}`;
+      const pendingMessage: RecentMessage = {
+        id: tempId,
+        patientId: selectedPatient.id,
+        patientName: selectedPatient.nev,
+        patientTaj: selectedPatient.taj,
+        senderType: 'doctor',
+        subject: null,
+        message: message.trim(),
+        readAt: null,
+        createdAt: new Date(),
+        pending: true,
+      };
+      
+      setConversationMessages([...conversationMessages, pendingMessage]);
+      setPendingMessageId(tempId);
+      
       const response = await fetch('/api/messages', {
         method: 'POST',
         headers: {
@@ -214,18 +245,32 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
 
       if (!response.ok) {
         const error = await response.json();
+        // Eltávolítjuk a pending üzenetet, ha hiba történt
+        setConversationMessages(conversationMessages.filter(m => m.id !== tempId));
+        setPendingMessageId(null);
         throw new Error(error.error || 'Hiba az üzenet küldésekor');
       }
 
       const data = await response.json();
       showToast('Üzenet sikeresen elküldve', 'success');
+      
+      // Frissítjük a pending üzenetet a valódi üzenettel
+      setConversationMessages(prevMessages => {
+        // Eltávolítjuk a pending üzenetet és hozzáadjuk a valódi üzenetet
+        const filtered = prevMessages.filter(m => m.id !== tempId);
+        return [...filtered, { ...data.message, pending: false }];
+      });
+      setPendingMessageId(null);
+      
       // Reset form
       setMessage('');
-      // Frissítjük a beszélgetést és az üzenetek listáját
-      if (selectedPatient) {
-        fetchConversation(selectedPatient.id);
-      }
-      fetchRecentMessages();
+      // Frissítjük a beszélgetést és az üzenetek listáját (késleltetve, hogy a fenti frissítés előbb történjen)
+      setTimeout(() => {
+        if (selectedPatient) {
+          fetchConversation(selectedPatient.id);
+        }
+        fetchRecentMessages();
+      }, 500);
     } catch (error: any) {
       console.error('Hiba az üzenet küldésekor:', error);
       showToast(error.message || 'Hiba történt az üzenet küldésekor', 'error');
@@ -389,6 +434,12 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
                     ) : (
                       conversationMessages.map((msg) => {
                         const isDoctor = msg.senderType === 'doctor';
+                        const isPending = msg.pending === true;
+                        const isRead = msg.readAt !== null;
+                        
+                        // Csak a saját üzeneteinknek mutatjuk a státuszt
+                        const showStatus = isDoctor;
+                        
                         return (
                           <div
                             key={msg.id}
@@ -404,10 +455,21 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
                               <div className="text-sm whitespace-pre-wrap break-words">
                                 {msg.message}
                               </div>
-                              <div className={`text-xs mt-1 ${
+                              <div className={`text-xs mt-1 flex items-center gap-1.5 ${
                                 isDoctor ? 'text-blue-100' : 'text-gray-500'
                               }`}>
-                                {format(new Date(msg.createdAt), 'HH:mm', { locale: hu })}
+                                <span>{format(new Date(msg.createdAt), 'HH:mm', { locale: hu })}</span>
+                                {showStatus && (
+                                  <span className="ml-1">
+                                    {isPending ? (
+                                      <Loader2 className="w-3 h-3 animate-spin" />
+                                    ) : isRead ? (
+                                      <CheckCheck className="w-3 h-3" />
+                                    ) : (
+                                      <Check className="w-3 h-3 opacity-70" />
+                                    )}
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { MessageCircle, Send, Clock, User, Mail } from 'lucide-react';
+import { MessageCircle, Send, Clock, User, Mail, Check, CheckCheck, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
@@ -17,6 +17,7 @@ interface Message {
   message: string;
   readAt: Date | null;
   createdAt: Date;
+  pending?: boolean; // Küldés alatt
 }
 
 export function PatientMessages() {
@@ -31,6 +32,7 @@ export function PatientMessages() {
   const [newMessage, setNewMessage] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [pendingMessageId, setPendingMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -88,7 +90,10 @@ export function PatientMessages() {
       const data = await response.json();
       // Reverse to show oldest first (for chat view)
       const messages = (data.messages || []).reverse();
-      setMessages(messages);
+      
+      // Eltávolítjuk a pending üzeneteket, mert most már vannak valódi üzenetek
+      // A pending üzeneteket a handleSendMessage kezeli, és ott cseréli le a valódi üzenetre
+      setMessages(messages.filter((m: Message) => !m.pending));
       
       // Olvasatlan üzenetek száma (beteg számára csak az orvostól érkező olvasatlan üzenetek)
       const unread = (data.messages || []).filter(
@@ -118,6 +123,25 @@ export function PatientMessages() {
 
     try {
       setSending(true);
+      
+      // Hozzáadunk egy pending üzenetet azonnal
+      const tempId = `pending-${Date.now()}`;
+      const pendingMessage: Message = {
+        id: tempId,
+        patientId: patientId,
+        senderType: 'patient',
+        senderId: patientId,
+        senderEmail: '',
+        subject: null,
+        message: newMessage.trim(),
+        readAt: null,
+        createdAt: new Date(),
+        pending: true,
+      };
+      
+      setMessages([...messages, pendingMessage]);
+      setPendingMessageId(tempId);
+      
       const response = await fetch('/api/messages', {
         method: 'POST',
         headers: {
@@ -137,15 +161,30 @@ export function PatientMessages() {
           return;
         }
         const error = await response.json();
+        // Eltávolítjuk a pending üzenetet, ha hiba történt
+        setMessages(messages.filter(m => m.id !== tempId));
+        setPendingMessageId(null);
         throw new Error(error.error || 'Hiba az üzenet küldésekor');
       }
 
       const data = await response.json();
-      // Add new message to the end (oldest first order)
-      setMessages([...messages, data.message]);
+      
+      // Frissítjük a pending üzenetet a valódi üzenettel
+      setMessages(prevMessages => {
+        // Eltávolítjuk a pending üzenetet és hozzáadjuk a valódi üzenetet
+        const filtered = prevMessages.filter(m => m.id !== tempId);
+        return [...filtered, { ...data.message, pending: false }];
+      });
+      setPendingMessageId(null);
+      
       setNewMessage('');
       setShowForm(false);
       showToast('Üzenet sikeresen elküldve', 'success');
+      
+      // Frissítjük az üzeneteket késleltetve, hogy a fenti frissítés előbb történjen
+      setTimeout(() => {
+        fetchMessages();
+      }, 500);
       
       // Email értesítés automatikusan küldve az orvosnak
     } catch (error: any) {
@@ -238,6 +277,11 @@ export function PatientMessages() {
           messages.map((message) => {
             const isPatient = message.senderType === 'patient';
             const isUnread = !message.readAt && message.senderType === 'doctor';
+            const isPending = message.pending === true;
+            const isRead = message.readAt !== null;
+            
+            // Csak a saját üzeneteinknek mutatjuk a státuszt
+            const showStatus = isPatient;
 
             return (
               <div
@@ -261,11 +305,22 @@ export function PatientMessages() {
                   <div className="text-sm whitespace-pre-wrap break-words">
                     {message.message}
                   </div>
-                  <div className={`text-xs mt-1 flex items-center gap-1 ${
+                  <div className={`text-xs mt-1 flex items-center gap-1.5 ${
                     isPatient ? 'text-green-100' : 'text-gray-500'
                   }`}>
                     <Clock className="w-3 h-3" />
-                    {format(new Date(message.createdAt), 'HH:mm', { locale: hu })}
+                    <span>{format(new Date(message.createdAt), 'HH:mm', { locale: hu })}</span>
+                    {showStatus && (
+                      <span className="ml-1">
+                        {isPending ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : isRead ? (
+                          <CheckCheck className="w-3 h-3" />
+                        ) : (
+                          <Check className="w-3 h-3 opacity-70" />
+                        )}
+                      </span>
+                    )}
                     {isUnread && (
                       <span className="ml-2 px-1.5 py-0.5 text-xs font-semibold text-white bg-red-500 rounded">
                         Olvasatlan

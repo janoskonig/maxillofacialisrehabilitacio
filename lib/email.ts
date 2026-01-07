@@ -1091,7 +1091,7 @@ export async function sendNewMessageNotification(
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <h2 style="color: #2563eb;">Új üzenet érkezett</h2>
       <p>${greeting}!</p>
-      <p>Új üzenetet kaptak ${senderLabel}:</p>
+      <p><strong>Új üzenete érkezett!</strong></p>
       ${messageSubject ? `<p><strong>Tárgy:</strong> ${messageSubject}</p>` : ''}
       <div style="background-color: #f9fafb; border-left: 4px solid #2563eb; padding: 15px; margin: 20px 0; border-radius: 4px;">
         <p style="margin: 0; color: #6b7280; font-size: 14px; font-style: italic;">

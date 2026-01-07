@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Calendar, FileText, Clock, User, Plus, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Calendar, FileText, Clock, User, Plus, CheckCircle, XCircle, AlertCircle, MessageCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
@@ -44,6 +44,7 @@ export function PortalDashboard() {
   const [patient, setPatient] = useState<Patient | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -68,6 +69,25 @@ export function PortalDashboard() {
         setPatient(patientData.patient);
         setAppointments(appointmentsData.appointments || []);
         setDocuments(documentsData.documents || []);
+
+        // Fetch unread message count
+        if (patientData.patient?.id) {
+          try {
+            const messagesRes = await fetch(`/api/messages?patientId=${patientData.patient.id}`, {
+              credentials: 'include',
+            });
+            if (messagesRes.ok) {
+              const messagesData = await messagesRes.json();
+              const unread = (messagesData.messages || []).filter(
+                (m: any) => m.senderType === 'doctor' && !m.readAt
+              ).length;
+              setUnreadMessageCount(unread);
+            }
+          } catch (error) {
+            // Ignore message fetch errors
+            console.error('Error fetching messages:', error);
+          }
+        }
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
         showToast('Hiba történt az adatok betöltésekor', 'error');
@@ -168,7 +188,7 @@ export function PortalDashboard() {
       </div>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-50 rounded-lg">
@@ -192,6 +212,32 @@ export function PortalDashboard() {
               <p className="text-sm text-gray-600">Dokumentumok</p>
               <p className="text-2xl font-bold text-gray-900">
                 {documents.length}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div 
+          className="bg-white rounded-lg border border-gray-200 p-4 cursor-pointer hover:shadow-md transition-shadow"
+          onClick={() => router.push('/patient-portal/messages')}
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-purple-50 rounded-lg relative">
+              <MessageCircle className="w-6 h-6 text-purple-600" />
+              {unreadMessageCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                  {unreadMessageCount > 9 ? '9+' : unreadMessageCount}
+                </span>
+              )}
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">Üzenetek</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {unreadMessageCount > 0 ? (
+                  <span className="text-red-600">{unreadMessageCount} olvasatlan</span>
+                ) : (
+                  '0'
+                )}
               </p>
             </div>
           </div>
