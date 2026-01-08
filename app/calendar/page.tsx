@@ -115,7 +115,7 @@ export default function CalendarPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <MobileMenu currentPath="/calendar" />
+              <MobileMenu currentPath="/calendar" showBackButton={true} />
               <div className="hidden md:flex gap-2">
                 <FeedbackButtonTrigger />
                 {currentUser?.role === 'admin' && (

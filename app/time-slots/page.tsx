@@ -65,7 +65,7 @@ export default function TimeSlotsPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <MobileMenu currentPath="/time-slots" />
+              <MobileMenu currentPath="/time-slots" showBackButton={true} />
               <div className="hidden md:flex gap-2">
                 {userRole === 'admin' && (
                   <button

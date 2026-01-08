@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Menu, CalendarDays, Settings, LogOut, Shield, Home, Users, MessageCircle } from 'lucide-react';
+import { X, Menu, CalendarDays, Settings, LogOut, Shield, Home, Users, MessageCircle, ArrowLeft, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser, logout, type AuthUser } from '@/lib/auth';
 import { useFeedback } from '@/components/FeedbackContext';
@@ -9,19 +9,29 @@ import { getStoredErrors } from '@/lib/errorLogger';
 
 interface MobileMenuProps {
   currentPath?: string;
+  onMessageClick?: () => void;
+  onNewPatientClick?: () => void;
+  showBackButton?: boolean;
 }
 
-export function MobileMenu({ currentPath }: MobileMenuProps) {
+export function MobileMenu({ currentPath, onMessageClick, onNewPatientClick, showBackButton }: MobileMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [hasStoredErrors, setHasStoredErrors] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const { openModal } = useFeedback();
 
   useEffect(() => {
     const loadUser = async () => {
-      const currentUser = await getCurrentUser();
-      setUser(currentUser);
+      try {
+        const currentUser = await getCurrentUser();
+        setUser(currentUser);
+      } catch (error) {
+        console.error('Error loading user:', error);
+      } finally {
+        setIsLoading(false);
+      }
     };
     loadUser();
     
@@ -40,6 +50,18 @@ export function MobileMenu({ currentPath }: MobileMenuProps) {
     setIsOpen(false);
     router.push(path);
   };
+
+  if (isLoading) {
+    return (
+      <button
+        className="md:hidden p-2 rounded-md text-gray-700"
+        aria-label="Betöltés..."
+        disabled
+      >
+        <Menu className="w-6 h-6" />
+      </button>
+    );
+  }
 
   if (!user) {
     return null;
@@ -90,27 +112,55 @@ export function MobileMenu({ currentPath }: MobileMenuProps) {
               </div>
 
               {/* Menu Items */}
-              <nav className="flex-1 overflow-y-auto">
-                <div className="p-2">
+              <nav className="flex-1 overflow-y-auto min-h-0" style={{ minHeight: '200px' }}>
+                <div className="p-2 space-y-1">
+                  {/* Főoldal - mindig megjelenik */}
                   <button
                     onClick={() => handleNavigate('/')}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors ${
                       currentPath === '/' ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
                     }`}
                   >
-                    <Home className="w-5 h-5" />
+                    <Home className="w-5 h-5 flex-shrink-0" />
                     <span className="font-medium">Főoldal</span>
                   </button>
 
+                  {/* Naptár - mindig megjelenik */}
                   <button
                     onClick={() => handleNavigate('/calendar')}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors ${
                       currentPath === '/calendar' ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
                     }`}
                   >
-                    <CalendarDays className="w-5 h-5" />
+                    <CalendarDays className="w-5 h-5 flex-shrink-0" />
                     <span className="font-medium">Naptár</span>
                   </button>
+
+                  {onMessageClick && (
+                    <button
+                      onClick={() => {
+                        setIsOpen(false);
+                        onMessageClick();
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left text-gray-700 hover:bg-gray-100 transition-colors"
+                    >
+                      <MessageCircle className="w-5 h-5 flex-shrink-0" />
+                      <span className="font-medium">Üzenet</span>
+                    </button>
+                  )}
+
+                  {onNewPatientClick && (user.role === 'admin' || user.role === 'editor' || user.role === 'fogpótlástanász' || user.role === 'sebészorvos') && (
+                    <button
+                      onClick={() => {
+                        setIsOpen(false);
+                        onNewPatientClick();
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left text-gray-700 hover:bg-gray-100 transition-colors bg-blue-50 text-blue-700"
+                    >
+                      <Plus className="w-5 h-5 flex-shrink-0" />
+                      <span className="font-medium">Új beteg</span>
+                    </button>
+                  )}
 
                   {(user.role === 'fogpótlástanász' || user.role === 'admin') && (
                     <button
@@ -119,7 +169,7 @@ export function MobileMenu({ currentPath }: MobileMenuProps) {
                         currentPath === '/time-slots' ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
                       }`}
                     >
-                      <CalendarDays className="w-5 h-5" />
+                      <CalendarDays className="w-5 h-5 flex-shrink-0" />
                       <span className="font-medium">Időpontok kezelése</span>
                     </button>
                   )}
@@ -131,7 +181,7 @@ export function MobileMenu({ currentPath }: MobileMenuProps) {
                         currentPath === '/admin' ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
                       }`}
                     >
-                      <Shield className="w-5 h-5" />
+                      <Shield className="w-5 h-5 flex-shrink-0" />
                       <span className="font-medium">Admin</span>
                     </button>
                   )}
@@ -142,7 +192,7 @@ export function MobileMenu({ currentPath }: MobileMenuProps) {
                       currentPath === '/settings' ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
                     }`}
                   >
-                    <Settings className="w-5 h-5" />
+                    <Settings className="w-5 h-5 flex-shrink-0" />
                     <span className="font-medium">Beállítások</span>
                   </button>
 
@@ -153,7 +203,7 @@ export function MobileMenu({ currentPath }: MobileMenuProps) {
                     }}
                     className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left text-gray-700 hover:bg-gray-100 transition-colors relative"
                   >
-                    <MessageCircle className="w-5 h-5" />
+                    <MessageCircle className="w-5 h-5 flex-shrink-0" />
                     <span className="font-medium">Visszajelzés</span>
                     {hasStoredErrors && (
                       <span className="ml-auto bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
@@ -161,6 +211,16 @@ export function MobileMenu({ currentPath }: MobileMenuProps) {
                       </span>
                     )}
                   </button>
+
+                  {showBackButton && currentPath !== '/' && (
+                    <button
+                      onClick={() => handleNavigate('/')}
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left text-gray-700 hover:bg-gray-100 transition-colors"
+                    >
+                      <ArrowLeft className="w-5 h-5 flex-shrink-0" />
+                      <span className="font-medium">Vissza</span>
+                    </button>
+                  )}
                 </div>
               </nav>
 
@@ -170,7 +230,7 @@ export function MobileMenu({ currentPath }: MobileMenuProps) {
                   onClick={handleLogout}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left text-red-700 hover:bg-red-50 transition-colors"
                 >
-                  <LogOut className="w-5 h-5" />
+                  <LogOut className="w-5 h-5 flex-shrink-0" />
                   <span className="font-medium">Kijelentkezés</span>
                 </button>
               </div>

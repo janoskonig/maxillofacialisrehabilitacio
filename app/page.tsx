@@ -385,7 +385,11 @@ export default function Home() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <MobileMenu currentPath="/" />
+              <MobileMenu 
+                currentPath="/" 
+                onMessageClick={() => setShowMessageModal(true)}
+                onNewPatientClick={handleNewPatient}
+              />
               {/* Desktop Navigation */}
               <div className="hidden md:flex gap-2">
                 <FeedbackButtonTrigger />

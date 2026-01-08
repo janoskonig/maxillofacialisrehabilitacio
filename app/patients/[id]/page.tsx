@@ -15,6 +15,7 @@ export default function PatientDetailPage() {
   const patientId = params.id as string;
   const [authorized, setAuthorized] = useState(false);
   const [patientName, setPatientName] = useState<string | null>(null);
+  const [patientEmail, setPatientEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -46,6 +47,7 @@ export default function PatientDetailPage() {
 
           const data = await response.json();
           setPatientName(data.patient?.nev || null);
+          setPatientEmail(data.patient?.email || null);
           setAuthorized(true);
         } catch (error) {
           console.error('Error fetching patient:', error);
@@ -99,7 +101,7 @@ export default function PatientDetailPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <MobileMenu />
+              <MobileMenu showBackButton={true} />
               <button
                 onClick={handleBack}
                 className="btn-secondary flex items-center gap-2"
@@ -115,10 +117,12 @@ export default function PatientDetailPage() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="space-y-6">
-          {/* Chat Messages */}
-          <PatientMessages patientId={patientId} patientName={patientName} />
+          {/* Chat Messages - csak ha van email-cím */}
+          {patientEmail && (
+            <PatientMessages patientId={patientId} patientName={patientName} />
+          )}
           
-          {/* Communication Log */}
+          {/* Communication Log - mindig látható */}
           <CommunicationLog patientId={patientId} patientName={patientName} />
         </div>
       </main>
