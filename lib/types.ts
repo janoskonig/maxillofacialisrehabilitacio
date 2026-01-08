@@ -405,3 +405,32 @@ export type MedicalStats = {
     }>;
   };
 };
+
+// Doctor-to-doctor messaging types
+export interface DoctorMessage {
+  id: string;
+  senderId: string;
+  recipientId: string;
+  senderEmail: string;
+  senderName: string | null;
+  subject: string | null;
+  message: string;
+  readAt: Date | null;
+  createdAt: Date;
+  pending?: boolean; // Küldés alatt
+}
+
+export interface DoctorConversation {
+  doctorId: string;
+  doctorName: string;
+  doctorEmail: string;
+  lastMessage: DoctorMessage | null;
+  unreadCount: number;
+}
+
+// Patient mention types
+export interface PatientMention {
+  id: string;
+  nev: string;
+  mentionFormat: string; // @vezeteknev+keresztnev formátum
+}

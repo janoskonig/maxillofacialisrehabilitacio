@@ -89,6 +89,7 @@ export async function GET(request: NextRequest) {
     const pool = getDbPool();
     const searchParams = request.nextUrl.searchParams;
     const query = searchParams.get('q');
+    const forMention = searchParams.get('forMention') === 'true';
 
     // Ellenőrizzük a felhasználó szerepkörét és jogosultságait
     const auth = await verifyAuth(request);
@@ -238,7 +239,7 @@ export async function GET(request: NextRequest) {
     const total = parseInt(countResult.rows[0].total, 10);
 
     // Activity logging: patients list viewed or searched (csak ha be van jelentkezve)
-    if (auth) {
+    if (auth && !forMention) {
       const searchQuery = request.nextUrl.searchParams.get('q');
       const action = searchQuery ? 'patient_search' : 'patients_list_viewed';
       const detail = searchQuery 
@@ -246,6 +247,32 @@ export async function GET(request: NextRequest) {
         : `Total patients: ${result.rows.length}`;
       
       await logActivityWithAuth(request, auth, action, detail);
+    }
+
+    // Ha forMention=true, csak id és nev mezőket adunk vissza mention formátumban
+    if (forMention) {
+      const mentionPatients = result.rows
+        .filter((row: any) => row.nev && row.nev.trim()) // Csak akiknek van neve
+        .map((row: any) => {
+          const nev = row.nev.trim();
+          // Vezetéknév+keresztnév formátum (kisbetű, ékezetek nélkül)
+          const mentionFormat = nev
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '') // Ékezetek eltávolítása
+            .replace(/\s+/g, '+') // Szóközök + jellel
+            .replace(/[^a-z0-9+]/g, ''); // Csak betűk, számok és +
+          
+          return {
+            id: row.id,
+            nev: nev, // Eredeti név megjelenítéshez
+            mentionFormat: `@${mentionFormat}`, // @vezeteknev+keresztnev formátum
+          };
+        });
+
+      return NextResponse.json({ 
+        patients: mentionPatients
+      }, { status: 200 });
     }
 
     return NextResponse.json({ 

@@ -139,6 +139,18 @@ export function MobileMenu({ currentPath, onMessageClick, onNewPatientClick, sho
                     <span className="font-medium">Naptár</span>
                   </button>
 
+                  {/* Orvosok közötti üzenetek */}
+                  <button
+                    onClick={() => handleNavigate('/messages')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors mb-1 ${
+                      currentPath === '/messages' ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                    style={{ backgroundColor: currentPath === '/messages' ? '#eff6ff' : '#ffffff', display: 'flex' }}
+                  >
+                    <MessageCircle className="w-5 h-5 flex-shrink-0" />
+                    <span className="font-medium">Orvosok közötti üzenetek</span>
+                  </button>
+
                   {/* Admin - ha admin jogosultság van */}
                   {user.role === 'admin' && (
                     <button

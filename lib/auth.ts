@@ -1,6 +1,7 @@
 // Auth utilities - szerver oldali cookie alapú hitelesítés
 
 export type AuthUser = {
+  id?: string;
   email: string;
   role: 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
   intezmeny?: string | null;

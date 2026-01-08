@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       user: {
+        id: userId,
         email: userResult.rows[0].email,
         role: userResult.rows[0].role,
         restrictedView: userResult.rows[0].restricted_view || false,

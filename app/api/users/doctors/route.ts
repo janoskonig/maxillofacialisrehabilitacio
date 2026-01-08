@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     
     // Összes aktív felhasználó, akinek van doktor_neve (orvos szerepkörök és admin)
     const result = await pool.query(
-      `SELECT DISTINCT doktor_neve, intezmeny
+      `SELECT DISTINCT id, email, doktor_neve, intezmeny
        FROM users
        WHERE doktor_neve IS NOT NULL 
          AND doktor_neve != ''
@@ -28,6 +28,8 @@ export async function GET(request: NextRequest) {
     );
 
     const doctors = result.rows.map((row) => ({
+      id: row.id,
+      email: row.email,
       name: row.doktor_neve,
       intezmeny: row.intezmeny || null,
     }));
