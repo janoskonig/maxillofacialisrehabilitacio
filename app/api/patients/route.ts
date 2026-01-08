@@ -270,6 +270,18 @@ export async function GET(request: NextRequest) {
           };
         });
 
+      // Ha van q paraméter és + jelet tartalmaz (mention formátum), akkor szűrjük a mention formátum alapján
+      if (query && query.includes('+')) {
+        const queryNormalized = query.toLowerCase().replace('@', '').trim();
+        const filtered = mentionPatients.filter((p: any) => {
+          const mentionWithoutAt = p.mentionFormat.substring(1).toLowerCase();
+          return mentionWithoutAt === queryNormalized || mentionWithoutAt.includes(queryNormalized);
+        });
+        return NextResponse.json({ 
+          patients: filtered
+        }, { status: 200 });
+      }
+
       return NextResponse.json({ 
         patients: mentionPatients
       }, { status: 200 });

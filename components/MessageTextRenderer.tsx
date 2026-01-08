@@ -109,39 +109,18 @@ function MentionLink({ mentionFormat, displayText }: MentionLinkProps) {
         const searchData = await searchResponse.json();
         
         if (searchData.patients && searchData.patients.length > 0) {
-          // Find exact match by mentionFormat
+          // Find exact match by mentionFormat (case insensitive)
           let match = searchData.patients.find(
-            (p: any) => p.mentionFormat === mentionFormat
+            (p: any) => p.mentionFormat?.toLowerCase() === mentionFormat.toLowerCase()
           );
           
-          // If no exact match, try case insensitive
-          if (!match) {
-            match = searchData.patients.find(
-              (p: any) => p.mentionFormat?.toLowerCase() === mentionFormat.toLowerCase()
-            );
-          }
-          
-          // If still no match and only one result, use it
+          // If no exact match but only one result, use it (API already filtered)
           if (!match && searchData.patients.length === 1) {
             match = searchData.patients[0];
           }
           
-          // If still no match, try partial matching
+          // If still no match, try fetching all patients and search there
           if (!match) {
-            match = searchData.patients.find(
-              (p: any) => {
-                const pMention = p.mentionFormat?.toLowerCase().replace('@', '');
-                const searchMention = mentionWithoutAt.toLowerCase();
-                return pMention === searchMention;
-              }
-            );
-          }
-          
-          if (match) {
-            setPatientId(match.id);
-            setPatientName(match.nev);
-          } else {
-            // If no match in search results, try fetching all patients
             const allResponse = await fetch(`/api/patients?forMention=true`, {
               credentials: 'include',
             });
@@ -149,16 +128,37 @@ function MentionLink({ mentionFormat, displayText }: MentionLinkProps) {
             if (allResponse.ok) {
               const allData = await allResponse.json();
               if (allData.patients && allData.patients.length > 0) {
-                const allMatch = allData.patients.find(
+                match = allData.patients.find(
                   (p: any) => p.mentionFormat?.toLowerCase() === mentionFormat.toLowerCase()
                 );
-                
-                if (allMatch) {
-                  setPatientId(allMatch.id);
-                  setPatientName(allMatch.nev);
-                } else {
-                  console.warn('Patient not found for mention:', mentionFormat);
-                }
+              }
+            }
+          }
+          
+          if (match) {
+            setPatientId(match.id);
+            setPatientName(match.nev);
+          } else {
+            console.warn('Patient not found for mention:', mentionFormat);
+          }
+        } else {
+          // No results from search, try fetching all patients
+          const allResponse = await fetch(`/api/patients?forMention=true`, {
+            credentials: 'include',
+          });
+          
+          if (allResponse.ok) {
+            const allData = await allResponse.json();
+            if (allData.patients && allData.patients.length > 0) {
+              const match = allData.patients.find(
+                (p: any) => p.mentionFormat?.toLowerCase() === mentionFormat.toLowerCase()
+              );
+              
+              if (match) {
+                setPatientId(match.id);
+                setPatientName(match.nev);
+              } else {
+                console.warn('Patient not found for mention:', mentionFormat);
               }
             }
           }
