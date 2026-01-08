@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { CommunicationLog } from '@/components/CommunicationLog';
+import { PatientMessages } from '@/components/PatientMessages';
 import { ArrowLeft } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { MobileMenu } from '@/components/MobileMenu';
@@ -114,6 +115,10 @@ export default function PatientDetailPage() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="space-y-6">
+          {/* Chat Messages */}
+          <PatientMessages patientId={patientId} patientName={patientName} />
+          
+          {/* Communication Log */}
           <CommunicationLog patientId={patientId} patientName={patientName} />
         </div>
       </main>

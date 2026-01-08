@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { MessageCircle, Send, Clock, User, Mail } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { MessageCircle, Send, Clock, User, Mail, Check, CheckCheck, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
@@ -16,6 +16,7 @@ interface Message {
   message: string;
   readAt: Date | null;
   createdAt: Date;
+  pending?: boolean; // Küldés alatt
 }
 
 interface PatientMessagesProps {
@@ -29,16 +30,47 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [newMessage, setNewMessage] = useState('');
-  const [newSubject, setNewSubject] = useState('');
-  const [showForm, setShowForm] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [pendingMessageId, setPendingMessageId] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchMessages();
-    // Frissítés 30 másodpercenként
-    const interval = setInterval(fetchMessages, 30000);
+    // Frissítés 5 másodpercenként (státuszok frissítéséhez)
+    const interval = setInterval(fetchMessages, 5000);
     return () => clearInterval(interval);
   }, [patientId]);
+
+  // Automatikus olvasottnak jelölés, amikor betöltjük az üzeneteket
+  useEffect(() => {
+    if (messages.length > 0 && !loading) {
+      // Keresünk olvasatlan beteg üzeneteket
+      const unreadPatientMessages = messages.filter(
+        m => m.senderType === 'patient' && !m.readAt && !m.pending
+      );
+      
+      // Jelöljük olvasottnak őket (csak ha van ilyen)
+      if (unreadPatientMessages.length > 0) {
+        unreadPatientMessages.forEach(msg => {
+          // Aszinkron hívás, de nem várjuk meg
+          fetch(`/api/messages/${msg.id}/read`, {
+            method: 'PUT',
+            credentials: 'include',
+          }).catch(err => console.error('Hiba az üzenet olvasottnak jelölésekor:', err));
+        });
+        
+        // Frissítjük a helyi állapotot
+        setMessages(messages.map(m => 
+          unreadPatientMessages.some(um => um.id === m.id) 
+            ? { ...m, readAt: new Date() } 
+            : m
+        ));
+        
+        // Frissítjük az olvasatlan számlálót
+        setUnreadCount(0);
+      }
+    }
+  }, [messages.length, loading]); // Csak akkor fut le, ha az üzenetek száma vagy a loading állapot változik
 
   const fetchMessages = async () => {
     try {
@@ -51,7 +83,11 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
       }
 
       const data = await response.json();
-      setMessages(data.messages || []);
+      // Reverse to show oldest first (for chat view)
+      const messages = (data.messages || []).reverse();
+      
+      // Eltávolítjuk a pending üzeneteket, mert most már vannak valódi üzenetek
+      setMessages(messages.filter((m: Message) => !m.pending));
       
       // Olvasatlan üzenetek száma (orvos számára csak a betegtől érkező olvasatlan üzenetek)
       const unread = (data.messages || []).filter(
@@ -66,6 +102,13 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
     }
   };
 
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
+
   const handleSendMessage = async () => {
     if (!newMessage.trim()) {
       showToast('Kérjük, írjon üzenetet', 'error');
@@ -74,6 +117,25 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
 
     try {
       setSending(true);
+      
+      // Hozzáadunk egy pending üzenetet azonnal
+      const tempId = `pending-${Date.now()}`;
+      const pendingMessage: Message = {
+        id: tempId,
+        patientId: patientId,
+        senderType: 'doctor',
+        senderId: '',
+        senderEmail: '',
+        subject: null,
+        message: newMessage.trim(),
+        readAt: null,
+        createdAt: new Date(),
+        pending: true,
+      };
+      
+      setMessages([...messages, pendingMessage]);
+      setPendingMessageId(tempId);
+      
       const response = await fetch('/api/messages', {
         method: 'POST',
         headers: {
@@ -82,22 +144,34 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
         credentials: 'include',
         body: JSON.stringify({
           patientId,
-          subject: newSubject.trim() || null,
+          subject: null,
           message: newMessage.trim(),
         }),
       });
 
       if (!response.ok) {
         const error = await response.json();
+        // Eltávolítjuk a pending üzenetet, ha hiba történt
+        setMessages(messages.filter(m => m.id !== tempId));
+        setPendingMessageId(null);
         throw new Error(error.error || 'Hiba az üzenet küldésekor');
       }
 
       const data = await response.json();
-      setMessages([data.message, ...messages]);
+      
+      // Frissítjük a pending üzenetet a valódi üzenettel
+      setMessages(messages.map(m => 
+        m.id === tempId ? { ...data.message, pending: false } : m
+      ));
+      setPendingMessageId(null);
+      
       setNewMessage('');
-      setNewSubject('');
-      setShowForm(false);
       showToast('Üzenet sikeresen elküldve', 'success');
+      
+      // Frissítjük az üzeneteket késleltetve
+      setTimeout(() => {
+        fetchMessages();
+      }, 500);
       
       // Email értesítés automatikusan küldve
     } catch (error: any) {
@@ -145,8 +219,9 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
   }
 
   return (
-    <div className="card space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="card flex flex-col h-[600px] min-h-[600px]">
+      {/* Header */}
+      <div className="flex items-center justify-between pb-4 border-b">
         <div className="flex items-center gap-2">
           <MessageCircle className="w-5 h-5 text-blue-600" />
           <h3 className="text-lg font-semibold text-gray-900">
@@ -158,61 +233,10 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
             </span>
           )}
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Send className="w-4 h-4" />
-          Új üzenet
-        </button>
       </div>
 
-      {showForm && (
-        <div className="border-t pt-4 space-y-3">
-          <div>
-            <label className="form-label">Tárgy (opcionális)</label>
-            <input
-              type="text"
-              value={newSubject}
-              onChange={(e) => setNewSubject(e.target.value)}
-              className="form-input"
-              placeholder="Üzenet tárgya..."
-            />
-          </div>
-          <div>
-            <label className="form-label">Üzenet</label>
-            <textarea
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              className="form-input"
-              rows={4}
-              placeholder="Írja be üzenetét..."
-            />
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={handleSendMessage}
-              disabled={sending || !newMessage.trim()}
-              className="btn-primary flex items-center gap-2"
-            >
-              <Send className="w-4 h-4" />
-              {sending ? 'Küldés...' : 'Küldés'}
-            </button>
-            <button
-              onClick={() => {
-                setShowForm(false);
-                setNewMessage('');
-                setNewSubject('');
-              }}
-              className="btn-secondary"
-            >
-              Mégse
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="space-y-3 max-h-96 overflow-y-auto">
+      {/* Chat Messages */}
+      <div className="flex-1 overflow-y-auto p-4 bg-gray-50 space-y-3">
         {messages.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <MessageCircle className="w-12 h-12 mx-auto mb-2 text-gray-300" />
@@ -220,53 +244,95 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
           </div>
         ) : (
           messages.map((message) => {
-            const isDoctor = message.senderType === 'doctor';
-            const isUnread = !message.readAt && message.senderType === 'patient';
+            // Orvos oldalon: orvos üzenetei jobbra kék, beteg üzenetei balra fehér/kék
+            const isFromDoctor = message.senderType === 'doctor';
+            const isFromPatient = message.senderType === 'patient';
+            const isUnread = !message.readAt && isFromPatient;
+            const isPending = message.pending === true;
+            const isRead = message.readAt !== null;
+            
+            // Csak a saját üzeneteinknek mutatjuk a státuszt (orvos üzenetei)
+            const showStatus = isFromDoctor;
 
             return (
               <div
                 key={message.id}
-                className={`border rounded-lg p-4 ${
-                  isUnread ? 'bg-blue-50 border-blue-200' : 'bg-white'
-                } ${isDoctor ? 'border-l-4 border-l-blue-500' : 'border-l-4 border-l-green-500'}`}
+                className={`flex ${isFromDoctor ? 'justify-end' : 'justify-start'}`}
                 onClick={() => {
                   if (isUnread) {
                     handleMarkAsRead(message.id);
                   }
                 }}
               >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    {isDoctor ? (
-                      <User className="w-4 h-4 text-blue-600" />
-                    ) : (
-                      <Mail className="w-4 h-4 text-green-600" />
+                <div
+                  className={`max-w-[75%] rounded-lg px-4 py-2 ${
+                    isFromDoctor
+                      ? 'bg-blue-600 text-white'
+                      : isUnread
+                      ? 'bg-blue-100 text-gray-900 border-2 border-blue-300'
+                      : 'bg-white text-gray-900 border border-gray-200'
+                  }`}
+                >
+                  <div className="text-sm whitespace-pre-wrap break-words">
+                    {message.message}
+                  </div>
+                  <div className={`text-xs mt-1 flex items-center gap-1.5 ${
+                    isFromDoctor ? 'text-blue-100' : 'text-gray-500'
+                  }`}>
+                    <span>{format(new Date(message.createdAt), 'HH:mm', { locale: hu })}</span>
+                    {showStatus && (
+                      <span className="ml-1">
+                        {isPending ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : isRead ? (
+                          <CheckCheck className="w-3 h-3" />
+                        ) : (
+                          <Check className="w-3 h-3 opacity-70" />
+                        )}
+                      </span>
                     )}
-                    <span className="font-semibold text-gray-900">
-                      {isDoctor ? 'Ön' : patientName || 'Beteg'}
-                    </span>
                     {isUnread && (
-                      <span className="px-2 py-0.5 text-xs font-semibold text-white bg-red-500 rounded">
+                      <span className="ml-2 px-1.5 py-0.5 text-xs font-semibold text-white bg-red-500 rounded">
                         Olvasatlan
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-gray-500">
-                    <Clock className="w-3 h-3" />
-                    {format(new Date(message.createdAt), 'yyyy. MM. dd. HH:mm', { locale: hu })}
-                  </div>
                 </div>
-                {message.subject && (
-                  <div className="mb-2">
-                    <span className="text-sm font-medium text-gray-700">Tárgy: </span>
-                    <span className="text-sm text-gray-900">{message.subject}</span>
-                  </div>
-                )}
-                <div className="text-gray-700 whitespace-pre-wrap">{message.message}</div>
               </div>
             );
           })
         )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Message Input */}
+      <div className="border-t bg-white p-4">
+        <div className="flex gap-2">
+          <textarea
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            className="form-input flex-1 resize-none"
+            rows={2}
+            placeholder="Írja be üzenetét..."
+            disabled={sending}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (newMessage.trim() && !sending) {
+                  handleSendMessage();
+                }
+              }
+            }}
+          />
+          <button
+            onClick={handleSendMessage}
+            disabled={sending || !newMessage.trim()}
+            className="btn-primary flex items-center gap-2 px-4 self-end"
+          >
+            <Send className="w-4 h-4" />
+            {sending ? '...' : 'Küldés'}
+          </button>
+        </div>
       </div>
     </div>
   );
