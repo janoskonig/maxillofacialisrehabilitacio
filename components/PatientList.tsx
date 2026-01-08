@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useMemo, memo } from 'react';
 import { Patient } from '@/lib/types';
-import { Phone, Mail, Calendar, FileText, Eye, Pencil, CheckCircle2, XCircle, Clock, Trash2, ArrowUp, ArrowDown, Image, Camera, AlertCircle, Clock as ClockIcon } from 'lucide-react';
+import { Phone, Mail, Calendar, FileText, Eye, Pencil, CheckCircle2, XCircle, Clock, Trash2, ArrowUp, ArrowDown, Image, Camera, AlertCircle, Clock as ClockIcon, MessageCircle } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { formatDateForDisplay, calculateAge } from '@/lib/dateUtils';
 import { PatientCard } from './PatientCard';
 import { useIsMobile } from '@/hooks/useMediaQuery';
@@ -39,6 +40,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
   const [opDocuments, setOpDocuments] = useState<Record<string, number>>({});
   const [fotoDocuments, setFotoDocuments] = useState<Record<string, number>>({});
   const isMobile = useIsMobile();
+  const router = useRouter();
 
   // Load appointments for all roles
   // Optimalizálás: csak akkor töltjük újra, ha a betegek ID-ja változott
@@ -323,19 +325,26 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                       </div>
                     </div>
                     <div className="ml-3">
-                      <div
-                        className="text-sm font-semibold text-gray-900 cursor-pointer text-medical-primary hover:text-medical-primary-dark hover:underline transition-colors"
-                        onClick={() => {
-                          // Ha van szerkesztési jogosultság, akkor szerkesztés, különben csak megtekintés
-                          if (canEdit && onEdit) {
-                            onEdit(patient);
-                          } else {
-                            onView(patient);
-                          }
-                        }}
-                        title={canEdit && onEdit ? "Beteg szerkesztése" : "Beteg megtekintése"}
-                      >
-                        {patient.nev}
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="text-sm font-semibold text-gray-900 cursor-pointer text-medical-primary hover:text-medical-primary-dark hover:underline transition-colors"
+                          onClick={() => {
+                            // Ha van szerkesztési jogosultság, akkor szerkesztés, különben csak megtekintés
+                            if (canEdit && onEdit) {
+                              onEdit(patient);
+                            } else {
+                              onView(patient);
+                            }
+                          }}
+                          title={canEdit && onEdit ? "Beteg szerkesztése" : "Beteg megtekintése"}
+                        >
+                          {patient.nev}
+                        </div>
+                        {patient.halalDatum && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-200 text-gray-700" title={`Halál dátuma: ${formatDateForDisplay(patient.halalDatum)}`}>
+                            ✝
+                          </span>
+                        )}
                       </div>
                       <div className="text-xs text-gray-500 mt-0.5">
                         {patient.nem === 'ferfi' ? 'Férfi' : patient.nem === 'no' ? 'Nő' : ''} 
@@ -343,6 +352,9 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                           const age = calculateAge(patient.szuletesiDatum);
                           return age !== null ? ` • ${age} éves` : '';
                         })()}
+                        {patient.halalDatum && (
+                          <span className="text-gray-600 ml-1">• Halál: {formatDateForDisplay(patient.halalDatum)}</span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -522,6 +534,13 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                 </td>
                 <td className="px-3 py-2 whitespace-nowrap text-right text-xs font-medium">
                   <div className="flex justify-end space-x-1.5">
+                    <button
+                      onClick={() => router.push(`/patients/${patient.id}`)}
+                      className="text-blue-600 hover:text-blue-800"
+                      title={patient.email ? "Kapcsolattartás (chat és érintkezési napló)" : "Kapcsolattartás (érintkezési napló - nincs email-cím)"}
+                    >
+                      <MessageCircle className="w-3.5 h-3.5" />
+                    </button>
                     <button
                       onClick={() => onView(patient)}
                       className="text-medical-primary hover:text-blue-700"

@@ -236,6 +236,9 @@ export const patientSchema = z.object({
   kortortenetiOsszefoglalo: z.string().optional().nullable(),
   kezelesiTervMelleklet: z.string().optional().nullable(),
   szakorvosiVelemény: z.string().optional().nullable(),
+
+  // HALÁL JELÖLÉS
+  halalDatum: z.string().optional().nullable(),
 });
 
 // Lab Quote Request Schema (külön táblában tárolva)

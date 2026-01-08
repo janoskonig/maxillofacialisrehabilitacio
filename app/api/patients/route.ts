@@ -76,6 +76,7 @@ const PATIENT_SELECT_FIELDS = `
   kortorteneti_osszefoglalo as "kortortenetiOsszefoglalo",
   kezelesi_terv_melleklet as "kezelesiTervMelleklet",
   szakorvosi_velemeny as "szakorvosiVelemény",
+  halal_datum as "halalDatum",
   created_at as "createdAt",
   updated_at as "updatedAt",
   created_by as "createdBy",
@@ -417,6 +418,7 @@ export async function POST(request: NextRequest) {
       validatedPatient.kortortenetiOsszefoglalo || null,
       validatedPatient.kezelesiTervMelleklet || null,
       validatedPatient.szakorvosiVelemény || null,
+      validatedPatient.halalDatum || null,
       userEmail
     );
     
@@ -447,7 +449,7 @@ export async function POST(request: NextRequest) {
         veleszuletett_rendellenessegek, veleszuletett_mutetek_leirasa,
         kezelesi_terv_felso, kezelesi_terv_also, kezelesi_terv_arcot_erinto,
         kortorteneti_osszefoglalo, kezelesi_terv_melleklet, szakorvosi_velemeny,
-        created_by
+        halal_datum, created_by
       ) VALUES (
         ${paramPlaceholders}
       )
@@ -501,6 +503,7 @@ export async function POST(request: NextRequest) {
         kortorteneti_osszefoglalo as "kortortenetiOsszefoglalo",
         kezelesi_terv_melleklet as "kezelesiTervMelleklet",
         szakorvosi_velemeny as "szakorvosiVelemény",
+        halal_datum as "halalDatum",
         created_at as "createdAt", updated_at as "updatedAt",
         created_by as "createdBy", updated_by as "updatedBy"`,
       values

@@ -90,6 +90,7 @@ export async function GET(
         kortorteneti_osszefoglalo as "kortortenetiOsszefoglalo",
         kezelesi_terv_melleklet as "kezelesiTervMelleklet",
         szakorvosi_velemeny as "szakorvosiVelemény",
+        halal_datum as "halalDatum",
         created_at as "createdAt",
         updated_at as "updatedAt",
         created_by as "createdBy",
@@ -341,8 +342,9 @@ export async function PUT(
         kortorteneti_osszefoglalo = $67,
         kezelesi_terv_melleklet = $68,
         szakorvosi_velemeny = $69,
+        halal_datum = $70,
         updated_at = CURRENT_TIMESTAMP,
-        updated_by = $70
+        updated_by = $71
       WHERE id = $1
       RETURNING 
         id, nev, taj, telefonszam, szuletesi_datum as "szuletesiDatum", nem,
@@ -395,6 +397,7 @@ export async function PUT(
         kortorteneti_osszefoglalo as "kortortenetiOsszefoglalo",
         kezelesi_terv_melleklet as "kezelesiTervMelleklet",
         szakorvosi_velemeny as "szakorvosiVelemény",
+        halal_datum as "halalDatum",
         created_at as "createdAt", updated_at as "updatedAt",
         created_by as "createdBy", updated_by as "updatedBy"`,
       [
@@ -479,6 +482,7 @@ export async function PUT(
         validatedPatient.kortortenetiOsszefoglalo || null,
         validatedPatient.kezelesiTervMelleklet || null,
         validatedPatient.szakorvosiVelemény || null,
+        validatedPatient.halalDatum || null,
         userEmail
       ]
     );
@@ -557,7 +561,7 @@ export async function PUT(
         
         // Handle date fields
         const dateFields = ['szuletesi_datum', 'mutet_ideje', 'felvetel_datuma', 'felso_fogpotlas_mikor', 
-                           'also_fogpotlas_mikor', 'baleset_idopont', 'arajanlatkero_datuma'];
+                           'also_fogpotlas_mikor', 'baleset_idopont', 'arajanlatkero_datuma', 'halal_datum'];
         if (fieldName && dateFields.includes(fieldName)) {
           return normalizeDate(val);
         }
@@ -640,6 +644,7 @@ export async function PUT(
         kortorteneti_osszefoglalo: 'Kórtörténeti összefoglaló',
         kezelesi_terv_melleklet: 'Kezelési terv melléklet',
         szakorvosi_velemeny: 'Szakorvosi vélemény',
+        halal_datum: 'Halál dátuma',
         arajanlatkero_szoveg: 'Árajánlatkérő szöveg',
         arajanlatkero_datuma: 'Árajánlatkérő dátuma',
         kezelesi_terv_also: 'Kezelési terv (alsó)',
@@ -707,6 +712,7 @@ export async function PUT(
         else if (dbField === 'kortorteneti_osszefoglalo') newVal = normalize(validatedPatient.kortortenetiOsszefoglalo, dbField);
         else if (dbField === 'kezelesi_terv_melleklet') newVal = normalize(validatedPatient.kezelesiTervMelleklet, dbField);
         else if (dbField === 'szakorvosi_velemeny') newVal = normalize(validatedPatient.szakorvosiVelemény, dbField);
+        else if (dbField === 'halal_datum') newVal = normalize(validatedPatient.halalDatum, dbField);
         else {
           // Direct field name mapping (camelCase to snake_case handled above)
           const camelField = dbField.replace(/_([a-z])/g, (_, c) => c.toUpperCase());

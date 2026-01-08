@@ -1955,6 +1955,22 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
                 <p className="text-gray-500 text-xs mt-1">Formátum: +36XXXXXXXXX (pl. +36123456789)</p>
               )}
             </div>
+            <div>
+              <label className="form-label">EMAIL</label>
+              <input
+                {...register('email')}
+                type="email"
+                className={`form-input ${errors.email ? 'border-red-500' : ''}`}
+                placeholder="nev@example.com"
+                readOnly={isViewOnly}
+              />
+              {errors.email && (
+                <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>
+              )}
+              {!errors.email && (
+                <p className="text-gray-500 text-xs mt-1">Formátum: nev@example.com</p>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1987,18 +2003,19 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
               </select>
             </div>
             <div>
-              <label className="form-label">Email</label>
-              <input
-                {...register('email')}
-                type="email"
-                className={`form-input ${errors.email ? 'border-red-500' : ''}`}
-                placeholder="nev@example.com"
+              <label className="form-label">Halál dátuma</label>
+              <DatePicker
+                selected={watch('halalDatum') ? new Date(watch('halalDatum') || '') : null}
+                onChange={(date: Date | null) => {
+                  const formatted = date ? formatDateForInput(date.toISOString().split('T')[0]) : '';
+                  setValue('halalDatum', formatted, { shouldValidate: true });
+                }}
+                placeholder="Válasszon dátumot"
+                disabled={isViewOnly}
+                maxDate={new Date()}
               />
-              {errors.email && (
-                <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>
-              )}
-              {!errors.email && (
-                <p className="text-gray-500 text-xs mt-1">Formátum: nev@example.com</p>
+              {errors.halalDatum && (
+                <p className="text-red-500 text-sm mt-1">{errors.halalDatum.message}</p>
               )}
             </div>
             <div>

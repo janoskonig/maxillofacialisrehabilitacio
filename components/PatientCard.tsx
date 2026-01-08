@@ -76,11 +76,21 @@ export function PatientCard({
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
-          <h3 className="text-base font-semibold text-gray-900 truncate">
-            {patient.nev || 'Név nélküli beteg'}
-          </h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-base font-semibold text-gray-900 truncate">
+              {patient.nev || 'Név nélküli beteg'}
+            </h3>
+            {patient.halalDatum && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-200 text-gray-700 flex-shrink-0" title={`Halál dátuma: ${formatDateForDisplay(patient.halalDatum)}`}>
+                ✝
+              </span>
+            )}
+          </div>
           {patient.taj && (
             <p className="text-sm text-gray-600 mt-0.5">TAJ: {patient.taj}</p>
+          )}
+          {patient.halalDatum && (
+            <p className="text-sm text-gray-600 mt-0.5">Halál dátuma: {formatDateForDisplay(patient.halalDatum)}</p>
           )}
         </div>
         <div className="flex items-center gap-1 ml-2">
