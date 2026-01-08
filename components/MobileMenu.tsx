@@ -40,6 +40,7 @@ export function MobileMenu({ currentPath, onMessageClick, onNewPatientClick, sho
     setHasStoredErrors(errors.length > 0);
   }, []);
 
+
   const handleLogout = () => {
     setIsOpen(false);
     logout();
@@ -88,13 +89,14 @@ export function MobileMenu({ currentPath, onMessageClick, onNewPatientClick, sho
           
           {/* Menu Drawer */}
           <div
-            className={`fixed top-0 left-0 h-full w-80 bg-white shadow-xl z-50 transform transition-transform duration-300 ease-in-out md:hidden ${
+            className={`fixed top-0 left-0 h-full w-80 bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out md:hidden ${
               isOpen ? 'translate-x-0' : '-translate-x-full'
             }`}
+            style={{ backgroundColor: '#ffffff' }}
           >
-            <div className="flex flex-col h-full">
+            <div className="flex flex-col h-full bg-white" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
               {/* Header */}
-              <div className="flex items-center justify-between p-4 border-b">
+              <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-white flex-shrink-0">
                 <h2 className="text-lg font-bold text-gray-900">Menü</h2>
                 <button
                   onClick={() => setIsOpen(false)}
@@ -106,20 +108,20 @@ export function MobileMenu({ currentPath, onMessageClick, onNewPatientClick, sho
               </div>
 
               {/* User Info */}
-              <div className="p-4 border-b bg-gray-50">
+              <div className="p-4 border-b border-gray-200 bg-gray-50 flex-shrink-0">
                 <p className="text-sm font-medium text-gray-900">{user.email}</p>
                 <p className="text-xs text-gray-500 mt-1 capitalize">{user.role}</p>
               </div>
 
               {/* Menu Items */}
-              <nav className="flex-1 overflow-y-auto min-h-0" style={{ minHeight: '200px' }}>
-                <div className="p-2 space-y-1">
+              <div className="overflow-y-auto bg-white" style={{ padding: '8px', height: 'calc(100vh - 200px)', minHeight: '300px' }}>
                   {/* Főoldal - mindig megjelenik */}
                   <button
                     onClick={() => handleNavigate('/')}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors ${
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors mb-1 ${
                       currentPath === '/' ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
                     }`}
+                    style={{ backgroundColor: currentPath === '/' ? '#eff6ff' : '#ffffff', display: 'flex' }}
                   >
                     <Home className="w-5 h-5 flex-shrink-0" />
                     <span className="font-medium">Főoldal</span>
@@ -128,13 +130,28 @@ export function MobileMenu({ currentPath, onMessageClick, onNewPatientClick, sho
                   {/* Naptár - mindig megjelenik */}
                   <button
                     onClick={() => handleNavigate('/calendar')}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors ${
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors mb-1 ${
                       currentPath === '/calendar' ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
                     }`}
+                    style={{ backgroundColor: currentPath === '/calendar' ? '#eff6ff' : '#ffffff', display: 'flex' }}
                   >
                     <CalendarDays className="w-5 h-5 flex-shrink-0" />
                     <span className="font-medium">Naptár</span>
                   </button>
+
+                  {/* Admin - ha admin jogosultság van */}
+                  {user.role === 'admin' && (
+                    <button
+                      onClick={() => handleNavigate('/admin')}
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors mb-1 ${
+                        currentPath === '/admin' ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                      style={{ backgroundColor: currentPath === '/admin' ? '#eff6ff' : '#ffffff', display: 'flex' }}
+                    >
+                      <Shield className="w-5 h-5 flex-shrink-0" />
+                      <span className="font-medium">Admin</span>
+                    </button>
+                  )}
 
                   {onMessageClick && (
                     <button
@@ -142,7 +159,8 @@ export function MobileMenu({ currentPath, onMessageClick, onNewPatientClick, sho
                         setIsOpen(false);
                         onMessageClick();
                       }}
-                      className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left text-gray-700 hover:bg-gray-100 transition-colors"
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left text-gray-700 hover:bg-gray-100 transition-colors mb-1"
+                      style={{ backgroundColor: '#ffffff', display: 'flex' }}
                     >
                       <MessageCircle className="w-5 h-5 flex-shrink-0" />
                       <span className="font-medium">Üzenet</span>
@@ -155,7 +173,8 @@ export function MobileMenu({ currentPath, onMessageClick, onNewPatientClick, sho
                         setIsOpen(false);
                         onNewPatientClick();
                       }}
-                      className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left text-gray-700 hover:bg-gray-100 transition-colors bg-blue-50 text-blue-700"
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left text-gray-700 hover:bg-gray-100 transition-colors mb-1"
+                      style={{ backgroundColor: '#eff6ff', color: '#1e40af', display: 'flex' }}
                     >
                       <Plus className="w-5 h-5 flex-shrink-0" />
                       <span className="font-medium">Új beteg</span>
@@ -165,32 +184,22 @@ export function MobileMenu({ currentPath, onMessageClick, onNewPatientClick, sho
                   {(user.role === 'fogpótlástanász' || user.role === 'admin') && (
                     <button
                       onClick={() => handleNavigate('/time-slots')}
-                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors ${
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors mb-1 ${
                         currentPath === '/time-slots' ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
                       }`}
+                      style={{ backgroundColor: currentPath === '/time-slots' ? '#eff6ff' : '#ffffff', display: 'flex' }}
                     >
                       <CalendarDays className="w-5 h-5 flex-shrink-0" />
                       <span className="font-medium">Időpontok kezelése</span>
                     </button>
                   )}
 
-                  {user.role === 'admin' && (
-                    <button
-                      onClick={() => handleNavigate('/admin')}
-                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors ${
-                        currentPath === '/admin' ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
-                      }`}
-                    >
-                      <Shield className="w-5 h-5 flex-shrink-0" />
-                      <span className="font-medium">Admin</span>
-                    </button>
-                  )}
-
                   <button
                     onClick={() => handleNavigate('/settings')}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors ${
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors mb-1 ${
                       currentPath === '/settings' ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
                     }`}
+                    style={{ backgroundColor: currentPath === '/settings' ? '#eff6ff' : '#ffffff', display: 'flex' }}
                   >
                     <Settings className="w-5 h-5 flex-shrink-0" />
                     <span className="font-medium">Beállítások</span>
@@ -201,7 +210,8 @@ export function MobileMenu({ currentPath, onMessageClick, onNewPatientClick, sho
                       setIsOpen(false);
                       openModal();
                     }}
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left text-gray-700 hover:bg-gray-100 transition-colors relative"
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left text-gray-700 hover:bg-gray-100 transition-colors relative mb-1"
+                    style={{ backgroundColor: '#ffffff', display: 'flex' }}
                   >
                     <MessageCircle className="w-5 h-5 flex-shrink-0" />
                     <span className="font-medium">Visszajelzés</span>
@@ -215,20 +225,21 @@ export function MobileMenu({ currentPath, onMessageClick, onNewPatientClick, sho
                   {showBackButton && currentPath !== '/' && (
                     <button
                       onClick={() => handleNavigate('/')}
-                      className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left text-gray-700 hover:bg-gray-100 transition-colors"
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left text-gray-700 hover:bg-gray-100 transition-colors mb-1"
+                      style={{ backgroundColor: '#ffffff', display: 'flex' }}
                     >
                       <ArrowLeft className="w-5 h-5 flex-shrink-0" />
                       <span className="font-medium">Vissza</span>
                     </button>
                   )}
-                </div>
-              </nav>
+              </div>
 
               {/* Footer */}
-              <div className="p-4 border-t">
+              <div className="p-4 border-t border-gray-200 bg-white flex-shrink-0">
                 <button
                   onClick={handleLogout}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left text-red-700 hover:bg-red-50 transition-colors"
+                  style={{ backgroundColor: '#ffffff', display: 'flex' }}
                 >
                   <LogOut className="w-5 h-5 flex-shrink-0" />
                   <span className="font-medium">Kijelentkezés</span>
