@@ -225,8 +225,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Always use production URL for email links (never localhost)
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://rehabilitacios-protetika.hu';
+    // Get base URL: use env var if set, otherwise detect from request (dev) or use production
+    let baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+    if (!baseUrl) {
+      if (process.env.NODE_ENV === 'development') {
+        const origin = request.headers.get('origin') || request.nextUrl.origin;
+        baseUrl = origin;
+      } else {
+        baseUrl = 'https://rehabilitacios-protetika.hu';
+      }
+    }
 
     // Send magic link email
     await sendPatientMagicLink(patientInfo.email, patientInfo.name, token, baseUrl);

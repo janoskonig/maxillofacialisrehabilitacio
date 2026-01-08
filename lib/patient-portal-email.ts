@@ -1,21 +1,22 @@
 import { sendEmail } from './email';
 import { getDbPool } from './db';
 
-// Always use production URL, never localhost
-const PORTAL_BASE_URL = (process.env.NEXT_PUBLIC_BASE_URL && 
-  !process.env.NEXT_PUBLIC_BASE_URL.includes('localhost') && 
-  !process.env.NEXT_PUBLIC_BASE_URL.includes('127.0.0.1'))
-  ? process.env.NEXT_PUBLIC_BASE_URL 
-  : 'https://rehabilitacios-protetika.hu';
+// Base URL: use env var if set, otherwise default based on environment
+const PORTAL_BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 
+  (process.env.NODE_ENV === 'development' 
+    ? 'http://localhost:3000' 
+    : 'https://rehabilitacios-protetika.hu');
 
 /**
- * Get base URL - always use production URL, never localhost
+ * Get base URL for email links
+ * Priority: 1. Explicit baseUrl parameter, 2. NEXT_PUBLIC_BASE_URL env var, 3. Default
  */
 function getBaseUrl(baseUrl?: string): string {
-  // Always use production URL, ignore any localhost URLs
-  if (baseUrl && !baseUrl.includes('localhost') && !baseUrl.includes('127.0.0.1')) {
+  // If explicit baseUrl is provided, use it (allows localhost for local dev)
+  if (baseUrl) {
     return baseUrl;
   }
+  // Otherwise use env var or default
   return PORTAL_BASE_URL;
 }
 
