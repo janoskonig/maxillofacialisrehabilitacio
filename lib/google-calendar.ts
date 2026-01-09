@@ -667,13 +667,31 @@ export async function syncTimeSlotsFromGoogleCalendar(userId: string): Promise<{
   try {
     const pool = getDbPool();
     
+    // Test database connection first
+    try {
+      await pool.query('SELECT 1');
+    } catch (dbError) {
+      const errorMsg = dbError instanceof Error ? dbError.message : 'Unknown database error';
+      console.error(`[syncTimeSlotsFromGoogleCalendar] Database connection test failed for user ${userId}:`, errorMsg);
+      result.errors.push(`Database connection failed: ${errorMsg}`);
+      throw new Error(`Database connection failed: ${errorMsg}`);
+    }
+    
     // Ellenőrizzük, hogy a felhasználó Google Calendar-hoz kapcsolva van-e
-    const userResult = await pool.query(
-      `SELECT id, email, google_calendar_source_calendar_id 
-       FROM users 
-       WHERE id = $1 AND google_calendar_enabled = true`,
-      [userId]
-    );
+    let userResult;
+    try {
+      userResult = await pool.query(
+        `SELECT id, email, google_calendar_source_calendar_id 
+         FROM users 
+         WHERE id = $1 AND google_calendar_enabled = true`,
+        [userId]
+      );
+    } catch (dbError) {
+      const errorMsg = dbError instanceof Error ? dbError.message : 'Unknown database error';
+      console.error(`[syncTimeSlotsFromGoogleCalendar] Error querying user ${userId}:`, errorMsg);
+      result.errors.push(`Database query failed: ${errorMsg}`);
+      throw new Error(`Database query failed: ${errorMsg}`);
+    }
     
     if (userResult.rows.length === 0) {
       return result;
@@ -700,12 +718,20 @@ export async function syncTimeSlotsFromGoogleCalendar(userId: string): Promise<{
     console.log(`[syncTimeSlotsFromGoogleCalendar] Found ${szabadEvents.length} "szabad" events`);
     
     // Lekérjük az adatbázisban lévő Google Calendar-ból származó időpontokat
-    const existingSlotsResult = await pool.query(
-      `SELECT id, google_calendar_event_id, start_time, status, teremszam 
-       FROM available_time_slots 
-       WHERE user_id = $1 AND source = 'google_calendar' AND google_calendar_event_id IS NOT NULL`,
-      [userId]
-    );
+    let existingSlotsResult;
+    try {
+      existingSlotsResult = await pool.query(
+        `SELECT id, google_calendar_event_id, start_time, status, teremszam 
+         FROM available_time_slots 
+         WHERE user_id = $1 AND source = 'google_calendar' AND google_calendar_event_id IS NOT NULL`,
+        [userId]
+      );
+    } catch (dbError) {
+      const errorMsg = dbError instanceof Error ? dbError.message : 'Unknown database error';
+      console.error(`[syncTimeSlotsFromGoogleCalendar] Error querying existing slots for user ${userId}:`, errorMsg);
+      result.errors.push(`Database query failed: ${errorMsg}`);
+      throw new Error(`Database query failed: ${errorMsg}`);
+    }
     
     const existingSlots = new Map<string, {
       id: string;
@@ -785,25 +811,37 @@ export async function syncTimeSlotsFromGoogleCalendar(userId: string): Promise<{
             
             if (updates.length > 0) {
               values.push(existingSlot.id);
-              await pool.query(
-                `UPDATE available_time_slots 
-                 SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP 
-                 WHERE id = $${paramIndex}`,
-                values
-              );
-              result.updated++;
+              try {
+                await pool.query(
+                  `UPDATE available_time_slots 
+                   SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP 
+                   WHERE id = $${paramIndex}`,
+                  values
+                );
+                result.updated++;
+              } catch (dbError) {
+                const errorMsg = dbError instanceof Error ? dbError.message : 'Unknown database error';
+                console.error(`[syncTimeSlotsFromGoogleCalendar] Error updating slot ${existingSlot.id} for user ${userId}:`, errorMsg);
+                result.errors.push(`Failed to update slot ${existingSlot.id}: ${errorMsg}`);
+              }
             }
           }
         }
       } else {
         // Új időpont létrehozása
         // cim-et nem állítjuk be (marad NULL, majd az API alapértelmezett értéket használ)
-        await pool.query(
-          `INSERT INTO available_time_slots (user_id, start_time, status, google_calendar_event_id, source, teremszam)
-           VALUES ($1, $2, 'available', $3, 'google_calendar', $4)`,
-          [userId, startTime.toISOString(), event.id, teremszam]
-        );
-        result.created++;
+        try {
+          await pool.query(
+            `INSERT INTO available_time_slots (user_id, start_time, status, google_calendar_event_id, source, teremszam)
+             VALUES ($1, $2, 'available', $3, 'google_calendar', $4)`,
+            [userId, startTime.toISOString(), event.id, teremszam]
+          );
+          result.created++;
+        } catch (dbError) {
+          const errorMsg = dbError instanceof Error ? dbError.message : 'Unknown database error';
+          console.error(`[syncTimeSlotsFromGoogleCalendar] Error creating slot for event ${event.id} for user ${userId}:`, errorMsg);
+          result.errors.push(`Failed to create slot for event ${event.id}: ${errorMsg}`);
+        }
       }
     }
     
@@ -812,19 +850,42 @@ export async function syncTimeSlotsFromGoogleCalendar(userId: string): Promise<{
       if (!processedEventIds.has(eventId)) {
         // Csak akkor törölünk, ha nincs lefoglalva
         if (slot.status === 'available') {
-          await pool.query(
-            `DELETE FROM available_time_slots WHERE id = $1`,
-            [slot.id]
-          );
-          result.deleted++;
+          try {
+            await pool.query(
+              `DELETE FROM available_time_slots WHERE id = $1`,
+              [slot.id]
+            );
+            result.deleted++;
+          } catch (dbError) {
+            const errorMsg = dbError instanceof Error ? dbError.message : 'Unknown database error';
+            console.error(`[syncTimeSlotsFromGoogleCalendar] Error deleting slot ${slot.id} for user ${userId}:`, errorMsg);
+            result.errors.push(`Failed to delete slot ${slot.id}: ${errorMsg}`);
+          }
         }
       }
     }
     
     return result;
   } catch (error) {
-    console.error('Error syncing time slots from Google Calendar:', error);
-    result.errors.push(`Sync error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    console.error(`[syncTimeSlotsFromGoogleCalendar] Error syncing time slots from Google Calendar for user ${userId}:`, errorMessage);
+    if (errorStack) {
+      console.error(`[syncTimeSlotsFromGoogleCalendar] Error stack:`, errorStack);
+    }
+    
+    // Check if it's a connection error
+    if (errorMessage.includes('Connection terminated') || 
+        errorMessage.includes('ECONNRESET') || 
+        errorMessage.includes('ETIMEDOUT') ||
+        errorMessage.includes('timeout') ||
+        errorMessage.includes('Connection') ||
+        errorMessage.includes('terminated')) {
+      console.error(`[syncTimeSlotsFromGoogleCalendar] Connection error detected for user ${userId}`);
+    }
+    
+    result.errors.push(`Sync error: ${errorMessage}`);
+    // Don't throw - return partial results
     return result;
   }
 }
