@@ -232,14 +232,16 @@ export async function sendEmail(options: SendEmailOptions): Promise<void> {
       // Additional headers for better deliverability and spam prevention
       headers: {
         'MIME-Version': '1.0',
+        'Content-Language': 'hu-HU', // Specify language for better deliverability
         // Content-Type is automatically set by nodemailer based on html/text
         'X-Mailer': 'Maxillofaciális Rehabilitáció Rendszer',
         // Remove X-Priority and Importance - these can trigger spam filters
         // Instead, let email clients determine priority naturally
-        'Precedence': allRecipients.length > 1 ? 'bulk' : 'normal',
+        // REMOVED: 'Precedence': 'bulk' - This can trigger spam filters
         'Auto-Submitted': 'no', // Indicates this is not an auto-generated email
         'List-Id': '<maxillofacialis-rehabilitacio.system>', // Helps identify legitimate emails
         'List-Unsubscribe': '<mailto:' + (options.replyTo || SMTP_REPLY_TO) + '>', // Unsubscribe header for better deliverability
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click', // Required by Gmail and other providers for one-click unsubscribe
         'X-Auto-Response-Suppress': 'All', // Suppress auto-responses
       },
       // Set return path for bounce handling
