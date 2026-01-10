@@ -414,7 +414,7 @@ export default function Home() {
                   className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2"
                 >
                   <MessageCircle className="w-3.5 h-3.5" />
-                  Orvosok közötti üzenetek
+                  Üzenetek
                 </button>
                 <button
                   onClick={() => setShowMessageModal(true)}

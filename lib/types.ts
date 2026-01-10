@@ -426,6 +426,35 @@ export interface DoctorConversation {
   doctorEmail: string;
   lastMessage: DoctorMessage | null;
   unreadCount: number;
+  type?: 'individual' | 'group';
+  groupId?: string;
+  groupName?: string | null;
+  participantCount?: number;
+}
+
+// Doctor message group types
+export interface DoctorMessageGroup {
+  id: string;
+  name: string | null;
+  createdBy: string;
+  createdAt: Date;
+  participantCount?: number;
+}
+
+export interface DoctorGroupParticipant {
+  userId: string;
+  userName: string;
+  userEmail: string;
+  joinedAt: Date;
+}
+
+export interface DoctorGroupConversation {
+  groupId: string;
+  groupName: string | null;
+  participants: DoctorGroupParticipant[];
+  lastMessage: DoctorMessage | null;
+  unreadCount: number;
+  participantCount: number;
 }
 
 // Patient mention types

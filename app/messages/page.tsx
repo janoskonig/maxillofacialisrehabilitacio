@@ -1,17 +1,20 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { DoctorMessages } from '@/components/DoctorMessages';
-import { ArrowLeft } from 'lucide-react';
+import { PatientMessagesList } from '@/components/PatientMessagesList';
+import { ArrowLeft, MessageCircle, Users } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { MobileMenu } from '@/components/MobileMenu';
 
 export default function MessagesPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [authorized, setAuthorized] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'doctor-doctor' | 'doctor-patient'>('doctor-doctor');
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -33,6 +36,14 @@ export default function MessagesPage() {
 
     checkAuth();
   }, [router]);
+
+  // Set active tab from URL query parameter
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'doctor-patient' || tab === 'doctor-doctor') {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
 
   const handleBack = () => {
     router.push('/');
@@ -60,7 +71,7 @@ export default function MessagesPage() {
               <Logo width={50} height={58} />
               <div>
                 <h1 className="text-lg sm:text-xl font-bold text-medical-primary">
-                  Orvosok közötti üzenetek
+                  Üzenetek
                 </h1>
               </div>
             </div>
@@ -80,7 +91,40 @@ export default function MessagesPage() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <DoctorMessages />
+        {/* Tabs */}
+        <div className="mb-4 border-b border-gray-200">
+          <nav className="flex gap-1" aria-label="Üzenetek fülök">
+            <button
+              onClick={() => setActiveTab('doctor-doctor')}
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                activeTab === 'doctor-doctor'
+                  ? 'text-medical-primary border-medical-primary'
+                  : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              Orvos-orvos
+            </button>
+            <button
+              onClick={() => setActiveTab('doctor-patient')}
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                activeTab === 'doctor-patient'
+                  ? 'text-medical-primary border-medical-primary'
+                  : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
+              }`}
+            >
+              <MessageCircle className="w-4 h-4" />
+              Orvos-beteg
+            </button>
+          </nav>
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === 'doctor-doctor' ? (
+          <DoctorMessages />
+        ) : (
+          <PatientMessagesList />
+        )}
       </main>
     </div>
   );

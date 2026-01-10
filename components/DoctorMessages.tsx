@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { MessageCircle, Send, Check, CheckCheck, Loader2, Users, Search } from 'lucide-react';
+import { MessageCircle, Send, Check, CheckCheck, Loader2, Users, Search, UserPlus, Plus, Edit2, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
@@ -9,12 +9,17 @@ import { DoctorMessage, DoctorConversation } from '@/lib/types';
 import { PatientMention } from './PatientMention';
 import { MessageTextRenderer } from './MessageTextRenderer';
 import { getCurrentUser, AuthUser } from '@/lib/auth';
+import { CreateGroupChatModal } from './CreateGroupChatModal';
+import { RecipientSelector } from './RecipientSelector';
 
 export function DoctorMessages() {
   const { showToast } = useToast();
   const [conversations, setConversations] = useState<DoctorConversation[]>([]);
   const [selectedDoctorId, setSelectedDoctorId] = useState<string | null>(null);
   const [selectedDoctorName, setSelectedDoctorName] = useState<string | null>(null);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [selectedGroupName, setSelectedGroupName] = useState<string | null>(null);
+  const [groupParticipants, setGroupParticipants] = useState<Array<{ userId: string; userName: string; userEmail: string }>>([]);
   const [messages, setMessages] = useState<DoctorMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -24,8 +29,13 @@ export function DoctorMessages() {
   const [cursorPosition, setCursorPosition] = useState(0);
   const [doctors, setDoctors] = useState<Array<{ id: string; name: string; email: string; intezmeny: string | null }>>([]);
   const [showDoctorSelector, setShowDoctorSelector] = useState(false);
+  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   const [doctorSearchQuery, setDoctorSearchQuery] = useState('');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [newChatRecipients, setNewChatRecipients] = useState<Array<{ id: string; name: string; email: string; intezmeny: string | null }>>([]);
+  const [showNewChat, setShowNewChat] = useState(false);
+  const [editingGroupName, setEditingGroupName] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -44,19 +54,29 @@ export function DoctorMessages() {
       fetchUnreadCount();
       if (selectedDoctorId) {
         fetchMessages();
+      } else if (selectedGroupId) {
+        fetchGroupMessages();
       }
     }, 5000);
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch messages when doctor is selected
+  // Fetch messages when doctor or group is selected
   useEffect(() => {
     if (selectedDoctorId) {
+      setSelectedGroupId(null);
+      setSelectedGroupName(null);
+      setGroupParticipants([]);
       fetchMessages();
+    } else if (selectedGroupId) {
+      setSelectedDoctorId(null);
+      setSelectedDoctorName(null);
+      fetchGroupMessages();
+      fetchGroupParticipants();
     } else {
       setMessages([]);
     }
-  }, [selectedDoctorId]);
+  }, [selectedDoctorId, selectedGroupId]);
 
   // Fetch doctors list and current user
   useEffect(() => {
@@ -70,9 +90,9 @@ export function DoctorMessages() {
     loadCurrentUser();
   }, []);
 
-  // Auto-mark as read when messages are loaded
+  // Auto-mark as read when messages are loaded (only for individual conversations)
   useEffect(() => {
-    if (messages.length > 0 && !loading && selectedDoctorId && currentUserId) {
+    if (messages.length > 0 && !loading && selectedDoctorId && !selectedGroupId && currentUserId) {
       // Csak a valódi üzeneteket jelöljük olvasottnak (nem pending-eket)
       const unreadMessages = messages.filter(
         m => m.recipientId === currentUserId && !m.readAt && !m.pending && !m.id.startsWith('pending-')
@@ -96,7 +116,7 @@ export function DoctorMessages() {
         ));
       }
     }
-  }, [messages.length, loading, selectedDoctorId, currentUserId]);
+  }, [messages.length, loading, selectedDoctorId, selectedGroupId, currentUserId]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -165,6 +185,48 @@ export function DoctorMessages() {
     }
   };
 
+  const fetchGroupMessages = async () => {
+    if (!selectedGroupId) return;
+
+    try {
+      const response = await fetch(`/api/doctor-messages?groupId=${selectedGroupId}`, {
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error('Hiba a csoportos beszélgetés üzeneteinek betöltésekor');
+      }
+
+      const data = await response.json();
+      const messages = (data.messages || []) as DoctorMessage[];
+      setMessages(messages.filter((m: DoctorMessage) => !m.pending));
+    } catch (error) {
+      console.error('Hiba a csoportos beszélgetés üzeneteinek betöltésekor:', error);
+      showToast('Hiba történt az üzenetek betöltésekor', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchGroupParticipants = async () => {
+    if (!selectedGroupId) return;
+
+    try {
+      const response = await fetch(`/api/doctor-messages/groups/${selectedGroupId}/participants`, {
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error('Hiba a résztvevők betöltésekor');
+      }
+
+      const data = await response.json();
+      setGroupParticipants(data.participants || []);
+    } catch (error) {
+      console.error('Hiba a résztvevők betöltésekor:', error);
+    }
+  };
+
   const fetchDoctors = async () => {
     try {
       const response = await fetch('/api/users/doctors', {
@@ -186,20 +248,20 @@ export function DoctorMessages() {
   };
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !selectedDoctorId) {
-      showToast('Kérjük, válasszon orvost és írjon üzenetet', 'error');
+    if (!newMessage.trim() || (!selectedDoctorId && !selectedGroupId)) {
+      showToast('Kérjük, válasszon beszélgetést és írjon üzenetet', 'error');
       return;
     }
 
     try {
       setSending(true);
       
-      // Pending message - beállítjuk a senderId-t a currentUserId-re, hogy azonnal jobb oldalon jelenjen meg
+      // Pending message
       const tempId = `pending-${Date.now()}`;
       const pendingMessage: DoctorMessage = {
         id: tempId,
         senderId: currentUserId || '',
-        recipientId: selectedDoctorId,
+        recipientId: selectedDoctorId || '',
         senderEmail: '',
         senderName: null,
         subject: null,
@@ -219,7 +281,8 @@ export function DoctorMessages() {
         },
         credentials: 'include',
         body: JSON.stringify({
-          recipientId: selectedDoctorId,
+          recipientId: selectedDoctorId || undefined,
+          groupId: selectedGroupId || undefined,
           subject: null,
           message: newMessage.trim(),
         }),
@@ -243,7 +306,11 @@ export function DoctorMessages() {
       showToast('Üzenet sikeresen elküldve', 'success');
       
       setTimeout(() => {
-        fetchMessages();
+        if (selectedDoctorId) {
+          fetchMessages();
+        } else if (selectedGroupId) {
+          fetchGroupMessages();
+        }
         fetchConversations();
       }, 500);
     } catch (error: any) {
@@ -257,9 +324,140 @@ export function DoctorMessages() {
   const handleSelectDoctor = (doctorId: string, doctorName: string) => {
     setSelectedDoctorId(doctorId);
     setSelectedDoctorName(doctorName);
+    setSelectedGroupId(null);
+    setSelectedGroupName(null);
+    setGroupParticipants([]);
     setLoading(true);
     setShowDoctorSelector(false);
     setDoctorSearchQuery('');
+  };
+
+  const handleSelectGroup = (groupId: string, groupName: string | null) => {
+    setSelectedGroupId(groupId);
+    setSelectedGroupName(groupName);
+    setSelectedDoctorId(null);
+    setSelectedDoctorName(null);
+    setLoading(true);
+    setShowDoctorSelector(false);
+    setDoctorSearchQuery('');
+    setShowNewChat(false);
+    setNewChatRecipients([]);
+  };
+
+  const handleStartNewChat = () => {
+    setShowNewChat(true);
+    setSelectedDoctorId(null);
+    setSelectedDoctorName(null);
+    setSelectedGroupId(null);
+    setSelectedGroupName(null);
+    setNewChatRecipients([]);
+    setMessages([]);
+  };
+
+  const handleNewChatRecipientsChange = (recipients: Array<{ id: string; name: string; email: string; intezmeny: string | null }>) => {
+    setNewChatRecipients(recipients);
+  };
+
+  const handleStartConversation = async () => {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DoctorMessages.tsx:361',message:'handleStartConversation entry',data:{recipientsCount:newChatRecipients.length,currentUserId,participantIds:newChatRecipients.map(r => r.id)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
+    if (newChatRecipients.length === 0) {
+      showToast('Kérjük, válasszon legalább egy címzettet', 'error');
+      return;
+    }
+
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DoctorMessages.tsx:367',message:'Checking participant limit',data:{recipientsCount:newChatRecipients.length,limit:19,willCreateGroup:newChatRecipients.length > 1},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
+
+    try {
+      if (newChatRecipients.length === 1) {
+        // Egy-egy beszélgetés
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DoctorMessages.tsx:373',message:'Creating individual conversation',data:{recipientId:newChatRecipients[0].id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
+        handleSelectDoctor(newChatRecipients[0].id, newChatRecipients[0].name);
+        setShowNewChat(false);
+        setNewChatRecipients([]);
+      } else {
+        // Csoportos beszélgetés létrehozása
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DoctorMessages.tsx:380',message:'Creating group conversation',data:{participantIds:newChatRecipients.map(r => r.id),participantCount:newChatRecipients.length,currentUserId,includesCurrentUser:newChatRecipients.some(r => r.id === currentUserId)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+        // #endregion
+        setLoading(true);
+        const response = await fetch('/api/doctor-messages/groups', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            participantIds: newChatRecipients.map(r => r.id),
+            name: null, // Névtelen csoport, később át lehet nevezni
+          }),
+        });
+
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DoctorMessages.tsx:395',message:'Group creation response',data:{ok:response.ok,status:response.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
+
+        if (!response.ok) {
+          const error = await response.json();
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DoctorMessages.tsx:400',message:'Group creation failed',data:{error:error.error,status:response.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+          // #endregion
+          throw new Error(error.error || 'Hiba a csoportos beszélgetés létrehozásakor');
+        }
+
+        const data = await response.json();
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DoctorMessages.tsx:406',message:'Group created successfully',data:{groupId:data.groupId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
+        handleSelectGroup(data.groupId, null);
+        setShowNewChat(false);
+        setNewChatRecipients([]);
+        showToast('Csoportos beszélgetés létrehozva', 'success');
+      }
+    } catch (error: any) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DoctorMessages.tsx:414',message:'Error in handleStartConversation',data:{error:error.message,recipientsCount:newChatRecipients.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
+      console.error('Hiba a beszélgetés indításakor:', error);
+      showToast(error.message || 'Hiba történt a beszélgetés indításakor', 'error');
+      setLoading(false);
+    }
+  };
+
+  const handleRenameGroup = async () => {
+    if (!selectedGroupId) return;
+
+    try {
+      const response = await fetch(`/api/doctor-messages/groups/${selectedGroupId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          name: newGroupName.trim() || null,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Hiba a csoportos beszélgetés átnevezésekor');
+      }
+
+      setSelectedGroupName(newGroupName.trim() || null);
+      setEditingGroupName(false);
+      setNewGroupName('');
+      showToast('Csoportos beszélgetés átnevezve', 'success');
+      fetchConversations();
+    } catch (error: any) {
+      console.error('Hiba a csoportos beszélgetés átnevezésekor:', error);
+      showToast(error.message || 'Hiba történt a csoportos beszélgetés átnevezésekor', 'error');
+    }
   };
 
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -292,7 +490,7 @@ export function DoctorMessages() {
 
   if (loading) {
     return (
-      <div className="flex h-[700px] border border-gray-200 rounded-lg overflow-hidden bg-white">
+      <div className="flex h-[calc(100vh-200px)] sm:h-[700px] border border-gray-200 rounded-lg overflow-hidden bg-white">
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
@@ -304,9 +502,9 @@ export function DoctorMessages() {
   }
 
   return (
-    <div className="flex h-[700px] border border-gray-200 rounded-lg overflow-hidden bg-white">
+    <div className="flex h-[calc(100vh-200px)] sm:h-[700px] border border-gray-200 rounded-lg overflow-hidden bg-white">
       {/* Conversations List */}
-      <div className="w-80 border-r border-gray-200 flex flex-col">
+      <div className={`${selectedDoctorId || selectedGroupId ? 'hidden sm:flex' : 'flex'} w-full sm:w-80 border-r border-gray-200 flex flex-col`}>
         <div className="p-4 border-b border-gray-200 bg-gray-50">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
@@ -320,10 +518,10 @@ export function DoctorMessages() {
             )}
           </div>
           <button
-            onClick={() => setShowDoctorSelector(!showDoctorSelector)}
-            className="w-full btn-secondary flex items-center gap-2 justify-center"
+            onClick={handleStartNewChat}
+            className="w-full btn-primary flex items-center gap-2 justify-center"
           >
-            <Search className="w-4 h-4" />
+            <Plus className="w-4 h-4" />
             Új beszélgetés
           </button>
           {showDoctorSelector && (
@@ -362,47 +560,185 @@ export function DoctorMessages() {
               <p className="text-xs mt-2 text-gray-400">Kattintson az "Új beszélgetés" gombra egy orvos kiválasztásához</p>
             </div>
           ) : (
-            conversations.map((conv) => (
-              <div
-                key={conv.doctorId}
-                onClick={() => handleSelectDoctor(conv.doctorId, conv.doctorName)}
-                className={`p-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 ${
-                  selectedDoctorId === conv.doctorId ? 'bg-blue-50' : ''
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="font-medium text-sm">{conv.doctorName}</div>
-                  {conv.unreadCount > 0 && (
-                    <span className="px-2 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full">
-                      {conv.unreadCount}
-                    </span>
+            conversations.map((conv) => {
+              const isSelected = (conv.type === 'individual' && selectedDoctorId === conv.doctorId) ||
+                                (conv.type === 'group' && selectedGroupId === conv.groupId);
+              
+              return (
+                <div
+                  key={conv.type === 'individual' ? conv.doctorId : conv.groupId}
+                  onClick={() => {
+                    if (conv.type === 'individual' && conv.doctorId) {
+                      handleSelectDoctor(conv.doctorId, conv.doctorName);
+                    } else if (conv.type === 'group' && conv.groupId) {
+                      handleSelectGroup(conv.groupId, conv.groupName || null);
+                    }
+                  }}
+                  className={`p-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 ${
+                    isSelected ? 'bg-blue-50' : ''
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      {conv.type === 'group' && (
+                        <Users className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                      )}
+                      <div className="font-medium text-sm truncate">
+                        {conv.type === 'individual' 
+                          ? conv.doctorName 
+                          : (conv.groupName || `Csoport (${conv.participantCount || 0} résztvevő)`)}
+                      </div>
+                    </div>
+                    {conv.unreadCount > 0 && (
+                      <span className="px-2 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full flex-shrink-0">
+                        {conv.unreadCount}
+                      </span>
+                    )}
+                  </div>
+                  {conv.lastMessage && (
+                    <div className="text-xs text-gray-500 mt-1 truncate">
+                      {conv.lastMessage.message.substring(0, 50)}
+                      {conv.lastMessage.message.length > 50 ? '...' : ''}
+                    </div>
+                  )}
+                  {conv.type === 'group' && conv.participantCount && (
+                    <div className="text-xs text-gray-400 mt-1">
+                      {conv.participantCount} résztvevő
+                    </div>
                   )}
                 </div>
-                {conv.lastMessage && (
-                  <div className="text-xs text-gray-500 mt-1 truncate">
-                    {conv.lastMessage.message.substring(0, 50)}
-                    {conv.lastMessage.message.length > 50 ? '...' : ''}
-                  </div>
-                )}
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
 
       {/* Chat Area */}
       <div className="flex-1 flex flex-col">
-        {selectedDoctorId ? (
+        {showNewChat ? (
+          <>
+            {/* New Chat Header */}
+            <div className="p-3 sm:p-4 border-b border-gray-200 bg-gray-50">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900">Új beszélgetés</h3>
+                <button
+                  onClick={() => {
+                    setShowNewChat(false);
+                    setNewChatRecipients([]);
+                  }}
+                  className="p-1 hover:bg-gray-200 rounded transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <RecipientSelector
+                selectedRecipients={newChatRecipients}
+                onRecipientsChange={handleNewChatRecipientsChange}
+              />
+              {newChatRecipients.length > 0 && (
+                <button
+                  onClick={handleStartConversation}
+                  className="mt-3 w-full btn-primary flex items-center justify-center gap-2"
+                >
+                  Beszélgetés indítása
+                </button>
+              )}
+            </div>
+            <div className="flex-1 flex items-center justify-center text-gray-500">
+              <div className="text-center">
+                <MessageCircle className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                <p>Válasszon címzett(ek)et a beszélgetéshez</p>
+              </div>
+            </div>
+          </>
+        ) : (selectedDoctorId || selectedGroupId) ? (
           <>
             {/* Header */}
-            <div className="p-4 border-b border-gray-200 bg-gray-50">
-              <h3 className="text-lg font-semibold text-gray-900">
-                {selectedDoctorName}
-              </h3>
+            <div className="p-3 sm:p-4 border-b border-gray-200 bg-gray-50">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  {editingGroupName && selectedGroupId ? (
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                      <input
+                        type="text"
+                        value={newGroupName}
+                        onChange={(e) => setNewGroupName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleRenameGroup();
+                          } else if (e.key === 'Escape') {
+                            setEditingGroupName(false);
+                            setNewGroupName('');
+                          }
+                        }}
+                        placeholder="Csoport neve..."
+                        className="form-input flex-1"
+                        autoFocus
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleRenameGroup}
+                          className="btn-primary px-3 py-1 text-sm flex-1 sm:flex-none"
+                        >
+                          Mentés
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingGroupName(false);
+                            setNewGroupName('');
+                          }}
+                          className="btn-secondary px-3 py-1 text-sm flex-1 sm:flex-none"
+                        >
+                          Mégse
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <h3 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center gap-2 truncate">
+                        {selectedGroupId && <Users className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0" />}
+                        <span className="truncate">{selectedDoctorId ? selectedDoctorName : (selectedGroupName || 'Csoportos beszélgetés')}</span>
+                      </h3>
+                      {selectedGroupId && groupParticipants.length > 0 && (
+                        <div className="text-xs sm:text-sm text-gray-600 mt-1">
+                          {groupParticipants.length} résztvevő
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                  {selectedGroupId && !editingGroupName && (
+                    <>
+                      <button
+                        onClick={() => {
+                          setEditingGroupName(true);
+                          setNewGroupName(selectedGroupName || '');
+                        }}
+                        className="btn-secondary flex items-center gap-1 text-sm px-2 py-1"
+                        title="Csoport átnevezése"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                        <span className="hidden sm:inline">Átnevezés</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowCreateGroupModal(true);
+                        }}
+                        className="btn-secondary flex items-center gap-1 text-sm px-2 py-1"
+                        title="Résztvevők hozzáadása"
+                      >
+                        <UserPlus className="w-4 h-4" />
+                        <span className="hidden sm:inline">Hozzáadás</span>
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 bg-gray-50 space-y-3">
+            <div className="flex-1 overflow-y-auto p-2 sm:p-4 bg-gray-50 space-y-3">
               {messages.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   <MessageCircle className="w-12 h-12 mx-auto mb-2 text-gray-300" />
@@ -455,8 +791,8 @@ export function DoctorMessages() {
             </div>
 
             {/* Message Input */}
-            <div className="border-t bg-white p-4 relative">
-              <div className="flex gap-2">
+            <div className="border-t bg-white p-2 sm:p-4 relative">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <div className="flex-1 relative">
                   <textarea
                     ref={textareaRef}
@@ -464,7 +800,7 @@ export function DoctorMessages() {
                     onChange={handleTextareaChange}
                     onKeyDown={handleTextareaKeyDown}
                     onSelect={handleTextareaSelect}
-                    className="form-input flex-1 resize-none"
+                    className="form-input flex-1 resize-none w-full min-h-[60px] sm:min-h-0"
                     rows={2}
                     placeholder="Írja be üzenetét... (használjon @ jelet beteg jelöléséhez)"
                     disabled={sending}
@@ -495,10 +831,10 @@ export function DoctorMessages() {
                 <button
                   onClick={handleSendMessage}
                   disabled={sending || !newMessage.trim()}
-                  className="btn-primary flex items-center gap-2 px-4 self-end"
+                  className="btn-primary flex items-center justify-center gap-2 px-4 py-2 sm:self-end w-full sm:w-auto"
                 >
                   <Send className="w-4 h-4" />
-                  {sending ? '...' : 'Küldés'}
+                  <span className="sm:inline">{sending ? '...' : 'Küldés'}</span>
                 </button>
               </div>
             </div>
@@ -507,11 +843,28 @@ export function DoctorMessages() {
           <div className="flex-1 flex items-center justify-center text-gray-500">
             <div className="text-center">
               <MessageCircle className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-              <p>Válasszon egy orvost a beszélgetéshez</p>
+              <p>Válasszon egy beszélgetést</p>
+              <p className="text-sm mt-2 text-gray-400">
+                Válasszon egy orvost vagy csoportos beszélgetést
+              </p>
             </div>
           </div>
         )}
       </div>
+
+      {/* Create Group Chat Modal */}
+      <CreateGroupChatModal
+        isOpen={showCreateGroupModal}
+        onClose={() => setShowCreateGroupModal(false)}
+        onGroupCreated={() => {
+          fetchConversations();
+          if (selectedGroupId) {
+            fetchGroupParticipants();
+          }
+          setShowCreateGroupModal(false);
+        }}
+        existingGroupId={selectedGroupId}
+      />
     </div>
   );
 }

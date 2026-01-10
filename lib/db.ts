@@ -20,7 +20,8 @@ export function getDbPool(): Pool {
       process.env.NODE_ENV === 'production';
 
     // Pool beállítások környezeti változókból vagy alapértelmezett értékekből
-    const maxConnections = parseInt(process.env.DB_POOL_MAX || '20', 10);
+    // Increased default max connections to handle multiple concurrent API calls
+    const maxConnections = parseInt(process.env.DB_POOL_MAX || '50', 10);
     const connectionTimeout = parseInt(process.env.DB_POOL_CONNECTION_TIMEOUT || '10000', 10); // Increased to 10s
     const idleTimeout = parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '60000', 10); // Increased to 60s for long-running operations
     const minConnections = parseInt(process.env.DB_POOL_MIN || '2', 10);

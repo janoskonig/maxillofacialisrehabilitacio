@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { CommunicationLog } from '@/components/CommunicationLog';
 import { PatientMessages } from '@/components/PatientMessages';
+import { DoctorMessagesForPatient } from '@/components/DoctorMessagesForPatient';
 import { ArrowLeft } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { MobileMenu } from '@/components/MobileMenu';
@@ -121,6 +122,9 @@ export default function PatientDetailPage() {
           {patientEmail && (
             <PatientMessages patientId={patientId} patientName={patientName} />
           )}
+          
+          {/* Konzílium - Orvos-orvos üzenetek */}
+          <DoctorMessagesForPatient patientId={patientId} patientName={patientName} />
           
           {/* Communication Log - mindig látható */}
           <CommunicationLog patientId={patientId} patientName={patientName} />
