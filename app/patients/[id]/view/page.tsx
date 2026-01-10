@@ -106,37 +106,42 @@ export default function PatientViewPage() {
     return null;
   }
 
-  const tabs: Array<{ id: TabType; label: string; icon: React.ReactNode }> = [
-    { id: 'alapadatok', label: 'Alapadatok', icon: <User className="w-4 h-4" /> },
-    { id: 'anamnezis', label: 'Anamnézis és betegvizsgálat', icon: <FileText className="w-4 h-4" /> },
-    { id: 'adminisztracio', label: 'Adminisztráció', icon: <ClipboardList className="w-4 h-4" /> },
-    { id: 'idopont', label: 'Időpontfoglalás', icon: <Calendar className="w-4 h-4" /> },
-    { id: 'konzilium', label: 'Konzílium', icon: <Users className="w-4 h-4" /> },
-    { id: 'uzenet', label: 'Üzenet a betegnek', icon: <MessageCircle className="w-4 h-4" /> },
+  const tabs: Array<{ id: TabType; label: string; shortLabel: string; icon: React.ReactNode }> = [
+    { id: 'alapadatok', label: 'Alapadatok', shortLabel: 'Alap', icon: <User className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
+    { id: 'anamnezis', label: 'Anamnézis és betegvizsgálat', shortLabel: 'Anamnézis', icon: <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
+    { id: 'adminisztracio', label: 'Adminisztráció', shortLabel: 'Admin', icon: <ClipboardList className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
+    { id: 'idopont', label: 'Időpontfoglalás', shortLabel: 'Időpont', icon: <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
+    { id: 'konzilium', label: 'Konzílium', shortLabel: 'Konzílium', icon: <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
+    { id: 'uzenet', label: 'Üzenet a betegnek', shortLabel: 'Üzenet', icon: <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
   ];
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between py-4">
-            <div className="flex items-center gap-4">
-              <Logo width={50} height={58} />
-              <div>
-                <h1 className="text-lg sm:text-xl font-bold text-medical-primary">
+        <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
+          <div className="flex items-center justify-between py-2 sm:py-4">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
+              <div className="hidden sm:block">
+                <Logo width={50} height={58} />
+              </div>
+              <div className="block sm:hidden">
+                <Logo width={40} height={46} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h1 className="text-base sm:text-lg lg:text-xl font-bold text-medical-primary truncate">
                   Beteg profil
                 </h1>
                 {patient.nev && (
-                  <p className="text-sm text-gray-600">{patient.nev}</p>
+                  <p className="text-xs sm:text-sm text-gray-600 truncate">{patient.nev}</p>
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
               <MobileMenu showBackButton={true} />
               <button
                 onClick={handleBack}
-                className="btn-secondary flex items-center gap-2"
+                className="btn-secondary flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-sm"
               >
                 <ArrowLeft className="w-4 h-4" />
                 <span className="hidden sm:inline">Vissza</span>
@@ -147,15 +152,18 @@ export default function PatientViewPage() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-6">
         {/* Tabs */}
-        <div className="mb-6 border-b border-gray-200">
-          <nav className="flex gap-1 overflow-x-auto" aria-label="Betegűrlap fülök">
+        <div className="mb-4 sm:mb-6 border-b border-gray-200 -mx-2 sm:mx-0">
+          <nav 
+            className="flex gap-0.5 sm:gap-1 overflow-x-auto scrollbar-hide px-2 sm:px-0" 
+            aria-label="Betegűrlap fülök"
+          >
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
-                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
                   activeTab === tab.id
                     ? 'text-medical-primary border-medical-primary'
                     : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
@@ -163,14 +171,14 @@ export default function PatientViewPage() {
               >
                 {tab.icon}
                 <span className="hidden sm:inline">{tab.label}</span>
-                <span className="sm:hidden">{tab.label.split(' ')[0]}</span>
+                <span className="sm:hidden">{tab.shortLabel}</span>
               </button>
             ))}
           </nav>
         </div>
 
         {/* Tab Content */}
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           {activeTab === 'alapadatok' && loadedTabs.has('alapadatok') && (
             <PatientForm
               patient={patient}

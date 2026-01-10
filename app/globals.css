@@ -231,6 +231,16 @@
   width: 100%;
 }
 
+/* Scrollbar hide utility */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari and Opera */
+}
+
 /* Mobile-specific improvements */
 @media (max-width: 767px) {
   /* Ensure touch targets are at least 44x44px */

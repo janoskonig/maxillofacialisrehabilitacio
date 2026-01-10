@@ -1865,15 +1865,15 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
   const selectedIndok = watch('kezelesreErkezesIndoka');
 
   return (
-    <div className="p-6 relative pb-24">
+    <div className="p-3 sm:p-6 relative pb-20 sm:pb-24">
       {/* Floating Save Button */}
       {!isViewOnly && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 pt-4 pb-4 bg-white border-t border-gray-200 shadow-soft-xl px-6 md:px-8">
-          <div className="max-w-4xl mx-auto flex justify-end gap-3">
+        <div className="fixed bottom-0 left-0 right-0 z-50 pt-3 pb-3 sm:pt-4 sm:pb-4 bg-white border-t border-gray-200 shadow-soft-xl px-3 sm:px-6 md:px-8">
+          <div className="max-w-4xl mx-auto flex justify-end gap-2 sm:gap-3">
             <button
               type="button"
               onClick={handleCancel}
-              className="btn-secondary"
+              className="btn-secondary text-xs sm:text-sm px-3 sm:px-5 py-2 sm:py-2.5"
               data-patient-form-cancel
             >
               Mégse
@@ -1881,7 +1881,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
             <button
               type="submit"
               form="patient-form"
-              className="btn-primary"
+              className="btn-primary text-xs sm:text-sm px-3 sm:px-5 py-2 sm:py-2.5"
             >
               {patient ? 'Beteg frissítése' : 'Beteg mentése'}
             </button>
