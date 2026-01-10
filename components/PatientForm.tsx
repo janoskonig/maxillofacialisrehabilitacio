@@ -231,11 +231,21 @@ interface PatientFormProps {
   onSave: (patient: Patient) => void;
   onCancel: () => void;
   isViewOnly?: boolean;
+  showOnlySections?: string[]; // Array of section IDs to show: 'alapadatok', 'szemelyes', 'beutalo', 'kezeloorvos', 'anamnezis', 'betegvizsgalat', 'adminisztracio', 'idopont'
 }
 
-export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: PatientFormProps) {
+export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, showOnlySections }: PatientFormProps) {
   const router = useRouter();
   const { confirm: confirmDialog, showToast } = useToast();
+  
+  // Helper function to check if a section should be shown
+  const shouldShowSection = (sectionId: string): boolean => {
+    if (!showOnlySections || showOnlySections.length === 0) {
+      return true; // If no filter, show all sections
+    }
+    return showOnlySections.includes(sectionId);
+  };
+  
   const [userRole, setUserRole] = useState<string>('');
   const [kezeloorvosOptions, setKezeloorvosOptions] = useState<Array<{ name: string; intezmeny: string | null }>>([]);
   const [doctorOptions, setDoctorOptions] = useState<Array<{ name: string; intezmeny: string | null }>>([]);
@@ -1905,6 +1915,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
 
       <form id="patient-form" onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         {/* ALAPADATOK */}
+        {shouldShowSection('alapadatok') && (
         <div className="card">
           <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <User className="w-5 h-5 mr-2 text-medical-primary" />
@@ -1973,8 +1984,10 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
             </div>
           </div>
         </div>
+        )}
 
         {/* SZEMÉLYES ADATOK */}
+        {shouldShowSection('szemelyes') && (
         <div className="card">
           <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <MapPin className="w-5 h-5 mr-2 text-medical-primary" />
@@ -2044,8 +2057,10 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
             </div>
           </div>
         </div>
+        )}
 
         {/* BEUTALÓ */}
+        {shouldShowSection('beutalo') && (
         <div className="card">
           <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <FileText className="w-5 h-5 mr-2 text-medical-primary" />
@@ -2112,9 +2127,10 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
             </div>
           )}
         </div>
+        )}
 
         {/* KEZELŐORVOS */}
-        {userRole !== 'sebészorvos' && (
+        {shouldShowSection('kezeloorvos') && userRole !== 'sebészorvos' && (
         <div className="card">
           <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <User className="w-5 h-5 mr-2 text-medical-primary" />
@@ -2148,7 +2164,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         )}
 
         {/* ANAMNÉZIS */}
-        {userRole !== 'sebészorvos' && (
+        {shouldShowSection('anamnezis') && userRole !== 'sebészorvos' && (
         <div className="card">
           <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <Calendar className="w-5 h-5 mr-2 text-medical-primary" />
@@ -2407,7 +2423,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         )}
 
         {/* BETEGVIZSGÁLAT */}
-        {userRole !== 'sebészorvos' && (
+        {shouldShowSection('betegvizsgalat') && userRole !== 'sebészorvos' && (
         <div className="card">
           <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <Calendar className="w-5 h-5 mr-2 text-medical-primary" />
@@ -2956,6 +2972,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         )}
 
         {/* MEGLÉVŐ IMPLANTÁTUMOK */}
+        {shouldShowSection('betegvizsgalat') && (
         <div className="card">
           <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <AlertTriangle className="w-5 h-5 mr-2 text-medical-primary" />
@@ -3099,9 +3116,10 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
             )}
           </div>
         </div>
+        )}
 
         {/* KEZELÉSI TERV */}
-        {userRole !== 'sebészorvos' && (
+        {shouldShowSection('betegvizsgalat') && userRole !== 'sebészorvos' && (
         <div className="card">
           <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <FileText className="w-5 h-5 mr-2 text-medical-primary" />
@@ -3366,6 +3384,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         )}
 
         {/* Documents Section */}
+        {shouldShowSection('adminisztracio') && (
         <PatientDocuments
           patientId={patientId}
           isViewOnly={isViewOnly}
@@ -3374,9 +3393,10 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
           onSavePatientBeforeUpload={!isViewOnly ? savePatientSilently : undefined}
           isPatientDirty={!isViewOnly && hasUnsavedChanges()}
         />
+        )}
 
         {/* Méltányossági kérelemhez szükséges adatok */}
-        {patientId && (
+        {shouldShowSection('adminisztracio') && patientId && (
           <div className="card">
             <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
               <FileText className="w-5 h-5 mr-2 text-medical-primary" />
@@ -3531,7 +3551,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
         )}
 
         {/* Árajánlatkérő laborba */}
-        {patientId && (
+        {shouldShowSection('adminisztracio') && patientId && (
           <div className="card">
             <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
               <FileText className="w-5 h-5 mr-2 text-medical-primary" />
@@ -3789,6 +3809,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
 
         {/* Appointment Booking Section */}
         {/* For surgeons, always allow editing appointments even if form is view-only */}
+        {shouldShowSection('idopont') && (
         <AppointmentBookingSection 
           patientId={patientId} 
           isViewOnly={userRole === 'sebészorvos' ? false : isViewOnly}
@@ -3801,9 +3822,10 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false }: P
             onSave(savedPatient);
           }}
         />
+        )}
 
         {/* Conditional Appointment Booking Section - Only for admins */}
-        {userRole === 'admin' && patientId && (
+        {shouldShowSection('idopont') && userRole === 'admin' && patientId && (
           <ConditionalAppointmentBooking 
             patientId={patientId}
             patientEmail={currentPatient?.email || null}

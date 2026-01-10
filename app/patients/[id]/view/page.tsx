@@ -5,12 +5,14 @@ import { useRouter, useParams } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { PatientForm } from '@/components/PatientForm';
 import { Patient } from '@/lib/types';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, User, FileText, Calendar, ClipboardList, MessageCircle, Users } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { MobileMenu } from '@/components/MobileMenu';
 import { CommunicationLog } from '@/components/CommunicationLog';
 import { PatientMessages } from '@/components/PatientMessages';
 import { DoctorMessagesForPatient } from '@/components/DoctorMessagesForPatient';
+
+type TabType = 'alapadatok' | 'anamnezis' | 'adminisztracio' | 'idopont' | 'konzilium' | 'uzenet';
 
 export default function PatientViewPage() {
   const router = useRouter();
@@ -21,6 +23,8 @@ export default function PatientViewPage() {
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [patientEmail, setPatientEmail] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<TabType>('alapadatok');
+  const [loadedTabs, setLoadedTabs] = useState<Set<TabType>>(new Set<TabType>(['alapadatok']));
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -82,6 +86,14 @@ export default function PatientViewPage() {
     setPatient(savedPatient);
   };
 
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab);
+    // Lazy load: csak akkor töltjük be a tab tartalmát, amikor először megnyitjuk
+    if (!loadedTabs.has(tab)) {
+      setLoadedTabs(prev => new Set<TabType>([...Array.from(prev), tab]));
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -93,6 +105,15 @@ export default function PatientViewPage() {
   if (!authorized || !patient) {
     return null;
   }
+
+  const tabs: Array<{ id: TabType; label: string; icon: React.ReactNode }> = [
+    { id: 'alapadatok', label: 'Alapadatok', icon: <User className="w-4 h-4" /> },
+    { id: 'anamnezis', label: 'Anamnézis és betegvizsgálat', icon: <FileText className="w-4 h-4" /> },
+    { id: 'adminisztracio', label: 'Adminisztráció', icon: <ClipboardList className="w-4 h-4" /> },
+    { id: 'idopont', label: 'Időpontfoglalás', icon: <Calendar className="w-4 h-4" /> },
+    { id: 'konzilium', label: 'Konzílium', icon: <Users className="w-4 h-4" /> },
+    { id: 'uzenet', label: 'Üzenet a betegnek', icon: <MessageCircle className="w-4 h-4" /> },
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -127,27 +148,79 @@ export default function PatientViewPage() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Tabs */}
+        <div className="mb-6 border-b border-gray-200">
+          <nav className="flex gap-1 overflow-x-auto" aria-label="Betegűrlap fülök">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => handleTabChange(tab.id)}
+                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                  activeTab === tab.id
+                    ? 'text-medical-primary border-medical-primary'
+                    : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
+                }`}
+              >
+                {tab.icon}
+                <span className="hidden sm:inline">{tab.label}</span>
+                <span className="sm:hidden">{tab.label.split(' ')[0]}</span>
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        {/* Tab Content */}
         <div className="space-y-6">
-          {/* Patient Form */}
-          <PatientForm
-            patient={patient}
-            isViewOnly={false}
-            onSave={handleSavePatient}
-            onCancel={handleBack}
-          />
-          
-          {/* Chat Messages - csak ha van email-cím */}
-          {patientEmail && patient?.id && (
-            <PatientMessages patientId={patient.id} patientName={patient.nev || null} />
+          {activeTab === 'alapadatok' && loadedTabs.has('alapadatok') && (
+            <PatientForm
+              patient={patient}
+              isViewOnly={false}
+              onSave={handleSavePatient}
+              onCancel={handleBack}
+              showOnlySections={['alapadatok', 'szemelyes', 'beutalo', 'kezeloorvos']}
+            />
           )}
-          
-          {/* Konzílium - Orvos-orvos üzenetek */}
-          {patient?.id && (
+
+          {activeTab === 'anamnezis' && loadedTabs.has('anamnezis') && (
+            <PatientForm
+              patient={patient}
+              isViewOnly={false}
+              onSave={handleSavePatient}
+              onCancel={handleBack}
+              showOnlySections={['anamnezis', 'betegvizsgalat']}
+            />
+          )}
+
+          {activeTab === 'adminisztracio' && loadedTabs.has('adminisztracio') && (
+            <PatientForm
+              patient={patient}
+              isViewOnly={false}
+              onSave={handleSavePatient}
+              onCancel={handleBack}
+              showOnlySections={['adminisztracio']}
+            />
+          )}
+
+          {activeTab === 'idopont' && loadedTabs.has('idopont') && (
+            <PatientForm
+              patient={patient}
+              isViewOnly={false}
+              onSave={handleSavePatient}
+              onCancel={handleBack}
+              showOnlySections={['idopont']}
+            />
+          )}
+
+          {activeTab === 'konzilium' && loadedTabs.has('konzilium') && patient?.id && (
             <DoctorMessagesForPatient patientId={patient.id} patientName={patient.nev || null} />
           )}
-          
-          {/* Communication Log - mindig látható */}
-          {patient?.id && (
+
+          {activeTab === 'uzenet' && loadedTabs.has('uzenet') && patientEmail && patient?.id && (
+            <PatientMessages patientId={patient.id} patientName={patient.nev || null} />
+          )}
+
+          {/* Communication Log - mindig látható az alapadatok tab alatt */}
+          {activeTab === 'alapadatok' && patient?.id && (
             <CommunicationLog patientId={patient.id} patientName={patient.nev || null} />
           )}
         </div>
@@ -155,4 +228,3 @@ export default function PatientViewPage() {
     </div>
   );
 }
-
