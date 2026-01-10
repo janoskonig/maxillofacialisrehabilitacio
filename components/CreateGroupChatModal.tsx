@@ -31,9 +31,6 @@ export function CreateGroupChatModal({ isOpen, onClose, onGroupCreated, existing
 
   useEffect(() => {
     if (isOpen) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CreateGroupChatModal.tsx:32',message:'Modal opened, fetching data',data:{timestamp:Date.now()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       fetchDoctors();
       fetchInstitutions();
       // Reset state

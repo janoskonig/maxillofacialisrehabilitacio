@@ -34,24 +34,15 @@ export function RecipientSelector({
   const institutionSelectorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RecipientSelector.tsx:36',message:'useEffect triggered, fetching data',data:{timestamp:Date.now()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     fetchDoctors();
     fetchInstitutions();
   }, []);
 
   const fetchInstitutions = async () => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RecipientSelector.tsx:41',message:'fetchInstitutions called',data:{timestamp:Date.now()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     try {
       const response = await fetch('/api/institutions', {
         credentials: 'include',
       });
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RecipientSelector.tsx:48',message:'fetchInstitutions response',data:{ok:response.ok,status:response.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
 
       if (!response.ok) {
         throw new Error('Hiba az intézmények betöltésekor');
@@ -60,9 +51,6 @@ export function RecipientSelector({
       const data = await response.json();
       setInstitutions(data.institutions || []);
     } catch (error) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RecipientSelector.tsx:58',message:'fetchInstitutions error',data:{error:error instanceof Error ? error.message : String(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       console.error('Hiba az intézmények betöltésekor:', error);
     }
   };
@@ -116,13 +104,7 @@ export function RecipientSelector({
   };
 
   const handleAddInstitution = async (institution: string) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RecipientSelector.tsx:106',message:'handleAddInstitution entry',data:{institution,currentRecipientsCount:selectedRecipients.length,addedInstitutions:Array.from(addedInstitutions)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     if (addedInstitutions.has(institution)) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RecipientSelector.tsx:109',message:'Institution already added, returning early',data:{institution},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       return; // Already added
     }
 
@@ -139,9 +121,6 @@ export function RecipientSelector({
       const data = await response.json();
       const institutionDoctors = data.doctors || [];
       
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RecipientSelector.tsx:125',message:'Institution doctors fetched',data:{institution,institutionDoctorsCount:institutionDoctors.length,currentRecipientsCount:selectedRecipients.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       
       // Add all doctors from institution, excluding already selected ones
       const newRecipients = [...selectedRecipients];
@@ -156,17 +135,11 @@ export function RecipientSelector({
         }
       });
       
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RecipientSelector.tsx:137',message:'After adding institution doctors',data:{institution,addedCount,newRecipientsCount:newRecipients.length},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       
       onRecipientsChange(newRecipients);
       setAddedInstitutions(new Set([...Array.from(addedInstitutions), institution]));
       setShowInstitutionSelector(false);
     } catch (error) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RecipientSelector.tsx:145',message:'Error adding institution',data:{institution,error:error instanceof Error ? error.message : String(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       console.error('Hiba az intézmény orvosainak betöltésekor:', error);
     } finally {
       setAddingInstitution(false);
@@ -174,22 +147,13 @@ export function RecipientSelector({
   };
 
   const handleRemoveInstitution = (institution: string) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RecipientSelector.tsx:147',message:'handleRemoveInstitution entry',data:{institution,currentRecipientsCount:selectedRecipients.length,addedInstitutions:Array.from(addedInstitutions)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-    // #endregion
     // Remove all doctors from this institution
     const newRecipients = selectedRecipients.filter(r => r.intezmeny !== institution);
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RecipientSelector.tsx:150',message:'After filtering recipients',data:{institution,removedCount:selectedRecipients.length - newRecipients.length,newRecipientsCount:newRecipients.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-    // #endregion
     onRecipientsChange(newRecipients);
     
     const newAddedInstitutions = new Set(addedInstitutions);
     newAddedInstitutions.delete(institution);
     setAddedInstitutions(newAddedInstitutions);
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RecipientSelector.tsx:156',message:'After updating addedInstitutions',data:{institution,newAddedInstitutions:Array.from(newAddedInstitutions)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-    // #endregion
   };
 
   const filteredDoctors = doctors.filter(doctor => {
@@ -217,14 +181,8 @@ export function RecipientSelector({
   };
 
   const handleRemoveRecipient = (doctorId: string) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RecipientSelector.tsx:187',message:'handleRemoveRecipient entry',data:{doctorId,currentRecipientsCount:selectedRecipients.length,addedInstitutions:Array.from(addedInstitutions)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-    // #endregion
     const removedDoctor = selectedRecipients.find(r => r.id === doctorId);
     const newRecipients = selectedRecipients.filter(r => r.id !== doctorId);
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RecipientSelector.tsx:191',message:'After removing recipient',data:{doctorId,removedDoctorInstitution:removedDoctor?.intezmeny,newRecipientsCount:newRecipients.length,shouldRemoveInstitution:removedDoctor?.intezmeny && !newRecipients.some(r => r.intezmeny === removedDoctor.intezmeny)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-    // #endregion
     onRecipientsChange(newRecipients);
     
     // Check if institution should be removed from addedInstitutions
@@ -234,9 +192,6 @@ export function RecipientSelector({
         const newAddedInstitutions = new Set(addedInstitutions);
         newAddedInstitutions.delete(removedDoctor.intezmeny);
         setAddedInstitutions(newAddedInstitutions);
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RecipientSelector.tsx:201',message:'Removed institution from addedInstitutions',data:{institution:removedDoctor.intezmeny},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-        // #endregion
       }
     }
   };

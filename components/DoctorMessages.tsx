@@ -359,32 +359,20 @@ export function DoctorMessages() {
   };
 
   const handleStartConversation = async () => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DoctorMessages.tsx:361',message:'handleStartConversation entry',data:{recipientsCount:newChatRecipients.length,currentUserId,participantIds:newChatRecipients.map(r => r.id)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
     if (newChatRecipients.length === 0) {
       showToast('Kérjük, válasszon legalább egy címzettet', 'error');
       return;
     }
 
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DoctorMessages.tsx:367',message:'Checking participant limit',data:{recipientsCount:newChatRecipients.length,limit:19,willCreateGroup:newChatRecipients.length > 1},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
 
     try {
       if (newChatRecipients.length === 1) {
         // Egy-egy beszélgetés
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DoctorMessages.tsx:373',message:'Creating individual conversation',data:{recipientId:newChatRecipients[0].id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-        // #endregion
         handleSelectDoctor(newChatRecipients[0].id, newChatRecipients[0].name);
         setShowNewChat(false);
         setNewChatRecipients([]);
       } else {
         // Csoportos beszélgetés létrehozása
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DoctorMessages.tsx:380',message:'Creating group conversation',data:{participantIds:newChatRecipients.map(r => r.id),participantCount:newChatRecipients.length,currentUserId,includesCurrentUser:newChatRecipients.some(r => r.id === currentUserId)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-        // #endregion
         setLoading(true);
         const response = await fetch('/api/doctor-messages/groups', {
           method: 'POST',
@@ -398,31 +386,19 @@ export function DoctorMessages() {
           }),
         });
 
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DoctorMessages.tsx:395',message:'Group creation response',data:{ok:response.ok,status:response.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-        // #endregion
 
         if (!response.ok) {
           const error = await response.json();
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DoctorMessages.tsx:400',message:'Group creation failed',data:{error:error.error,status:response.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-          // #endregion
           throw new Error(error.error || 'Hiba a csoportos beszélgetés létrehozásakor');
         }
 
         const data = await response.json();
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DoctorMessages.tsx:406',message:'Group created successfully',data:{groupId:data.groupId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-        // #endregion
         handleSelectGroup(data.groupId, null);
         setShowNewChat(false);
         setNewChatRecipients([]);
         showToast('Csoportos beszélgetés létrehozva', 'success');
       }
     } catch (error: any) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DoctorMessages.tsx:414',message:'Error in handleStartConversation',data:{error:error.message,recipientsCount:newChatRecipients.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
       console.error('Hiba a beszélgetés indításakor:', error);
       showToast(error.message || 'Hiba történt a beszélgetés indításakor', 'error');
       setLoading(false);
