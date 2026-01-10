@@ -495,6 +495,13 @@ export function TimeSlotsManager() {
     }
   };
 
+  // Validálja a teremszám mezőt: csak számokat fogad el
+  const validateTeremszam = (value: string): string => {
+    // Csak számokat enged be, eltávolítja az összes nem szám karaktert
+    const numbersOnly = value.replace(/[^0-9]/g, '');
+    return numbersOnly;
+  };
+
   const formatDateTime = (dateTime: string) => {
     const date = new Date(dateTime);
     return date.toLocaleString('hu-HU', {
@@ -1265,7 +1272,7 @@ export function TimeSlotsManager() {
                 <input
                   type="text"
                   value={newTeremszam}
-                  onChange={(e) => setNewTeremszam(e.target.value)}
+                  onChange={(e) => setNewTeremszam(validateTeremszam(e.target.value))}
                   placeholder="Pl. 101"
                   className="form-input w-full"
                 />

@@ -81,6 +81,33 @@ export default function PatientViewPage() {
     router.back();
   };
 
+  const handleImpersonate = async () => {
+    if (!patientId) return;
+    
+    try {
+      const response = await fetch('/api/patient-portal/auth/impersonate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ patientId }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Redirect to patient portal
+        window.location.href = data.redirectUrl || '/patient-portal/dashboard';
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Hiba történt a bejelentkezéskor');
+      }
+    } catch (error) {
+      console.error('Error impersonating patient:', error);
+      alert('Hiba történt a bejelentkezéskor');
+    }
+  };
+
   const handleSavePatient = async (savedPatient: Patient) => {
     // Frissítjük a beteg adatokat a mentés után
     setPatient(savedPatient);
@@ -138,6 +165,16 @@ export default function PatientViewPage() {
               </div>
             </div>
             <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+              {userRole === 'admin' && patientId && (
+                <button
+                  onClick={handleImpersonate}
+                  className="btn-secondary flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-sm text-purple-600 hover:text-purple-700"
+                  title="Belépés betegként"
+                >
+                  <User className="w-4 h-4" />
+                  <span className="hidden sm:inline">Belépés betegként</span>
+                </button>
+              )}
               <MobileMenu showBackButton={true} />
               <button
                 onClick={handleBack}

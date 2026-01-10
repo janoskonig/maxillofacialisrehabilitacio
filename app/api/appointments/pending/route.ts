@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { patientId, timeSlotId, alternativeTimeSlotIds } = body;
+    const { patientId, timeSlotId, alternativeTimeSlotIds, appointmentType } = body;
 
     if (!patientId || !timeSlotId) {
       return NextResponse.json(
@@ -149,8 +149,8 @@ export async function POST(request: NextRequest) {
       // Create pending appointment with alternative time slots
       const alternativeIdsJson = JSON.stringify(alternativeIds);
       const appointmentResult = await pool.query(
-        `INSERT INTO appointments (patient_id, time_slot_id, created_by, dentist_email, approval_status, approval_token, alternative_time_slot_ids, current_alternative_index)
-         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, NULL)
+        `INSERT INTO appointments (patient_id, time_slot_id, created_by, dentist_email, approval_status, approval_token, alternative_time_slot_ids, current_alternative_index, appointment_type)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, NULL, $8)
          RETURNING 
            id,
            patient_id as "patientId",
@@ -161,8 +161,9 @@ export async function POST(request: NextRequest) {
            approval_token as "approvalToken",
            alternative_time_slot_ids as "alternativeTimeSlotIds",
            current_alternative_index as "currentAlternativeIndex",
+           appointment_type as "appointmentType",
            created_at as "createdAt"`,
-        [patientId, timeSlotId, auth.email, timeSlot.dentist_email, 'pending', approvalToken, alternativeIdsJson]
+        [patientId, timeSlotId, auth.email, timeSlot.dentist_email, 'pending', approvalToken, alternativeIdsJson, appointmentType || null]
       );
 
       const appointment = appointmentResult.rows[0];

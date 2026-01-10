@@ -61,7 +61,7 @@ export default function Home() {
         setUserInstitution(intezmeny);
         setIsAuthorized(true);
         setIsCheckingAuth(false);
-        loadPatients();
+        // Ne töltse be automatikusan a betegeket - csak kereséskor
 
         // Send heartbeat only once per session
         try {
@@ -89,16 +89,17 @@ export default function Home() {
   }, [router]);
 
   useEffect(() => {
-    // Load all patients without pagination
+    // Load patients only when there's a search query
     const loadPatientsData = async () => {
+      // Only load if there's a search query
+      if (!searchQuery.trim()) {
+        setPatients([]);
+        setFilteredPatients([]);
+        return;
+      }
+
       try {
-        let allPatients;
-        if (searchQuery.trim()) {
-          allPatients = await searchPatients(searchQuery);
-        } else {
-          allPatients = await getAllPatients();
-        }
-        
+        const allPatients = await searchPatients(searchQuery);
         setPatients(allPatients);
         
         // Apply sorting (only for fields that don't need appointment data)
@@ -467,70 +468,67 @@ export default function Home() {
                 />
               </div>
 
-              {/* Stats */}
-              <div className={`grid gap-4 ${searchQuery.trim() ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
-                <div className="card card-hover p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-medical-primary/10 rounded-lg">
-                      <Users className="w-5 h-5 text-medical-primary" />
-                    </div>
-                    <div>
-                      <p className="text-body-sm text-gray-500">
-                        {searchQuery.trim() ? 'Keresési eredmények' : 'Összes beteg'}
-                      </p>
-                      <p className="text-2xl font-bold text-gray-900 mt-0.5">
-                        {filteredPatients.length}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                {!searchQuery.trim() && (
+              {/* Stats - only show when searching */}
+              {searchQuery.trim() && (
+                <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
                   <div className="card card-hover p-4">
                     <div className="flex items-center gap-3">
-                      <div className="p-2 bg-medical-success/10 rounded-lg">
-                        <Plus className="w-5 h-5 text-medical-success" />
+                      <div className="p-2 bg-medical-primary/10 rounded-lg">
+                        <Users className="w-5 h-5 text-medical-primary" />
                       </div>
                       <div>
-                        <p className="text-body-sm text-gray-500">Új ebben a hónapban</p>
+                        <p className="text-body-sm text-gray-500">
+                          Keresési eredmények
+                        </p>
                         <p className="text-2xl font-bold text-gray-900 mt-0.5">
-                          {patients.filter(p => {
-                            const created = new Date(p.createdAt || '');
-                            const now = new Date();
-                            return created.getMonth() === now.getMonth() && 
-                                   created.getFullYear() === now.getFullYear();
-                          }).length}
+                          {filteredPatients.length}
                         </p>
                       </div>
                     </div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
-              {/* Patient List */}
-              <PatientList
-                patients={filteredPatients}
-                onView={handleViewPatient}
-                onEdit={handleEditPatient}
-                onDelete={userRole === 'admin' ? handleDeletePatient : undefined}
-                onViewOP={handleViewOP}
-                onViewFoto={handleViewFoto}
-                canEdit={userRole === 'admin' || userRole === 'editor' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos'}
-                canDelete={userRole === 'admin'}
-                userRole={userRole}
-                sortField={sortField}
-                sortDirection={sortDirection}
-                onSort={(field: 'nev' | 'idopont' | 'createdAt') => {
-                  if (sortField === field) {
-                    // Toggle direction if same field
-                    setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-                  } else {
-                    // New field, default to ascending
-                    setSortField(field);
-                    setSortDirection('asc');
-                  }
-                }}
-                searchQuery={searchQuery}
-              />
+              {/* Patient List - only show when searching */}
+              {searchQuery.trim() && (
+                <PatientList
+                  patients={filteredPatients}
+                  onView={handleViewPatient}
+                  onEdit={handleEditPatient}
+                  onDelete={userRole === 'admin' ? handleDeletePatient : undefined}
+                  onViewOP={handleViewOP}
+                  onViewFoto={handleViewFoto}
+                  canEdit={userRole === 'admin' || userRole === 'editor' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos'}
+                  canDelete={userRole === 'admin'}
+                  userRole={userRole}
+                  sortField={sortField}
+                  sortDirection={sortDirection}
+                  onSort={(field: 'nev' | 'idopont' | 'createdAt') => {
+                    if (sortField === field) {
+                      // Toggle direction if same field
+                      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                    } else {
+                      // New field, default to ascending
+                      setSortField(field);
+                      setSortDirection('asc');
+                    }
+                  }}
+                  searchQuery={searchQuery}
+                />
+              )}
+
+              {/* Empty state when no search */}
+              {!searchQuery.trim() && (
+                <div className="card text-center py-12">
+                  <Search className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    Keresés a betegek között
+                  </h3>
+                  <p className="text-gray-600 mb-4">
+                    Kezdjen el gépelni a keresőmezőben a beteg neve, TAJ száma vagy telefonszáma alapján.
+                  </p>
+                </div>
+              )}
             </>
 
       {/* Patient Form Modal */}

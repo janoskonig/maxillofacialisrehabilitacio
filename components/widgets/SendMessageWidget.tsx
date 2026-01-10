@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { DashboardWidget } from '../DashboardWidget';
-import { MessageCircle, Send, Plus, Clock, Mail, Users } from 'lucide-react';
+import { MessageCircle, Send, Clock, Mail, Users } from 'lucide-react';
 import { SendMessageModal } from '../SendMessageModal';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
@@ -150,27 +150,13 @@ export function SendMessageWidget() {
         onClick={() => router.push('/messages')}
       >
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-600">
-              Üzenet küldése és megtekintése
-            </p>
-            {(patientUnreadCount > 0 || doctorUnreadCount > 0) && (
+          {(patientUnreadCount > 0 || doctorUnreadCount > 0) && (
+            <div className="flex items-center justify-end">
               <span className="px-2 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full">
                 {patientUnreadCount + doctorUnreadCount} olvasatlan
               </span>
-            )}
-          </div>
-          
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsModalOpen(true);
-            }}
-            className="btn-primary w-full flex items-center justify-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Új üzenet
-          </button>
+            </div>
+          )}
 
           {/* Recent Messages - Minimalistább megjelenés */}
           {loading ? (

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Calendar, Clock, MapPin, Plus, CheckCircle, XCircle, AlertCircle, X } from 'lucide-react';
+import { Calendar, Clock, MapPin, Plus, CheckCircle, XCircle, AlertCircle, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
@@ -42,6 +42,10 @@ export function PatientAppointmentsList() {
   const [bookingLoading, setBookingLoading] = useState(false);
   const [cancellingAppointment, setCancellingAppointment] = useState<Appointment | null>(null);
   const [cancellationLoading, setCancellationLoading] = useState(false);
+  
+  // Pagination for past appointments
+  const [pastAppointmentsPage, setPastAppointmentsPage] = useState(1);
+  const ITEMS_PER_PAGE = 5;
 
   useEffect(() => {
     fetchAppointments();
@@ -223,6 +227,19 @@ export function PatientAppointmentsList() {
 
   const upcomingAppointments = appointments.filter((apt) => !isPast(apt.startTime));
   const pastAppointments = appointments.filter((apt) => isPast(apt.startTime));
+  
+  // Pagination calculations for past appointments
+  const totalPastPages = Math.ceil(pastAppointments.length / ITEMS_PER_PAGE);
+  const startIndex = (pastAppointmentsPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const paginatedPastAppointments = pastAppointments.slice(startIndex, endIndex);
+  
+  // Reset to page 1 when past appointments change
+  useEffect(() => {
+    if (pastAppointmentsPage > totalPastPages && totalPastPages > 0) {
+      setPastAppointmentsPage(1);
+    }
+  }, [pastAppointments.length, pastAppointmentsPage, totalPastPages]);
 
   const canCancelAppointment = (appointment: Appointment) => {
     // Can cancel if:
@@ -264,69 +281,6 @@ export function PatientAppointmentsList() {
           <span className="hidden sm:inline">Új időpont kérése</span>
           <span className="sm:hidden">Új</span>
         </button>
-      </div>
-
-      {/* Available Time Slots Section */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">
-          Szabad időpontok
-        </h2>
-        {loadingSlots ? (
-          <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-medical-primary"></div>
-            <span className="ml-3 text-gray-600">Betöltés...</span>
-          </div>
-        ) : availableSlots.length > 0 ? (
-          <div className="space-y-3">
-            {availableSlots.map((slot) => {
-              const startTime = new Date(slot.startTime);
-              const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
-              const displayCim = slot.cim || DEFAULT_CIM;
-              return (
-                <div
-                  key={slot.id}
-                  className="p-4 rounded-lg border-l-4 border-green-500 bg-white hover:bg-green-50 transition-colors"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Clock className="w-4 h-4 text-green-600" />
-                        <span className="font-semibold text-gray-900">
-                          {format(startTime, 'yyyy. MMMM d. EEEE, HH:mm', { locale: hu })}
-                        </span>
-                      </div>
-                      {slot.dentistName && (
-                        <p className="text-sm text-gray-600 mb-1">
-                          Orvos: {slot.dentistName}
-                        </p>
-                      )}
-                      <div className="flex items-center gap-1 text-sm text-gray-600">
-                        <MapPin className="w-3 h-3" />
-                        <span>
-                          {displayCim}
-                          {slot.teremszam && ` • ${slot.teremszam}. terem`}
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => handleBookSlot(slot)}
-                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex-shrink-0"
-                    >
-                      Foglalás
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="text-center py-8">
-            <Calendar className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-            <p className="text-gray-600">
-              Jelenleg nincs elérhető szabad időpont.
-            </p>
-          </div>
-        )}
       </div>
 
       {/* Request Appointment Form */}
@@ -408,10 +362,10 @@ export function PatientAppointmentsList() {
       {pastAppointments.length > 0 && (
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            Korábbi időpontok
+            Korábbi időpontok ({pastAppointments.length})
           </h2>
           <div className="space-y-3">
-            {pastAppointments.map((appointment) => {
+            {paginatedPastAppointments.map((appointment) => {
               const startTime = new Date(appointment.startTime);
               return (
                 <div
@@ -447,6 +401,48 @@ export function PatientAppointmentsList() {
               );
             })}
           </div>
+          
+          {/* Pagination */}
+          {totalPastPages > 1 && (
+            <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
+              <div className="text-sm text-gray-600">
+                {startIndex + 1}-{Math.min(endIndex, pastAppointments.length)} / {pastAppointments.length} időpont
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPastAppointmentsPage(prev => Math.max(1, prev - 1))}
+                  disabled={pastAppointmentsPage === 1}
+                  className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Előző
+                </button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPastPages }, (_, i) => i + 1).map((page) => (
+                    <button
+                      key={page}
+                      onClick={() => setPastAppointmentsPage(page)}
+                      className={`px-3 py-1.5 text-sm font-medium rounded-md ${
+                        page === pastAppointmentsPage
+                          ? 'bg-medical-primary text-white'
+                          : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setPastAppointmentsPage(prev => Math.min(totalPastPages, prev + 1))}
+                  disabled={pastAppointmentsPage === totalPastPages}
+                  className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                >
+                  Következő
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -469,6 +465,69 @@ export function PatientAppointmentsList() {
           </button>
         </div>
       )}
+
+      {/* Available Time Slots Section - Last Section */}
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">
+          Szabad időpontok
+        </h2>
+        {loadingSlots ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-medical-primary"></div>
+            <span className="ml-3 text-gray-600">Betöltés...</span>
+          </div>
+        ) : availableSlots.length > 0 ? (
+          <div className="space-y-3">
+            {availableSlots.map((slot) => {
+              const startTime = new Date(slot.startTime);
+              const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
+              const displayCim = slot.cim || DEFAULT_CIM;
+              return (
+                <div
+                  key={slot.id}
+                  className="p-4 rounded-lg border-l-4 border-green-500 bg-white hover:bg-green-50 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Clock className="w-4 h-4 text-green-600" />
+                        <span className="font-semibold text-gray-900">
+                          {format(startTime, 'yyyy. MMMM d. EEEE, HH:mm', { locale: hu })}
+                        </span>
+                      </div>
+                      {slot.dentistName && (
+                        <p className="text-sm text-gray-600 mb-1">
+                          Orvos: {slot.dentistName}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-1 text-sm text-gray-600">
+                        <MapPin className="w-3 h-3" />
+                        <span>
+                          {displayCim}
+                          {slot.teremszam && ` • ${slot.teremszam}. terem`}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleBookSlot(slot)}
+                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex-shrink-0"
+                    >
+                      Foglalás
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <Calendar className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+            <p className="text-gray-600">
+              Jelenleg nincs elérhető szabad időpont.
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* Booking Modal */}
       {selectedSlot && (

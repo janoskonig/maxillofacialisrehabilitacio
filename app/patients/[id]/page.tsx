@@ -6,7 +6,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { CommunicationLog } from '@/components/CommunicationLog';
 import { PatientMessages } from '@/components/PatientMessages';
 import { DoctorMessagesForPatient } from '@/components/DoctorMessagesForPatient';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, User } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { MobileMenu } from '@/components/MobileMenu';
 
@@ -18,6 +18,7 @@ export default function PatientDetailPage() {
   const [patientName, setPatientName] = useState<string | null>(null);
   const [patientEmail, setPatientEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -27,6 +28,8 @@ export default function PatientDetailPage() {
           router.push('/login');
           return;
         }
+
+        setUserRole(user.role);
 
         // Fetch patient data to verify access and get name
         try {
@@ -72,6 +75,33 @@ export default function PatientDetailPage() {
     router.push('/');
   };
 
+  const handleImpersonate = async () => {
+    if (!patientId) return;
+    
+    try {
+      const response = await fetch('/api/patient-portal/auth/impersonate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ patientId }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Redirect to patient portal
+        window.location.href = data.redirectUrl || '/patient-portal/dashboard';
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Hiba történt a bejelentkezéskor');
+      }
+    } catch (error) {
+      console.error('Error impersonating patient:', error);
+      alert('Hiba történt a bejelentkezéskor');
+    }
+  };
+
   // #region agent log
   useEffect(() => {
     if (authorized && patientId) {
@@ -110,6 +140,16 @@ export default function PatientDetailPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {userRole === 'admin' && patientId && (
+                <button
+                  onClick={handleImpersonate}
+                  className="btn-secondary flex items-center gap-2 text-purple-600 hover:text-purple-700"
+                  title="Belépés betegként"
+                >
+                  <User className="w-4 h-4" />
+                  <span className="hidden sm:inline">Belépés betegként</span>
+                </button>
+              )}
               <MobileMenu showBackButton={true} />
               <button
                 onClick={handleBack}

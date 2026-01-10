@@ -1,7 +1,7 @@
 'use client';
 
 import { Patient } from '@/lib/types';
-import { Phone, Mail, Calendar, Eye, Pencil, Trash2, Image, Camera, CheckCircle2, XCircle, Clock, Clock as ClockIcon, History } from 'lucide-react';
+import { Phone, Mail, Calendar, Eye, Pencil, Trash2, Image, Camera, CheckCircle2, XCircle, Clock, Clock as ClockIcon, History, User } from 'lucide-react';
 import { formatDateForDisplay, calculateAge } from '@/lib/dateUtils';
 import { useRouter } from 'next/navigation';
 
@@ -48,6 +48,34 @@ export function PatientCard({
   const handleHistoryClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     router.push(`/patients/${patient.id}/history`);
+  };
+
+  const handleImpersonate = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!patient.id) return;
+    
+    try {
+      const response = await fetch('/api/patient-portal/auth/impersonate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ patientId: patient.id }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Redirect to patient portal
+        window.location.href = data.redirectUrl || '/patient-portal/dashboard';
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Hiba történt a bejelentkezéskor');
+      }
+    } catch (error) {
+      console.error('Error impersonating patient:', error);
+      alert('Hiba történt a bejelentkezéskor');
+    }
   };
 
   const getStatusInfo = (status?: AppointmentInfo['appointmentStatus'], isLate?: boolean) => {
@@ -194,6 +222,15 @@ export function PatientCard({
 
       {/* Actions */}
       <div className="flex items-center gap-2 pt-3 border-t border-gray-100">
+        {userRole === 'admin' && patient.id && (
+          <button
+            onClick={handleImpersonate}
+            className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-all duration-200"
+            title="Belépés betegként"
+          >
+            <User className="w-4 h-4" />
+          </button>
+        )}
         <button
           onClick={() => onView(patient)}
           className="flex-1 btn-secondary flex items-center justify-center gap-2 text-sm py-2"

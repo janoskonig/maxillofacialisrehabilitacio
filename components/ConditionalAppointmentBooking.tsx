@@ -45,6 +45,7 @@ export function ConditionalAppointmentBooking({ patientId, patientEmail }: Condi
   const [showNewSlotForm, setShowNewSlotForm] = useState(false);
   const [newSlotDateTime, setNewSlotDateTime] = useState<Date | null>(null);
   const [newSlotTeremszam, setNewSlotTeremszam] = useState<string>('');
+  const [selectedAppointmentType, setSelectedAppointmentType] = useState<'elso_konzultacio' | 'munkafazis' | 'kontroll' | null>(null);
   const [creatingNewSlot, setCreatingNewSlot] = useState(false);
   const isLoadingRef = useRef(false);
 
@@ -210,6 +211,7 @@ export function ConditionalAppointmentBooking({ patientId, patientEmail }: Condi
           patientId: effectivePatientId,
           timeSlotId: selectedSlot,
           alternativeTimeSlotIds: alternativeSlots.filter(id => id && id !== selectedSlot),
+          appointmentType: selectedAppointmentType || null,
         }),
       });
 
@@ -220,6 +222,7 @@ export function ConditionalAppointmentBooking({ patientId, patientEmail }: Condi
         }
         setSelectedSlot('');
         setAlternativeSlots([]);
+        setSelectedAppointmentType(null);
         alert('Feltételes időpont sikeresen létrehozva! A páciens emailben értesítést kapott.');
       } else {
         const data = await response.json();
@@ -231,7 +234,7 @@ export function ConditionalAppointmentBooking({ patientId, patientEmail }: Condi
     } finally {
       setCreating(false);
     }
-  }, [patientId, patientEmail, selectedPatient, selectedSlot, alternativeSlots, patients, loadData]);
+  }, [patientId, patientEmail, selectedPatient, selectedSlot, alternativeSlots, selectedAppointmentType, patients, loadData]);
 
   const addAlternativeSlot = useCallback(() => {
     if (selectedSlot && !alternativeSlots.includes(selectedSlot)) {
@@ -322,6 +325,13 @@ export function ConditionalAppointmentBooking({ patientId, patientEmail }: Condi
       setCreatingNewSlot(false);
     }
   }, [newSlotDateTime, newSlotTeremszam, loadAvailableSlots]);
+
+  // Validálja a teremszám mezőt: csak számokat fogad el
+  const validateTeremszam = useCallback((value: string): string => {
+    // Csak számokat enged be, eltávolítja az összes nem szám karaktert
+    const numbersOnly = value.replace(/[^0-9]/g, '');
+    return numbersOnly;
+  }, []);
 
   const formatDateTime = useCallback((dateTime: string) => {
     const date = new Date(dateTime);
@@ -431,7 +441,7 @@ export function ConditionalAppointmentBooking({ patientId, patientEmail }: Condi
                   <input
                     type="text"
                     value={newSlotTeremszam}
-                    onChange={(e) => setNewSlotTeremszam(e.target.value)}
+                    onChange={(e) => setNewSlotTeremszam(validateTeremszam(e.target.value))}
                     placeholder="Pl. 101"
                     className="form-input w-full"
                     disabled={creatingNewSlot}
@@ -473,6 +483,24 @@ export function ConditionalAppointmentBooking({ patientId, patientEmail }: Condi
                 Jelenleg nincs elérhető szabad időpont.
               </p>
             )}
+          </div>
+          
+          {/* Időpont típusa */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Időpont típusa
+            </label>
+            <select
+              value={selectedAppointmentType || ''}
+              onChange={(e) => setSelectedAppointmentType(e.target.value as any || null)}
+              className="form-input w-full"
+              disabled={creating}
+            >
+              <option value="">Nincs megadva</option>
+              <option value="elso_konzultacio">Első konzultáció</option>
+              <option value="munkafazis">Munkafázis</option>
+              <option value="kontroll">Kontroll</option>
+            </select>
           </div>
           
           {/* Alternatív időpontok */}

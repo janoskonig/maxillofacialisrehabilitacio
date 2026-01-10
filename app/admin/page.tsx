@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser, type AuthUser } from '@/lib/auth';
-import { MessageCircle, ChevronDown, ChevronUp, AlertCircle, Bug, Lightbulb, Mail, Send, ArrowUp, ArrowDown, BarChart3, User, LogIn } from 'lucide-react';
+import { MessageCircle, ChevronDown, ChevronUp, AlertCircle, Bug, Lightbulb, Mail, Send, ArrowUp, ArrowDown, BarChart3, User, LogIn, Search, UserCircle } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 
 type UserRole = 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
@@ -56,6 +56,13 @@ export default function AdminPage() {
   // Impersonate (belépés mint) állapotok
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [impersonating, setImpersonating] = useState(false);
+  
+  // Patient impersonate állapotok
+  const [patientSearchQuery, setPatientSearchQuery] = useState<string>('');
+  const [patients, setPatients] = useState<Array<{ id: string; nev: string; taj: string | null; email: string | null }>>([]);
+  const [patientsLoading, setPatientsLoading] = useState(false);
+  const [selectedPatientId, setSelectedPatientId] = useState<string>('');
+  const [impersonatingPatient, setImpersonatingPatient] = useState(false);
   
   // E-mail küldés állapotok
   const [emailRoles, setEmailRoles] = useState<string[]>([]);
@@ -537,6 +544,83 @@ export default function AdminPage() {
     }
   };
 
+  // Beteg keresés
+  useEffect(() => {
+    const searchPatients = async () => {
+      if (!patientSearchQuery.trim()) {
+        setPatients([]);
+        return;
+      }
+
+      setPatientsLoading(true);
+      try {
+        const res = await fetch(`/api/patients?q=${encodeURIComponent(patientSearchQuery)}`, {
+          credentials: 'include',
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setPatients((data.patients || []).slice(0, 20)); // Limit to 20 results
+        } else {
+          setPatients([]);
+        }
+      } catch (e) {
+        console.error('Error searching patients:', e);
+        setPatients([]);
+      } finally {
+        setPatientsLoading(false);
+      }
+    };
+
+    const timer = setTimeout(() => {
+      searchPatients();
+    }, 300); // Debounce: 300ms késleltetés
+
+    return () => clearTimeout(timer);
+  }, [patientSearchQuery]);
+
+  const handleImpersonatePatient = async () => {
+    if (!selectedPatientId) {
+      alert('Válasszon ki egy beteget');
+      return;
+    }
+
+    const selectedPatient = patients.find(p => p.id === selectedPatientId);
+    if (!selectedPatient) {
+      alert('Beteg nem található');
+      return;
+    }
+
+    if (!confirm(`Biztosan be szeretne lépni mint: ${selectedPatient.nev}?`)) {
+      return;
+    }
+
+    setImpersonatingPatient(true);
+    try {
+      const res = await fetch('/api/patient-portal/auth/impersonate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ patientId: selectedPatientId }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        // Redirect to patient portal
+        window.location.href = data.redirectUrl || '/patient-portal/dashboard';
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Hiba történt a bejelentkezéskor');
+      }
+    } catch (e) {
+      console.error('Error impersonating patient:', e);
+      alert('Hiba történt a bejelentkezéskor');
+    } finally {
+      setImpersonatingPatient(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -635,6 +719,81 @@ export default function AdminPage() {
                   <>
                     <LogIn className="w-4 h-4" />
                     Belépés mint...
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Belépés mint beteg */}
+        <div className="card mb-6 border-l-4 border-purple-500">
+          <div className="flex items-center gap-2 mb-4">
+            <UserCircle className="w-5 h-5 text-purple-600" />
+            <h2 className="text-xl font-semibold">Belépés mint beteg</h2>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Beteg keresése (név, TAJ, email)
+              </label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={patientSearchQuery}
+                  onChange={(e) => setPatientSearchQuery(e.target.value)}
+                  placeholder="Kezdjen el gépelni a beteg nevének, TAJ számának vagy email címének..."
+                  className="form-input w-full pl-10"
+                  disabled={impersonatingPatient}
+                />
+              </div>
+            </div>
+            
+            {patientsLoading && (
+              <div className="text-sm text-gray-600">Keresés...</div>
+            )}
+            
+            {!patientsLoading && patientSearchQuery.trim() && patients.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Válasszon beteget
+                </label>
+                <select
+                  value={selectedPatientId}
+                  onChange={(e) => setSelectedPatientId(e.target.value)}
+                  className="form-input w-full"
+                  disabled={impersonatingPatient}
+                >
+                  <option value="">-- Válasszon beteget --</option>
+                  {patients.map((patient) => (
+                    <option key={patient.id} value={patient.id}>
+                      {patient.nev} {patient.taj ? `(TAJ: ${patient.taj})` : ''} {patient.email ? `[${patient.email}]` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            
+            {!patientsLoading && patientSearchQuery.trim() && patients.length === 0 && (
+              <div className="text-sm text-gray-600">Nincs találat</div>
+            )}
+            
+            <div className="flex justify-end">
+              <button
+                onClick={handleImpersonatePatient}
+                disabled={!selectedPatientId || impersonatingPatient || patientsLoading}
+                className="btn-primary flex items-center gap-2"
+              >
+                {impersonatingPatient ? (
+                  <>
+                    <span className="animate-spin">⏳</span>
+                    Belépés...
+                  </>
+                ) : (
+                  <>
+                    <UserCircle className="w-4 h-4" />
+                    Belépés betegként
                   </>
                 )}
               </button>

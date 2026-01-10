@@ -20,11 +20,12 @@ export function getDbPool(): Pool {
       process.env.NODE_ENV === 'production';
 
     // Pool beállítások környezeti változókból vagy alapértelmezett értékekből
-    // Increased default max connections to handle multiple concurrent API calls
-    const maxConnections = parseInt(process.env.DB_POOL_MAX || '50', 10);
-    const connectionTimeout = parseInt(process.env.DB_POOL_CONNECTION_TIMEOUT || '10000', 10); // Increased to 10s
-    const idleTimeout = parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '60000', 10); // Increased to 60s for long-running operations
-    const minConnections = parseInt(process.env.DB_POOL_MIN || '2', 10);
+    // Reduced max connections to prevent "too many clients" error
+    // PostgreSQL free tier typically allows ~20-25 connections
+    const maxConnections = parseInt(process.env.DB_POOL_MAX || '10', 10);
+    const connectionTimeout = parseInt(process.env.DB_POOL_CONNECTION_TIMEOUT || '10000', 10); // 10s
+    const idleTimeout = parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000', 10); // Reduced to 30s to close idle connections faster
+    const minConnections = parseInt(process.env.DB_POOL_MIN || '1', 10);
     const queryTimeout = parseInt(process.env.DB_QUERY_TIMEOUT || '300000', 10); // 5 minutes for long queries
 
     pool = new Pool({
@@ -46,12 +47,27 @@ export function getDbPool(): Pool {
       // Keep connections alive
       keepAlive: true,
       keepAliveInitialDelayMillis: 10000, // 10 seconds
+      // Allow exit on idle - close pool when no connections are in use
+      allowExitOnIdle: true,
     });
 
     // Hibakezelés
-    pool.on('error', (err) => {
+    pool.on('error', (err: any) => {
       console.error('Adatbázis kapcsolat hiba:', err);
+      // Ha "too many clients" hiba, próbáljuk meg újra kapcsolatot létrehozni
+      if (err?.code === '53300') {
+        console.error('Túl sok adatbázis kapcsolat! Várakozás...');
+      }
     });
+
+    // Log pool stats periodically in development
+    if (process.env.NODE_ENV === 'development' && pool) {
+      setInterval(() => {
+        if (pool) {
+          console.log(`DB Pool stats: total=${pool.totalCount}, idle=${pool.idleCount}, waiting=${pool.waitingCount}`);
+        }
+      }, 30000); // Every 30 seconds
+    }
   }
 
   return pool;
@@ -76,5 +92,35 @@ export async function testConnection(): Promise<boolean> {
     console.error('Adatbázis kapcsolat teszt sikertelen:', error);
     return false;
   }
+}
+
+// Helper function to execute queries with retry on "too many clients" error
+export async function queryWithRetry<T = any>(
+  queryFn: () => Promise<T>,
+  maxRetries: number = 3,
+  retryDelay: number = 1000
+): Promise<T> {
+  let lastError: any;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await queryFn();
+    } catch (error: any) {
+      lastError = error;
+      
+      // If it's a "too many clients" error, wait and retry
+      if (error?.code === '53300' && attempt < maxRetries - 1) {
+        const delay = retryDelay * (attempt + 1); // Exponential backoff
+        console.warn(`Too many clients error, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      
+      // For other errors or last attempt, throw immediately
+      throw error;
+    }
+  }
+  
+  throw lastError;
 }
 

@@ -136,6 +136,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
     }
   };
 
+
   // Sort patients by appointment if needed
   const sortedPatients = useMemo(() => {
     if (sortField === 'idopont') {

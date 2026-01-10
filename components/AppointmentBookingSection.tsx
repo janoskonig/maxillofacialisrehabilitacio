@@ -57,6 +57,7 @@ export function AppointmentBookingSection({
   const [newSlotDateTime, setNewSlotDateTime] = useState<Date | null>(null);
   const [newSlotTeremszam, setNewSlotTeremszam] = useState<string>('');
   const [newSlotCim, setNewSlotCim] = useState<string>('');
+  const [newSlotAppointmentType, setNewSlotAppointmentType] = useState<'elso_konzultacio' | 'munkafazis' | 'kontroll' | null>(null);
   const [customCim, setCustomCim] = useState<string>('');
   const [customTeremszam, setCustomTeremszam] = useState<string>('');
   const [selectedAppointmentType, setSelectedAppointmentType] = useState<'elso_konzultacio' | 'munkafazis' | 'kontroll' | null>(null);
@@ -527,6 +528,9 @@ export function AppointmentBookingSection({
         body: JSON.stringify({
           patientId: currentPatientId,
           timeSlotId: newTimeSlotId,
+          cim: newSlotCim || DEFAULT_CIM,
+          teremszam: newSlotTeremszam.trim() || null,
+          appointmentType: newSlotAppointmentType || null,
         }),
       });
 
@@ -535,6 +539,7 @@ export function AppointmentBookingSection({
         setNewSlotDateTime(null);
         setNewSlotCim('');
         setNewSlotTeremszam('');
+        setNewSlotAppointmentType(null);
         setShowNewSlotForm(false);
         alert('Új időpont sikeresen létrehozva és lefoglalva a betegnek!');
       } else {
@@ -558,6 +563,13 @@ export function AppointmentBookingSection({
       hour: '2-digit',
       minute: '2-digit',
     });
+  };
+
+  // Validálja a teremszám mezőt: csak számokat fogad el
+  const validateTeremszam = (value: string): string => {
+    // Csak számokat enged be, eltávolítja az összes nem szám karaktert
+    const numbersOnly = value.replace(/[^0-9]/g, '');
+    return numbersOnly;
   };
 
   // Only show for surgeons, admins, and fogpótlástanász
@@ -625,7 +637,7 @@ export function AppointmentBookingSection({
                 <input
                   type="text"
                   value={newModifyTeremszam}
-                  onChange={(e) => setNewModifyTeremszam(e.target.value)}
+                  onChange={(e) => setNewModifyTeremszam(validateTeremszam(e.target.value))}
                   className="form-input w-full"
                   placeholder="Pl. 611"
                 />
@@ -981,10 +993,25 @@ export function AppointmentBookingSection({
                     <input
                       type="text"
                       value={newSlotTeremszam}
-                      onChange={(e) => setNewSlotTeremszam(e.target.value)}
+                      onChange={(e) => setNewSlotTeremszam(validateTeremszam(e.target.value))}
                       className="form-input w-full"
                       placeholder="Pl. 611"
                     />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Időpont típusa
+                    </label>
+                    <select
+                      value={newSlotAppointmentType || ''}
+                      onChange={(e) => setNewSlotAppointmentType(e.target.value as any || null)}
+                      className="form-input w-full"
+                    >
+                      <option value="">Nincs megadva</option>
+                      <option value="elso_konzultacio">Első konzultáció</option>
+                      <option value="munkafazis">Munkafázis</option>
+                      <option value="kontroll">Kontroll</option>
+                    </select>
                   </div>
                   <div className="flex gap-2">
                     <button
@@ -1001,6 +1028,7 @@ export function AppointmentBookingSection({
                         setNewSlotDateTime(null);
                         setNewSlotCim('');
                         setNewSlotTeremszam('');
+                        setNewSlotAppointmentType(null);
                       }}
                       className="btn-secondary"
                     >
@@ -1112,7 +1140,7 @@ export function AppointmentBookingSection({
                     <input
                       type="text"
                       value={customTeremszam}
-                      onChange={(e) => setCustomTeremszam(e.target.value)}
+                      onChange={(e) => setCustomTeremszam(validateTeremszam(e.target.value))}
                       className="form-input w-full text-sm"
                       placeholder={availableSlotsOnly.find(s => s.id === selectedSlot)?.teremszam || 'Pl. 611'}
                     />
