@@ -11,6 +11,7 @@ import { MessageTextRenderer } from './MessageTextRenderer';
 import { getCurrentUser, AuthUser } from '@/lib/auth';
 import { CreateGroupChatModal } from './CreateGroupChatModal';
 import { RecipientSelector } from './RecipientSelector';
+import { getMonogram, getLastName } from '@/lib/utils';
 
 export function DoctorMessages() {
   const { showToast } = useToast();
@@ -676,8 +677,20 @@ export function DoctorMessages() {
                         <span className="truncate">{selectedDoctorId ? selectedDoctorName : (selectedGroupName || 'Csoportos beszélgetés')}</span>
                       </h3>
                       {selectedGroupId && groupParticipants.length > 0 && (
-                        <div className="text-xs sm:text-sm text-gray-600 mt-1">
-                          {groupParticipants.length} résztvevő
+                        <div className="flex items-center gap-2 flex-wrap mt-1">
+                          <Users className="w-3 h-3 sm:w-4 sm:h-4 text-blue-600 flex-shrink-0" />
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {groupParticipants.map((participant, idx) => (
+                              <span
+                                key={participant.userId}
+                                className="text-xs text-gray-700 bg-gray-100 px-2 py-0.5 rounded-full"
+                                title={participant.userEmail}
+                              >
+                                {participant.userName || participant.userEmail}
+                                {idx < groupParticipants.length - 1 && ','}
+                              </span>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </>
@@ -726,12 +739,24 @@ export function DoctorMessages() {
                   const isFromMe = currentUserId ? message.senderId === currentUserId : false;
                   const isPending = message.pending === true;
                   const isRead = message.readAt !== null;
+                  const senderName = message.senderName || message.senderEmail || 'Ismeretlen';
+                  const lastName = getLastName(senderName);
+                  const monogram = getMonogram(senderName);
 
                   return (
                     <div
                       key={message.id}
-                      className={`flex ${isFromMe ? 'justify-end' : 'justify-start'}`}
+                      className={`flex flex-col ${isFromMe ? 'items-end' : 'items-start'}`}
                     >
+                      {/* Sender name and monogram */}
+                      {!isFromMe && (
+                        <div className="flex items-center gap-1.5 mb-1 px-1">
+                          <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-xs font-semibold text-blue-700">
+                            {monogram}
+                          </div>
+                          <span className="text-xs font-medium text-gray-700">{lastName}</span>
+                        </div>
+                      )}
                       <div
                         className={`max-w-[75%] rounded-lg px-4 py-2 ${
                           isFromMe

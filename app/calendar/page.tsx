@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { getCurrentUser, logout, type AuthUser } from '@/lib/auth';
 import { CalendarView } from '@/components/CalendarView';
 import { Logo } from '@/components/Logo';
-import { LogOut, Shield, Settings, ArrowLeft, Download, Edit2, X } from 'lucide-react';
+import { LogOut, Shield, Settings, ArrowLeft, Download, Edit2, X, Calendar } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
 import { MobileMenu } from '@/components/MobileMenu';
 import { FeedbackButtonTrigger } from '@/components/FeedbackButton';
@@ -156,6 +156,27 @@ export default function CalendarPage() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="space-y-6">
+          {/* Link to time slots management page for fogpótlástanász and admin */}
+          {currentUser && (currentUser.role === 'fogpótlástanász' || currentUser.role === 'admin') && (
+            <div className="card card-hover p-4 bg-gradient-to-r from-medical-primary/5 to-medical-accent/5 border-medical-primary/20">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+                <div>
+                  <h3 className="text-heading-4">Időpontkezelés</h3>
+                  <p className="text-body-sm mt-1">
+                    Hozzon létre és kezeljen szabad időpontokat
+                  </p>
+                </div>
+                <button
+                  onClick={() => router.push('/time-slots')}
+                  className="btn-primary w-full sm:w-auto flex items-center justify-center gap-1.5 text-sm px-4 py-2.5"
+                >
+                  <Calendar className="w-4 h-4" />
+                  Időpontok kezelése
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Google Calendar Settings Info */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <div className="flex items-start gap-3">

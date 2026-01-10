@@ -9,6 +9,7 @@ import { Message } from '@/lib/communication';
 import { PatientMention } from './PatientMention';
 import { MessageTextRenderer } from './MessageTextRenderer';
 import { getCurrentUser } from '@/lib/auth';
+import { getMonogram, getLastName } from '@/lib/utils';
 
 interface PatientConversation {
   patientId: string;

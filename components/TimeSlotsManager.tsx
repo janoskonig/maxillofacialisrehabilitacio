@@ -57,6 +57,7 @@ export function TimeSlotsManager() {
   const [filterTeremszam, setFilterTeremszam] = useState<string>('');
   const [filterDentistName, setFilterDentistName] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'available' | 'booked'>('all');
+  const [filterAppointmentType, setFilterAppointmentType] = useState<'all' | 'elso_konzultacio' | 'munkafazis' | 'kontroll' | null>('all');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 50;
 
@@ -541,6 +542,31 @@ export function TimeSlotsManager() {
       filtered = filtered.filter(slot => slot.status === filterStatus);
     }
     
+    // Szűrés időpont típusra (csak booked slotoknál)
+    if (filterAppointmentType !== 'all') {
+      filtered = filtered.filter(slot => {
+        // Ha szabad slot, akkor csak akkor mutatjuk, ha "Nincs típus" van kiválasztva
+        if (slot.status !== 'booked') {
+          return filterAppointmentType === null;
+        }
+        
+        // Ha booked slot, akkor az appointment type alapján szűrünk
+        const appointment = appointments[slot.id];
+        if (!appointment) {
+          // Ha nincs appointment adat, akkor "Nincs típus"-nak számít
+          return filterAppointmentType === null;
+        }
+        
+        // Ha "Nincs típus" van kiválasztva, akkor csak azokat mutatjuk, ahol nincs appointment type
+        if (filterAppointmentType === null) {
+          return !appointment.appointmentType;
+        }
+        
+        // Egyébként csak azokat, ahol az appointment type megegyezik
+        return appointment.appointmentType === filterAppointmentType;
+      });
+    }
+    
     // Rendezés
     if (sortField) {
       filtered.sort((a, b) => {
@@ -577,7 +603,7 @@ export function TimeSlotsManager() {
     }
     
     return filtered;
-  }, [timeSlots, filterCim, filterTeremszam, filterDentistName, filterStatus, sortField, sortDirection]);
+  }, [timeSlots, filterCim, filterTeremszam, filterDentistName, filterStatus, filterAppointmentType, appointments, sortField, sortDirection]);
   
   // Pagináció - most már nem használjuk közvetlenül, mert külön pagináljuk a jövőbeli és elmúlt időpontokat
   
@@ -1072,7 +1098,7 @@ export function TimeSlotsManager() {
       </div>
       
       {/* Szűrők */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Cím
@@ -1144,6 +1170,30 @@ export function TimeSlotsManager() {
             <option value="booked">Lefoglalva</option>
           </select>
         </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Időpont típusa
+          </label>
+          <select
+            value={filterAppointmentType === null ? 'null' : filterAppointmentType}
+            onChange={(e) => {
+              const value = e.target.value;
+              setFilterAppointmentType(
+                value === 'all' ? 'all' : 
+                value === 'null' ? null : 
+                value as 'elso_konzultacio' | 'munkafazis' | 'kontroll'
+              );
+              setCurrentPage(1);
+            }}
+            className="form-input w-full"
+          >
+            <option value="all">Összes típus</option>
+            <option value="elso_konzultacio">Első konzultáció</option>
+            <option value="munkafazis">Munkafázis</option>
+            <option value="kontroll">Kontroll</option>
+            <option value="null">Nincs típus</option>
+          </select>
+        </div>
       </div>
       
       {/* Eredmények száma és törlés gomb */}
@@ -1154,13 +1204,14 @@ export function TimeSlotsManager() {
             <span> (szűrve: {timeSlots.length} összesből)</span>
           )}
         </div>
-        {(filterCim || filterTeremszam || filterDentistName || filterStatus !== 'all') && (
+        {(filterCim || filterTeremszam || filterDentistName || filterStatus !== 'all' || filterAppointmentType !== 'all') && (
           <button
             onClick={() => {
               setFilterCim('');
               setFilterTeremszam('');
               setFilterDentistName('');
               setFilterStatus('all');
+              setFilterAppointmentType('all');
               setCurrentPage(1);
             }}
             className="text-sm text-blue-600 hover:text-blue-800"

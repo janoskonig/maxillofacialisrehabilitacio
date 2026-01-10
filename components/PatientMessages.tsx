@@ -5,6 +5,7 @@ import { MessageCircle, Send, Clock, User, Mail, Check, CheckCheck, Loader2 } fr
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
+import { getMonogram, getLastName } from '@/lib/utils';
 
 interface Message {
   id: string;
@@ -254,16 +255,33 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
             // Csak a saját üzeneteinknek mutatjuk a státuszt (orvos üzenetei)
             const showStatus = isFromDoctor;
 
+            const senderName = isFromDoctor 
+              ? (message.senderEmail || 'Orvos')
+              : (patientName || 'Beteg');
+            const lastName = getLastName(senderName);
+            const monogram = getMonogram(senderName);
+
             return (
               <div
                 key={message.id}
-                className={`flex ${isFromDoctor ? 'justify-end' : 'justify-start'}`}
+                className={`flex flex-col ${isFromDoctor ? 'items-end' : 'items-start'}`}
                 onClick={() => {
                   if (isUnread) {
                     handleMarkAsRead(message.id);
                   }
                 }}
               >
+                {/* Sender name and monogram */}
+                <div className={`flex items-center gap-1.5 mb-1 px-1 ${isFromDoctor ? 'flex-row-reverse' : ''}`}>
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold ${
+                    isFromDoctor 
+                      ? 'bg-blue-100 text-blue-700' 
+                      : 'bg-green-100 text-green-700'
+                  }`}>
+                    {monogram}
+                  </div>
+                  <span className="text-xs font-medium text-gray-700">{lastName}</span>
+                </div>
                 <div
                   className={`max-w-[75%] rounded-lg px-4 py-2 ${
                     isFromDoctor

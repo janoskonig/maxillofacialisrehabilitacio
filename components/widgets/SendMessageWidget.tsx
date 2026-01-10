@@ -52,8 +52,8 @@ export function SendMessageWidget() {
 
   const fetchRecentMessages = async () => {
     try {
-      // Orvos-beteg üzenetek
-      const patientResponse = await fetch('/api/messages/all?limit=5', {
+      // Orvos-beteg üzenetek - növelt limit, hogy biztosan legyen 3 különböző küldő
+      const patientResponse = await fetch('/api/messages/all?limit=15', {
         credentials: 'include',
       });
 
@@ -65,8 +65,8 @@ export function SendMessageWidget() {
         setPatientUnreadCount(unread);
       }
 
-      // Orvos-orvos üzenetek
-      const doctorResponse = await fetch('/api/doctor-messages/recent?limit=5', {
+      // Orvos-orvos üzenetek - növelt limit, hogy biztosan legyen 3 különböző küldő
+      const doctorResponse = await fetch('/api/doctor-messages/recent?limit=15', {
         credentials: 'include',
       });
 
@@ -83,16 +83,62 @@ export function SendMessageWidget() {
     }
   };
 
-  const handlePatientMessageClick = (message: PatientMessage) => {
-    // Navigálás az üzenetoldalra orvos-beteg fülre
-    router.push('/messages?tab=doctor-patient');
+  const handleMessageClick = (message: { type: 'doctor' | 'patient'; id: string }) => {
+    // Navigálás az üzenetoldalra a megfelelő fülre
+    if (message.type === 'doctor') {
+      router.push('/messages?tab=doctor-doctor');
+    } else {
+      router.push('/messages?tab=doctor-patient');
+    }
     setIsModalOpen(false);
   };
 
-  const handleDoctorMessageClick = (message: DoctorMessage) => {
-    // Navigálás az üzenetoldalra orvos-orvos fülre
-    router.push('/messages?tab=doctor-doctor');
-    setIsModalOpen(false);
+  // Összevont lista létrehozása és csoportosítás küldő szerint
+  const getTop3UniqueMessages = () => {
+    // 1. Összevont lista létrehozása
+    const allMessages: Array<{
+      id: string;
+      type: 'doctor' | 'patient';
+      senderId: string;
+      senderName: string | null;
+      readAt: Date | null;
+      createdAt: Date;
+      originalMessage: PatientMessage | DoctorMessage;
+    }> = [
+      ...recentDoctorMessages.map(m => ({
+        id: m.id,
+        type: 'doctor' as const,
+        senderId: m.otherDoctorId,
+        senderName: m.otherDoctorName,
+        readAt: m.readAt,
+        createdAt: m.createdAt,
+        originalMessage: m,
+      })),
+      ...recentPatientMessages.map(m => ({
+        id: m.id,
+        type: 'patient' as const,
+        senderId: m.patientId,
+        senderName: m.patientName,
+        readAt: m.readAt,
+        createdAt: m.createdAt,
+        originalMessage: m,
+      })),
+    ];
+
+    // 2. Rendezés dátumszerint (legfrissebb előre)
+    allMessages.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    // 3. Csoportosítás küldő szerint (csak a legfrissebb üzenet)
+    const uniqueSenders = new Map<string, typeof allMessages[0]>();
+    allMessages.forEach(msg => {
+      const key = msg.senderId;
+      if (!uniqueSenders.has(key) || new Date(msg.createdAt) > new Date(uniqueSenders.get(key)!.createdAt)) {
+        uniqueSenders.set(key, msg);
+      }
+    });
+
+    // 4. Első 3 küldő
+    return Array.from(uniqueSenders.values()).slice(0, 3);
   };
 
   return (
@@ -126,59 +172,42 @@ export function SendMessageWidget() {
             Új üzenet
           </button>
 
-          {/* Recent Messages */}
+          {/* Recent Messages - Minimalistább megjelenés */}
           {loading ? (
             <div className="text-center py-2 text-gray-500 text-xs">Betöltés...</div>
           ) : (
-            <div className="space-y-3 border-t pt-3">
-              {/* Orvos-orvos üzenetek */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-1.5">
-                    <Users className="w-3 h-3 text-gray-500" />
-                    <div className="text-xs font-semibold text-gray-700">Orvos-orvos üzenetek</div>
-                  </div>
-                  {doctorUnreadCount > 0 && (
-                    <span className="px-1.5 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full">
-                      {doctorUnreadCount}
-                    </span>
-                  )}
-                </div>
-                {recentDoctorMessages.length > 0 ? (
-                  <div className="space-y-1.5 max-h-32 overflow-y-auto">
-                    {recentDoctorMessages.slice(0, 3).map((message) => (
+            <div className="border-t pt-3">
+              {(() => {
+                const top3Messages = getTop3UniqueMessages();
+                return top3Messages.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {top3Messages.map((message) => (
                       <button
                         key={message.id}
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleDoctorMessageClick(message);
+                          handleMessageClick(message);
                         }}
-                        className={`w-full text-left p-1.5 rounded border text-xs transition-colors ${
+                        className={`w-full text-left p-2 rounded border text-xs transition-colors ${
                           !message.readAt
                             ? 'bg-blue-50 border-blue-200 hover:bg-blue-100'
                             : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
                         }`}
                       >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-gray-900 truncate">
-                              {message.otherDoctorName}
-                            </div>
-                            <div className="text-gray-500 truncate mt-0.5">
-                              {message.message.substring(0, 40)}
-                              {message.message.length > 40 ? '...' : ''}
-                            </div>
-                          </div>
-                          <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
                             {!message.readAt && (
-                              <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+                              <span className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0"></span>
                             )}
-                            <div className="flex items-center gap-1 text-gray-400">
-                              <Clock className="w-3 h-3" />
-                              <span className="text-xs">
-                                {format(new Date(message.createdAt), 'MM.dd', { locale: hu })}
-                              </span>
-                            </div>
+                            <span className="font-medium text-gray-900 truncate">
+                              {message.senderName || (message.type === 'patient' ? 'Név nélküli beteg' : 'Ismeretlen')}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1 text-gray-400 flex-shrink-0">
+                            <Clock className="w-3 h-3" />
+                            <span className="text-xs">
+                              {format(new Date(message.createdAt), 'MM.dd', { locale: hu })}
+                            </span>
                           </div>
                         </div>
                       </button>
@@ -186,66 +215,8 @@ export function SendMessageWidget() {
                   </div>
                 ) : (
                   <div className="text-center py-1 text-gray-400 text-xs">Nincsenek üzenetek</div>
-                )}
-              </div>
-
-              {/* Orvos-beteg üzenetek */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-1.5">
-                    <MessageCircle className="w-3 h-3 text-gray-500" />
-                    <div className="text-xs font-semibold text-gray-700">Orvos-beteg üzenetek</div>
-                  </div>
-                  {patientUnreadCount > 0 && (
-                    <span className="px-1.5 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full">
-                      {patientUnreadCount}
-                    </span>
-                  )}
-                </div>
-                {recentPatientMessages.length > 0 ? (
-                  <div className="space-y-1.5 max-h-32 overflow-y-auto">
-                    {recentPatientMessages.slice(0, 3).map((message) => (
-                      <button
-                        key={message.id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handlePatientMessageClick(message);
-                        }}
-                        className={`w-full text-left p-1.5 rounded border text-xs transition-colors ${
-                          !message.readAt
-                            ? 'bg-blue-50 border-blue-200 hover:bg-blue-100'
-                            : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-gray-900 truncate">
-                              {message.patientName || 'Név nélküli beteg'}
-                            </div>
-                            <div className="text-gray-500 truncate mt-0.5">
-                              {message.message.substring(0, 40)}
-                              {message.message.length > 40 ? '...' : ''}
-                            </div>
-                          </div>
-                          <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                            {!message.readAt && (
-                              <span className="w-2 h-2 bg-red-500 rounded-full"></span>
-                            )}
-                            <div className="flex items-center gap-1 text-gray-400">
-                              <Clock className="w-3 h-3" />
-                              <span className="text-xs">
-                                {format(new Date(message.createdAt), 'MM.dd', { locale: hu })}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-1 text-gray-400 text-xs">Nincsenek üzenetek</div>
-                )}
-              </div>
+                );
+              })()}
             </div>
           )}
         </div>

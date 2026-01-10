@@ -38,7 +38,7 @@ export function PendingApprovalsWidget({ approvals }: PendingApprovalsWidgetProp
           <p className="text-body-sm">Nincsenek függőben lévő időpontok</p>
         </div>
       ) : (
-        <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
+        <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
         {approvals.map((approval) => {
           const startTime = new Date(approval.startTime);
           
@@ -46,35 +46,33 @@ export function PendingApprovalsWidget({ approvals }: PendingApprovalsWidgetProp
             <div
               key={approval.id}
               onClick={() => handleAppointmentClick(approval.patientId)}
-              className="p-4 rounded-xl border border-medical-warning/30 bg-gradient-to-br from-medical-warning/10 to-medical-error/5 hover:shadow-soft cursor-pointer transition-all duration-200 animate-fade-in"
+              className="p-2 rounded-lg border border-medical-warning/30 bg-gradient-to-br from-medical-warning/10 to-medical-error/5 hover:shadow-soft cursor-pointer transition-all duration-200 animate-fade-in"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="p-1.5 bg-medical-warning/20 rounded-lg">
-                      <Clock className="w-4 h-4 text-medical-warning flex-shrink-0" />
-                    </div>
-                    <span className="font-bold text-base text-gray-900">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Clock className="w-3 h-3 text-medical-warning flex-shrink-0" />
+                    <span className="font-semibold text-sm text-gray-900">
                       {format(startTime, 'yyyy. MMMM d. HH:mm', { locale: hu })}
                     </span>
-                    <span className="badge badge-warning text-xs">Függőben</span>
+                    <span className="badge badge-warning text-xs px-1.5 py-0.5">Függőben</span>
                   </div>
-                  <div className="font-semibold text-base text-gray-900 truncate mb-1">
+                  <div className="font-medium text-sm text-gray-900 truncate mb-0.5">
                     {approval.patientName || 'Névtelen beteg'}
                   </div>
                   {approval.dentistName && (
-                    <div className="text-body-sm text-gray-700 font-medium mt-0.5">
+                    <div className="text-xs text-gray-700 mt-0.5">
                       {approval.dentistName}
                     </div>
                   )}
                   {approval.patientTaj && (
-                    <div className="text-body-sm text-gray-600 mt-0.5">
+                    <div className="text-xs text-gray-600 mt-0.5">
                       TAJ: {approval.patientTaj}
                     </div>
                   )}
-                  <div className="flex items-center gap-1.5 mt-2 text-body-sm text-gray-500">
-                    <User className="w-3.5 h-3.5" />
-                    <span>Létrehozta: {approval.createdBy}</span>
+                  <div className="flex items-center gap-1 mt-1.5 text-xs text-gray-500">
+                    <User className="w-3 h-3" />
+                    <span>{approval.createdBy}</span>
                   </div>
                 </div>
               </div>

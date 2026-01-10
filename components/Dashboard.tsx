@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { TodaysAppointmentsWidget } from './widgets/TodaysAppointmentsWidget';
 import { PendingApprovalsWidget } from './widgets/PendingApprovalsWidget';
 import { SendMessageWidget } from './widgets/SendMessageWidget';
+import { WaitingTimeWidget } from './widgets/WaitingTimeWidget';
 import { ChevronDown, ChevronUp, LayoutDashboard, UserPlus } from 'lucide-react';
 import { PatientList } from './PatientList';
 import { Patient } from '@/lib/types';
@@ -204,7 +205,7 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
 
           {/* Tab Content */}
           {activeTab === 'overview' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Send Message Widget */}
               <SendMessageWidget />
 
@@ -218,6 +219,9 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
               {data.pendingAppointments.length > 0 && (
                 <PendingApprovalsWidget approvals={data.pendingAppointments} />
               )}
+
+              {/* Waiting Times Widget */}
+              <WaitingTimeWidget />
             </div>
           )}
 

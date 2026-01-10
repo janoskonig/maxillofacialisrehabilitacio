@@ -6,6 +6,7 @@ import { useToast } from '@/contexts/ToastContext';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useRouter } from 'next/navigation';
+import { getMonogram, getLastName } from '@/lib/utils';
 
 interface Patient {
   id: string;
@@ -440,11 +441,28 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
                         // Csak a saját üzeneteinknek mutatjuk a státuszt
                         const showStatus = isDoctor;
                         
+                        const senderName = isDoctor 
+                          ? 'Orvos'
+                          : (selectedPatient?.nev || 'Beteg');
+                        const lastName = getLastName(senderName);
+                        const monogram = getMonogram(senderName);
+                        
                         return (
                           <div
                             key={msg.id}
-                            className={`flex ${isDoctor ? 'justify-end' : 'justify-start'}`}
+                            className={`flex flex-col ${isDoctor ? 'items-end' : 'items-start'}`}
                           >
+                            {/* Sender name and monogram */}
+                            <div className={`flex items-center gap-1.5 mb-1 px-1 ${isDoctor ? 'flex-row-reverse' : ''}`}>
+                              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold ${
+                                isDoctor 
+                                  ? 'bg-blue-100 text-blue-700' 
+                                  : 'bg-green-100 text-green-700'
+                              }`}>
+                                {monogram}
+                              </div>
+                              <span className="text-xs font-medium text-gray-700">{lastName}</span>
+                            </div>
                             <div
                               className={`max-w-[75%] rounded-lg px-4 py-2 ${
                                 isDoctor
