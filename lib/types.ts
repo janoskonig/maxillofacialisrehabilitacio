@@ -410,14 +410,19 @@ export type MedicalStats = {
 export interface DoctorMessage {
   id: string;
   senderId: string;
-  recipientId: string;
+  recipientId: string | null; // Lehet NULL csoportos beszélgetésnél
+  groupId?: string | null; // Új mező a csoport ID-hoz
   senderEmail: string;
   senderName: string | null;
+  recipientName?: string | null; // Címzett neve (opcionális, csak megjelenítéshez)
+  groupName?: string | null; // Csoport neve (opcionális, csak megjelenítéshez)
+  groupParticipantCount?: number; // Csoport résztvevők száma (opcionális, csak megjelenítéshez)
   subject: string | null;
   message: string;
   readAt: Date | null;
   createdAt: Date;
   pending?: boolean; // Küldés alatt
+  mentionedPatientIds?: string[]; // Új mező a megemlített betegek ID-ihoz
 }
 
 export interface DoctorConversation {

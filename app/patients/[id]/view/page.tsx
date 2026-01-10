@@ -8,6 +8,9 @@ import { Patient } from '@/lib/types';
 import { ArrowLeft } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { MobileMenu } from '@/components/MobileMenu';
+import { CommunicationLog } from '@/components/CommunicationLog';
+import { PatientMessages } from '@/components/PatientMessages';
+import { DoctorMessagesForPatient } from '@/components/DoctorMessagesForPatient';
 
 export default function PatientViewPage() {
   const router = useRouter();
@@ -17,6 +20,7 @@ export default function PatientViewPage() {
   const [patient, setPatient] = useState<Patient | null>(null);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [patientEmail, setPatientEmail] = useState<string | null>(null);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -49,6 +53,7 @@ export default function PatientViewPage() {
 
           const data = await response.json();
           setPatient(data.patient);
+          setPatientEmail(data.patient?.email || null);
           setAuthorized(true);
         } catch (error) {
           console.error('Error fetching patient:', error);
@@ -122,12 +127,30 @@ export default function PatientViewPage() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <PatientForm
-          patient={patient}
-          isViewOnly={false}
-          onSave={handleSavePatient}
-          onCancel={handleBack}
-        />
+        <div className="space-y-6">
+          {/* Patient Form */}
+          <PatientForm
+            patient={patient}
+            isViewOnly={false}
+            onSave={handleSavePatient}
+            onCancel={handleBack}
+          />
+          
+          {/* Chat Messages - csak ha van email-cím */}
+          {patientEmail && patient?.id && (
+            <PatientMessages patientId={patient.id} patientName={patient.nev || null} />
+          )}
+          
+          {/* Konzílium - Orvos-orvos üzenetek */}
+          {patient?.id && (
+            <DoctorMessagesForPatient patientId={patient.id} patientName={patient.nev || null} />
+          )}
+          
+          {/* Communication Log - mindig látható */}
+          {patient?.id && (
+            <CommunicationLog patientId={patient.id} patientName={patient.nev || null} />
+          )}
+        </div>
       </main>
     </div>
   );

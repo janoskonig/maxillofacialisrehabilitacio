@@ -72,6 +72,14 @@ export default function PatientDetailPage() {
     router.push('/');
   };
 
+  // #region agent log
+  useEffect(() => {
+    if (authorized && patientId) {
+      fetch('http://127.0.0.1:7242/ingest/c070e5b2-a34e-45de-ad79-947d2863632f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/patients/[id]/page.tsx:71',message:'Rendering DoctorMessagesForPatient',data:{patientId,patientName,authorized},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    }
+  }, [authorized, patientId, patientName]);
+  // #endregion
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">

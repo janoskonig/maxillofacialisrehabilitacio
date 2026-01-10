@@ -230,20 +230,8 @@ export default function Home() {
       showToast('Hiba: A beteg ID nem található', 'error');
       return;
     }
-    try {
-      // Fetch fresh data from database
-      const freshPatient = await getPatientById(patient.id);
-      setEditingPatient(freshPatient);
-      setIsViewMode(true);
-      setShowForm(true);
-    } catch (error) {
-      console.error('Error loading patient:', error);
-      showToast('Hiba történt a beteg adatok betöltésekor', 'error');
-      // Fallback to cached data
-      setEditingPatient(patient);
-      setIsViewMode(true);
-      setShowForm(true);
-    }
+    // Navigate to separate page instead of opening modal
+    router.push(`/patients/${patient.id}/view`);
   };
 
   const handleViewOP = (patient: Patient) => {
@@ -259,20 +247,8 @@ export default function Home() {
       showToast('Hiba: A beteg ID nem található', 'error');
       return;
     }
-    try {
-      // Fetch fresh data from database
-      const freshPatient = await getPatientById(patient.id);
-      setEditingPatient(freshPatient);
-      setIsViewMode(false);
-      setShowForm(true);
-    } catch (error) {
-      console.error('Error loading patient:', error);
-      showToast('Hiba történt a beteg adatok betöltésekor', 'error');
-      // Fallback to cached data
-      setEditingPatient(patient);
-      setIsViewMode(false);
-      setShowForm(true);
-    }
+    // Navigate to separate page instead of opening modal
+    router.push(`/patients/${patient.id}/view`);
   };
 
   const handleCloseForm = async () => {

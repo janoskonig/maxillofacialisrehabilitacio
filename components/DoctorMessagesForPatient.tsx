@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { MessageCircle, Users, Clock, ArrowRight } from 'lucide-react';
+import { MessageCircle, Users, Clock, ArrowRight, User } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useRouter } from 'next/navigation';
@@ -37,7 +37,11 @@ export function DoctorMessagesForPatient({ patientId, patientName }: DoctorMessa
 
       if (!response.ok) {
         if (response.status === 403) {
-          setError('Nincs jogosultsága az üzenetek megtekintéséhez');
+          // Don't show error, just return empty - maybe user doesn't have access to this patient
+          // But still show the component with empty state
+          setError(null);
+          setMessages([]);
+          setLoading(false);
           return;
         }
         throw new Error('Hiba az üzenetek betöltésekor');
@@ -109,7 +113,8 @@ export function DoctorMessagesForPatient({ patientId, patientName }: DoctorMessa
           </div>
         ) : (
           messages.slice(0, 5).map((message) => {
-            const isFromCurrentUser = false; // We don't track current user here, but could if needed
+            const isGroupMessage = !!message.groupId;
+            const isIndividualMessage = !!message.recipientId && !message.groupId;
 
             return (
               <div
@@ -119,22 +124,51 @@ export function DoctorMessagesForPatient({ patientId, patientName }: DoctorMessa
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="font-medium text-gray-900">
-                        {message.senderName || message.senderEmail}
-                      </span>
-                      {message.recipientId && (
+                    {/* Küldő és címzett/csoport információ */}
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <div className="flex items-center gap-1.5">
+                        <User className="w-4 h-4 text-gray-500" />
+                        <span className="font-medium text-gray-900">
+                          {message.senderName || message.senderEmail}
+                        </span>
+                      </div>
+                      
+                      {isIndividualMessage && message.recipientName && (
                         <>
                           <span className="text-gray-400">→</span>
-                          <span className="text-sm text-gray-600">
-                            {message.recipientId ? 'Orvos' : ''}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <User className="w-4 h-4 text-gray-500" />
+                            <span className="text-sm text-gray-600 font-medium">
+                              {message.recipientName}
+                            </span>
+                          </div>
+                        </>
+                      )}
+                      
+                      {isGroupMessage && (
+                        <>
+                          <span className="text-gray-400">→</span>
+                          <div className="flex items-center gap-1.5">
+                            <Users className="w-4 h-4 text-blue-600" />
+                            <span className="text-sm text-blue-700 font-medium">
+                              {message.groupName || `Csoportos beszélgetés`}
+                            </span>
+                            {message.groupParticipantCount !== undefined && (
+                              <span className="text-xs text-gray-500">
+                                ({message.groupParticipantCount} résztvevő)
+                              </span>
+                            )}
+                          </div>
                         </>
                       )}
                     </div>
+                    
+                    {/* Üzenet szövege */}
                     <div className="text-sm text-gray-700 mb-2">
                       <MessageTextRenderer text={message.message} />
                     </div>
+                    
+                    {/* Időbélyeg */}
                     <div className="flex items-center gap-2 text-xs text-gray-500">
                       <Clock className="w-3 h-3" />
                       <span>
@@ -163,4 +197,3 @@ export function DoctorMessagesForPatient({ patientId, patientName }: DoctorMessa
     </div>
   );
 }
-

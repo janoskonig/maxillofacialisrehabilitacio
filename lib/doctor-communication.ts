@@ -4,13 +4,18 @@ import { extractPatientMentions } from './mention-parser';
 export interface DoctorMessage {
   id: string;
   senderId: string;
-  recipientId: string;
+  recipientId: string | null; // Lehet NULL csoportos beszélgetésnél
+  groupId?: string | null; // Új mező a csoport ID-hoz
   senderEmail: string;
   senderName: string | null;
+  recipientName?: string | null; // Címzett neve (opcionális, csak megjelenítéshez)
+  groupName?: string | null; // Csoport neve (opcionális, csak megjelenítéshez)
+  groupParticipantCount?: number; // Csoport résztvevők száma (opcionális, csak megjelenítéshez)
   subject: string | null;
   message: string;
   readAt: Date | null;
   createdAt: Date;
+  mentionedPatientIds?: string[]; // Új mező a megemlített betegek ID-ihoz
 }
 
 export interface CreateDoctorMessageInput {
@@ -53,13 +58,15 @@ export async function sendDoctorMessage(input: CreateDoctorMessageInput): Promis
   const message: DoctorMessage = {
     id: row.id,
     senderId: row.sender_id,
-    recipientId: row.recipient_id,
+    recipientId: row.recipient_id || null,
+    groupId: row.group_id || null,
     senderEmail: row.sender_email,
     senderName: row.sender_name,
     subject: row.subject,
     message: row.message,
     readAt: row.read_at ? new Date(row.read_at) : null,
     createdAt: new Date(row.created_at),
+    mentionedPatientIds: row.mentioned_patient_ids ? JSON.parse(row.mentioned_patient_ids) : [],
   };
 
   return message;
@@ -121,7 +128,8 @@ export async function getDoctorMessages(
   return result.rows.map((row: any) => ({
     id: row.id,
     senderId: row.sender_id,
-    recipientId: row.recipient_id,
+    recipientId: row.recipient_id || null,
+    groupId: row.group_id || null,
     senderEmail: row.sender_email,
     senderName: row.sender_name,
     subject: row.subject,
@@ -240,7 +248,7 @@ export async function getDoctorConversations(userId: string): Promise<Array<{
 
     // Utolsó üzenet
     const lastMessageResult = await pool.query(
-      `SELECT id, sender_id, recipient_id, sender_email, sender_name, subject, message, read_at, created_at
+      `SELECT id, sender_id, recipient_id, group_id, sender_email, sender_name, subject, message, read_at, created_at
        FROM doctor_messages
        WHERE ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1))
        AND group_id IS NULL
@@ -255,7 +263,8 @@ export async function getDoctorConversations(userId: string): Promise<Array<{
       lastMessage = {
         id: msgRow.id,
         senderId: msgRow.sender_id,
-        recipientId: msgRow.recipient_id,
+        recipientId: msgRow.recipient_id || null,
+        groupId: msgRow.group_id || null,
         senderEmail: msgRow.sender_email,
         senderName: msgRow.sender_name,
         subject: msgRow.subject,
@@ -470,7 +479,8 @@ export async function getDoctorMessageGroups(userId: string): Promise<Array<{
       lastMessage = {
         id: msgRow.id,
         senderId: msgRow.sender_id,
-        recipientId: msgRow.recipient_id || '',
+        recipientId: msgRow.recipient_id || null,
+        groupId: msgRow.group_id || null,
         senderEmail: msgRow.sender_email,
         senderName: msgRow.sender_name,
         subject: msgRow.subject,
@@ -540,7 +550,7 @@ export async function getGroupMessages(
   }
 
   let query = `
-    SELECT id, sender_id, recipient_id, sender_email, sender_name, subject, message, read_at, created_at
+    SELECT id, sender_id, recipient_id, group_id, sender_email, sender_name, subject, message, read_at, created_at
     FROM doctor_messages
     WHERE group_id = $1
     ORDER BY created_at ASC
@@ -562,7 +572,8 @@ export async function getGroupMessages(
   return result.rows.map((row: any) => ({
     id: row.id,
     senderId: row.sender_id,
-    recipientId: row.recipient_id || '',
+    recipientId: row.recipient_id || null,
+    groupId: row.group_id || null,
     senderEmail: row.sender_email,
     senderName: row.sender_name,
     subject: row.subject,
