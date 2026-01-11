@@ -22,20 +22,31 @@ export async function GET(request: NextRequest) {
 
     const result = await pool.query(
       `SELECT 
-        id,
-        patient_id as "patientId",
-        filename,
-        file_path as "filePath",
-        file_size as "fileSize",
-        mime_type as "mimeType",
-        description,
-        tags,
-        uploaded_by as "uploadedBy",
-        uploaded_at as "uploadedAt",
-        created_at as "createdAt"
-      FROM patient_documents
-      WHERE patient_id = $1
-      ORDER BY uploaded_at DESC`,
+        pd.id,
+        pd.patient_id as "patientId",
+        pd.filename,
+        pd.file_path as "filePath",
+        pd.file_size as "fileSize",
+        pd.mime_type as "mimeType",
+        pd.description,
+        pd.tags,
+        pd.uploaded_by as "uploadedBy",
+        COALESCE(
+          u.doktor_neve,
+          p.nev,
+          u_by_id.doktor_neve,
+          p_by_id.nev,
+          pd.uploaded_by
+        ) as "uploadedByName",
+        pd.uploaded_at as "uploadedAt",
+        pd.created_at as "createdAt"
+      FROM patient_documents pd
+      LEFT JOIN users u ON u.email = pd.uploaded_by
+      LEFT JOIN patients p ON p.email = pd.uploaded_by
+      LEFT JOIN users u_by_id ON pd.uploaded_by ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' AND u_by_id.id::text = pd.uploaded_by
+      LEFT JOIN patients p_by_id ON pd.uploaded_by ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' AND p_by_id.id::text = pd.uploaded_by
+      WHERE pd.patient_id = $1
+      ORDER BY pd.uploaded_at DESC`,
       [patientId]
     );
 

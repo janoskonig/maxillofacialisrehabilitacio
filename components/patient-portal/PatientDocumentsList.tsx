@@ -16,6 +16,7 @@ interface Document {
   tags: string[];
   uploadedAt: string;
   uploadedBy?: string;
+  uploadedByName?: string;
 }
 
 interface DocumentUploadCardProps {
@@ -552,11 +553,11 @@ export function PatientDocumentsList() {
                       <span>{formatFileSize(doc.fileSize)}</span>
                       <span>•</span>
                       <span>{format(new Date(doc.uploadedAt), 'yyyy. MMMM d.', { locale: hu })}</span>
-                      {doc.uploadedBy && (
+                      {doc.uploadedByName && (
                         <>
                           <span>•</span>
                           <span>
-                            Feltöltötte: {doc.uploadedBy === patientEmail ? 'Ön' : doc.uploadedBy}
+                            Feltöltötte: {doc.uploadedBy === patientEmail ? 'Ön' : doc.uploadedByName}
                           </span>
                         </>
                       )}

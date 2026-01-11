@@ -686,8 +686,8 @@ export function PatientDocuments({
                       {doc.uploadedAt && (
                         <span>{formatDateForDisplay(doc.uploadedAt)}</span>
                       )}
-                      {doc.uploadedBy && (
-                        <span>Feltöltötte: {doc.uploadedBy}</span>
+                      {doc.uploadedByName && (
+                        <span>Feltöltötte: {doc.uploadedByName}</span>
                       )}
                     </div>
                     {doc.description && (
