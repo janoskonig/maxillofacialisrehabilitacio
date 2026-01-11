@@ -23,12 +23,13 @@ export async function GET(request: NextRequest) {
 
     const pool = getDbPool();
 
-    // Legutóbbi üzenetek (küldött vagy fogadott)
+    // Legutóbbi üzenetek (küldött vagy fogadott) - támogatja a group chat-eket is
     const query = `
       SELECT 
         dm.id,
         dm.sender_id,
         dm.recipient_id,
+        dm.group_id,
         dm.sender_email,
         dm.sender_name,
         dm.subject,
@@ -36,17 +37,24 @@ export async function GET(request: NextRequest) {
         dm.read_at,
         dm.created_at,
         CASE 
+          WHEN dm.group_id IS NOT NULL THEN dmg.name
           WHEN dm.sender_id = $1 THEN u_recipient.doktor_neve
           ELSE u_sender.doktor_neve
         END as other_doctor_name,
         CASE 
+          WHEN dm.group_id IS NOT NULL THEN NULL
           WHEN dm.sender_id = $1 THEN dm.recipient_id
           ELSE dm.sender_id
-        END as other_doctor_id
+        END as other_doctor_id,
+        dm.group_id as group_id,
+        (SELECT COUNT(*) FROM doctor_message_group_participants WHERE group_id = dm.group_id) as group_participant_count
       FROM doctor_messages dm
       LEFT JOIN users u_sender ON u_sender.id = dm.sender_id
       LEFT JOIN users u_recipient ON u_recipient.id = dm.recipient_id
-      WHERE dm.sender_id = $1 OR dm.recipient_id = $1
+      LEFT JOIN doctor_message_groups dmg ON dmg.id = dm.group_id
+      WHERE dm.sender_id = $1 
+         OR dm.recipient_id = $1
+         OR dm.group_id IN (SELECT group_id FROM doctor_message_group_participants WHERE user_id = $1)
       ORDER BY dm.created_at DESC
       LIMIT $2
     `;
@@ -57,6 +65,7 @@ export async function GET(request: NextRequest) {
       id: row.id,
       senderId: row.sender_id,
       recipientId: row.recipient_id,
+      groupId: row.group_id || null,
       senderEmail: row.sender_email,
       senderName: row.sender_name,
       subject: row.subject,
@@ -64,14 +73,25 @@ export async function GET(request: NextRequest) {
       readAt: row.read_at ? new Date(row.read_at) : null,
       createdAt: new Date(row.created_at),
       otherDoctorId: row.other_doctor_id,
-      otherDoctorName: row.other_doctor_name || 'Ismeretlen orvos',
+      otherDoctorName: row.group_id 
+        ? (row.other_doctor_name || `Csoportos beszélgetés (${row.group_participant_count || 0} résztvevő)`)
+        : (row.other_doctor_name || 'Ismeretlen orvos'),
+      groupName: row.group_id ? (row.other_doctor_name || `Csoportos beszélgetés`) : null,
+      groupParticipantCount: row.group_id ? (row.group_participant_count || 0) : null,
     }));
 
-    // Olvasatlan üzenetek száma
+    // Olvasatlan üzenetek száma (egyéni és csoportos beszélgetések)
     const unreadResult = await pool.query(
       `SELECT COUNT(*) as count
-       FROM doctor_messages
-       WHERE recipient_id = $1 AND read_at IS NULL`,
+       FROM doctor_messages dm
+       WHERE (
+         (dm.recipient_id = $1 AND dm.read_at IS NULL)
+         OR 
+         (dm.group_id IS NOT NULL 
+          AND dm.group_id IN (SELECT group_id FROM doctor_message_group_participants WHERE user_id = $1)
+          AND dm.sender_id != $1
+          AND dm.read_at IS NULL)
+       )`,
       [auth.userId]
     );
 

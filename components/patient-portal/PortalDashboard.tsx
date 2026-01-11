@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Calendar, FileText, Clock, User, Plus, CheckCircle, XCircle, AlertCircle, MessageCircle } from 'lucide-react';
+import { Calendar, Clock, User, Plus, CheckCircle, XCircle, AlertCircle, MessageCircle, MapPin, Mail, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
@@ -30,74 +30,62 @@ interface Appointment {
   approvalStatus: string | null;
 }
 
-interface Document {
-  id: string;
-  filename: string;
-  uploadedAt: string;
-  description: string | null;
-}
-
 export function PortalDashboard() {
   const router = useRouter();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [patient, setPatient] = useState<Patient | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [documents, setDocuments] = useState<Document[]>([]);
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-
-        const [patientRes, appointmentsRes, documentsRes] = await Promise.all([
-          fetch('/api/patient-portal/patient', { credentials: 'include' }),
-          fetch('/api/patient-portal/appointments', { credentials: 'include' }),
-          fetch('/api/patient-portal/documents', { credentials: 'include' }),
-        ]);
-
-        if (!patientRes.ok || patientRes.status === 401) {
-          router.push('/patient-portal');
-          return;
-        }
-
-        const patientData = await patientRes.json();
-        const appointmentsData = await appointmentsRes.json();
-        const documentsData = await documentsRes.json();
-
-        setPatient(patientData.patient);
-        setAppointments(appointmentsData.appointments || []);
-        setDocuments(documentsData.documents || []);
-
-        // Fetch unread message count
-        if (patientData.patient?.id) {
-          try {
-            const messagesRes = await fetch(`/api/messages?patientId=${patientData.patient.id}`, {
-              credentials: 'include',
-            });
-            if (messagesRes.ok) {
-              const messagesData = await messagesRes.json();
-              const unread = (messagesData.messages || []).filter(
-                (m: any) => m.senderType === 'doctor' && !m.readAt
-              ).length;
-              setUnreadMessageCount(unread);
-            }
-          } catch (error) {
-            // Ignore message fetch errors
-            console.error('Error fetching messages:', error);
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error);
-        showToast('Hiba történt az adatok betöltésekor', 'error');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchData();
-  }, [router, showToast]);
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+
+      const [patientRes, appointmentsRes] = await Promise.all([
+        fetch('/api/patient-portal/patient', { credentials: 'include' }),
+        fetch('/api/patient-portal/appointments', { credentials: 'include' }),
+      ]);
+
+      if (!patientRes.ok || patientRes.status === 401) {
+        router.push('/patient-portal');
+        return;
+      }
+
+      const patientData = await patientRes.json();
+      const appointmentsData = await appointmentsRes.json();
+
+      setPatient(patientData.patient);
+      setAppointments(appointmentsData.appointments || []);
+
+      // Fetch unread message count
+      if (patientData.patient?.id) {
+        try {
+          const messagesRes = await fetch(`/api/messages?patientId=${patientData.patient.id}`, {
+            credentials: 'include',
+          });
+          if (messagesRes.ok) {
+            const messagesData = await messagesRes.json();
+            const unread = (messagesData.messages || []).filter(
+              (m: any) => m.senderType === 'doctor' && !m.readAt
+            ).length;
+            setUnreadMessageCount(unread);
+          }
+        } catch (error) {
+          console.error('Error fetching messages:', error);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      showToast('Hiba történt az adatok betöltésekor', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -112,281 +100,193 @@ export function PortalDashboard() {
   const getStatusBadge = (appointment: Appointment) => {
     if (appointment.approvalStatus === 'pending') {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-orange-100 text-orange-700 rounded">
-          <AlertCircle className="w-3 h-3" />
-          Jóváhagyásra vár
+        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-orange-100 text-orange-700 rounded">
+          <AlertCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+          <span className="hidden xs:inline">Jóváhagyásra vár</span>
+          <span className="xs:hidden">Vár</span>
         </span>
       );
     }
     if (appointment.approvalStatus === 'rejected') {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-red-100 text-red-700 rounded">
-          <XCircle className="w-3 h-3" />
-          Elutasítva
+        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-red-100 text-red-700 rounded">
+          <XCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+          <span className="hidden xs:inline">Elutasítva</span>
+          <span className="xs:hidden">Elutas.</span>
         </span>
       );
     }
     if (appointment.approvalStatus === 'approved') {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded">
-          <CheckCircle className="w-3 h-3" />
-          Jóváhagyva
+        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-green-100 text-green-700 rounded">
+          <CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+          <span className="hidden xs:inline">Jóváhagyva</span>
+          <span className="xs:hidden">OK</span>
         </span>
       );
     }
     if (appointment.appointmentStatus === 'completed') {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded">
-          <CheckCircle className="w-3 h-3" />
-          Lezárva
+        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-blue-100 text-blue-700 rounded">
+          <CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+          <span className="hidden xs:inline">Lezárva</span>
+          <span className="xs:hidden">Lezárva</span>
         </span>
       );
     }
     if (appointment.appointmentStatus === 'cancelled_by_doctor' || appointment.appointmentStatus === 'cancelled_by_patient') {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded">
-          <XCircle className="w-3 h-3" />
-          Lemondva
+        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-gray-100 text-gray-700 rounded">
+          <XCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+          <span className="hidden xs:inline">Lemondva</span>
+          <span className="xs:hidden">Lemondva</span>
         </span>
       );
     }
-    // If approved and no appointment status, show as active
     if (appointment.approvalStatus === 'approved' && !appointment.appointmentStatus) {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded">
-          <CheckCircle className="w-3 h-3" />
-          Élő
+        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-green-100 text-green-700 rounded">
+          <CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+          <span className="hidden xs:inline">Élő</span>
+          <span className="xs:hidden">Élő</span>
         </span>
       );
     }
     return null;
   };
 
-  // Get upcoming appointments (next 3)
+  // Get next appointment
   const now = new Date();
-  const upcomingAppointments = appointments
+  const nextAppointment = appointments
     .filter((apt) => {
       const startTime = new Date(apt.startTime);
       return startTime >= now && apt.approvalStatus !== 'rejected';
     })
-    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
-    .slice(0, 3);
-
-  // Get recent documents (last 5)
-  const recentDocuments = documents.slice(0, 5);
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())[0];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Welcome */}
       <div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">
           Üdvözöljük, {patient?.nev || 'Páciens'}!
         </h1>
-        <p className="text-gray-600 mt-2">
+        <p className="text-sm sm:text-base text-gray-600 mt-1 sm:mt-2">
           Itt találhatja az időpontjait, dokumentumait és egyéb információit.
         </p>
       </div>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-50 rounded-lg">
-              <Calendar className="w-6 h-6 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Következő időpontok</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {upcomingAppointments.length}
-              </p>
-            </div>
+      {/* Patient Basic Info */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+        <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <User className="w-4 h-4 sm:w-5 sm:h-5 text-medical-primary" />
+          Alapadatok
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div>
+            <p className="text-xs sm:text-sm text-gray-600 mb-1">Név</p>
+            <p className="text-sm sm:text-base font-semibold text-gray-900">{patient?.nev || '-'}</p>
           </div>
-        </div>
-
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-green-50 rounded-lg">
-              <FileText className="w-6 h-6 text-green-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Dokumentumok</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {documents.length}
-              </p>
-            </div>
+          <div>
+            <p className="text-xs sm:text-sm text-gray-600 mb-1 flex items-center gap-1">
+              <Mail className="w-3.5 h-3.5" />
+              Email cím
+            </p>
+            <p className="text-sm sm:text-base font-semibold text-gray-900">{patient?.email || '-'}</p>
           </div>
-        </div>
-
-        <div 
-          className="bg-white rounded-lg border border-gray-200 p-4 cursor-pointer hover:shadow-md transition-shadow"
-          onClick={() => router.push('/patient-portal/messages')}
-        >
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-purple-50 rounded-lg relative">
-              <MessageCircle className="w-6 h-6 text-purple-600" />
-              {unreadMessageCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
-                  {unreadMessageCount > 9 ? '9+' : unreadMessageCount}
-                </span>
-              )}
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Üzenetek</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {unreadMessageCount > 0 ? (
-                  <span className="text-red-600">{unreadMessageCount} olvasatlan</span>
-                ) : (
-                  '0'
-                )}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-purple-50 rounded-lg">
-              <User className="w-6 h-6 text-purple-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">TAJ szám</p>
-              <p className="text-lg font-bold text-gray-900">
-                {patient?.taj || '-'}
-              </p>
-            </div>
+          <div>
+            <p className="text-xs sm:text-sm text-gray-600 mb-1">TAJ szám</p>
+            <p className="text-sm sm:text-base font-semibold text-gray-900">{patient?.taj || '-'}</p>
           </div>
         </div>
       </div>
 
-      {/* Upcoming Appointments */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-medical-primary" />
-            Következő időpontok
-          </h2>
-          <a
-            href="/patient-portal/appointments"
-            className="text-sm text-medical-primary hover:underline"
-          >
-            Összes megtekintése
-          </a>
+      {/* Next Appointment Card */}
+      <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="p-1.5 sm:p-2 bg-blue-50 rounded-lg flex-shrink-0">
+            <Calendar className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-blue-600" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs sm:text-sm text-gray-600 truncate">Következő időpont</p>
+            {nextAppointment ? (
+              <p className="text-sm sm:text-base lg:text-lg font-bold text-gray-900 truncate">
+                {format(new Date(nextAppointment.startTime), 'MMM d.', { locale: hu })}
+              </p>
+            ) : (
+              <p className="text-sm sm:text-base text-gray-500 truncate">Nincs</p>
+            )}
+          </div>
         </div>
+      </div>
 
-        {upcomingAppointments.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <Calendar className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-            <p className="text-sm">Nincsenek közelgő időpontok</p>
+      {/* Next Appointment - Detailed */}
+      {nextAppointment && (
+        <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-medical-primary" />
+              Következő időpont
+            </h2>
             <a
               href="/patient-portal/appointments"
-              className="btn-primary mt-4 inline-flex items-center gap-2"
+              className="text-xs sm:text-sm text-medical-primary hover:underline whitespace-nowrap"
             >
-              <Plus className="w-4 h-4" />
-              Új időpont kérése
+              Összes megtekintése
             </a>
           </div>
-        ) : (
-          <div className="space-y-3">
-            {upcomingAppointments.map((appointment) => {
-              const startTime = new Date(appointment.startTime);
-              const isPending = appointment.approvalStatus === 'pending';
-              const isCancelled = appointment.appointmentStatus === 'cancelled_by_doctor' || appointment.appointmentStatus === 'cancelled_by_patient';
 
-              return (
-                <div
-                  key={appointment.id}
-                  className={`p-4 rounded-lg border ${
-                    isPending
-                      ? 'border-orange-200 bg-orange-50'
-                      : isCancelled
-                      ? 'border-gray-200 bg-gray-50 opacity-75'
-                      : 'border-gray-200 bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <Clock className="w-4 h-4 text-gray-500" />
-                        <span className="font-semibold text-gray-900">
-                          {format(startTime, 'yyyy. MMMM d. HH:mm', { locale: hu })}
-                        </span>
-                        {getStatusBadge(appointment)}
-                      </div>
-                      {appointment.dentistName && (
-                        <p className="text-sm text-gray-600">
-                          Orvos: {appointment.dentistName}
-                        </p>
-                      )}
-                      {(appointment.cim || appointment.teremszam) && (
-                        <p className="text-sm text-gray-600">
-                          {appointment.cim}
-                          {appointment.teremszam && ` • ${appointment.teremszam}. terem`}
-                        </p>
-                      )}
-                    </div>
-                  </div>
+          <div className="p-4 rounded-lg border border-gray-200 bg-gray-50">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 sm:gap-2 mb-2 flex-wrap">
+                  <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500 flex-shrink-0" />
+                  <span className="font-semibold text-base sm:text-lg text-gray-900">
+                    {format(new Date(nextAppointment.startTime), 'yyyy. MMMM d. EEEE, HH:mm', { locale: hu })}
+                  </span>
+                  {getStatusBadge(nextAppointment)}
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Recent Documents */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            <FileText className="w-5 h-5 text-medical-primary" />
-            Legutóbbi dokumentumok
-          </h2>
-          <a
-            href="/patient-portal/documents"
-            className="text-sm text-medical-primary hover:underline"
-          >
-            Összes megtekintése
-          </a>
-        </div>
-
-        {recentDocuments.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <FileText className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-            <p className="text-sm">Nincsenek dokumentumok</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {recentDocuments.map((doc) => (
-              <div
-                key={doc.id}
-                className="p-3 rounded-lg border border-gray-200 hover:bg-gray-50"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900 truncate">
-                      {doc.filename}
-                    </p>
-                    {doc.description && (
-                      <p className="text-sm text-gray-600 truncate">
-                        {doc.description}
-                      </p>
-                    )}
-                    <p className="text-xs text-gray-500 mt-1">
-                      {format(new Date(doc.uploadedAt), 'yyyy. MMMM d.', { locale: hu })}
-                    </p>
+                {nextAppointment.dentistName && (
+                  <p className="text-sm sm:text-base text-gray-700 mb-1">
+                    <span className="font-medium">Orvos:</span> {nextAppointment.dentistName}
+                  </p>
+                )}
+                {(nextAppointment.cim || nextAppointment.teremszam) && (
+                  <div className="flex items-center gap-1 text-sm sm:text-base text-gray-600">
+                    <MapPin className="w-4 h-4 flex-shrink-0" />
+                    <span>
+                      {nextAppointment.cim}
+                      {nextAppointment.teremszam && ` • ${nextAppointment.teremszam}. terem`}
+                    </span>
                   </div>
-                </div>
+                )}
               </div>
-            ))}
+            </div>
           </div>
-        )}
+        </div>
+      )}
+
+      {/* Document Upload Button */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+              <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-medical-primary" />
+              Dokumentumok
+            </h2>
+            <p className="text-sm sm:text-base text-gray-600">
+              Töltse fel a szükséges dokumentumokat (OP, önarckép, zárójelentés, ambuláns lap)
+            </p>
+          </div>
+          <button
+            onClick={() => router.push('/patient-portal/documents')}
+            className="btn-primary flex items-center gap-2 text-sm sm:text-base px-4 sm:px-6 py-2 sm:py-2.5 w-full sm:w-auto justify-center"
+          >
+            <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
+            Dokumentumok feltöltése
+          </button>
+        </div>
       </div>
     </div>
   );
 }
-
-
-
-
-
-
-
-

@@ -245,21 +245,21 @@ export function PatientMessages() {
   }
 
   return (
-    <div className="card flex flex-col h-[calc(100vh-200px)] min-h-[600px]">
+    <div className="card flex flex-col h-[calc(100vh-180px)] sm:h-[calc(100vh-200px)] min-h-[500px] sm:min-h-[600px]">
       {/* Header */}
-      <div className="flex items-center justify-between pb-4 border-b">
-        <div className="flex items-center gap-2">
-          <MessageCircle className="w-5 h-5 text-blue-600" />
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900">Üzenetek</h2>
+      <div className="flex items-center justify-between pb-3 sm:pb-4 border-b px-3 sm:px-6 pt-3 sm:pt-6">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0" />
+          <div className="min-w-0 flex-1">
+            <h2 className="text-base sm:text-xl font-semibold text-gray-900 truncate">Üzenetek</h2>
             {doctorName && (
-              <p className="text-sm text-gray-600 mt-0.5">
+              <p className="text-xs sm:text-sm text-gray-600 mt-0.5 truncate">
                 Üzenet küldése: <span className="font-medium text-gray-900">{doctorName}</span>
               </p>
             )}
           </div>
           {unreadCount > 0 && (
-            <span className="px-2 py-1 text-xs font-semibold text-white bg-red-500 rounded-full">
+            <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold text-white bg-red-500 rounded-full flex-shrink-0">
               {unreadCount} olvasatlan
             </span>
           )}
@@ -267,12 +267,12 @@ export function PatientMessages() {
       </div>
 
       {/* Chat Messages */}
-      <div className="flex-1 overflow-y-auto p-4 bg-gray-50 space-y-3">
+      <div className="flex-1 overflow-y-auto p-2 sm:p-4 bg-gray-50 space-y-2 sm:space-y-3">
         {messages.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <MessageCircle className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-            <p>Még nincsenek üzenetek</p>
-            <p className="text-sm mt-2">Küldjön üzenetet az orvosának!</p>
+          <div className="text-center py-6 sm:py-8 text-gray-500">
+            <MessageCircle className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-2 text-gray-300" />
+            <p className="text-sm sm:text-base">Még nincsenek üzenetek</p>
+            <p className="text-xs sm:text-sm mt-2">Küldjön üzenetet az orvosának!</p>
           </div>
         ) : (
           messages.map((message) => {
@@ -305,18 +305,18 @@ export function PatientMessages() {
                 }}
               >
                 {/* Sender name and monogram */}
-                <div className={`flex items-center gap-1.5 mb-1 px-1 ${isFromPatient ? 'flex-row-reverse' : ''}`}>
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold ${
+                <div className={`flex items-center gap-1 sm:gap-1.5 mb-0.5 sm:mb-1 px-1 ${isFromPatient ? 'flex-row-reverse' : ''}`}>
+                  <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-[10px] sm:text-xs font-semibold flex-shrink-0 ${
                     isFromPatient 
                       ? 'bg-green-100 text-green-700' 
                       : 'bg-blue-100 text-blue-700'
                   }`}>
                     {monogram}
                   </div>
-                  <span className="text-xs font-medium text-gray-700">{lastName}</span>
+                  <span className="text-[10px] sm:text-xs font-medium text-gray-700 truncate">{lastName}</span>
                 </div>
                 <div
-                  className={`max-w-[75%] rounded-lg px-4 py-2 ${
+                  className={`max-w-[85%] sm:max-w-[75%] rounded-lg px-3 sm:px-4 py-1.5 sm:py-2 ${
                     isFromPatient
                       ? 'bg-green-600 text-white'
                       : isUnread
@@ -324,27 +324,27 @@ export function PatientMessages() {
                       : 'bg-white text-gray-900 border border-gray-200'
                   }`}
                 >
-                  <div className="text-sm whitespace-pre-wrap break-words">
+                  <div className="text-xs sm:text-sm whitespace-pre-wrap break-words">
                     {message.message}
                   </div>
-                  <div className={`text-xs mt-1 flex items-center gap-1.5 ${
+                  <div className={`text-[10px] sm:text-xs mt-1 flex items-center gap-1 sm:gap-1.5 flex-wrap ${
                     isFromPatient ? 'text-green-100' : 'text-gray-500'
                   }`}>
-                    <Clock className="w-3 h-3" />
+                    <Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                     <span>{format(new Date(message.createdAt), 'HH:mm', { locale: hu })}</span>
                     {showStatus && (
-                      <span className="ml-1">
+                      <span className="ml-0.5 sm:ml-1">
                         {isPending ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <Loader2 className="w-2.5 h-2.5 sm:w-3 sm:h-3 animate-spin" />
                         ) : isRead ? (
-                          <CheckCheck className="w-3 h-3" />
+                          <CheckCheck className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                         ) : (
-                          <Check className="w-3 h-3 opacity-70" />
+                          <Check className="w-2.5 h-2.5 sm:w-3 sm:h-3 opacity-70" />
                         )}
                       </span>
                     )}
                     {isUnread && (
-                      <span className="ml-2 px-1.5 py-0.5 text-xs font-semibold text-white bg-red-500 rounded">
+                      <span className="ml-1 sm:ml-2 px-1 sm:px-1.5 py-0.5 text-[10px] sm:text-xs font-semibold text-white bg-red-500 rounded">
                         Olvasatlan
                       </span>
                     )}
@@ -358,12 +358,12 @@ export function PatientMessages() {
       </div>
 
       {/* Message Input */}
-      <div className="border-t bg-white p-4">
-        <div className="flex gap-2">
+      <div className="border-t bg-white p-2 sm:p-4">
+        <div className="flex gap-1.5 sm:gap-2">
           <textarea
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
-            className="form-input flex-1 resize-none"
+            className="form-input flex-1 resize-none text-sm sm:text-base"
             rows={2}
             placeholder="Írja be üzenetét az orvosnak..."
             disabled={sending}
@@ -379,10 +379,11 @@ export function PatientMessages() {
           <button
             onClick={handleSendMessage}
             disabled={sending || !newMessage.trim()}
-            className="btn-primary flex items-center gap-2 px-4 self-end"
+            className="btn-primary flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 self-end text-xs sm:text-sm"
           >
-            <Send className="w-4 h-4" />
-            {sending ? '...' : 'Küldés'}
+            <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span className="hidden xs:inline">{sending ? '...' : 'Küldés'}</span>
+            <span className="xs:hidden">{sending ? '...' : 'Küld'}</span>
           </button>
         </div>
       </div>

@@ -148,30 +148,30 @@ export function PatientProfileView() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2">
-            <User className="w-6 h-6 sm:w-8 sm:h-8 text-medical-primary" />
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 flex items-center gap-2">
+            <User className="w-5 h-5 sm:w-6 sm:h-6 lg:w-8 lg:h-8 text-medical-primary flex-shrink-0" />
             Adataim
           </h1>
-          <p className="text-gray-600 mt-2">
+          <p className="text-sm sm:text-base text-gray-600 mt-1 sm:mt-2">
             {editing ? 'Módosítsa személyes adatait' : 'Itt találhatja személyes adatait.'}
           </p>
         </div>
         {!editing && (
           <button
             onClick={handleEdit}
-            className="btn-primary flex items-center gap-2"
+            className="btn-primary flex items-center gap-2 text-sm sm:text-base px-3 sm:px-4 py-1.5 sm:py-2 w-full sm:w-auto justify-center"
           >
-            <Edit2 className="w-4 h-4" />
+            <Edit2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             Szerkesztés
           </button>
         )}
       </div>
 
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
           {/* Name */}
           <div>
             <label className="form-label flex items-center gap-2">
@@ -354,9 +354,9 @@ export function PatientProfileView() {
         </div>
 
         {/* Referral Section */}
-        <div className="mt-6 pt-6 border-t">
-          <h3 className="text-sm font-semibold text-gray-700 mb-4">Beutaló adatok</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t">
+          <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-3 sm:mb-4">Beutaló adatok</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
             {/* Referring Doctor */}
             <div>
               <label className="form-label flex items-center gap-2">
@@ -402,28 +402,28 @@ export function PatientProfileView() {
         </div>
 
         {editing && (
-          <div className="mt-6 pt-6 border-t flex gap-3">
+          <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t flex flex-col sm:flex-row gap-2 sm:gap-3">
             <button
               onClick={handleCancel}
-              className="btn-secondary flex items-center gap-2 flex-1"
+              className="btn-secondary flex items-center justify-center gap-2 flex-1 text-sm sm:text-base py-2 sm:py-2.5"
               disabled={saving}
             >
-              <X className="w-4 h-4" />
+              <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               Mégse
             </button>
             <button
               onClick={handleSave}
-              className="btn-primary flex items-center gap-2 flex-1"
+              className="btn-primary flex items-center justify-center gap-2 flex-1 text-sm sm:text-base py-2 sm:py-2.5"
               disabled={saving}
             >
               {saving ? (
                 <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <div className="animate-spin rounded-full h-3.5 w-3.5 sm:h-4 sm:w-4 border-b-2 border-white"></div>
                   Mentés...
                 </>
               ) : (
                 <>
-                  <Save className="w-4 h-4" />
+                  <Save className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   Mentés
                 </>
               )}

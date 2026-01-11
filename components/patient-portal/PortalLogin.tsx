@@ -164,20 +164,20 @@ export function PortalLogin() {
 
   if (step === 'register') {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">
+      <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 sm:p-6">
+        <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-3 sm:mb-4">
           Regisztráció
         </h2>
-        <p className="text-sm text-gray-600 mb-6">
+        <p className="text-xs sm:text-sm text-gray-600 mb-4 sm:mb-6">
           Kérjük, töltse ki az alábbi adatokat az időpontfoglaláshoz.
         </p>
 
-        <form onSubmit={handleRegister} className="space-y-4">
+        <form onSubmit={handleRegister} className="space-y-3 sm:space-y-4">
           {/* Basic Info Section */}
-          <div className="border-b border-gray-200 pb-4">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">Alapadatok</h3>
+          <div className="border-b border-gray-200 pb-3 sm:pb-4">
+            <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3">Alapadatok</h3>
             
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               <div>
                 <label htmlFor="email" className="form-label flex items-center gap-2">
                   <Mail className="w-4 h-4" />
@@ -233,10 +233,10 @@ export function PortalLogin() {
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <label htmlFor="szuletesiDatum" className="form-label flex items-center gap-2">
-                    <Calendar className="w-4 h-4" />
+                    <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     Születési dátum <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -244,7 +244,7 @@ export function PortalLogin() {
                     type="date"
                     value={szuletesiDatum}
                     onChange={(e) => setSzuletesiDatum(e.target.value)}
-                    className="form-input"
+                    className="form-input text-sm sm:text-base"
                     required
                     disabled={loading}
                     max={new Date().toISOString().split('T')[0]}
@@ -259,7 +259,7 @@ export function PortalLogin() {
                     id="nem"
                     value={nem}
                     onChange={(e) => setNem(e.target.value as 'ferfi' | 'no' | 'nem_ismert' | '')}
-                    className="form-input"
+                    className="form-input text-sm sm:text-base"
                     required
                     disabled={loading}
                   >
@@ -290,13 +290,13 @@ export function PortalLogin() {
           </div>
 
           {/* Address Section */}
-          <div className="border-b border-gray-200 pb-4">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">Lakcím</h3>
+          <div className="border-b border-gray-200 pb-3 sm:pb-4">
+            <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3">Lakcím</h3>
             
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               <div>
                 <label htmlFor="cim" className="form-label flex items-center gap-2">
-                  <MapPin className="w-4 h-4" />
+                  <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   Cím
                 </label>
                 <input
@@ -304,13 +304,13 @@ export function PortalLogin() {
                   type="text"
                   value={cim}
                   onChange={(e) => setCim(e.target.value)}
-                  className="form-input"
+                  className="form-input text-sm sm:text-base"
                   placeholder="Utca, házszám"
                   disabled={loading}
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <label htmlFor="varos" className="form-label">
                     Város
@@ -347,9 +347,9 @@ export function PortalLogin() {
 
           {/* Referral Section */}
           <div>
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">Beutaló adatok</h3>
+            <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3">Beutaló adatok</h3>
             
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               <div>
                 <label htmlFor="beutaloOrvos" className="form-label flex items-center gap-2">
                   <Building className="w-4 h-4" />
@@ -384,11 +384,11 @@ export function PortalLogin() {
             </div>
           </div>
 
-          <div className="flex gap-3 pt-4">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 pt-3 sm:pt-4">
             <button
               type="button"
               onClick={() => setStep('check')}
-              className="btn-secondary flex-1"
+              className="btn-secondary flex-1 text-sm sm:text-base py-2 sm:py-2.5"
               disabled={loading}
             >
               Vissza
@@ -396,17 +396,18 @@ export function PortalLogin() {
             <button
               type="submit"
               disabled={loading}
-              className="btn-primary flex-1 flex items-center justify-center gap-2 py-2.5"
+              className="btn-primary flex-1 flex items-center justify-center gap-2 py-2 sm:py-2.5 text-sm sm:text-base"
             >
               {loading ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
                   Küldés...
                 </>
               ) : (
                 <>
-                  <Mail className="w-4 h-4" />
-                  Regisztráció és link küldése
+                  <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <span className="hidden xs:inline">Regisztráció és link küldése</span>
+                  <span className="xs:hidden">Regisztráció</span>
                 </>
               )}
             </button>
@@ -417,15 +418,15 @@ export function PortalLogin() {
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-      <h2 className="text-xl font-semibold text-gray-900 mb-4">
+    <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 sm:p-6">
+      <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-3 sm:mb-4">
         Bejelentkezés
       </h2>
-      <p className="text-sm text-gray-600 mb-6">
+      <p className="text-xs sm:text-sm text-gray-600 mb-4 sm:mb-6">
         Adja meg email címét és TAJ számát. Bejelentkezési linket küldünk emailben. Ha még nem regisztrált, automatikusan létrehozzuk a fiókját.
       </p>
 
-      <form onSubmit={handleCheckPatient} className="space-y-4">
+      <form onSubmit={handleCheckPatient} className="space-y-3 sm:space-y-4">
         <div>
           <label htmlFor="email-check" className="form-label flex items-center gap-2">
             <Mail className="w-4 h-4" />
@@ -467,17 +468,18 @@ export function PortalLogin() {
         <button
           type="submit"
           disabled={checking || loading}
-          className="btn-primary w-full flex items-center justify-center gap-2 py-2.5"
+          className="btn-primary w-full flex items-center justify-center gap-2 py-2 sm:py-2.5 text-sm sm:text-base"
         >
           {checking ? (
             <>
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
               Ellenőrzés...
             </>
           ) : (
             <>
-              <Mail className="w-4 h-4" />
-              Bejelentkezési link küldése
+              <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="hidden xs:inline">Bejelentkezési link küldése</span>
+              <span className="xs:hidden">Link küldése</span>
             </>
           )}
         </button>

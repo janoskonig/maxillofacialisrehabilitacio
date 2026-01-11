@@ -61,13 +61,14 @@ export function getDbPool(): Pool {
     });
 
     // Log pool stats periodically in development
-    if (process.env.NODE_ENV === 'development' && pool) {
-      setInterval(() => {
-        if (pool) {
-          console.log(`DB Pool stats: total=${pool.totalCount}, idle=${pool.idleCount}, waiting=${pool.waitingCount}`);
-        }
-      }, 30000); // Every 30 seconds
-    }
+    // Disabled - uncomment to enable pool stats logging
+    // if (process.env.NODE_ENV === 'development' && pool) {
+    //   setInterval(() => {
+    //     if (pool) {
+    //       console.log(`DB Pool stats: total=${pool.totalCount}, idle=${pool.idleCount}, waiting=${pool.waitingCount}`);
+    //     }
+    //   }, 30000); // Every 30 seconds
+    // }
   }
 
   return pool;

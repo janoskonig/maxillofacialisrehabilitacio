@@ -180,41 +180,46 @@ export function PatientAppointmentsList() {
   const getStatusBadge = (appointment: Appointment) => {
     if (appointment.approvalStatus === 'pending') {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-orange-100 text-orange-700 rounded">
-          <AlertCircle className="w-3 h-3" />
-          Jóváhagyásra vár
+        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-orange-100 text-orange-700 rounded">
+          <AlertCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+          <span className="hidden xs:inline">Jóváhagyásra vár</span>
+          <span className="xs:hidden">Vár</span>
         </span>
       );
     }
     if (appointment.approvalStatus === 'rejected') {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-red-100 text-red-700 rounded">
-          <XCircle className="w-3 h-3" />
-          Elutasítva
+        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-red-100 text-red-700 rounded">
+          <XCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+          <span className="hidden xs:inline">Elutasítva</span>
+          <span className="xs:hidden">Elutas.</span>
         </span>
       );
     }
     if (appointment.approvalStatus === 'approved') {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded">
-          <CheckCircle className="w-3 h-3" />
-          Jóváhagyva
+        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-green-100 text-green-700 rounded">
+          <CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+          <span className="hidden xs:inline">Jóváhagyva</span>
+          <span className="xs:hidden">OK</span>
         </span>
       );
     }
     if (appointment.appointmentStatus === 'completed') {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded">
-          <CheckCircle className="w-3 h-3" />
-          Lezárva
+        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-blue-100 text-blue-700 rounded">
+          <CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+          <span className="hidden xs:inline">Lezárva</span>
+          <span className="xs:hidden">Lezárva</span>
         </span>
       );
     }
     if (appointment.appointmentStatus === 'cancelled_by_doctor' || appointment.appointmentStatus === 'cancelled_by_patient') {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded">
-          <XCircle className="w-3 h-3" />
-          Törölve
+        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-gray-100 text-gray-700 rounded">
+          <XCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+          <span className="hidden xs:inline">Törölve</span>
+          <span className="xs:hidden">Törölve</span>
         </span>
       );
     }
@@ -262,22 +267,22 @@ export function PatientAppointmentsList() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2">
-            <Calendar className="w-6 h-6 sm:w-8 sm:h-8 text-medical-primary" />
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 flex items-center gap-2">
+            <Calendar className="w-5 h-5 sm:w-6 sm:h-6 lg:w-8 lg:h-8 text-medical-primary flex-shrink-0" />
             Időpontok
           </h1>
-          <p className="text-gray-600 mt-2">
+          <p className="text-sm sm:text-base text-gray-600 mt-1 sm:mt-2">
             Itt találhatja az összes időpontját és foglalhat új időpontot.
           </p>
         </div>
         <button
           onClick={() => setShowRequestForm(!showRequestForm)}
-          className="btn-primary flex items-center gap-2"
+          className="btn-primary flex items-center gap-2 text-sm sm:text-base px-3 sm:px-4 py-1.5 sm:py-2 w-full sm:w-auto justify-center"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           <span className="hidden sm:inline">Új időpont kérése</span>
           <span className="sm:hidden">Új</span>
         </button>
@@ -285,11 +290,11 @@ export function PatientAppointmentsList() {
 
       {/* Request Appointment Form */}
       {showRequestForm && (
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+        <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">
             Új időpont kérése
           </h2>
-          <p className="text-sm text-gray-600 mb-4">
+          <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">
             Kérjen időpontot. Az adminisztráció felveszi Önnel a kapcsolatot az időpont egyeztetéséhez.
           </p>
           <RequestAppointmentForm
@@ -304,36 +309,36 @@ export function PatientAppointmentsList() {
 
       {/* Upcoming Appointments */}
       {upcomingAppointments.length > 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+        <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">
             Következő időpontok
           </h2>
-          <div className="space-y-3">
+          <div className="space-y-2 sm:space-y-3">
             {upcomingAppointments.map((appointment) => {
               const startTime = new Date(appointment.startTime);
               return (
                 <div
                   key={appointment.id}
-                  className="p-4 rounded-lg border border-gray-200 hover:bg-gray-50"
+                  className="p-3 sm:p-4 rounded-lg border border-gray-200 hover:bg-gray-50"
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Clock className="w-4 h-4 text-gray-500" />
-                        <span className="font-semibold text-gray-900">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2 flex-wrap">
+                        <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
+                        <span className="font-semibold text-sm sm:text-base text-gray-900">
                           {format(startTime, 'yyyy. MMMM d. EEEE, HH:mm', { locale: hu })}
                         </span>
                         {getStatusBadge(appointment)}
                       </div>
                       {appointment.dentistName && (
-                        <p className="text-sm text-gray-600 mb-1">
+                        <p className="text-xs sm:text-sm text-gray-600 mb-1 truncate">
                           Orvos: {appointment.dentistName}
                         </p>
                       )}
                       {(appointment.cim || appointment.teremszam) && (
-                        <div className="flex items-center gap-1 text-sm text-gray-600">
-                          <MapPin className="w-3 h-3" />
-                          <span>
+                        <div className="flex items-center gap-1 text-xs sm:text-sm text-gray-600">
+                          <MapPin className="w-3 h-3 flex-shrink-0" />
+                          <span className="truncate">
                             {appointment.cim}
                             {appointment.teremszam && ` • ${appointment.teremszam}. terem`}
                           </span>
@@ -343,9 +348,9 @@ export function PatientAppointmentsList() {
                     {canCancelAppointment(appointment) && (
                       <button
                         onClick={() => handleCancelAppointment(appointment)}
-                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 flex-shrink-0"
+                        className="bg-red-600 hover:bg-red-700 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-colors flex items-center gap-1.5 sm:gap-2 flex-shrink-0 w-full sm:w-auto justify-center"
                       >
-                        <X className="w-4 h-4" />
+                        <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                         <span className="hidden sm:inline">Lemondás</span>
                         <span className="sm:hidden">Lemond</span>
                       </button>
@@ -360,36 +365,36 @@ export function PatientAppointmentsList() {
 
       {/* Past Appointments */}
       {pastAppointments.length > 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+        <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">
             Korábbi időpontok ({pastAppointments.length})
           </h2>
-          <div className="space-y-3">
+          <div className="space-y-2 sm:space-y-3">
             {paginatedPastAppointments.map((appointment) => {
               const startTime = new Date(appointment.startTime);
               return (
                 <div
                   key={appointment.id}
-                  className="p-4 rounded-lg border border-gray-200 bg-gray-50"
+                  className="p-3 sm:p-4 rounded-lg border border-gray-200 bg-gray-50"
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Clock className="w-4 h-4 text-gray-400" />
-                        <span className="font-semibold text-gray-700">
+                  <div className="flex items-start justify-between gap-2 sm:gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2 flex-wrap">
+                        <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" />
+                        <span className="font-semibold text-sm sm:text-base text-gray-700">
                           {format(startTime, 'yyyy. MMMM d. EEEE, HH:mm', { locale: hu })}
                         </span>
                         {getStatusBadge(appointment)}
                       </div>
                       {appointment.dentistName && (
-                        <p className="text-sm text-gray-600 mb-1">
+                        <p className="text-xs sm:text-sm text-gray-600 mb-1 truncate">
                           Orvos: {appointment.dentistName}
                         </p>
                       )}
                       {(appointment.cim || appointment.teremszam) && (
-                        <div className="flex items-center gap-1 text-sm text-gray-600">
-                          <MapPin className="w-3 h-3" />
-                          <span>
+                        <div className="flex items-center gap-1 text-xs sm:text-sm text-gray-600">
+                          <MapPin className="w-3 h-3 flex-shrink-0" />
+                          <span className="truncate">
                             {appointment.cim}
                             {appointment.teremszam && ` • ${appointment.teremszam}. terem`}
                           </span>
@@ -404,25 +409,25 @@ export function PatientAppointmentsList() {
           
           {/* Pagination */}
           {totalPastPages > 1 && (
-            <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
-              <div className="text-sm text-gray-600">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 sm:mt-6 pt-3 sm:pt-4 border-t border-gray-200">
+              <div className="text-xs sm:text-sm text-gray-600">
                 {startIndex + 1}-{Math.min(endIndex, pastAppointments.length)} / {pastAppointments.length} időpont
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2">
                 <button
                   onClick={() => setPastAppointmentsPage(prev => Math.max(1, prev - 1))}
                   disabled={pastAppointmentsPage === 1}
-                  className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                  className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                 >
-                  <ChevronLeft className="w-4 h-4" />
-                  Előző
+                  <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <span className="hidden xs:inline">Előző</span>
                 </button>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-0.5 sm:gap-1">
                   {Array.from({ length: totalPastPages }, (_, i) => i + 1).map((page) => (
                     <button
                       key={page}
                       onClick={() => setPastAppointmentsPage(page)}
-                      className={`px-3 py-1.5 text-sm font-medium rounded-md ${
+                      className={`px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium rounded-md ${
                         page === pastAppointmentsPage
                           ? 'bg-medical-primary text-white'
                           : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
@@ -435,10 +440,10 @@ export function PatientAppointmentsList() {
                 <button
                   onClick={() => setPastAppointmentsPage(prev => Math.min(totalPastPages, prev + 1))}
                   disabled={pastAppointmentsPage === totalPastPages}
-                  className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                  className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                 >
-                  Következő
-                  <ChevronRight className="w-4 h-4" />
+                  <span className="hidden xs:inline">Következő</span>
+                  <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </button>
               </div>
             </div>
@@ -448,27 +453,27 @@ export function PatientAppointmentsList() {
 
       {/* Empty State */}
       {appointments.length === 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-          <Calendar className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+        <div className="bg-white rounded-lg border border-gray-200 p-8 sm:p-12 text-center">
+          <Calendar className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 text-gray-300" />
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">
             Nincsenek időpontok
           </h3>
-          <p className="text-gray-600 mb-6">
+          <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">
             Még nincs rögzített időpontja. Kérjen új időpontot az "Új időpont kérése" gombbal.
           </p>
           <button
             onClick={() => setShowRequestForm(true)}
-            className="btn-primary inline-flex items-center gap-2"
+            className="btn-primary inline-flex items-center gap-2 text-sm sm:text-base px-3 sm:px-4 py-1.5 sm:py-2"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             Új időpont kérése
           </button>
         </div>
       )}
 
       {/* Available Time Slots Section - Last Section */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">
+      <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+        <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">
           Szabad időpontok
         </h2>
         {loadingSlots ? (
@@ -477,7 +482,7 @@ export function PatientAppointmentsList() {
             <span className="ml-3 text-gray-600">Betöltés...</span>
           </div>
         ) : availableSlots.length > 0 ? (
-          <div className="space-y-3">
+          <div className="space-y-2 sm:space-y-3">
             {availableSlots.map((slot) => {
               const startTime = new Date(slot.startTime);
               const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
@@ -485,24 +490,24 @@ export function PatientAppointmentsList() {
               return (
                 <div
                   key={slot.id}
-                  className="p-4 rounded-lg border-l-4 border-green-500 bg-white hover:bg-green-50 transition-colors"
+                  className="p-3 sm:p-4 rounded-lg border-l-4 border-green-500 bg-white hover:bg-green-50 transition-colors"
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Clock className="w-4 h-4 text-green-600" />
-                        <span className="font-semibold text-gray-900">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2 flex-wrap">
+                        <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-600 flex-shrink-0" />
+                        <span className="font-semibold text-sm sm:text-base text-gray-900">
                           {format(startTime, 'yyyy. MMMM d. EEEE, HH:mm', { locale: hu })}
                         </span>
                       </div>
                       {slot.dentistName && (
-                        <p className="text-sm text-gray-600 mb-1">
+                        <p className="text-xs sm:text-sm text-gray-600 mb-1 truncate">
                           Orvos: {slot.dentistName}
                         </p>
                       )}
-                      <div className="flex items-center gap-1 text-sm text-gray-600">
-                        <MapPin className="w-3 h-3" />
-                        <span>
+                      <div className="flex items-center gap-1 text-xs sm:text-sm text-gray-600">
+                        <MapPin className="w-3 h-3 flex-shrink-0" />
+                        <span className="truncate">
                           {displayCim}
                           {slot.teremszam && ` • ${slot.teremszam}. terem`}
                         </span>
@@ -510,7 +515,7 @@ export function PatientAppointmentsList() {
                     </div>
                     <button
                       onClick={() => handleBookSlot(slot)}
-                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex-shrink-0"
+                      className="bg-green-600 hover:bg-green-700 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-colors flex-shrink-0 w-full sm:w-auto justify-center"
                     >
                       Foglalás
                     </button>
@@ -520,9 +525,9 @@ export function PatientAppointmentsList() {
             })}
           </div>
         ) : (
-          <div className="text-center py-8">
-            <Calendar className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-            <p className="text-gray-600">
+          <div className="text-center py-6 sm:py-8">
+            <Calendar className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-2 sm:mb-3 text-gray-300" />
+            <p className="text-sm sm:text-base text-gray-600">
               Jelenleg nincs elérhető szabad időpont.
             </p>
           </div>

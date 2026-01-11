@@ -23,15 +23,18 @@ interface PatientMessage {
 interface DoctorMessage {
   id: string;
   senderId: string;
-  recipientId: string;
+  recipientId: string | null;
+  groupId?: string | null;
   senderEmail: string;
   senderName: string | null;
   subject: string | null;
   message: string;
   readAt: Date | null;
   createdAt: Date;
-  otherDoctorId: string;
+  otherDoctorId: string | null;
   otherDoctorName: string;
+  groupName?: string | null;
+  groupParticipantCount?: number | null;
 }
 
 export function SendMessageWidget() {
@@ -61,7 +64,8 @@ export function SendMessageWidget() {
         const patientData = await patientResponse.json();
         const messages = patientData.messages || [];
         setRecentPatientMessages(messages);
-        const unread = messages.filter((m: PatientMessage) => !m.readAt).length;
+        // Csak azokat számoljuk, amiket az orvos még nem olvasott (betegtől érkező üzenetek)
+        const unread = messages.filter((m: PatientMessage) => m.senderType === 'patient' && !m.readAt).length;
         setPatientUnreadCount(unread);
       }
 
@@ -93,25 +97,36 @@ export function SendMessageWidget() {
     setIsModalOpen(false);
   };
 
+  // Üzenet preview készítése (fix karakterig utána '...')
+  const getMessagePreview = (message: string, maxLength: number = 50): string => {
+    if (!message) return '';
+    if (message.length <= maxLength) return message;
+    return message.substring(0, maxLength) + '...';
+  };
+
   // Összevont lista létrehozása és csoportosítás küldő szerint
   const getTop3UniqueMessages = () => {
     // 1. Összevont lista létrehozása
     const allMessages: Array<{
       id: string;
       type: 'doctor' | 'patient';
-      senderId: string;
+      senderId: string | null;
       senderName: string | null;
       readAt: Date | null;
       createdAt: Date;
+      message: string;
+      isGroup: boolean;
       originalMessage: PatientMessage | DoctorMessage;
     }> = [
       ...recentDoctorMessages.map(m => ({
         id: m.id,
         type: 'doctor' as const,
-        senderId: m.otherDoctorId,
-        senderName: m.otherDoctorName,
+        senderId: m.groupId || m.otherDoctorId,
+        senderName: m.groupId ? (m.groupName || `Csoportos beszélgetés`) : m.otherDoctorName,
         readAt: m.readAt,
         createdAt: m.createdAt,
+        message: m.message,
+        isGroup: !!m.groupId,
         originalMessage: m,
       })),
       ...recentPatientMessages.map(m => ({
@@ -121,6 +136,8 @@ export function SendMessageWidget() {
         senderName: m.patientName,
         readAt: m.readAt,
         createdAt: m.createdAt,
+        message: m.message,
+        isGroup: false,
         originalMessage: m,
       })),
     ];
@@ -129,9 +146,10 @@ export function SendMessageWidget() {
     allMessages.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     // 3. Csoportosítás küldő szerint (csak a legfrissebb üzenet)
+    // Group chat-eknél a groupId-t használjuk, egyéni beszélgetéseknél a senderId-t
     const uniqueSenders = new Map<string, typeof allMessages[0]>();
     allMessages.forEach(msg => {
-      const key = msg.senderId;
+      const key = msg.senderId || `group-${msg.id}`;
       if (!uniqueSenders.has(key) || new Date(msg.createdAt) > new Date(uniqueSenders.get(key)!.createdAt)) {
         uniqueSenders.set(key, msg);
       }
@@ -167,37 +185,51 @@ export function SendMessageWidget() {
                 const top3Messages = getTop3UniqueMessages();
                 return top3Messages.length > 0 ? (
                   <div className="space-y-1.5">
-                    {top3Messages.map((message) => (
-                      <button
-                        key={message.id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleMessageClick(message);
-                        }}
-                        className={`w-full text-left p-2 rounded border text-xs transition-colors ${
-                          !message.readAt
-                            ? 'bg-blue-50 border-blue-200 hover:bg-blue-100'
-                            : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
-                            {!message.readAt && (
-                              <span className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0"></span>
-                            )}
-                            <span className="font-medium text-gray-900 truncate">
-                              {message.senderName || (message.type === 'patient' ? 'Név nélküli beteg' : 'Ismeretlen')}
-                            </span>
+                    {top3Messages.map((message) => {
+                      // Olvasatlan üzenet: csak akkor, ha az orvos még nem olvasta
+                      // Beteg üzeneteknél: csak akkor olvasatlan, ha az orvos még nem olvasta
+                      // Orvos üzeneteknél: csak akkor olvasatlan, ha a címzett vagyunk és még nem olvastuk
+                      const isUnread = !message.readAt && (
+                        message.type === 'patient' || 
+                        (message.type === 'doctor' && (message.originalMessage as DoctorMessage).recipientId !== null)
+                      );
+                      
+                      return (
+                        <button
+                          key={message.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMessageClick(message);
+                          }}
+                          className={`w-full text-left p-2 rounded border text-xs transition-colors ${
+                            isUnread
+                              ? 'bg-blue-50 border-blue-200 hover:bg-blue-100'
+                              : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              {isUnread && (
+                                <span className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0"></span>
+                              )}
+                              <span className="font-medium text-gray-900 truncate">
+                                {message.senderName || (message.type === 'patient' ? 'Név nélküli beteg' : (message.isGroup ? 'Csoportos beszélgetés' : 'Ismeretlen orvos'))}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1 text-gray-400 flex-shrink-0">
+                              <Clock className="w-3 h-3" />
+                              <span className="text-xs">
+                                {format(new Date(message.createdAt), 'MM.dd', { locale: hu })}
+                              </span>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1 text-gray-400 flex-shrink-0">
-                            <Clock className="w-3 h-3" />
-                            <span className="text-xs">
-                              {format(new Date(message.createdAt), 'MM.dd', { locale: hu })}
-                            </span>
+                          {/* Üzenet preview */}
+                          <div className="text-xs text-gray-600 truncate">
+                            {getMessagePreview(message.message, 50)}
                           </div>
-                        </div>
-                      </button>
-                    ))}
+                        </button>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="text-center py-1 text-gray-400 text-xs">Nincsenek üzenetek</div>
