@@ -76,9 +76,9 @@ export async function POST(request: NextRequest) {
 
     const pool = getDbPool();
 
-    // Verify patient exists
+    // Verify patient exists and get email
     const patientCheck = await pool.query(
-      'SELECT id, nev FROM patients WHERE id = $1',
+      'SELECT id, nev, email FROM patients WHERE id = $1',
       [patientId]
     );
 
@@ -88,6 +88,8 @@ export async function POST(request: NextRequest) {
         { status: 404 }
       );
     }
+
+    const patientEmail = patientCheck.rows[0].email;
 
     // Parse form data
     const formData = await request.formData();
@@ -169,7 +171,7 @@ export async function POST(request: NextRequest) {
         file.type || null,
         description || null,
         tagsJsonb,
-        patientId, // Use patient ID as uploaded_by for portal uploads
+        patientEmail, // Use patient email as uploaded_by for portal uploads
       ]
     );
 

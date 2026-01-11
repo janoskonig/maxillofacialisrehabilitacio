@@ -15,6 +15,7 @@ interface Document {
   description: string | null;
   tags: string[];
   uploadedAt: string;
+  uploadedBy?: string;
 }
 
 interface DocumentUploadCardProps {
@@ -278,6 +279,7 @@ export function PatientDocumentsList() {
   const [loading, setLoading] = useState(true);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [patientId, setPatientId] = useState<string | null>(null);
+  const [patientEmail, setPatientEmail] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPatientInfo();
@@ -298,6 +300,7 @@ export function PatientDocumentsList() {
       const data = await response.json();
       if (data.patient) {
         setPatientId(data.patient.id);
+        setPatientEmail(data.patient.email || null);
       }
     } catch (error) {
       console.error('Error fetching patient info:', error);
@@ -549,6 +552,14 @@ export function PatientDocumentsList() {
                       <span>{formatFileSize(doc.fileSize)}</span>
                       <span>•</span>
                       <span>{format(new Date(doc.uploadedAt), 'yyyy. MMMM d.', { locale: hu })}</span>
+                      {doc.uploadedBy && (
+                        <>
+                          <span>•</span>
+                          <span>
+                            Feltöltötte: {doc.uploadedBy === patientEmail ? 'Ön' : doc.uploadedBy}
+                          </span>
+                        </>
+                      )}
                     </div>
                     
                     {doc.tags && doc.tags.length > 0 && (
