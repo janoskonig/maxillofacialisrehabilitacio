@@ -7,6 +7,7 @@ import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
 import { useRouter } from 'next/navigation';
 import { getMonogram, getLastName } from '@/lib/utils';
+import { MessageTextRenderer } from '@/components/MessageTextRenderer';
 
 interface Message {
   id: string;
@@ -116,9 +117,12 @@ export function PatientMessages() {
     }
   }, [messages]);
 
-  const handleSendMessage = async () => {
-    if (!patientId || !newMessage.trim()) {
-      showToast('Kérjük, írjon üzenetet', 'error');
+  const handleSendMessage = async (messageText?: string) => {
+    const textToSend = messageText || newMessage.trim();
+    if (!patientId || !textToSend) {
+      if (!messageText) {
+        showToast('Kérjük, írjon üzenetet', 'error');
+      }
       return;
     }
 
@@ -134,7 +138,7 @@ export function PatientMessages() {
         senderId: patientId,
         senderEmail: '',
         subject: null,
-        message: newMessage.trim(),
+        message: textToSend,
         readAt: null,
         createdAt: new Date(),
         pending: true,
@@ -152,7 +156,7 @@ export function PatientMessages() {
         body: JSON.stringify({
           patientId,
           subject: null,
-          message: newMessage.trim(),
+          message: textToSend,
         }),
       });
 
@@ -178,8 +182,10 @@ export function PatientMessages() {
       });
       setPendingMessageId(null);
       
-      setNewMessage('');
-      setShowForm(false);
+      if (!messageText) {
+        setNewMessage('');
+        setShowForm(false);
+      }
       showToast('Üzenet sikeresen elküldve', 'success');
       
       // Frissítjük az üzeneteket késleltetve, hogy a fenti frissítés előbb történjen
@@ -287,6 +293,9 @@ export function PatientMessages() {
             
             // Csak a saját üzeneteinknek mutatjuk a státuszt (beteg üzenetei)
             const showStatus = isFromPatient;
+            
+            // Címzett ellenőrzés: ha az orvos küldi, akkor a beteg a címzett
+            const isRecipient = isFromDoctor; // Beteg a címzett, ha orvos küldi
 
             const senderName = isFromPatient 
               ? (patientName || 'Beteg')
@@ -325,7 +334,17 @@ export function PatientMessages() {
                   }`}
                 >
                   <div className="text-xs sm:text-sm whitespace-pre-wrap break-words">
-                    {message.message}
+                    <MessageTextRenderer 
+                      text={message.message} 
+                      chatType="patient-doctor"
+                      patientId={patientId}
+                      messageId={message.id}
+                      senderId={message.senderId}
+                      currentUserId={isRecipient ? patientId : null}
+                      onSendMessage={async (messageText) => {
+                        await handleSendMessage(messageText);
+                      }}
+                    />
                   </div>
                   <div className={`text-[10px] sm:text-xs mt-1 flex items-center gap-1 sm:gap-1.5 flex-wrap ${
                     isFromPatient ? 'text-green-100' : 'text-gray-500'
@@ -377,7 +396,7 @@ export function PatientMessages() {
             }}
           />
           <button
-            onClick={handleSendMessage}
+            onClick={() => handleSendMessage()}
             disabled={sending || !newMessage.trim()}
             className="btn-primary flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 self-end text-xs sm:text-sm"
           >

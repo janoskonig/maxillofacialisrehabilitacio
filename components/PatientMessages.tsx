@@ -6,6 +6,7 @@ import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
 import { getMonogram, getLastName } from '@/lib/utils';
+import { MessageTextRenderer } from './MessageTextRenderer';
 
 interface Message {
   id: string;
@@ -110,9 +111,12 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
     }
   }, [messages]);
 
-  const handleSendMessage = async () => {
-    if (!newMessage.trim()) {
-      showToast('Kérjük, írjon üzenetet', 'error');
+  const handleSendMessage = async (messageText?: string) => {
+    const textToSend = messageText || newMessage.trim();
+    if (!textToSend) {
+      if (!messageText) {
+        showToast('Kérjük, írjon üzenetet', 'error');
+      }
       return;
     }
 
@@ -128,7 +132,7 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
         senderId: '',
         senderEmail: '',
         subject: null,
-        message: newMessage.trim(),
+        message: textToSend,
         readAt: null,
         createdAt: new Date(),
         pending: true,
@@ -146,7 +150,7 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
         body: JSON.stringify({
           patientId,
           subject: null,
-          message: newMessage.trim(),
+          message: textToSend,
         }),
       });
 
@@ -166,7 +170,9 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
       ));
       setPendingMessageId(null);
       
-      setNewMessage('');
+      if (!messageText) {
+        setNewMessage('');
+      }
       showToast('Üzenet sikeresen elküldve', 'success');
       
       // Frissítjük az üzeneteket késleltetve
@@ -292,7 +298,17 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
                   }`}
                 >
                   <div className="text-sm whitespace-pre-wrap break-words">
-                    {message.message}
+                    <MessageTextRenderer 
+                      text={message.message} 
+                      chatType="doctor-view-patient"
+                      patientId={patientId}
+                      messageId={message.id}
+                      senderId={message.senderId}
+                      currentUserId={patientId}
+                      onSendMessage={async (messageText) => {
+                        await handleSendMessage(messageText);
+                      }}
+                    />
                   </div>
                   <div className={`text-xs mt-1 flex items-center gap-1.5 ${
                     isFromDoctor ? 'text-blue-100' : 'text-gray-500'
@@ -343,7 +359,7 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
             }}
           />
           <button
-            onClick={handleSendMessage}
+            onClick={() => handleSendMessage()}
             disabled={sending || !newMessage.trim()}
             className="btn-primary flex items-center gap-2 px-4 self-end"
           >

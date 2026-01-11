@@ -248,9 +248,12 @@ export function DoctorMessages() {
     }
   };
 
-  const handleSendMessage = async () => {
-    if (!newMessage.trim() || (!selectedDoctorId && !selectedGroupId)) {
-      showToast('Kérjük, válasszon beszélgetést és írjon üzenetet', 'error');
+  const handleSendMessage = async (messageText?: string) => {
+    const textToSend = messageText || newMessage.trim();
+    if (!textToSend || (!selectedDoctorId && !selectedGroupId)) {
+      if (!messageText) {
+        showToast('Kérjük, válasszon beszélgetést és írjon üzenetet', 'error');
+      }
       return;
     }
 
@@ -266,7 +269,7 @@ export function DoctorMessages() {
         senderEmail: '',
         senderName: null,
         subject: null,
-        message: newMessage.trim(),
+        message: textToSend,
         readAt: null,
         createdAt: new Date(),
         pending: true,
@@ -285,7 +288,7 @@ export function DoctorMessages() {
           recipientId: selectedDoctorId || undefined,
           groupId: selectedGroupId || undefined,
           subject: null,
-          message: newMessage.trim(),
+          message: textToSend,
         }),
       });
 
@@ -303,7 +306,9 @@ export function DoctorMessages() {
       ));
       setPendingMessageId(null);
       
-      setNewMessage('');
+      if (!messageText) {
+        setNewMessage('');
+      }
       showToast('Üzenet sikeresen elküldve', 'success');
       
       setTimeout(() => {
@@ -765,7 +770,17 @@ export function DoctorMessages() {
                         }`}
                       >
                         <div className="text-sm">
-                          <MessageTextRenderer text={message.message} />
+                          <MessageTextRenderer 
+                            text={message.message} 
+                            chatType="doctor-doctor"
+                            patientId={null}
+                            messageId={message.id}
+                            senderId={message.senderId}
+                            currentUserId={currentUserId}
+                            onSendMessage={async (messageText) => {
+                              await handleSendMessage(messageText);
+                            }}
+                          />
                         </div>
                         <div className={`text-xs mt-1 flex items-center gap-1.5 ${
                           isFromMe ? 'text-blue-100' : 'text-gray-500'
@@ -830,7 +845,7 @@ export function DoctorMessages() {
                   />
                 </div>
                 <button
-                  onClick={handleSendMessage}
+                  onClick={() => handleSendMessage()}
                   disabled={sending || !newMessage.trim()}
                   className="btn-primary flex items-center justify-center gap-2 px-4 py-2 sm:self-end w-full sm:w-auto"
                 >

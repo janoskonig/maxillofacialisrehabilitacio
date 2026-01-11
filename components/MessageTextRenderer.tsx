@@ -2,17 +2,76 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { DocumentRequestCard } from './DocumentRequestCard';
+import { DocumentUploadButton } from './DocumentUploadButton';
+import { DocumentRequestInfoCard } from './DocumentRequestInfoCard';
+import { detectDocumentRequest } from '@/lib/document-request-detector';
 
 interface MessageTextRendererProps {
   text: string;
+  chatType?: 'patient-doctor' | 'doctor-doctor' | 'doctor-view-patient';
+  patientId?: string | null;
+  messageId?: string; // Message ID for upload button
+  senderId?: string; // Sender ID to check if current user is recipient
+  currentUserId?: string | null; // Current user ID
+  onSendMessage?: (messageText: string) => Promise<void>; // Function to send message
 }
 
 /**
- * Render message text with @mention support
+ * Render message text with @mention support, document request cards, and upload buttons
  * Mentions are in format: @vezeteknev+keresztnev
- * They are rendered as clickable links to /patients/[id]/view
+ * Document uploads are in format: [DOCUMENT_UPLOADED:tag:patientId?:documentId]
+ * Document requests are detected from text and show upload button for recipients
  */
-export function MessageTextRenderer({ text }: MessageTextRendererProps) {
+export function MessageTextRenderer({ 
+  text, 
+  chatType = 'patient-doctor', 
+  patientId,
+  messageId,
+  senderId,
+  currentUserId,
+  onSendMessage,
+}: MessageTextRendererProps) {
+  // First check for document upload format: [DOCUMENT_UPLOADED:tag:patientId?:documentId]
+  const documentUploadRegex = /\[DOCUMENT_UPLOADED:([^:]*):?([^:]*):?([^\]]*)\]/g;
+  const documentUploadMatch = documentUploadRegex.exec(text);
+  
+  if (documentUploadMatch) {
+    const tag = documentUploadMatch[1] || '';
+    const patientIdFromMatch = documentUploadMatch[2] || null;
+    const documentId = documentUploadMatch[3] || '';
+    
+    if (documentId) {
+      // Render document upload card
+      return (
+        <DocumentRequestCard
+          tag={tag}
+          patientId={patientIdFromMatch || patientId || undefined}
+          documentId={documentId}
+          chatType={chatType}
+        />
+      );
+    }
+  }
+
+  // Check for document request in text
+  const isRecipient = senderId && currentUserId && senderId !== currentUserId;
+  const documentRequest = detectDocumentRequest(text);
+  
+  // If document request detected, show info card for both sender and recipient
+  if (documentRequest.isDocumentRequest && messageId) {
+    return (
+      <DocumentRequestInfoCard
+        documentRequest={documentRequest}
+        messageId={messageId}
+        patientId={patientId}
+        chatType={chatType}
+        isRecipient={isRecipient || false}
+        onSendMessage={onSendMessage}
+      />
+    );
+  }
+
   // Regex to match @mentions: @word+word (e.g., @kovacs+janos)
   const mentionRegex = /@([a-z0-9+]+)/gi;
   
@@ -205,4 +264,5 @@ function MentionLink({ mentionFormat, displayText }: MentionLinkProps) {
     </Link>
   );
 }
+
 

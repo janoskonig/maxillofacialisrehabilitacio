@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useRouter } from 'next/navigation';
 import { getMonogram, getLastName } from '@/lib/utils';
+import { MessageTextRenderer } from './MessageTextRenderer';
 
 interface Patient {
   id: string;
@@ -21,6 +22,7 @@ interface RecentMessage {
   patientName: string | null;
   patientTaj: string | null;
   senderType: 'doctor' | 'patient';
+  senderId: string;
   subject: string | null;
   message: string;
   readAt: Date | null;
@@ -199,14 +201,19 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
     );
   });
 
-  const handleSendMessage = async () => {
+  const handleSendMessage = async (messageText?: string) => {
     if (!selectedPatient) {
-      showToast('Kérjük, válasszon beteget', 'error');
+      if (!messageText) {
+        showToast('Kérjük, válasszon beteget', 'error');
+      }
       return;
     }
 
-    if (!message.trim()) {
-      showToast('Kérjük, írjon üzenetet', 'error');
+    const textToSend = messageText || message.trim();
+    if (!textToSend) {
+      if (!messageText) {
+        showToast('Kérjük, írjon üzenetet', 'error');
+      }
       return;
     }
 
@@ -221,8 +228,9 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
         patientName: selectedPatient.nev,
         patientTaj: selectedPatient.taj,
         senderType: 'doctor',
+        senderId: '', // Will be set by API response
         subject: null,
-        message: message.trim(),
+        message: textToSend,
         readAt: null,
         createdAt: new Date(),
         pending: true,
@@ -240,7 +248,7 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
         body: JSON.stringify({
           patientId: selectedPatient.id,
           subject: null,
-          message: message.trim(),
+          message: textToSend,
         }),
       });
 
@@ -264,7 +272,9 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
       setPendingMessageId(null);
       
       // Reset form
-      setMessage('');
+      if (!messageText) {
+        setMessage('');
+      }
       // Frissítjük a beszélgetést és az üzenetek listáját (késleltetve, hogy a fenti frissítés előbb történjen)
       setTimeout(() => {
         if (selectedPatient) {
@@ -471,7 +481,17 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
                               }`}
                             >
                               <div className="text-sm whitespace-pre-wrap break-words">
-                                {msg.message}
+                                <MessageTextRenderer 
+                                  text={msg.message} 
+                                  chatType="doctor-view-patient"
+                                  patientId={selectedPatient?.id || null}
+                                  messageId={msg.id}
+                                  senderId={msg.senderId}
+                                  currentUserId={selectedPatient?.id || null}
+                                  onSendMessage={async (messageText) => {
+                                    await handleSendMessage(messageText);
+                                  }}
+                                />
                               </div>
                               <div className={`text-xs mt-1 flex items-center gap-1.5 ${
                                 isDoctor ? 'text-blue-100' : 'text-gray-500'
@@ -517,7 +537,7 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
                         }}
                       />
                       <button
-                        onClick={handleSendMessage}
+                        onClick={() => handleSendMessage()}
                         disabled={!message.trim() || sending}
                         className="btn-primary flex items-center gap-2 px-4 self-end"
                       >
@@ -573,7 +593,17 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
                             <div className="text-sm font-medium text-gray-700 mb-1">{message.subject}</div>
                           )}
                           <div className="text-sm text-gray-600 line-clamp-2">
-                            {message.message}
+                            <MessageTextRenderer 
+                              text={message.message} 
+                              chatType="doctor-view-patient"
+                              patientId={selectedPatient?.id || null}
+                              messageId={message.id}
+                              senderId={message.senderId}
+                              currentUserId={selectedPatient?.id || null}
+                              onSendMessage={async (messageText) => {
+                                await handleSendMessage(messageText);
+                              }}
+                            />
                           </div>
                         </div>
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
