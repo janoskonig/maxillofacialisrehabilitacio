@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
         a.created_by as "createdBy",
         a.dentist_email as "dentistEmail",
         a.created_at as "createdAt",
+        a.approval_token as "approvalToken",
         a.appointment_status as "appointmentStatus",
         a.approval_status as "approvalStatus",
         ats.start_time as "startTime",

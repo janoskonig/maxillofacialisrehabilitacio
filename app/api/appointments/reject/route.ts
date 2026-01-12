@@ -43,8 +43,57 @@ export async function GET(request: NextRequest) {
 
     const appointment = appointmentResult.rows[0];
     
+    // Check if time slot is still valid (can only reject before appointment time)
+    const startTime = new Date(appointment.start_time);
+    if (startTime <= new Date()) {
+      return new NextResponse(`
+        <!DOCTYPE html>
+        <html lang="hu">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Időpont elmúlt</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              min-height: 100vh;
+              margin: 0;
+              background-color: #f5f5f5;
+            }
+            .container {
+              background: white;
+              padding: 40px;
+              border-radius: 8px;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+              text-align: center;
+              max-width: 500px;
+            }
+            h1 { color: #ef4444; }
+            p { color: #6b7280; line-height: 1.6; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>✗ Időpont elmúlt</h1>
+            <p>Ez az időpont már elmúlt, nem lehet elutasítani.</p>
+            <p>Ha kérdése van, kérjük, lépjen kapcsolatba velünk: <a href="mailto:konig.janos@semmelweis.hu">konig.janos@semmelweis.hu</a></p>
+          </div>
+        </body>
+        </html>
+      `, {
+        status: 200,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      });
+    }
+    
     // Get alternative time slots
-    const alternativeIds = appointment.alternative_time_slot_ids || [];
+    const alternativeIdsRaw = appointment.alternative_time_slot_ids;
+    const alternativeIds = Array.isArray(alternativeIdsRaw) 
+      ? alternativeIdsRaw 
+      : (alternativeIdsRaw ? [alternativeIdsRaw] : []);
     const currentAlternativeIndex = appointment.current_alternative_index;
     
     // Determine next alternative index
@@ -82,11 +131,21 @@ export async function GET(request: NextRequest) {
         );
         
         if (nextAltSlotResult.rows.length === 0 || nextAltSlotResult.rows[0].status !== 'available') {
-          // Alternative slot no longer available, reject the appointment
+          // Alternative slot no longer available, reject the appointment and free all slots
           await pool.query(
             'UPDATE appointments SET approval_status = $1 WHERE id = $2',
             ['rejected', appointment.id]
           );
+          
+          // Free all alternative time slots
+          const validIds = alternativeIds.filter((id: any) => id && typeof id === 'string');
+          if (validIds.length > 0) {
+            await pool.query(
+              'UPDATE available_time_slots SET status = $1 WHERE id = ANY($2::uuid[])',
+              ['available', validIds]
+            );
+          }
+          
           await pool.query('COMMIT');
           
           return new NextResponse(`
@@ -123,7 +182,8 @@ export async function GET(request: NextRequest) {
                 <h1>✗ Időpont elvetve</h1>
                 <p>Az időpontfoglalást elvetettük.</p>
                 <p>Sajnáljuk, de az alternatív időpontok már nem elérhetők.</p>
-                <p>Ha új időpontot szeretne, kérjük, lépjen kapcsolatba velünk.</p>
+                <p>Az időpontok újra foglalhatóvá váltak.</p>
+                <p>Ha új időpontot szeretne, kérjük, lépjen kapcsolatba velünk: <a href="mailto:konig.janos@semmelweis.hu">konig.janos@semmelweis.hu</a></p>
               </div>
             </body>
             </html>
@@ -245,17 +305,26 @@ export async function GET(request: NextRequest) {
           headers: { 'Content-Type': 'text/html; charset=utf-8' },
         });
       } else {
-        // No more alternatives, reject the appointment
+        // No more alternatives, reject the appointment and free all time slots
         await pool.query(
           'UPDATE appointments SET approval_status = $1 WHERE id = $2',
           ['rejected', appointment.id]
         );
 
-        // Free the time slot
+        // Free the current time slot
         await pool.query(
           'UPDATE available_time_slots SET status = $1 WHERE id = $2',
           ['available', appointment.time_slot_id]
         );
+
+        // Free all alternative time slots
+        const validIds = alternativeIds.filter((id: any) => id && typeof id === 'string');
+        if (validIds.length > 0) {
+          await pool.query(
+            'UPDATE available_time_slots SET status = $1 WHERE id = ANY($2::uuid[])',
+            ['available', validIds]
+          );
+        }
 
         await pool.query('COMMIT');
 
@@ -293,7 +362,8 @@ export async function GET(request: NextRequest) {
             <div class="container">
               <h1>✗ Időpont elvetve</h1>
               <p>Az időpontfoglalást elvetettük.</p>
-              <p>Ha új időpontot szeretne, kérjük, lépjen kapcsolatba velünk.</p>
+              <p>Az összes időpont újra foglalhatóvá vált.</p>
+              <p>Ha új időpontot szeretne, kérjük, lépjen kapcsolatba velünk: <a href="mailto:konig.janos@semmelweis.hu">konig.janos@semmelweis.hu</a></p>
             </div>
           </body>
           </html>

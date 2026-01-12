@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { MessageCircle, Send, Check, CheckCheck, Loader2, Users, Search } from 'lucide-react';
+import { MessageCircle, Send, Check, CheckCheck, Loader2, Users, Search, Plus, User } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
@@ -32,6 +32,10 @@ export function PatientMessagesList() {
   const [pendingMessageId, setPendingMessageId] = useState<string | null>(null);
   const [cursorPosition, setCursorPosition] = useState(0);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [patientSearchQuery, setPatientSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Array<{ id: string; nev: string | null; taj: string | null; email: string | null }>>([]);
+  const [searchingPatients, setSearchingPatients] = useState(false);
+  const [showPatientSearch, setShowPatientSearch] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -284,6 +288,52 @@ export function PatientMessagesList() {
     setCursorPosition((e.target as HTMLTextAreaElement).selectionStart);
   };
 
+  const searchPatients = async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    try {
+      setSearchingPatients(true);
+      const response = await fetch(`/api/patients?q=${encodeURIComponent(query)}&limit=20`, {
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setSearchResults(data.patients || []);
+      } else {
+        setSearchResults([]);
+      }
+    } catch (error) {
+      console.error('Error searching patients:', error);
+      setSearchResults([]);
+    } finally {
+      setSearchingPatients(false);
+    }
+  };
+
+  useEffect(() => {
+    if (patientSearchQuery.trim()) {
+      const timeoutId = setTimeout(() => {
+        searchPatients(patientSearchQuery);
+      }, 300);
+      return () => clearTimeout(timeoutId);
+    } else {
+      setSearchResults([]);
+    }
+  }, [patientSearchQuery]);
+
+  const handleSelectNewPatient = (patientId: string, patientName: string) => {
+    setSelectedPatientId(patientId);
+    setSelectedPatientName(patientName);
+    setPatientSearchQuery('');
+    setSearchResults([]);
+    setShowPatientSearch(false);
+    setLoading(true);
+  };
+
 
   if (loading && conversations.length === 0) {
     return (
@@ -312,6 +362,62 @@ export function PatientMessagesList() {
               <span className="px-2 py-1 text-xs font-semibold text-white bg-red-500 rounded-full">
                 {unreadCount}
               </span>
+            )}
+          </div>
+          <div className="space-y-2">
+            <button
+              onClick={() => {
+                setShowPatientSearch(!showPatientSearch);
+                if (!showPatientSearch) {
+                  setPatientSearchQuery('');
+                  setSearchResults([]);
+                }
+              }}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Új betegnek üzen
+            </button>
+            {showPatientSearch && (
+              <div className="space-y-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    value={patientSearchQuery}
+                    onChange={(e) => setPatientSearchQuery(e.target.value)}
+                    className="form-input pl-10 w-full text-sm"
+                    placeholder="Keresés név, TAJ vagy email alapján..."
+                    autoFocus
+                  />
+                </div>
+                {searchingPatients && (
+                  <div className="text-center py-2 text-xs text-gray-500">Keresés...</div>
+                )}
+                {!searchingPatients && patientSearchQuery.trim() && searchResults.length > 0 && (
+                  <div className="border rounded-lg max-h-64 overflow-y-auto bg-white">
+                    {searchResults.map((patient) => (
+                      <button
+                        key={patient.id}
+                        onClick={() => handleSelectNewPatient(patient.id, patient.nev || 'Név nélküli beteg')}
+                        className="w-full px-3 py-2 text-left hover:bg-gray-50 border-b last:border-b-0 transition-colors text-sm"
+                      >
+                        <div className="font-medium text-gray-900">
+                          {patient.nev || 'Név nélküli beteg'}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          {patient.taj && `TAJ: ${patient.taj}`}
+                          {patient.taj && patient.email && ' • '}
+                          {patient.email && `Email: ${patient.email}`}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {!searchingPatients && patientSearchQuery.trim() && searchResults.length === 0 && (
+                  <div className="text-center py-2 text-xs text-gray-500">Nincs találat</div>
+                )}
+              </div>
             )}
           </div>
         </div>

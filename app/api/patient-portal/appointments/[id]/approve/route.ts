@@ -1,29 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
+import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
 import { sendAppointmentBookingNotification, sendAppointmentBookingNotificationToPatient, sendAppointmentBookingNotificationToAdmins } from '@/lib/email';
 import { generateIcsFile } from '@/lib/calendar';
 import { createGoogleCalendarEvent } from '@/lib/google-calendar';
 import { handleApiError } from '@/lib/api-error-handler';
 
 /**
- * Approve a pending appointment (via email link)
+ * Approve a pending appointment (via patient portal)
  * This converts a pending appointment to an approved/booked appointment
  */
-export async function GET(request: NextRequest) {
+export async function POST(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const token = searchParams.get('token');
+    const patientId = await verifyPatientPortalSession(request);
 
-    if (!token) {
+    if (!patientId) {
       return NextResponse.json(
-        { error: 'Érvénytelen vagy hiányzó token' },
-        { status: 400 }
+        { error: 'Bejelentkezés szükséges' },
+        { status: 401 }
       );
     }
 
     const pool = getDbPool();
 
-    // Find appointment by token
+    // Find appointment by id and verify it belongs to this patient and is pending
     const appointmentResult = await pool.query(
       `SELECT a.*, p.nev as patient_name, p.taj as patient_taj, p.email as patient_email, p.nem as patient_nem,
               ats.start_time, ats.cim, ats.teremszam, ats.user_id as dentist_user_id,
@@ -32,13 +35,13 @@ export async function GET(request: NextRequest) {
        JOIN patients p ON a.patient_id = p.id
        JOIN available_time_slots ats ON a.time_slot_id = ats.id
        JOIN users u ON a.dentist_email = u.email
-       WHERE a.approval_token = $1 AND a.approval_status = 'pending'`,
-      [token]
+       WHERE a.id = $1 AND a.patient_id = $2 AND a.approval_status = 'pending'`,
+      [params.id, patientId]
     );
 
     if (appointmentResult.rows.length === 0) {
       return NextResponse.json(
-        { error: 'Érvénytelen vagy lejárt token, vagy az időpont már nem vár jóváhagyásra' },
+        { error: 'Időpont nem található, vagy már nem vár jóváhagyásra' },
         { status: 404 }
       );
     }
@@ -48,47 +51,10 @@ export async function GET(request: NextRequest) {
     // Check if time slot is still valid (can only approve before appointment time)
     const startTime = new Date(appointment.start_time);
     if (startTime <= new Date()) {
-      return new NextResponse(`
-        <!DOCTYPE html>
-        <html lang="hu">
-        <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Időpont elmúlt</title>
-          <style>
-            body {
-              font-family: Arial, sans-serif;
-              display: flex;
-              justify-content: center;
-              align-items: center;
-              min-height: 100vh;
-              margin: 0;
-              background-color: #f5f5f5;
-            }
-            .container {
-              background: white;
-              padding: 40px;
-              border-radius: 8px;
-              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-              text-align: center;
-              max-width: 500px;
-            }
-            h1 { color: #ef4444; }
-            p { color: #6b7280; line-height: 1.6; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <h1>✗ Időpont elmúlt</h1>
-            <p>Ez az időpont már elmúlt, nem lehet elfogadni.</p>
-            <p>Ha kérdése van, kérjük, lépjen kapcsolatba velünk: <a href="mailto:konig.janos@semmelweis.hu">konig.janos@semmelweis.hu</a></p>
-          </div>
-        </body>
-        </html>
-      `, {
-        status: 200,
-        headers: { 'Content-Type': 'text/html; charset=utf-8' },
-      });
+      return NextResponse.json(
+        { error: 'Ez az időpont már elmúlt' },
+        { status: 400 }
+      );
     }
 
     // Start transaction
@@ -104,17 +70,14 @@ export async function GET(request: NextRequest) {
       // Time slot is already marked as booked, so no need to update it
 
       // Free all alternative time slots that were not chosen
-      // When patient approves an appointment, all other alternatives should be freed
       const alternativeIdsRaw = appointment.alternative_time_slot_ids;
       const alternativeIds = Array.isArray(alternativeIdsRaw) 
         ? alternativeIdsRaw 
         : (alternativeIdsRaw ? [alternativeIdsRaw] : []);
       
       if (alternativeIds.length > 0) {
-        // Filter out any null/undefined values and ensure they're valid UUIDs
         const validIds = alternativeIds.filter((id: any) => id && typeof id === 'string');
         if (validIds.length > 0) {
-          // Free all alternative time slots
           await pool.query(
             'UPDATE available_time_slots SET status = $1 WHERE id = ANY($2::uuid[])',
             ['available', validIds]
@@ -236,50 +199,9 @@ export async function GET(request: NextRequest) {
         // Don't fail the request if email fails
       }
 
-      // Return success page HTML
-      const html = `
-        <!DOCTYPE html>
-        <html lang="hu">
-        <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Időpont elfogadva</title>
-          <style>
-            body {
-              font-family: Arial, sans-serif;
-              display: flex;
-              justify-content: center;
-              align-items: center;
-              min-height: 100vh;
-              margin: 0;
-              background-color: #f5f5f5;
-            }
-            .container {
-              background: white;
-              padding: 40px;
-              border-radius: 8px;
-              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-              text-align: center;
-              max-width: 500px;
-            }
-            h1 { color: #10b981; }
-            p { color: #6b7280; line-height: 1.6; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <h1>✓ Időpont elfogadva</h1>
-            <p>Köszönjük! Az időpontfoglalását sikeresen elfogadtuk.</p>
-            <p>Időpont: <strong>${updatedStartTime.toLocaleString('hu-HU')}</strong></p>
-            <p>Részletes információkat emailben küldtünk.</p>
-          </div>
-        </body>
-        </html>
-      `;
-
-      return new NextResponse(html, {
-        status: 200,
-        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      return NextResponse.json({
+        success: true,
+        message: 'Időpont sikeresen elfogadva!',
       });
     } catch (error) {
       await pool.query('ROLLBACK');
@@ -289,4 +211,3 @@ export async function GET(request: NextRequest) {
     return handleApiError(error, 'Hiba történt az időpont elfogadásakor');
   }
 }
-

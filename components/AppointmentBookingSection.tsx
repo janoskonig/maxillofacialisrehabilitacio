@@ -28,6 +28,10 @@ interface Appointment {
   completionNotes?: string | null;
   isLate?: boolean;
   appointmentType?: 'elso_konzultacio' | 'munkafazis' | 'kontroll' | null;
+  createdAt?: string;
+  approvedAt?: string | null;
+  createdBy?: string;
+  timeSlotSource?: 'manual' | 'google_calendar' | null;
 }
 
 interface AppointmentBookingSectionProps {
@@ -837,6 +841,40 @@ export function AppointmentBookingSection({
                           </span>
                         </div>
                       )}
+                      <div className="mt-2 pt-2 border-t border-green-200 space-y-1">
+                        {appointment.createdAt && (
+                          <div>
+                            <span className="text-xs font-medium text-gray-600">Létrehozva: </span>
+                            <span className="text-xs text-gray-700">
+                              {formatDateTime(appointment.createdAt)}
+                            </span>
+                          </div>
+                        )}
+                        {appointment.approvedAt && (
+                          <div>
+                            <span className="text-xs font-medium text-gray-600">Elfogadva: </span>
+                            <span className="text-xs text-gray-700">
+                              {formatDateTime(appointment.approvedAt)}
+                            </span>
+                          </div>
+                        )}
+                        {appointment.createdBy && (
+                          <div>
+                            <span className="text-xs font-medium text-gray-600">Foglalta: </span>
+                            <span className="text-xs text-gray-700">
+                              {appointment.createdBy}
+                            </span>
+                          </div>
+                        )}
+                        {appointment.timeSlotSource && (
+                          <div>
+                            <span className="text-xs font-medium text-gray-600">Forrás: </span>
+                            <span className="text-xs text-gray-700">
+                              {appointment.timeSlotSource === 'google_calendar' ? 'Google Naptár szinkron' : 'Manuális'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                       {(() => {
                         if (appointment.isLate) {
                           return (

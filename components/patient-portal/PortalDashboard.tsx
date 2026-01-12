@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Calendar, Clock, User, Plus, CheckCircle, XCircle, AlertCircle, MessageCircle, MapPin, Mail, FileText } from 'lucide-react';
+import { Calendar, Clock, User, Plus, CheckCircle, XCircle, AlertCircle, MessageCircle, MapPin, Mail, FileText, CheckCircle2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
@@ -28,6 +28,7 @@ interface Appointment {
   dentistName: string | null;
   appointmentStatus: string | null;
   approvalStatus: string | null;
+  approvalToken?: string | null;
 }
 
 export function PortalDashboard() {
@@ -37,6 +38,7 @@ export function PortalDashboard() {
   const [patient, setPatient] = useState<Patient | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
+  const [processingAppointment, setProcessingAppointment] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -84,6 +86,61 @@ export function PortalDashboard() {
       showToast('Hiba történt az adatok betöltésekor', 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleApproveAppointment = async (appointmentId: string) => {
+    if (!confirm('Biztosan elfogadja ezt az időpontot?')) {
+      return;
+    }
+
+    try {
+      setProcessingAppointment(appointmentId);
+      const response = await fetch(`/api/patient-portal/appointments/${appointmentId}/approve`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        showToast('Időpont sikeresen elfogadva!', 'success');
+        await fetchData();
+      } else {
+        const data = await response.json();
+        showToast(data.error || 'Hiba történt az időpont elfogadásakor', 'error');
+      }
+    } catch (error) {
+      console.error('Error approving appointment:', error);
+      showToast('Hiba történt az időpont elfogadásakor', 'error');
+    } finally {
+      setProcessingAppointment(null);
+    }
+  };
+
+  const handleRejectAppointment = async (appointmentId: string) => {
+    if (!confirm('Biztosan elutasítja ezt az időpontot?')) {
+      return;
+    }
+
+    try {
+      setProcessingAppointment(appointmentId);
+      const response = await fetch(`/api/patient-portal/appointments/${appointmentId}/reject`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        showToast(data.message || 'Időpont elutasítva', 'success');
+        await fetchData();
+      } else {
+        const data = await response.json();
+        showToast(data.error || 'Hiba történt az időpont elutasításakor', 'error');
+      }
+    } catch (error) {
+      console.error('Error rejecting appointment:', error);
+      showToast('Hiba történt az időpont elutasításakor', 'error');
+    } finally {
+      setProcessingAppointment(null);
     }
   };
 
@@ -258,6 +315,26 @@ export function PortalDashboard() {
                       {nextAppointment.cim}
                       {nextAppointment.teremszam && ` • ${nextAppointment.teremszam}. terem`}
                     </span>
+                  </div>
+                )}
+                {nextAppointment.approvalStatus === 'pending' && (
+                  <div className="mt-3 pt-3 border-t border-gray-300 flex flex-col sm:flex-row gap-2">
+                    <button
+                      onClick={() => handleApproveAppointment(nextAppointment.id)}
+                      disabled={processingAppointment === nextAppointment.id}
+                      className="flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base transition-colors"
+                    >
+                      <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                      {processingAppointment === nextAppointment.id ? 'Feldolgozás...' : 'Elfogadom'}
+                    </button>
+                    <button
+                      onClick={() => handleRejectAppointment(nextAppointment.id)}
+                      disabled={processingAppointment === nextAppointment.id}
+                      className="flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base transition-colors"
+                    >
+                      <XCircle className="w-4 h-4 sm:w-5 sm:h-5" />
+                      {processingAppointment === nextAppointment.id ? 'Feldolgozás...' : 'Elutasítom'}
+                    </button>
                   </div>
                 )}
               </div>

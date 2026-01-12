@@ -832,7 +832,7 @@ export async function sendPatientLoginNotificationToAdmins(
 
 /**
  * Send conditional appointment request to patient
- * Patient can approve, reject, or request a new time slot
+ * Patient can approve or reject the appointment
  */
 export async function sendConditionalAppointmentRequestToPatient(
   patientEmail: string,
@@ -881,7 +881,6 @@ export async function sendConditionalAppointmentRequestToPatient(
 
   const approveUrl = `${baseUrl}/api/appointments/approve?token=${approvalToken}`;
   const rejectUrl = `${baseUrl}/api/appointments/reject?token=${approvalToken}`;
-  const requestNewUrl = `${baseUrl}/api/appointments/request-new?token=${approvalToken}`;
   
   // Format alternative slots if any - only show if showAlternatives is true
   let alternativeSlotsHtml = '';
@@ -914,17 +913,18 @@ export async function sendConditionalAppointmentRequestToPatient(
         <li><strong>Kezelőorvos:</strong> ${dentistFullName}</li>
       </ul>
       ${alternativeSlotsHtml}
+      <p style="margin-top: 20px; color: #6b7280; font-size: 14px;">
+        <strong>Fontos:</strong> Kérjük, válaszát az időpontig küldje el.
+      </p>
       <p style="margin-top: 20px;">Kérjük, válassza ki az alábbi lehetőségek közül:</p>
       <div style="margin: 30px 0; text-align: center;">
         <a href="${approveUrl}" style="display: inline-block; background-color: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 5px; font-weight: bold;">✓ Elfogadom</a>
         <a href="${rejectUrl}" style="display: inline-block; background-color: #ef4444; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 5px; font-weight: bold;">✗ Elvetem</a>
-        <a href="${requestNewUrl}" style="display: inline-block; background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 5px; font-weight: bold;">🔄 Új időpontot kérek</a>
       </div>
       <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
         Ha a gombok nem működnek, másolja be az alábbi linkeket a böngészőjébe:<br>
         Elfogadás: <a href="${approveUrl}" style="color: #3b82f6;">${approveUrl}</a><br>
-        Elvetés: <a href="${rejectUrl}" style="color: #3b82f6;">${rejectUrl}</a><br>
-        Új időpont kérése: <a href="${requestNewUrl}" style="color: #3b82f6;">${requestNewUrl}</a>
+        Elvetés: <a href="${rejectUrl}" style="color: #3b82f6;">${rejectUrl}</a>
       </p>
       <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
     </div>

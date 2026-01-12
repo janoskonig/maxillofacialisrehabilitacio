@@ -402,6 +402,8 @@ export async function DELETE(
         a.created_by,
         a.dentist_email,
         a.google_calendar_event_id,
+        a.approval_status,
+        a.alternative_time_slot_ids,
         ats.start_time,
         ats.user_id as time_slot_user_id,
         ats.source as time_slot_source,
@@ -463,6 +465,24 @@ export async function DELETE(
         'UPDATE available_time_slots SET status = $1 WHERE id = $2',
         ['available', appointment.time_slot_id]
       );
+
+      // If this was a conditional appointment (pending), also free any alternative time slots
+      if (appointment.approval_status === 'pending' && appointment.alternative_time_slot_ids) {
+        const alternativeIds = Array.isArray(appointment.alternative_time_slot_ids) 
+          ? appointment.alternative_time_slot_ids 
+          : (appointment.alternative_time_slot_ids ? [appointment.alternative_time_slot_ids] : []);
+        
+        if (alternativeIds.length > 0) {
+          // Filter out any null/undefined values and ensure they're valid UUIDs
+          const validIds = alternativeIds.filter((id: any) => id && typeof id === 'string');
+          if (validIds.length > 0) {
+            await pool.query(
+              'UPDATE available_time_slots SET status = $1 WHERE id = ANY($2::uuid[])',
+              ['available', validIds]
+            );
+          }
+        }
+      }
 
       await pool.query('COMMIT');
 

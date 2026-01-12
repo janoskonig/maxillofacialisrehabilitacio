@@ -57,6 +57,7 @@ export async function GET(request: NextRequest) {
         a.created_by as "createdBy",
         a.dentist_email as "dentistEmail",
         a.created_at as "createdAt",
+        a.approved_at as "approvedAt",
         a.approval_status as "approvalStatus",
         a.approval_token as "approvalToken",
         a.appointment_status as "appointmentStatus",
@@ -67,6 +68,7 @@ export async function GET(request: NextRequest) {
         ats.status,
         ats.cim,
         ats.teremszam,
+        ats.source as "timeSlotSource",
         p.nev as "patientName",
         p.taj as "patientTaj",
         p.email as "patientEmail"
