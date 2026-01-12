@@ -230,8 +230,12 @@ export function PatientAppointmentsList() {
     return new Date(startTime) < new Date();
   };
 
-  const upcomingAppointments = appointments.filter((apt) => !isPast(apt.startTime));
-  const pastAppointments = appointments.filter((apt) => isPast(apt.startTime));
+  const upcomingAppointments = appointments
+    .filter((apt) => !isPast(apt.startTime))
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  const pastAppointments = appointments
+    .filter((apt) => isPast(apt.startTime))
+    .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
   
   // Pagination calculations for past appointments
   const totalPastPages = Math.ceil(pastAppointments.length / ITEMS_PER_PAGE);
