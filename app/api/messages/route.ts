@@ -13,7 +13,7 @@ import { getDbPool } from '@/lib/db';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { patientId, subject, message } = body;
+    const { patientId, subject, message, recipientDoctorId } = body;
 
     // Validáció
     if (!patientId || !message || message.trim().length === 0) {
@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
     let senderId: string;
     let senderEmail: string;
     let senderName: string | null = null;
+    let recipientDoctorIdFinal: string | null = null;
 
     if (auth) {
       // Orvos küldi
@@ -104,6 +105,25 @@ export async function POST(request: NextRequest) {
 
       senderEmail = patientResult.rows[0].email || '';
       senderName = patientResult.rows[0].nev;
+
+      // Ha a beteg megadott egy recipientDoctorId-t, ellenőrizzük, hogy létezik és aktív-e
+      if (recipientDoctorId) {
+        const doctorResult = await pool.query(
+          `SELECT id, email, doktor_neve FROM users 
+           WHERE id = $1 AND active = true 
+           AND (doktor_neve IS NOT NULL OR role IN ('sebészorvos', 'fogpótlástanász', 'admin'))`,
+          [recipientDoctorId]
+        );
+
+        if (doctorResult.rows.length === 0) {
+          return NextResponse.json(
+            { error: 'A megadott orvos nem található vagy nem aktív' },
+            { status: 404 }
+          );
+        }
+
+        recipientDoctorIdFinal = recipientDoctorId;
+      }
     } else {
       return NextResponse.json(
         { error: 'Nincs jogosultsága üzenetet küldeni' },
@@ -153,7 +173,26 @@ export async function POST(request: NextRequest) {
         }
       } else {
         // Beteg küldött → orvos kap értesítést
-        const doctor = await getDoctorForNotification(patientId);
+        const pool = getDbPool();
+        let doctor: { email: string; name: string } | null = null;
+
+        // Ha van recipientDoctorId, annak küldjük az értesítést
+        if (recipientDoctorIdFinal) {
+          const doctorResult = await pool.query(
+            `SELECT email, doktor_neve FROM users WHERE id = $1 AND active = true`,
+            [recipientDoctorIdFinal]
+          );
+          if (doctorResult.rows.length > 0) {
+            doctor = {
+              email: doctorResult.rows[0].email,
+              name: doctorResult.rows[0].doktor_neve || doctorResult.rows[0].email,
+            };
+          }
+        } else {
+          // Ha nincs recipientDoctorId, akkor a kezelőorvosnak küldjük
+          doctor = await getDoctorForNotification(patientId);
+        }
+
         if (doctor) {
           const patient = await getPatientForNotification(patientId);
           console.log(`[Messages] Email értesítés küldése orvosnak: ${doctor.email}`);
@@ -170,7 +209,6 @@ export async function POST(request: NextRequest) {
           console.log(`[Messages] Email értesítés sikeresen elküldve orvosnak: ${doctor.email}`);
         } else {
           // Ha nincs kezelőorvos, adminoknak küldünk értesítést
-          const pool = getDbPool();
           const adminResult = await pool.query(
             `SELECT email, doktor_neve FROM users WHERE role = 'admin' AND active = true`
           );
@@ -243,8 +281,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Ha beteg kéri, csak a saját üzeneteit láthatja
-    if (patientSessionId && patientSessionId !== patientId) {
+    // Ha beteg kéri (és NEM orvos), csak a saját üzeneteit láthatja
+    if (!auth && patientSessionId && patientSessionId !== patientId) {
       return NextResponse.json(
         { error: 'Csak saját üzeneteit tekintheti meg' },
         { status: 403 }

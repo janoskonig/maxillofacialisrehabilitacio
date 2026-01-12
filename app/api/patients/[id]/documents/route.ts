@@ -146,8 +146,9 @@ export async function POST(
       );
     }
 
-    // Only editors and admins can upload
-    if (auth.role !== 'admin' && auth.role !== 'editor') {
+    // Only doctors (admin, editor, fogpótlástanász, sebészorvos) can upload
+    const doctorRoles = ['admin', 'editor', 'fogpótlástanász', 'sebészorvos'];
+    if (!doctorRoles.includes(auth.role)) {
       return NextResponse.json(
         { error: 'Nincs jogosultsága dokumentumok feltöltéséhez' },
         { status: 403 }

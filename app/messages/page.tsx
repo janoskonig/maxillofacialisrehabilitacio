@@ -43,7 +43,7 @@ export default function MessagesPage() {
     if (tab === 'doctor-patient' || tab === 'doctor-doctor') {
       setActiveTab(tab);
     }
-  }, [searchParams]);
+  }, [searchParams, activeTab]);
 
   const handleBack = () => {
     router.push('/');
@@ -120,11 +120,14 @@ export default function MessagesPage() {
         </div>
 
         {/* Tab Content */}
-        {activeTab === 'doctor-doctor' ? (
-          <DoctorMessages />
-        ) : (
-          <PatientMessagesList />
-        )}
+        <div>
+          {activeTab === 'doctor-doctor' && (
+            <DoctorMessages key="doctor-doctor" />
+          )}
+          {activeTab === 'doctor-patient' && (
+            <PatientMessagesList key="doctor-patient" />
+          )}
+        </div>
       </main>
     </div>
   );

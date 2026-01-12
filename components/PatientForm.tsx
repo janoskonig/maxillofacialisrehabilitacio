@@ -3388,7 +3388,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
         <PatientDocuments
           patientId={patientId}
           isViewOnly={isViewOnly}
-          canUpload={userRole === 'admin' || userRole === 'editor'}
+          canUpload={userRole === 'admin' || userRole === 'editor' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos'}
           canDelete={userRole === 'admin'}
           onSavePatientBeforeUpload={!isViewOnly ? savePatientSilently : undefined}
           isPatientDirty={!isViewOnly && hasUnsavedChanges()}

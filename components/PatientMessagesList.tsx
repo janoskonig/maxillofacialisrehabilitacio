@@ -53,6 +53,7 @@ export function PatientMessagesList() {
       }
     }, 5000);
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Fetch messages when patient is selected
@@ -62,6 +63,7 @@ export function PatientMessagesList() {
     } else {
       setMessages([]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPatientId]);
 
   // Fetch current user
@@ -94,13 +96,16 @@ export function PatientMessagesList() {
           }
         });
         
-        setMessages(messages.map(m => 
-          unreadPatientMessages.some(um => um.id === m.id) 
-            ? { ...m, readAt: new Date() } 
-            : m
-        ));
+        setMessages(prevMessages => 
+          prevMessages.map(m => 
+            unreadPatientMessages.some(um => um.id === m.id) 
+              ? { ...m, readAt: new Date() } 
+              : m
+          )
+        );
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length, loading, selectedPatientId]);
 
   // Scroll to bottom when messages change
@@ -123,7 +128,8 @@ export function PatientMessagesList() {
       }
 
       const data = await response.json();
-      setConversations(data.conversations || []);
+      const conversationsToSet = data.conversations || [];
+      setConversations(conversationsToSet);
     } catch (error) {
       console.error('Hiba a konverzációk betöltésekor:', error);
       showToast('Hiba történt a konverzációk betöltésekor', 'error');
@@ -148,15 +154,25 @@ export function PatientMessagesList() {
   };
 
   const fetchMessages = async () => {
-    if (!selectedPatientId) return;
+    if (!selectedPatientId) {
+      return;
+    }
 
     try {
+      setLoading(true);
       const response = await fetch(`/api/messages?patientId=${selectedPatientId}`, {
         credentials: 'include',
       });
 
       if (!response.ok) {
-        throw new Error('Hiba az üzenetek betöltésekor');
+        const errorText = await response.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { error: errorText || 'Unknown error' };
+        }
+        throw new Error(errorData.error || 'Hiba az üzenetek betöltésekor');
       }
 
       const data = await response.json();
@@ -165,7 +181,7 @@ export function PatientMessagesList() {
       setMessages(messages.filter((m: Message) => !m.id.startsWith('pending-')));
     } catch (error) {
       console.error('Hiba az üzenetek betöltésekor:', error);
-      showToast('Hiba történt az üzenetek betöltésekor', 'error');
+      showToast(error instanceof Error ? error.message : 'Hiba történt az üzenetek betöltésekor', 'error');
     } finally {
       setLoading(false);
     }
@@ -268,6 +284,7 @@ export function PatientMessagesList() {
     setCursorPosition((e.target as HTMLTextAreaElement).selectionStart);
   };
 
+
   if (loading && conversations.length === 0) {
     return (
       <div className="flex h-[700px] border border-gray-200 rounded-lg overflow-hidden bg-white">
@@ -282,7 +299,7 @@ export function PatientMessagesList() {
   }
 
   return (
-    <div className="flex h-[700px] border border-gray-200 rounded-lg overflow-hidden bg-white">
+    <div data-patient-messages-list className="flex h-[700px] border border-gray-200 rounded-lg overflow-hidden bg-white">
       {/* Conversations List */}
       <div className="w-80 border-r border-gray-200 flex flex-col">
         <div className="p-4 border-b border-gray-200 bg-gray-50">
@@ -305,33 +322,33 @@ export function PatientMessagesList() {
               <p className="text-xs mt-2 text-gray-400">Még nem érkeztek üzenetek betegektől</p>
             </div>
           ) : (
-            conversations.map((conv) => (
-              <div
-                key={conv.patientId}
-                onClick={() => handleSelectPatient(conv.patientId, conv.patientName)}
-                className={`p-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 ${
-                  selectedPatientId === conv.patientId ? 'bg-blue-50' : ''
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="font-medium text-sm">{conv.patientName}</div>
-                  {conv.unreadCount > 0 && (
-                    <span className="px-2 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full">
-                      {conv.unreadCount}
-                    </span>
+              conversations.map((conv) => (
+                <div
+                  key={conv.patientId}
+                  onClick={() => handleSelectPatient(conv.patientId, conv.patientName)}
+                  className={`p-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 ${
+                    selectedPatientId === conv.patientId ? 'bg-blue-50' : ''
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="font-medium text-sm">{conv.patientName}</div>
+                    {conv.unreadCount > 0 && (
+                      <span className="px-2 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full">
+                        {conv.unreadCount}
+                      </span>
+                    )}
+                  </div>
+                  {conv.patientTaj && (
+                    <div className="text-xs text-gray-500 mt-0.5">TAJ: {conv.patientTaj}</div>
+                  )}
+                  {conv.lastMessage && (
+                    <div className="text-xs text-gray-500 mt-1 truncate">
+                      {conv.lastMessage.message.substring(0, 50)}
+                      {conv.lastMessage.message.length > 50 ? '...' : ''}
+                    </div>
                   )}
                 </div>
-                {conv.patientTaj && (
-                  <div className="text-xs text-gray-500 mt-0.5">TAJ: {conv.patientTaj}</div>
-                )}
-                {conv.lastMessage && (
-                  <div className="text-xs text-gray-500 mt-1 truncate">
-                    {conv.lastMessage.message.substring(0, 50)}
-                    {conv.lastMessage.message.length > 50 ? '...' : ''}
-                  </div>
-                )}
-              </div>
-            ))
+              ))
           )}
         </div>
       </div>
