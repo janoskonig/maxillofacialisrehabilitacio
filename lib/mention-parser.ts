@@ -5,6 +5,20 @@ import { getDbPool } from './db';
  * Mentions are in format: @vezeteknev+keresztnev (e.g., @kovacs+janos)
  * Returns array of patient IDs
  */
+/**
+ * Normalize patient name to mention format
+ * This must match exactly the format used in the API
+ */
+function normalizeToMentionFormat(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove accents
+    .replace(/\s+/g, '+') // Replace spaces with +
+    .replace(/[^a-z0-9+]/g, '') // Only letters, numbers and +
+    .trim();
+}
+
 export async function extractPatientMentions(messageText: string): Promise<string[]> {
   // Regex to match @mentions: @word+word (e.g., @kovacs+janos)
   const mentionRegex = /@([a-z0-9+]+)/gi;
@@ -24,38 +38,59 @@ export async function extractPatientMentions(messageText: string): Promise<strin
   const pool = getDbPool();
   const patientIds: string[] = [];
 
-  for (const mentionFormat of Array.from(mentionFormats)) {
-    // Remove @ symbol
-    const mentionWithoutAt = mentionFormat.substring(1); // kovacs+janos
-    
-    // The mention format matches the format used in the API: lowercase, normalized, + separated
-    // We need to find patients by matching their normalized mention format
-    // Get all patients and match by mentionFormat
-    const result = await pool.query(
-      `SELECT id, nev FROM patients WHERE nev IS NOT NULL AND TRIM(nev) != ''`
-    );
+  // Get all patients once
+  const allPatientsResult = await pool.query(
+    `SELECT id, nev FROM patients WHERE nev IS NOT NULL AND TRIM(nev) != ''`
+  );
 
-    for (const row of result.rows) {
-      const nev = row.nev.trim();
-      // Generate mention format the same way as the API does
-      const patientMentionFormat = nev
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '') // Remove accents
-        .replace(/\s+/g, '+') // Replace spaces with +
-        .replace(/[^a-z0-9+]/g, ''); // Only letters, numbers and +
-      
-      const fullMentionFormat = `@${patientMentionFormat}`;
-      
-      if (fullMentionFormat === mentionFormat) {
-        const patientId = row.id;
+  // Create a map of normalized mention format -> patient IDs
+  // This allows us to handle multiple patients with the same normalized name
+  const mentionFormatToPatientIds = new Map<string, string[]>();
+  
+  for (const row of allPatientsResult.rows) {
+    const nev = row.nev.trim();
+    const normalizedMention = normalizeToMentionFormat(nev);
+    const fullMentionFormat = `@${normalizedMention}`;
+    
+    if (!mentionFormatToPatientIds.has(fullMentionFormat)) {
+      mentionFormatToPatientIds.set(fullMentionFormat, []);
+    }
+    mentionFormatToPatientIds.get(fullMentionFormat)!.push(row.id);
+  }
+
+  // Match mention formats from message to patient IDs
+  for (const mentionFormat of Array.from(mentionFormats)) {
+    const matchingPatientIds = mentionFormatToPatientIds.get(mentionFormat);
+    
+    if (matchingPatientIds && matchingPatientIds.length > 0) {
+      // Add all matching patient IDs (in case multiple patients have the same normalized name)
+      for (const patientId of matchingPatientIds) {
         if (!patientIds.includes(patientId)) {
           patientIds.push(patientId);
         }
-        break; // Found match, no need to continue
       }
+    } else {
+      // Log if mention format not found (for debugging)
+      const mentionWithoutAt = mentionFormat.substring(1);
+      console.warn('[extractPatientMentions] Patient not found for mention format:', {
+        mentionFormat,
+        mentionWithoutAt,
+        totalPatients: allPatientsResult.rows.length,
+        sampleNormalizedMentions: Array.from(mentionFormatToPatientIds.keys()).slice(0, 10),
+        sampleNames: allPatientsResult.rows.slice(0, 5).map((r: any) => ({
+          name: r.nev,
+          normalized: normalizeToMentionFormat(r.nev),
+          fullFormat: `@${normalizeToMentionFormat(r.nev)}`
+        }))
+      });
     }
   }
+
+  console.log('[extractPatientMentions] Extracted patient IDs:', {
+    mentionFormats: Array.from(mentionFormats),
+    patientIds,
+    messagePreview: messageText.substring(0, 100)
+  });
 
   return patientIds;
 }
@@ -63,24 +98,14 @@ export async function extractPatientMentions(messageText: string): Promise<strin
 /**
  * Get mention format from patient name
  * Converts "Kovács János" to "@kovacs+janos"
+ * Must match the format used in extractPatientMentions and API
  */
 export function getMentionFormatFromName(name: string): string {
   if (!name) return '';
   
-  // Normalize: lowercase, remove accents, split by space
-  const normalized = name
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // Remove accents
-    .trim();
+  // Use the same normalization function
+  const mentionFormat = normalizeToMentionFormat(name);
   
-  const parts = normalized.split(/\s+/);
-  if (parts.length >= 2) {
-    const vezeteknev = parts[0];
-    const keresztnev = parts[parts.length - 1];
-    return `@${vezeteknev}+${keresztnev}`;
-  }
-  
-  return '';
+  return mentionFormat ? `@${mentionFormat}` : '';
 }
 

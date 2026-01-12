@@ -87,9 +87,7 @@ export async function GET(
 
     // Get doctor messages that mention this patient
     // Include both individual and group messages
-    // #region agent log
-    console.log('[API] Fetching doctor messages for patient', { patientId, userId: auth.userId });
-    // #endregion
+    // Use jsonb_array_elements_text with EXISTS for reliable JSONB array searching
     const result = await pool.query(
       `SELECT 
         dm.id,
@@ -112,7 +110,13 @@ export async function GET(
       LEFT JOIN users u_sender ON u_sender.id = dm.sender_id
       LEFT JOIN users u_recipient ON u_recipient.id = dm.recipient_id
       LEFT JOIN doctor_message_groups g ON g.id = dm.group_id
-      WHERE dm.mentioned_patient_ids @> $1::jsonb
+      WHERE dm.mentioned_patient_ids IS NOT NULL
+        AND dm.mentioned_patient_ids != '[]'::jsonb
+        AND EXISTS (
+          SELECT 1 
+          FROM jsonb_array_elements_text(dm.mentioned_patient_ids) AS elem
+          WHERE elem = $1
+        )
         AND (
           dm.sender_id = $2 
           OR dm.recipient_id = $2 
@@ -123,11 +127,8 @@ export async function GET(
           )
         )
       ORDER BY dm.created_at DESC`,
-      [JSON.stringify([patientId]), auth.userId]
+      [patientId, auth.userId]
     );
-    // #region agent log
-    console.log('[API] Query result', { rowCount: result.rows.length, patientId });
-    // #endregion
 
     const messages: DoctorMessage[] = result.rows.map((row: any) => ({
       id: row.id,
@@ -150,10 +151,6 @@ export async function GET(
       messages,
     });
   } catch (error: any) {
-    // #region agent log
-    const errorPatientId = params?.patientId || 'unknown';
-    console.error('[API] Error fetching doctor messages for patient', { error: error.message, stack: error.stack, patientId: errorPatientId });
-    // #endregion
     console.error('Hiba a betegre hivatkozó üzenetek lekérésekor:', error);
     return NextResponse.json(
       { error: 'Hiba történt az üzenetek lekérésekor' },

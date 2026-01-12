@@ -7,6 +7,7 @@ import { FeedbackProvider } from '@/components/FeedbackContext'
 import { FeedbackModal } from '@/components/FeedbackButton'
 import { ToastProvider } from '@/contexts/ToastContext'
 import { ToastContainer } from '@/components/ToastContainer'
+import { SocketProvider } from '@/contexts/SocketContext'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -24,14 +25,16 @@ export default function RootLayout({
     <html lang="hu">
       <body className={inter.className}>
         <ErrorBoundary>
-          <ToastProvider>
-            <FeedbackProvider>
-              <GlobalErrorHandler />
-              {children}
-              <FeedbackModal />
-              <ToastContainer />
-            </FeedbackProvider>
-          </ToastProvider>
+          <SocketProvider>
+            <ToastProvider>
+              <FeedbackProvider>
+                <GlobalErrorHandler />
+                {children}
+                <FeedbackModal />
+                <ToastContainer />
+              </FeedbackProvider>
+            </ToastProvider>
+          </SocketProvider>
         </ErrorBoundary>
       </body>
     </html>

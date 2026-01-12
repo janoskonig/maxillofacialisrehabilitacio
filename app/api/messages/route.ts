@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth-server';
-import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
+import { verifyPatientPortalSession, getPatientPortalSessionInfo } from '@/lib/patient-portal-server';
 import { sendMessage, getPatientMessages } from '@/lib/communication';
 import { sendNewMessageNotification } from '@/lib/email';
 import { getPatientForNotification, getDoctorForNotification } from '@/lib/communication';
-import { logActivityWithAuth } from '@/lib/activity';
+import { logActivityWithAuth, logActivity } from '@/lib/activity';
 import { getDbPool } from '@/lib/db';
+import { emitNewMessage } from '@/lib/socket-server';
 
 /**
  * POST /api/messages - Új üzenet küldése
@@ -33,63 +34,13 @@ export async function POST(request: NextRequest) {
     let senderName: string | null = null;
     let recipientDoctorIdFinal: string | null = null;
 
-    if (auth) {
-      // Orvos küldi
-      senderType = 'doctor';
-      senderId = auth.userId;
-      senderEmail = auth.email;
-      
-      // Ellenőrizzük, hogy az orvos hozzáférhet-e a beteghez
-      const pool = getDbPool();
-      const patientResult = await pool.query(
-        `SELECT id, kezeleoorvos FROM patients WHERE id = $1`,
-        [patientId]
-      );
-
-      if (patientResult.rows.length === 0) {
-        return NextResponse.json(
-          { error: 'Beteg nem található' },
-          { status: 404 }
-        );
-      }
-
-      // Admin vagy a kezelőorvos küldhet üzenetet
-      const patient = patientResult.rows[0];
-      if (auth.role !== 'admin' && patient.kezeleoorvos !== auth.email) {
-        // Ellenőrizzük, hogy a user doktor_neve mezője egyezik-e
-        const userResult = await pool.query(
-          `SELECT doktor_neve FROM users WHERE id = $1`,
-          [auth.userId]
-        );
-        const userName = userResult.rows.length > 0 ? userResult.rows[0].doktor_neve : null;
-        
-        if (patient.kezeleoorvos !== userName) {
-          return NextResponse.json(
-            { error: 'Nincs jogosultsága üzenetet küldeni ennek a betegnek' },
-            { status: 403 }
-          );
-        }
-      }
-
-      // Orvos neve
-      const userResult = await pool.query(
-        `SELECT doktor_neve FROM users WHERE id = $1`,
-        [auth.userId]
-      );
-      senderName = userResult.rows.length > 0 ? userResult.rows[0].doktor_neve : auth.email;
-    } else if (patientSessionId) {
-      // Beteg küldi
+    // Ha van patientSessionId ÉS az megegyezik a patientId-vel, akkor a beteg küldi
+    // (ez az impersonate eset is kezeli, mert akkor is van patientSessionId)
+    if (patientSessionId && patientSessionId === patientId) {
+      // Beteg küldi (akár impersonate módban is)
       senderType = 'patient';
       senderId = patientSessionId;
       
-      // Ellenőrizzük, hogy a beteg a saját üzenetét küldi-e
-      if (patientSessionId !== patientId) {
-        return NextResponse.json(
-          { error: 'Csak saját magának küldhet üzenetet' },
-          { status: 403 }
-        );
-      }
-
       const pool = getDbPool();
       const patientResult = await pool.query(
         `SELECT email, nev FROM patients WHERE id = $1`,
@@ -105,6 +56,14 @@ export async function POST(request: NextRequest) {
 
       senderEmail = patientResult.rows[0].email || '';
       senderName = patientResult.rows[0].nev;
+      
+      // Validáció: ha nincs email, akkor nem küldhet üzenetet
+      if (!senderEmail || senderEmail.trim() === '') {
+        return NextResponse.json(
+          { error: 'A betegnek nincs email címe, ezért nem küldhet üzenetet' },
+          { status: 400 }
+        );
+      }
 
       // Beteg csak a kezelőorvosnak vagy az adminnak küldhet üzenetet
       // Először megkeressük a kezelőorvos ID-ját
@@ -153,7 +112,54 @@ export async function POST(request: NextRequest) {
         }
 
         recipientDoctorIdFinal = recipientDoctorId;
+      } else {
+        // Ha nincs megadva, akkor a kezelőorvosnak küldjük, ha van, különben az adminnak
+        recipientDoctorIdFinal = treatingDoctorId || adminId;
       }
+    } else if (auth) {
+      // Orvos küldi (csak akkor, ha nincs érvényes patientSessionId)
+      senderType = 'doctor';
+      senderId = auth.userId;
+      senderEmail = auth.email;
+      
+      // Ellenőrizzük, hogy az orvos hozzáférhet-e a beteghez
+      const pool = getDbPool();
+      const patientResult = await pool.query(
+        `SELECT id, kezeleoorvos FROM patients WHERE id = $1`,
+        [patientId]
+      );
+
+      if (patientResult.rows.length === 0) {
+        return NextResponse.json(
+          { error: 'Beteg nem található' },
+          { status: 404 }
+        );
+      }
+
+      // Admin vagy a kezelőorvos küldhet üzenetet
+      const patient = patientResult.rows[0];
+      if (auth.role !== 'admin' && patient.kezeleoorvos !== auth.email) {
+        // Ellenőrizzük, hogy a user doktor_neve mezője egyezik-e
+        const userResult = await pool.query(
+          `SELECT doktor_neve FROM users WHERE id = $1`,
+          [auth.userId]
+        );
+        const userName = userResult.rows.length > 0 ? userResult.rows[0].doktor_neve : null;
+        
+        if (patient.kezeleoorvos !== userName) {
+          return NextResponse.json(
+            { error: 'Nincs jogosultsága üzenetet küldeni ennek a betegnek' },
+            { status: 403 }
+          );
+        }
+      }
+
+      // Orvos neve
+      const userResult = await pool.query(
+        `SELECT doktor_neve FROM users WHERE id = $1`,
+        [auth.userId]
+      );
+      senderName = userResult.rows.length > 0 ? userResult.rows[0].doktor_neve : auth.email;
     } else {
       return NextResponse.json(
         { error: 'Nincs jogosultsága üzenetet küldeni' },
@@ -180,6 +186,24 @@ export async function POST(request: NextRequest) {
         'message_sent',
         `Üzenet küldve betegnek: ${patientId}`
       );
+    } else {
+      // Impersonate módban is naplózzuk
+      const sessionInfo = await getPatientPortalSessionInfo(request);
+      if (sessionInfo?.impersonatedBy) {
+        const pool = getDbPool();
+        const impersonatorResult = await pool.query(
+          `SELECT email FROM users WHERE id = $1`,
+          [sessionInfo.impersonatedBy]
+        );
+        if (impersonatorResult.rows.length > 0) {
+          await logActivity(
+            request,
+            impersonatorResult.rows[0].email,
+            'message_sent_impersonated',
+            `Üzenet küldve beteg nevében (impersonate): ${patientId}`
+          );
+        }
+      }
     }
 
     // Email értesítés küldése
@@ -268,6 +292,14 @@ export async function POST(request: NextRequest) {
     } catch (emailError) {
       console.error('Hiba az email értesítés küldésekor:', emailError);
       // Ne akadályozza meg az üzenet küldését, ha az email nem sikerül
+    }
+
+    // Emit Socket.io event for real-time updates
+    try {
+      emitNewMessage(patientId, newMessage);
+    } catch (socketError) {
+      console.error('Hiba a Socket.io event küldésekor:', socketError);
+      // Ne akadályozza meg az üzenet küldését, ha a Socket.io nem működik
     }
 
     return NextResponse.json({

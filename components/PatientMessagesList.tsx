@@ -1,224 +1,380 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { MessageCircle, Send, Check, CheckCheck, Loader2, Users, Search, Plus, User } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { MessageCircle, Send, Check, CheckCheck, Loader2, Search, User, ArrowRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
-import { Message } from '@/lib/communication';
-import { PatientMention } from './PatientMention';
-import { MessageTextRenderer } from './MessageTextRenderer';
+import { useRouter } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
+import { MessageTextRenderer } from './MessageTextRenderer';
+import { useSocket } from '@/contexts/SocketContext';
 import { getMonogram, getLastName } from '@/lib/utils';
 
-interface PatientConversation {
+interface Message {
+  id: string;
+  patientId: string;
+  senderType: 'doctor' | 'patient';
+  senderId: string;
+  senderEmail: string;
+  subject: string | null;
+  message: string;
+  readAt: Date | null;
+  createdAt: Date;
+  pending?: boolean;
+}
+
+interface Patient {
+  id: string;
+  nev: string;
+  email: string | null;
+}
+
+interface Conversation {
   patientId: string;
   patientName: string;
-  patientTaj: string | null;
   lastMessage: Message | null;
   unreadCount: number;
 }
 
 export function PatientMessagesList() {
+  const router = useRouter();
   const { showToast } = useToast();
-  const [conversations, setConversations] = useState<PatientConversation[]>([]);
+  const { socket, isConnected, joinRoom, leaveRoom } = useSocket();
+  
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [selectedPatientName, setSelectedPatientName] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
   const [newMessage, setNewMessage] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
-  const [pendingMessageId, setPendingMessageId] = useState<string | null>(null);
-  const [cursorPosition, setCursorPosition] = useState(0);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [patientSearchQuery, setPatientSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<Array<{ id: string; nev: string | null; taj: string | null; email: string | null }>>([]);
-  const [searchingPatients, setSearchingPatients] = useState(false);
-  const [showPatientSearch, setShowPatientSearch] = useState(false);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const messagesLoadedRef = useRef<Set<string>>(new Set());
 
-  // Fetch conversations and unread count
+  // Get current user
   useEffect(() => {
-    const loadData = async () => {
-      await fetchConversations();
-      await fetchUnreadCount();
-      setLoading(false);
-    };
-    loadData();
-    
-    // Frissítés 5 másodpercenként
-    const interval = setInterval(() => {
-      fetchConversations();
-      fetchUnreadCount();
-      if (selectedPatientId) {
-        fetchMessages();
-      }
-    }, 5000);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Fetch messages when patient is selected
-  useEffect(() => {
-    if (selectedPatientId) {
-      fetchMessages();
-    } else {
-      setMessages([]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPatientId]);
-
-  // Fetch current user
-  useEffect(() => {
-    const loadCurrentUser = async () => {
-      const user = await getCurrentUser();
-      if (user && user.id) {
-        setCurrentUserId(user.id);
+    const fetchUser = async () => {
+      try {
+        const user = await getCurrentUser();
+        if (user && user.id) {
+          setCurrentUserId(user.id);
+        }
+      } catch (error) {
+        console.error('Hiba a felhasználó betöltésekor:', error);
       }
     };
-    loadCurrentUser();
+    fetchUser();
   }, []);
 
-  // Auto-mark as read when messages are loaded
-  useEffect(() => {
-    if (messages.length > 0 && !loading && selectedPatientId) {
-      // Csak a betegtől érkező olvasatlan üzeneteket jelöljük olvasottnak
-      const unreadPatientMessages = messages.filter(
-        m => m.senderType === 'patient' && !m.readAt && !m.id.startsWith('pending-')
-      );
-      
-      if (unreadPatientMessages.length > 0) {
-        unreadPatientMessages.forEach(msg => {
-          // Csak UUID formátumú ID-kat próbálunk meg olvasottnak jelölni
-          if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(msg.id)) {
-            fetch(`/api/messages/${msg.id}/read`, {
-              method: 'PUT',
-              credentials: 'include',
-            }).catch(err => console.error('Hiba az üzenet olvasottnak jelölésekor:', err));
-          }
-        });
-        
-        setMessages(prevMessages => 
-          prevMessages.map(m => 
-            unreadPatientMessages.some(um => um.id === m.id) 
-              ? { ...m, readAt: new Date() } 
-              : m
-          )
-        );
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages.length, loading, selectedPatientId]);
-
-  // Scroll to bottom when messages change
-  useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [messages]);
-
-  const fetchConversations = async () => {
+  // Fetch conversations (patients with messages)
+  const fetchConversations = useCallback(async () => {
     try {
-      const response = await fetch('/api/messages/conversations', {
+      // Get all patients with email
+      const patientsResponse = await fetch('/api/patients?limit=1000', {
         credentials: 'include',
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('API error:', errorData);
-        throw new Error(errorData.error || 'Hiba a konverzációk betöltésekor');
+      if (!patientsResponse.ok) {
+        throw new Error('Hiba a betegek betöltésekor');
       }
 
-      const data = await response.json();
-      const conversationsToSet = data.conversations || [];
-      setConversations(conversationsToSet);
+      const patientsData = await patientsResponse.json();
+      const patientsWithEmail = (patientsData.patients || []).filter(
+        (p: Patient) => p.email && p.email.trim() !== ''
+      );
+
+      // Get messages for each patient and build conversations
+      const conversationsList: Conversation[] = [];
+      
+      for (const patient of patientsWithEmail) {
+        try {
+          const messagesResponse = await fetch(`/api/messages?patientId=${patient.id}`, {
+            credentials: 'include',
+          });
+
+          if (messagesResponse.ok) {
+            const messagesData = await messagesResponse.json();
+            const patientMessages = (messagesData.messages || []) as Message[];
+            
+            if (patientMessages.length > 0) {
+              const lastMessage = patientMessages[patientMessages.length - 1];
+              const unread = patientMessages.filter(
+                (m: Message) => m.senderType === 'patient' && !m.readAt
+              ).length;
+
+              conversationsList.push({
+                patientId: patient.id,
+                patientName: patient.nev,
+                lastMessage,
+                unreadCount: unread,
+              });
+            }
+          }
+        } catch (error) {
+          // Skip patients with errors
+          console.error(`Hiba az üzenetek betöltésekor beteghez ${patient.id}:`, error);
+        }
+      }
+
+      // Sort by unread count, then by last message date
+      conversationsList.sort((a, b) => {
+        if (a.unreadCount !== b.unreadCount) {
+          return b.unreadCount - a.unreadCount;
+        }
+        if (a.lastMessage && b.lastMessage) {
+          return new Date(b.lastMessage.createdAt).getTime() - new Date(a.lastMessage.createdAt).getTime();
+        }
+        if (a.lastMessage) return -1;
+        if (b.lastMessage) return 1;
+        return 0;
+      });
+
+      setConversations(conversationsList);
     } catch (error) {
       console.error('Hiba a konverzációk betöltésekor:', error);
       showToast('Hiba történt a konverzációk betöltésekor', 'error');
-    }
-  };
-
-  const fetchUnreadCount = async () => {
-    try {
-      const response = await fetch('/api/messages/all?unreadOnly=true', {
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        throw new Error('Hiba az olvasatlan üzenetek számának lekérdezésekor');
-      }
-
-      const data = await response.json();
-      setUnreadCount((data.messages || []).length);
-    } catch (error) {
-      console.error('Hiba az olvasatlan üzenetek számának lekérdezésekor:', error);
-    }
-  };
-
-  const fetchMessages = async () => {
-    if (!selectedPatientId) {
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const response = await fetch(`/api/messages?patientId=${selectedPatientId}`, {
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch {
-          errorData = { error: errorText || 'Unknown error' };
-        }
-        throw new Error(errorData.error || 'Hiba az üzenetek betöltésekor');
-      }
-
-      const data = await response.json();
-      // Reverse to show oldest first (for chat view)
-      const messages = (data.messages || []).reverse() as Message[];
-      setMessages(messages.filter((m: Message) => !m.id.startsWith('pending-')));
-    } catch (error) {
-      console.error('Hiba az üzenetek betöltésekor:', error);
-      showToast(error instanceof Error ? error.message : 'Hiba történt az üzenetek betöltésekor', 'error');
     } finally {
       setLoading(false);
     }
-  };
+  }, [showToast]);
 
-  const handleSendMessage = async (messageText?: string) => {
-    const textToSend = messageText || newMessage.trim();
-    if (!textToSend || !selectedPatientId) {
-      if (!messageText) {
-        showToast('Kérjük, válasszon beteget és írjon üzenetet', 'error');
+  // Initial load
+  useEffect(() => {
+    fetchConversations();
+    
+    // Refresh conversations periodically
+    const interval = setInterval(() => {
+      fetchConversations();
+      if (selectedPatientId) {
+        fetchMessages(selectedPatientId);
       }
+    }, 5000);
+    
+    return () => clearInterval(interval);
+  }, [fetchConversations]);
+
+  // Fetch messages for selected patient
+  const fetchMessages = useCallback(async (patientId: string) => {
+    if (!patientId) return;
+
+    setLoadingMessages(true);
+    try {
+      const response = await fetch(`/api/messages?patientId=${patientId}`, {
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error('Hiba az üzenetek betöltésekor');
+      }
+
+      const data = await response.json();
+      const loadedMessages = (data.messages || []).reverse() as Message[];
+      
+      loadedMessages.forEach(msg => messagesLoadedRef.current.add(msg.id));
+      
+      setMessages(loadedMessages);
+      
+      const unread = loadedMessages.filter(
+        (m: Message) => m.senderType === 'patient' && !m.readAt
+      ).length;
+      setUnreadCount(unread);
+    } catch (error) {
+      console.error('Hiba az üzenetek betöltésekor:', error);
+      showToast('Hiba történt az üzenetek betöltésekor', 'error');
+    } finally {
+      setLoadingMessages(false);
+    }
+  }, [showToast]);
+
+  // Load messages and setup WebSocket when patient selected
+  useEffect(() => {
+    if (selectedPatientId) {
+      fetchMessages(selectedPatientId);
+      
+      if (isConnected) {
+        joinRoom(selectedPatientId);
+      }
+      
+      return () => {
+        if (isConnected) {
+          leaveRoom(selectedPatientId);
+        }
+      };
+    } else {
+      setMessages([]);
+      messagesLoadedRef.current.clear();
+    }
+  }, [selectedPatientId, isConnected, joinRoom, leaveRoom, fetchMessages]);
+
+  // WebSocket: Listen for new messages
+  useEffect(() => {
+    if (!socket || !selectedPatientId) return;
+
+    const handleNewMessage = (data: { message: Message; patientId: string }) => {
+      if (data.patientId !== selectedPatientId) {
+        // Update conversations list if message is for another patient
+        fetchConversations();
+        return;
+      }
+
+      if (messagesLoadedRef.current.has(data.message.id)) {
+        return;
+      }
+
+      messagesLoadedRef.current.add(data.message.id);
+
+      setMessages(prev => {
+        if (prev.some(m => m.id === data.message.id)) {
+          return prev;
+        }
+        
+        return [...prev, {
+          ...data.message,
+          createdAt: new Date(data.message.createdAt),
+          readAt: data.message.readAt ? new Date(data.message.readAt) : null,
+        }];
+      });
+
+      if (data.message.senderType === 'patient' && !data.message.readAt) {
+        setUnreadCount(prev => prev + 1);
+      }
+      
+      // Refresh conversations to update last message
+      fetchConversations();
+    };
+
+    const handleMessageRead = (data: { messageId: string; patientId: string }) => {
+      if (data.patientId !== selectedPatientId) return;
+
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === data.messageId ? { ...m, readAt: new Date() } : m
+        )
+      );
+
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    };
+
+    socket.on('new-message', handleNewMessage);
+    socket.on('message-read', handleMessageRead);
+
+    return () => {
+      socket.off('new-message', handleNewMessage);
+      socket.off('message-read', handleMessageRead);
+    };
+  }, [socket, selectedPatientId, fetchConversations]);
+
+  // Auto-mark patient messages as read when they become visible
+  useEffect(() => {
+    if (messages.length === 0 || loadingMessages || !selectedPatientId) return;
+
+    // Mark all unread patient messages as read immediately when loaded
+    const unreadPatientMessages = messages.filter(
+      m => m.senderType === 'patient' && !m.readAt && !m.pending && !m.id.startsWith('pending-')
+    );
+    
+    if (unreadPatientMessages.length > 0) {
+      // Mark as read optimistically
+      setMessages(prevMessages => 
+        prevMessages.map(m => 
+          unreadPatientMessages.some(um => um.id === m.id) 
+            ? { ...m, readAt: new Date() } 
+            : m
+        )
+      );
+      
+      setUnreadCount(0);
+      
+      // Send API requests to mark as read
+      Promise.all(
+        unreadPatientMessages.map(msg => 
+          fetch(`/api/messages/${msg.id}/read`, {
+            method: 'PUT',
+            credentials: 'include',
+          }).catch(err => {
+            console.error(`Hiba az üzenet ${msg.id} olvasottnak jelölésekor:`, err);
+            // Revert on error
+            setMessages(prevMessages => 
+              prevMessages.map(m => 
+                m.id === msg.id ? { ...m, readAt: null } : m
+              )
+            );
+          })
+        )
+      ).then(() => {
+        fetchConversations(); // Refresh conversations after marking as read
+      });
+    }
+  }, [messages, loadingMessages, selectedPatientId, fetchConversations]);
+
+  // Intersection Observer: Mark messages as read when they become visible
+  useEffect(() => {
+    if (messages.length === 0 || loadingMessages || !selectedPatientId) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const messageId = entry.target.getAttribute('data-message-id');
+            if (messageId) {
+              const message = messages.find(m => m.id === messageId);
+              if (message && message.senderType === 'patient' && !message.readAt && !message.pending && !message.id.startsWith('pending-')) {
+                // Mark as read
+                fetch(`/api/messages/${messageId}/read`, {
+                  method: 'PUT',
+                  credentials: 'include',
+                }).then(() => {
+                  setMessages(prevMessages => 
+                    prevMessages.map(m => 
+                      m.id === messageId ? { ...m, readAt: new Date() } : m
+                    )
+                  );
+                  setUnreadCount(prev => Math.max(0, prev - 1));
+                  fetchConversations();
+                }).catch(err => console.error('Hiba az üzenet olvasottnak jelölésekor:', err));
+              }
+            }
+          }
+        });
+      },
+      { threshold: 0.5 } // Mark as read when 50% visible
+    );
+
+    // Observe all message elements
+    const messageElements = document.querySelectorAll('[data-message-id]');
+    messageElements.forEach(el => observer.observe(el));
+
+    return () => {
+      messageElements.forEach(el => observer.unobserve(el));
+      observer.disconnect();
+    };
+  }, [messages, loadingMessages, selectedPatientId, fetchConversations]);
+
+  // Smooth scroll to bottom
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }, 100);
+    }
+  }, [messages]);
+
+  // Send message
+  const handleSendMessage = async () => {
+    const textToSend = newMessage.trim();
+    if (!textToSend || !selectedPatientId) {
+      showToast('Kérjük, válasszon beteget és írjon üzenetet', 'error');
       return;
     }
 
     try {
       setSending(true);
-      
-      // Pending message
-      const tempId = `pending-${Date.now()}`;
-      const pendingMessage: Message = {
-        id: tempId,
-        patientId: selectedPatientId,
-        senderType: 'doctor',
-        senderId: currentUserId || '',
-        senderEmail: '',
-        subject: null,
-        message: textToSend,
-        readAt: null,
-        createdAt: new Date(),
-      };
-      
-      setMessages([...messages, pendingMessage]);
-      setPendingMessageId(tempId);
       
       const response = await fetch('/api/messages', {
         method: 'POST',
@@ -235,27 +391,28 @@ export function PatientMessagesList() {
 
       if (!response.ok) {
         const error = await response.json();
-        setMessages(messages.filter(m => m.id !== tempId));
-        setPendingMessageId(null);
         throw new Error(error.error || 'Hiba az üzenet küldésekor');
       }
 
       const data = await response.json();
       
-      setMessages(messages.map(m => 
-        m.id === tempId ? { ...data.message } : m
-      ));
-      setPendingMessageId(null);
-      
-      if (!messageText) {
-        setNewMessage('');
+      if (data.message) {
+        messagesLoadedRef.current.add(data.message.id);
+        setMessages(prev => {
+          if (prev.some(m => m.id === data.message.id)) {
+            return prev;
+          }
+          return [...prev, {
+            ...data.message,
+            createdAt: new Date(data.message.createdAt),
+            readAt: data.message.readAt ? new Date(data.message.readAt) : null,
+          }];
+        });
       }
-      showToast('Üzenet sikeresen elküldve', 'success');
       
-      setTimeout(() => {
-        fetchMessages();
-        fetchConversations();
-      }, 500);
+      setNewMessage('');
+      showToast('Üzenet sikeresen elküldve', 'success');
+      fetchConversations(); // Refresh conversations
     } catch (error: any) {
       console.error('Hiba az üzenet küldésekor:', error);
       showToast(error.message || 'Hiba történt az üzenet küldésekor', 'error');
@@ -264,80 +421,17 @@ export function PatientMessagesList() {
     }
   };
 
-  const handleSelectPatient = (patientId: string, patientName: string) => {
-    setSelectedPatientId(patientId);
-    setSelectedPatientName(patientName);
-    setLoading(true);
-  };
+  // Filter conversations
+  const filteredConversations = conversations.filter(conv =>
+    conv.patientName.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
-  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setNewMessage(e.target.value);
-    setCursorPosition(e.target.selectionStart);
-  };
+  // Calculate total unread count
+  const totalUnreadCount = conversations.reduce((sum, conv) => sum + conv.unreadCount, 0);
 
-  const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      if (newMessage.trim() && !sending) {
-        handleSendMessage();
-      }
-    }
-  };
-
-  const handleTextareaSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
-    setCursorPosition((e.target as HTMLTextAreaElement).selectionStart);
-  };
-
-  const searchPatients = async (query: string) => {
-    if (!query.trim()) {
-      setSearchResults([]);
-      return;
-    }
-
-    try {
-      setSearchingPatients(true);
-      const response = await fetch(`/api/patients?q=${encodeURIComponent(query)}&limit=20`, {
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setSearchResults(data.patients || []);
-      } else {
-        setSearchResults([]);
-      }
-    } catch (error) {
-      console.error('Error searching patients:', error);
-      setSearchResults([]);
-    } finally {
-      setSearchingPatients(false);
-    }
-  };
-
-  useEffect(() => {
-    if (patientSearchQuery.trim()) {
-      const timeoutId = setTimeout(() => {
-        searchPatients(patientSearchQuery);
-      }, 300);
-      return () => clearTimeout(timeoutId);
-    } else {
-      setSearchResults([]);
-    }
-  }, [patientSearchQuery]);
-
-  const handleSelectNewPatient = (patientId: string, patientName: string) => {
-    setSelectedPatientId(patientId);
-    setSelectedPatientName(patientName);
-    setPatientSearchQuery('');
-    setSearchResults([]);
-    setShowPatientSearch(false);
-    setLoading(true);
-  };
-
-
-  if (loading && conversations.length === 0) {
+  if (loading) {
     return (
-      <div className="flex h-[700px] border border-gray-200 rounded-lg overflow-hidden bg-white">
+      <div className="flex h-[calc(100vh-200px)] sm:h-[700px] border border-gray-200 rounded-lg overflow-hidden bg-white">
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
@@ -349,104 +443,68 @@ export function PatientMessagesList() {
   }
 
   return (
-    <div data-patient-messages-list className="flex h-[700px] border border-gray-200 rounded-lg overflow-hidden bg-white">
+    <div className="flex h-[calc(100vh-200px)] sm:h-[700px] border border-gray-200 rounded-lg overflow-hidden bg-white">
       {/* Conversations List */}
-      <div className="w-80 border-r border-gray-200 flex flex-col">
+      <div className={`${selectedPatientId ? 'hidden sm:flex' : 'flex'} w-full sm:w-80 border-r border-gray-200 flex flex-col`}>
         <div className="p-4 border-b border-gray-200 bg-gray-50">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <Users className="w-5 h-5" />
+              <MessageCircle className="w-5 h-5" />
               Betegek
             </h3>
-            {unreadCount > 0 && (
+            {totalUnreadCount > 0 && (
               <span className="px-2 py-1 text-xs font-semibold text-white bg-red-500 rounded-full">
-                {unreadCount}
+                {totalUnreadCount}
               </span>
             )}
           </div>
-          <div className="space-y-2">
-            <button
-              onClick={() => {
-                setShowPatientSearch(!showPatientSearch);
-                if (!showPatientSearch) {
-                  setPatientSearchQuery('');
-                  setSearchResults([]);
-                }
-              }}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Új betegnek üzen
-            </button>
-            {showPatientSearch && (
-              <div className="space-y-2">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="text"
-                    value={patientSearchQuery}
-                    onChange={(e) => setPatientSearchQuery(e.target.value)}
-                    className="form-input pl-10 w-full text-sm"
-                    placeholder="Keresés név, TAJ vagy email alapján..."
-                    autoFocus
-                  />
-                </div>
-                {searchingPatients && (
-                  <div className="text-center py-2 text-xs text-gray-500">Keresés...</div>
-                )}
-                {!searchingPatients && patientSearchQuery.trim() && searchResults.length > 0 && (
-                  <div className="border rounded-lg max-h-64 overflow-y-auto bg-white">
-                    {searchResults.map((patient) => (
-                      <button
-                        key={patient.id}
-                        onClick={() => handleSelectNewPatient(patient.id, patient.nev || 'Név nélküli beteg')}
-                        className="w-full px-3 py-2 text-left hover:bg-gray-50 border-b last:border-b-0 transition-colors text-sm"
-                      >
-                        <div className="font-medium text-gray-900">
-                          {patient.nev || 'Név nélküli beteg'}
-                        </div>
-                        <div className="text-xs text-gray-500 mt-0.5">
-                          {patient.taj && `TAJ: ${patient.taj}`}
-                          {patient.taj && patient.email && ' • '}
-                          {patient.email && `Email: ${patient.email}`}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {!searchingPatients && patientSearchQuery.trim() && searchResults.length === 0 && (
-                  <div className="text-center py-2 text-xs text-gray-500">Nincs találat</div>
-                )}
-              </div>
-            )}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Beteg keresése..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="form-input pl-10 w-full"
+            />
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
-          {conversations.length === 0 && !loading ? (
+          {filteredConversations.length === 0 ? (
             <div className="p-4 text-center text-gray-500 text-sm">
-              Még nincsenek beszélgetések
-              <p className="text-xs mt-2 text-gray-400">Még nem érkeztek üzenetek betegektől</p>
+              {searchQuery ? 'Nincs találat' : 'Még nincsenek beszélgetések'}
+              <p className="text-xs mt-2 text-gray-400">
+                {!searchQuery && 'A betegekkel folytatott beszélgetések itt jelennek meg'}
+              </p>
             </div>
           ) : (
-              conversations.map((conv) => (
+            filteredConversations.map((conv) => {
+              const isSelected = selectedPatientId === conv.patientId;
+              
+              return (
                 <div
                   key={conv.patientId}
-                  onClick={() => handleSelectPatient(conv.patientId, conv.patientName)}
-                  className={`p-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 ${
-                    selectedPatientId === conv.patientId ? 'bg-blue-50' : ''
+                  onClick={() => {
+                    setSelectedPatientId(conv.patientId);
+                    setSelectedPatientName(conv.patientName);
+                    messagesLoadedRef.current.clear();
+                  }}
+                  className={`p-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${
+                    isSelected ? 'bg-blue-50' : ''
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <div className="font-medium text-sm">{conv.patientName}</div>
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <div className="font-medium text-sm truncate">
+                        {conv.patientName}
+                      </div>
+                    </div>
                     {conv.unreadCount > 0 && (
-                      <span className="px-2 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full">
+                      <span className="px-2 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full flex-shrink-0">
                         {conv.unreadCount}
                       </span>
                     )}
                   </div>
-                  {conv.patientTaj && (
-                    <div className="text-xs text-gray-500 mt-0.5">TAJ: {conv.patientTaj}</div>
-                  )}
                   {conv.lastMessage && (
                     <div className="text-xs text-gray-500 mt-1 truncate">
                       {conv.lastMessage.message.substring(0, 50)}
@@ -454,129 +512,158 @@ export function PatientMessagesList() {
                     </div>
                   )}
                 </div>
-              ))
+              );
+            })
           )}
         </div>
       </div>
 
       {/* Chat Area */}
-      <div className={`${selectedPatientId ? 'flex' : 'hidden sm:flex'} flex-1 flex flex-col`}>
+      <div className="flex-1 flex flex-col">
         {selectedPatientId ? (
           <>
             {/* Header */}
             <div className="p-3 sm:p-4 border-b border-gray-200 bg-gray-50">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">
-                {selectedPatientName}
-              </h3>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">
+                      {selectedPatientName}
+                    </h3>
+                    <button
+                      onClick={() => router.push(`/patients/${selectedPatientId}/view`)}
+                      className="btn-secondary flex items-center gap-1 text-sm px-2 py-1 flex-shrink-0"
+                      title="Beteg részletei"
+                    >
+                      <User className="w-4 h-4" />
+                      <span className="hidden sm:inline">Részletek</span>
+                      <ArrowRight className="w-3 h-3 sm:hidden" />
+                    </button>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                  {isConnected && (
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-connection-pulse" title="Kapcsolódva" />
+                  )}
+                  {unreadCount > 0 && (
+                    <span className="px-2 py-1 text-xs font-semibold text-white bg-red-500 rounded-full">
+                      {unreadCount}
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-2 sm:p-4 bg-gray-50 space-y-3">
-              {loading ? (
-                <div className="text-center py-8 text-gray-500">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-                  <p>Betöltés...</p>
+            {loadingMessages ? (
+              <div className="flex-1 flex items-center justify-center bg-gray-50">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <p className="text-gray-500">Üzenetek betöltése...</p>
                 </div>
-              ) : messages.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <MessageCircle className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                  <p>Még nincsenek üzenetek</p>
-                </div>
-              ) : (
-                messages.map((message) => {
-                  const isFromDoctor = message.senderType === 'doctor';
-                  const isPending = message.id.startsWith('pending-');
-                  const isRead = message.readAt !== null;
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto p-2 sm:p-4 bg-gray-50 space-y-3 scroll-smooth">
+                {messages.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <MessageCircle className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                    <p>Még nincsenek üzenetek</p>
+                  </div>
+                ) : (
+                  messages.map((message) => {
+                    // Orvos oldalon: orvos üzenetei JOBBRA (kék), beteg üzenetei BALRA (fehér)
+                    const isFromMe = currentUserId ? message.senderType === 'doctor' && message.senderId === currentUserId : message.senderType === 'doctor';
+                    const isPending = message.pending === true;
+                    const isRead = message.readAt !== null;
+                    
+                    const senderName = isFromMe 
+                      ? (message.senderEmail || 'Én')
+                      : (selectedPatientName || 'Beteg');
+                    const lastName = getLastName(senderName);
+                    const monogram = getMonogram(senderName);
 
-                  return (
-                    <div
-                      key={message.id}
-                      className={`flex ${isFromDoctor ? 'justify-end' : 'justify-start'}`}
-                    >
+                    return (
                       <div
-                        className={`max-w-[75%] rounded-lg px-4 py-2 ${
-                          isFromDoctor
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-white text-gray-900 border border-gray-200'
-                        }`}
+                        key={message.id}
+                        data-message-id={message.id}
+                        className={`flex flex-col ${isFromMe ? 'items-end' : 'items-start'}`}
                       >
-                        <div className="text-sm">
-                          <MessageTextRenderer 
-                            text={message.message} 
-                            chatType="doctor-view-patient"
-                            patientId={selectedPatientId}
-                            messageId={message.id}
-                            senderId={message.senderId}
-                            currentUserId={currentUserId}
-                            onSendMessage={async (messageText) => {
-                              await handleSendMessage(messageText);
-                            }}
-                          />
-                        </div>
-                        <div className={`text-xs mt-1 flex items-center gap-1.5 ${
-                          isFromDoctor ? 'text-blue-100' : 'text-gray-500'
-                        }`}>
-                          <span>{format(new Date(message.createdAt), 'HH:mm', { locale: hu })}</span>
-                          {isFromDoctor && (
-                            <span className="ml-1">
-                              {isPending ? (
-                                <Loader2 className="w-3 h-3 animate-spin" />
-                              ) : isRead ? (
-                                <CheckCheck className="w-3 h-3" />
-                              ) : (
-                                <Check className="w-3 h-3 opacity-70" />
-                              )}
-                            </span>
-                          )}
+                        {/* Sender name and monogram */}
+                        {!isFromMe && (
+                          <div className="flex items-center gap-1.5 mb-1 px-1">
+                            <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center text-xs font-semibold text-green-700">
+                              {monogram}
+                            </div>
+                            <span className="text-xs font-medium text-gray-700">{lastName}</span>
+                          </div>
+                        )}
+                        <div
+                          className={`max-w-[75%] rounded-lg px-4 py-2 ${
+                            isFromMe
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-white text-gray-900 border border-gray-200'
+                          }`}
+                        >
+                          <div className="text-sm">
+                            <MessageTextRenderer 
+                              text={message.message} 
+                              chatType="doctor-view-patient"
+                              patientId={selectedPatientId}
+                              messageId={message.id}
+                              senderId={message.senderId}
+                              currentUserId={currentUserId || undefined}
+                              onSendMessage={async (messageText) => {
+                                setNewMessage(messageText);
+                                await handleSendMessage();
+                              }}
+                            />
+                          </div>
+                          <div className={`text-xs mt-1 flex items-center gap-1.5 ${
+                            isFromMe ? 'text-blue-100' : 'text-gray-500'
+                          }`}>
+                            <span>{format(new Date(message.createdAt), 'HH:mm', { locale: hu })}</span>
+                            {isFromMe && (
+                              <span className="ml-1">
+                                {isPending ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : isRead ? (
+                                  <CheckCheck className="w-3 h-3" />
+                                ) : (
+                                  <Check className="w-3 h-3 opacity-70" />
+                                )}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })
-              )}
-              <div ref={messagesEndRef} />
-            </div>
+                    );
+                  })
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+            )}
 
             {/* Message Input */}
-            <div className="border-t bg-white p-2 sm:p-4 relative">
+            <div className="border-t bg-white p-2 sm:p-4">
               <div className="flex flex-col sm:flex-row gap-2">
-                <div className="flex-1 relative">
-                  <textarea
-                    ref={textareaRef}
-                    value={newMessage}
-                    onChange={handleTextareaChange}
-                    onKeyDown={handleTextareaKeyDown}
-                    onSelect={handleTextareaSelect}
-                    className="form-input flex-1 resize-none w-full min-h-[60px] sm:min-h-0"
-                    rows={2}
-                    placeholder="Írja be üzenetét... (használjon @ jelet beteg jelöléséhez)"
-                    disabled={sending}
-                  />
-                  <PatientMention
-                    text={newMessage}
-                    cursorPosition={cursorPosition}
-                    onSelect={(mentionFormat, patientName) => {
-                      // Replace @query with mentionFormat
-                      const textBefore = newMessage.substring(0, cursorPosition);
-                      const lastAtIndex = textBefore.lastIndexOf('@');
-                      if (lastAtIndex !== -1) {
-                        const textAfter = newMessage.substring(cursorPosition);
-                        const newText = `${newMessage.substring(0, lastAtIndex)}${mentionFormat} ${textAfter}`;
-                        setNewMessage(newText);
-                        // Set cursor position after mention
-                        setTimeout(() => {
-                          if (textareaRef.current) {
-                            const newPos = lastAtIndex + mentionFormat.length + 1;
-                            textareaRef.current.setSelectionRange(newPos, newPos);
-                            setCursorPosition(newPos);
-                          }
-                        }, 0);
+                <textarea
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  className="form-input flex-1 resize-none w-full min-h-[60px] sm:min-h-0"
+                  rows={2}
+                  placeholder="Írja be üzenetét..."
+                  disabled={sending}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      if (newMessage.trim() && !sending) {
+                        handleSendMessage();
                       }
-                    }}
-                  />
-                </div>
+                    }
+                  }}
+                />
                 <button
-                  onClick={() => handleSendMessage()}
+                  onClick={handleSendMessage}
                   disabled={sending || !newMessage.trim()}
                   className="btn-primary flex items-center justify-center gap-2 px-4 py-2 sm:self-end w-full sm:w-auto"
                 >
@@ -590,7 +677,10 @@ export function PatientMessagesList() {
           <div className="flex-1 flex items-center justify-center text-gray-500">
             <div className="text-center">
               <MessageCircle className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-              <p>Válasszon egy beteget a beszélgetéshez</p>
+              <p>Válasszon egy beszélgetést</p>
+              <p className="text-sm mt-2 text-gray-400">
+                Válasszon egy beteget a bal oldali listából
+              </p>
             </div>
           </div>
         )}
@@ -598,4 +688,3 @@ export function PatientMessagesList() {
     </div>
   );
 }
-

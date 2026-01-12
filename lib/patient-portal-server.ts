@@ -9,6 +9,12 @@ const JWT_SECRET = new TextEncoder().encode(
 interface PortalSession {
   patientId: string;
   type: 'patient_portal';
+  impersonatedBy?: string; // Opcionális: ki impersonálta (ha van)
+}
+
+export interface PatientPortalSessionInfo {
+  patientId: string;
+  impersonatedBy?: string;
 }
 
 /**
@@ -38,6 +44,40 @@ export async function verifyPatientPortalSession(
     return payload.patientId;
   } catch (error) {
     console.error('Error verifying portal session:', error);
+    return null;
+  }
+}
+
+/**
+ * Get full patient portal session info including impersonatedBy
+ * Returns session info if valid, null otherwise
+ */
+export async function getPatientPortalSessionInfo(
+  request: NextRequest
+): Promise<PatientPortalSessionInfo | null> {
+  try {
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get('patient_portal_session');
+
+    if (!sessionCookie?.value) {
+      return null;
+    }
+
+    const { payload } = await jwtVerify<PortalSession>(
+      sessionCookie.value,
+      JWT_SECRET
+    );
+
+    if (payload.type !== 'patient_portal' || !payload.patientId) {
+      return null;
+    }
+
+    return {
+      patientId: payload.patientId,
+      impersonatedBy: payload.impersonatedBy,
+    };
+  } catch (error) {
+    console.error('Error getting portal session info:', error);
     return null;
   }
 }

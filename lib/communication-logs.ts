@@ -50,6 +50,22 @@ export async function logCommunication(input: CreateCommunicationLogInput): Prom
   );
 
   const row = result.rows[0];
+  
+  // Parse metadata - PostgreSQL JSONB returns as object/array, not string
+  let metadataParsed: Record<string, any> | null = null;
+  if (row.metadata) {
+    if (typeof row.metadata === 'string') {
+      try {
+        metadataParsed = JSON.parse(row.metadata);
+      } catch (e) {
+        console.warn('[logCommunication] Failed to parse metadata:', e);
+        metadataParsed = null;
+      }
+    } else if (typeof row.metadata === 'object') {
+      metadataParsed = row.metadata;
+    }
+  }
+  
   return {
     id: row.id,
     patientId: row.patient_id,
@@ -58,7 +74,7 @@ export async function logCommunication(input: CreateCommunicationLogInput): Prom
     direction: row.direction,
     subject: row.subject,
     content: row.content,
-    metadata: row.metadata ? JSON.parse(row.metadata) : null,
+    metadata: metadataParsed,
     createdAt: new Date(row.created_at),
     createdBy: row.created_by,
   };
@@ -103,17 +119,34 @@ export async function getPatientCommunicationLogs(
 
   const result = await pool.query(query, params);
 
-  return result.rows.map((row: any) => ({
-    id: row.id,
-    patientId: row.patient_id,
-    doctorId: row.doctor_id,
-    communicationType: row.communication_type,
-    direction: row.direction,
-    subject: row.subject,
-    content: row.content,
-    metadata: row.metadata ? JSON.parse(row.metadata) : null,
-    createdAt: new Date(row.created_at),
-    createdBy: row.created_by,
-  }));
+  return result.rows.map((row: any) => {
+    // Parse metadata - PostgreSQL JSONB returns as object/array, not string
+    let metadataParsed: Record<string, any> | null = null;
+    if (row.metadata) {
+      if (typeof row.metadata === 'string') {
+        try {
+          metadataParsed = JSON.parse(row.metadata);
+        } catch (e) {
+          console.warn('[getPatientCommunicationLogs] Failed to parse metadata:', e, row.id);
+          metadataParsed = null;
+        }
+      } else if (typeof row.metadata === 'object') {
+        metadataParsed = row.metadata;
+      }
+    }
+    
+    return {
+      id: row.id,
+      patientId: row.patient_id,
+      doctorId: row.doctor_id,
+      communicationType: row.communication_type,
+      direction: row.direction,
+      subject: row.subject,
+      content: row.content,
+      metadata: metadataParsed,
+      createdAt: new Date(row.created_at),
+      createdBy: row.created_by,
+    };
+  });
 }
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { MessageCircle, Send, Check, CheckCheck, Loader2, Users, Search, UserPlus, Plus, Edit2, X } from 'lucide-react';
+import { MessageCircle, Send, Check, CheckCheck, Loader2, Users, Search, UserPlus, Plus, Edit2, X, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
@@ -37,6 +37,8 @@ export function DoctorMessages() {
   const [showNewChat, setShowNewChat] = useState(false);
   const [editingGroupName, setEditingGroupName] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
+  const [isGroupCreator, setIsGroupCreator] = useState(false);
+  const [deletingGroup, setDeletingGroup] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -223,8 +225,16 @@ export function DoctorMessages() {
 
       const data = await response.json();
       setGroupParticipants(data.participants || []);
+      
+      // Check if current user is the creator
+      if (data.createdBy && currentUserId) {
+        setIsGroupCreator(data.createdBy === currentUserId);
+      } else {
+        setIsGroupCreator(false);
+      }
     } catch (error) {
       console.error('Hiba a résztvevők betöltésekor:', error);
+      setIsGroupCreator(false);
     }
   };
 
@@ -439,6 +449,39 @@ export function DoctorMessages() {
     } catch (error: any) {
       console.error('Hiba a csoportos beszélgetés átnevezésekor:', error);
       showToast(error.message || 'Hiba történt a csoportos beszélgetés átnevezésekor', 'error');
+    }
+  };
+
+  const handleDeleteGroup = async () => {
+    if (!selectedGroupId) return;
+
+    if (!confirm('Biztosan törölni szeretné ezt a csoportos beszélgetést? Ez a művelet nem visszavonható, és az összes üzenet törlődik.')) {
+      return;
+    }
+
+    try {
+      setDeletingGroup(true);
+      const response = await fetch(`/api/doctor-messages/groups/${selectedGroupId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Hiba a csoportos beszélgetés törlésekor');
+      }
+
+      showToast('Csoportos beszélgetés törölve', 'success');
+      setSelectedGroupId(null);
+      setSelectedGroupName(null);
+      setGroupParticipants([]);
+      setMessages([]);
+      fetchConversations();
+    } catch (error: any) {
+      console.error('Hiba a csoportos beszélgetés törlésekor:', error);
+      showToast(error.message || 'Hiba történt a csoportos beszélgetés törlésekor', 'error');
+    } finally {
+      setDeletingGroup(false);
     }
   };
 
@@ -725,6 +768,21 @@ export function DoctorMessages() {
                         <UserPlus className="w-4 h-4" />
                         <span className="hidden sm:inline">Hozzáadás</span>
                       </button>
+                      {isGroupCreator && (
+                        <button
+                          onClick={handleDeleteGroup}
+                          disabled={deletingGroup}
+                          className="btn-secondary flex items-center gap-1 text-sm px-2 py-1 text-red-600 hover:text-red-700 hover:bg-red-50"
+                          title="Csoport törlése"
+                        >
+                          {deletingGroup ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                          <span className="hidden sm:inline">Törlés</span>
+                        </button>
+                      )}
                     </>
                   )}
                 </div>

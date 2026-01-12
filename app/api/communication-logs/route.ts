@@ -34,8 +34,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Ha beteg kéri, csak a saját naplóját láthatja
-    if (patientSessionId && patientSessionId !== patientId) {
+    // Ha beteg kéri (és NINCS orvos session), csak a saját naplóját láthatja
+    // Ha orvos van bejelentkezve, akkor az orvos jogosultság-ellenőrzés fut le később
+    if (patientSessionId && !auth && patientSessionId !== patientId) {
       return NextResponse.json(
         { error: 'Csak saját érintkezési naplóját tekintheti meg' },
         { status: 403 }
@@ -87,7 +88,11 @@ export async function GET(request: NextRequest) {
       logs,
     });
   } catch (error: any) {
-    console.error('Hiba az érintkezési napló lekérésekor:', error);
+    console.error('[API] Hiba az érintkezési napló lekérésekor:', {
+      error: error.message,
+      stack: error.stack,
+      patientId: request.nextUrl.searchParams.get('patientId')
+    });
     return NextResponse.json(
       { error: 'Hiba történt az érintkezési napló lekérésekor' },
       { status: 500 }

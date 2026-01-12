@@ -36,12 +36,20 @@ export async function sendDoctorMessage(input: CreateDoctorMessageInput): Promis
 
   // Extract patient mentions from message text
   const mentionedPatientIds = await extractPatientMentions(input.message);
+  
+  // Log extracted mentions for debugging
+  console.log('[sendDoctorMessage] Extracted patient mentions:', {
+    messagePreview: input.message.substring(0, 200),
+    mentionedPatientIds,
+    mentionedPatientIdsCount: mentionedPatientIds.length,
+    mentionedPatientIdsJSON: JSON.stringify(mentionedPatientIds)
+  });
 
   // Üzenet mentése (groupId támogatással)
   const result = await pool.query(
     `INSERT INTO doctor_messages (sender_id, recipient_id, sender_email, sender_name, subject, message, mentioned_patient_ids, group_id)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-     RETURNING id, sender_id, recipient_id, sender_email, sender_name, subject, message, read_at, created_at`,
+     RETURNING id, sender_id, recipient_id, sender_email, sender_name, subject, message, read_at, created_at, mentioned_patient_ids`,
     [
       input.senderId,
       input.recipientId || null,
@@ -53,8 +61,30 @@ export async function sendDoctorMessage(input: CreateDoctorMessageInput): Promis
       input.groupId || null,
     ]
   );
+  
+  // Log what was actually stored
+  const storedMentionedIds = result.rows[0].mentioned_patient_ids;
+  console.log('[sendDoctorMessage] Stored mentioned_patient_ids:', {
+    messageId: result.rows[0].id,
+    storedValue: storedMentionedIds,
+    storedType: typeof storedMentionedIds,
+    parsedValue: storedMentionedIds ? (typeof storedMentionedIds === 'string' ? JSON.parse(storedMentionedIds) : storedMentionedIds) : null
+  });
 
   const row = result.rows[0];
+  
+  // Parse mentioned_patient_ids - PostgreSQL JSONB returns as object/array, not string
+  let mentionedPatientIdsParsed: string[] = [];
+  if (row.mentioned_patient_ids) {
+    if (typeof row.mentioned_patient_ids === 'string') {
+      mentionedPatientIdsParsed = JSON.parse(row.mentioned_patient_ids);
+    } else if (Array.isArray(row.mentioned_patient_ids)) {
+      mentionedPatientIdsParsed = row.mentioned_patient_ids;
+    } else {
+      console.warn('[sendDoctorMessage] Unexpected mentioned_patient_ids type:', typeof row.mentioned_patient_ids);
+    }
+  }
+  
   const message: DoctorMessage = {
     id: row.id,
     senderId: row.sender_id,
@@ -66,7 +96,7 @@ export async function sendDoctorMessage(input: CreateDoctorMessageInput): Promis
     message: row.message,
     readAt: row.read_at ? new Date(row.read_at) : null,
     createdAt: new Date(row.created_at),
-    mentionedPatientIds: row.mentioned_patient_ids ? JSON.parse(row.mentioned_patient_ids) : [],
+    mentionedPatientIds: mentionedPatientIdsParsed,
   };
 
   return message;
@@ -606,6 +636,37 @@ export async function renameDoctorMessageGroup(
   await pool.query(
     `UPDATE doctor_message_groups SET name = $1 WHERE id = $2`,
     [newName, groupId]
+  );
+}
+
+/**
+ * Csoportos beszélgetés törlése
+ * Csak a létrehozó törölheti a csoportot
+ */
+export async function deleteDoctorMessageGroup(
+  groupId: string,
+  userId: string
+): Promise<void> {
+  const pool = getDbPool();
+
+  // Verify user is the creator
+  const groupResult = await pool.query(
+    `SELECT created_by FROM doctor_message_groups WHERE id = $1`,
+    [groupId]
+  );
+
+  if (groupResult.rows.length === 0) {
+    throw new Error('Csoportos beszélgetés nem található');
+  }
+
+  if (groupResult.rows[0].created_by !== userId) {
+    throw new Error('Csak a csoport létrehozója törölheti a csoportot');
+  }
+
+  // Delete group (CASCADE will delete participants and messages)
+  await pool.query(
+    `DELETE FROM doctor_message_groups WHERE id = $1`,
+    [groupId]
   );
 }
 

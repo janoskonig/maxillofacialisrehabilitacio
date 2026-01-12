@@ -39,9 +39,17 @@ export async function GET(
 
     const participants = await getGroupParticipants(groupId);
 
+    // Get group creator
+    const groupResult = await pool.query(
+      `SELECT created_by FROM doctor_message_groups WHERE id = $1`,
+      [groupId]
+    );
+    const createdBy = groupResult.rows.length > 0 ? groupResult.rows[0].created_by : null;
+
     return NextResponse.json({
       success: true,
       participants,
+      createdBy,
     });
   } catch (error: any) {
     console.error('Hiba a résztvevők lekérésekor:', error);
