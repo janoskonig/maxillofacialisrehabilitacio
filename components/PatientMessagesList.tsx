@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { MessageCircle, Send, Check, CheckCheck, Loader2, Search, User, ArrowRight } from 'lucide-react';
+import { MessageCircle, Send, Check, CheckCheck, Loader2, Search, User, ArrowRight, Plus, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
@@ -53,6 +53,10 @@ export function PatientMessagesList() {
   const [newMessage, setNewMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
+  const [showPatientSelector, setShowPatientSelector] = useState(false);
+  const [patientSearchQuery, setPatientSearchQuery] = useState('');
+  const [availablePatients, setAvailablePatients] = useState<Patient[]>([]);
+  const [loadingPatients, setLoadingPatients] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -145,6 +149,40 @@ export function PatientMessagesList() {
       setLoading(false);
     }
   }, [showToast]);
+
+  // Fetch available patients for new chat
+  const fetchAvailablePatients = useCallback(async () => {
+    if (!showPatientSelector) return;
+    
+    setLoadingPatients(true);
+    try {
+      const response = await fetch('/api/patients?limit=1000', {
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error('Hiba a betegek betöltésekor');
+      }
+
+      const data = await response.json();
+      const patientsWithEmail = (data.patients || []).filter(
+        (p: Patient) => p.email && p.email.trim() !== ''
+      );
+      setAvailablePatients(patientsWithEmail);
+    } catch (error) {
+      console.error('Hiba a betegek betöltésekor:', error);
+      showToast('Hiba történt a betegek betöltésekor', 'error');
+    } finally {
+      setLoadingPatients(false);
+    }
+  }, [showPatientSelector, showToast]);
+
+  // Fetch patients when selector is shown
+  useEffect(() => {
+    if (showPatientSelector) {
+      fetchAvailablePatients();
+    }
+  }, [showPatientSelector, fetchAvailablePatients]);
 
   // Initial load
   useEffect(() => {
@@ -480,6 +518,80 @@ export function PatientMessagesList() {
               </span>
             )}
           </div>
+          <button
+            onClick={() => setShowPatientSelector(true)}
+            className="w-full btn-primary flex items-center gap-2 justify-center mb-3"
+          >
+            <Plus className="w-4 h-4" />
+            Új beszélgetés
+          </button>
+          {showPatientSelector && (
+            <div className="mb-3">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    value={patientSearchQuery}
+                    onChange={(e) => setPatientSearchQuery(e.target.value)}
+                    placeholder="Beteg keresése..."
+                    className="form-input pl-10 w-full"
+                    autoFocus
+                  />
+                </div>
+                <button
+                  onClick={() => {
+                    setShowPatientSelector(false);
+                    setPatientSearchQuery('');
+                  }}
+                  className="p-2 hover:bg-gray-200 rounded transition-colors"
+                  title="Bezárás"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              {patientSearchQuery && (
+                <div className="max-h-60 overflow-y-auto border border-gray-200 rounded bg-white">
+                  {loadingPatients ? (
+                    <div className="p-4 text-center text-gray-500 text-sm">Betöltés...</div>
+                  ) : availablePatients.length === 0 ? (
+                    <div className="p-4 text-center text-gray-500 text-sm">Nincs találat</div>
+                  ) : (
+                    availablePatients
+                      .filter(p => 
+                        p.nev.toLowerCase().includes(patientSearchQuery.toLowerCase()) ||
+                        (p.email && p.email.toLowerCase().includes(patientSearchQuery.toLowerCase()))
+                      )
+                      .slice(0, 10)
+                      .map((patient) => (
+                        <div
+                          key={patient.id}
+                          onClick={() => {
+                            if (!patient.email || patient.email.trim() === '') {
+                              showToast('Ennek a betegnek nincs email címe, ezért nem küldhet üzenetet', 'error');
+                              return;
+                            }
+                            setSelectedPatientId(patient.id);
+                            setSelectedPatientName(patient.nev);
+                            setShowPatientSelector(false);
+                            setPatientSearchQuery('');
+                            messagesLoadedRef.current.clear();
+                            // Refresh conversations to include new patient
+                            setTimeout(() => fetchConversations(), 500);
+                          }}
+                          className="p-2 cursor-pointer hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                        >
+                          <div className="font-medium text-sm">{patient.nev}</div>
+                          {patient.email && (
+                            <div className="text-xs text-gray-500">{patient.email}</div>
+                          )}
+                        </div>
+                      ))
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
