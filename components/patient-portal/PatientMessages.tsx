@@ -47,6 +47,7 @@ export function PatientMessages() {
   const [showRecipientSelector, setShowRecipientSelector] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesLoadedRef = useRef<Set<string>>(new Set());
 
   // Fetch patient info
@@ -241,14 +242,34 @@ export function PatientMessages() {
     }
   }, [messages.length, loading, patientId]);
 
-  // Smooth scroll to bottom
+  // Scroll to bottom when messages change or loading finishes
   useEffect(() => {
-    if (messagesEndRef.current) {
-      setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-      }, 100);
+    if (!loading) {
+      // Use requestAnimationFrame to ensure DOM is updated
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          if (messagesContainerRef.current) {
+            messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+          } else if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'auto', block: 'end' });
+          }
+        }, 50);
+      });
     }
-  }, [messages]);
+  }, [messages, loading]);
+
+  // Force scroll to bottom when component mounts
+  useEffect(() => {
+    if (!loading) {
+      setTimeout(() => {
+        if (messagesContainerRef.current) {
+          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+        } else if (messagesEndRef.current) {
+          messagesEndRef.current.scrollIntoView({ behavior: 'auto', block: 'end' });
+        }
+      }, 200);
+    }
+  }, [loading]);
 
   // Send message
   const handleSendMessage = async () => {
@@ -355,7 +376,7 @@ export function PatientMessages() {
       </div>
 
       {/* Messages Container */}
-      <div className="flex-1 overflow-y-auto bg-gradient-to-b from-gray-50 to-gray-100 p-4 space-y-4 scroll-smooth">
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto bg-gradient-to-b from-gray-50 to-gray-100 p-4 space-y-4 scroll-smooth">
         {messages.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             <MessageCircle className="w-16 h-16 mx-auto mb-4 text-gray-300" />

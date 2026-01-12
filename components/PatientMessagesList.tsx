@@ -55,6 +55,7 @@ export function PatientMessagesList() {
   const [unreadCount, setUnreadCount] = useState(0);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesLoadedRef = useRef<Set<string>>(new Set());
 
   // Get current user
@@ -103,7 +104,8 @@ export function PatientMessagesList() {
             const patientMessages = (messagesData.messages || []) as Message[];
             
             if (patientMessages.length > 0) {
-              const lastMessage = patientMessages[patientMessages.length - 1];
+              // API DESC sorrendben adja vissza (legfrissebb először), így az első elem a legfrissebb
+              const lastMessage = patientMessages[0];
               const unread = patientMessages.filter(
                 (m: Message) => m.senderType === 'patient' && !m.readAt
               ).length;
@@ -356,14 +358,34 @@ export function PatientMessagesList() {
     };
   }, [messages, loadingMessages, selectedPatientId, fetchConversations]);
 
-  // Smooth scroll to bottom
+  // Scroll to bottom when messages change or loading finishes
   useEffect(() => {
-    if (messagesEndRef.current) {
-      setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-      }, 100);
+    if (!loadingMessages) {
+      // Use requestAnimationFrame to ensure DOM is updated
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          if (messagesContainerRef.current) {
+            messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+          } else if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'auto', block: 'end' });
+          }
+        }, 50);
+      });
     }
-  }, [messages]);
+  }, [messages, loadingMessages]);
+
+  // Force scroll to bottom when patient is selected
+  useEffect(() => {
+    if (selectedPatientId && !loadingMessages) {
+      setTimeout(() => {
+        if (messagesContainerRef.current) {
+          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+        } else if (messagesEndRef.current) {
+          messagesEndRef.current.scrollIntoView({ behavior: 'auto', block: 'end' });
+        }
+      }, 200);
+    }
+  }, [selectedPatientId, loadingMessages]);
 
   // Send message
   const handleSendMessage = async () => {
@@ -563,7 +585,7 @@ export function PatientMessagesList() {
                 </div>
               </div>
             ) : (
-              <div className="flex-1 overflow-y-auto p-2 sm:p-4 bg-gray-50 space-y-3 scroll-smooth">
+              <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-2 sm:p-4 bg-gray-50 space-y-3 scroll-smooth">
                 {messages.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">
                     <MessageCircle className="w-12 h-12 mx-auto mb-2 text-gray-300" />

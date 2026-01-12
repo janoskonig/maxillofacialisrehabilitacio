@@ -40,6 +40,7 @@ export function DoctorMessages() {
   const [isGroupCreator, setIsGroupCreator] = useState(false);
   const [deletingGroup, setDeletingGroup] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Fetch conversations and unread count
@@ -121,12 +122,34 @@ export function DoctorMessages() {
     }
   }, [messages.length, loading, selectedDoctorId, selectedGroupId, currentUserId]);
 
-  // Scroll to bottom when messages change
+  // Scroll to bottom when messages change or loading finishes
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (!loading) {
+      // Use requestAnimationFrame to ensure DOM is updated
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          if (messagesContainerRef.current) {
+            messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+          } else if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'auto', block: 'end' });
+          }
+        }, 50);
+      });
     }
-  }, [messages]);
+  }, [messages, loading]);
+
+  // Force scroll to bottom when doctor or group is selected
+  useEffect(() => {
+    if ((selectedDoctorId || selectedGroupId) && !loading) {
+      setTimeout(() => {
+        if (messagesContainerRef.current) {
+          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+        } else if (messagesEndRef.current) {
+          messagesEndRef.current.scrollIntoView({ behavior: 'auto', block: 'end' });
+        }
+      }, 200);
+    }
+  }, [selectedDoctorId, selectedGroupId, loading]);
 
   const fetchConversations = async () => {
     try {
@@ -790,7 +813,7 @@ export function DoctorMessages() {
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-2 sm:p-4 bg-gray-50 space-y-3">
+            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-2 sm:p-4 bg-gray-50 space-y-3">
               {messages.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   <MessageCircle className="w-12 h-12 mx-auto mb-2 text-gray-300" />
