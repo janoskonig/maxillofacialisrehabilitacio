@@ -1082,28 +1082,20 @@ export async function sendNewMessageNotification(
   const senderLabel = senderType === 'doctor' ? 'orvosától' : 'betegétől';
   const portalLink = senderType === 'doctor' 
     ? `${baseUrl}/patient-portal/messages`
-    : `${baseUrl}/patients`;
-
-  // Üzenet előnézet (első 200 karakter)
-  const preview = messagePreview.length > 200 
-    ? messagePreview.substring(0, 200) + '...' 
-    : messagePreview;
+    : `${baseUrl}/messages`;
 
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <h2 style="color: #2563eb;">Új üzenet érkezett</h2>
       <p>${greeting}!</p>
-      <p><strong>Új üzenete érkezett!</strong></p>
+      <p><strong>Új üzenete érkezett ${senderName ? `a ${senderName} ${senderLabel}` : senderLabel}!</strong></p>
       ${messageSubject ? `<p><strong>Tárgy:</strong> ${messageSubject}</p>` : ''}
-      <div style="background-color: #f9fafb; border-left: 4px solid #2563eb; padding: 15px; margin: 20px 0; border-radius: 4px;">
-        <p style="margin: 0; color: #6b7280; font-size: 14px; font-style: italic;">
-          ${senderName ? `<strong>${senderName}</strong> írta:` : 'Üzenet:'}
-        </p>
-        <p style="margin: 10px 0 0 0; color: #111827; white-space: pre-wrap;">${preview}</p>
-      </div>
+      <p style="margin-top: 20px; color: #374151;">
+        Az üzenet tartalmának megtekintéséhez kérjük, jelentkezzen be az oldalra.
+      </p>
       <p style="margin-top: 20px;">
         <a href="${portalLink}" style="display: inline-block; background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
-          Üzenet megtekintése
+          Bejelentkezés és üzenet megtekintése
         </a>
       </p>
       <p style="color: #6b7280; font-size: 14px; margin-top: 20px;">
@@ -1151,26 +1143,18 @@ export async function sendDoctorMessageNotification(
 
   const portalLink = `${baseUrl}/messages`;
 
-  // Üzenet előnézet (első 200 karakter)
-  const preview = messagePreview.length > 200 
-    ? messagePreview.substring(0, 200) + '...' 
-    : messagePreview;
-
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <h2 style="color: #2563eb;">Új üzenet érkezett kollégától</h2>
       <p>${greeting}!</p>
-      <p><strong>Új üzenete érkezett egy orvoskollégától!</strong></p>
+      <p><strong>Új üzenete érkezett ${senderName ? `a ${senderName} kollégától` : 'egy orvoskollégától'}!</strong></p>
       ${messageSubject ? `<p><strong>Tárgy:</strong> ${messageSubject}</p>` : ''}
-      <div style="background-color: #f9fafb; border-left: 4px solid #2563eb; padding: 15px; margin: 20px 0; border-radius: 4px;">
-        <p style="margin: 0; color: #6b7280; font-size: 14px; font-style: italic;">
-          ${senderName ? `<strong>${senderName}</strong> írta:` : 'Üzenet:'}
-        </p>
-        <p style="margin: 10px 0 0 0; color: #111827; white-space: pre-wrap;">${preview}</p>
-      </div>
+      <p style="margin-top: 20px; color: #374151;">
+        Az üzenet tartalmának megtekintéséhez kérjük, jelentkezzen be az oldalra.
+      </p>
       <p style="margin-top: 20px;">
         <a href="${portalLink}" style="display: inline-block; background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
-          Üzenet megtekintése
+          Bejelentkezés és üzenet megtekintése
         </a>
       </p>
       <p style="color: #6b7280; font-size: 14px; margin-top: 20px;">
