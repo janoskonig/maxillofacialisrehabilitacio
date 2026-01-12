@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { MessageCircle, Send, Clock, User, Mail, Check, CheckCheck, Loader2 } from 'lucide-react';
+import { MessageCircle, Send, Clock, User, Mail, Check, CheckCheck, Loader2, ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
@@ -35,10 +35,14 @@ export function PatientMessages() {
   const [showForm, setShowForm] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [pendingMessageId, setPendingMessageId] = useState<string | null>(null);
+  const [recipients, setRecipients] = useState<Array<{ id: string; name: string; type: 'treating_doctor' | 'admin' }>>([]);
+  const [selectedRecipientId, setSelectedRecipientId] = useState<string | null>(null);
+  const [showRecipientSelector, setShowRecipientSelector] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchPatientInfo();
+    fetchRecipients();
   }, []);
 
   useEffect(() => {
@@ -70,6 +74,31 @@ export function PatientMessages() {
     } catch (error) {
       console.error('Hiba a beteg adatok betöltésekor:', error);
       router.push('/patient-portal');
+    }
+  };
+
+  const fetchRecipients = async () => {
+    try {
+      const response = await fetch('/api/patient-portal/recipients', {
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          router.push('/patient-portal');
+          return;
+        }
+        throw new Error('Hiba a címzettek betöltésekor');
+      }
+
+      const data = await response.json();
+      if (data.recipients && data.recipients.length > 0) {
+        setRecipients(data.recipients);
+        // Alapértelmezetten az első címzettet választjuk (általában a kezelőorvos)
+        setSelectedRecipientId(data.recipients[0].id);
+      }
+    } catch (error) {
+      console.error('Hiba a címzettek betöltésekor:', error);
     }
   };
 
@@ -157,6 +186,7 @@ export function PatientMessages() {
           patientId,
           subject: null,
           message: textToSend,
+          recipientDoctorId: selectedRecipientId,
         }),
       });
 
@@ -258,11 +288,6 @@ export function PatientMessages() {
           <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0" />
           <div className="min-w-0 flex-1">
             <h2 className="text-base sm:text-xl font-semibold text-gray-900 truncate">Üzenetek</h2>
-            {doctorName && (
-              <p className="text-xs sm:text-sm text-gray-600 mt-0.5 truncate">
-                Üzenet küldése: <span className="font-medium text-gray-900">{doctorName}</span>
-              </p>
-            )}
           </div>
           {unreadCount > 0 && (
             <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold text-white bg-red-500 rounded-full flex-shrink-0">
@@ -378,13 +403,75 @@ export function PatientMessages() {
 
       {/* Message Input */}
       <div className="border-t bg-white p-2 sm:p-4">
+        {/* Recipient Selector */}
+        {recipients.length > 1 && (
+          <div className="mb-2 sm:mb-3 relative">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+              Üzenet küldése:
+            </label>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowRecipientSelector(!showRecipientSelector)}
+                className="w-full px-3 py-2 text-left text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 flex items-center justify-between"
+              >
+                <span className="truncate">
+                  {selectedRecipientId
+                    ? recipients.find(r => r.id === selectedRecipientId)?.name || 'Válasszon címzettet'
+                    : 'Válasszon címzettet'}
+                </span>
+                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showRecipientSelector ? 'transform rotate-180' : ''}`} />
+              </button>
+              {showRecipientSelector && (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setShowRecipientSelector(false)}
+                  />
+                  <div className="absolute z-20 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-auto">
+                    {recipients.map((recipient) => (
+                      <button
+                        key={recipient.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedRecipientId(recipient.id);
+                          setShowRecipientSelector(false);
+                        }}
+                        className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 ${
+                          selectedRecipientId === recipient.id ? 'bg-blue-50 text-blue-700' : 'text-gray-900'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span>{recipient.name}</span>
+                          {recipient.type === 'treating_doctor' && (
+                            <span className="text-xs text-gray-500">(Kezelőorvos)</span>
+                          )}
+                          {recipient.type === 'admin' && (
+                            <span className="text-xs text-gray-500">(Admin)</span>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+        {recipients.length === 1 && (
+          <div className="mb-2 sm:mb-3">
+            <p className="text-xs sm:text-sm text-gray-600">
+              Üzenet küldése: <span className="font-medium text-gray-900">{recipients[0].name}</span>
+            </p>
+          </div>
+        )}
         <div className="flex gap-1.5 sm:gap-2">
           <textarea
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             className="form-input flex-1 resize-none text-sm sm:text-base"
             rows={2}
-            placeholder="Írja be üzenetét az orvosnak..."
+            placeholder="Írja be üzenetét..."
             disabled={sending}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -397,7 +484,7 @@ export function PatientMessages() {
           />
           <button
             onClick={() => handleSendMessage()}
-            disabled={sending || !newMessage.trim()}
+            disabled={sending || !newMessage.trim() || !selectedRecipientId}
             className="btn-primary flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 self-end text-xs sm:text-sm"
           >
             <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />

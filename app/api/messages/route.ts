@@ -106,12 +106,42 @@ export async function POST(request: NextRequest) {
       senderEmail = patientResult.rows[0].email || '';
       senderName = patientResult.rows[0].nev;
 
-      // Ha a beteg megadott egy recipientDoctorId-t, ellenőrizzük, hogy létezik és aktív-e
+      // Beteg csak a kezelőorvosnak vagy az adminnak küldhet üzenetet
+      // Először megkeressük a kezelőorvos ID-ját
+      const patientData = patientResult.rows[0];
+      let treatingDoctorId: string | null = null;
+      
+      if (patientData.kezeleoorvos) {
+        const treatingDoctorResult = await pool.query(
+          `SELECT id FROM users 
+           WHERE (email = $1 OR doktor_neve = $1) AND active = true 
+           LIMIT 1`,
+          [patientData.kezeleoorvos]
+        );
+        if (treatingDoctorResult.rows.length > 0) {
+          treatingDoctorId = treatingDoctorResult.rows[0].id;
+        }
+      }
+
+      // Admin ID lekérése (első aktív admin)
+      const adminResult = await pool.query(
+        `SELECT id FROM users WHERE role = 'admin' AND active = true LIMIT 1`
+      );
+      const adminId = adminResult.rows.length > 0 ? adminResult.rows[0].id : null;
+
+      // Ha a beteg megadott egy recipientDoctorId-t, ellenőrizzük, hogy csak kezelőorvos vagy admin lehet
       if (recipientDoctorId) {
+        if (recipientDoctorId !== treatingDoctorId && recipientDoctorId !== adminId) {
+          return NextResponse.json(
+            { error: 'Csak a kezelőorvosnak vagy az adminnak küldhet üzenetet' },
+            { status: 403 }
+          );
+        }
+
+        // Ellenőrizzük, hogy létezik és aktív-e
         const doctorResult = await pool.query(
           `SELECT id, email, doktor_neve FROM users 
-           WHERE id = $1 AND active = true 
-           AND (doktor_neve IS NOT NULL OR role IN ('sebészorvos', 'fogpótlástanász', 'admin'))`,
+           WHERE id = $1 AND active = true`,
           [recipientDoctorId]
         );
 
@@ -139,6 +169,7 @@ export async function POST(request: NextRequest) {
       senderEmail,
       subject: subject || null,
       message: message.trim(),
+      recipientDoctorId: recipientDoctorIdFinal,
     });
 
     // Activity log

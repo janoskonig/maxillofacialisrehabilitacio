@@ -22,6 +22,7 @@ export interface CreateMessageInput {
   senderEmail: string;
   subject?: string | null;
   message: string;
+  recipientDoctorId?: string | null; // Opcionális: ha beteg küldi, megadhatja, melyik orvosnak küldi (kezelőorvos vagy admin)
 }
 
 /**
@@ -33,9 +34,9 @@ export async function sendMessage(input: CreateMessageInput): Promise<Message> {
 
   // Üzenet mentése
   const result = await pool.query(
-    `INSERT INTO messages (patient_id, sender_type, sender_id, sender_email, subject, message)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING id, patient_id, sender_type, sender_id, sender_email, subject, message, read_at, created_at`,
+    `INSERT INTO messages (patient_id, sender_type, sender_id, sender_email, subject, message, recipient_doctor_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     RETURNING id, patient_id, sender_type, sender_id, sender_email, subject, message, read_at, created_at, recipient_doctor_id`,
     [
       input.patientId,
       input.senderType,
@@ -43,6 +44,7 @@ export async function sendMessage(input: CreateMessageInput): Promise<Message> {
       input.senderEmail,
       input.subject || null,
       input.message,
+      input.recipientDoctorId || null,
     ]
   );
 
@@ -70,19 +72,24 @@ export async function sendMessage(input: CreateMessageInput): Promise<Message> {
       doctorId = userResult.rows[0].id;
     }
   } else {
-    // Ha beteg küldi, meg kell találni a kezelőorvosát
-    const patientResult = await pool.query(
-      `SELECT kezeleoorvos FROM patients WHERE id = $1`,
-      [input.patientId]
-    );
-    if (patientResult.rows.length > 0 && patientResult.rows[0].kezeleoorvos) {
-      // Megkeressük az orvos user ID-ját email alapján
-      const doctorEmailResult = await pool.query(
-        `SELECT id FROM users WHERE email = $1 OR doktor_neve = $2 LIMIT 1`,
-        [patientResult.rows[0].kezeleoorvos, patientResult.rows[0].kezeleoorvos]
+    // Ha beteg küldi, meg kell találni a címzett orvos ID-ját
+    // Ha van recipientDoctorId, azt használjuk, különben a kezelőorvosát
+    if (input.recipientDoctorId) {
+      doctorId = input.recipientDoctorId;
+    } else {
+      const patientResult = await pool.query(
+        `SELECT kezeleoorvos FROM patients WHERE id = $1`,
+        [input.patientId]
       );
-      if (doctorEmailResult.rows.length > 0) {
-        doctorId = doctorEmailResult.rows[0].id;
+      if (patientResult.rows.length > 0 && patientResult.rows[0].kezeleoorvos) {
+        // Megkeressük az orvos user ID-ját email alapján
+        const doctorEmailResult = await pool.query(
+          `SELECT id FROM users WHERE email = $1 OR doktor_neve = $2 LIMIT 1`,
+          [patientResult.rows[0].kezeleoorvos, patientResult.rows[0].kezeleoorvos]
+        );
+        if (doctorEmailResult.rows.length > 0) {
+          doctorId = doctorEmailResult.rows[0].id;
+        }
       }
     }
   }
