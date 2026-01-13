@@ -75,8 +75,16 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
   }
   
   // Form mezők lekérése
-  const form = pdfDoc.getForm();
-  const formFields = form.getFields();
+  let form;
+  let formFields;
+  try {
+    form = pdfDoc.getForm();
+    formFields = form.getFields();
+    console.log(`PDF form sikeresen betöltve. Mezők száma: ${formFields.length}`);
+  } catch (formError) {
+    console.error('Hiba a PDF form lekérésekor:', formError);
+    throw new Error(`Nem sikerült betölteni a PDF form mezőket: ${(formError as Error).message}`);
+  }
   
   // Adatok előkészítése a template számára
   const tajNumber = (patient.taj || '').replace(/[^0-9]/g, ''); // Csak számok
@@ -218,9 +226,13 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
   // Form mezők kitöltése
   let filledFields = 0;
   const errors: Array<{ field: string; error: string }> = [];
+  const allFieldNames: string[] = [];
+  
+  console.log(`PDF form mezők száma: ${formFields.length}`);
   
   formFields.forEach(field => {
     const fieldName = field.getName();
+    allFieldNames.push(fieldName);
     
     // Pontos mezőnév egyezés keresése
     if (fieldMapping.hasOwnProperty(fieldName)) {
@@ -228,13 +240,21 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
       try {
         // Type guard használata a típus ellenőrzéshez
         if (field.constructor.name === 'PDFTextField') {
-          (field as any).setText(String(value));
+          // Próbáljuk meg az updateAppearances opcióval is
+          try {
+            (field as any).setText(String(value), { updateAppearances: true });
+          } catch {
+            // Ha nem támogatja, próbáljuk meg anélkül
+            (field as any).setText(String(value));
+          }
           filledFields++;
+          console.log(`Mező kitöltve: ${fieldName} = ${value}`);
         } else if (field.constructor.name === 'PDFCheckBox') {
           const stringValue = String(value);
           if (stringValue === 'Igen' || stringValue === 'igen' || stringValue.toLowerCase() === 'true') {
             (field as any).check();
             filledFields++;
+            console.log(`Checkbox bejelölve: ${fieldName}`);
           }
         }
       } catch (err: any) {
@@ -245,39 +265,82 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
             const fieldDict = acroField.dict;
             fieldDict.set('V', pdfDoc.context.obj(String(value)));
             filledFields++;
+            console.log(`Mező kitöltve (közvetlen): ${fieldName} = ${value}`);
           } catch (directErr) {
-            errors.push({ field: fieldName, error: (directErr as Error).message });
+            const errorMsg = (directErr as Error).message;
+            errors.push({ field: fieldName, error: errorMsg });
+            console.error(`Hiba a mező kitöltésekor (közvetlen): ${fieldName} - ${errorMsg}`);
           }
         } else {
-          errors.push({ field: fieldName, error: err.message });
+          const errorMsg = err.message || 'Ismeretlen hiba';
+          errors.push({ field: fieldName, error: errorMsg });
+          console.error(`Hiba a mező kitöltésekor: ${fieldName} - ${errorMsg}`);
         }
       }
     } else {
       // Ha nincs pontos egyezés, próbáljuk meg részleges egyezéssel
       const fieldNameLower = fieldName.toLowerCase();
+      let matched = false;
       for (const [key, value] of Object.entries(fieldMapping)) {
         if (fieldNameLower.includes(key.toLowerCase()) || key.toLowerCase().includes(fieldNameLower)) {
           try {
             if (field.constructor.name === 'PDFTextField') {
-              (field as any).setText(String(value), { updateAppearances: false });
+              // Próbáljuk meg az updateAppearances opcióval is
+              try {
+                (field as any).setText(String(value), { updateAppearances: true });
+              } catch {
+                // Ha nem támogatja, próbáljuk meg anélkül
+                (field as any).setText(String(value));
+              }
               filledFields++;
+              matched = true;
+              console.log(`Mező kitöltve (részleges egyezés): ${fieldName} (kulcs: ${key}) = ${value}`);
+              break;
             }
-            break;
           } catch (err) {
             // Folytatjuk a következő mezővel
           }
         }
       }
+      if (!matched) {
+        console.log(`Mező nem található a mapping-ben: ${fieldName}`);
+      }
     }
   });
   
-  // PDF mentése
+  console.log(`Összesen ${filledFields} mező lett kitöltve a ${formFields.length} mezőből`);
+  console.log(`Elérhető mezőnevek: ${allFieldNames.join(', ')}`);
+  console.log(`Mapping kulcsok: ${Object.keys(fieldMapping).join(', ')}`);
+  
+  if (errors.length > 0) {
+    console.error(`Hibák a PDF kitöltésekor:`, errors);
+  }
+  
+  // Ha egyetlen mező sem lett kitöltve, figyelmeztetés
+  if (filledFields === 0) {
+    if (formFields.length === 0) {
+      console.warn('FIGYELEM: A PDF template-nek nincsenek form mezői! A PDF üres lesz.');
+      throw new Error('A PDF template nem tartalmaz kitölthető form mezőket. Ellenőrizze, hogy a template fájl helyes-e.');
+    } else {
+      console.warn('FIGYELEM: Egyetlen mező sem lett kitöltve! A PDF üres lehet.');
+      console.warn(`Talált mezők a PDF-ben: ${allFieldNames.slice(0, 20).join(', ')}${allFieldNames.length > 20 ? '...' : ''}`);
+      console.warn(`Mapping kulcsok: ${Object.keys(fieldMapping).slice(0, 20).join(', ')}${Object.keys(fieldMapping).length > 20 ? '...' : ''}`);
+      throw new Error(`Nem sikerült kitölteni a PDF mezőket. Talált mezők: ${allFieldNames.slice(0, 10).join(', ')}${allFieldNames.length > 10 ? '...' : ''}. Ellenőrizze, hogy a mezőnevek egyeznek-e a template-tel.`);
+    }
+  }
+  
+  // PDF mentése - fontos: updateFieldAppearances: true kell, hogy a kitöltött mezők láthatók legyenek
   let pdfBytes: Uint8Array;
   try {
-    pdfBytes = await pdfDoc.save({ updateFieldAppearances: false });
+    // Először próbáljuk meg az appearance frissítéssel (ez biztosítja, hogy a mezők láthatók legyenek)
+    pdfBytes = await pdfDoc.save({ updateFieldAppearances: true });
+    console.log('PDF sikeresen mentve appearance frissítéssel');
   } catch (saveError) {
+    console.warn('Hiba az appearance frissítéssel, próbáljuk meg anélkül:', saveError);
     try {
-      pdfBytes = await pdfDoc.save();
+      // Ha nem sikerül, próbáljuk meg anélkül
+      pdfBytes = await pdfDoc.save({ updateFieldAppearances: false });
+      console.warn('PDF mentve appearance frissítés nélkül - a mezők lehet, hogy nem láthatók');
     } catch (saveError2) {
       throw new Error(`PDF mentési hiba: ${(saveError2 as Error).message}`);
     }
