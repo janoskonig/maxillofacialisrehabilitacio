@@ -115,6 +115,14 @@ export default function Login() {
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+                <div className="mt-2 text-right">
+                  <Link
+                    href="/forgot-password"
+                    className="text-sm font-medium text-medical-primary hover:text-medical-primary-dark"
+                  >
+                    Elfelejtett jelszó?
+                  </Link>
+                </div>
               </div>
 
               {error && (
