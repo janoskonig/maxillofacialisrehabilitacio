@@ -281,6 +281,72 @@ export async function sendApprovalEmail(userEmail: string): Promise<void> {
 }
 
 /**
+ * Get base URL for email links
+ * Priority: 1. NEXT_PUBLIC_BASE_URL env var, 2. Request origin (dev), 3. Production URL
+ */
+function getBaseUrlForEmail(request?: { headers?: { get: (name: string) => string | null }; nextUrl?: { origin: string } }): string {
+  const envBaseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+  
+  // If environment variable is set, use it (works for both local and production)
+  if (envBaseUrl) {
+    return envBaseUrl;
+  }
+  
+  // In development, try to use request origin if available
+  if (process.env.NODE_ENV === 'development' && request) {
+    const origin = request.headers?.get('origin') || request.nextUrl?.origin;
+    if (origin) {
+      return origin;
+    }
+  }
+  
+  // Production fallback
+  return 'https://rehabilitacios-protetika.hu';
+}
+
+/**
+ * Send password reset email
+ */
+export async function sendPasswordResetEmail(
+  userEmail: string,
+  resetToken: string,
+  request?: { headers?: { get: (name: string) => string | null }; nextUrl?: { origin: string } }
+): Promise<void> {
+  const baseUrl = getBaseUrlForEmail(request);
+  const resetUrl = `${baseUrl}/reset-password?token=${resetToken}`;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #2563eb;">Jelszó-visszaállítás</h2>
+      <p>Kedves felhasználó,</p>
+      <p>Kérvényt kaptunk a jelszó-visszaállításához. Ha Ön kérte ezt, kattintson az alábbi linkre:</p>
+      <p style="margin: 20px 0;">
+        <a href="${resetUrl}" 
+           clicktracking="off"
+           style="background-color: #2563eb; color: white; padding: 12px 24px; 
+                  text-decoration: none; border-radius: 5px; display: inline-block;">
+          Jelszó visszaállítása
+        </a>
+      </p>
+      <p>Vagy másolja be ezt a linket a böngészőbe:</p>
+      <p style="word-break: break-all; color: #666;">${resetUrl}</p>
+      <p style="color: #dc2626; font-size: 12px; margin-top: 20px;">
+        <strong>Fontos:</strong> Ez a link 1 órán belül lejár. Ha nem Ön kérte a jelszó-visszaállítást, kérjük hagyja figyelmen kívül ezt az emailt. A jelszava nem változik meg.
+      </p>
+      <p style="color: #666; font-size: 12px; margin-top: 30px;">
+        Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer
+      </p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: userEmail,
+    subject: 'Jelszó-visszaállítás - Maxillofaciális Rehabilitáció',
+    html,
+  });
+}
+
+/**
  * Send patient creation notification to admins
  */
 export async function sendPatientCreationNotification(
