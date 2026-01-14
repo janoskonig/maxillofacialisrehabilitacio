@@ -16,6 +16,11 @@ export interface DoctorMessage {
   readAt: Date | null;
   createdAt: Date;
   mentionedPatientIds?: string[]; // Új mező a megemlített betegek ID-ihoz
+  readBy?: Array<{ // Új mező: ki olvasta az üzenetet (group chat-ekhez)
+    userId: string;
+    userName: string | null;
+    readAt: Date;
+  }>;
 }
 
 export interface CreateDoctorMessageInput {
@@ -121,7 +126,7 @@ export async function getDoctorMessages(
   const pool = getDbPool();
 
   let query = `
-    SELECT id, sender_id, recipient_id, sender_email, sender_name, subject, message, read_at, created_at
+    SELECT id, sender_id, recipient_id, group_id, sender_email, sender_name, subject, message, read_at, created_at
     FROM doctor_messages
     WHERE (sender_id = $1 OR recipient_id = $1)
   `;
@@ -155,6 +160,34 @@ export async function getDoctorMessages(
 
   const result = await pool.query(query, params);
 
+  // Lekérjük az olvasókat group chat üzenetekhez
+  const groupMessageIds = result.rows
+    .filter((row: any) => row.group_id)
+    .map((row: any) => row.id);
+  const readByMap = new Map<string, Array<{ userId: string; userName: string | null; readAt: Date }>>();
+  
+  if (groupMessageIds.length > 0) {
+    const readsResult = await pool.query(
+      `SELECT dmr.message_id, dmr.user_id, dmr.read_at, u.doktor_neve
+       FROM doctor_message_reads dmr
+       LEFT JOIN users u ON u.id = dmr.user_id
+       WHERE dmr.message_id = ANY($1::uuid[])
+       ORDER BY dmr.read_at ASC`,
+      [groupMessageIds]
+    );
+
+    for (const readRow of readsResult.rows) {
+      if (!readByMap.has(readRow.message_id)) {
+        readByMap.set(readRow.message_id, []);
+      }
+      readByMap.get(readRow.message_id)!.push({
+        userId: readRow.user_id,
+        userName: readRow.doktor_neve || null,
+        readAt: new Date(readRow.read_at),
+      });
+    }
+  }
+
   return result.rows.map((row: any) => ({
     id: row.id,
     senderId: row.sender_id,
@@ -166,22 +199,61 @@ export async function getDoctorMessages(
     message: row.message,
     readAt: row.read_at ? new Date(row.read_at) : null,
     createdAt: new Date(row.created_at),
+    readBy: row.group_id ? (readByMap.get(row.id) || []) : undefined,
   }));
 }
 
 /**
  * Üzenet olvasottnak jelölése
+ * Group chat-eknél minden résztvevő jelölheti olvasottnak
  */
 export async function markDoctorMessageAsRead(messageId: string, userId: string): Promise<void> {
   const pool = getDbPool();
 
-  // Csak akkor jelölhetjük olvasottnak, ha a felhasználó a címzett
-  await pool.query(
-    `UPDATE doctor_messages 
-     SET read_at = CURRENT_TIMESTAMP 
-     WHERE id = $1 AND recipient_id = $2 AND read_at IS NULL`,
-    [messageId, userId]
+  // Először ellenőrizzük, hogy group chat-e vagy egyéni beszélgetés
+  const messageResult = await pool.query(
+    `SELECT group_id, recipient_id FROM doctor_messages WHERE id = $1`,
+    [messageId]
   );
+
+  if (messageResult.rows.length === 0) {
+    throw new Error('Üzenet nem található');
+  }
+
+  const message = messageResult.rows[0];
+
+  if (message.group_id) {
+    // Group chat: ellenőrizzük, hogy a felhasználó résztvevő-e
+    const participantResult = await pool.query(
+      `SELECT 1 FROM doctor_message_group_participants 
+       WHERE group_id = $1 AND user_id = $2`,
+      [message.group_id, userId]
+    );
+
+    if (participantResult.rows.length === 0) {
+      throw new Error('Nincs jogosultsága az üzenet olvasottnak jelöléséhez');
+    }
+
+    // Group chat: rögzítjük az olvasást a doctor_message_reads táblában
+    await pool.query(
+      `INSERT INTO doctor_message_reads (message_id, user_id, read_at)
+       VALUES ($1, $2, CURRENT_TIMESTAMP)
+       ON CONFLICT (message_id, user_id) DO NOTHING`,
+      [messageId, userId]
+    );
+  } else {
+    // Egyéni beszélgetés: csak akkor jelölhetjük olvasottnak, ha a felhasználó a címzett
+    if (message.recipient_id !== userId) {
+      throw new Error('Csak a saját fogadott üzeneteit jelölheti olvasottnak');
+    }
+
+    await pool.query(
+      `UPDATE doctor_messages 
+       SET read_at = CURRENT_TIMESTAMP 
+       WHERE id = $1 AND recipient_id = $2 AND read_at IS NULL`,
+      [messageId, userId]
+    );
+  }
 }
 
 /**
@@ -495,7 +567,7 @@ export async function getDoctorMessageGroups(userId: string): Promise<Array<{
 
     // Get last message
     const lastMessageResult = await pool.query(
-      `SELECT id, sender_id, recipient_id, sender_email, sender_name, subject, message, read_at, created_at
+      `SELECT id, sender_id, recipient_id, group_id, sender_email, sender_name, subject, message, read_at, created_at
        FROM doctor_messages
        WHERE group_id = $1
        ORDER BY created_at DESC
@@ -506,6 +578,23 @@ export async function getDoctorMessageGroups(userId: string): Promise<Array<{
     let lastMessage: DoctorMessage | null = null;
     if (lastMessageResult.rows.length > 0) {
       const msgRow = lastMessageResult.rows[0];
+      
+      // Lekérjük az olvasókat az utolsó üzenethez
+      const readsResult = await pool.query(
+        `SELECT dmr.user_id, dmr.read_at, u.doktor_neve
+         FROM doctor_message_reads dmr
+         LEFT JOIN users u ON u.id = dmr.user_id
+         WHERE dmr.message_id = $1
+         ORDER BY dmr.read_at ASC`,
+        [msgRow.id]
+      );
+
+      const readBy = readsResult.rows.map((readRow: any) => ({
+        userId: readRow.user_id,
+        userName: readRow.doktor_neve || null,
+        readAt: new Date(readRow.read_at),
+      }));
+
       lastMessage = {
         id: msgRow.id,
         senderId: msgRow.sender_id,
@@ -517,6 +606,7 @@ export async function getDoctorMessageGroups(userId: string): Promise<Array<{
         message: msgRow.message,
         readAt: msgRow.read_at ? new Date(msgRow.read_at) : null,
         createdAt: new Date(msgRow.created_at),
+        readBy: readBy,
       };
     }
 
@@ -558,6 +648,7 @@ export async function getDoctorMessageGroups(userId: string): Promise<Array<{
 
 /**
  * Üzenetek lekérése csoportos beszélgetésből
+ * Group chat-eknél tartalmazza az olvasók listáját
  */
 export async function getGroupMessages(
   groupId: string,
@@ -599,6 +690,32 @@ export async function getGroupMessages(
 
   const result = await pool.query(query, params);
 
+  // Lekérjük az olvasókat minden üzenethez (group chat-ekhez)
+  const messageIds = result.rows.map((row: any) => row.id);
+  const readByMap = new Map<string, Array<{ userId: string; userName: string | null; readAt: Date }>>();
+  
+  if (messageIds.length > 0) {
+    const readsResult = await pool.query(
+      `SELECT dmr.message_id, dmr.user_id, dmr.read_at, u.doktor_neve
+       FROM doctor_message_reads dmr
+       LEFT JOIN users u ON u.id = dmr.user_id
+       WHERE dmr.message_id = ANY($1::uuid[])
+       ORDER BY dmr.read_at ASC`,
+      [messageIds]
+    );
+
+    for (const readRow of readsResult.rows) {
+      if (!readByMap.has(readRow.message_id)) {
+        readByMap.set(readRow.message_id, []);
+      }
+      readByMap.get(readRow.message_id)!.push({
+        userId: readRow.user_id,
+        userName: readRow.doktor_neve || null,
+        readAt: new Date(readRow.read_at),
+      });
+    }
+  }
+
   return result.rows.map((row: any) => ({
     id: row.id,
     senderId: row.sender_id,
@@ -610,6 +727,7 @@ export async function getGroupMessages(
     message: row.message,
     readAt: row.read_at ? new Date(row.read_at) : null,
     createdAt: new Date(row.created_at),
+    readBy: readByMap.get(row.id) || [],
   }));
 }
 

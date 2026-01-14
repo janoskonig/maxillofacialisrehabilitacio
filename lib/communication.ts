@@ -1,5 +1,6 @@
 import { getDbPool } from './db';
 import { logCommunication } from './communication-logs';
+import { validateUUID, validateMessageText, validateSubject } from './validation';
 
 export type MessageSenderType = 'doctor' | 'patient';
 
@@ -32,18 +33,28 @@ export interface CreateMessageInput {
 export async function sendMessage(input: CreateMessageInput): Promise<Message> {
   const pool = getDbPool();
 
+  // Validáció
+  const validatedPatientId = validateUUID(input.patientId, 'Beteg ID');
+  const validatedSenderId = validateUUID(input.senderId, 'Küldő ID');
+  const validatedMessage = validateMessageText(input.message);
+  const validatedSubject = validateSubject(input.subject);
+  
+  if (input.recipientDoctorId) {
+    validateUUID(input.recipientDoctorId, 'Címzett orvos ID');
+  }
+
   // Üzenet mentése
   const result = await pool.query(
     `INSERT INTO messages (patient_id, sender_type, sender_id, sender_email, subject, message, recipient_doctor_id)
      VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING id, patient_id, sender_type, sender_id, sender_email, subject, message, read_at, created_at, recipient_doctor_id`,
     [
-      input.patientId,
+      validatedPatientId,
       input.senderType,
-      input.senderId,
+      validatedSenderId,
       input.senderEmail,
-      input.subject || null,
-      input.message,
+      validatedSubject,
+      validatedMessage,
       input.recipientDoctorId || null,
     ]
   );
@@ -109,6 +120,8 @@ export async function sendMessage(input: CreateMessageInput): Promise<Message> {
 
 /**
  * Beteg üzeneteinek lekérése
+ * @param patientId - Beteg ID-ja
+ * @param options - Opciók: unreadOnly, limit, offset, doctorId (ha orvos kéri, csak az ő üzeneteit mutatja), isAdmin (ha admin, minden üzenetet lát)
  */
 export async function getPatientMessages(
   patientId: string,
@@ -116,22 +129,74 @@ export async function getPatientMessages(
     unreadOnly?: boolean;
     limit?: number;
     offset?: number;
+    doctorId?: string | null; // Ha meg van adva, csak az adott orvosnak küldött üzeneteket mutatja (betegtől érkező üzeneteknél)
+    isAdmin?: boolean; // Ha true, admin minden üzenetet lát (nem szűrünk recipient_doctor_id alapján)
   }
 ): Promise<Message[]> {
   const pool = getDbPool();
-
-  let query = `
-    SELECT id, patient_id, sender_type, sender_id, sender_email, subject, message, read_at, created_at
-    FROM messages
-    WHERE patient_id = $1
-  `;
-  const params: any[] = [patientId];
-
-  if (options?.unreadOnly) {
-    query += ' AND read_at IS NULL';
+  
+  // Validáció
+  const validatedPatientId = validateUUID(patientId, 'Beteg ID');
+  if (options?.doctorId) {
+    validateUUID(options.doctorId, 'Orvos ID');
   }
 
-  query += ' ORDER BY created_at DESC';
+  // Ha orvos kéri az üzeneteket, először ellenőrizzük, hogy a kezelőorvos-e
+  let isTreatingDoctor = false;
+  if (options?.doctorId && !options?.isAdmin) {
+    const patientResult = await pool.query(
+      `SELECT kezeleoorvos FROM patients WHERE id = $1`,
+      [validatedPatientId]
+    );
+    
+    if (patientResult.rows.length > 0) {
+      const kezeleoorvos = patientResult.rows[0].kezeleoorvos;
+      if (kezeleoorvos) {
+        // Ellenőrizzük, hogy az orvos a kezelőorvos-e
+        const doctorResult = await pool.query(
+          `SELECT id FROM users WHERE id = $1 AND (email = $2 OR doktor_neve = $2)`,
+          [options.doctorId, kezeleoorvos]
+        );
+        isTreatingDoctor = doctorResult.rows.length > 0;
+      }
+    }
+  }
+
+  let query = `
+    SELECT m.id, m.patient_id, m.sender_type, m.sender_id, m.sender_email, m.subject, m.message, m.read_at, m.created_at, m.recipient_doctor_id
+    FROM messages m
+    WHERE m.patient_id = $1
+  `;
+  const params: any[] = [validatedPatientId];
+
+  // Ha orvos kéri az üzeneteket (doctorId meg van adva), akkor csak az ő üzeneteit mutatjuk
+  // Ez azt jelenti:
+  // - Ha beteg küldi (sender_type = 'patient'), akkor csak akkor mutatjuk, ha:
+  //   * recipient_doctor_id = doctorId VAGY
+  //   * (recipient_doctor_id IS NULL ÉS az orvos a kezelőorvos)
+  // - Ha orvos küldi (sender_type = 'doctor'), akkor csak akkor mutatjuk, ha sender_id = doctorId
+  if (options?.doctorId && !options?.isAdmin) {
+    if (isTreatingDoctor) {
+      // Ha a kezelőorvos, akkor látja a recipient_doctor_id IS NULL üzeneteket is
+      query += ` AND (
+        (m.sender_type = 'patient' AND (m.recipient_doctor_id = $${params.length + 1} OR m.recipient_doctor_id IS NULL))
+        OR (m.sender_type = 'doctor' AND m.sender_id = $${params.length + 1})
+      )`;
+    } else {
+      // Ha nem a kezelőorvos, akkor csak az explicit neki küldött üzeneteket látja
+      query += ` AND (
+        (m.sender_type = 'patient' AND m.recipient_doctor_id = $${params.length + 1})
+        OR (m.sender_type = 'doctor' AND m.sender_id = $${params.length + 1})
+      )`;
+    }
+    params.push(options.doctorId);
+  }
+
+  if (options?.unreadOnly) {
+    query += ' AND m.read_at IS NULL';
+  }
+
+  query += ' ORDER BY m.created_at DESC';
 
   if (options?.limit) {
     query += ` LIMIT $${params.length + 1}`;
@@ -163,10 +228,13 @@ export async function getPatientMessages(
  */
 export async function markMessageAsRead(messageId: string): Promise<void> {
   const pool = getDbPool();
+  
+  // Validáció
+  const validatedMessageId = validateUUID(messageId, 'Üzenet ID');
 
   await pool.query(
     `UPDATE messages SET read_at = CURRENT_TIMESTAMP WHERE id = $1 AND read_at IS NULL`,
-    [messageId]
+    [validatedMessageId]
   );
 }
 
@@ -175,6 +243,9 @@ export async function markMessageAsRead(messageId: string): Promise<void> {
  */
 export async function getUnreadMessageCount(patientId: string, recipientType: MessageSenderType): Promise<number> {
   const pool = getDbPool();
+  
+  // Validáció
+  const validatedPatientId = validateUUID(patientId, 'Beteg ID');
 
   // Ha orvos kérdezi, akkor csak a betegtől érkező olvasatlan üzeneteket számoljuk
   // Ha beteg kérdezi, akkor csak az orvostól érkező olvasatlan üzeneteket számoljuk
@@ -184,7 +255,7 @@ export async function getUnreadMessageCount(patientId: string, recipientType: Me
     `SELECT COUNT(*) as count
      FROM messages
      WHERE patient_id = $1 AND sender_type = $2 AND read_at IS NULL`,
-    [patientId, senderType]
+    [validatedPatientId, senderType]
   );
 
   return parseInt(result.rows[0].count, 10);
@@ -200,10 +271,13 @@ export async function getPatientForNotification(patientId: string): Promise<{
   nem: string | null;
 } | null> {
   const pool = getDbPool();
+  
+  // Validáció
+  const validatedPatientId = validateUUID(patientId, 'Beteg ID');
 
   const result = await pool.query(
     `SELECT id, email, nev, nem FROM patients WHERE id = $1`,
-    [patientId]
+    [validatedPatientId]
   );
 
   if (result.rows.length === 0) {
@@ -226,11 +300,14 @@ export async function getDoctorForNotification(patientId: string): Promise<{
   name: string;
 } | null> {
   const pool = getDbPool();
+  
+  // Validáció
+  const validatedPatientId = validateUUID(patientId, 'Beteg ID');
 
   // Először megkeressük a beteg kezelőorvosát
   const patientResult = await pool.query(
     `SELECT kezeleoorvos FROM patients WHERE id = $1`,
-    [patientId]
+    [validatedPatientId]
   );
 
   if (patientResult.rows.length === 0) {

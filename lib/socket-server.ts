@@ -63,28 +63,39 @@ export function initSocketIO(httpServer: HTTPServer): SocketIOServer {
       console.log(`[Socket] Patient ${auth.patientId} joined room: ${room}`);
     }
 
-    // Handle join-room event (for doctors joining patient rooms)
-    socket.on('join-room', async (data: { patientId: string }) => {
-      if (!data.patientId) {
-        return;
-      }
-
-      // Verify access (doctors need to have access to the patient)
-      if (auth.userType === 'doctor') {
-        // TODO: Verify doctor has access to this patient
-        // For now, allow all authenticated doctors
-        const room = `patient:${data.patientId}`;
-        socket.join(room);
-        console.log(`[Socket] Doctor ${auth.userId} joined room: ${room}`);
+    // Handle join-room event (for doctors joining patient rooms or group chats)
+    socket.on('join-room', async (data: { patientId?: string; groupId?: string }) => {
+      if (data.patientId) {
+        // Verify access (doctors need to have access to the patient)
+        if (auth.userType === 'doctor') {
+          // TODO: Verify doctor has access to this patient
+          // For now, allow all authenticated doctors
+          const room = `patient:${data.patientId}`;
+          socket.join(room);
+          console.log(`[Socket] Doctor ${auth.userId} joined room: ${room}`);
+        }
+      } else if (data.groupId) {
+        // Group chat room
+        if (auth.userType === 'doctor') {
+          // TODO: Verify doctor is a participant in this group
+          // For now, allow all authenticated doctors
+          const room = data.groupId;
+          socket.join(room);
+          console.log(`[Socket] Doctor ${auth.userId} joined group room: ${room}`);
+        }
       }
     });
 
     // Handle leave-room event
-    socket.on('leave-room', (data: { patientId: string }) => {
+    socket.on('leave-room', (data: { patientId?: string; groupId?: string }) => {
       if (data.patientId) {
         const room = `patient:${data.patientId}`;
         socket.leave(room);
         console.log(`[Socket] User ${auth.userId} left room: ${room}`);
+      } else if (data.groupId) {
+        const room = data.groupId;
+        socket.leave(room);
+        console.log(`[Socket] User ${auth.userId} left group room: ${room}`);
       }
     });
 
@@ -153,4 +164,26 @@ export function emitMessageRead(patientId: string, messageId: string): void {
   });
 
   console.log(`[Socket] Emitted message-read to room: ${room}`);
+}
+
+/**
+ * Emit doctor message read event (for group chats)
+ * Safe to call from API routes - will silently fail if Socket.io not initialized
+ */
+export function emitDoctorMessageRead(groupId: string, messageId: string, userId: string, userName: string | null): void {
+  const socketIO = getSocketIO();
+  
+  if (!socketIO) {
+    return;
+  }
+
+  const room = `doctor-group:${groupId}`;
+  socketIO.to(room).emit('doctor-message-read', {
+    messageId,
+    groupId,
+    userId,
+    userName,
+  });
+
+  console.log(`[Socket] Emitted doctor-message-read to room: ${room}`);
 }

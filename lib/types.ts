@@ -424,6 +424,11 @@ export interface DoctorMessage {
   createdAt: Date;
   pending?: boolean; // Küldés alatt
   mentionedPatientIds?: string[]; // Új mező a megemlített betegek ID-ihoz
+  readBy?: Array<{ // Új mező: ki olvasta az üzenetet (group chat-ekhez)
+    userId: string;
+    userName: string | null;
+    readAt: Date;
+  }>;
 }
 
 export interface DoctorConversation {

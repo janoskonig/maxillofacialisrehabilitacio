@@ -61,6 +61,34 @@ export async function GET(request: NextRequest) {
 
     const result = await pool.query(query, [auth.userId, limit]);
 
+    // Lekérjük az olvasókat group chat üzenetekhez
+    const groupMessageIds = result.rows
+      .filter((row: any) => row.group_id)
+      .map((row: any) => row.id);
+    const readByMap = new Map<string, Array<{ userId: string; userName: string | null; readAt: Date }>>();
+    
+    if (groupMessageIds.length > 0) {
+      const readsResult = await pool.query(
+        `SELECT dmr.message_id, dmr.user_id, dmr.read_at, u.doktor_neve
+         FROM doctor_message_reads dmr
+         LEFT JOIN users u ON u.id = dmr.user_id
+         WHERE dmr.message_id = ANY($1::uuid[])
+         ORDER BY dmr.read_at ASC`,
+        [groupMessageIds]
+      );
+
+      for (const readRow of readsResult.rows) {
+        if (!readByMap.has(readRow.message_id)) {
+          readByMap.set(readRow.message_id, []);
+        }
+        readByMap.get(readRow.message_id)!.push({
+          userId: readRow.user_id,
+          userName: readRow.doktor_neve || null,
+          readAt: new Date(readRow.read_at),
+        });
+      }
+    }
+
     const messages = result.rows.map((row: any) => ({
       id: row.id,
       senderId: row.sender_id,
@@ -78,6 +106,7 @@ export async function GET(request: NextRequest) {
         : (row.other_doctor_name || 'Ismeretlen orvos'),
       groupName: row.group_id ? (row.other_doctor_name || `Csoportos beszélgetés`) : null,
       groupParticipantCount: row.group_id ? (row.group_participant_count || 0) : null,
+      readBy: row.group_id ? (readByMap.get(row.id) || []) : undefined,
     }));
 
     // Olvasatlan üzenetek száma (egyéni és csoportos beszélgetések)
