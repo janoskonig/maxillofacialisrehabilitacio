@@ -41,13 +41,13 @@ export function SendMessageWidget() {
       }
 
       // Orvos-orvos üzenetek - csak olvasatlanok száma
-      const doctorResponse = await fetch('/api/doctor-messages/recent?limit=1', {
+      const doctorResponse = await fetch('/api/doctor-messages/unread-count', {
         credentials: 'include',
       });
 
       if (doctorResponse.ok) {
         const doctorData = await doctorResponse.json();
-        setDoctorUnreadCount(doctorData.unreadCount || 0);
+        setDoctorUnreadCount(doctorData.count || 0);
       }
     } catch (error) {
       console.error('Hiba az olvasatlan üzenetek számának lekérdezésekor:', error);
