@@ -15,6 +15,8 @@ export default function MessagesPage() {
   const [authorized, setAuthorized] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'doctor-doctor' | 'doctor-patient'>('doctor-doctor');
+  const [doctorDoctorUnreadCount, setDoctorDoctorUnreadCount] = useState(0);
+  const [doctorPatientUnreadCount, setDoctorPatientUnreadCount] = useState(0);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -44,6 +46,43 @@ export default function MessagesPage() {
       setActiveTab(tab);
     }
   }, [searchParams, activeTab]);
+
+  // Fetch unread counts
+  useEffect(() => {
+    if (!authorized) return;
+
+    const fetchUnreadCounts = async () => {
+      try {
+        // Fetch doctor-doctor unread count
+        const doctorResponse = await fetch('/api/doctor-messages/unread-count', {
+          credentials: 'include',
+        });
+        if (doctorResponse.ok) {
+          const doctorData = await doctorResponse.json();
+          setDoctorDoctorUnreadCount(doctorData.count || 0);
+        }
+
+        // Fetch doctor-patient unread count
+        const patientResponse = await fetch('/api/messages/all?unreadOnly=true', {
+          credentials: 'include',
+        });
+        if (patientResponse.ok) {
+          const patientData = await patientResponse.json();
+          const messages = patientData.messages || [];
+          // Only count unread messages from patients
+          const unread = messages.filter((m: any) => m.senderType === 'patient' && !m.readAt).length;
+          setDoctorPatientUnreadCount(unread);
+        }
+      } catch (error) {
+        console.error('Hiba az olvasatlan üzenetek számának lekérdezésekor:', error);
+      }
+    };
+
+    fetchUnreadCounts();
+    // Refresh every 5 seconds
+    const interval = setInterval(fetchUnreadCounts, 5000);
+    return () => clearInterval(interval);
+  }, [authorized]);
 
   const handleBack = () => {
     router.push('/');
@@ -104,6 +143,11 @@ export default function MessagesPage() {
             >
               <Users className="w-4 h-4" />
               Orvos-orvos
+              {doctorDoctorUnreadCount > 0 && (
+                <span className="px-2 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full">
+                  {doctorDoctorUnreadCount}
+                </span>
+              )}
             </button>
             <button
               onClick={() => setActiveTab('doctor-patient')}
@@ -115,6 +159,11 @@ export default function MessagesPage() {
             >
               <MessageCircle className="w-4 h-4" />
               Orvos-beteg
+              {doctorPatientUnreadCount > 0 && (
+                <span className="px-2 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full">
+                  {doctorPatientUnreadCount}
+                </span>
+              )}
             </button>
           </nav>
         </div>
