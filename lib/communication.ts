@@ -232,10 +232,16 @@ export async function markMessageAsRead(messageId: string): Promise<void> {
   // Validáció
   const validatedMessageId = validateUUID(messageId, 'Üzenet ID');
 
-  await pool.query(
-    `UPDATE messages SET read_at = CURRENT_TIMESTAMP WHERE id = $1 AND read_at IS NULL`,
+  const result = await pool.query(
+    `UPDATE messages SET read_at = CURRENT_TIMESTAMP WHERE id = $1 AND read_at IS NULL RETURNING id`,
     [validatedMessageId]
   );
+  
+  if (result.rows.length === 0) {
+    console.warn(`[markMessageAsRead] Üzenet ${validatedMessageId} nem található vagy már olvasottnak jelölve`);
+  } else {
+    console.log(`[markMessageAsRead] Üzenet ${validatedMessageId} sikeresen olvasottnak jelölve`);
+  }
 }
 
 /**

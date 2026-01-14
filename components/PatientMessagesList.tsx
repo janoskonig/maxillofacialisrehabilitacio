@@ -224,13 +224,69 @@ export function PatientMessagesList() {
         (m: Message) => m.senderType === 'patient' && !m.readAt
       ).length;
       setUnreadCount(unread);
+      
+      // Automatikusan jelöljük olvasottnak az olvasatlan beteg üzeneteket
+      setTimeout(() => {
+        const unreadPatientMessages = loadedMessages.filter(
+          m => m.senderType === 'patient' && 
+               !m.readAt && 
+               !m.pending && 
+               !m.id.startsWith('pending-') &&
+               /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(m.id)
+        );
+        
+        if (unreadPatientMessages.length > 0) {
+          console.log('[PatientMessagesList] Auto-marking messages as read after fetch:', unreadPatientMessages.length);
+          
+          // Optimistic update
+          setMessages(prevMessages => 
+            prevMessages.map(m => 
+              unreadPatientMessages.some(um => um.id === m.id) 
+                ? { ...m, readAt: new Date() } 
+                : m
+            )
+          );
+          
+          setUnreadCount(prev => Math.max(0, prev - unreadPatientMessages.length));
+          
+          // API hívások
+          Promise.all(
+            unreadPatientMessages.map(msg => {
+              console.log('[PatientMessagesList] Marking message as read:', msg.id);
+              return fetch(`/api/messages/${msg.id}/read`, {
+                method: 'PUT',
+                credentials: 'include',
+              })
+              .then(async (response) => {
+                if (!response.ok) {
+                  const errorData = await response.json().catch(() => ({}));
+                  throw new Error(errorData.error || `HTTP ${response.status}`);
+                }
+                console.log('[PatientMessagesList] Message marked as read successfully:', msg.id);
+              })
+              .catch(err => {
+                console.error(`[PatientMessagesList] Hiba az üzenet ${msg.id} olvasottnak jelölésekor:`, err);
+                // Revert on error
+                setMessages(prevMessages => 
+                  prevMessages.map(m => 
+                    m.id === msg.id ? { ...m, readAt: null } : m
+                  )
+                );
+                setUnreadCount(prev => prev + 1);
+              });
+            })
+          ).then(() => {
+            fetchConversations(); // Refresh conversations after marking as read
+          });
+        }
+      }, 300);
     } catch (error) {
       console.error('Hiba az üzenetek betöltésekor:', error);
       showToast('Hiba történt az üzenetek betöltésekor', 'error');
     } finally {
       setLoadingMessages(false);
     }
-  }, [showToast]);
+  }, [showToast, fetchConversations]);
 
   // Load messages and setup WebSocket when patient selected
   useEffect(() => {
@@ -310,91 +366,75 @@ export function PatientMessagesList() {
     };
   }, [socket, selectedPatientId, fetchConversations]);
 
-  // Auto-mark patient messages as read when they become visible
+  // Auto-mark patient messages as read when conversation opens
+  // Egyszerűbb és megbízhatóbb: amikor a beszélgetés megnyílik, jelöljük olvasottnak az összes olvasatlant
   useEffect(() => {
-    if (messages.length === 0 || loadingMessages || !selectedPatientId) return;
+    if (messages.length === 0 || loadingMessages || !selectedPatientId) {
+      console.log('[PatientMessagesList] Auto-mark skipped:', { loadingMessages, messagesLength: messages.length, selectedPatientId });
+      return;
+    }
 
-    // Mark all unread patient messages as read immediately when loaded
-    const unreadPatientMessages = messages.filter(
-      m => m.senderType === 'patient' && !m.readAt && !m.pending && !m.id.startsWith('pending-')
-    );
-    
-    if (unreadPatientMessages.length > 0) {
-      // Mark as read optimistically
-      setMessages(prevMessages => 
-        prevMessages.map(m => 
-          unreadPatientMessages.some(um => um.id === m.id) 
-            ? { ...m, readAt: new Date() } 
-            : m
-        )
+    console.log('[PatientMessagesList] Auto-mark triggered:', { selectedPatientId, messagesCount: messages.length });
+
+    // Várunk egy kicsit, hogy biztosan renderelődtek az üzenetek
+    const timeoutId = setTimeout(() => {
+      // Mark all unread patient messages as read immediately when loaded
+      const unreadPatientMessages = messages.filter(
+        m => m.senderType === 'patient' && 
+             !m.readAt && 
+             !m.pending && 
+             !m.id.startsWith('pending-') &&
+             /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(m.id)
       );
       
-      setUnreadCount(0);
+      console.log('[PatientMessagesList] Unread messages found:', unreadPatientMessages.length, unreadPatientMessages.map(m => ({ id: m.id, readAt: m.readAt })));
       
-      // Send API requests to mark as read
-      Promise.all(
-        unreadPatientMessages.map(msg => 
-          fetch(`/api/messages/${msg.id}/read`, {
-            method: 'PUT',
-            credentials: 'include',
-          }).catch(err => {
-            console.error(`Hiba az üzenet ${msg.id} olvasottnak jelölésekor:`, err);
-            // Revert on error
-            setMessages(prevMessages => 
-              prevMessages.map(m => 
-                m.id === msg.id ? { ...m, readAt: null } : m
-              )
-            );
-          })
-        )
-      ).then(() => {
-        fetchConversations(); // Refresh conversations after marking as read
-      });
-    }
-  }, [messages, loadingMessages, selectedPatientId, fetchConversations]);
-
-  // Intersection Observer: Mark messages as read when they become visible
-  useEffect(() => {
-    if (messages.length === 0 || loadingMessages || !selectedPatientId) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            const messageId = entry.target.getAttribute('data-message-id');
-            if (messageId) {
-              const message = messages.find(m => m.id === messageId);
-              if (message && message.senderType === 'patient' && !message.readAt && !message.pending && !message.id.startsWith('pending-')) {
-                // Mark as read
-                fetch(`/api/messages/${messageId}/read`, {
-                  method: 'PUT',
-                  credentials: 'include',
-                }).then(() => {
-                  setMessages(prevMessages => 
-                    prevMessages.map(m => 
-                      m.id === messageId ? { ...m, readAt: new Date() } : m
-                    )
-                  );
-                  setUnreadCount(prev => Math.max(0, prev - 1));
-                  fetchConversations();
-                }).catch(err => console.error('Hiba az üzenet olvasottnak jelölésekor:', err));
+      if (unreadPatientMessages.length > 0) {
+        // Mark as read optimistically
+        setMessages(prevMessages => 
+          prevMessages.map(m => 
+            unreadPatientMessages.some(um => um.id === m.id) 
+              ? { ...m, readAt: new Date() } 
+              : m
+          )
+        );
+        
+        setUnreadCount(prev => Math.max(0, prev - unreadPatientMessages.length));
+        
+        // Send API requests to mark as read
+        Promise.all(
+          unreadPatientMessages.map(msg => {
+            console.log('[PatientMessagesList] Marking message as read:', msg.id);
+            return fetch(`/api/messages/${msg.id}/read`, {
+              method: 'PUT',
+              credentials: 'include',
+            })
+            .then(async (response) => {
+              if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || `HTTP ${response.status}`);
               }
-            }
-          }
+              console.log('[PatientMessagesList] Message marked as read successfully:', msg.id);
+            })
+            .catch(err => {
+              console.error(`[PatientMessagesList] Hiba az üzenet ${msg.id} olvasottnak jelölésekor:`, err);
+              // Revert on error
+              setMessages(prevMessages => 
+                prevMessages.map(m => 
+                  m.id === msg.id ? { ...m, readAt: null } : m
+                )
+              );
+              setUnreadCount(prev => prev + 1);
+            });
+          })
+        ).then(() => {
+          fetchConversations(); // Refresh conversations after marking as read
         });
-      },
-      { threshold: 0.5 } // Mark as read when 50% visible
-    );
+      }
+    }, 500); // 500ms delay, hogy biztosan renderelődtek az üzenetek
 
-    // Observe all message elements
-    const messageElements = document.querySelectorAll('[data-message-id]');
-    messageElements.forEach(el => observer.observe(el));
-
-    return () => {
-      messageElements.forEach(el => observer.unobserve(el));
-      observer.disconnect();
-    };
-  }, [messages, loadingMessages, selectedPatientId, fetchConversations]);
+    return () => clearTimeout(timeoutId);
+  }, [selectedPatientId, loadingMessages, messages.length, fetchConversations]);
 
   // Scroll to bottom when messages change or loading finishes
   useEffect(() => {
