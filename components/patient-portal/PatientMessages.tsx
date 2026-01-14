@@ -211,36 +211,55 @@ export function PatientMessages() {
     };
   }, [socket, patientId]);
 
-  // Auto-mark doctor messages as read
+  // Auto-mark doctor messages as read when conversation opens
+  // Egyszerűbb és megbízhatóbb: amikor a beszélgetés megnyílik, jelöljük olvasottnak az összes olvasatlant
   useEffect(() => {
     if (messages.length === 0 || loading || !patientId) return;
 
-    const unreadDoctorMessages = messages.filter(
-      m => m.senderType === 'doctor' && !m.readAt && !m.pending && 
-           /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(m.id)
-    );
-    
-    if (unreadDoctorMessages.length > 0) {
-      unreadDoctorMessages.forEach(msg => {
-        fetch(`/api/messages/${msg.id}/read`, {
-          method: 'PUT',
-          credentials: 'include',
-        }).catch(err => console.error('Hiba az üzenet olvasottnak jelölésekor:', err));
-      });
-      
-      setMessages(prevMessages => 
-        prevMessages.map(m => 
-          unreadDoctorMessages.some(um => um.id === m.id) 
-            ? { ...m, readAt: new Date() } 
-            : m
-        )
+    // Várunk egy kicsit, hogy biztosan renderelődtek az üzenetek
+    const timeoutId = setTimeout(() => {
+      const unreadDoctorMessages = messages.filter(
+        m => m.senderType === 'doctor' && 
+             !m.readAt && 
+             !m.pending && 
+             /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(m.id)
       );
       
-      setUnreadCount(prev => 
-        prev - unreadDoctorMessages.length
-      );
-    }
-  }, [messages.length, loading, patientId]);
+      if (unreadDoctorMessages.length > 0) {
+        // Mark as read optimistically
+        setMessages(prevMessages => 
+          prevMessages.map(m => 
+            unreadDoctorMessages.some(um => um.id === m.id) 
+              ? { ...m, readAt: new Date() } 
+              : m
+          )
+        );
+        
+        setUnreadCount(prev => Math.max(0, prev - unreadDoctorMessages.length));
+        
+        // Send API requests to mark as read
+        Promise.all(
+          unreadDoctorMessages.map(msg => 
+            fetch(`/api/messages/${msg.id}/read`, {
+              method: 'PUT',
+              credentials: 'include',
+            }).catch(err => {
+              console.error(`Hiba az üzenet ${msg.id} olvasottnak jelölésekor:`, err);
+              // Revert on error
+              setMessages(prevMessages => 
+                prevMessages.map(m => 
+                  m.id === msg.id ? { ...m, readAt: null } : m
+                )
+              );
+              setUnreadCount(prev => prev + 1);
+            })
+          )
+        );
+      }
+    }, 500); // 500ms delay, hogy biztosan renderelődtek az üzenetek
+
+    return () => clearTimeout(timeoutId);
+  }, [patientId, loading, messages.length]);
 
   // Scroll to bottom when messages change or loading finishes
   useEffect(() => {

@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { getCurrentUser } from '@/lib/auth';
 
 interface SocketContextType {
   socket: Socket | null;
@@ -22,37 +23,82 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    // Initialize socket connection
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || window.location.origin;
+    let newSocket: Socket | null = null;
+    let checkInterval: NodeJS.Timeout | null = null;
     
-    // Socket.io client automatically handles ws:// or wss:// based on http/https
-    const newSocket = io(baseUrl, {
-      path: '/socket.io',
-      transports: ['websocket', 'polling'],
-      withCredentials: true,
-      autoConnect: true,
-    });
+    const initializeSocket = async () => {
+      // Csak akkor próbálunk csatlakozni, ha van bejelentkezett felhasználó
+      const user = await getCurrentUser();
+      if (!user) {
+        return null;
+      }
 
-    newSocket.on('connect', () => {
-      console.log('[Socket Client] Connected');
-      setIsConnected(true);
-    });
+      // Ha már van kapcsolat, ne hozzunk létre újat
+      if (newSocket && newSocket.connected) {
+        return newSocket;
+      }
 
-    newSocket.on('disconnect', () => {
-      console.log('[Socket Client] Disconnected');
-      setIsConnected(false);
-    });
+      // Initialize socket connection
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || window.location.origin;
+      
+      // Socket.io client automatically handles ws:// or wss:// based on http/https
+      const socket = io(baseUrl, {
+        path: '/socket.io',
+        transports: ['websocket', 'polling'],
+        withCredentials: true,
+        autoConnect: true,
+      });
 
-    newSocket.on('connect_error', (error) => {
-      console.error('[Socket Client] Connection error:', error);
-      setIsConnected(false);
-    });
+      socket.on('connect', () => {
+        setIsConnected(true);
+        // Töröljük az ellenőrzési intervallumot, ha sikeresen csatlakoztunk
+        if (checkInterval) {
+          clearInterval(checkInterval);
+          checkInterval = null;
+        }
+      });
 
-    setSocket(newSocket);
+      socket.on('disconnect', () => {
+        setIsConnected(false);
+      });
+
+      socket.on('connect_error', (error) => {
+        console.error('[Socket Client] Connection error:', error);
+        setIsConnected(false);
+      });
+
+      return socket;
+    };
+
+    // Próbáljuk meg inicializálni azonnal
+    initializeSocket().then(socket => {
+      if (socket) {
+        newSocket = socket;
+        setSocket(socket);
+      } else {
+        // Ha nincs bejelentkezett felhasználó, ellenőrizzük periodikusan
+        checkInterval = setInterval(async () => {
+          const socket = await initializeSocket();
+          if (socket) {
+            newSocket = socket;
+            setSocket(socket);
+            if (checkInterval) {
+              clearInterval(checkInterval);
+              checkInterval = null;
+            }
+          }
+        }, 2000); // 2 másodpercenként ellenőrizzük
+      }
+    });
 
     // Cleanup on unmount
     return () => {
-      newSocket.close();
+      if (checkInterval) {
+        clearInterval(checkInterval);
+      }
+      if (newSocket) {
+        newSocket.close();
+      }
     };
   }, []);
 
