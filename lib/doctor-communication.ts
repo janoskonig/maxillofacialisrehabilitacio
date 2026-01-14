@@ -249,14 +249,34 @@ export async function markDoctorMessageAsRead(messageId: string, userId: string)
 export async function getUnreadDoctorMessageCount(userId: string): Promise<number> {
   const pool = getDbPool();
 
-  const result = await pool.query(
+  // Egyéni beszélgetések: olvasatlan üzenetek száma
+  const individualResult = await pool.query(
     `SELECT COUNT(*) as count
      FROM doctor_messages
-     WHERE recipient_id = $1 AND read_at IS NULL`,
+     WHERE recipient_id = $1 AND read_at IS NULL AND group_id IS NULL`,
     [userId]
   );
+  const individualCount = parseInt(individualResult.rows[0].count, 10);
 
-  return parseInt(result.rows[0].count, 10);
+  // Group chat üzenetek: olvasatlan üzenetek száma (amiket nem én küldtem és nincs benne a doctor_message_reads táblában)
+  const groupResult = await pool.query(
+    `SELECT COUNT(*) as count
+     FROM doctor_messages dm
+     WHERE dm.group_id IS NOT NULL 
+       AND dm.sender_id != $1
+       AND EXISTS (
+         SELECT 1 FROM doctor_message_group_participants dmgp
+         WHERE dmgp.group_id = dm.group_id AND dmgp.user_id = $1
+       )
+       AND NOT EXISTS (
+         SELECT 1 FROM doctor_message_reads dmr
+         WHERE dmr.message_id = dm.id AND dmr.user_id = $1
+       )`,
+    [userId]
+  );
+  const groupCount = parseInt(groupResult.rows[0].count, 10);
+
+  return individualCount + groupCount;
 }
 
 /**
