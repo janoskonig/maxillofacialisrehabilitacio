@@ -47,15 +47,22 @@ export async function GET(request: NextRequest) {
     // Csak a betegtől érkező üzeneteket mutatjuk (patient -> doctor)
     query += ` WHERE m.sender_type = 'patient'`;
 
-    // Ha nem admin, csak a saját betegeinek üzeneteit
+    // Ha nem admin, csak a saját betegeinek üzeneteit ÉS csak az ő neki küldött üzeneteket
     if (auth.role !== 'admin') {
       query += ` AND (
         p.kezeleoorvos = $${paramIndex} OR 
         p.kezeleoorvos = (SELECT doktor_neve FROM users WHERE id = $${paramIndex + 1})
+      ) AND (
+        m.recipient_doctor_id = $${paramIndex + 1} 
+        OR (m.recipient_doctor_id IS NULL AND (
+          p.kezeleoorvos = $${paramIndex} OR 
+          p.kezeleoorvos = (SELECT doktor_neve FROM users WHERE id = $${paramIndex + 1})
+        ))
       )`;
       params.push(auth.email, auth.userId);
       paramIndex += 2;
     }
+    // Admin esetén minden üzenetet lát (nem szűrünk recipient_doctor_id alapján)
 
     // Olvasatlan szűrés
     if (unreadOnly) {

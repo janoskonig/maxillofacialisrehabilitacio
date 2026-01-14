@@ -7,6 +7,7 @@ import { getPatientForNotification, getDoctorForNotification } from '@/lib/commu
 import { logActivityWithAuth, logActivity } from '@/lib/activity';
 import { getDbPool } from '@/lib/db';
 import { emitNewMessage } from '@/lib/socket-server';
+import { validateUUID, validateMessageText, validateSubject, validateLimit, validateOffset } from '@/lib/validation';
 
 /**
  * POST /api/messages - Új üzenet küldése
@@ -17,9 +18,19 @@ export async function POST(request: NextRequest) {
     const { patientId, subject, message, recipientDoctorId } = body;
 
     // Validáció
-    if (!patientId || !message || message.trim().length === 0) {
+    let finalPatientId: string;
+    let finalMessage: string;
+    let finalSubject: string | null;
+    let finalRecipientDoctorId: string | null;
+    
+    try {
+      finalPatientId = validateUUID(patientId, 'Beteg ID');
+      finalMessage = validateMessageText(message);
+      finalSubject = validateSubject(subject);
+      finalRecipientDoctorId = recipientDoctorId ? validateUUID(recipientDoctorId, 'Címzett orvos ID') : null;
+    } catch (validationError: any) {
       return NextResponse.json(
-        { error: 'Beteg ID és üzenet tartalma kötelező' },
+        { error: validationError.message || 'Érvénytelen adatok' },
         { status: 400 }
       );
     }
@@ -36,7 +47,7 @@ export async function POST(request: NextRequest) {
 
     // Ha van patientSessionId ÉS az megegyezik a patientId-vel, akkor a beteg küldi
     // (ez az impersonate eset is kezeli, mert akkor is van patientSessionId)
-    if (patientSessionId && patientSessionId === patientId) {
+    if (patientSessionId && patientSessionId === finalPatientId) {
       // Beteg küldi (akár impersonate módban is)
       senderType = 'patient';
       senderId = patientSessionId;
@@ -44,7 +55,7 @@ export async function POST(request: NextRequest) {
       const pool = getDbPool();
       const patientResult = await pool.query(
         `SELECT email, nev FROM patients WHERE id = $1`,
-        [patientId]
+        [finalPatientId]
       );
 
       if (patientResult.rows.length === 0) {
@@ -89,8 +100,8 @@ export async function POST(request: NextRequest) {
       const adminId = adminResult.rows.length > 0 ? adminResult.rows[0].id : null;
 
       // Ha a beteg megadott egy recipientDoctorId-t, ellenőrizzük, hogy csak kezelőorvos vagy admin lehet
-      if (recipientDoctorId) {
-        if (recipientDoctorId !== treatingDoctorId && recipientDoctorId !== adminId) {
+      if (finalRecipientDoctorId) {
+        if (finalRecipientDoctorId !== treatingDoctorId && finalRecipientDoctorId !== adminId) {
           return NextResponse.json(
             { error: 'Csak a kezelőorvosnak vagy az adminnak küldhet üzenetet' },
             { status: 403 }
@@ -101,7 +112,7 @@ export async function POST(request: NextRequest) {
         const doctorResult = await pool.query(
           `SELECT id, email, doktor_neve FROM users 
            WHERE id = $1 AND active = true`,
-          [recipientDoctorId]
+          [finalRecipientDoctorId]
         );
 
         if (doctorResult.rows.length === 0) {
@@ -111,7 +122,7 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        recipientDoctorIdFinal = recipientDoctorId;
+        recipientDoctorIdFinal = finalRecipientDoctorId;
       } else {
         // Ha nincs megadva, akkor a kezelőorvosnak küldjük, ha van, különben az adminnak
         recipientDoctorIdFinal = treatingDoctorId || adminId;
@@ -126,7 +137,7 @@ export async function POST(request: NextRequest) {
       const pool = getDbPool();
       const patientResult = await pool.query(
         `SELECT id, kezeleoorvos FROM patients WHERE id = $1`,
-        [patientId]
+        [finalPatientId]
       );
 
       if (patientResult.rows.length === 0) {
@@ -169,12 +180,12 @@ export async function POST(request: NextRequest) {
 
     // Üzenet küldése
     const newMessage = await sendMessage({
-      patientId,
+      patientId: finalPatientId,
       senderType,
       senderId,
       senderEmail,
-      subject: subject || null,
-      message: message.trim(),
+      subject: finalSubject,
+      message: finalMessage,
       recipientDoctorId: recipientDoctorIdFinal,
     });
 
@@ -213,7 +224,7 @@ export async function POST(request: NextRequest) {
 
       if (senderType === 'doctor') {
         // Orvos küldött → beteg kap értesítést
-        const patient = await getPatientForNotification(patientId);
+        const patient = await getPatientForNotification(finalPatientId);
         if (patient && patient.email) {
           await sendNewMessageNotification(
             patient.email,
@@ -221,8 +232,8 @@ export async function POST(request: NextRequest) {
             patient.nem,
             senderName,
             'doctor',
-            subject || null,
-            message.trim(),
+            finalSubject,
+            finalMessage,
             baseUrl
           );
         }
@@ -245,11 +256,11 @@ export async function POST(request: NextRequest) {
           }
         } else {
           // Ha nincs recipientDoctorId, akkor a kezelőorvosnak küldjük
-          doctor = await getDoctorForNotification(patientId);
+          doctor = await getDoctorForNotification(finalPatientId);
         }
 
         if (doctor) {
-          const patient = await getPatientForNotification(patientId);
+          const patient = await getPatientForNotification(finalPatientId);
           console.log(`[Messages] Email értesítés küldése orvosnak: ${doctor.email}`);
           await sendNewMessageNotification(
             doctor.email,
@@ -257,8 +268,8 @@ export async function POST(request: NextRequest) {
             null, // Orvos nem mezője nincs
             patient?.nev || senderName,
             'patient',
-            subject || null,
-            message.trim(),
+            finalSubject,
+            finalMessage,
             baseUrl
           );
           console.log(`[Messages] Email értesítés sikeresen elküldve orvosnak: ${doctor.email}`);
@@ -269,7 +280,7 @@ export async function POST(request: NextRequest) {
           );
           
           if (adminResult.rows.length > 0) {
-            const patient = await getPatientForNotification(patientId);
+            const patient = await getPatientForNotification(finalPatientId);
             // Első adminnak küldjük
             const admin = adminResult.rows[0];
             console.log(`[Messages] Beteg üzenet - kezelőorvos nem található, adminnak küldve: ${admin.email}`);
@@ -279,13 +290,13 @@ export async function POST(request: NextRequest) {
               null,
               patient?.nev || senderName,
               'patient',
-              subject || null,
-              message.trim(),
+              finalSubject,
+              finalMessage,
               baseUrl
             );
             console.log(`[Messages] Email értesítés sikeresen elküldve adminnak: ${admin.email}`);
           } else {
-            console.warn(`[Messages] Beteg üzenet - kezelőorvos és admin sem található beteghez: ${patientId}`);
+            console.warn(`[Messages] Beteg üzenet - kezelőorvos és admin sem található beteghez: ${finalPatientId}`);
           }
         }
       }
@@ -296,7 +307,7 @@ export async function POST(request: NextRequest) {
 
     // Emit Socket.io event for real-time updates
     try {
-      emitNewMessage(patientId, newMessage);
+      emitNewMessage(finalPatientId, newMessage);
     } catch (socketError) {
       console.error('Hiba a Socket.io event küldésekor:', socketError);
       // Ne akadályozza meg az üzenet küldését, ha a Socket.io nem működik
@@ -323,12 +334,21 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const patientId = searchParams.get('patientId');
     const unreadOnly = searchParams.get('unreadOnly') === 'true';
-    const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!, 10) : undefined;
-    const offset = searchParams.get('offset') ? parseInt(searchParams.get('offset')!, 10) : undefined;
-
-    if (!patientId) {
+    
+    // Validáció
+    let validatedPatientId: string;
+    let validatedLimit: number | undefined;
+    let validatedOffset: number | undefined;
+    
+    try {
+      validatedPatientId = validateUUID(patientId, 'Beteg ID');
+      const limitParam = searchParams.get('limit');
+      const offsetParam = searchParams.get('offset');
+      validatedLimit = validateLimit(limitParam ? parseInt(limitParam, 10) : undefined);
+      validatedOffset = validateOffset(offsetParam ? parseInt(offsetParam, 10) : undefined);
+    } catch (validationError: any) {
       return NextResponse.json(
-        { error: 'Beteg ID kötelező' },
+        { error: validationError.message || 'Érvénytelen paraméterek' },
         { status: 400 }
       );
     }
@@ -345,7 +365,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Ha beteg kéri (és NEM orvos), csak a saját üzeneteit láthatja
-    if (!auth && patientSessionId && patientSessionId !== patientId) {
+    if (!auth && patientSessionId && patientSessionId !== validatedPatientId) {
       return NextResponse.json(
         { error: 'Csak saját üzeneteit tekintheti meg' },
         { status: 403 }
@@ -357,7 +377,7 @@ export async function GET(request: NextRequest) {
       const pool = getDbPool();
       const patientResult = await pool.query(
         `SELECT id, kezeleoorvos FROM patients WHERE id = $1`,
-        [patientId]
+        [validatedPatientId]
       );
 
       if (patientResult.rows.length === 0) {
@@ -386,10 +406,16 @@ export async function GET(request: NextRequest) {
     }
 
     // Üzenetek lekérése
-    const messages = await getPatientMessages(patientId, {
+    // Ha beteg kéri, minden üzenetet lát (nem szűrünk)
+    // Ha orvos kéri, csak az ő üzeneteit mutatjuk (figyelembe véve a recipient_doctor_id mezőt)
+    const doctorId = auth ? auth.userId : null;
+    const isAdmin = auth?.role === 'admin';
+    const messages = await getPatientMessages(validatedPatientId, {
       unreadOnly,
-      limit,
-      offset,
+      limit: validatedLimit,
+      offset: validatedOffset,
+      doctorId: auth ? auth.userId : undefined, // Csak akkor adjuk meg, ha orvos kéri
+      isAdmin: isAdmin,
     });
 
     return NextResponse.json({
