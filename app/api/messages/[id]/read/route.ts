@@ -65,25 +65,25 @@ export async function PUT(
 
     // Ha orvos jelöli olvasottnak, ellenőrizzük a hozzáférést
     if (auth) {
-      const patientResult = await pool.query(
-        `SELECT id, kezeleoorvos FROM patients WHERE id = $1`,
-        [message.patient_id]
-      );
-
-      if (patientResult.rows.length === 0) {
-        return NextResponse.json(
-          { error: 'Beteg nem található' },
-          { status: 404 }
+      // Admin minden üzenetet jelölhet olvasottnak
+      if (auth.role === 'admin') {
+        // Admin hozzáfér minden üzenethez, nincs további ellenőrzés
+      } else {
+        // Nem admin: ellenőrizzük a hozzáférést
+        const patientResult = await pool.query(
+          `SELECT id, kezeleoorvos FROM patients WHERE id = $1`,
+          [message.patient_id]
         );
-      }
 
-      const patient = patientResult.rows[0];
-      
-      // Ellenőrizzük, hogy az orvos hozzáférhet-e az üzenethez
-      // - Ha admin, minden üzenethez hozzáfér
-      // - Ha kezelőorvos, hozzáfér az üzenetekhez
-      // - Ha nem kezelőorvos, csak az explicit neki küldött üzenetekhez fér hozzá
-      if (auth.role !== 'admin') {
+        if (patientResult.rows.length === 0) {
+          return NextResponse.json(
+            { error: 'Beteg nem található' },
+            { status: 404 }
+          );
+        }
+
+        const patient = patientResult.rows[0];
+        
         // Ellenőrizzük, hogy a kezelőorvos-e
         const userResult = await pool.query(
           `SELECT doktor_neve FROM users WHERE id = $1`,
@@ -97,18 +97,33 @@ export async function PUT(
         if (message.sender_type === 'patient') {
           // Beteg küldte az üzenetet
           if (isTreatingDoctor) {
-            // Kezelőorvos: hozzáfér az összes üzenethez (recipient_doctor_id IS NULL vagy egyezik)
+            // Kezelőorvos: hozzáfér az összes betegtől érkező üzenethez
+            // (recipient_doctor_id IS NULL = kezelőorvosnak küldve, vagy explicit neki küldve)
             hasAccess = !message.recipient_doctor_id || message.recipient_doctor_id === auth.userId;
           } else {
             // Nem kezelőorvos: csak az explicit neki küldött üzenetekhez fér hozzá
+            // (recipient_doctor_id nem lehet NULL, mert akkor a kezelőorvosnak küldték)
             hasAccess = message.recipient_doctor_id === auth.userId;
           }
         } else if (message.sender_type === 'doctor') {
           // Orvos küldte az üzenetet - csak akkor fér hozzá, ha ő küldte
+          // (az orvos mindig jelölheti olvasottnak a saját üzeneteit)
           hasAccess = message.sender_id === auth.userId;
         }
         
         if (!hasAccess) {
+          console.warn(`[markMessageAsRead] Hozzáférés megtagadva:`, {
+            messageId: validatedMessageId,
+            doctorId: auth.userId,
+            doctorEmail: auth.email,
+            doctorName: userName,
+            senderType: message.sender_type,
+            senderId: message.sender_id,
+            recipientDoctorId: message.recipient_doctor_id,
+            isTreatingDoctor,
+            patientKezeleoorvos: patient.kezeleoorvos,
+            patientId: message.patient_id,
+          });
           return NextResponse.json(
             { error: 'Nincs jogosultsága az üzenet olvasottnak jelöléséhez' },
             { status: 403 }

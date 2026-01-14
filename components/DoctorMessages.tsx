@@ -12,9 +12,11 @@ import { getCurrentUser, AuthUser } from '@/lib/auth';
 import { CreateGroupChatModal } from './CreateGroupChatModal';
 import { RecipientSelector } from './RecipientSelector';
 import { getMonogram, getLastName } from '@/lib/utils';
+import { useSocket } from '@/contexts/SocketContext';
 
 export function DoctorMessages() {
   const { showToast } = useToast();
+  const { socket, isConnected } = useSocket();
   const [conversations, setConversations] = useState<DoctorConversation[]>([]);
   const [selectedDoctorId, setSelectedDoctorId] = useState<string | null>(null);
   const [selectedDoctorName, setSelectedDoctorName] = useState<string | null>(null);
@@ -94,33 +96,179 @@ export function DoctorMessages() {
     loadCurrentUser();
   }, []);
 
-  // Auto-mark as read when messages are loaded (only for individual conversations)
+  // Auto-mark as read when messages are loaded (individual and group conversations)
   useEffect(() => {
-    if (messages.length > 0 && !loading && selectedDoctorId && !selectedGroupId && currentUserId) {
+    if (messages.length > 0 && !loading && currentUserId) {
       // Csak a valódi üzeneteket jelöljük olvasottnak (nem pending-eket)
-      const unreadMessages = messages.filter(
-        m => m.recipientId === currentUserId && !m.readAt && !m.pending && !m.id.startsWith('pending-')
-      );
+      const unreadMessages = messages.filter(m => {
+        if (m.pending || m.id.startsWith('pending-')) return false;
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(m.id)) return false;
+        
+        // Egyéni beszélgetés: csak a fogadott üzeneteket
+        if (selectedDoctorId && !selectedGroupId) {
+          return m.recipientId === currentUserId && !m.readAt;
+        }
+        
+        // Group chat: csak azok az üzenetek, amiket nem én küldtem és még nem olvastam
+        if (selectedGroupId) {
+          return m.senderId !== currentUserId && 
+                 (!m.readBy || !m.readBy.some(r => r.userId === currentUserId));
+        }
+        
+        return false;
+      });
       
       if (unreadMessages.length > 0) {
         unreadMessages.forEach(msg => {
-          // Csak UUID formátumú ID-kat próbálunk meg olvasottnak jelölni
-          if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(msg.id)) {
-            fetch(`/api/doctor-messages/${msg.id}/read`, {
-              method: 'PUT',
-              credentials: 'include',
-            }).catch(err => console.error('Hiba az üzenet olvasottnak jelölésekor:', err));
-          }
+          fetch(`/api/doctor-messages/${msg.id}/read`, {
+            method: 'PUT',
+            credentials: 'include',
+          })
+          .then(async () => {
+            // Frissítjük az üzenetet az olvasók listájával
+            if (selectedGroupId) {
+              // Group chat: lekérjük a frissített üzenetet
+              const response = await fetch(`/api/doctor-messages?groupId=${selectedGroupId}`, {
+                credentials: 'include',
+              });
+              if (response.ok) {
+                const data = await response.json();
+                const updatedMessage = data.messages?.find((m: DoctorMessage) => m.id === msg.id);
+                if (updatedMessage) {
+                  setMessages(prevMessages => 
+                    prevMessages.map(m => 
+                      m.id === msg.id ? updatedMessage : m
+                    )
+                  );
+                }
+              }
+            } else {
+              // Egyéni beszélgetés: csak readAt-et frissítjük
+              setMessages(prevMessages => 
+                prevMessages.map(m => 
+                  m.id === msg.id ? { ...m, readAt: new Date() } : m
+                )
+              );
+            }
+          })
+          .catch(err => {
+            console.error('Hiba az üzenet olvasottnak jelölésekor:', err);
+            // Visszaállítás hiba esetén
+            setMessages(prevMessages => 
+              prevMessages.map(m => 
+                m.id === msg.id && selectedGroupId 
+                  ? { ...m, readBy: m.readBy?.filter(r => r.userId !== currentUserId) } 
+                  : m
+              )
+            );
+          });
         });
-        
-        setMessages(messages.map(m => 
-          unreadMessages.some(um => um.id === m.id) 
-            ? { ...m, readAt: new Date() } 
-            : m
-        ));
       }
     }
   }, [messages.length, loading, selectedDoctorId, selectedGroupId, currentUserId]);
+
+  // Intersection Observer: Mark group chat messages as read when they become visible
+  useEffect(() => {
+    if (messages.length === 0 || loading || !selectedGroupId || !currentUserId) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const messageId = entry.target.getAttribute('data-message-id');
+            if (messageId) {
+              const message = messages.find(m => m.id === messageId);
+              // Csak azok az üzenetek, amiket nem én küldtem és még nem olvastam
+              if (message && 
+                  message.senderId !== currentUserId && 
+                  (!message.readBy || !message.readBy.some(r => r.userId === currentUserId)) &&
+                  !message.pending && 
+                  !message.id.startsWith('pending-') &&
+                  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(message.id)) {
+                // Mark as read
+                fetch(`/api/doctor-messages/${messageId}/read`, {
+                  method: 'PUT',
+                  credentials: 'include',
+                })
+                .then(async () => {
+                  // Frissítjük az üzenetet az olvasók listájával
+                  const response = await fetch(`/api/doctor-messages?groupId=${selectedGroupId}`, {
+                    credentials: 'include',
+                  });
+                  if (response.ok) {
+                    const data = await response.json();
+                    const updatedMessage = data.messages?.find((m: DoctorMessage) => m.id === messageId);
+                    if (updatedMessage) {
+                      setMessages(prevMessages => 
+                        prevMessages.map(m => 
+                          m.id === messageId ? updatedMessage : m
+                        )
+                      );
+                    }
+                  }
+                })
+                .catch(err => console.error('Hiba az üzenet olvasottnak jelölésekor:', err));
+              }
+            }
+          }
+        });
+      },
+      { threshold: 0.5 } // Mark as read when 50% visible
+    );
+
+    // Observe all message elements
+    const messageElements = document.querySelectorAll('[data-message-id]');
+    messageElements.forEach(el => observer.observe(el));
+
+    return () => {
+      messageElements.forEach(el => observer.unobserve(el));
+      observer.disconnect();
+    };
+  }, [messages, loading, selectedGroupId, currentUserId]);
+
+  // WebSocket: Listen for doctor message read events (group chats)
+  useEffect(() => {
+    if (!socket || !isConnected || !selectedGroupId) return;
+
+    const handleDoctorMessageRead = (data: { messageId: string; groupId: string; userId: string; userName: string | null }) => {
+      if (data.groupId !== selectedGroupId) return;
+
+      // Frissítjük az üzenetet az olvasók listájával
+      setMessages(prevMessages => 
+        prevMessages.map(m => {
+          if (m.id === data.messageId) {
+            const existingReadBy = m.readBy || [];
+            // Ha már benne van, ne adjuk hozzá újra
+            if (existingReadBy.some(r => r.userId === data.userId)) {
+              return m;
+            }
+            return {
+              ...m,
+              readBy: [
+                ...existingReadBy,
+                {
+                  userId: data.userId,
+                  userName: data.userName,
+                  readAt: new Date(),
+                }
+              ]
+            };
+          }
+          return m;
+        })
+      );
+    };
+
+    // Join group room
+    socket.emit('join-room', { groupId: `doctor-group:${selectedGroupId}` });
+
+    socket.on('doctor-message-read', handleDoctorMessageRead);
+
+    return () => {
+      socket.off('doctor-message-read', handleDoctorMessageRead);
+      socket.emit('leave-room', { groupId: `doctor-group:${selectedGroupId}` });
+    };
+  }, [socket, isConnected, selectedGroupId]);
 
   // Scroll to bottom when messages change or loading finishes
   useEffect(() => {
@@ -832,6 +980,7 @@ export function DoctorMessages() {
                   return (
                     <div
                       key={message.id}
+                      data-message-id={message.id}
                       className={`flex flex-col ${isFromMe ? 'items-end' : 'items-start'}`}
                     >
                       {/* Sender name and monogram */}
@@ -879,6 +1028,36 @@ export function DoctorMessages() {
                             </span>
                           )}
                         </div>
+                        {/* Group chat: ki olvasta az üzenetet */}
+                        {isFromMe && selectedGroupId && message.readBy && message.readBy.length > 0 && (
+                          <div className="text-xs text-blue-100 mt-1 px-1">
+                            <span className="font-medium">Olvasták: </span>
+                            <span className="opacity-90">
+                              {message.readBy.length <= 3 ? (
+                                // Mobilon is jól néz ki, ha kevés olvasó van
+                                message.readBy.map((reader, idx) => (
+                                  <span key={reader.userId}>
+                                    {reader.userName || 'Ismeretlen'}
+                                    {idx < message.readBy!.length - 1 && ', '}
+                                  </span>
+                                ))
+                              ) : (
+                                // Ha sok olvasó van, csak az első 2-t mutatjuk + számláló
+                                <>
+                                  {message.readBy.slice(0, 2).map((reader, idx) => (
+                                    <span key={reader.userId}>
+                                      {reader.userName || 'Ismeretlen'}
+                                      {idx < 1 && ', '}
+                                    </span>
+                                  ))}
+                                  <span className="ml-1">
+                                    +{message.readBy.length - 2} további
+                                  </span>
+                                </>
+                              )}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
