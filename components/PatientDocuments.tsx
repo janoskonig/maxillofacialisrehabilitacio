@@ -30,7 +30,7 @@ export function PatientDocuments({
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [showUploadForm, setShowUploadForm] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState('');
@@ -145,38 +145,39 @@ export function PatientDocuments({
     }
   };
 
-  const handleFileSelect = (file: File) => {
-    if (file) {
-      // Check if OP tag is selected and file is not an image
-      const hasOPTag = tags.some(tag => 
-        tag.toLowerCase() === 'op' || 
-        tag.toLowerCase() === 'orthopantomogram'
-      );
-      
-      if (hasOPTag) {
-        const isImage = file.type && file.type.startsWith('image/');
-        if (!isImage) {
-          showToast('OP tag-gel csak képfájlok tölthetők fel. Kérjük, válasszon ki egy képfájlt vagy távolítsa el az OP tag-et.', 'error');
-          return;
-        }
-      }
+  const handleFileSelect = (files: FileList | File[]) => {
+    const fileArray = Array.from(files);
+    if (fileArray.length === 0) return;
 
-      // Check if foto tag is selected and file is not an image
-      const hasFotoTag = tags.some(tag => 
-        tag.toLowerCase() === 'foto'
-      );
-      
-      if (hasFotoTag) {
-        const isImage = file.type && file.type.startsWith('image/');
-        if (!isImage) {
-          showToast('Foto tag-gel csak képfájlok tölthetők fel. Kérjük, válasszon ki egy képfájlt vagy távolítsa el a foto tag-et.', 'error');
-          return;
-        }
+    // Check if OP tag is selected and validate all files are images
+    const hasOPTag = tags.some(tag => 
+      tag.toLowerCase() === 'op' || 
+      tag.toLowerCase() === 'orthopantomogram'
+    );
+    
+    if (hasOPTag) {
+      const invalidFiles = fileArray.filter(file => !file.type.startsWith('image/'));
+      if (invalidFiles.length > 0) {
+        showToast('OP tag-gel csak képfájlok tölthetők fel. Kérjük, válasszon ki képfájlokat vagy távolítsa el az OP tag-et.', 'error');
+        return;
       }
-      
-      setSelectedFile(file);
-      setShowUploadForm(true);
     }
+
+    // Check if foto tag is selected and validate all files are images
+    const hasFotoTag = tags.some(tag => 
+      tag.toLowerCase() === 'foto'
+    );
+    
+    if (hasFotoTag) {
+      const invalidFiles = fileArray.filter(file => !file.type.startsWith('image/'));
+      if (invalidFiles.length > 0) {
+        showToast('Foto tag-gel csak képfájlok tölthetők fel. Kérjük, válasszon ki képfájlokat vagy távolítsa el a foto tag-et.', 'error');
+        return;
+      }
+    }
+    
+    setSelectedFiles(fileArray);
+    setShowUploadForm(true);
   };
 
   const handleDragEnter = (e: React.DragEvent) => {
@@ -209,12 +210,12 @@ export function PatientDocuments({
     dragCounterRef.current = 0;
 
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      handleFileSelect(e.dataTransfer.files[0]);
+      handleFileSelect(e.dataTransfer.files);
     }
   };
 
   const handleUpload = async () => {
-    if (!selectedFile) return;
+    if (selectedFiles.length === 0) return;
 
     // Validate: OP tag can only be used with image files
     const hasOPTag = tags.some(tag => 
@@ -223,9 +224,9 @@ export function PatientDocuments({
     );
     
     if (hasOPTag) {
-      const isImage = selectedFile.type && selectedFile.type.startsWith('image/');
-      if (!isImage) {
-        showToast('OP tag-gel csak képfájlok tölthetők fel. Kérjük, válasszon ki egy képfájlt vagy távolítsa el az OP tag-et.', 'error');
+      const invalidFiles = selectedFiles.filter(file => !file.type.startsWith('image/'));
+      if (invalidFiles.length > 0) {
+        showToast('OP tag-gel csak képfájlok tölthetők fel. Kérjük, válasszon ki képfájlokat vagy távolítsa el az OP tag-et.', 'error');
         return;
       }
     }
@@ -236,9 +237,9 @@ export function PatientDocuments({
     );
     
     if (hasFotoTag) {
-      const isImage = selectedFile.type && selectedFile.type.startsWith('image/');
-      if (!isImage) {
-        showToast('Foto tag-gel csak képfájlok tölthetők fel. Kérjük, válasszon ki egy képfájlt vagy távolítsa el a foto tag-et.', 'error');
+      const invalidFiles = selectedFiles.filter(file => !file.type.startsWith('image/'));
+      if (invalidFiles.length > 0) {
+        showToast('Foto tag-gel csak képfájlok tölthetők fel. Kérjük, válasszon ki képfájlokat vagy távolítsa el a foto tag-et.', 'error');
         return;
       }
     }
@@ -274,33 +275,62 @@ export function PatientDocuments({
       setUploading(true);
       setUploadProgress(0);
 
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-      if (description.trim()) {
-        formData.append('description', description.trim());
+      const uploadedDocuments: PatientDocument[] = [];
+      let successCount = 0;
+      let errorCount = 0;
+
+      // Upload each file with the same tags and description
+      for (let i = 0; i < selectedFiles.length; i++) {
+        const file = selectedFiles[i];
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+          if (description.trim()) {
+            formData.append('description', description.trim());
+          }
+          // Always send tags, even if empty array
+          console.log('Sending tags:', tags);
+          formData.append('tags', JSON.stringify(tags));
+
+          const response = await fetch(`/api/patients/${currentPatientId}/documents`, {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Upload failed');
+          }
+
+          const data = await response.json();
+          uploadedDocuments.push(data.document);
+          successCount++;
+          
+          // Update progress
+          setUploadProgress(Math.round(((i + 1) / selectedFiles.length) * 100));
+        } catch (error) {
+          console.error(`Error uploading file ${file.name}:`, error);
+          errorCount++;
+        }
       }
-      // Always send tags, even if empty array
-      console.log('Sending tags:', tags);
-      formData.append('tags', JSON.stringify(tags));
 
-      const response = await fetch(`/api/patients/${currentPatientId}/documents`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Upload failed');
+      if (uploadedDocuments.length > 0) {
+        setDocuments([...uploadedDocuments, ...documents]);
+        // Reload available tags to include any new tags
+        loadAvailableTags();
       }
 
-      const data = await response.json();
-      setDocuments([data.document, ...documents]);
-      
-      // Reload available tags to include any new tags
-      loadAvailableTags();
+      // Show success/error message
+      if (successCount > 0 && errorCount === 0) {
+        showToast(`${successCount} fájl sikeresen feltöltve`, 'success');
+      } else if (successCount > 0 && errorCount > 0) {
+        showToast(`${successCount} fájl feltöltve, ${errorCount} fájl hibával`, 'error');
+      } else {
+        showToast('Hiba történt a fájlok feltöltésekor', 'error');
+      }
       
       // Reset form
-      setSelectedFile(null);
+      setSelectedFiles([]);
       setDescription('');
       setTags([]);
       setNewTag('');
@@ -309,7 +339,7 @@ export function PatientDocuments({
         fileInputRef.current.value = '';
       }
     } catch (error) {
-      console.error('Error uploading document:', error);
+      console.error('Error uploading documents:', error);
       showToast(error instanceof Error ? error.message : 'Hiba történt a feltöltés során', 'error');
     } finally {
       setUploading(false);
@@ -383,22 +413,22 @@ export function PatientDocuments({
   const addTag = (tagToAdd?: string) => {
     const tag = tagToAdd || newTag.trim();
     if (tag && !tags.includes(tag)) {
-      // Check if adding OP tag and selected file is not an image
+      // Check if adding OP tag and selected files are not images
       const isOPTag = tag.toLowerCase() === 'op' || tag.toLowerCase() === 'orthopantomogram';
-      if (isOPTag && selectedFile) {
-        const isImage = selectedFile.type && selectedFile.type.startsWith('image/');
-        if (!isImage) {
-          showToast('OP tag-gel csak képfájlok tölthetők fel. Kérjük, válasszon ki egy képfájlt vagy távolítsa el a fájlt.', 'error');
+      if (isOPTag && selectedFiles.length > 0) {
+        const invalidFiles = selectedFiles.filter(file => !file.type.startsWith('image/'));
+        if (invalidFiles.length > 0) {
+          showToast('OP tag-gel csak képfájlok tölthetők fel. Kérjük, válasszon ki képfájlokat vagy távolítsa el a nem képfájlokat.', 'error');
           return;
         }
       }
 
-      // Check if adding foto tag and selected file is not an image
+      // Check if adding foto tag and selected files are not images
       const isFotoTag = tag.toLowerCase() === 'foto';
-      if (isFotoTag && selectedFile) {
-        const isImage = selectedFile.type && selectedFile.type.startsWith('image/');
-        if (!isImage) {
-          showToast('Foto tag-gel csak képfájlok tölthetők fel. Kérjük, válasszon ki egy képfájlt vagy távolítsa el a fájlt.', 'error');
+      if (isFotoTag && selectedFiles.length > 0) {
+        const invalidFiles = selectedFiles.filter(file => !file.type.startsWith('image/'));
+        if (invalidFiles.length > 0) {
+          showToast('Foto tag-gel csak képfájlok tölthetők fel. Kérjük, válasszon ki képfájlokat vagy távolítsa el a nem képfájlokat.', 'error');
           return;
         }
       }
@@ -518,29 +548,48 @@ export function PatientDocuments({
                   type="file"
                   className="hidden"
                   accept={fileAccept}
+                  multiple
                   onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      handleFileSelect(e.target.files[0]);
+                    if (e.target.files && e.target.files.length > 0) {
+                      handleFileSelect(e.target.files);
                     }
                   }}
                 />
                 <Upload className="w-8 h-8 mx-auto mb-2 text-gray-400" />
                 <p className="text-sm text-gray-600">
-                  {selectedFile ? selectedFile.name : 'Kattintson vagy húzza ide a fájlt'}
+                  {selectedFiles.length > 0 
+                    ? `${selectedFiles.length} fájl kiválasztva` 
+                    : 'Kattintson vagy húzza ide a fájlokat'}
                 </p>
-                {selectedFile && (
+                {selectedFiles.length > 0 && (
                   <p className="text-xs text-gray-500 mt-1">
-                    {formatFileSize(selectedFile.size)}
+                    Összesen: {formatFileSize(selectedFiles.reduce((sum, file) => sum + file.size, 0))}
                   </p>
                 )}
               </div>
             </div>
 
-            {selectedFile && (
+            {selectedFiles.length > 0 && (
               <>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Leírás (opcionális)
+                    Kiválasztott fájlok ({selectedFiles.length})
+                  </label>
+                  <div className="mb-4 p-3 bg-white border border-gray-200 rounded-lg max-h-40 overflow-y-auto">
+                    <ul className="space-y-1">
+                      {selectedFiles.map((file, index) => (
+                        <li key={index} className="text-sm text-gray-700 flex items-center justify-between">
+                          <span className="flex-1 truncate">{file.name}</span>
+                          <span className="text-xs text-gray-500 ml-2">{formatFileSize(file.size)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Leírás (opcionális - minden fájlhoz ugyanaz)
                   </label>
                   <textarea
                     value={description}
@@ -635,7 +684,7 @@ export function PatientDocuments({
                     type="button"
                     onClick={() => {
                       setShowUploadForm(false);
-                      setSelectedFile(null);
+                      setSelectedFiles([]);
                       setDescription('');
                       setTags([]);
                       setNewTag('');
@@ -647,10 +696,12 @@ export function PatientDocuments({
                   <button
                     type="button"
                     onClick={handleUpload}
-                    disabled={uploading}
+                    disabled={uploading || selectedFiles.length === 0}
                     className="btn-primary"
                   >
-                    {uploading ? 'Feltöltés...' : 'Feltöltés'}
+                    {uploading 
+                      ? `Feltöltés... (${selectedFiles.length} fájl)` 
+                      : `Feltöltés (${selectedFiles.length} fájl)`}
                   </button>
                 </div>
               </>

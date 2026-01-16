@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
 import { sendEmail, sendAppointmentBookingNotification, sendAppointmentBookingNotificationToPatient, sendAppointmentBookingNotificationToAdmins } from '@/lib/email';
 import { generateIcsFile } from '@/lib/calendar';
+import { createGoogleCalendarEvent, deleteGoogleCalendarEvent } from '@/lib/google-calendar';
 
 /**
  * Get patient's appointments
@@ -277,6 +278,10 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
     const appointmentTeremszam = timeSlot.teremszam || null;
     const dentistFullName = timeSlot.dentist_name || timeSlot.dentist_email;
 
+    // Calculate end time (30 minutes duration)
+    const endTime = new Date(startTime);
+    endTime.setMinutes(endTime.getMinutes() + 30);
+
     // Generate ICS file
     const icsFileData = {
       patientName: patient.nev,
@@ -287,7 +292,7 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
     };
     const icsFile = await generateIcsFile(icsFileData);
 
-    // Send email notifications
+    // Send email notifications and create Google Calendar event (parallel)
     try {
       const [adminResult] = await Promise.all([
         pool.query('SELECT email FROM users WHERE role = $1 AND active = true', ['admin']),
@@ -337,6 +342,96 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
               appointmentTeremszam
             )
           : Promise.resolve(),
+        // Google Calendar event handling
+        (async () => {
+          try {
+            // Check if time slot came from Google Calendar
+            const googleCalendarEventId = timeSlot.google_calendar_event_id;
+            const source = timeSlot.source;
+            
+            console.log('[Patient Portal Booking] Time slot info:', {
+              id: timeSlot.id,
+              google_calendar_event_id: googleCalendarEventId,
+              source: source,
+              dentist_user_id: timeSlot.dentist_user_id,
+              status: timeSlot.status
+            });
+
+            const isFromGoogleCalendar = googleCalendarEventId && source === 'google_calendar';
+
+            let finalEventId: string | null = null;
+
+            // Get calendar IDs from user settings
+            const userCalendarResult = await pool.query(
+              `SELECT google_calendar_source_calendar_id, google_calendar_target_calendar_id 
+               FROM users 
+               WHERE id = $1`,
+              [timeSlot.dentist_user_id]
+            );
+            const sourceCalendarId = userCalendarResult.rows[0]?.google_calendar_source_calendar_id || 'primary';
+            const targetCalendarId = userCalendarResult.rows[0]?.google_calendar_target_calendar_id || 'primary';
+            
+            if (isFromGoogleCalendar) {
+              console.log('[Patient Portal Booking] Deleting "szabad" event from source calendar:', googleCalendarEventId);
+              // If from Google Calendar, delete the "szabad" event from source calendar
+              const deleteResult = await deleteGoogleCalendarEvent(
+                timeSlot.dentist_user_id,
+                googleCalendarEventId,
+                sourceCalendarId
+              );
+              console.log('[Patient Portal Booking] Delete result:', deleteResult);
+              
+              // Create a new event with patient name in target calendar
+              console.log('[Patient Portal Booking] Creating new event with patient name in target calendar');
+              const newEventId = await createGoogleCalendarEvent(
+                timeSlot.dentist_user_id,
+                {
+                  summary: `Betegfogadás - ${patient.nev || 'Név nélküli beteg'}`,
+                  description: `Beteg: ${patient.nev || 'Név nélküli'}\nTAJ: ${patient.taj || 'Nincs megadva'}\nBeutaló orvos: Páciens portál`,
+                  startTime: startTime,
+                  endTime: endTime,
+                  location: 'Maxillofaciális Rehabilitáció',
+                  calendarId: targetCalendarId,
+                }
+              );
+              finalEventId = newEventId;
+              
+              if (!newEventId) {
+                console.error('[Patient Portal Booking] Failed to create new Google Calendar event in target calendar');
+              } else {
+                console.log('[Patient Portal Booking] Successfully created new event with patient name in target calendar');
+              }
+            } else {
+              console.log('[Patient Portal Booking] Time slot is not from Google Calendar, creating new event');
+              // If not from Google Calendar, create a new event
+              const newEventId = await createGoogleCalendarEvent(
+                timeSlot.dentist_user_id,
+                {
+                  summary: `Betegfogadás - ${patient.nev || 'Név nélküli beteg'}`,
+                  description: `Beteg: ${patient.nev || 'Név nélküli'}\nTAJ: ${patient.taj || 'Nincs megadva'}\nBeutaló orvos: Páciens portál`,
+                  startTime: startTime,
+                  endTime: endTime,
+                  location: 'Maxillofaciális Rehabilitáció',
+                  calendarId: targetCalendarId,
+                }
+              );
+              finalEventId = newEventId;
+            }
+
+            console.log('[Patient Portal Booking] Final event ID:', finalEventId);
+
+            if (finalEventId) {
+              // Save event ID to appointments table
+              await pool.query(
+                'UPDATE appointments SET google_calendar_event_id = $1 WHERE id = $2',
+                [finalEventId, appointment.id]
+              );
+            }
+          } catch (error) {
+            // Google Calendar error should not block the booking
+            console.error('[Patient Portal Booking] Failed to handle Google Calendar event:', error);
+          }
+        })(),
       ]);
     } catch (emailError) {
       console.error('Hiba az értesítő email küldésekor:', emailError);
