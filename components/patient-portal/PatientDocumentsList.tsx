@@ -31,33 +31,63 @@ interface DocumentUploadCardProps {
 
 function DocumentUploadCard({ title, description, tag, icon, onUpload, uploadedDocuments, patientId }: DocumentUploadCardProps) {
   const [showUpload, setShowUpload] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [descriptionText, setDescriptionText] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { showToast } = useToast();
 
-  const handleFileSelect = (file: File) => {
-    // Validate image for foto tag
-    if (tag === 'foto' && !file.type.startsWith('image/')) {
-      showToast('Önarcképhez csak képfájl tölthető fel', 'error');
-      return;
+  const handleFileSelect = (files: FileList | File[]) => {
+    const fileArray = Array.from(files);
+    if (fileArray.length === 0) return;
+
+    // Validate images for foto tag
+    if (tag === 'foto') {
+      const invalidFiles = fileArray.filter(file => !file.type.startsWith('image/'));
+      if (invalidFiles.length > 0) {
+        showToast('Önarcképhez csak képfájlok tölthetők fel', 'error');
+        return;
+      }
     }
-    // Validate image for op tag
-    if (tag === 'op' && !file.type.startsWith('image/')) {
-      showToast('OP-hez csak képfájl tölthető fel', 'error');
-      return;
+    // Validate images for op tag
+    if (tag === 'op') {
+      const invalidFiles = fileArray.filter(file => !file.type.startsWith('image/'));
+      if (invalidFiles.length > 0) {
+        showToast('OP-hez csak képfájlok tölthetők fel', 'error');
+        return;
+      }
     }
-    setSelectedFile(file);
+    setSelectedFiles(fileArray);
   };
 
   const handleUpload = async () => {
-    if (!selectedFile) return;
+    if (selectedFiles.length === 0) return;
 
     setUploading(true);
     try {
-      await onUpload(selectedFile, tag, descriptionText);
-      setSelectedFile(null);
+      let successCount = 0;
+      let errorCount = 0;
+
+      // Upload each file with the same tag and description
+      for (const file of selectedFiles) {
+        try {
+          await onUpload(file, tag, descriptionText);
+          successCount++;
+        } catch (error) {
+          console.error(`Error uploading file ${file.name}:`, error);
+          errorCount++;
+        }
+      }
+
+      if (successCount > 0 && errorCount === 0) {
+        showToast(`${successCount} fájl sikeresen feltöltve`, 'success');
+      } else if (successCount > 0 && errorCount > 0) {
+        showToast(`${successCount} fájl feltöltve, ${errorCount} fájl hibával`, 'error');
+      } else {
+        showToast('Hiba történt a fájlok feltöltésekor', 'error');
+      }
+
+      setSelectedFiles([]);
       setDescriptionText('');
       setShowUpload(false);
     } catch (error) {
@@ -102,7 +132,7 @@ function DocumentUploadCard({ title, description, tag, icon, onUpload, uploadedD
             <button
               onClick={() => {
                 setShowUpload(false);
-                setSelectedFile(null);
+                setSelectedFiles([]);
                 setDescriptionText('');
               }}
               className="text-gray-400 hover:text-gray-600"
@@ -113,9 +143,11 @@ function DocumentUploadCard({ title, description, tag, icon, onUpload, uploadedD
           <input
             ref={fileInputRef}
             type="file"
+            multiple
             onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handleFileSelect(file);
+              if (e.target.files && e.target.files.length > 0) {
+                handleFileSelect(e.target.files);
+              }
             }}
             className="hidden"
             accept={tag === 'foto' || tag === 'op' ? 'image/*' : undefined}
@@ -124,20 +156,29 @@ function DocumentUploadCard({ title, description, tag, icon, onUpload, uploadedD
             onClick={() => fileInputRef.current?.click()}
             className="btn-secondary w-full text-xs sm:text-sm py-2 mb-2"
           >
-            {selectedFile ? selectedFile.name : 'Fájl kiválasztása'}
+            {selectedFiles.length > 0 
+              ? `${selectedFiles.length} fájl kiválasztva` 
+              : 'Fájlok kiválasztása'}
           </button>
-          {selectedFile && (
+          {selectedFiles.length > 0 && (
             <div className="mb-2">
+              <div className="mb-2 p-2 bg-white border border-gray-200 rounded text-xs max-h-24 overflow-y-auto">
+                <ul className="space-y-1">
+                  {selectedFiles.map((file, index) => (
+                    <li key={index} className="text-gray-700 truncate">{file.name}</li>
+                  ))}
+                </ul>
+              </div>
               <textarea
                 value={descriptionText}
                 onChange={(e) => setDescriptionText(e.target.value)}
-                placeholder="Leírás (opcionális)"
+                placeholder="Leírás (opcionális - minden fájlhoz ugyanaz)"
                 className="form-input text-xs sm:text-sm w-full"
                 rows={2}
               />
             </div>
           )}
-          {selectedFile && (
+          {selectedFiles.length > 0 && (
             <div className="flex gap-2">
               <button
                 onClick={handleUpload}
@@ -147,12 +188,12 @@ function DocumentUploadCard({ title, description, tag, icon, onUpload, uploadedD
                 {uploading ? (
                   <>
                     <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
-                    Feltöltés...
+                    Feltöltés... ({selectedFiles.length} fájl)
                   </>
                 ) : (
                   <>
                     <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                    Feltöltés
+                    Feltöltés ({selectedFiles.length} fájl)
                   </>
                 )}
               </button>
@@ -182,14 +223,14 @@ function GeneralDocumentUploadForm({
   onSuccess: () => void;
 }) {
   const { showToast } = useToast();
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [description, setDescription] = useState('');
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleUpload = async () => {
-    if (!selectedFile) {
-      showToast('Kérjük, válasszon fájlt', 'error');
+    if (selectedFiles.length === 0) {
+      showToast('Kérjük, válasszon fájlokat', 'error');
       return;
     }
 
@@ -200,9 +241,30 @@ function GeneralDocumentUploadForm({
 
     setUploading(true);
     try {
-      // No specific tag for general documents, just use description
-      await onUpload(selectedFile, '', description.trim());
-      setSelectedFile(null);
+      let successCount = 0;
+      let errorCount = 0;
+
+      // Upload each file with the same description
+      for (const file of selectedFiles) {
+        try {
+          // No specific tag for general documents, just use description
+          await onUpload(file, '', description.trim());
+          successCount++;
+        } catch (error) {
+          console.error(`Error uploading file ${file.name}:`, error);
+          errorCount++;
+        }
+      }
+
+      if (successCount > 0 && errorCount === 0) {
+        showToast(`${successCount} fájl sikeresen feltöltve`, 'success');
+      } else if (successCount > 0 && errorCount > 0) {
+        showToast(`${successCount} fájl feltöltve, ${errorCount} fájl hibával`, 'error');
+      } else {
+        showToast('Hiba történt a fájlok feltöltésekor', 'error');
+      }
+
+      setSelectedFiles([]);
       setDescription('');
       onSuccess();
     } catch (error) {
@@ -218,9 +280,11 @@ function GeneralDocumentUploadForm({
       <input
         ref={fileInputRef}
         type="file"
+        multiple
         onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) setSelectedFile(file);
+          if (e.target.files && e.target.files.length > 0) {
+            setSelectedFiles(Array.from(e.target.files));
+          }
         }}
         className="hidden"
       />
@@ -228,14 +292,23 @@ function GeneralDocumentUploadForm({
         onClick={() => fileInputRef.current?.click()}
         className="btn-secondary w-full text-xs sm:text-sm py-2"
       >
-        {selectedFile ? selectedFile.name : 'Fájl kiválasztása'}
+        {selectedFiles.length > 0 
+          ? `${selectedFiles.length} fájl kiválasztva` 
+          : 'Fájlok kiválasztása'}
       </button>
       
-      {selectedFile && (
+      {selectedFiles.length > 0 && (
         <>
+          <div className="p-2 bg-white border border-gray-200 rounded text-xs max-h-24 overflow-y-auto">
+            <ul className="space-y-1">
+              {selectedFiles.map((file, index) => (
+                <li key={index} className="text-gray-700 truncate">{file.name}</li>
+              ))}
+            </ul>
+          </div>
           <div>
             <label className="form-label text-xs sm:text-sm">
-              Dokumentum leírása <span className="text-red-500">*</span>
+              Dokumentum leírása <span className="text-red-500">*</span> (minden fájlhoz ugyanaz)
             </label>
             <textarea
               value={description}
@@ -259,12 +332,12 @@ function GeneralDocumentUploadForm({
             {uploading ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
-                Feltöltés...
+                Feltöltés... ({selectedFiles.length} fájl)
               </>
             ) : (
               <>
                 <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                Feltöltés
+                Feltöltés ({selectedFiles.length} fájl)
               </>
             )}
           </button>
