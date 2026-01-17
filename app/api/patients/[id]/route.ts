@@ -247,6 +247,7 @@ export async function PUT(
     
     const pool = getDbPool();
     const userEmail = auth.email;
+    const userId = auth.userId; // UUID from JWT
     const role = auth.role;
     
     // Get old patient data for comparison (including updated_at for conflict detection)
@@ -943,6 +944,26 @@ export async function PUT(
     } catch (logError) {
       // Activity logging failed, but don't fail the request
       console.error('Failed to log activity:', logError);
+    }
+
+    // Create snapshot for manual saves only
+    if (saveSource === 'manual') {
+      try {
+        await pool.query(
+          `INSERT INTO patient_snapshots (patient_id, snapshot_data, created_by_user_id, source, created_at)
+           VALUES ($1, $2::jsonb, $3, $4, CURRENT_TIMESTAMP)`,
+          [
+            params.id,
+            JSON.stringify(result.rows[0]), // Full patient object from DB (after save)
+            userId,
+            'manual',
+          ]
+        );
+      } catch (snapshotError) {
+        // Snapshot creation failed, but don't fail the request
+        console.error('Failed to create patient snapshot:', snapshotError);
+        // Continue - snapshot is not critical for the save operation
+      }
     }
 
     const response = NextResponse.json({ patient: result.rows[0] }, { status: 200 });
