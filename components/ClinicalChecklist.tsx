@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { CheckCircle2, XCircle, AlertTriangle, FileText, ClipboardList } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { CheckCircle2, XCircle, AlertTriangle, FileText, ClipboardList, Loader2 } from 'lucide-react';
 import { Patient } from '@/lib/types';
 import { PatientDocument } from '@/lib/types';
 import { getChecklistStatus, RequiredField } from '@/lib/clinical-rules';
@@ -14,37 +14,103 @@ interface ClinicalChecklistProps {
 export function ClinicalChecklist({ patient, patientId }: ClinicalChecklistProps) {
   const [documents, setDocuments] = useState<PatientDocument[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Load documents if patientId is provided
+  // Only fetch when patientId changes (not on every render)
   useEffect(() => {
+    // Cleanup previous request if component unmounts or patientId changes
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
     if (!patientId) {
       setDocuments([]);
+      setError(null);
+      setLoading(false);
       return;
     }
+
+    // Create new abort controller for this request
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
 
     const loadDocuments = async () => {
       try {
         setLoading(true);
+        setError(null);
         const response = await fetch(`/api/patients/${patientId}/documents`, {
           credentials: 'include',
+          signal: abortController.signal,
         });
-        if (response.ok) {
-          const data = await response.json();
-          setDocuments(data.documents || []);
+        
+        if (abortController.signal.aborted) {
+          return; // Component unmounted or patientId changed
         }
-      } catch (error) {
+
+        if (!response.ok) {
+          throw new Error(`Failed to load documents: ${response.status}`);
+        }
+
+        const data = await response.json();
+        // PHI check: only store tags, not document content/metadata
+        // We only need tags for the checklist, so we can safely extract just the tags
+        const documentsWithTagsOnly: PatientDocument[] = (data.documents || []).map((doc: PatientDocument) => ({
+          id: doc.id,
+          tags: doc.tags || [],
+          // Explicitly exclude any PHI fields (description, filename, etc.)
+        }));
+        
+        setDocuments(documentsWithTagsOnly);
+      } catch (error: any) {
+        if (error.name === 'AbortError') {
+          // Request was aborted, ignore
+          return;
+        }
         console.error('Error loading documents for checklist:', error);
+        setError('Nem sikerült betölteni a dokumentumokat');
+        // On error, set empty array so checklist still works (just shows missing docs)
+        setDocuments([]);
       } finally {
-        setLoading(false);
+        if (!abortController.signal.aborted) {
+          setLoading(false);
+        }
       }
     };
 
     loadDocuments();
-  }, [patientId]);
+
+    // Cleanup function
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [patientId]); // Only re-fetch when patientId changes
 
   const status = getChecklistStatus(patient, documents);
 
-  if (status.isComplete) {
+  // Loading state
+  if (loading && documents.length === 0) {
+    return (
+      <div className="card p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <ClipboardList className="w-5 h-5 text-gray-600" />
+          <h3 className="text-lg font-semibold text-gray-900">Klinikai checklist</h3>
+        </div>
+        <div className="flex items-center gap-2 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+          <Loader2 className="w-5 h-5 text-gray-600 flex-shrink-0 animate-spin" />
+          <span className="text-sm font-medium text-gray-700">Dokumentumok betöltése...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state (non-blocking: still show checklist, but indicate error)
+  const hasError = error !== null;
+
+  if (status.isComplete && !hasError) {
     return (
       <div className="card p-6">
         <div className="flex items-center gap-3 mb-4">
@@ -65,6 +131,16 @@ export function ClinicalChecklist({ patient, patientId }: ClinicalChecklistProps
         <ClipboardList className="w-5 h-5 text-amber-600" />
         <h3 className="text-lg font-semibold text-gray-900">Klinikai checklist</h3>
       </div>
+
+      {/* Error Banner (non-blocking) */}
+      {hasError && (
+        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+            <span className="text-sm text-amber-800">{error}</span>
+          </div>
+        </div>
+      )}
 
       {/* Summary Status */}
       <div className={`p-4 rounded-lg border mb-4 ${
