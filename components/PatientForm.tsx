@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, ReactNode } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Patient, patientSchema, nyakiBlokkdisszekcioOptions, fabianFejerdyProtetikaiOsztalyOptions, kezelesiTervOptions, kezelesiTervArcotErintoTipusOptions, kezelesiTervArcotErintoElhorgonyzasOptions } from '@/lib/types';
@@ -273,6 +273,10 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
   const isNewPatient = !patient && !isViewOnly;
   const [currentPatient, setCurrentPatient] = useState<Patient | null | undefined>(patient);
   const patientId = currentPatient?.id || null;
+  
+  // Conflict handling state
+  const [conflictError, setConflictError] = useState<ApiError | null>(null); // Manual save 409 → modal
+  const [showConflictModal, setShowConflictModal] = useState(false);
 
   // Ref for immediate access to current patient (for hasUnsavedChanges)
   const currentPatientRef = useRef<Patient | null | undefined>(patient);
@@ -623,6 +627,9 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
   const lastSaveSourceRef = useRef<'auto' | 'manual' | null>(null);
   const lastSaveAttemptAtRef = useRef<number | null>(null);
   const lastSaveErrorRef = useRef<Error | null>(null);
+  
+  // State for conflict banner visibility (auto-save 409)
+  const [showConflictBanner, setShowConflictBanner] = useState(false);
 
   // State refs - hogy a performSave ne függjön closure-öktől
   const fogakRef = useRef(fogak);
@@ -644,6 +651,9 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
     saveSequenceRef.current = 0;
     lastSaveSourceRef.current = null;
     lastSaveErrorRef.current = null;
+    setShowConflictBanner(false);
+    setShowConflictModal(false);
+    setConflictError(null);
   }, [patient?.id]);
 
   // Watch individual fields to ensure we catch all changes
@@ -1751,15 +1761,13 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
             details: err.details,
           });
           lastSaveErrorRef.current = err;
+          setShowConflictBanner(true);
           return null;
         } else {
-          // Manual save: toast hibaüzenet correlationId-vel
-          const correlationIdMsg = err.correlationId ? ` (ID: ${err.correlationId})` : '';
-          showToast(
-            `Konfliktus: Másik felhasználó módosította a beteg adatait közben. Kérjük, frissítse az oldalt és próbálja újra.${correlationIdMsg}`,
-            "error"
-          );
-          throw err;
+          // Manual save: modal megjelenítése (toast helyett)
+          setConflictError(err);
+          setShowConflictModal(true);
+          throw err; // Ne dobjuk tovább, a modal kezeli
         }
       }
 
@@ -1914,6 +1922,64 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
           <X className="w-6 h-6" />
         </button>
       </div>
+
+      {/* Auto-save conflict banner */}
+      {showConflictBanner && 
+       lastSaveErrorRef.current instanceof ApiError && 
+       lastSaveErrorRef.current.status === 409 && 
+       lastSaveErrorRef.current.code === 'STALE_WRITE' && (
+        <div className="mb-4 bg-amber-50 border-l-4 border-amber-400 p-4 rounded-md">
+          <div className="flex items-start justify-between">
+            <div className="flex items-start">
+              <AlertTriangle className="w-5 h-5 text-amber-600 mr-3 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <h4 className="text-sm font-semibold text-amber-800 mb-1">
+                  Konfliktus észlelve
+                </h4>
+                <p className="text-sm text-amber-700 mb-3">
+                  Másik felhasználó módosította a beteg adatait közben. Kérjük, frissítse az adatokat a legfrissebb verzió betöltéséhez.
+                </p>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!patientId) return;
+                    try {
+                      const response = await fetch(`/api/patients/${patientId}`, {
+                        credentials: 'include',
+                      });
+                      if (response.ok) {
+                        const data = await response.json();
+                        updateCurrentPatient(data.patient);
+                        reset(data.patient);
+                        lastSaveErrorRef.current = null;
+                        setShowConflictBanner(false);
+                        showToast('Adatok frissítve', 'success');
+                      }
+                    } catch (error) {
+                      console.error('Error refreshing patient:', error);
+                      showToast('Hiba az adatok frissítésekor', 'error');
+                    }
+                  }}
+                  className="text-sm bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-md transition-colors"
+                >
+                  Adatok frissítése
+                </button>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                lastSaveErrorRef.current = null;
+                setShowConflictBanner(false);
+              }}
+              className="text-amber-600 hover:text-amber-800 ml-4"
+              aria-label="Banner bezárása"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       <form id="patient-form" onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         {/* ALAPADATOK */}
@@ -3868,6 +3934,156 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
           </div>
         )}
       </form>
+
+      {/* Manual save conflict modal */}
+      {showConflictModal && conflictError && (() => {
+        const details = conflictError.details && typeof conflictError.details === 'object' && 'serverUpdatedAt' in conflictError.details
+          ? conflictError.details as { serverUpdatedAt?: string; clientUpdatedAt?: string }
+          : null;
+        
+        return (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+              <div className="p-6">
+                <div className="flex items-start mb-4">
+                  <AlertTriangle className="w-6 h-6 text-amber-600 mr-3 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                      Konfliktus észlelve
+                    </h3>
+                    <p className="text-sm text-gray-700 mb-4">
+                      Másik felhasználó módosította a beteg adatait közben. Mit szeretne tenni?
+                    </p>
+                    
+                    {/* Details section (collapsible) */}
+                    {details && (
+                      <details className="mb-4 text-xs text-gray-600">
+                        <summary className="cursor-pointer hover:text-gray-800 mb-2">
+                          Részletek
+                        </summary>
+                        <div className="pl-4 space-y-1">
+                          {conflictError.correlationId && (
+                            <div>
+                              <strong>Correlation ID:</strong> {String(conflictError.correlationId)}
+                            </div>
+                          )}
+                          {details.serverUpdatedAt && (
+                            <div>
+                              <strong>Szerver frissítve:</strong>{' '}
+                              {new Date(details.serverUpdatedAt).toLocaleString('hu-HU')}
+                            </div>
+                          )}
+                          {details.clientUpdatedAt && (
+                            <div>
+                              <strong>Kliens verzió:</strong>{' '}
+                              {new Date(details.clientUpdatedAt).toLocaleString('hu-HU')}
+                            </div>
+                          )}
+                        </div>
+                      </details>
+                    )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowConflictModal(false);
+                    setConflictError(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                  aria-label="Modal bezárása"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!patientId) return;
+                    try {
+                      const response = await fetch(`/api/patients/${patientId}`, {
+                        credentials: 'include',
+                      });
+                      if (response.ok) {
+                        const data = await response.json();
+                        updateCurrentPatient(data.patient);
+                        reset(data.patient);
+                        setShowConflictModal(false);
+                        setConflictError(null);
+                        showToast('Adatok frissítve', 'success');
+                      } else {
+                        showToast('Hiba az adatok frissítésekor', 'error');
+                      }
+                    } catch (error) {
+                      console.error('Error refreshing patient:', error);
+                      showToast('Hiba az adatok frissítésekor', 'error');
+                    }
+                  }}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors text-sm font-medium"
+                >
+                  Frissítés
+                </button>
+                
+                {/* Felülírás csak admin/editor számára */}
+                {(userRole === 'admin' || userRole === 'editor') && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const confirmed = await confirmDialog(
+                        'Biztosan felülírja a másik felhasználó módosításait? Ez a művelet nem vonható vissza.',
+                        { title: 'Felülírás megerősítése', type: 'warning' }
+                      );
+                      if (!confirmed) return;
+
+                      if (!patientId) return;
+                      try {
+                        // Felülírás: először frissítjük az adatokat (hogy megkapjuk a legfrissebb updatedAt-t),
+                        // majd mentjük a jelenlegi form állapotot (ami felülírja)
+                        const refreshResponse = await fetch(`/api/patients/${patientId}`, {
+                          credentials: 'include',
+                        });
+                        if (!refreshResponse.ok) {
+                          showToast('Hiba az adatok frissítésekor', 'error');
+                          return;
+                        }
+                        const refreshData = await refreshResponse.json();
+                        
+                        // Most mentjük a jelenlegi form állapotot (felülírás)
+                        const currentFormData = getValues();
+                        const payload = buildSavePayload(
+                          currentFormData,
+                          fogakRef.current,
+                          implantatumokRef.current,
+                          vanBeutaloRef.current,
+                          patientId
+                        );
+                        
+                        // Felülírás: a legfrissebb updatedAt-tel küldjük (de a backend még mindig konfliktust dob)
+                        // Ezért explicit felülírás flag kellene, de MVP-ben: if-match nélkül (backward compat)
+                        // Jelenleg a backend engedi if-match nélkül, de ez nem teljesen "felülírás"
+                        // TODO: Később explicit felülírás API endpoint vagy flag
+                        const saved = await savePatient(payload, { source: 'manual' });
+                        updateCurrentPatient(saved);
+                        setShowConflictModal(false);
+                        setConflictError(null);
+                        showToast('Adatok felülírva', 'success');
+                      } catch (error) {
+                        console.error('Error overwriting patient:', error);
+                        showToast('Hiba a felülírás során', 'error');
+                      }
+                    }}
+                    className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md transition-colors text-sm font-medium"
+                  >
+                    Felülírás
+                  </button>
+                )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
