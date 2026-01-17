@@ -203,14 +203,15 @@ export function ClinicalChecklist({ patient, patientId }: ClinicalChecklistProps
             Kötelező dokumentumok
           </h4>
           <div className="space-y-2">
-            {status.missingDocs.map((tag) => (
+            {status.missingDocs.map((rule) => (
               <div
-                key={tag}
+                key={rule.tag}
                 className="flex items-center gap-2 p-2 rounded bg-amber-50 border border-amber-200"
               >
                 <XCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
                 <span className="text-sm text-amber-800">
-                  {tag.toUpperCase()} tag dokumentum
+                  {rule.label}: {rule.actualCount} / {rule.minCount} db
+                  {rule.actualCount > 0 && ` (hiányzik még ${rule.minCount - rule.actualCount} db)`}
                 </span>
               </div>
             ))}

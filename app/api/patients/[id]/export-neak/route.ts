@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { handleApiError } from '@/lib/api-error-handler';
-import { REQUIRED_DOC_TAGS, getMissingRequiredDocTags, getChecklistStatus, getMissingRequiredFields } from '@/lib/clinical-rules';
+import { REQUIRED_DOC_TAGS, REQUIRED_DOC_RULES, getMissingRequiredDocRules, getMissingRequiredDocTags, getChecklistStatus, getMissingRequiredFields } from '@/lib/clinical-rules';
 import { Patient } from '@/lib/types';
 import { downloadFile } from '@/lib/ftp-client';
 import { PDFDocument, StandardFonts } from 'pdf-lib';
@@ -130,10 +130,10 @@ async function generatePatientSummaryPDF(
   );
   yPosition -= 15;
 
-  // Required documents status
-  const missingDocs = getMissingRequiredDocTags(documents);
+  // Required documents status (using rules for accurate count)
+  const missingDocRules = getMissingRequiredDocRules(documents);
   page.drawText(
-    `Kötelező dokumentumok: ${missingDocs.length === 0 ? '✓ Minden megvan' : `✗ ${missingDocs.length} hiányzik`}`,
+    `Kötelező dokumentumok: ${missingDocRules.length === 0 ? '✓ Minden megvan' : `✗ ${missingDocRules.length} hiányzik`}`,
     {
       x: margin + 20,
       y: yPosition,
@@ -143,8 +143,8 @@ async function generatePatientSummaryPDF(
   );
   yPosition -= 20;
 
-  // Required tags list
-  page.drawText('Kötelező tag-ek:', {
+  // Required document rules list (detailed)
+  page.drawText('Kötelező dokumentumok részletei:', {
     x: margin,
     y: yPosition,
     size: 10,
@@ -152,16 +152,21 @@ async function generatePatientSummaryPDF(
   });
   yPosition -= 15;
 
-  REQUIRED_DOC_TAGS.forEach((tag) => {
-    const hasTag = documents.some((doc) =>
-      (doc.tags || []).some((t: string) => t.toLowerCase() === tag.toLowerCase())
+  REQUIRED_DOC_RULES.forEach((rule) => {
+    // Count documents with this tag
+    const docCount = documents.filter((doc) =>
+      (doc.tags || []).some((t: string) => t.toLowerCase() === rule.tag.toLowerCase())
+    ).length;
+    const isComplete = docCount >= rule.minCount;
+    page.drawText(
+      `${isComplete ? '✓' : '✗'} ${rule.label}: ${docCount} / ${rule.minCount} db`,
+      {
+        x: margin + 20,
+        y: yPosition,
+        size: 10,
+        font: font,
+      }
     );
-    page.drawText(`${hasTag ? '✓' : '✗'} ${tag.toUpperCase()}`, {
-      x: margin + 20,
-      y: yPosition,
-      size: 10,
-      font: font,
-    });
     yPosition -= 15;
   });
 
@@ -273,10 +278,12 @@ export async function GET(
 
     const documents = documentsResult.rows;
 
-    // Check missing required doc tags
-    const missingDocTags = getMissingRequiredDocTags(documents);
+    // Check missing required doc rules (tag + minCount)
+    const missingDocRules = getMissingRequiredDocRules(documents);
+    const missingDocTags = missingDocRules.map((rule) => rule.tag);
 
-    // Get documents that match required tags (for includedDocuments list)
+    // Get documents that match required rules (for includedDocuments list)
+    // Only include documents that match REQUIRED_DOC_RULES tags
     const includedDocuments: Array<{
       id: string;
       tags: string[];
@@ -286,8 +293,8 @@ export async function GET(
 
     documents.forEach((doc: any) => {
       const docTags = (doc.tags || []) as string[];
-      const hasRequiredTag = REQUIRED_DOC_TAGS.some((requiredTag) =>
-        docTags.some((tag: string) => tag.toLowerCase() === requiredTag.toLowerCase())
+      const hasRequiredTag = REQUIRED_DOC_RULES.some((rule) =>
+        docTags.some((tag: string) => tag.toLowerCase() === rule.tag.toLowerCase())
       );
 
       if (hasRequiredTag) {
@@ -318,7 +325,18 @@ export async function GET(
         {
           isReady,
           missingDocTags,
-          requiredDocTags: [...REQUIRED_DOC_TAGS],
+          requiredDocTags: REQUIRED_DOC_RULES.map((rule) => rule.tag), // Backward compatibility
+          requiredDocRules: REQUIRED_DOC_RULES.map((rule) => ({
+            tag: rule.tag,
+            label: rule.label,
+            minCount: rule.minCount,
+          })),
+          missingDocRules: missingDocRules.map((rule) => ({
+            tag: rule.tag,
+            label: rule.label,
+            minCount: rule.minCount,
+            actualCount: rule.actualCount,
+          })),
           includedDocuments,
           estimatedTotalBytes: estimatedTotalBytes > 0 ? estimatedTotalBytes : undefined,
           checklistSummary: {

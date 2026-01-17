@@ -1,13 +1,16 @@
 /**
  * Clinical rules and protocol definitions
  * Centralized location for required fields, document tags, and checklist logic
+ * 
+ * This is the single source of truth for NEAK/klinikai minimum protocol.
+ * All components (PatientForm, ClinicalChecklist, W2 saved views, W1 export) use this.
  */
 
 import { Patient } from './types';
 import { PatientDocument } from './types';
 
-// Required document tags for clinical workflow
-export const REQUIRED_DOC_TAGS = ['neak', 'op', 'foto'] as const;
+// Protocol version (for tracking changes)
+export const PROTOCOL_VERSION = '2026-01-17';
 
 // Required field definitions for clinical protocol
 // Each field has: key (Patient object key), label (display name), severity (error/warning)
@@ -17,16 +20,36 @@ export interface RequiredField {
   severity?: 'error' | 'warning';
 }
 
-// MVP: 5-10 kötelező mező (amit tényleg használtok)
-const REQUIRED_FIELDS: RequiredField[] = [
+// NEAK/Klinikai minimum protokoll - kötelező mezők
+// These are hard-required (severity: "error") - everything else is optional
+export const REQUIRED_FIELDS: RequiredField[] = [
   { key: 'nev', label: 'Név', severity: 'error' },
-  { key: 'taj', label: 'TAJ szám', severity: 'error' },
+  { key: 'nem', label: 'Nem', severity: 'error' },
+  { key: 'szuletesiDatum', label: 'Születési idő', severity: 'error' },
+  { key: 'taj', label: 'TAJ', severity: 'error' },
+  { key: 'email', label: 'Email', severity: 'error' },
+  { key: 'kezelesreErkezesIndoka', label: 'Kezelésre érkezés indoka', severity: 'error' },
   { key: 'diagnozis', label: 'Diagnózis', severity: 'error' },
-  { key: 'szuletesiDatum', label: 'Születési dátum', severity: 'warning' },
-  { key: 'nem', label: 'Nem', severity: 'warning' },
-  { key: 'kezelesreErkezesIndoka', label: 'Kezelésre érkezés indoka', severity: 'warning' },
-  { key: 'kezeleoorvos', label: 'Kezelőorvos', severity: 'warning' },
-];
+  { key: 'meglevoFogak', label: 'Fogazati státusz', severity: 'error' },
+] as const;
+
+// Required document rules (tag-based with minimum count)
+export interface RequiredDocRule {
+  tag: string;
+  label: string;
+  minCount: number;
+}
+
+// NEAK/Klinikai minimum protokoll - kötelező dokumentumok
+// Only OP röntgenfelvétel is required (1 db minimum)
+// Note: If your OP tag is different (e.g., "rtg_op" or "panorama"), update this
+export const REQUIRED_DOC_RULES: RequiredDocRule[] = [
+  { tag: 'op', label: 'OP röntgenfelvétel', minCount: 1 },
+] as const;
+
+// Backward compatibility: Extract tag list from REQUIRED_DOC_RULES
+// This is used by W2 saved views and W1 export
+export const REQUIRED_DOC_TAGS = REQUIRED_DOC_RULES.map((rule) => rule.tag) as readonly string[];
 
 /**
  * Get missing required fields for a patient
@@ -64,37 +87,70 @@ export function getMissingRequiredFields(patient: Patient | null | undefined): R
 }
 
 /**
- * Get missing required document tags for a patient
+ * Get missing required document rules for a patient
+ * Checks both tag presence and minimum count requirements
  * @param documents - Array of patient documents
- * @returns Array of missing required tag names
+ * @returns Array of missing required document rules (with label for display)
  */
-export function getMissingRequiredDocTags(documents: PatientDocument[]): string[] {
+export interface MissingDocRule {
+  tag: string;
+  label: string;
+  minCount: number;
+  actualCount: number;
+}
+
+export function getMissingRequiredDocRules(documents: PatientDocument[]): MissingDocRule[] {
   if (!documents || documents.length === 0) {
-    return [...REQUIRED_DOC_TAGS];
+    // All rules are missing if no documents
+    return REQUIRED_DOC_RULES.map((rule) => ({
+      tag: rule.tag,
+      label: rule.label,
+      minCount: rule.minCount,
+      actualCount: 0,
+    }));
   }
 
-  // Extract all tags from documents (case-insensitive)
-  const existingTags = new Set<string>();
+  // Count documents per tag (case-insensitive)
+  const tagCounts = new Map<string, number>();
   documents.forEach((doc) => {
     if (doc.tags && Array.isArray(doc.tags)) {
       doc.tags.forEach((tag) => {
         if (typeof tag === 'string') {
-          existingTags.add(tag.toLowerCase());
+          const lowerTag = tag.toLowerCase();
+          tagCounts.set(lowerTag, (tagCounts.get(lowerTag) || 0) + 1);
         }
       });
     }
   });
 
-  // Find missing tags (case-insensitive comparison)
-  const missingTags: string[] = [];
-  REQUIRED_DOC_TAGS.forEach((requiredTag) => {
-    const lowerRequired = requiredTag.toLowerCase();
-    if (!existingTags.has(lowerRequired)) {
-      missingTags.push(requiredTag);
+  // Check each required rule
+  const missingRules: MissingDocRule[] = [];
+  REQUIRED_DOC_RULES.forEach((rule) => {
+    const lowerTag = rule.tag.toLowerCase();
+    const actualCount = tagCounts.get(lowerTag) || 0;
+    
+    if (actualCount < rule.minCount) {
+      missingRules.push({
+        tag: rule.tag,
+        label: rule.label,
+        minCount: rule.minCount,
+        actualCount,
+      });
     }
   });
 
-  return missingTags;
+  return missingRules;
+}
+
+/**
+ * Get missing required document tags (backward compatibility)
+ * @param documents - Array of patient documents
+ * @returns Array of missing required tag names
+ * @deprecated Use getMissingRequiredDocRules() for more detailed information
+ */
+export function getMissingRequiredDocTags(documents: PatientDocument[]): string[] {
+  const missingRules = getMissingRequiredDocRules(documents);
+  return missingRules.map((rule) => rule.tag);
 }
 
 /**
@@ -106,7 +162,7 @@ export function getMissingRequiredDocTags(documents: PatientDocument[]): string[
 export interface ChecklistStatus {
   isComplete: boolean;
   missingFields: RequiredField[];
-  missingDocs: string[];
+  missingDocs: MissingDocRule[]; // Changed to include count details
   hasErrors: boolean; // true if any missing field has severity 'error'
   hasWarnings: boolean; // true if any missing field has severity 'warning'
 }
@@ -116,7 +172,7 @@ export function getChecklistStatus(
   documents: PatientDocument[] = []
 ): ChecklistStatus {
   const missingFields = getMissingRequiredFields(patient);
-  const missingDocs = getMissingRequiredDocTags(documents);
+  const missingDocs = getMissingRequiredDocRules(documents);
   
   const hasErrors = missingFields.some((field) => field.severity === 'error');
   const hasWarnings = missingFields.some((field) => field.severity === 'warning');
