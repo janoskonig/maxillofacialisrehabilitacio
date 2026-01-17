@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, ReactNode } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Patient, patientSchema, nyakiBlokkdisszekcioOptions, fabianFejerdyProtetikaiOsztalyOptions, kezelesiTervOptions, kezelesiTervArcotErintoTipusOptions, kezelesiTervArcotErintoElhorgonyzasOptions } from '@/lib/types';
@@ -11,7 +11,20 @@ import { AppointmentBookingSection } from './AppointmentBookingSection';
 import { ConditionalAppointmentBooking } from './ConditionalAppointmentBooking';
 import { getCurrentUser } from '@/lib/auth';
 import { DatePicker } from './DatePicker';
-import { savePatient } from '@/lib/storage';
+import { savePatient, ApiError, TimeoutError } from '@/lib/storage';
+import { logEvent } from '@/lib/event-logger';
+import { getMissingRequiredFields } from '@/lib/clinical-rules';
+import { ClinicalChecklist } from './ClinicalChecklist';
+
+// Sentry import (conditional, only if enabled)
+let Sentry: typeof import('@sentry/nextjs') | null = null;
+if (typeof window !== 'undefined' && process.env.ENABLE_SENTRY === 'true') {
+  try {
+    Sentry = require('@sentry/nextjs');
+  } catch {
+    // Sentry not available, ignore
+  }
+}
 import { BNOAutocomplete } from './BNOAutocomplete';
 import { PatientDocuments } from './PatientDocuments';
 import { useToast } from '@/contexts/ToastContext';
@@ -273,6 +286,10 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
   const isNewPatient = !patient && !isViewOnly;
   const [currentPatient, setCurrentPatient] = useState<Patient | null | undefined>(patient);
   const patientId = currentPatient?.id || null;
+  
+  // Conflict handling state
+  const [conflictError, setConflictError] = useState<ApiError | null>(null); // Manual save 409 → modal
+  const [showConflictModal, setShowConflictModal] = useState(false);
 
   // Ref for immediate access to current patient (for hasUnsavedChanges)
   const currentPatientRef = useRef<Patient | null | undefined>(patient);
@@ -623,6 +640,9 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
   const lastSaveSourceRef = useRef<'auto' | 'manual' | null>(null);
   const lastSaveAttemptAtRef = useRef<number | null>(null);
   const lastSaveErrorRef = useRef<Error | null>(null);
+  
+  // State for conflict banner visibility (auto-save 409)
+  const [showConflictBanner, setShowConflictBanner] = useState(false);
 
   // State refs - hogy a performSave ne függjön closure-öktől
   const fogakRef = useRef(fogak);
@@ -644,6 +664,9 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
     saveSequenceRef.current = 0;
     lastSaveSourceRef.current = null;
     lastSaveErrorRef.current = null;
+    setShowConflictBanner(false);
+    setShowConflictModal(false);
+    setConflictError(null);
   }, [patient?.id]);
 
   // Watch individual fields to ensure we catch all changes
@@ -1601,31 +1624,36 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
     };
   }, []);
 
-  // Robusztus hiba típus detektálás
+  // Robusztus hiba típus detektálás - ApiError alapú (regex fallback eltávolítva)
   const isRetryableError = useCallback((err: any): boolean => {
     if (!err) return false;
 
+    // AbortError: user abort, ne retry
     if (err.name === "AbortError") return false;
-    if (err.name === "TimeoutError") return true;
+
+    // TimeoutError: retry
+    if (err instanceof TimeoutError || err.name === "TimeoutError") return true;
 
     // Network: fetch often throws TypeError
     if (err instanceof TypeError) return true;
 
-    // HTTP status detection
-    // Ideális esetben: handleApiResponse dobjon ApiError-t { status, body }-val
-    // Addig fallback: regex a message-ben (törékeny, de működő)
-    if (err.name === "ApiError" && err.status) {
-      return err.status === 429 || err.status >= 500;
-    }
-
-    // Fallback: message parsing (ha handleApiResponse még nem strukturált)
-    const m = String(err.message || "");
-    const statusMatch = m.match(/\b([45]\d{2})\b/);
-    if (statusMatch) {
-      const status = parseInt(statusMatch[1], 10);
+    // Strukturált API hiba - ApiError instance vagy name check
+    if (err instanceof ApiError || err.name === "ApiError") {
+      const status = (err as ApiError).status;
+      // 409 (konfliktus): no retry
+      if (status === 409) return false;
+      // 429 (rate limit) vagy 5xx (server error): retry
       return status === 429 || status >= 500;
     }
 
+    // Ha ApiError, de nincs status mező (nem várható, de safety check)
+    if (err.name === "ApiError" && typeof (err as any).status === "number") {
+      const status = (err as any).status;
+      if (status === 409) return false;
+      return status === 429 || status >= 500;
+    }
+
+    // Egyéb esetek: no retry (biztonságos default)
     return false;
   }, []);
 
@@ -1651,9 +1679,17 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
 
     const seq = ++saveSequenceRef.current;
 
+    // Event logging: attempt
+    const startTime = Date.now();
+    const eventType = source === 'auto' ? 'autosave_attempt' : 'manualsave_attempt';
+    logEvent(eventType, {
+      source,
+      patientId: currentPatientIdRef.current || undefined,
+    });
+
     try {
       setSavingSource(source);
-      lastSaveAttemptAtRef.current = Date.now();
+      lastSaveAttemptAtRef.current = startTime;
       lastSaveErrorRef.current = null;
 
       const payload = buildSavePayload(
@@ -1680,7 +1716,16 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
         if (lastSavedHashRef.current === hash) return null;
       }
 
-      const saved = await savePatient(validatedPayload, { signal: controller.signal });
+      // Ensure updatedAt is included for conflict detection (use currentPatient's updatedAt)
+      const payloadWithUpdatedAt = {
+        ...validatedPayload,
+        updatedAt: currentPatientRef.current?.updatedAt || validatedPayload.updatedAt,
+      };
+
+      const saved = await savePatient(payloadWithUpdatedAt, { 
+        signal: controller.signal,
+        source 
+      });
 
       // Sequencing: csak a legutolsó válasz érvényes
       if (seq !== saveSequenceRef.current) {
@@ -1697,6 +1742,15 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
       // Update hash
       lastSavedHashRef.current = stableStringify(validatedPayload);
       lastSaveSourceRef.current = source;
+
+      // Event logging: success
+      const durationMs = Date.now() - startTime;
+      const successEventType = source === 'auto' ? 'autosave_success' : 'manualsave_success';
+      logEvent(successEventType, {
+        source,
+        durationMs,
+        patientId: currentPatientIdRef.current || undefined,
+      });
 
       // Tiszta callback API
       onSave(saved, { source });
@@ -1728,6 +1782,37 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
     } catch (err: any) {
       if (err?.name === "AbortError" || controller.signal.aborted) return null;
 
+      // 409 Conflict (STALE_WRITE) külön kezelése
+      if (err instanceof ApiError && err.status === 409 && err.code === 'STALE_WRITE') {
+        // Event logging: fail (409 conflict)
+        const durationMs = Date.now() - startTime;
+        const failEventType = source === 'auto' ? 'autosave_fail' : 'manualsave_fail';
+        logEvent(failEventType, {
+          source,
+          durationMs,
+          status: err.status,
+          errorName: err.name,
+          code: err.code,
+          patientId: currentPatientIdRef.current || undefined,
+        }, err.correlationId);
+
+        if (source === "auto") {
+          // Auto-save: ne retry, csak log és return null
+          console.warn(`Auto-save conflict detected (409 STALE_WRITE):`, {
+            correlationId: err.correlationId,
+            details: err.details,
+          });
+          lastSaveErrorRef.current = err;
+          setShowConflictBanner(true);
+          return null;
+        } else {
+          // Manual save: modal megjelenítése (toast helyett)
+          setConflictError(err);
+          setShowConflictModal(true);
+          throw err; // Ne dobjuk tovább, a modal kezeli
+        }
+      }
+
       if (retryCount < 2 && isRetryableError(err)) {
         const delay = 1000 * (retryCount + 1);
         console.warn(`Save (${source}) failed, retrying (${retryCount + 1}/2) after ${delay}ms...`, err);
@@ -1739,6 +1824,46 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
         }
         // Manual retry: eredeti data
         return performSave("manual", formData, retryCount + 1);
+      }
+
+      // Event logging: fail (other errors)
+      const durationMs = Date.now() - startTime;
+      const failEventType = source === 'auto' ? 'autosave_fail' : 'manualsave_fail';
+      const errorMetadata: {
+        source: 'auto' | 'manual';
+        durationMs: number;
+        status?: number;
+        errorName?: string;
+        code?: string;
+        patientId?: string;
+      } = {
+        source,
+        durationMs,
+        patientId: currentPatientIdRef.current || undefined,
+      };
+
+      if (err instanceof ApiError) {
+        errorMetadata.status = err.status;
+        errorMetadata.errorName = err.name;
+        errorMetadata.code = err.code;
+        logEvent(failEventType, errorMetadata, err.correlationId);
+      } else if (err instanceof TimeoutError) {
+        errorMetadata.errorName = 'TimeoutError';
+        logEvent(failEventType, errorMetadata);
+      } else {
+        errorMetadata.errorName = err?.name || 'UnknownError';
+        logEvent(failEventType, errorMetadata);
+      }
+
+      // Sentry: Capture unexpected errors (not ApiError 4xx, those are filtered in beforeSend)
+      if (Sentry && !(err instanceof ApiError && err.status >= 400 && err.status < 500)) {
+        // Only capture 5xx errors, TimeoutError, or unexpected exceptions
+        if (err instanceof TimeoutError || err instanceof ApiError || !(err instanceof Error)) {
+          if (err instanceof ApiError && err.correlationId) {
+            Sentry.setTag('correlation_id', err.correlationId);
+          }
+          Sentry.captureException(err);
+        }
       }
 
       // Error handling
@@ -1879,6 +2004,125 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
           <X className="w-6 h-6" />
         </button>
       </div>
+
+      {/* Auto-save conflict banner */}
+      {showConflictBanner && 
+       lastSaveErrorRef.current instanceof ApiError && 
+       lastSaveErrorRef.current.status === 409 && 
+       lastSaveErrorRef.current.code === 'STALE_WRITE' && (
+        <div className="mb-4 bg-amber-50 border-l-4 border-amber-400 p-4 rounded-md">
+          <div className="flex items-start justify-between">
+            <div className="flex items-start">
+              <AlertTriangle className="w-5 h-5 text-amber-600 mr-3 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <h4 className="text-sm font-semibold text-amber-800 mb-1">
+                  Konfliktus észlelve
+                </h4>
+                <p className="text-sm text-amber-700 mb-3">
+                  Másik felhasználó módosította a beteg adatait közben. Kérjük, frissítse az adatokat a legfrissebb verzió betöltéséhez.
+                </p>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!patientId) return;
+                    try {
+                      const response = await fetch(`/api/patients/${patientId}`, {
+                        credentials: 'include',
+                      });
+                      if (response.ok) {
+                        const data = await response.json();
+                        updateCurrentPatient(data.patient);
+                        reset(data.patient);
+                        lastSaveErrorRef.current = null;
+                        setShowConflictBanner(false);
+                        showToast('Adatok frissítve', 'success');
+                      }
+                    } catch (error) {
+                      console.error('Error refreshing patient:', error);
+                      showToast('Hiba az adatok frissítésekor', 'error');
+                    }
+                  }}
+                  className="text-sm bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-md transition-colors"
+                >
+                  Adatok frissítése
+                </button>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                lastSaveErrorRef.current = null;
+                setShowConflictBanner(false);
+              }}
+              className="text-amber-600 hover:text-amber-800 ml-4"
+              aria-label="Banner bezárása"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Missing Required Fields Banner */}
+      {(() => {
+        const missingFields = getMissingRequiredFields(currentPatient);
+        if (missingFields.length === 0) return null;
+
+        const errorFields = missingFields.filter(f => f.severity === 'error');
+        const warningFields = missingFields.filter(f => f.severity === 'warning');
+
+        return (
+          <div className={`mb-4 border-l-4 p-4 rounded-md ${
+            errorFields.length > 0
+              ? 'bg-red-50 border-red-400'
+              : 'bg-amber-50 border-amber-400'
+          }`}>
+            <div className="flex items-start">
+              <AlertTriangle className={`w-5 h-5 mr-3 mt-0.5 flex-shrink-0 ${
+                errorFields.length > 0 ? 'text-red-600' : 'text-amber-600'
+              }`} />
+              <div className="flex-1">
+                <h4 className={`text-sm font-semibold mb-2 ${
+                  errorFields.length > 0 ? 'text-red-800' : 'text-amber-800'
+                }`}>
+                  Hiányzó kötelező adatok ({missingFields.length})
+                </h4>
+                <div className="space-y-1">
+                  {missingFields.map((field) => (
+                    <div
+                      key={field.key}
+                      className="text-sm"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Scroll to field (simple anchor-based approach)
+                          const fieldElement = document.querySelector(`[name="${field.key}"]`);
+                          if (fieldElement) {
+                            fieldElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            // Focus the field
+                            (fieldElement as HTMLElement).focus();
+                          }
+                        }}
+                        className={`hover:underline ${
+                          field.severity === 'error' ? 'text-red-700' : 'text-amber-700'
+                        }`}
+                      >
+                        • {field.label}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Clinical Checklist */}
+      {patientId && (
+        <ClinicalChecklist patient={currentPatient} patientId={patientId} />
+      )}
 
       <form id="patient-form" onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         {/* ALAPADATOK */}
@@ -3833,6 +4077,156 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
           </div>
         )}
       </form>
+
+      {/* Manual save conflict modal */}
+      {showConflictModal && conflictError && (() => {
+        const details = conflictError.details && typeof conflictError.details === 'object' && 'serverUpdatedAt' in conflictError.details
+          ? conflictError.details as { serverUpdatedAt?: string; clientUpdatedAt?: string }
+          : null;
+        
+        return (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+              <div className="p-6">
+                <div className="flex items-start mb-4">
+                  <AlertTriangle className="w-6 h-6 text-amber-600 mr-3 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                      Konfliktus észlelve
+                    </h3>
+                    <p className="text-sm text-gray-700 mb-4">
+                      Másik felhasználó módosította a beteg adatait közben. Mit szeretne tenni?
+                    </p>
+                    
+                    {/* Details section (collapsible) */}
+                    {details && (
+                      <details className="mb-4 text-xs text-gray-600">
+                        <summary className="cursor-pointer hover:text-gray-800 mb-2">
+                          Részletek
+                        </summary>
+                        <div className="pl-4 space-y-1">
+                          {conflictError.correlationId && (
+                            <div>
+                              <strong>Correlation ID:</strong> {String(conflictError.correlationId)}
+                            </div>
+                          )}
+                          {details.serverUpdatedAt && (
+                            <div>
+                              <strong>Szerver frissítve:</strong>{' '}
+                              {new Date(details.serverUpdatedAt).toLocaleString('hu-HU')}
+                            </div>
+                          )}
+                          {details.clientUpdatedAt && (
+                            <div>
+                              <strong>Kliens verzió:</strong>{' '}
+                              {new Date(details.clientUpdatedAt).toLocaleString('hu-HU')}
+                            </div>
+                          )}
+                        </div>
+                      </details>
+                    )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowConflictModal(false);
+                    setConflictError(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                  aria-label="Modal bezárása"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!patientId) return;
+                    try {
+                      const response = await fetch(`/api/patients/${patientId}`, {
+                        credentials: 'include',
+                      });
+                      if (response.ok) {
+                        const data = await response.json();
+                        updateCurrentPatient(data.patient);
+                        reset(data.patient);
+                        setShowConflictModal(false);
+                        setConflictError(null);
+                        showToast('Adatok frissítve', 'success');
+                      } else {
+                        showToast('Hiba az adatok frissítésekor', 'error');
+                      }
+                    } catch (error) {
+                      console.error('Error refreshing patient:', error);
+                      showToast('Hiba az adatok frissítésekor', 'error');
+                    }
+                  }}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors text-sm font-medium"
+                >
+                  Frissítés
+                </button>
+                
+                {/* Felülírás csak admin/editor számára */}
+                {(userRole === 'admin' || userRole === 'editor') && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const confirmed = await confirmDialog(
+                        'Biztosan felülírja a másik felhasználó módosításait? Ez a művelet nem vonható vissza.',
+                        { title: 'Felülírás megerősítése', type: 'warning' }
+                      );
+                      if (!confirmed) return;
+
+                      if (!patientId) return;
+                      try {
+                        // Felülírás: először frissítjük az adatokat (hogy megkapjuk a legfrissebb updatedAt-t),
+                        // majd mentjük a jelenlegi form állapotot (ami felülírja)
+                        const refreshResponse = await fetch(`/api/patients/${patientId}`, {
+                          credentials: 'include',
+                        });
+                        if (!refreshResponse.ok) {
+                          showToast('Hiba az adatok frissítésekor', 'error');
+                          return;
+                        }
+                        const refreshData = await refreshResponse.json();
+                        
+                        // Most mentjük a jelenlegi form állapotot (felülírás)
+                        const currentFormData = getValues();
+                        const payload = buildSavePayload(
+                          currentFormData,
+                          fogakRef.current,
+                          implantatumokRef.current,
+                          vanBeutaloRef.current,
+                          patientId
+                        );
+                        
+                        // Felülírás: a legfrissebb updatedAt-tel küldjük (de a backend még mindig konfliktust dob)
+                        // Ezért explicit felülírás flag kellene, de MVP-ben: if-match nélkül (backward compat)
+                        // Jelenleg a backend engedi if-match nélkül, de ez nem teljesen "felülírás"
+                        // TODO: Később explicit felülírás API endpoint vagy flag
+                        const saved = await savePatient(payload, { source: 'manual' });
+                        updateCurrentPatient(saved);
+                        setShowConflictModal(false);
+                        setConflictError(null);
+                        showToast('Adatok felülírva', 'success');
+                      } catch (error) {
+                        console.error('Error overwriting patient:', error);
+                        showToast('Hiba a felülírás során', 'error');
+                      }
+                    }}
+                    className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md transition-colors text-sm font-medium"
+                  >
+                    Felülírás
+                  </button>
+                )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

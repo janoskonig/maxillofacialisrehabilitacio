@@ -4,6 +4,91 @@ import { Patient, patientSchema } from '@/lib/types';
 import { verifyAuth } from '@/lib/auth-server';
 import { sendPatientCreationNotification } from '@/lib/email';
 import { logActivity, logActivityWithAuth } from '@/lib/activity';
+import { withCorrelation } from '@/lib/api/withCorrelation';
+import { handleApiError } from '@/lib/api-error-handler';
+import { REQUIRED_DOC_TAGS } from '@/lib/clinical-rules';
+
+// View presets - server-side filtering logic
+type ViewPreset = 'neak_pending' | 'missing_docs';
+
+interface ViewBuilder {
+  (baseQuery: string, params: any[], paramIndex: number, needsUserJoin: boolean): {
+    whereClause: string;
+    params: any[];
+    paramIndex: number;
+  };
+}
+
+const VIEWS: Record<ViewPreset, ViewBuilder> = {
+  // Missing docs: patients missing at least one required document tag
+  missing_docs: (baseQuery, params, paramIndex, needsUserJoin) => {
+    const patientIdColumn = needsUserJoin ? 'p.id' : 'patients.id';
+    
+    // For each required tag, check if patient has at least one document with that tag
+    // Patient is missing docs if ANY required tag is missing
+    // Use jsonb_array_elements_text to check if tag exists in the array
+    const missingTagChecks = REQUIRED_DOC_TAGS.map((tag, idx) => {
+      // Check for lowercase, uppercase, or capitalized version using case-insensitive check
+      return `NOT EXISTS (
+        SELECT 1 FROM patient_documents pd${idx}
+        WHERE pd${idx}.patient_id = ${patientIdColumn}
+        AND EXISTS (
+          SELECT 1 FROM jsonb_array_elements_text(pd${idx}.tags) AS tag_elem
+          WHERE LOWER(tag_elem) = LOWER($${paramIndex + idx})
+        )
+      )`;
+    });
+    
+    // Required tags as parameters (lowercase for comparison)
+    const tagParams = REQUIRED_DOC_TAGS.map(tag => tag.toLowerCase());
+    
+    const whereClause = `(${missingTagChecks.join(' OR ')})`;
+    
+    return {
+      whereClause,
+      params: [...params, ...tagParams],
+      paramIndex: paramIndex + tagParams.length,
+    };
+  },
+  
+  // NEAK pending: patients with NEAK-related documents but missing required docs
+  neak_pending: (baseQuery, params, paramIndex, needsUserJoin) => {
+    const patientIdColumn = needsUserJoin ? 'p.id' : 'patients.id';
+    
+    // Patients that have at least one NEAK-related document
+    const hasNeakDoc = `EXISTS (
+      SELECT 1 FROM patient_documents pd_neak
+      WHERE pd_neak.patient_id = ${patientIdColumn}
+      AND EXISTS (
+        SELECT 1 FROM jsonb_array_elements_text(pd_neak.tags) AS tag_elem
+        WHERE LOWER(tag_elem) = 'neak'
+      )
+    )`;
+    
+    // Missing at least one required tag (same logic as missing_docs)
+    const missingTagChecks = REQUIRED_DOC_TAGS.map((tag, idx) => {
+      return `NOT EXISTS (
+        SELECT 1 FROM patient_documents pd${idx}
+        WHERE pd${idx}.patient_id = ${patientIdColumn}
+        AND EXISTS (
+          SELECT 1 FROM jsonb_array_elements_text(pd${idx}.tags) AS tag_elem
+          WHERE LOWER(tag_elem) = LOWER($${paramIndex + idx})
+        )
+      )`;
+    });
+    
+    // Required tags as parameters
+    const tagParams = REQUIRED_DOC_TAGS.map(tag => tag.toLowerCase());
+    
+    const whereClause = `${hasNeakDoc} AND (${missingTagChecks.join(' OR ')})`;
+    
+    return {
+      whereClause,
+      params: [...params, ...tagParams],
+      paramIndex: paramIndex + tagParams.length,
+    };
+  },
+};
 
 // Patient SELECT lista - közös használatra
 const PATIENT_SELECT_FIELDS = `
@@ -84,12 +169,13 @@ const PATIENT_SELECT_FIELDS = `
 `;
 
 // Összes beteg lekérdezése
-export async function GET(request: NextRequest) {
+export const GET = withCorrelation(async (request: NextRequest, { correlationId }) => {
   try {
     const pool = getDbPool();
     const searchParams = request.nextUrl.searchParams;
     const query = searchParams.get('q');
     const forMention = searchParams.get('forMention') === 'true';
+    const view = searchParams.get('view') as ViewPreset | null;
 
     // Ellenőrizzük a felhasználó szerepkörét és jogosultságait
     const auth = await verifyAuth(request);
@@ -98,7 +184,7 @@ export async function GET(request: NextRequest) {
     
     // Szerepkör alapú szűrés meghatározása
     let whereConditions: string[] = [];
-    let queryParams: string[] = [];
+    let queryParams: any[] = [];
     let paramIndex = 1;
     
     // JOIN szükséges-e a users táblával (sebészorvos szerepkör esetén)
@@ -163,9 +249,23 @@ export async function GET(request: NextRequest) {
         ? whereConditions.map(cond => cond.replace(/\b(kezelesi_terv_arcot_erinto)\b/g, 'p.$1'))
         : whereConditions;
       
-      const searchCondition = prefixedWhereConditions.length > 0
-        ? `${searchBase} AND ${prefixedWhereConditions.join(' AND ')}`
-        : searchBase;
+      // Apply view preset if specified
+      let viewCondition = '';
+      if (view && VIEWS[view]) {
+        const viewResult = VIEWS[view]('', queryParams, paramIndex, needsUserJoin);
+        viewCondition = viewResult.whereClause;
+        queryParams = viewResult.params;
+        paramIndex = viewResult.paramIndex;
+      }
+      
+      // Combine all conditions
+      const allConditions = [
+        searchBase,
+        ...prefixedWhereConditions,
+        ...(viewCondition ? [viewCondition] : []),
+      ].filter(Boolean);
+      
+      const searchCondition = allConditions.join(' AND ');
       
       // Count query
       const countQuery = `SELECT COUNT(*) as total ${fromClause} WHERE ${searchCondition}`;
@@ -180,7 +280,7 @@ export async function GET(request: NextRequest) {
         queryParams
       );
     } else {
-      // Összes beteg
+      // Összes beteg vagy view preset
       // FROM klauzula építése JOIN-nal ha szükséges
       let fromClause: string;
       let selectFields: string;
@@ -277,27 +377,30 @@ export async function GET(request: NextRequest) {
           const mentionWithoutAt = p.mentionFormat.substring(1).toLowerCase();
           return mentionWithoutAt === queryNormalized || mentionWithoutAt.includes(queryNormalized);
         });
-        return NextResponse.json({ 
+        const response1 = NextResponse.json({ 
           patients: filtered
         }, { status: 200 });
+        response1.headers.set('x-correlation-id', correlationId);
+        return response1;
       }
 
-      return NextResponse.json({ 
+      const response2 = NextResponse.json({ 
         patients: mentionPatients
       }, { status: 200 });
+      response2.headers.set('x-correlation-id', correlationId);
+      return response2;
     }
 
-    return NextResponse.json({ 
+    const response = NextResponse.json({ 
       patients: result.rows
     }, { status: 200 });
+    response.headers.set('x-correlation-id', correlationId);
+    return response;
   } catch (error) {
     console.error('Hiba a betegek lekérdezésekor:', error);
-    return NextResponse.json(
-      { error: 'Hiba történt a betegek lekérdezésekor' },
-      { status: 500 }
-    );
+    return handleApiError(error, 'Hiba történt a betegek lekérdezésekor', correlationId);
   }
-}
+});
 
 // Új beteg létrehozása
 export async function POST(request: NextRequest) {

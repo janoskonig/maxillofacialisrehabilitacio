@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Clock, User, ArrowRight } from 'lucide-react';
+import { Clock, User, ArrowRight, FileText, Eye, X } from 'lucide-react';
 
 interface PatientChange {
   id: string;
@@ -19,12 +19,35 @@ interface PatientHistoryProps {
   patientId: string;
 }
 
+interface Snapshot {
+  id: string;
+  createdAt: string;
+  createdByUserId: string | null;
+  createdByEmail: string | null;
+  source: string;
+}
+
+interface SnapshotDetail {
+  id: string;
+  snapshotData: any; // Full patient object
+  createdAt: string;
+  createdByUserId: string | null;
+  createdByEmail: string | null;
+  source: string;
+}
+
 export function PatientHistory({ patientId }: PatientHistoryProps) {
   const [changes, setChanges] = useState<PatientChange[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterField, setFilterField] = useState<string>('');
   const [filterUser, setFilterUser] = useState<string>('');
+  
+  // Snapshots state
+  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+  const [snapshotsLoading, setSnapshotsLoading] = useState(true);
+  const [selectedSnapshot, setSelectedSnapshot] = useState<SnapshotDetail | null>(null);
+  const [snapshotDetailLoading, setSnapshotDetailLoading] = useState(false);
 
   useEffect(() => {
     const fetchChanges = async () => {
@@ -52,6 +75,53 @@ export function PatientHistory({ patientId }: PatientHistoryProps) {
 
     fetchChanges();
   }, [patientId, filterField, filterUser]);
+
+  // Fetch snapshots
+  useEffect(() => {
+    const fetchSnapshots = async () => {
+      try {
+        setSnapshotsLoading(true);
+        const response = await fetch(`/api/patients/${patientId}/snapshots`, {
+          credentials: 'include',
+        });
+        
+        if (!response.ok) {
+          throw new Error('Hiba történt a snapshotok lekérdezésekor');
+        }
+        
+        const data = await response.json();
+        setSnapshots(data.snapshots || []);
+      } catch (err) {
+        console.error('Error fetching snapshots:', err);
+        // Don't show error for snapshots, just log it
+      } finally {
+        setSnapshotsLoading(false);
+      }
+    };
+
+    fetchSnapshots();
+  }, [patientId]);
+
+  const handleViewSnapshot = async (snapshotId: string) => {
+    try {
+      setSnapshotDetailLoading(true);
+      const response = await fetch(`/api/patients/${patientId}/snapshots/${snapshotId}`, {
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Hiba történt a snapshot lekérdezésekor');
+      }
+      
+      const data = await response.json();
+      setSelectedSnapshot(data.snapshot);
+    } catch (err) {
+      console.error('Error fetching snapshot detail:', err);
+      alert('Hiba történt a snapshot betöltésekor');
+    } finally {
+      setSnapshotDetailLoading(false);
+    }
+  };
 
   const formatDateTime = (dateString: string): string => {
     try {
@@ -138,6 +208,101 @@ export function PatientHistory({ patientId }: PatientHistoryProps) {
 
   return (
     <div className="space-y-6">
+      {/* Snapshots Section */}
+      <div className="card p-6">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <FileText className="w-5 h-5 text-medical-primary" />
+          Verziók
+        </h2>
+        
+        {snapshotsLoading ? (
+          <div className="text-center py-4">
+            <Clock className="w-8 h-8 text-gray-400 mx-auto mb-2 animate-pulse" />
+            <p className="text-sm text-gray-500">Betöltés...</p>
+          </div>
+        ) : snapshots.length === 0 ? (
+          <div className="text-center py-4">
+            <p className="text-gray-500">Nincsenek mentett verziók</p>
+            <p className="text-sm text-gray-400 mt-1">
+              A manuális mentések után itt jelennek meg a verziók.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {snapshots.map((snapshot) => (
+              <div
+                key={snapshot.id}
+                className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
+              >
+                <div className="flex-1">
+                  <div className="flex items-center gap-3">
+                    <Clock className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm font-medium text-gray-900">
+                      {formatDateTime(snapshot.createdAt)}
+                    </span>
+                  </div>
+                  {snapshot.createdByEmail && (
+                    <div className="flex items-center gap-2 mt-1 text-sm text-gray-600">
+                      <User className="w-4 h-4" />
+                      <span>{getUserDisplayName(snapshot.createdByEmail)}</span>
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={() => handleViewSnapshot(snapshot.id)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors text-sm font-medium"
+                  disabled={snapshotDetailLoading}
+                >
+                  <Eye className="w-4 h-4" />
+                  Megtekintés
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Snapshot Detail Modal */}
+      {selectedSnapshot && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Snapshot részletek
+                </h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  {formatDateTime(selectedSnapshot.createdAt)}
+                  {selectedSnapshot.createdByEmail && (
+                    <> • {getUserDisplayName(selectedSnapshot.createdByEmail)}</>
+                  )}
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedSnapshot(null)}
+                className="text-gray-400 hover:text-gray-600"
+                aria-label="Bezárás"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              <pre className="bg-gray-50 p-4 rounded-lg border border-gray-200 text-sm overflow-x-auto">
+                {JSON.stringify(selectedSnapshot.snapshotData, null, 2)}
+              </pre>
+            </div>
+            <div className="p-6 border-t border-gray-200 flex justify-end">
+              <button
+                onClick={() => setSelectedSnapshot(null)}
+                className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md transition-colors"
+              >
+                Bezárás
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="card p-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

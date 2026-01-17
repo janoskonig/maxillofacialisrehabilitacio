@@ -1,5 +1,15 @@
 import { Patient } from './types';
 
+// Sentry import (conditional, only if enabled)
+let Sentry: typeof import('@sentry/nextjs') | null = null;
+if (typeof window !== 'undefined' && process.env.ENABLE_SENTRY === 'true') {
+  try {
+    Sentry = require('@sentry/nextjs');
+  } catch {
+    // Sentry not available, ignore
+  }
+}
+
 // CSV fejléc mezők sorrendje (CSV export/import funkcióhoz)
 const CSV_HEADERS = [
   'id',
@@ -55,25 +65,117 @@ export class TimeoutError extends Error {
   }
 }
 
+/**
+ * ApiError osztály - strukturált hiba kezeléshez
+ * Constructor pattern: name mező ne legyen duplikálva (Error.name már létezik)
+ */
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+  details?: unknown;
+  correlationId?: string;
+
+  constructor(args: {
+    message: string;
+    status: number;
+    code?: string;
+    details?: unknown;
+    correlationId?: string;
+    name?: string;
+  }) {
+    super(args.message);
+    this.name = args.name ?? 'ApiError';
+    this.status = args.status;
+    this.code = args.code;
+    this.details = args.details;
+    this.correlationId = args.correlationId;
+  }
+}
+
 // API hívás hibakezelő
+// Strukturált ApiError-t dob, fallback text parsing-sel
 async function handleApiResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    let errorData;
+    // CorrelationId kinyerése header-ből
+    const correlationId = response.headers.get('x-correlation-id') || undefined;
+    
+    let errorData: any;
+    let errorMessage = `HTTP hiba: ${response.status} ${response.statusText}`;
+    
+    // Próbáljuk JSON parse-olni
     try {
       errorData = await response.json();
     } catch {
-      errorData = { error: `HTTP hiba: ${response.status} ${response.statusText}` };
+      // Fallback: próbáljuk text()-ként olvasni (max 200 chars)
+      try {
+        const text = await response.text();
+        const snippet = text.length > 200 ? text.substring(0, 200) + '...' : text;
+        errorData = { error: snippet || errorMessage };
+      } catch {
+        // Ha text() is fail, akkor csak a status alapú üzenet
+        errorData = { error: errorMessage };
+      }
     }
-    // Ha van details mező, azt is hozzáadjuk a hibaüzenethez
-    const errorMessage = errorData.details 
-      ? `${errorData.error || `HTTP hiba: ${response.status}`}\n${errorData.details}`
-      : errorData.error || `HTTP hiba: ${response.status}`;
-    throw new Error(errorMessage);
+    
+    // Strukturált error response ellenőrzése
+    if (errorData?.error && typeof errorData.error === 'object') {
+      const structuredError = errorData.error;
+      // CorrelationId prioritás: header elsődleges, body fallback
+      const finalCorrelationId = correlationId || structuredError.correlationId;
+      const apiError = new ApiError({
+        message: structuredError.message || errorMessage,
+        status: structuredError.status || response.status,
+        code: structuredError.code,
+        details: structuredError.details,
+        correlationId: finalCorrelationId,
+        name: structuredError.name || 'ApiError',
+      });
+
+      // Sentry: Add correlationId tag (only for 5xx errors or unexpected errors)
+      if (Sentry && finalCorrelationId) {
+        const status = structuredError.status || response.status;
+        // Only capture 5xx errors or unexpected errors (not 4xx client errors)
+        if (status >= 500 || status < 400) {
+          Sentry.setTag('correlation_id', finalCorrelationId);
+          Sentry.setTag('error_code', structuredError.code || 'unknown');
+          Sentry.setTag('status', status.toString());
+        }
+      }
+
+      throw apiError;
+    }
+    
+    // Fallback: régi formátum (backward compatibility)
+    errorMessage = errorData.details
+      ? `${errorData.error || errorMessage}\n${errorData.details}`
+      : errorData.error || errorMessage;
+    
+    const apiError = new ApiError({
+      message: errorMessage,
+      status: response.status,
+      correlationId,
+    });
+
+    // Sentry: Add correlationId tag (only for 5xx errors or unexpected errors)
+    if (Sentry && correlationId) {
+      const status = response.status;
+      // Only capture 5xx errors or unexpected errors (not 4xx client errors)
+      if (status >= 500 || status < 400) {
+        Sentry.setTag('correlation_id', correlationId);
+        Sentry.setTag('status', status.toString());
+      }
+    }
+
+    throw apiError;
   }
+  
   try {
     return await response.json();
   } catch (error) {
-    throw new Error('Érvénytelen válasz a szervertől');
+    throw new ApiError({
+      message: 'Érvénytelen válasz a szervertől',
+      status: 500,
+    });
   }
 }
 
@@ -146,21 +248,53 @@ async function fetchWithTimeout(
   }
 }
 
-// Beteg mentése (új vagy frissítés) - támogatja a cancellation-t
+// Beteg mentése (új vagy frissítés) - támogatja a cancellation-t és konfliktuskezelést
 export async function savePatient(
   patient: Patient,
-  options?: { signal?: AbortSignal }
+  options?: { signal?: AbortSignal; source?: "auto" | "manual" }
 ): Promise<Patient> {
   const isUpdate = !!patient.id;
   const url = isUpdate ? `${API_BASE_URL}/${patient.id}` : API_BASE_URL;
   const method = isUpdate ? "PUT" : "POST";
+
+  // Headers összeállítása
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  // If-Match header: updatedAt értéke (konfliktuskezelés)
+  // Normalizálás ISO stringgé (biztos, hogy nem Date objektum vagy más formátum)
+  if (isUpdate && patient.updatedAt) {
+    const updatedAtValue: unknown = patient.updatedAt;
+    // Ha Date objektum, konvertáljuk ISO stringgé
+    if (updatedAtValue instanceof Date) {
+      headers["if-match"] = updatedAtValue.toISOString();
+    } else if (typeof updatedAtValue === 'string') {
+      // Ha string, ellenőrizzük, hogy érvényes ISO string-e
+      const date = new Date(updatedAtValue);
+      if (!isNaN(date.getTime())) {
+        headers["if-match"] = date.toISOString();
+      } else {
+        // Invalid date string - skip if-match (backward compat)
+        console.warn('Invalid updatedAt format, skipping if-match header:', updatedAtValue);
+      }
+    } else {
+      // Egyéb típus - skip (nem várható)
+      console.warn('Unexpected updatedAt type, skipping if-match header:', typeof updatedAtValue);
+    }
+  }
+
+  // X-Save-Source header: auto|manual (jövőbeli snapshot használathoz)
+  if (options?.source) {
+    headers["x-save-source"] = options.source;
+  }
 
   try {
     const response = await fetchWithTimeout(
       url,
       {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers,
         credentials: "include",
         body: JSON.stringify(patient),
       },
@@ -206,14 +340,25 @@ export async function getAllPatients(): Promise<Patient[]> {
 }
 
 // Beteg keresése (pagination nélkül)
-export async function searchPatients(query: string): Promise<Patient[]> {
+export async function searchPatients(
+  query: string,
+  options?: { view?: 'neak_pending' | 'missing_docs' }
+): Promise<Patient[]> {
   try {
-    if (!query.trim()) {
+    if (!query.trim() && !options?.view) {
       return getAllPatients();
     }
     
+    const params = new URLSearchParams();
+    if (query.trim()) {
+      params.append('q', query);
+    }
+    if (options?.view) {
+      params.append('view', options.view);
+    }
+    
     const response = await fetchWithTimeout(
-      `${API_BASE_URL}?q=${encodeURIComponent(query)}`,
+      `${API_BASE_URL}?${params.toString()}`,
       {
         credentials: 'include',
       },

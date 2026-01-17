@@ -1,0 +1,593 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getDbPool } from '@/lib/db';
+import { verifyAuth } from '@/lib/auth-server';
+import { handleApiError } from '@/lib/api-error-handler';
+import { REQUIRED_DOC_TAGS, REQUIRED_DOC_RULES, getMissingRequiredDocRules, getMissingRequiredDocTags, getChecklistStatus, getMissingRequiredFields } from '@/lib/clinical-rules';
+import { Patient } from '@/lib/types';
+import { downloadFile } from '@/lib/ftp-client';
+import { PDFDocument, StandardFonts } from 'pdf-lib';
+import archiver from 'archiver';
+import { Readable } from 'stream';
+
+// Force Node.js runtime (required for archiver, pdf-lib, Buffer operations)
+export const runtime = 'nodejs';
+
+// Size limits
+const MAX_EXPORT_SIZE = 200 * 1024 * 1024; // 200 MB total
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB per file
+const FILE_DOWNLOAD_TIMEOUT_MS = 30000; // 30 seconds per file
+
+// Feature flag: ENABLE_NEAK_EXPORT
+const ENABLE_NEAK_EXPORT = process.env.ENABLE_NEAK_EXPORT === 'true';
+
+/**
+ * Helper to get correlation ID from request
+ */
+function getCorrelationId(req: NextRequest): string {
+  return req.headers.get('x-correlation-id')?.toLowerCase() || 'unknown';
+}
+
+/**
+ * Helper függvény az ő → ö, ű → ü cseréhez (fallback, ha az eredeti nem működik)
+ */
+function replaceLongAccents(text: string): string {
+  return text
+    .replace(/ő/g, 'ö')
+    .replace(/Ő/g, 'Ö')
+    .replace(/ű/g, 'ü')
+    .replace(/Ű/g, 'Ü');
+}
+
+/**
+ * Helper függvény az összes ékezetes karakter cseréjéhez ASCII karakterekre
+ * Utolsó fallback, ha még mindig hiba van
+ */
+function replaceAllAccentedChars(text: string): string {
+  const replacements: Record<string, string> = {
+    'á': 'a', 'Á': 'A',
+    'é': 'e', 'É': 'E',
+    'í': 'i', 'Í': 'I',
+    'ó': 'o', 'Ó': 'O',
+    'ö': 'o', 'Ö': 'O',
+    'ő': 'o', 'Ő': 'O',
+    'ú': 'u', 'Ú': 'U',
+    'ü': 'u', 'Ü': 'U',
+    'ű': 'u', 'Ű': 'U',
+  };
+  
+  return text.replace(/[áéíóöőúüűÁÉÍÓÖŐÚÜŰ]/g, (char) => replacements[char] || char);
+}
+
+/**
+ * Safe text drawing helper - handles Hungarian accented characters
+ */
+function drawTextSafe(
+  page: any,
+  text: string,
+  options: { x: number; y: number; size: number; font: any }
+): void {
+  try {
+    page.drawText(text, options);
+  } catch (error: any) {
+    // Ha hiba van, próbáljuk meg az ő → ö, ű → ü cserét
+    if (error.message && error.message.includes('cannot encode')) {
+      try {
+        const textWithReplacedLong = replaceLongAccents(text);
+        page.drawText(textWithReplacedLong, options);
+      } catch (retryError: any) {
+        // Ha még mindig hiba van, cseréljük az összes ékezetes karaktert
+        if (retryError.message && retryError.message.includes('cannot encode')) {
+          const safeText = replaceAllAccentedChars(text);
+          try {
+            page.drawText(safeText, options);
+          } catch (finalError) {
+            // Ha még mindig hiba van, teljesen biztonságos szöveget használunk
+            const finalSafeText = text.replace(/[^\x00-\x7F]/g, '?');
+            page.drawText(finalSafeText, options);
+          }
+        } else {
+          throw retryError;
+        }
+      }
+    } else {
+      throw error;
+    }
+  }
+}
+
+/**
+ * Generate patient_summary.pdf for NEAK export
+ */
+async function generatePatientSummaryPDF(
+  patient: Patient,
+  documents: any[],
+  checklistStatus: ReturnType<typeof getChecklistStatus>
+): Promise<Buffer> {
+  const pdfDoc = await PDFDocument.create();
+  const page = pdfDoc.addPage([595, 842]); // A4 size
+
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+  const margin = 50;
+  const pageWidth = page.getSize().width;
+  let yPosition = page.getSize().height - margin;
+
+  // Title
+  drawTextSafe(page, 'NEAK Export - Beteg Osszefoglalo', {
+    x: margin,
+    y: yPosition,
+    size: 18,
+    font: boldFont,
+  });
+  yPosition -= 40;
+
+  // Patient identification
+  drawTextSafe(page, 'Beteg azonositok:', {
+    x: margin,
+    y: yPosition,
+    size: 12,
+    font: boldFont,
+  });
+  yPosition -= 20;
+
+  if (patient.nev) {
+    drawTextSafe(page, `Nev: ${patient.nev}`, {
+      x: margin + 20,
+      y: yPosition,
+      size: 10,
+      font: font,
+    });
+    yPosition -= 15;
+  }
+
+  if (patient.taj) {
+    drawTextSafe(page, `TAJ: ${patient.taj}`, {
+      x: margin + 20,
+      y: yPosition,
+      size: 10,
+      font: font,
+    });
+    yPosition -= 15;
+  }
+
+  yPosition -= 10;
+
+  // Diagnosis / Surgery date
+  if (patient.diagnozis) {
+    drawTextSafe(page, `Diagnozis: ${patient.diagnozis}`, {
+      x: margin,
+      y: yPosition,
+      size: 10,
+      font: font,
+    });
+    yPosition -= 15;
+  }
+
+  if (patient.mutetIdeje) {
+    drawTextSafe(page, `Mutet ideje: ${patient.mutetIdeje}`, {
+      x: margin,
+      y: yPosition,
+      size: 10,
+      font: font,
+    });
+    yPosition -= 15;
+  }
+
+  yPosition -= 20;
+
+  // Checklist summary
+  drawTextSafe(page, 'Checklist osszefoglalo:', {
+    x: margin,
+    y: yPosition,
+    size: 12,
+    font: boldFont,
+  });
+  yPosition -= 20;
+
+  // Required fields status
+  const missingFields = getMissingRequiredFields(patient);
+  const fieldsStatus = missingFields.length === 0 
+    ? '✓ Minden megvan' 
+    : `✗ ${missingFields.length} hianyzik`;
+  drawTextSafe(page, `Kotelezo mezok: ${fieldsStatus}`, {
+    x: margin + 20,
+    y: yPosition,
+    size: 10,
+    font: font,
+  });
+  yPosition -= 15;
+
+  // Required documents status (using rules for accurate count)
+  const missingDocRules = getMissingRequiredDocRules(documents);
+  const docsStatus = missingDocRules.length === 0 
+    ? '✓ Minden megvan' 
+    : `✗ ${missingDocRules.length} hianyzik`;
+  drawTextSafe(page, `Kotelezo dokumentumok: ${docsStatus}`, {
+    x: margin + 20,
+    y: yPosition,
+    size: 10,
+    font: font,
+  });
+  yPosition -= 20;
+
+  // Required document rules list (detailed)
+  drawTextSafe(page, 'Kotelezo dokumentumok reszletei:', {
+    x: margin,
+    y: yPosition,
+    size: 10,
+    font: boldFont,
+  });
+  yPosition -= 15;
+
+  REQUIRED_DOC_RULES.forEach((rule) => {
+    // Count documents with this tag
+    const docCount = documents.filter((doc) =>
+      (doc.tags || []).some((t: string) => t.toLowerCase() === rule.tag.toLowerCase())
+    ).length;
+    const isComplete = docCount >= rule.minCount;
+    const ruleText = `${isComplete ? '✓' : '✗'} ${rule.label}: ${docCount} / ${rule.minCount} db`;
+    drawTextSafe(page, ruleText, {
+      x: margin + 20,
+      y: yPosition,
+      size: 10,
+      font: font,
+    });
+    yPosition -= 15;
+  });
+
+  // Export date
+  yPosition -= 20;
+  const exportDate = new Date().toLocaleString('hu-HU');
+  drawTextSafe(page, `Export datuma: ${exportDate}`, {
+    x: margin,
+    y: yPosition,
+    size: 9,
+    font: font,
+  });
+
+  // Generate PDF buffer
+  const pdfBytes = await pdfDoc.save();
+  return Buffer.from(pdfBytes);
+}
+
+/**
+ * Dry-run endpoint: Check if patient is ready for NEAK export
+ * GET /api/patients/[id]/export-neak?dryRun=1
+ * Export endpoint: Generate and download NEAK package
+ * GET /api/patients/[id]/export-neak
+ */
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const correlationId = getCorrelationId(req);
+  
+  try {
+    // Feature flag check
+    if (!ENABLE_NEAK_EXPORT) {
+      const response = NextResponse.json(
+        {
+          error: 'NEAK export feature is not enabled',
+          code: 'FEATURE_DISABLED',
+          correlationId,
+        },
+        { status: 404 }
+      );
+      response.headers.set('x-correlation-id', correlationId);
+      return response;
+    }
+
+    // Authentication
+    const auth = await verifyAuth(req);
+    if (!auth) {
+      const response = NextResponse.json(
+        {
+          error: 'Bejelentkezés szükséges',
+          code: 'UNAUTHORIZED',
+          correlationId,
+        },
+        { status: 401 }
+      );
+      response.headers.set('x-correlation-id', correlationId);
+      return response;
+    }
+
+    // Extract patient ID from params and check dryRun query param
+    const patientId = params.id;
+    const url = new URL(req.url);
+    const isDryRun = url.searchParams.get('dryRun') === '1';
+
+    if (!patientId) {
+      return NextResponse.json(
+        {
+          error: 'Beteg ID hiányzik',
+          code: 'INVALID_REQUEST',
+          correlationId,
+        },
+        { status: 400 }
+      );
+    }
+
+    const pool = getDbPool();
+
+    // Get patient data
+    const patientResult = await pool.query(
+      `SELECT 
+        id, nev, taj, diagnozis, szuletesi_datum as "szuletesiDatum", 
+        mutet_ideje as "mutetIdeje", created_at as "createdAt"
+      FROM patients 
+      WHERE id = $1`,
+      [patientId]
+    );
+
+    if (patientResult.rows.length === 0) {
+      return NextResponse.json(
+        {
+          error: 'Beteg nem található',
+          code: 'PATIENT_NOT_FOUND',
+          correlationId,
+        },
+        { status: 404 }
+      );
+    }
+
+    const patient = patientResult.rows[0] as Patient;
+
+    // Get documents with tags
+    const documentsResult = await pool.query(
+      `SELECT 
+        id, filename, tags, file_size as "fileSize", file_path as "filePath"
+      FROM patient_documents
+      WHERE patient_id = $1`,
+      [patientId]
+    );
+
+    const documents = documentsResult.rows;
+
+    // Check missing required doc rules (tag + minCount)
+    const missingDocRules = getMissingRequiredDocRules(documents);
+    const missingDocTags = missingDocRules.map((rule) => rule.tag);
+
+    // Get documents that match required rules (for includedDocuments list)
+    // Only include documents that match REQUIRED_DOC_RULES tags
+    const includedDocuments: Array<{
+      id: string;
+      tags: string[];
+      filename?: string;
+      sizeBytes?: number;
+    }> = [];
+
+    documents.forEach((doc: any) => {
+      const docTags = (doc.tags || []) as string[];
+      const hasRequiredTag = REQUIRED_DOC_RULES.some((rule) =>
+        docTags.some((tag: string) => tag.toLowerCase() === rule.tag.toLowerCase())
+      );
+
+      if (hasRequiredTag) {
+        includedDocuments.push({
+          id: doc.id,
+          tags: docTags,
+          filename: doc.filename || undefined,
+          sizeBytes: doc.fileSize || undefined,
+        });
+      }
+    });
+
+    // Calculate estimated total bytes (sum of included documents)
+    const estimatedTotalBytes = includedDocuments.reduce(
+      (sum, doc) => sum + (doc.sizeBytes || 0),
+      0
+    );
+
+    // Check if ready (no missing tags)
+    const isReady = missingDocTags.length === 0;
+
+    // Get checklist status for summary
+    const checklistStatus = getChecklistStatus(patient, documents);
+
+    // DRY-RUN: Return status only
+    if (isDryRun) {
+      const response = NextResponse.json(
+        {
+          isReady,
+          missingDocTags,
+          requiredDocTags: REQUIRED_DOC_RULES.map((rule) => rule.tag), // Backward compatibility
+          requiredDocRules: REQUIRED_DOC_RULES.map((rule) => ({
+            tag: rule.tag,
+            label: rule.label,
+            minCount: rule.minCount,
+          })),
+          missingDocRules: missingDocRules.map((rule) => ({
+            tag: rule.tag,
+            label: rule.label,
+            minCount: rule.minCount,
+            actualCount: rule.actualCount,
+          })),
+          includedDocuments,
+          estimatedTotalBytes: estimatedTotalBytes > 0 ? estimatedTotalBytes : undefined,
+          checklistSummary: {
+            missingFields: checklistStatus.missingFields.length,
+            missingDocs: checklistStatus.missingDocs.length,
+            hasErrors: checklistStatus.hasErrors,
+          },
+          correlationId,
+        },
+        { status: 200 }
+      );
+      response.headers.set('x-correlation-id', correlationId);
+      return response;
+    }
+
+    // EXPORT: Generate ZIP package
+    // Check if required docs are missing
+    if (!isReady) {
+      const response = NextResponse.json(
+        {
+          error: 'Hiányoznak kötelező dokumentumok',
+          code: 'MISSING_REQUIRED_DOCS',
+          details: {
+            missingDocTags,
+          },
+          correlationId,
+        },
+        { status: 422 }
+      );
+      response.headers.set('x-correlation-id', correlationId);
+      return response;
+    }
+
+    // Size limit: 200 MB
+    if (estimatedTotalBytes > MAX_EXPORT_SIZE) {
+      const response = NextResponse.json(
+        {
+          error: 'Az export csomag mérete meghaladja a maximumot (200 MB)',
+          code: 'EXPORT_TOO_LARGE',
+          details: {
+            estimatedTotalBytes,
+            maxSize: MAX_EXPORT_SIZE,
+          },
+          correlationId,
+        },
+        { status: 413 }
+      );
+      response.headers.set('x-correlation-id', correlationId);
+      return response;
+    }
+
+    // Generate patient_summary.pdf
+    const pdfBuffer = await generatePatientSummaryPDF(patient, documents, checklistStatus);
+
+    // Create ZIP archive stream
+    const archive = archiver('zip', {
+      zlib: { level: 9 }, // Maximum compression
+    });
+
+    // Track archive state for proper error handling
+    let archiveError: Error | null = null as Error | null;
+    let archiveFinished = false;
+
+    // Handle archive errors (critical for proper cleanup)
+    archive.on('error', (err: unknown) => {
+      const error: Error = err instanceof Error ? err : new Error(String(err));
+      console.error('[NEAK Export] Archive error:', error);
+      archiveError = error;
+      archive.abort(); // Abort archive on error
+    });
+
+    // Track when archive is fully finalized
+    archive.on('end', () => {
+      archiveFinished = true;
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[NEAK Export] Archive finalized successfully');
+      }
+    });
+
+    // Add PDF to ZIP
+    archive.append(pdfBuffer, { name: 'patient_summary.pdf' });
+
+    // Add required documents to ZIP
+    // IMPORTANT: Process sequentially (not in parallel) to avoid memory spikes
+    // Each file is downloaded, checked, and added one at a time
+    let totalSize = pdfBuffer.length;
+
+    for (const doc of includedDocuments) {
+      try {
+        // Get full document data from DB
+        const docResult = await pool.query(
+          `SELECT file_path, filename, file_size FROM patient_documents WHERE id = $1`,
+          [doc.id]
+        );
+
+        if (docResult.rows.length === 0) {
+          console.warn(`[NEAK Export] Document ${doc.id} not found in DB, skipping`);
+          continue;
+        }
+
+        const docData = docResult.rows[0];
+
+        // Per-file size limit check (before download)
+        if (docData.file_size && docData.file_size > MAX_FILE_SIZE) {
+          throw new Error(
+            `Document ${docData.filename || doc.id} exceeds per-file size limit: ${docData.file_size} > ${MAX_FILE_SIZE} bytes`
+          );
+        }
+
+        // Download file with timeout
+        const downloadPromise = downloadFile(docData.file_path, patientId);
+        const timeoutPromise = new Promise<Buffer>((_, reject) => {
+          setTimeout(() => reject(new Error(`File download timeout after ${FILE_DOWNLOAD_TIMEOUT_MS}ms`)), FILE_DOWNLOAD_TIMEOUT_MS);
+        });
+
+        const fileBuffer = await Promise.race([downloadPromise, timeoutPromise]);
+
+        // Check per-file size limit (after download, in case DB size was wrong)
+        if (fileBuffer.length > MAX_FILE_SIZE) {
+          throw new Error(
+            `Document ${docData.filename || doc.id} exceeds per-file size limit: ${fileBuffer.length} > ${MAX_FILE_SIZE} bytes`
+          );
+        }
+
+        // Check total size limit
+        totalSize += fileBuffer.length;
+        if (totalSize > MAX_EXPORT_SIZE) {
+          throw new Error(
+            `Export size exceeds limit: ${totalSize} > ${MAX_EXPORT_SIZE} bytes (after adding ${docData.filename || doc.id})`
+          );
+        }
+
+        // Add to archive
+        const filename = docData.filename || `document_${doc.id}`;
+        archive.append(fileBuffer, { name: `documents/${filename}` });
+
+        // Log progress (for debugging)
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[NEAK Export] Added document: ${filename} (${fileBuffer.length} bytes, total: ${totalSize} bytes)`);
+        }
+      } catch (error) {
+        console.error(`[NEAK Export] Error adding document ${doc.id} to archive:`, error);
+        // Abort archive on error
+        archive.abort();
+        // Re-throw with context for proper error handling
+        throw new Error(
+          `Failed to add document ${doc.filename || doc.id} to export: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
+      }
+    }
+
+    // Check if archive had errors during document addition
+    if (archiveError) {
+      // TypeScript narrowing: archiveError is Error here
+      const errorMsg = (archiveError as Error).message;
+      throw new Error(`Archive error during document processing: ${errorMsg}`);
+    }
+
+    // Finalize archive (this triggers the 'end' event when complete)
+    archive.finalize();
+
+    // Create response stream
+    const stream = Readable.from(archive);
+
+    // Generate filename
+    const dateStr = new Date().toISOString().split('T')[0];
+    const filename = `NEAK_${patientId}_${dateStr}.zip`;
+
+    // Create response with proper error handling
+    const response = new NextResponse(stream as any, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+        'x-correlation-id': correlationId,
+      },
+    });
+
+    // Note: Archive 'end' event will fire when ZIP is fully written
+    // Frontend should wait for blob download to complete before logging success
+    // (This is handled in PatientDocuments.tsx - success log only after blob download)
+
+    return response;
+  } catch (error: any) {
+    return handleApiError(error, correlationId);
+  }
+}
