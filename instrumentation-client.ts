@@ -143,3 +143,22 @@ if (typeof window !== 'undefined') {
     }
   }
 }
+
+// Export router transition hook for Next.js instrumentation
+// This is required by Sentry for navigation tracking
+// @see https://nextjs.org/docs/app/api-reference/file-conventions/instrumentation-client
+export const onRouterTransitionStart = async (
+  url: string,
+  navigationType: 'push' | 'replace' | 'traverse'
+) => {
+  if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_ENABLE_SENTRY === 'true') {
+    try {
+      const Sentry = await import('@sentry/nextjs');
+      if (Sentry.captureRouterTransitionStart) {
+        Sentry.captureRouterTransitionStart(url, navigationType);
+      }
+    } catch (error) {
+      // Silently fail if Sentry can't be loaded
+    }
+  }
+};
