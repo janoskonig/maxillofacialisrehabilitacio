@@ -110,12 +110,14 @@ async function handleApiResponse<T>(response: Response): Promise<T> {
     // Strukturált error response ellenőrzése
     if (errorData?.error && typeof errorData.error === 'object') {
       const structuredError = errorData.error;
+      // CorrelationId prioritás: header elsődleges, body fallback
+      const finalCorrelationId = correlationId || structuredError.correlationId;
       throw new ApiError({
         message: structuredError.message || errorMessage,
         status: structuredError.status || response.status,
         code: structuredError.code,
         details: structuredError.details,
-        correlationId: structuredError.correlationId || correlationId,
+        correlationId: finalCorrelationId,
         name: structuredError.name || 'ApiError',
       });
     }

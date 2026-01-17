@@ -11,7 +11,7 @@ import { AppointmentBookingSection } from './AppointmentBookingSection';
 import { ConditionalAppointmentBooking } from './ConditionalAppointmentBooking';
 import { getCurrentUser } from '@/lib/auth';
 import { DatePicker } from './DatePicker';
-import { savePatient } from '@/lib/storage';
+import { savePatient, ApiError, TimeoutError } from '@/lib/storage';
 import { BNOAutocomplete } from './BNOAutocomplete';
 import { PatientDocuments } from './PatientDocuments';
 import { useToast } from '@/contexts/ToastContext';
@@ -1601,31 +1601,36 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
     };
   }, []);
 
-  // Robusztus hiba típus detektálás
+  // Robusztus hiba típus detektálás - ApiError alapú (regex fallback eltávolítva)
   const isRetryableError = useCallback((err: any): boolean => {
     if (!err) return false;
 
+    // AbortError: user abort, ne retry
     if (err.name === "AbortError") return false;
-    if (err.name === "TimeoutError") return true;
+
+    // TimeoutError: retry
+    if (err instanceof TimeoutError || err.name === "TimeoutError") return true;
 
     // Network: fetch often throws TypeError
     if (err instanceof TypeError) return true;
 
-    // HTTP status detection
-    // Ideális esetben: handleApiResponse dobjon ApiError-t { status, body }-val
-    // Addig fallback: regex a message-ben (törékeny, de működő)
-    if (err.name === "ApiError" && err.status) {
-      return err.status === 429 || err.status >= 500;
-    }
-
-    // Fallback: message parsing (ha handleApiResponse még nem strukturált)
-    const m = String(err.message || "");
-    const statusMatch = m.match(/\b([45]\d{2})\b/);
-    if (statusMatch) {
-      const status = parseInt(statusMatch[1], 10);
+    // Strukturált API hiba - ApiError instance vagy name check
+    if (err instanceof ApiError || err.name === "ApiError") {
+      const status = (err as ApiError).status;
+      // 409 (konfliktus): no retry
+      if (status === 409) return false;
+      // 429 (rate limit) vagy 5xx (server error): retry
       return status === 429 || status >= 500;
     }
 
+    // Ha ApiError, de nincs status mező (nem várható, de safety check)
+    if (err.name === "ApiError" && typeof (err as any).status === "number") {
+      const status = (err as any).status;
+      if (status === 409) return false;
+      return status === 429 || status >= 500;
+    }
+
+    // Egyéb esetek: no retry (biztonságos default)
     return false;
   }, []);
 
