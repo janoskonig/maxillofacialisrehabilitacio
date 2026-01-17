@@ -3,6 +3,11 @@ const { withSentryConfig } = require('@sentry/nextjs');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Enable instrumentation hook (for Sentry)
+  experimental: {
+    instrumentationHook: true,
+  },
+  
   // Production optimalizációk
   compress: true,
   
@@ -64,7 +69,8 @@ if (process.env.ENABLE_SENTRY === 'true') {
       // Disable source maps upload for now (can be enabled later)
       widenClientFileUpload: true,
       hideSourceMaps: true,
-      disableLogger: true,
+      // Note: disableLogger is deprecated (removed)
+      // Use silent: true instead, and tree-shaking will remove Sentry logger in production builds
     }
   );
 } else {
