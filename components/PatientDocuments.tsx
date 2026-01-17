@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { PatientDocument } from '@/lib/types';
-import { Upload, File, Download, Trash2, X, Tag, Plus } from 'lucide-react';
+import { Upload, File, Download, Trash2, X, Tag, Plus, Package, AlertTriangle, Loader2 } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth';
 import { formatDateForDisplay } from '@/lib/dateUtils';
 import { useToast } from '@/contexts/ToastContext';
+import { logEvent } from '@/lib/event-logger';
 
 interface PatientDocumentsProps {
   patientId: string | null;
@@ -45,6 +46,11 @@ export function PatientDocuments({
   const dragCounterRef = useRef(0);
   const [isDragging, setIsDragging] = useState(false);
   const [fileAccept, setFileAccept] = useState<string | undefined>(undefined);
+  const [neakExportLoading, setNeakExportLoading] = useState(false);
+  const [neakExportStatus, setNeakExportStatus] = useState<{
+    isReady: boolean;
+    missingDocTags: string[];
+  } | null>(null);
 
   useEffect(() => {
     const checkRole = async () => {
@@ -492,6 +498,111 @@ export function PatientDocuments({
     return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
   };
 
+  // NEAK Export handler
+  const handleNeakExport = async () => {
+    if (!patientId) {
+      showToast('Beteg ID hiányzik', 'error');
+      return;
+    }
+
+    try {
+      setNeakExportLoading(true);
+      setNeakExportStatus(null);
+
+      // Check feature flag (client-side check, server also validates)
+      const enableNeakExport = process.env.NEXT_PUBLIC_ENABLE_NEAK_EXPORT === 'true';
+      if (!enableNeakExport) {
+        showToast('NEAK export funkció nincs engedélyezve', 'error');
+        return;
+      }
+
+      // Dry-run: Check if ready
+      const dryRunResponse = await fetch(`/api/patients/${patientId}/export-neak?dryRun=1`, {
+        credentials: 'include',
+      });
+
+      if (!dryRunResponse.ok) {
+        const errorData = await dryRunResponse.json().catch(() => ({}));
+        if (errorData.code === 'FEATURE_DISABLED') {
+          showToast('NEAK export funkció nincs engedélyezve', 'error');
+          return;
+        }
+        throw new Error(errorData.error || 'Dry-run hiba');
+      }
+
+      const dryRunData = await dryRunResponse.json();
+
+      // Log attempt
+      logEvent('neak_export_attempt', {
+        patientIdHash: patientId ? patientId.substring(0, 8) : null,
+        isReady: dryRunData.isReady,
+        missingDocTags: dryRunData.missingDocTags || [],
+      }, dryRunData.correlationId);
+
+      if (!dryRunData.isReady) {
+        // Show missing tags
+        setNeakExportStatus({
+          isReady: false,
+          missingDocTags: dryRunData.missingDocTags || [],
+        });
+        showToast(
+          `Hiányoznak kötelező dokumentumok: ${dryRunData.missingDocTags?.join(', ') || 'ismeretlen'}`,
+          'info'
+        );
+        return;
+      }
+
+      // Ready: Start export
+      const exportResponse = await fetch(`/api/patients/${patientId}/export-neak`, {
+        credentials: 'include',
+      });
+
+      if (!exportResponse.ok) {
+        const errorData = await exportResponse.json().catch(() => ({}));
+        if (errorData.code === 'MISSING_REQUIRED_DOCS') {
+          setNeakExportStatus({
+            isReady: false,
+            missingDocTags: errorData.details?.missingDocTags || [],
+          });
+          showToast('Hiányoznak kötelező dokumentumok', 'error');
+          logEvent('neak_export_fail', {
+            patientIdHash: patientId ? patientId.substring(0, 8) : null,
+            errorCode: errorData.code,
+            missingDocTags: errorData.details?.missingDocTags || [],
+          }, errorData.correlationId);
+          return;
+        }
+        throw new Error(errorData.error || 'Export hiba');
+      }
+
+      // Download ZIP
+      const blob = await exportResponse.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `NEAK_${patientId}_${new Date().toISOString().split('T')[0]}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      showToast('NEAK export sikeresen letöltve', 'success');
+      logEvent('neak_export_success', {
+        patientIdHash: patientId ? patientId.substring(0, 8) : null,
+        estimatedTotalBytes: dryRunData.estimatedTotalBytes,
+      }, dryRunData.correlationId);
+    } catch (error) {
+      console.error('NEAK export error:', error);
+      showToast(error instanceof Error ? error.message : 'Hiba történt az export során', 'error');
+      logEvent('neak_export_fail', {
+        patientIdHash: patientId ? patientId.substring(0, 8) : null,
+        errorName: error instanceof Error ? error.constructor.name : 'Unknown',
+      });
+    } finally {
+      setNeakExportLoading(false);
+    }
+  };
+
   if (!patientId) {
     return (
       <div className="card">
@@ -507,21 +618,82 @@ export function PatientDocuments({
           <File className="w-5 h-5 mr-2 text-medical-primary" />
           DOKUMENTUMOK ({documents.length})
         </h4>
-        {canUpload && !isViewOnly && (
-          <button
-            onClick={() => {
-              setShowUploadForm(!showUploadForm);
-              if (!showUploadForm && fileInputRef.current) {
-                fileInputRef.current.click();
-              }
-            }}
-            className="btn-primary text-sm"
-          >
-            <Upload className="w-4 h-4 mr-2" />
-            Feltöltés
-          </button>
-        )}
+        <div className="flex gap-2">
+          {process.env.NEXT_PUBLIC_ENABLE_NEAK_EXPORT === 'true' && patientId && (
+            <button
+              onClick={handleNeakExport}
+              disabled={neakExportLoading}
+              className="btn-secondary text-sm"
+            >
+              {neakExportLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Export...
+                </>
+              ) : (
+                <>
+                  <Package className="w-4 h-4 mr-2" />
+                  NEAK Export
+                </>
+              )}
+            </button>
+          )}
+          {canUpload && !isViewOnly && (
+            <button
+              onClick={() => {
+                setShowUploadForm(!showUploadForm);
+                if (!showUploadForm && fileInputRef.current) {
+                  fileInputRef.current.click();
+                }
+              }}
+              className="btn-primary text-sm"
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              Feltöltés
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* NEAK Export Status */}
+      {neakExportStatus && !neakExportStatus.isReady && (
+        <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+          <div className="flex items-start">
+            <AlertTriangle className="w-5 h-5 text-amber-600 mr-3 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <h5 className="text-sm font-semibold text-amber-800 mb-2">
+                Hiányoznak kötelező dokumentumok
+              </h5>
+              <p className="text-sm text-amber-700 mb-2">
+                Az alábbi tag-ekkel rendelkező dokumentumok hiányoznak:
+              </p>
+              <ul className="list-disc list-inside text-sm text-amber-700 mb-3">
+                {neakExportStatus.missingDocTags.map((tag) => (
+                  <li key={tag}>{tag.toUpperCase()}</li>
+                ))}
+              </ul>
+              <button
+                onClick={() => {
+                  setNeakExportStatus(null);
+                  setShowUploadForm(true);
+                  if (fileInputRef.current) {
+                    fileInputRef.current.click();
+                  }
+                }}
+                className="text-sm text-amber-800 hover:text-amber-900 underline"
+              >
+                Ugrás dokumentum feltöltéshez →
+              </button>
+            </div>
+            <button
+              onClick={() => setNeakExportStatus(null)}
+              className="text-amber-600 hover:text-amber-800 ml-2"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Upload Form */}
       {showUploadForm && canUpload && !isViewOnly && (
