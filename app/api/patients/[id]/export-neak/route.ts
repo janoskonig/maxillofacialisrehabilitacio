@@ -9,6 +9,14 @@ import { PDFDocument, StandardFonts } from 'pdf-lib';
 import archiver from 'archiver';
 import { Readable } from 'stream';
 
+// Force Node.js runtime (required for archiver, pdf-lib, Buffer operations)
+export const runtime = 'nodejs';
+
+// Size limits
+const MAX_EXPORT_SIZE = 200 * 1024 * 1024; // 200 MB total
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB per file
+const FILE_DOWNLOAD_TIMEOUT_MS = 30000; // 30 seconds per file
+
 // Feature flag: ENABLE_NEAK_EXPORT
 const ENABLE_NEAK_EXPORT = process.env.ENABLE_NEAK_EXPORT === 'true';
 
@@ -345,7 +353,6 @@ export async function GET(
     }
 
     // Size limit: 200 MB
-    const MAX_EXPORT_SIZE = 200 * 1024 * 1024; // 200 MB
     if (estimatedTotalBytes > MAX_EXPORT_SIZE) {
       const response = NextResponse.json(
         {
@@ -375,46 +382,71 @@ export async function GET(
     archive.append(pdfBuffer, { name: 'patient_summary.pdf' });
 
     // Add required documents to ZIP
+    // IMPORTANT: Process sequentially (not in parallel) to avoid memory spikes
+    // Each file is downloaded, checked, and added one at a time
     let totalSize = pdfBuffer.length;
-    const documentPromises: Promise<void>[] = [];
 
     for (const doc of includedDocuments) {
-      const docPromise = (async () => {
-        try {
-          // Get full document data from DB
-          const docResult = await pool.query(
-            `SELECT file_path, filename FROM patient_documents WHERE id = $1`,
-            [doc.id]
-          );
+      try {
+        // Get full document data from DB
+        const docResult = await pool.query(
+          `SELECT file_path, filename, file_size FROM patient_documents WHERE id = $1`,
+          [doc.id]
+        );
 
-          if (docResult.rows.length === 0) {
-            console.warn(`Document ${doc.id} not found in DB, skipping`);
-            return;
-          }
-
-          const docData = docResult.rows[0];
-          const fileBuffer = await downloadFile(docData.file_path, patientId);
-
-          // Check size limit
-          totalSize += fileBuffer.length;
-          if (totalSize > MAX_EXPORT_SIZE) {
-            throw new Error(`Export size exceeds limit: ${totalSize} > ${MAX_EXPORT_SIZE}`);
-          }
-
-          // Add to archive
-          const filename = docData.filename || `document_${doc.id}`;
-          archive.append(fileBuffer, { name: `documents/${filename}` });
-        } catch (error) {
-          console.error(`Error adding document ${doc.id} to archive:`, error);
-          throw error;
+        if (docResult.rows.length === 0) {
+          console.warn(`[NEAK Export] Document ${doc.id} not found in DB, skipping`);
+          continue;
         }
-      })();
 
-      documentPromises.push(docPromise);
+        const docData = docResult.rows[0];
+
+        // Per-file size limit check (before download)
+        if (docData.file_size && docData.file_size > MAX_FILE_SIZE) {
+          throw new Error(
+            `Document ${docData.filename || doc.id} exceeds per-file size limit: ${docData.file_size} > ${MAX_FILE_SIZE} bytes`
+          );
+        }
+
+        // Download file with timeout
+        const downloadPromise = downloadFile(docData.file_path, patientId);
+        const timeoutPromise = new Promise<Buffer>((_, reject) => {
+          setTimeout(() => reject(new Error(`File download timeout after ${FILE_DOWNLOAD_TIMEOUT_MS}ms`)), FILE_DOWNLOAD_TIMEOUT_MS);
+        });
+
+        const fileBuffer = await Promise.race([downloadPromise, timeoutPromise]);
+
+        // Check per-file size limit (after download, in case DB size was wrong)
+        if (fileBuffer.length > MAX_FILE_SIZE) {
+          throw new Error(
+            `Document ${docData.filename || doc.id} exceeds per-file size limit: ${fileBuffer.length} > ${MAX_FILE_SIZE} bytes`
+          );
+        }
+
+        // Check total size limit
+        totalSize += fileBuffer.length;
+        if (totalSize > MAX_EXPORT_SIZE) {
+          throw new Error(
+            `Export size exceeds limit: ${totalSize} > ${MAX_EXPORT_SIZE} bytes (after adding ${docData.filename || doc.id})`
+          );
+        }
+
+        // Add to archive
+        const filename = docData.filename || `document_${doc.id}`;
+        archive.append(fileBuffer, { name: `documents/${filename}` });
+
+        // Log progress (for debugging)
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[NEAK Export] Added document: ${filename} (${fileBuffer.length} bytes, total: ${totalSize} bytes)`);
+        }
+      } catch (error) {
+        console.error(`[NEAK Export] Error adding document ${doc.id} to archive:`, error);
+        // Re-throw with context for proper error handling
+        throw new Error(
+          `Failed to add document ${doc.filename || doc.id} to export: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
+      }
     }
-
-    // Wait for all documents to be added
-    await Promise.all(documentPromises);
 
     // Finalize archive
     archive.finalize();
