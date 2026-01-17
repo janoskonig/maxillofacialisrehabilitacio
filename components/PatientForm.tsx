@@ -12,6 +12,7 @@ import { ConditionalAppointmentBooking } from './ConditionalAppointmentBooking';
 import { getCurrentUser } from '@/lib/auth';
 import { DatePicker } from './DatePicker';
 import { savePatient, ApiError, TimeoutError } from '@/lib/storage';
+import { logEvent } from '@/lib/event-logger';
 import { BNOAutocomplete } from './BNOAutocomplete';
 import { PatientDocuments } from './PatientDocuments';
 import { useToast } from '@/contexts/ToastContext';
@@ -1666,9 +1667,17 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
 
     const seq = ++saveSequenceRef.current;
 
+    // Event logging: attempt
+    const startTime = Date.now();
+    const eventType = source === 'auto' ? 'autosave_attempt' : 'manualsave_attempt';
+    logEvent(eventType, {
+      source,
+      patientId: currentPatientIdRef.current || undefined,
+    });
+
     try {
       setSavingSource(source);
-      lastSaveAttemptAtRef.current = Date.now();
+      lastSaveAttemptAtRef.current = startTime;
       lastSaveErrorRef.current = null;
 
       const payload = buildSavePayload(
@@ -1722,6 +1731,15 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
       lastSavedHashRef.current = stableStringify(validatedPayload);
       lastSaveSourceRef.current = source;
 
+      // Event logging: success
+      const durationMs = Date.now() - startTime;
+      const successEventType = source === 'auto' ? 'autosave_success' : 'manualsave_success';
+      logEvent(successEventType, {
+        source,
+        durationMs,
+        patientId: currentPatientIdRef.current || undefined,
+      });
+
       // Tiszta callback API
       onSave(saved, { source });
 
@@ -1754,6 +1772,18 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
 
       // 409 Conflict (STALE_WRITE) külön kezelése
       if (err instanceof ApiError && err.status === 409 && err.code === 'STALE_WRITE') {
+        // Event logging: fail (409 conflict)
+        const durationMs = Date.now() - startTime;
+        const failEventType = source === 'auto' ? 'autosave_fail' : 'manualsave_fail';
+        logEvent(failEventType, {
+          source,
+          durationMs,
+          status: err.status,
+          errorName: err.name,
+          code: err.code,
+          patientId: currentPatientIdRef.current || undefined,
+        }, err.correlationId);
+
         if (source === "auto") {
           // Auto-save: ne retry, csak log és return null
           console.warn(`Auto-save conflict detected (409 STALE_WRITE):`, {
@@ -1782,6 +1812,35 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
         }
         // Manual retry: eredeti data
         return performSave("manual", formData, retryCount + 1);
+      }
+
+      // Event logging: fail (other errors)
+      const durationMs = Date.now() - startTime;
+      const failEventType = source === 'auto' ? 'autosave_fail' : 'manualsave_fail';
+      const errorMetadata: {
+        source: 'auto' | 'manual';
+        durationMs: number;
+        status?: number;
+        errorName?: string;
+        code?: string;
+        patientId?: string;
+      } = {
+        source,
+        durationMs,
+        patientId: currentPatientIdRef.current || undefined,
+      };
+
+      if (err instanceof ApiError) {
+        errorMetadata.status = err.status;
+        errorMetadata.errorName = err.name;
+        errorMetadata.code = err.code;
+        logEvent(failEventType, errorMetadata, err.correlationId);
+      } else if (err instanceof TimeoutError) {
+        errorMetadata.errorName = 'TimeoutError';
+        logEvent(failEventType, errorMetadata);
+      } else {
+        errorMetadata.errorName = err?.name || 'UnknownError';
+        logEvent(failEventType, errorMetadata);
       }
 
       // Error handling
