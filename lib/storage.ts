@@ -340,14 +340,25 @@ export async function getAllPatients(): Promise<Patient[]> {
 }
 
 // Beteg keresése (pagination nélkül)
-export async function searchPatients(query: string): Promise<Patient[]> {
+export async function searchPatients(
+  query: string,
+  options?: { view?: 'neak_pending' | 'missing_docs' }
+): Promise<Patient[]> {
   try {
-    if (!query.trim()) {
+    if (!query.trim() && !options?.view) {
       return getAllPatients();
     }
     
+    const params = new URLSearchParams();
+    if (query.trim()) {
+      params.append('q', query);
+    }
+    if (options?.view) {
+      params.append('view', options.view);
+    }
+    
     const response = await fetchWithTimeout(
-      `${API_BASE_URL}?q=${encodeURIComponent(query)}`,
+      `${API_BASE_URL}?${params.toString()}`,
       {
         credentials: 'include',
       },

@@ -9,7 +9,7 @@ import { PatientList } from '@/components/PatientList';
 import { OPImageViewer } from '@/components/OPImageViewer';
 import { FotoImageViewer } from '@/components/FotoImageViewer';
 import { useToast } from '@/contexts/ToastContext';
-import { Plus, Search, Users, LogOut, Shield, Settings, Calendar, CalendarDays, MessageCircle } from 'lucide-react';
+import { Plus, Search, Users, LogOut, Shield, Settings, Calendar, CalendarDays, MessageCircle, Filter } from 'lucide-react';
 import { getCurrentUser, getUserEmail, getUserRole, logout } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
 import { MobileMenu } from '@/components/MobileMenu';
@@ -26,6 +26,7 @@ export default function Home() {
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
   const [isViewMode, setIsViewMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedView, setSelectedView] = useState<'all' | 'neak_pending' | 'missing_docs'>('all');
   const [filteredPatients, setFilteredPatients] = useState<Patient[]>([]);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<UserRoleType>('viewer');
@@ -88,19 +89,38 @@ export default function Home() {
     checkAuth();
   }, [router]);
 
+  // Sync view from URL on mount
   useEffect(() => {
-    // Load patients only when there's a search query
+    const urlParams = new URLSearchParams(window.location.search);
+    const viewParam = urlParams.get('view');
+    if (viewParam === 'neak_pending' || viewParam === 'missing_docs') {
+      setSelectedView(viewParam);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Load patients when there's a search query or a view selected
     const loadPatientsData = async () => {
-      // Only load if there's a search query
-      if (!searchQuery.trim()) {
+      // Only load if there's a search query or a view selected
+      if (!searchQuery.trim() && selectedView === 'all') {
         setPatients([]);
         setFilteredPatients([]);
         return;
       }
 
       try {
-        const allPatients = await searchPatients(searchQuery);
+        const viewOption = selectedView !== 'all' ? { view: selectedView } : undefined;
+        const allPatients = await searchPatients(searchQuery, viewOption);
         setPatients(allPatients);
+        
+        // Update URL with view param
+        const url = new URL(window.location.href);
+        if (selectedView !== 'all') {
+          url.searchParams.set('view', selectedView);
+        } else {
+          url.searchParams.delete('view');
+        }
+        window.history.replaceState({}, '', url.toString());
         
         // Apply sorting (only for fields that don't need appointment data)
         let sortedResults = [...allPatients];
@@ -132,7 +152,7 @@ export default function Home() {
     };
     
     loadPatientsData();
-  }, [searchQuery, sortField, sortDirection, refreshKey]);
+  }, [searchQuery, selectedView, sortField, sortDirection, refreshKey]);
 
   const loadPatients = async () => {
     // Force reload by incrementing refreshKey
@@ -457,20 +477,37 @@ export default function Home() {
 
           {/* Patient Management Section - shown for all roles */}
           <>
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 z-10" />
-                <input
-                  type="text"
-                  placeholder="Keresés név, TAJ szám vagy telefon alapján..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="form-input pl-12 py-3 text-base"
-                />
+              {/* Search and View Filter */}
+              <div className="space-y-3">
+                {/* Search */}
+                <div className="relative">
+                  <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 z-10" />
+                  <input
+                    type="text"
+                    placeholder="Keresés név, TAJ szám vagy telefon alapján..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="form-input pl-12 py-3 text-base"
+                  />
+                </div>
+                
+                {/* View Dropdown */}
+                <div className="flex items-center gap-3">
+                  <Filter className="w-5 h-5 text-gray-400" />
+                  <select
+                    value={selectedView}
+                    onChange={(e) => setSelectedView(e.target.value as 'all' | 'neak_pending' | 'missing_docs')}
+                    className="form-select flex-1 max-w-xs"
+                  >
+                    <option value="all">Minden beteg</option>
+                    <option value="neak_pending">NEAK pending</option>
+                    <option value="missing_docs">Hiányos dokumentáció</option>
+                  </select>
+                </div>
               </div>
 
-              {/* Stats - only show when searching */}
-              {searchQuery.trim() && (
+              {/* Stats - only show when searching or view selected */}
+              {(searchQuery.trim() || selectedView !== 'all') && (
                 <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
                   <div className="card card-hover p-4">
                     <div className="flex items-center gap-3">
@@ -490,8 +527,8 @@ export default function Home() {
                 </div>
               )}
 
-              {/* Patient List - only show when searching */}
-              {searchQuery.trim() && (
+              {/* Patient List - only show when searching or view selected */}
+              {(searchQuery.trim() || selectedView !== 'all') && (
                 <PatientList
                   patients={filteredPatients}
                   onView={handleViewPatient}
@@ -518,8 +555,8 @@ export default function Home() {
                 />
               )}
 
-              {/* Empty state when no search */}
-              {!searchQuery.trim() && (
+              {/* Empty state when no search and no view */}
+              {!searchQuery.trim() && selectedView === 'all' && (
                 <div className="card text-center py-12">
                   <Search className="w-16 h-16 mx-auto mb-4 text-gray-300" />
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">
