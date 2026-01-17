@@ -228,8 +228,25 @@ export async function savePatient(
   };
 
   // If-Match header: updatedAt értéke (konfliktuskezelés)
+  // Normalizálás ISO stringgé (biztos, hogy nem Date objektum vagy más formátum)
   if (isUpdate && patient.updatedAt) {
-    headers["if-match"] = patient.updatedAt;
+    const updatedAtValue: unknown = patient.updatedAt;
+    // Ha Date objektum, konvertáljuk ISO stringgé
+    if (updatedAtValue instanceof Date) {
+      headers["if-match"] = updatedAtValue.toISOString();
+    } else if (typeof updatedAtValue === 'string') {
+      // Ha string, ellenőrizzük, hogy érvényes ISO string-e
+      const date = new Date(updatedAtValue);
+      if (!isNaN(date.getTime())) {
+        headers["if-match"] = date.toISOString();
+      } else {
+        // Invalid date string - skip if-match (backward compat)
+        console.warn('Invalid updatedAt format, skipping if-match header:', updatedAtValue);
+      }
+    } else {
+      // Egyéb típus - skip (nem várható)
+      console.warn('Unexpected updatedAt type, skipping if-match header:', typeof updatedAtValue);
+    }
   }
 
   // X-Save-Source header: auto|manual (jövőbeli snapshot használathoz)
