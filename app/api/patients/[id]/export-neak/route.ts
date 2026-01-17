@@ -28,6 +28,74 @@ function getCorrelationId(req: NextRequest): string {
 }
 
 /**
+ * Helper függvény az ő → ö, ű → ü cseréhez (fallback, ha az eredeti nem működik)
+ */
+function replaceLongAccents(text: string): string {
+  return text
+    .replace(/ő/g, 'ö')
+    .replace(/Ő/g, 'Ö')
+    .replace(/ű/g, 'ü')
+    .replace(/Ű/g, 'Ü');
+}
+
+/**
+ * Helper függvény az összes ékezetes karakter cseréjéhez ASCII karakterekre
+ * Utolsó fallback, ha még mindig hiba van
+ */
+function replaceAllAccentedChars(text: string): string {
+  const replacements: Record<string, string> = {
+    'á': 'a', 'Á': 'A',
+    'é': 'e', 'É': 'E',
+    'í': 'i', 'Í': 'I',
+    'ó': 'o', 'Ó': 'O',
+    'ö': 'o', 'Ö': 'O',
+    'ő': 'o', 'Ő': 'O',
+    'ú': 'u', 'Ú': 'U',
+    'ü': 'u', 'Ü': 'U',
+    'ű': 'u', 'Ű': 'U',
+  };
+  
+  return text.replace(/[áéíóöőúüűÁÉÍÓÖŐÚÜŰ]/g, (char) => replacements[char] || char);
+}
+
+/**
+ * Safe text drawing helper - handles Hungarian accented characters
+ */
+function drawTextSafe(
+  page: any,
+  text: string,
+  options: { x: number; y: number; size: number; font: any }
+): void {
+  try {
+    page.drawText(text, options);
+  } catch (error: any) {
+    // Ha hiba van, próbáljuk meg az ő → ö, ű → ü cserét
+    if (error.message && error.message.includes('cannot encode')) {
+      try {
+        const textWithReplacedLong = replaceLongAccents(text);
+        page.drawText(textWithReplacedLong, options);
+      } catch (retryError: any) {
+        // Ha még mindig hiba van, cseréljük az összes ékezetes karaktert
+        if (retryError.message && retryError.message.includes('cannot encode')) {
+          const safeText = replaceAllAccentedChars(text);
+          try {
+            page.drawText(safeText, options);
+          } catch (finalError) {
+            // Ha még mindig hiba van, teljesen biztonságos szöveget használunk
+            const finalSafeText = text.replace(/[^\x00-\x7F]/g, '?');
+            page.drawText(finalSafeText, options);
+          }
+        } else {
+          throw retryError;
+        }
+      }
+    } else {
+      throw error;
+    }
+  }
+}
+
+/**
  * Generate patient_summary.pdf for NEAK export
  */
 async function generatePatientSummaryPDF(
@@ -46,7 +114,7 @@ async function generatePatientSummaryPDF(
   let yPosition = page.getSize().height - margin;
 
   // Title
-  page.drawText('NEAK Export - Beteg Összefoglaló', {
+  drawTextSafe(page, 'NEAK Export - Beteg Osszefoglalo', {
     x: margin,
     y: yPosition,
     size: 18,
@@ -55,7 +123,7 @@ async function generatePatientSummaryPDF(
   yPosition -= 40;
 
   // Patient identification
-  page.drawText('Beteg azonosítók:', {
+  drawTextSafe(page, 'Beteg azonositok:', {
     x: margin,
     y: yPosition,
     size: 12,
@@ -64,7 +132,7 @@ async function generatePatientSummaryPDF(
   yPosition -= 20;
 
   if (patient.nev) {
-    page.drawText(`Név: ${patient.nev}`, {
+    drawTextSafe(page, `Nev: ${patient.nev}`, {
       x: margin + 20,
       y: yPosition,
       size: 10,
@@ -74,7 +142,7 @@ async function generatePatientSummaryPDF(
   }
 
   if (patient.taj) {
-    page.drawText(`TAJ: ${patient.taj}`, {
+    drawTextSafe(page, `TAJ: ${patient.taj}`, {
       x: margin + 20,
       y: yPosition,
       size: 10,
@@ -87,7 +155,7 @@ async function generatePatientSummaryPDF(
 
   // Diagnosis / Surgery date
   if (patient.diagnozis) {
-    page.drawText(`Diagnózis: ${patient.diagnozis}`, {
+    drawTextSafe(page, `Diagnozis: ${patient.diagnozis}`, {
       x: margin,
       y: yPosition,
       size: 10,
@@ -97,7 +165,7 @@ async function generatePatientSummaryPDF(
   }
 
   if (patient.mutetIdeje) {
-    page.drawText(`Műtét ideje: ${patient.mutetIdeje}`, {
+    drawTextSafe(page, `Mutet ideje: ${patient.mutetIdeje}`, {
       x: margin,
       y: yPosition,
       size: 10,
@@ -109,7 +177,7 @@ async function generatePatientSummaryPDF(
   yPosition -= 20;
 
   // Checklist summary
-  page.drawText('Checklist összefoglaló:', {
+  drawTextSafe(page, 'Checklist osszefoglalo:', {
     x: margin,
     y: yPosition,
     size: 12,
@@ -119,32 +187,32 @@ async function generatePatientSummaryPDF(
 
   // Required fields status
   const missingFields = getMissingRequiredFields(patient);
-  page.drawText(
-    `Kötelező mezők: ${missingFields.length === 0 ? '✓ Minden megvan' : `✗ ${missingFields.length} hiányzik`}`,
-    {
-      x: margin + 20,
-      y: yPosition,
-      size: 10,
-      font: font,
-    }
-  );
+  const fieldsStatus = missingFields.length === 0 
+    ? '✓ Minden megvan' 
+    : `✗ ${missingFields.length} hianyzik`;
+  drawTextSafe(page, `Kotelezo mezok: ${fieldsStatus}`, {
+    x: margin + 20,
+    y: yPosition,
+    size: 10,
+    font: font,
+  });
   yPosition -= 15;
 
   // Required documents status (using rules for accurate count)
   const missingDocRules = getMissingRequiredDocRules(documents);
-  page.drawText(
-    `Kötelező dokumentumok: ${missingDocRules.length === 0 ? '✓ Minden megvan' : `✗ ${missingDocRules.length} hiányzik`}`,
-    {
-      x: margin + 20,
-      y: yPosition,
-      size: 10,
-      font: font,
-    }
-  );
+  const docsStatus = missingDocRules.length === 0 
+    ? '✓ Minden megvan' 
+    : `✗ ${missingDocRules.length} hianyzik`;
+  drawTextSafe(page, `Kotelezo dokumentumok: ${docsStatus}`, {
+    x: margin + 20,
+    y: yPosition,
+    size: 10,
+    font: font,
+  });
   yPosition -= 20;
 
   // Required document rules list (detailed)
-  page.drawText('Kötelező dokumentumok részletei:', {
+  drawTextSafe(page, 'Kotelezo dokumentumok reszletei:', {
     x: margin,
     y: yPosition,
     size: 10,
@@ -158,21 +226,20 @@ async function generatePatientSummaryPDF(
       (doc.tags || []).some((t: string) => t.toLowerCase() === rule.tag.toLowerCase())
     ).length;
     const isComplete = docCount >= rule.minCount;
-    page.drawText(
-      `${isComplete ? '✓' : '✗'} ${rule.label}: ${docCount} / ${rule.minCount} db`,
-      {
-        x: margin + 20,
-        y: yPosition,
-        size: 10,
-        font: font,
-      }
-    );
+    const ruleText = `${isComplete ? '✓' : '✗'} ${rule.label}: ${docCount} / ${rule.minCount} db`;
+    drawTextSafe(page, ruleText, {
+      x: margin + 20,
+      y: yPosition,
+      size: 10,
+      font: font,
+    });
     yPosition -= 15;
   });
 
   // Export date
   yPosition -= 20;
-  page.drawText(`Export dátuma: ${new Date().toLocaleString('hu-HU')}`, {
+  const exportDate = new Date().toLocaleString('hu-HU');
+  drawTextSafe(page, `Export datuma: ${exportDate}`, {
     x: margin,
     y: yPosition,
     size: 9,
