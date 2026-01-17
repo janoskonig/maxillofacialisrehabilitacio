@@ -6,10 +6,7 @@ import { sendPatientCreationNotification } from '@/lib/email';
 import { logActivity, logActivityWithAuth } from '@/lib/activity';
 import { withCorrelation } from '@/lib/api/withCorrelation';
 import { handleApiError } from '@/lib/api-error-handler';
-
-// Required document tags for clinical workflow views
-// TODO: Később áthelyezhető clinical-rules.ts-be
-const REQUIRED_DOC_TAGS = ['neak', 'op', 'foto'] as const;
+import { REQUIRED_DOC_TAGS } from '@/lib/clinical-rules';
 
 // View presets - server-side filtering logic
 type ViewPreset = 'neak_pending' | 'missing_docs';
