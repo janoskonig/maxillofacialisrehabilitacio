@@ -241,13 +241,17 @@ export async function PUT(
     const body = await request.json();
     const validatedPatient = patientSchema.parse(body);
     
+    // Read headers (lowercase canonicalization)
+    const ifMatch = request.headers.get('if-match');
+    const saveSource = request.headers.get('x-save-source'); // auto|manual (for future snapshot use)
+    
     const pool = getDbPool();
     const userEmail = auth.email;
     const role = auth.role;
     
-    // Get old patient data for comparison
+    // Get old patient data for comparison (including updated_at for conflict detection)
     const oldPatientResult = await pool.query(
-      `SELECT * FROM patients WHERE id = $1`,
+      `SELECT *, updated_at FROM patients WHERE id = $1`,
       [params.id]
     );
     
@@ -268,6 +272,56 @@ export async function PUT(
     }
     
     const oldPatient = oldPatientResult.rows[0];
+    
+    // Conflict detection: If-Match header ellenőrzése
+    if (ifMatch) {
+      try {
+        // Kliens updated_at értéke (ISO string)
+        const clientUpdatedAtStr = ifMatch.trim();
+        const clientUpdatedAt = new Date(clientUpdatedAtStr);
+        
+        // Szerver jelenlegi updated_at értéke (PostgreSQL TIMESTAMPTZ)
+        const serverUpdatedAt = oldPatient.updated_at 
+          ? new Date(oldPatient.updated_at)
+          : null;
+        
+        // Összehasonlítás: timestamp milliszekundumban (pontosabb, mint string)
+        if (serverUpdatedAt && clientUpdatedAt.getTime() !== serverUpdatedAt.getTime()) {
+          // 409 Conflict: Stale write detected
+          const response = NextResponse.json(
+            {
+              error: {
+                name: 'ConflictError',
+                status: 409,
+                code: 'STALE_WRITE',
+                message: 'Másik felhasználó módosította a beteg adatait közben. Kérjük, frissítse az oldalt és próbálja újra.',
+                details: {
+                  serverUpdatedAt: serverUpdatedAt.toISOString(),
+                  clientUpdatedAt: clientUpdatedAt.toISOString(),
+                },
+                correlationId,
+              },
+            },
+            { status: 409 }
+          );
+          response.headers.set('x-correlation-id', correlationId);
+          return response;
+        }
+      } catch (dateParseError) {
+        // Invalid date format in If-Match: log but allow (backward compat)
+        console.warn(`[PUT /api/patients/${params.id}] Invalid If-Match date format: ${ifMatch}`, {
+          correlationId,
+          userEmail,
+          error: dateParseError,
+        });
+      }
+    } else {
+      // If-Match hiányzik: MVP-ben engedjük át (backward compat), de logoljuk
+      console.warn(`[PUT /api/patients/${params.id}] If-Match header missing - allowing update (backward compat)`, {
+        correlationId,
+        userEmail,
+      });
+    }
     
     // Szerepkör alapú jogosultság ellenőrzés szerkesztéshez
     if (role === 'sebészorvos' && userEmail) {

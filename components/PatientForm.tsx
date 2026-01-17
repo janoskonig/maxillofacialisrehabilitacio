@@ -1685,7 +1685,16 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
         if (lastSavedHashRef.current === hash) return null;
       }
 
-      const saved = await savePatient(validatedPayload, { signal: controller.signal });
+      // Ensure updatedAt is included for conflict detection (use currentPatient's updatedAt)
+      const payloadWithUpdatedAt = {
+        ...validatedPayload,
+        updatedAt: currentPatientRef.current?.updatedAt || validatedPayload.updatedAt,
+      };
+
+      const saved = await savePatient(payloadWithUpdatedAt, { 
+        signal: controller.signal,
+        source 
+      });
 
       // Sequencing: csak a legutolsó válasz érvényes
       if (seq !== saveSequenceRef.current) {
@@ -1732,6 +1741,27 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
       return saved;
     } catch (err: any) {
       if (err?.name === "AbortError" || controller.signal.aborted) return null;
+
+      // 409 Conflict (STALE_WRITE) külön kezelése
+      if (err instanceof ApiError && err.status === 409 && err.code === 'STALE_WRITE') {
+        if (source === "auto") {
+          // Auto-save: ne retry, csak log és return null
+          console.warn(`Auto-save conflict detected (409 STALE_WRITE):`, {
+            correlationId: err.correlationId,
+            details: err.details,
+          });
+          lastSaveErrorRef.current = err;
+          return null;
+        } else {
+          // Manual save: toast hibaüzenet correlationId-vel
+          const correlationIdMsg = err.correlationId ? ` (ID: ${err.correlationId})` : '';
+          showToast(
+            `Konfliktus: Másik felhasználó módosította a beteg adatait közben. Kérjük, frissítse az oldalt és próbálja újra.${correlationIdMsg}`,
+            "error"
+          );
+          throw err;
+        }
+      }
 
       if (retryCount < 2 && isRetryableError(err)) {
         const delay = 1000 * (retryCount + 1);

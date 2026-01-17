@@ -213,21 +213,36 @@ async function fetchWithTimeout(
   }
 }
 
-// Beteg mentése (új vagy frissítés) - támogatja a cancellation-t
+// Beteg mentése (új vagy frissítés) - támogatja a cancellation-t és konfliktuskezelést
 export async function savePatient(
   patient: Patient,
-  options?: { signal?: AbortSignal }
+  options?: { signal?: AbortSignal; source?: "auto" | "manual" }
 ): Promise<Patient> {
   const isUpdate = !!patient.id;
   const url = isUpdate ? `${API_BASE_URL}/${patient.id}` : API_BASE_URL;
   const method = isUpdate ? "PUT" : "POST";
+
+  // Headers összeállítása
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  // If-Match header: updatedAt értéke (konfliktuskezelés)
+  if (isUpdate && patient.updatedAt) {
+    headers["if-match"] = patient.updatedAt;
+  }
+
+  // X-Save-Source header: auto|manual (jövőbeli snapshot használathoz)
+  if (options?.source) {
+    headers["x-save-source"] = options.source;
+  }
 
   try {
     const response = await fetchWithTimeout(
       url,
       {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers,
         credentials: "include",
         body: JSON.stringify(patient),
       },
