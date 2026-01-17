@@ -4,6 +4,8 @@ import { Patient, patientSchema } from '@/lib/types';
 import { verifyAuth } from '@/lib/auth-server';
 import { sendPatientCreationNotification } from '@/lib/email';
 import { logActivity, logActivityWithAuth } from '@/lib/activity';
+import { withCorrelation } from '@/lib/api/withCorrelation';
+import { handleApiError } from '@/lib/api-error-handler';
 
 // Patient SELECT lista - közös használatra
 const PATIENT_SELECT_FIELDS = `
@@ -84,7 +86,7 @@ const PATIENT_SELECT_FIELDS = `
 `;
 
 // Összes beteg lekérdezése
-export async function GET(request: NextRequest) {
+export const GET = withCorrelation(async (request: NextRequest, { correlationId }) => {
   try {
     const pool = getDbPool();
     const searchParams = request.nextUrl.searchParams;
@@ -277,27 +279,30 @@ export async function GET(request: NextRequest) {
           const mentionWithoutAt = p.mentionFormat.substring(1).toLowerCase();
           return mentionWithoutAt === queryNormalized || mentionWithoutAt.includes(queryNormalized);
         });
-        return NextResponse.json({ 
+        const response1 = NextResponse.json({ 
           patients: filtered
         }, { status: 200 });
+        response1.headers.set('x-correlation-id', correlationId);
+        return response1;
       }
 
-      return NextResponse.json({ 
+      const response2 = NextResponse.json({ 
         patients: mentionPatients
       }, { status: 200 });
+      response2.headers.set('x-correlation-id', correlationId);
+      return response2;
     }
 
-    return NextResponse.json({ 
+    const response = NextResponse.json({ 
       patients: result.rows
     }, { status: 200 });
+    response.headers.set('x-correlation-id', correlationId);
+    return response;
   } catch (error) {
     console.error('Hiba a betegek lekérdezésekor:', error);
-    return NextResponse.json(
-      { error: 'Hiba történt a betegek lekérdezésekor' },
-      { status: 500 }
-    );
+    return handleApiError(error, 'Hiba történt a betegek lekérdezésekor', correlationId);
   }
-}
+});
 
 // Új beteg létrehozása
 export async function POST(request: NextRequest) {

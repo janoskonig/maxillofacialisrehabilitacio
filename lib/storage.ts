@@ -55,25 +55,90 @@ export class TimeoutError extends Error {
   }
 }
 
+/**
+ * ApiError osztály - strukturált hiba kezeléshez
+ * Constructor pattern: name mező ne legyen duplikálva (Error.name már létezik)
+ */
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+  details?: unknown;
+  correlationId?: string;
+
+  constructor(args: {
+    message: string;
+    status: number;
+    code?: string;
+    details?: unknown;
+    correlationId?: string;
+    name?: string;
+  }) {
+    super(args.message);
+    this.name = args.name ?? 'ApiError';
+    this.status = args.status;
+    this.code = args.code;
+    this.details = args.details;
+    this.correlationId = args.correlationId;
+  }
+}
+
 // API hívás hibakezelő
+// Strukturált ApiError-t dob, fallback text parsing-sel
 async function handleApiResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    let errorData;
+    // CorrelationId kinyerése header-ből
+    const correlationId = response.headers.get('x-correlation-id') || undefined;
+    
+    let errorData: any;
+    let errorMessage = `HTTP hiba: ${response.status} ${response.statusText}`;
+    
+    // Próbáljuk JSON parse-olni
     try {
       errorData = await response.json();
     } catch {
-      errorData = { error: `HTTP hiba: ${response.status} ${response.statusText}` };
+      // Fallback: próbáljuk text()-ként olvasni (max 200 chars)
+      try {
+        const text = await response.text();
+        const snippet = text.length > 200 ? text.substring(0, 200) + '...' : text;
+        errorData = { error: snippet || errorMessage };
+      } catch {
+        // Ha text() is fail, akkor csak a status alapú üzenet
+        errorData = { error: errorMessage };
+      }
     }
-    // Ha van details mező, azt is hozzáadjuk a hibaüzenethez
-    const errorMessage = errorData.details 
-      ? `${errorData.error || `HTTP hiba: ${response.status}`}\n${errorData.details}`
-      : errorData.error || `HTTP hiba: ${response.status}`;
-    throw new Error(errorMessage);
+    
+    // Strukturált error response ellenőrzése
+    if (errorData?.error && typeof errorData.error === 'object') {
+      const structuredError = errorData.error;
+      throw new ApiError({
+        message: structuredError.message || errorMessage,
+        status: structuredError.status || response.status,
+        code: structuredError.code,
+        details: structuredError.details,
+        correlationId: structuredError.correlationId || correlationId,
+        name: structuredError.name || 'ApiError',
+      });
+    }
+    
+    // Fallback: régi formátum (backward compatibility)
+    errorMessage = errorData.details
+      ? `${errorData.error || errorMessage}\n${errorData.details}`
+      : errorData.error || errorMessage;
+    
+    throw new ApiError({
+      message: errorMessage,
+      status: response.status,
+      correlationId,
+    });
   }
+  
   try {
     return await response.json();
   } catch (error) {
-    throw new Error('Érvénytelen válasz a szervertől');
+    throw new ApiError({
+      message: 'Érvénytelen válasz a szervertől',
+      status: 500,
+    });
   }
 }
 

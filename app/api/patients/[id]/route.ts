@@ -5,12 +5,16 @@ import { verifyAuth } from '@/lib/auth-server';
 import { sendAppointmentTimeSlotFreedNotification } from '@/lib/email';
 import { deleteGoogleCalendarEvent, createGoogleCalendarEvent } from '@/lib/google-calendar';
 import { logActivity, logActivityWithAuth } from '@/lib/activity';
+import { withCorrelation } from '@/lib/api/withCorrelation';
+import { handleApiError } from '@/lib/api-error-handler';
 
 // Egy beteg lekérdezése ID alapján
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const correlationId = getCorrelationId(request);
+  
   try {
     const pool = getDbPool();
     
@@ -116,10 +120,19 @@ export async function GET(
                           Array.isArray(patient.kezelesiTervArcotErinto) && 
                           patient.kezelesiTervArcotErinto.length > 0;
       if (!hasEpitesis) {
-        return NextResponse.json(
-          { error: 'Nincs jogosultsága ehhez a beteghez' },
+        const response = NextResponse.json(
+          {
+            error: {
+              name: 'ForbiddenError',
+              status: 403,
+              message: 'Nincs jogosultsága ehhez a beteghez',
+              correlationId,
+            },
+          },
           { status: 403 }
         );
+        response.headers.set('x-correlation-id', correlationId);
+        return response;
       }
     } else if (role === 'sebészorvos' && userEmail) {
       // Sebészorvos: csak azokat a betegeket látja, akik az ő intézményéből származnak
@@ -133,17 +146,35 @@ export async function GET(
         const userInstitution = userResult.rows[0].intezmeny;
         // Ellenőrizzük, hogy a beteg beutalo_intezmeny mezője egyezik-e a felhasználó intézményével
         if (patient.beutaloIntezmeny !== userInstitution) {
-          return NextResponse.json(
-            { error: 'Nincs jogosultsága ehhez a beteghez' },
+          const response = NextResponse.json(
+            {
+              error: {
+                name: 'ForbiddenError',
+                status: 403,
+                message: 'Nincs jogosultsága ehhez a beteghez',
+                correlationId,
+              },
+            },
             { status: 403 }
           );
+          response.headers.set('x-correlation-id', correlationId);
+          return response;
         }
       } else {
         // Ha nincs intézmény beállítva, ne lássa a beteget
-        return NextResponse.json(
-          { error: 'Nincs jogosultsága ehhez a beteghez' },
+        const response = NextResponse.json(
+          {
+            error: {
+              name: 'ForbiddenError',
+              status: 403,
+              message: 'Nincs jogosultsága ehhez a beteghez',
+              correlationId,
+            },
+          },
           { status: 403 }
         );
+        response.headers.set('x-correlation-id', correlationId);
+        return response;
       }
     }
     // fogpótlástanász, admin, editor, viewer: mindent látnak (nincs szűrés)
@@ -159,29 +190,52 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ patient: result.rows[0] }, { status: 200 });
+    const response = NextResponse.json({ patient: result.rows[0] }, { status: 200 });
+    response.headers.set('x-correlation-id', correlationId);
+    return response;
   } catch (error) {
     console.error('Hiba a beteg lekérdezésekor:', error);
-    return NextResponse.json(
-      { error: 'Hiba történt a beteg lekérdezésekor' },
-      { status: 500 }
-    );
+    return handleApiError(error, 'Hiba történt a beteg lekérdezésekor', correlationId);
   }
 }
 
 // Beteg frissítése
+/**
+ * Helper to get correlation ID from request
+ */
+function getCorrelationId(request: NextRequest): string {
+  return request.headers.get('x-correlation-id')?.toLowerCase() || 
+    (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 
+     'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+       const r = (Math.random() * 16) | 0;
+       const v = c === 'x' ? r : (r & 0x3) | 0x8;
+       return v.toString(16);
+     }));
+}
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const correlationId = getCorrelationId(request);
+  
   try {
     // Authorization: require authenticated user
     const auth = await verifyAuth(request);
     if (!auth) {
-      return NextResponse.json(
-        { error: 'Bejelentkezés szükséges a módosításhoz' },
+      const response = NextResponse.json(
+        {
+          error: {
+            name: 'UnauthorizedError',
+            status: 401,
+            message: 'Bejelentkezés szükséges a módosításhoz',
+            correlationId,
+          },
+        },
         { status: 401 }
       );
+      response.headers.set('x-correlation-id', correlationId);
+      return response;
     }
 
     const body = await request.json();
@@ -198,10 +252,19 @@ export async function PUT(
     );
     
     if (oldPatientResult.rows.length === 0) {
-      return NextResponse.json(
-        { error: 'Beteg nem található' },
+      const response = NextResponse.json(
+        {
+          error: {
+            name: 'NotFoundError',
+            status: 404,
+            message: 'Beteg nem található',
+            correlationId,
+          },
+        },
         { status: 404 }
       );
+      response.headers.set('x-correlation-id', correlationId);
+      return response;
     }
     
     const oldPatient = oldPatientResult.rows[0];
@@ -219,17 +282,35 @@ export async function PUT(
         const userInstitution = userResult.rows[0].intezmeny;
         // Ellenőrizzük, hogy a beteg beutalo_intezmeny mezője egyezik-e a felhasználó intézményével
         if (oldPatient.beutalo_intezmeny !== userInstitution) {
-          return NextResponse.json(
-            { error: 'Nincs jogosultsága ehhez a beteg szerkesztéséhez. Csak az adott intézményből származó betegeket szerkesztheti.' },
+          const response = NextResponse.json(
+            {
+              error: {
+                name: 'ForbiddenError',
+                status: 403,
+                message: 'Nincs jogosultsága ehhez a beteg szerkesztéséhez. Csak az adott intézményből származó betegeket szerkesztheti.',
+                correlationId,
+              },
+            },
             { status: 403 }
           );
+          response.headers.set('x-correlation-id', correlationId);
+          return response;
         }
       } else {
         // Ha nincs intézmény beállítva, ne szerkeszthesse a beteget
-        return NextResponse.json(
-          { error: 'Nincs jogosultsága ehhez a beteg szerkesztéséhez' },
+        const response = NextResponse.json(
+          {
+            error: {
+              name: 'ForbiddenError',
+              status: 403,
+              message: 'Nincs jogosultsága ehhez a beteg szerkesztéséhez',
+              correlationId,
+            },
+          },
           { status: 403 }
         );
+        response.headers.set('x-correlation-id', correlationId);
+        return response;
       }
     } else if (role === 'technikus') {
       // Technikus: csak azokat a betegeket szerkesztheti, akikhez epitézist rendeltek
@@ -237,10 +318,19 @@ export async function PUT(
                           Array.isArray(oldPatient.kezelesi_terv_arcot_erinto) && 
                           oldPatient.kezelesi_terv_arcot_erinto.length > 0;
       if (!hasEpitesis) {
-        return NextResponse.json(
-          { error: 'Nincs jogosultsága ehhez a beteg szerkesztéséhez' },
+        const response = NextResponse.json(
+          {
+            error: {
+              name: 'ForbiddenError',
+              status: 403,
+              message: 'Nincs jogosultsága ehhez a beteg szerkesztéséhez',
+              correlationId,
+            },
+          },
           { status: 403 }
         );
+        response.headers.set('x-correlation-id', correlationId);
+        return response;
       }
     }
     
@@ -261,13 +351,21 @@ export async function PUT(
         
         if (existingPatient.rows.length > 0) {
           const existing = existingPatient.rows[0];
-          return NextResponse.json(
-            { 
-              error: 'Már létezik beteg ezzel a TAJ-számmal',
-              details: `A TAJ-szám (${validatedPatient.taj}) már használatban van. Beteg: ${existing.nev || 'Név nélküli'} (ID: ${existing.id})`
+          const response = NextResponse.json(
+            {
+              error: {
+                name: 'ConflictError',
+                status: 409,
+                code: 'DUPLICATE_TAJ',
+                message: 'Már létezik beteg ezzel a TAJ-számmal',
+                details: `A TAJ-szám (${validatedPatient.taj}) már használatban van. Beteg: ${existing.nev || 'Név nélküli'} (ID: ${existing.id})`,
+                correlationId,
+              },
             },
             { status: 409 }
           );
+          response.headers.set('x-correlation-id', correlationId);
+          return response;
         }
       }
     }
@@ -793,21 +891,12 @@ export async function PUT(
       console.error('Failed to log activity:', logError);
     }
 
-    return NextResponse.json({ patient: result.rows[0] }, { status: 200 });
+    const response = NextResponse.json({ patient: result.rows[0] }, { status: 200 });
+    response.headers.set('x-correlation-id', correlationId);
+    return response;
   } catch (error: any) {
     console.error('Hiba a beteg frissítésekor:', error);
-    
-    if (error.name === 'ZodError') {
-      return NextResponse.json(
-        { error: 'Érvénytelen adatok', details: error.errors },
-        { status: 400 }
-      );
-    }
-    
-    return NextResponse.json(
-      { error: 'Hiba történt a beteg frissítésekor' },
-      { status: 500 }
-    );
+    return handleApiError(error, 'Hiba történt a beteg frissítésekor', correlationId);
   }
 }
 
