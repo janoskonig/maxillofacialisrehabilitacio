@@ -1,3 +1,6 @@
+// Sentry integration (if enabled)
+const { withSentryConfig } = require('@sentry/nextjs');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Production optimalizációk
@@ -49,4 +52,21 @@ const nextConfig = {
   },
 }
 
-module.exports = nextConfig
+// Wrap with Sentry config only if enabled
+if (process.env.ENABLE_SENTRY === 'true') {
+  module.exports = withSentryConfig(
+    nextConfig,
+    {
+      // Sentry options
+      silent: true, // Suppress source map upload logs
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      // Disable source maps upload for now (can be enabled later)
+      widenClientFileUpload: true,
+      hideSourceMaps: true,
+      disableLogger: true,
+    }
+  );
+} else {
+  module.exports = nextConfig;
+}

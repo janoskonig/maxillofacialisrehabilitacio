@@ -13,6 +13,16 @@ import { getCurrentUser } from '@/lib/auth';
 import { DatePicker } from './DatePicker';
 import { savePatient, ApiError, TimeoutError } from '@/lib/storage';
 import { logEvent } from '@/lib/event-logger';
+
+// Sentry import (conditional, only if enabled)
+let Sentry: typeof import('@sentry/nextjs') | null = null;
+if (typeof window !== 'undefined' && process.env.ENABLE_SENTRY === 'true') {
+  try {
+    Sentry = require('@sentry/nextjs');
+  } catch {
+    // Sentry not available, ignore
+  }
+}
 import { BNOAutocomplete } from './BNOAutocomplete';
 import { PatientDocuments } from './PatientDocuments';
 import { useToast } from '@/contexts/ToastContext';
@@ -1841,6 +1851,17 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
       } else {
         errorMetadata.errorName = err?.name || 'UnknownError';
         logEvent(failEventType, errorMetadata);
+      }
+
+      // Sentry: Capture unexpected errors (not ApiError 4xx, those are filtered in beforeSend)
+      if (Sentry && !(err instanceof ApiError && err.status >= 400 && err.status < 500)) {
+        // Only capture 5xx errors, TimeoutError, or unexpected exceptions
+        if (err instanceof TimeoutError || err instanceof ApiError || !(err instanceof Error)) {
+          if (err instanceof ApiError && err.correlationId) {
+            Sentry.setTag('correlation_id', err.correlationId);
+          }
+          Sentry.captureException(err);
+        }
       }
 
       // Error handling

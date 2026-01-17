@@ -1,5 +1,15 @@
 import { Patient } from './types';
 
+// Sentry import (conditional, only if enabled)
+let Sentry: typeof import('@sentry/nextjs') | null = null;
+if (typeof window !== 'undefined' && process.env.ENABLE_SENTRY === 'true') {
+  try {
+    Sentry = require('@sentry/nextjs');
+  } catch {
+    // Sentry not available, ignore
+  }
+}
+
 // CSV fejléc mezők sorrendje (CSV export/import funkcióhoz)
 const CSV_HEADERS = [
   'id',
@@ -112,7 +122,7 @@ async function handleApiResponse<T>(response: Response): Promise<T> {
       const structuredError = errorData.error;
       // CorrelationId prioritás: header elsődleges, body fallback
       const finalCorrelationId = correlationId || structuredError.correlationId;
-      throw new ApiError({
+      const apiError = new ApiError({
         message: structuredError.message || errorMessage,
         status: structuredError.status || response.status,
         code: structuredError.code,
@@ -120,6 +130,19 @@ async function handleApiResponse<T>(response: Response): Promise<T> {
         correlationId: finalCorrelationId,
         name: structuredError.name || 'ApiError',
       });
+
+      // Sentry: Add correlationId tag (only for 5xx errors or unexpected errors)
+      if (Sentry && finalCorrelationId) {
+        const status = structuredError.status || response.status;
+        // Only capture 5xx errors or unexpected errors (not 4xx client errors)
+        if (status >= 500 || status < 400) {
+          Sentry.setTag('correlation_id', finalCorrelationId);
+          Sentry.setTag('error_code', structuredError.code || 'unknown');
+          Sentry.setTag('status', status.toString());
+        }
+      }
+
+      throw apiError;
     }
     
     // Fallback: régi formátum (backward compatibility)
@@ -127,11 +150,23 @@ async function handleApiResponse<T>(response: Response): Promise<T> {
       ? `${errorData.error || errorMessage}\n${errorData.details}`
       : errorData.error || errorMessage;
     
-    throw new ApiError({
+    const apiError = new ApiError({
       message: errorMessage,
       status: response.status,
       correlationId,
     });
+
+    // Sentry: Add correlationId tag (only for 5xx errors or unexpected errors)
+    if (Sentry && correlationId) {
+      const status = response.status;
+      // Only capture 5xx errors or unexpected errors (not 4xx client errors)
+      if (status >= 500 || status < 400) {
+        Sentry.setTag('correlation_id', correlationId);
+        Sentry.setTag('status', status.toString());
+      }
+    }
+
+    throw apiError;
   }
   
   try {
