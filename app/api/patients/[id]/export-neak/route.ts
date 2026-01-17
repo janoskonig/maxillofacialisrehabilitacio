@@ -378,6 +378,26 @@ export async function GET(
       zlib: { level: 9 }, // Maximum compression
     });
 
+    // Track archive state for proper error handling
+    let archiveError: Error | null = null as Error | null;
+    let archiveFinished = false;
+
+    // Handle archive errors (critical for proper cleanup)
+    archive.on('error', (err: unknown) => {
+      const error: Error = err instanceof Error ? err : new Error(String(err));
+      console.error('[NEAK Export] Archive error:', error);
+      archiveError = error;
+      archive.abort(); // Abort archive on error
+    });
+
+    // Track when archive is fully finalized
+    archive.on('end', () => {
+      archiveFinished = true;
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[NEAK Export] Archive finalized successfully');
+      }
+    });
+
     // Add PDF to ZIP
     archive.append(pdfBuffer, { name: 'patient_summary.pdf' });
 
@@ -441,6 +461,8 @@ export async function GET(
         }
       } catch (error) {
         console.error(`[NEAK Export] Error adding document ${doc.id} to archive:`, error);
+        // Abort archive on error
+        archive.abort();
         // Re-throw with context for proper error handling
         throw new Error(
           `Failed to add document ${doc.filename || doc.id} to export: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -448,7 +470,14 @@ export async function GET(
       }
     }
 
-    // Finalize archive
+    // Check if archive had errors during document addition
+    if (archiveError) {
+      // TypeScript narrowing: archiveError is Error here
+      const errorMsg = (archiveError as Error).message;
+      throw new Error(`Archive error during document processing: ${errorMsg}`);
+    }
+
+    // Finalize archive (this triggers the 'end' event when complete)
     archive.finalize();
 
     // Create response stream
@@ -458,6 +487,7 @@ export async function GET(
     const dateStr = new Date().toISOString().split('T')[0];
     const filename = `NEAK_${patientId}_${dateStr}.zip`;
 
+    // Create response with proper error handling
     const response = new NextResponse(stream as any, {
       status: 200,
       headers: {
@@ -466,6 +496,10 @@ export async function GET(
         'x-correlation-id': correlationId,
       },
     });
+
+    // Note: Archive 'end' event will fire when ZIP is fully written
+    // Frontend should wait for blob download to complete before logging success
+    // (This is handled in PatientDocuments.tsx - success log only after blob download)
 
     return response;
   } catch (error: any) {

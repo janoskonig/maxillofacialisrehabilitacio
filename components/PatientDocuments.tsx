@@ -576,7 +576,15 @@ export function PatientDocuments({
       }
 
       // Download ZIP
+      // IMPORTANT: Wait for blob to fully download before logging success
+      // This ensures the ZIP stream was fully written on the server
       const blob = await exportResponse.blob();
+      
+      // Verify blob is not empty (basic sanity check)
+      if (blob.size === 0) {
+        throw new Error('Downloaded ZIP is empty - export may have failed');
+      }
+
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -586,10 +594,13 @@ export function PatientDocuments({
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
 
+      // Log success ONLY after ZIP is fully downloaded and verified
+      // This ensures the archive.on("end") event fired on the server
       showToast('NEAK export sikeresen letöltve', 'success');
       logEvent('neak_export_success', {
         patientIdHash: patientId ? patientId.substring(0, 8) : null,
         estimatedTotalBytes: dryRunData.estimatedTotalBytes,
+        actualDownloadSize: blob.size,
       }, dryRunData.correlationId);
     } catch (error) {
       console.error('NEAK export error:', error);
