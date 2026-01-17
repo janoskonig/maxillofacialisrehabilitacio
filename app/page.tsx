@@ -140,10 +140,9 @@ export default function Home() {
     setRefreshKey(prev => prev + 1);
   };
 
-  const handleSavePatient = async (patientData: Patient) => {
+  const handleSavePatient = async (patientData: Patient, options?: { source?: 'auto' | 'manual' }) => {
     try {
-      // Check if this is a silent save (for document upload, etc.)
-      const isSilent = (handleSavePatient as any)._silent;
+      const source = options?.source || 'manual';
       
       // If patient already has an ID, it means it was already saved in PatientForm
       // Optimalizálás: ne kérdezzük le újra az adatbázisból, használjuk a kapott adatot
@@ -157,9 +156,14 @@ export default function Home() {
         setTimeout(() => {
           loadPatients();
         }, 0);
-        if (!isSilent) {
-          showToast('Betegadat sikeresen mentve', 'success');
+        
+        // Auto-save: silent update, no toast
+        if (source === 'auto') {
+          return;
         }
+        
+        // Manual save: show toast
+        showToast('Betegadat sikeresen mentve', 'success');
         return;
       }
       
@@ -173,7 +177,7 @@ export default function Home() {
       // setShowForm(false);
       // setEditingPatient(null);
       
-      if (!isSilent) {
+      if (source === 'manual') {
         showToast('Betegadat sikeresen mentve', 'success');
       }
     } catch (error: any) {
@@ -193,7 +197,11 @@ export default function Home() {
         errorMessage = 'A kérés túl hosszú ideig tartott. Lehet, hogy az adatok túl nagyok. Próbálja újra.';
       }
       
-      showToast(`Hiba a mentés során: ${errorMessage}`, 'error');
+      // Only show toast for manual saves
+      const source = options?.source || 'manual';
+      if (source === 'manual') {
+        showToast(`Hiba a mentés során: ${errorMessage}`, 'error');
+      }
     }
   };
 

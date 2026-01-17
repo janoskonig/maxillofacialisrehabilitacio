@@ -47,6 +47,14 @@ const CSV_HEADERS = [
 
 const API_BASE_URL = '/api/patients';
 
+// TimeoutError osztály - külön error típus timeout esetén
+export class TimeoutError extends Error {
+  constructor(message = "Request timed out") {
+    super(message);
+    this.name = "TimeoutError";
+  }
+}
+
 // API hívás hibakezelő
 async function handleApiResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
@@ -69,68 +77,113 @@ async function handleApiResponse<T>(response: Response): Promise<T> {
   }
 }
 
-// Fetch wrapper timeout-tal
-async function fetchWithTimeout(url: string, options: RequestInit, timeout: number = 30000): Promise<Response> {
+// Fetch wrapper timeout-tal - korrekt signal forwarding és timeout error jelölés
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeout: number = 30000,
+  externalSignal?: AbortSignal
+): Promise<Response> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
-  
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  let abortListener: (() => void) | null = null;
+  let didTimeout = false;
+
+  // Cleanup helper - egy helyen
+  const cleanup = () => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+    if (abortListener && externalSignal) {
+      externalSignal.removeEventListener("abort", abortListener);
+      abortListener = null;
+    }
+  };
+
+  // Timeout -> abort + didTimeout flag
+  timeoutId = setTimeout(() => {
+    didTimeout = true;
+    controller.abort();
+  }, timeout);
+
+  // External abort forwarding
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      cleanup();
+      const e = new Error("Aborted");
+      (e as any).name = "AbortError";
+      throw e;
+    }
+
+    abortListener = () => {
+      controller.abort();
+    };
+    externalSignal.addEventListener("abort", abortListener, { once: true });
+  }
+
   try {
-    const response = await fetch(url, {
-      ...options,
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
-    return response;
-  } catch (error: any) {
-    clearTimeout(timeoutId);
-    if (error.name === 'AbortError') {
-      throw new Error('A kérés túl hosszú ideig tartott. Kérjük, próbálja újra.');
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    cleanup();
+    return res;
+  } catch (err: any) {
+    cleanup();
+
+    // Abort can be timeout OR user abort
+    if (err?.name === "AbortError") {
+      if (didTimeout) {
+        throw new TimeoutError("A kérés időtúllépés miatt megszakadt.");
+      }
+      throw err; // user abort
     }
-    if (error.message && error.message.includes('Failed to fetch')) {
-      throw new Error('Nem sikerült csatlakozni a szerverhez. Ellenőrizze az internetkapcsolatot.');
+
+    // Network error normalization
+    if (err instanceof TypeError) {
+      throw new Error("Nem sikerült csatlakozni a szerverhez. Ellenőrizze az internetkapcsolatot.");
     }
-    throw error;
+
+    throw err;
   }
 }
 
-// Beteg mentése (új vagy frissítés)
-export async function savePatient(patient: Patient): Promise<Patient> {
+// Beteg mentése (új vagy frissítés) - támogatja a cancellation-t
+export async function savePatient(
+  patient: Patient,
+  options?: { signal?: AbortSignal }
+): Promise<Patient> {
+  const isUpdate = !!patient.id;
+  const url = isUpdate ? `${API_BASE_URL}/${patient.id}` : API_BASE_URL;
+  const method = isUpdate ? "PUT" : "POST";
+
   try {
-    const isUpdate = patient.id;
-    const url = isUpdate 
-      ? `${API_BASE_URL}/${patient.id}`
-      : API_BASE_URL;
-    
-    const method = isUpdate ? 'PUT' : 'POST';
-    
     const response = await fetchWithTimeout(
       url,
       {
         method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(patient),
       },
-      60000 // 60 másodperc timeout nagy adatokhoz
+      60000,
+      options?.signal
     );
 
     const data = await handleApiResponse<{ patient: Patient }>(response);
-    
-    // Validate response format
-    if (!data || !data.patient) {
-      throw new Error('Érvénytelen válasz a szervertől: hiányzó beteg adatok');
+
+    if (!data?.patient) {
+      throw new Error("Érvénytelen válasz a szervertől: hiányzó beteg adatok");
     }
-    
+
     return data.patient;
   } catch (error: any) {
-    console.error('Hiba a beteg mentésekor:', error);
-    // Jobb hibaüzenet a felhasználónak
-    if (error instanceof Error) {
+    // AbortError és TimeoutError: ne logoljunk, csak propagáljuk
+    if (error?.name === "AbortError" || error?.name === "TimeoutError") {
       throw error;
     }
-    throw new Error('Hiba történt a beteg mentésekor. Kérjük, próbálja újra.');
+    console.error("Hiba a beteg mentésekor:", error);
+    throw error instanceof Error
+      ? error
+      : new Error("Hiba történt a beteg mentésekor. Kérjük, próbálja újra.");
   }
 }
 

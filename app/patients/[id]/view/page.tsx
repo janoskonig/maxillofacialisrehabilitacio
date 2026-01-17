@@ -108,8 +108,9 @@ export default function PatientViewPage() {
     }
   };
 
-  const handleSavePatient = async (savedPatient: Patient) => {
+  const handleSavePatient = async (savedPatient: Patient, options?: { source?: 'auto' | 'manual' }) => {
     // Frissítjük a beteg adatokat a mentés után
+    // Auto-save és manual save esetén is frissítjük
     setPatient(savedPatient);
   };
 
