@@ -506,7 +506,7 @@ export async function PUT(
         primer_mutet_leirasa as "primerMutetLeirasa",
         mutet_ideje as "mutetIdeje", szovettani_diagnozis as "szovettaniDiagnozis",
         nyaki_blokkdisszekcio as "nyakiBlokkdisszekcio", alkoholfogyasztas,
-        dohanyzas_szam as "dohanyzasSzam", maxilladefektus_van as "maxilladefektusVan",
+        dohanyzas_szam as "dohanyzasSzam", kezelesre_erkezes_indoka as "kezelesreErkezesIndoka", maxilladefektus_van as "maxilladefektusVan",
         brown_fuggoleges_osztaly as "brownFuggolegesOsztaly",
         brown_vizszintes_komponens as "brownVizszintesKomponens",
         mandibuladefektus_van as "mandibuladefektusVan",
