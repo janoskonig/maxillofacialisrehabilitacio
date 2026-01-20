@@ -200,7 +200,7 @@ async function saveTokens(
   userId: string,
   accessToken: string,
   expiryDate: Date,
-  refreshToken?: string
+  refreshToken?: string | null
 ): Promise<void> {
   const pool = getDbPool();
   
@@ -281,7 +281,8 @@ async function performTokenRefresh(userId: string, refreshToken: string): Promis
   const expiryDateMs = expiryDate.getTime();
 
   // Token rotation: ha van új refresh token, azt is mentjük
-  const newRefreshToken = credentials.refresh_token;
+  // KRITIKUS: csak akkor frissítjük, ha új érkezik (ne nullázódjon!)
+  const newRefreshToken = credentials.refresh_token || undefined;
 
   // Tokenek mentése adatbázisba
   await saveTokens(userId, credentials.access_token, expiryDate, newRefreshToken);
