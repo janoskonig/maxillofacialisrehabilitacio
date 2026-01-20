@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth-server';
 import { SignJWT } from 'jose';
+import { getDbPool } from '@/lib/db';
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'change-this-to-a-random-secret-in-production'
@@ -51,6 +52,21 @@ export async function GET(request: NextRequest) {
       .setExpirationTime('10m') // 10 perc élettartam
       .sign(JWT_SECRET);
 
+    // Ellenőrizzük, hogy van-e már refresh token a DB-ben
+    const pool = getDbPool();
+    const userResult = await pool.query(
+      `SELECT google_calendar_refresh_token 
+       FROM users 
+       WHERE id = $1`,
+      [auth.userId]
+    );
+
+    const hasRefreshToken = userResult.rows.length > 0 && userResult.rows[0].google_calendar_refresh_token;
+
+    // Query paraméter ellenőrzése: explicit reconnect flow?
+    const searchParams = request.nextUrl.searchParams;
+    const isReconnect = searchParams.get('reconnect') === '1';
+
     // Google OAuth2 authorization URL
     const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
     authUrl.searchParams.set('client_id', GOOGLE_CLIENT_ID);
@@ -58,8 +74,13 @@ export async function GET(request: NextRequest) {
     authUrl.searchParams.set('response_type', 'code');
     // Szükséges scope-ok: események kezelése és naptárak listázása
     authUrl.searchParams.set('scope', 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly');
-    authUrl.searchParams.set('access_type', 'offline'); // Refresh token kérése
-    authUrl.searchParams.set('prompt', 'consent'); // Mindig kérjük a consent-et (refresh token miatt)
+    authUrl.searchParams.set('access_type', 'offline'); // Refresh token kérése (mindig)
+    
+    // Prompt csak akkor, ha nincs refresh token vagy explicit reconnect flow
+    if (!hasRefreshToken || isReconnect) {
+      authUrl.searchParams.set('prompt', 'consent'); // Consent kérése (refresh token miatt)
+    }
+    
     authUrl.searchParams.set('state', stateToken);
 
     return NextResponse.json({ authUrl: authUrl.toString() });

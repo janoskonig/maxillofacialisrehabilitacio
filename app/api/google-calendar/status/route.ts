@@ -19,7 +19,10 @@ export async function GET(request: NextRequest) {
     const result = await pool.query(
       `SELECT 
         google_calendar_enabled,
-        google_calendar_email
+        google_calendar_email,
+        google_calendar_status,
+        google_calendar_last_error_code,
+        google_calendar_last_error_at
       FROM users 
       WHERE id = $1`,
       [auth.userId]
@@ -36,6 +39,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       enabled: row.google_calendar_enabled || false,
       email: row.google_calendar_email || null,
+      status: row.google_calendar_status || 'active',
+      lastErrorCode: row.google_calendar_last_error_code || null,
+      lastErrorAt: row.google_calendar_last_error_at || null,
     });
   } catch (error) {
     console.error('Error fetching Google Calendar status:', error);
