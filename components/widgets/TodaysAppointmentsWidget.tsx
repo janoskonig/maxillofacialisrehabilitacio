@@ -58,6 +58,16 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
     }
   };
 
+  const handlePatientNameClick = (patientId: string | null | undefined, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (patientId) {
+      router.push(`/patients/${patientId}/view`);
+    } else {
+      console.warn('Patient ID is missing for appointment');
+    }
+  };
+
   const handleEditStatus = useCallback((appointment: Appointment) => {
     setEditingId(appointment.id);
     const validStatuses = ['cancelled_by_doctor', 'cancelled_by_patient', 'completed', 'no_show'] as const;
@@ -251,7 +261,9 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
                     )}
                   </div>
                   <div
-                    className="font-semibold text-base text-gray-900 truncate mb-1"
+                    onClick={(e) => handlePatientNameClick(appointment.patientId, e)}
+                    className="font-semibold text-base text-gray-900 truncate mb-1 cursor-pointer hover:text-medical-primary transition-colors"
+                    title="Beteg megtekintése"
                   >
                     {appointment.patientName || 'Névtelen beteg'}
                   </div>
