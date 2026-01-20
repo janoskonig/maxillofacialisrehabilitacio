@@ -281,7 +281,7 @@ async function performTokenRefresh(userId: string, refreshToken: string): Promis
   const expiryDateMs = expiryDate.getTime();
 
   // Token rotation: ha van új refresh token, azt is mentjük
-  const newRefreshToken = credentials.refresh_token;
+  const newRefreshToken = credentials.refresh_token || undefined;
 
   // Tokenek mentése adatbázisba
   await saveTokens(userId, credentials.access_token, expiryDate, newRefreshToken);
