@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     if (host && (host.includes('localhost') || host.includes('127.0.0.1'))) {
       protocol = 'http';
     }
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`;
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `${protocol}://${host}`;
     const redirectUri = GOOGLE_REDIRECT_URI || `${baseUrl}/api/google-calendar/callback`;
 
     // State paraméter generálása (CSRF védelem)

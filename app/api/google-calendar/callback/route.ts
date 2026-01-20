@@ -11,9 +11,45 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 
 /**
+ * Get base URL for redirects (production-proof, proxy-aware)
+ * Priority: 1) NEXT_PUBLIC_BASE_URL env var, 2) x-forwarded-host/proto, 3) host header, 4) request.url
+ */
+function getBaseUrl(request: NextRequest): string {
+  // 1) Prefer public canonical URL (recommended)
+  const envUrl = process.env.NEXT_PUBLIC_BASE_URL?.trim();
+  if (envUrl) {
+    // normalize: remove trailing slash
+    return envUrl.endsWith('/') ? envUrl.slice(0, -1) : envUrl;
+  }
+
+  // 2) Proxy-aware fallback
+  // Next/Edge: headers may include forwarded values
+  const xfProto = request.headers.get('x-forwarded-proto');
+  const xfHost = request.headers.get('x-forwarded-host');
+  if (xfHost) {
+    const proto = xfProto ?? 'https';
+    return `${proto}://${xfHost}`;
+  }
+
+  // 3) Direct host fallback
+  const host = request.headers.get('host');
+  if (host) {
+    const proto = xfProto ?? (host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : 'https');
+    return `${proto}://${host}`;
+  }
+
+  // 4) Last resort: derive from request.url (may be internal)
+  const u = new URL(request.url);
+  return `${u.protocol}//${u.host}`;
+}
+
+/**
  * OAuth2 callback feldolgozása
  */
 export async function GET(request: NextRequest) {
+  // Base URL meghatározása a handler elején (minden redirect előtt)
+  const baseUrl = getBaseUrl(request);
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const code = searchParams.get('code');
@@ -23,19 +59,19 @@ export async function GET(request: NextRequest) {
     // Ha hiba van, redirect a settings oldalra
     if (error) {
       return NextResponse.redirect(
-        new URL('/settings?google_calendar_error=' + encodeURIComponent(error), request.url)
+        new URL('/settings?google_calendar_error=' + encodeURIComponent(error), baseUrl)
       );
     }
 
     if (!code || !state) {
       return NextResponse.redirect(
-        new URL('/settings?google_calendar_error=missing_params', request.url)
+        new URL('/settings?google_calendar_error=missing_params', baseUrl)
       );
     }
 
     if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
       return NextResponse.redirect(
-        new URL('/settings?google_calendar_error=not_configured', request.url)
+        new URL('/settings?google_calendar_error=not_configured', baseUrl)
       );
     }
 
@@ -47,18 +83,11 @@ export async function GET(request: NextRequest) {
     } catch (error) {
       console.error('Invalid state token:', error);
       return NextResponse.redirect(
-        new URL('/settings?google_calendar_error=invalid_state', request.url)
+        new URL('/settings?google_calendar_error=invalid_state', baseUrl)
       );
     }
 
-    // Dinamikus redirect URI generálás
-    const host = request.headers.get('host');
-    // Protocol detection: localhost esetén http, egyébként https (vagy x-forwarded-proto)
-    let protocol = request.headers.get('x-forwarded-proto') || 'https';
-    if (host && (host.includes('localhost') || host.includes('127.0.0.1'))) {
-      protocol = 'http';
-    }
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`;
+    // Dinamikus redirect URI generálás (Google OAuth callback URL-hez)
     const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${baseUrl}/api/google-calendar/callback`;
 
     // Authorization code exchange access token-re
@@ -80,7 +109,7 @@ export async function GET(request: NextRequest) {
       const errorData = await tokenResponse.json().catch(() => ({}));
       console.error('Token exchange error:', errorData);
       return NextResponse.redirect(
-        new URL('/settings?google_calendar_error=token_exchange_failed', request.url)
+        new URL('/settings?google_calendar_error=token_exchange_failed', baseUrl)
       );
     }
 
@@ -88,7 +117,7 @@ export async function GET(request: NextRequest) {
 
     if (!tokenData.access_token || !tokenData.refresh_token) {
       return NextResponse.redirect(
-        new URL('/settings?google_calendar_error=missing_tokens', request.url)
+        new URL('/settings?google_calendar_error=missing_tokens', baseUrl)
       );
     }
 
@@ -135,12 +164,12 @@ export async function GET(request: NextRequest) {
 
     // Sikeres redirect a settings oldalra
     return NextResponse.redirect(
-      new URL('/settings?google_calendar_success=true', request.url)
+      new URL('/settings?google_calendar_success=true', baseUrl)
     );
   } catch (error) {
     console.error('Error processing OAuth2 callback:', error);
     return NextResponse.redirect(
-      new URL('/settings?google_calendar_error=internal_error', request.url)
+      new URL('/settings?google_calendar_error=internal_error', baseUrl)
     );
   }
 }
