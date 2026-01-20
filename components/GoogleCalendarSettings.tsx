@@ -1,11 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Calendar, Link2, Unlink, CheckCircle2, XCircle, Loader2, RefreshCw } from 'lucide-react';
+import { Calendar, Link2, Unlink, CheckCircle2, XCircle, Loader2, RefreshCw, AlertTriangle } from 'lucide-react';
 
 interface GoogleCalendarStatus {
   enabled: boolean;
   email: string | null;
+  status?: string | null;
+  lastErrorCode?: string | null;
+  lastErrorAt?: string | null;
 }
 
 interface GoogleCalendar {
@@ -116,7 +119,13 @@ export function GoogleCalendarSettings() {
       setConnecting(true);
       setError(null);
       
-      const response = await fetch('/api/google-calendar/auth', {
+      // Ha reconnect_required állapotban van, explicit reconnect paraméterrel hívjuk
+      const isReconnect = status?.status === 'reconnect_required';
+      const url = isReconnect 
+        ? '/api/google-calendar/auth?reconnect=1'
+        : '/api/google-calendar/auth';
+      
+      const response = await fetch(url, {
         credentials: 'include',
       });
       
@@ -268,17 +277,82 @@ export function GoogleCalendarSettings() {
 
       {status?.enabled ? (
         <div className="space-y-4">
-          <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-md">
-            <CheckCircle2 className="w-5 h-5 text-green-600" />
-            <div className="flex-1">
-              <div className="font-medium text-gray-900">Google Calendar összekötve</div>
-              {status.email && (
+          {/* Státusz megjelenítése */}
+          {status.status === 'reconnect_required' ? (
+            <div className="flex items-start gap-3 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+              <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5" />
+              <div className="flex-1">
+                <div className="font-medium text-gray-900">Újracsatlakoztatás szükséges</div>
                 <div className="text-sm text-gray-600 mt-1">
-                  Email: {status.email}
+                  {status.email && `Email: ${status.email}`}
+                  {status.lastErrorCode && (
+                    <div className="mt-1">
+                      <span className="font-medium">Hiba kód:</span> {status.lastErrorCode}
+                    </div>
+                  )}
+                  {status.lastErrorAt && (
+                    <div className="mt-1 text-xs text-gray-500">
+                      Utolsó hiba: {new Date(status.lastErrorAt).toLocaleString('hu-HU')}
+                    </div>
+                  )}
                 </div>
-              )}
+                <div className="mt-3">
+                  <button
+                    onClick={handleConnect}
+                    disabled={connecting}
+                    className="btn-primary flex items-center justify-center gap-2"
+                  >
+                    {connecting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Újracsatlakoztatás...
+                      </>
+                    ) : (
+                      <>
+                        <Link2 className="w-4 h-4" />
+                        Újracsatlakoztatás
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
+          ) : status.status === 'broken_config' ? (
+            <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-md">
+              <XCircle className="w-5 h-5 text-red-600 mt-0.5" />
+              <div className="flex-1">
+                <div className="font-medium text-gray-900">Konfigurációs hiba</div>
+                <div className="text-sm text-gray-600 mt-1">
+                  {status.email && `Email: ${status.email}`}
+                  {status.lastErrorCode && (
+                    <div className="mt-1">
+                      <span className="font-medium">Hiba kód:</span> {status.lastErrorCode}
+                    </div>
+                  )}
+                  {status.lastErrorAt && (
+                    <div className="mt-1 text-xs text-gray-500">
+                      Utolsó hiba: {new Date(status.lastErrorAt).toLocaleString('hu-HU')}
+                    </div>
+                  )}
+                </div>
+                <div className="mt-3 text-sm text-gray-600">
+                  Kérjük, lépjen kapcsolatba a rendszergazdával.
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-md">
+              <CheckCircle2 className="w-5 h-5 text-green-600" />
+              <div className="flex-1">
+                <div className="font-medium text-gray-900">Google Calendar összekötve</div>
+                {status.email && (
+                  <div className="text-sm text-gray-600 mt-1">
+                    Email: {status.email}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Naptár beállítások */}
           <div className="p-4 bg-gray-50 border border-gray-200 rounded-md space-y-4">
@@ -363,42 +437,45 @@ export function GoogleCalendarSettings() {
             )}
           </div>
 
-          <div className="flex gap-2">
-            <button
-              onClick={handleSync}
-              disabled={syncing}
-              className="btn-primary flex items-center justify-center gap-2 flex-1"
-            >
-              {syncing ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Szinkronizálás...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="w-4 h-4" />
-                  Szinkronizálás most
-                </>
-              )}
-            </button>
-            <button
-              onClick={handleDisconnect}
-              disabled={disconnecting}
-              className="btn-secondary flex items-center justify-center gap-2"
-            >
-              {disconnecting ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Kapcsolat megszüntetése...
-                </>
-              ) : (
-                <>
-                  <Unlink className="w-4 h-4" />
-                  Kapcsolat megszüntetése
-                </>
-              )}
-            </button>
-          </div>
+          {/* Csak akkor jelenítjük meg a szinkronizálás és kapcsolat megszüntetése gombokat, ha aktív állapotban van */}
+          {status.status === 'active' && (
+            <div className="flex gap-2">
+              <button
+                onClick={handleSync}
+                disabled={syncing}
+                className="btn-primary flex items-center justify-center gap-2 flex-1"
+              >
+                {syncing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Szinkronizálás...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-4 h-4" />
+                    Szinkronizálás most
+                  </>
+                )}
+              </button>
+              <button
+                onClick={handleDisconnect}
+                disabled={disconnecting}
+                className="btn-secondary flex items-center justify-center gap-2"
+              >
+                {disconnecting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Kapcsolat megszüntetése...
+                  </>
+                ) : (
+                  <>
+                    <Unlink className="w-4 h-4" />
+                    Kapcsolat megszüntetése
+                  </>
+                )}
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-4">

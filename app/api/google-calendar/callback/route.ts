@@ -111,13 +111,18 @@ export async function GET(request: NextRequest) {
       ? new Date(Date.now() + tokenData.expires_in * 1000)
       : new Date(Date.now() + 3600 * 1000); // Default 1 óra
 
+    // KRITIKUS: Refresh token mindig mentése, de csak akkor frissítjük, ha új érkezik
+    // (Token rotation esetén az új refresh token felülírja a régit)
     await pool.query(
       `UPDATE users 
        SET google_calendar_refresh_token = $1,
            google_calendar_access_token = $2,
            google_calendar_token_expires_at = $3,
            google_calendar_enabled = true,
-           google_calendar_email = $4
+           google_calendar_email = $4,
+           google_calendar_status = 'active',
+           google_calendar_last_error_code = NULL,
+           google_calendar_last_error_at = NULL
        WHERE id = $5`,
       [
         encryptToken(tokenData.refresh_token),
