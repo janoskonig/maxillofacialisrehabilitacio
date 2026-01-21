@@ -2341,7 +2341,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
         )}
 
         {/* KEZELŐORVOS */}
-        {shouldShowSection('kezeloorvos') && userRole !== 'sebészorvos' && (
+        {shouldShowSection('kezeloorvos') && (
         <div className="card">
           <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <User className="w-5 h-5 mr-2 text-medical-primary" />
@@ -2375,7 +2375,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
         )}
 
         {/* ANAMNÉZIS */}
-        {shouldShowSection('anamnezis') && userRole !== 'sebészorvos' && (
+        {shouldShowSection('anamnezis') && (
         <div className="card">
           <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <Calendar className="w-5 h-5 mr-2 text-medical-primary" />
@@ -2634,7 +2634,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
         )}
 
         {/* BETEGVIZSGÁLAT */}
-        {shouldShowSection('betegvizsgalat') && userRole !== 'sebészorvos' && (
+        {shouldShowSection('betegvizsgalat') && (
         <div className="card">
           <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <Calendar className="w-5 h-5 mr-2 text-medical-primary" />
@@ -3330,7 +3330,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
         )}
 
         {/* KEZELÉSI TERV */}
-        {shouldShowSection('betegvizsgalat') && userRole !== 'sebészorvos' && (
+        {shouldShowSection('betegvizsgalat') && (
         <div className="card">
           <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <FileText className="w-5 h-5 mr-2 text-medical-primary" />
