@@ -134,48 +134,6 @@ export async function GET(
         response.headers.set('x-correlation-id', correlationId);
         return response;
       }
-    } else if (role === 'sebészorvos' && userEmail) {
-      // Sebészorvos: csak azokat a betegeket látja, akik az ő intézményéből származnak
-      // Lekérdezzük a felhasználó intézményét
-      const userResult = await pool.query(
-        `SELECT intezmeny FROM users WHERE email = $1`,
-        [userEmail]
-      );
-      
-      if (userResult.rows.length > 0 && userResult.rows[0].intezmeny) {
-        const userInstitution = userResult.rows[0].intezmeny;
-        // Ellenőrizzük, hogy a beteg beutalo_intezmeny mezője egyezik-e a felhasználó intézményével
-        if (patient.beutaloIntezmeny !== userInstitution) {
-          const response = NextResponse.json(
-            {
-              error: {
-                name: 'ForbiddenError',
-                status: 403,
-                message: 'Nincs jogosultsága ehhez a beteghez',
-                correlationId,
-              },
-            },
-            { status: 403 }
-          );
-          response.headers.set('x-correlation-id', correlationId);
-          return response;
-        }
-      } else {
-        // Ha nincs intézmény beállítva, ne lássa a beteget
-        const response = NextResponse.json(
-          {
-            error: {
-              name: 'ForbiddenError',
-              status: 403,
-              message: 'Nincs jogosultsága ehhez a beteghez',
-              correlationId,
-            },
-          },
-          { status: 403 }
-        );
-        response.headers.set('x-correlation-id', correlationId);
-        return response;
-      }
     }
     // fogpótlástanász, admin, editor, viewer: mindent látnak (nincs szűrés)
 
@@ -326,23 +284,23 @@ export async function PUT(
     
     // Szerepkör alapú jogosultság ellenőrzés szerkesztéshez
     if (role === 'sebészorvos' && userEmail) {
-      // Sebészorvos: csak azokat a betegeket szerkesztheti, akik az ő intézményéből származnak
-      // Lekérdezzük a felhasználó intézményét
+      // Sebészorvos: csak azokat a betegeket szerkesztheti, akiket ő utalt be
+      // Lekérdezzük a felhasználó doktor_neve mezőjét
       const userResult = await pool.query(
-        `SELECT intezmeny FROM users WHERE email = $1`,
+        `SELECT doktor_neve FROM users WHERE email = $1`,
         [userEmail]
       );
       
-      if (userResult.rows.length > 0 && userResult.rows[0].intezmeny) {
-        const userInstitution = userResult.rows[0].intezmeny;
-        // Ellenőrizzük, hogy a beteg beutalo_intezmeny mezője egyezik-e a felhasználó intézményével
-        if (oldPatient.beutalo_intezmeny !== userInstitution) {
+      if (userResult.rows.length > 0 && userResult.rows[0].doktor_neve) {
+        const doktorNeve = userResult.rows[0].doktor_neve;
+        // Ellenőrizzük, hogy a beteg beutalo_orvos mezője egyezik-e a felhasználó doktor_neve mezőjével
+        if (oldPatient.beutalo_orvos !== doktorNeve) {
           const response = NextResponse.json(
             {
               error: {
                 name: 'ForbiddenError',
                 status: 403,
-                message: 'Nincs jogosultsága ehhez a beteg szerkesztéséhez. Csak az adott intézményből származó betegeket szerkesztheti.',
+                message: 'Nincs jogosultsága ehhez a beteg szerkesztéséhez. Csak a saját beutalt betegeit szerkesztheti.',
                 correlationId,
               },
             },
@@ -352,13 +310,13 @@ export async function PUT(
           return response;
         }
       } else {
-        // Ha nincs intézmény beállítva, ne szerkeszthesse a beteget
+        // Ha nincs doktor_neve beállítva, ne szerkeszthesse a beteget
         const response = NextResponse.json(
           {
             error: {
               name: 'ForbiddenError',
               status: 403,
-              message: 'Nincs jogosultsága ehhez a beteg szerkesztéséhez',
+              message: 'Nincs jogosultsága ehhez a beteg szerkesztéséhez. Nincs beállítva doktor_neve.',
               correlationId,
             },
           },
