@@ -155,9 +155,10 @@ export function usePushNotificationManager() {
       if (!subscription) {
         // Új subscription létrehozása
         try {
+          const applicationServerKey = urlBase64ToUint8Array(publicKey);
           subscription = await registration.pushManager.subscribe({
             userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(publicKey),
+            applicationServerKey: applicationServerKey.buffer as ArrayBuffer,
           });
         } catch (subscribeError: any) {
           console.error("Error creating push subscription:", subscribeError);
