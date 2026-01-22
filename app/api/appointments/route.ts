@@ -5,6 +5,9 @@ import { sendAppointmentBookingNotification, sendAppointmentBookingNotificationT
 import { generateIcsFile } from '@/lib/calendar';
 import { createGoogleCalendarEvent, deleteGoogleCalendarEvent } from '@/lib/google-calendar';
 import { handleApiError } from '@/lib/api-error-handler';
+import { sendPushNotification } from '@/lib/push-notifications';
+import { format } from 'date-fns';
+import { hu } from 'date-fns/locale';
 
 // Get all appointments
 export async function GET(request: NextRequest) {
@@ -277,6 +280,9 @@ export async function POST(request: NextRequest) {
       const updatedStartTime = new Date(updatedTimeSlot.start_time);
       const endTime = new Date(updatedStartTime);
       endTime.setMinutes(endTime.getMinutes() + 30); // 30 minutes duration
+      
+      // Format date for notifications
+      const formattedDate = format(updatedStartTime, "yyyy. MM. dd. HH:mm", { locale: hu });
 
       // Optimalizálás: admin email-eket és dentist full name-t egyszer lekérdezzük
       // ICS fájlt is egyszer generáljuk és újrahasznosítjuk
@@ -410,6 +416,26 @@ export async function POST(request: NextRequest) {
         // Don't fail the request if email fails
       }
 
+      // Send push notification to dentist
+      try {
+        if (timeSlot.dentist_user_id) {
+          await sendPushNotification(timeSlot.dentist_user_id, {
+            title: "Új időpont foglalás",
+            body: `${patient.nev || 'Név nélküli beteg'} - ${formattedDate}`,
+            icon: "/icon-192x192.png",
+            tag: `appointment-${appointment.id}`,
+            data: {
+              url: `/calendar`,
+              type: "appointment",
+              id: appointment.id,
+            },
+          });
+        }
+      } catch (pushError) {
+        console.error('Failed to send push notification to dentist:', pushError);
+        // Don't fail the request if push fails
+      }
+
       // Send email notification to patient if email is available
       if (patient.email && patient.email.trim() !== '') {
         try {
@@ -435,6 +461,33 @@ export async function POST(request: NextRequest) {
         }
       } else {
         console.log('[Appointment Booking] Patient has no email address, skipping email notification');
+      }
+
+      // Send push notification to patient (if patient portal user exists)
+      try {
+        // Check if patient has a portal account (users table with patient_id)
+        const patientUserResult = await pool.query(
+          'SELECT id FROM users WHERE email = $1 AND active = true',
+          [patient.email]
+        );
+        
+        if (patientUserResult.rows.length > 0 && patient.email) {
+          const patientUserId = patientUserResult.rows[0].id;
+          await sendPushNotification(patientUserId, {
+            title: "Időpont foglalva",
+            body: `Időpont: ${formattedDate}`,
+            icon: "/icon-192x192.png",
+            tag: `appointment-${appointment.id}`,
+            data: {
+              url: `/patient-portal/appointments`,
+              type: "appointment",
+              id: appointment.id,
+            },
+          });
+        }
+      } catch (pushError) {
+        console.error('Failed to send push notification to patient:', pushError);
+        // Don't fail the request if push fails
       }
 
       // Send email notification to all admins

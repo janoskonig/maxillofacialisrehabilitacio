@@ -1239,3 +1239,67 @@ export async function sendDoctorMessageNotification(
     html,
   });
 }
+
+/**
+ * Send appointment reminder email to patient (24 hours before)
+ */
+export async function sendAppointmentReminderEmail(
+  patientEmail: string,
+  patientName: string | null,
+  patientNem: string | null,
+  appointmentTime: Date,
+  dentistName: string,
+  cim?: string | null,
+  teremszam?: string | null
+): Promise<void> {
+  const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
+  const displayCim = cim || DEFAULT_CIM;
+  const formattedDate = formatDateForEmail(appointmentTime);
+  
+  // Üdvözlés: Tisztelt Vezetknév Keresztnév Úr/Hölgy
+  let greeting = 'Tisztelt';
+  if (patientName) {
+    const nameParts = patientName.trim().split(/\s+/);
+    if (nameParts.length >= 2) {
+      const vezeteknev = nameParts[0];
+      const keresztnev = nameParts.slice(1).join(' ');
+      const title = patientNem === 'no' ? 'Hölgy' : patientNem === 'ferfi' ? 'Úr' : '';
+      greeting = `Tisztelt ${vezeteknev} ${keresztnev} ${title}`.trim();
+    } else {
+      greeting = `Tisztelt ${patientName}`;
+    }
+  } else {
+    greeting = 'Tisztelt Beteg';
+  }
+  
+  // Cím formátum
+  let formattedAddress = displayCim.replace(/,/g, '');
+  if (teremszam) {
+    formattedAddress = `${formattedAddress.replace(/\.$/, '')}. ${teremszam}. terem`;
+  } else {
+    formattedAddress = formattedAddress.replace(/\.$/, '');
+  }
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #2563eb;">Időpont emlékeztető</h2>
+      <p>${greeting}!</p>
+      <p>Emlékeztetjük, hogy <strong>holnap</strong> van időpontja:</p>
+      <ul>
+        <li><strong>Időpont:</strong> ${formattedDate}</li>
+        <li><strong>Cím:</strong> ${formattedAddress}</li>
+        <li><strong>Fogpótlástanász:</strong> ${dentistName}</li>
+      </ul>
+      <p style="margin-top: 20px; color: #374151;">
+        Kérjük, hogy időben érkezzen az időpontra. Ha bármilyen kérdése van vagy módosítani szeretné az időpontot, kérjük, lépjen kapcsolatba velünk.
+      </p>
+      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: patientEmail,
+    subject: 'Időpont emlékeztető - Maxillofaciális Rehabilitáció',
+    html,
+  });
+}

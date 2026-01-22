@@ -11,7 +11,8 @@
     "start": "NODE_ENV=production tsx server.ts",
     "lint": "next lint",
     "convert-logo": "node scripts/convert-logo.js",
-    "pwa:icons": "node scripts/generate-pwa-icons.mjs"
+    "pwa:icons": "node scripts/generate-pwa-icons.mjs",
+    "vapid:generate": "node scripts/generate-vapid-keys.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.3.2",
@@ -50,6 +51,7 @@
     "socket.io-client": "^4.7.2",
     "tailwindcss": "^3.3.0",
     "typescript": "^5",
+    "web-push": "^3.6.7",
     "xlsx": "^0.18.5",
     "zod": "^3.22.4"
   },

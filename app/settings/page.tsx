@@ -3,10 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser, type AuthUser } from '@/lib/auth';
-import { Lock, Eye, EyeOff, User, ArrowLeft } from 'lucide-react';
+import { Lock, Eye, EyeOff, User, ArrowLeft, Bell, BellOff } from 'lucide-react';
 import Link from 'next/link';
 import { Logo } from '@/components/Logo';
 import { GoogleCalendarSettings } from '@/components/GoogleCalendarSettings';
+import { usePushNotificationManager } from '@/components/PushNotificationManager';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -21,6 +22,9 @@ export default function SettingsPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  
+  const pushManager = usePushNotificationManager();
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -252,6 +256,141 @@ export default function SettingsPage() {
 
         <div className="mt-8">
           <GoogleCalendarSettings />
+        </div>
+
+        <div className="mt-8 card">
+          <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
+            <Bell className="w-5 h-5" />
+            Push értesítések
+          </h2>
+
+          {!pushManager.isSupported ? (
+            <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-md text-sm">
+              A böngésző nem támogatja a push értesítéseket.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-700">
+                    Push értesítések állapota
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {pushManager.permission === 'granted'
+                      ? pushManager.isSubscribed
+                        ? 'Engedélyezve és aktív'
+                        : 'Engedélyezve, de nincs aktív feliratkozás'
+                      : pushManager.permission === 'denied'
+                      ? 'Letiltva a böngészőben'
+                      : 'Nincs engedélyezve'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {pushManager.isSubscribed ? (
+                    <Bell className="w-5 h-5 text-green-600" />
+                  ) : (
+                    <BellOff className="w-5 h-5 text-gray-400" />
+                  )}
+                </div>
+              </div>
+
+              {pushManager.permission === 'denied' && (
+                <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-md text-sm">
+                  Az értesítések le vannak tiltva. Kérjük, engedélyezze a böngésző beállításaiban.
+                </div>
+              )}
+
+              {pushManager.publicKeyError && (
+                <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-md text-sm">
+                  {pushManager.publicKeyError}
+                </div>
+              )}
+
+              {!pushManager.publicKey && !pushManager.publicKeyError && (
+                <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-md text-sm">
+                  VAPID kulcs betöltése...
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                {!pushManager.isSubscribed ? (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setPushLoading(true);
+                      try {
+                        const success = await pushManager.subscribe();
+                        if (success) {
+                          // Kicsit várunk, hogy a state frissüljön
+                          setTimeout(() => {
+                            setPushLoading(false);
+                          }, 500);
+                        } else {
+                          setPushLoading(false);
+                        }
+                      } catch (error) {
+                        console.error('Error subscribing to push:', error);
+                        setPushLoading(false);
+                      }
+                    }}
+                    disabled={pushLoading || pushManager.permission === 'denied' || !pushManager.isSupported || !pushManager.publicKey || !!pushManager.publicKeyError}
+                    className="btn-primary flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {pushLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Feliratkozás...
+                      </>
+                    ) : (
+                      <>
+                        <Bell className="w-4 h-4 mr-2" />
+                        Push értesítések engedélyezése
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setPushLoading(true);
+                      try {
+                        const success = await pushManager.unsubscribe();
+                        if (success) {
+                          // Kicsit várunk, hogy a state frissüljön
+                          setTimeout(() => {
+                            setPushLoading(false);
+                          }, 500);
+                        } else {
+                          setPushLoading(false);
+                        }
+                      } catch (error) {
+                        console.error('Error unsubscribing from push:', error);
+                        setPushLoading(false);
+                      }
+                    }}
+                    disabled={pushLoading}
+                    className="btn-secondary flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {pushLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-2"></div>
+                        Leiratkozás...
+                      </>
+                    ) : (
+                      <>
+                        <BellOff className="w-4 h-4 mr-2" />
+                        Push értesítések letiltása
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+
+              <p className="text-xs text-gray-500">
+                Push értesítéseket kaphat időpont foglalásokról, üzenetekről és emlékeztetőkről.
+              </p>
+            </div>
+          )}
         </div>
       </main>
     </div>
