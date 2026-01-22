@@ -28,6 +28,30 @@ const nextConfig = {
   // Production build optimalizációk
   productionBrowserSourceMaps: false,
   
+  // PWA cache control headers
+  async headers() {
+    return [
+      {
+        source: "/sw.js",
+        headers: [
+          { 
+            key: "Cache-Control", 
+            value: "no-store, no-cache, must-revalidate, proxy-revalidate" 
+          }
+        ]
+      },
+      {
+        source: "/manifest.json",
+        headers: [
+          { 
+            key: "Cache-Control", 
+            value: "no-cache" 
+          }
+        ]
+      }
+    ];
+  },
+  
   // Webpack konfiguráció console.log eltávolításához production-ben
   webpack: (config, { dev, isServer }) => {
     if (!dev && !isServer) {

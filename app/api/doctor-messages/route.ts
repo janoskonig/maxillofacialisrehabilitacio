@@ -5,6 +5,7 @@ import { sendDoctorMessageNotification } from '@/lib/email';
 import { getDoctorForNotification } from '@/lib/doctor-communication';
 import { logActivityWithAuth } from '@/lib/activity';
 import { getDbPool } from '@/lib/db';
+import { sendPushNotification } from '@/lib/push-notifications';
 
 /**
  * POST /api/doctor-messages - Új üzenet küldése orvosnak vagy csoportos beszélgetésbe
@@ -97,6 +98,23 @@ export async function POST(request: NextRequest) {
                 message.trim(),
                 baseUrl
               );
+              
+              // Push notification to participant
+              try {
+                await sendPushNotification(participant.userId, {
+                  title: "Új üzenet (csoport)",
+                  body: `${senderName || auth.email}: ${subject || message.trim().substring(0, 50)}${message.trim().length > 50 ? '...' : ''}`,
+                  icon: "/icon-192x192.png",
+                  tag: `doctor-message-group-${groupId}-${newMessage.id}`,
+                  data: {
+                    url: `/messages?groupId=${groupId}`,
+                    type: "message",
+                    id: newMessage.id,
+                  },
+                });
+              } catch (pushError) {
+                console.error(`Failed to send push notification to participant ${participant.userId}:`, pushError);
+              }
             } catch (emailError) {
               console.error(`Hiba az email értesítés küldésekor ${participant.userEmail}-nak:`, emailError);
             }
@@ -188,6 +206,23 @@ export async function POST(request: NextRequest) {
         message.trim(),
         baseUrl
       );
+      
+      // Push notification to recipient
+      try {
+        await sendPushNotification(recipientId, {
+          title: "Új üzenet",
+          body: `${senderName || auth.email}: ${subject || message.trim().substring(0, 50)}${message.trim().length > 50 ? '...' : ''}`,
+          icon: "/icon-192x192.png",
+          tag: `doctor-message-${newMessage.id}`,
+          data: {
+            url: `/messages?recipientId=${recipientId}`,
+            type: "message",
+            id: newMessage.id,
+          },
+        });
+      } catch (pushError) {
+        console.error('Failed to send push notification to recipient:', pushError);
+      }
     } catch (emailError) {
       console.error('Hiba az email értesítés küldésekor:', emailError);
       // Ne akadályozza meg az üzenet küldését, ha az email nem sikerül

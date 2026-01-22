@@ -8,6 +8,7 @@ import { logActivityWithAuth, logActivity } from '@/lib/activity';
 import { getDbPool } from '@/lib/db';
 import { emitNewMessage } from '@/lib/socket-server';
 import { validateUUID, validateMessageText, validateSubject, validateLimit, validateOffset } from '@/lib/validation';
+import { sendPushNotification } from '@/lib/push-notifications';
 
 /**
  * POST /api/messages - Új üzenet küldése
@@ -236,6 +237,32 @@ export async function POST(request: NextRequest) {
             finalMessage,
             baseUrl
           );
+          
+          // Push notification to patient
+          try {
+            const pool = getDbPool();
+            const patientUserResult = await pool.query(
+              'SELECT id FROM users WHERE email = $1 AND active = true',
+              [patient.email]
+            );
+            
+            if (patientUserResult.rows.length > 0) {
+              const patientUserId = patientUserResult.rows[0].id;
+              await sendPushNotification(patientUserId, {
+                title: "Új üzenet",
+                body: `${senderName || 'Orvos'}: ${finalSubject || finalMessage.substring(0, 50)}${finalMessage.length > 50 ? '...' : ''}`,
+                icon: "/icon-192x192.png",
+                tag: `message-${newMessage.id}`,
+                data: {
+                  url: `/patient-portal/messages`,
+                  type: "message",
+                  id: newMessage.id,
+                },
+              });
+            }
+          } catch (pushError) {
+            console.error('Failed to send push notification to patient:', pushError);
+          }
         }
       } else {
         // Beteg küldött → orvos kap értesítést
@@ -273,6 +300,25 @@ export async function POST(request: NextRequest) {
             baseUrl
           );
           console.log(`[Messages] Email értesítés sikeresen elküldve orvosnak: ${doctor.email}`);
+          
+          // Push notification to doctor
+          try {
+            if (recipientDoctorIdFinal) {
+              await sendPushNotification(recipientDoctorIdFinal, {
+                title: "Új üzenet",
+                body: `${patient?.nev || senderName || 'Beteg'}: ${finalSubject || finalMessage.substring(0, 50)}${finalMessage.length > 50 ? '...' : ''}`,
+                icon: "/icon-192x192.png",
+                tag: `message-${newMessage.id}`,
+                data: {
+                  url: `/messages?patientId=${finalPatientId}`,
+                  type: "message",
+                  id: newMessage.id,
+                },
+              });
+            }
+          } catch (pushError) {
+            console.error('Failed to send push notification to doctor:', pushError);
+          }
         } else {
           // Ha nincs kezelőorvos, adminoknak küldünk értesítést
           const adminResult = await pool.query(

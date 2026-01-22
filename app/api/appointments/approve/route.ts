@@ -4,6 +4,9 @@ import { sendAppointmentBookingNotification, sendAppointmentBookingNotificationT
 import { generateIcsFile } from '@/lib/calendar';
 import { createGoogleCalendarEvent } from '@/lib/google-calendar';
 import { handleApiError } from '@/lib/api-error-handler';
+import { sendPushNotification } from '@/lib/push-notifications';
+import { format } from 'date-fns';
+import { hu } from 'date-fns/locale';
 
 /**
  * Approve a pending appointment (via email link)
@@ -215,6 +218,34 @@ export async function GET(request: NextRequest) {
             appointmentTeremszam,
             adminEmail
           );
+        }
+
+        // Push notification to patient
+        try {
+          if (appointment.patient_email) {
+            const patientUserResult = await pool.query(
+              'SELECT id FROM users WHERE email = $1 AND active = true',
+              [appointment.patient_email]
+            );
+            
+            if (patientUserResult.rows.length > 0) {
+              const patientUserId = patientUserResult.rows[0].id;
+              const formattedDate = format(updatedStartTime, "yyyy. MM. dd. HH:mm", { locale: hu });
+              await sendPushNotification(patientUserId, {
+                title: "Időpont elfogadva",
+                body: `Időpont: ${formattedDate}`,
+                icon: "/icon-192x192.png",
+                tag: `appointment-approved-${appointment.id}`,
+                data: {
+                  url: `/patient-portal/appointments`,
+                  type: "appointment",
+                  id: appointment.id,
+                },
+              });
+            }
+          }
+        } catch (pushError) {
+          console.error('Failed to send push notification to patient:', pushError);
         }
 
         // Email to admins
