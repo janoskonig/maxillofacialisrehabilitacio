@@ -195,12 +195,29 @@ export async function POST(request: NextRequest) {
     await pool.query('BEGIN');
 
     try {
-      // Create appointment
+      // Create or update appointment (UPSERT)
+      // If there's a cancelled appointment for this time slot, update it instead of creating new
       // created_by: surgeon/admin who booked the appointment
       // dentist_email: dentist who created the time slot
       const appointmentResult = await pool.query(
         `INSERT INTO appointments (patient_id, time_slot_id, created_by, dentist_email, appointment_type)
          VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (time_slot_id) 
+         DO UPDATE SET
+           patient_id = EXCLUDED.patient_id,
+           created_by = EXCLUDED.created_by,
+           dentist_email = EXCLUDED.dentist_email,
+           appointment_type = EXCLUDED.appointment_type,
+           appointment_status = NULL,
+           completion_notes = NULL,
+           google_calendar_event_id = NULL,
+           approved_at = NULL,
+           approval_status = NULL,
+           approval_token = NULL,
+           alternative_time_slot_ids = NULL,
+           current_alternative_index = NULL,
+           is_late = false
+         WHERE appointments.appointment_status IN ('cancelled_by_patient', 'cancelled_by_doctor')
          RETURNING 
            id,
            patient_id as "patientId",
