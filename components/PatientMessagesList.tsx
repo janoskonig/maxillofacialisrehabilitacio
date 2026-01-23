@@ -10,6 +10,8 @@ import { getCurrentUser } from '@/lib/auth';
 import { MessageTextRenderer } from './MessageTextRenderer';
 import { useSocket } from '@/contexts/SocketContext';
 import { getMonogram, getLastName } from '@/lib/utils';
+import { MessagesShell } from './mobile/MessagesShell';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 
 interface Message {
   id: string;
@@ -61,6 +63,10 @@ export function PatientMessagesList() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesLoadedRef = useRef<Set<string>>(new Set());
+  
+  // Hooks must be called unconditionally at the top level
+  const breakpoint = useBreakpoint();
+  const isMobile = breakpoint === 'mobile';
 
   // Get current user
   useEffect(() => {
@@ -542,323 +548,325 @@ export function PatientMessagesList() {
     );
   }
 
-  return (
-    <div className="flex h-[calc(100vh-200px)] sm:h-[700px] border border-gray-200 rounded-lg overflow-hidden bg-white">
-      {/* Conversations List */}
-      <div className={`${selectedPatientId ? 'hidden sm:flex' : 'flex'} w-full sm:w-80 border-r border-gray-200 flex flex-col`}>
-        <div className="p-4 border-b border-gray-200 bg-gray-50">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <MessageCircle className="w-5 h-5" />
-              Betegek
-            </h3>
-            {totalUnreadCount > 0 && (
-              <span className="px-2 py-1 text-xs font-semibold text-white bg-red-500 rounded-full">
-                {totalUnreadCount}
+  // Prepare detail actions for MobileActionMenu
+  const detailActions = selectedPatientId ? [
+    {
+      label: 'Beteg részletei',
+      icon: <User className="w-4 h-4" />,
+      onClick: () => router.push(`/patients/${selectedPatientId}/view`),
+    },
+  ] : [];
+
+  // Conversations list content
+  const conversationsListContent = filteredConversations.length === 0 ? (
+    <div className="p-4 text-center text-gray-500 text-sm">
+      {searchQuery ? 'Nincs találat' : 'Még nincsenek beszélgetések'}
+      <p className="text-xs mt-2 text-gray-400">
+        {!searchQuery && 'A betegekkel folytatott beszélgetések itt jelennek meg'}
+      </p>
+    </div>
+  ) : (
+    filteredConversations.map((conv) => {
+      const isSelected = selectedPatientId === conv.patientId;
+      
+      return (
+        <div
+          key={conv.patientId}
+          onClick={() => {
+            setSelectedPatientId(conv.patientId);
+            setSelectedPatientName(conv.patientName);
+            messagesLoadedRef.current.clear();
+          }}
+          className={`p-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${
+            isSelected ? 'bg-blue-50' : ''
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <div className="font-medium text-sm truncate">
+                {conv.patientName}
+              </div>
+            </div>
+            {conv.unreadCount > 0 && (
+              <span className="px-2 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full flex-shrink-0">
+                {conv.unreadCount}
               </span>
             )}
           </div>
-          <button
-            onClick={() => setShowPatientSelector(true)}
-            className="w-full btn-primary flex items-center gap-2 justify-center mb-3"
-          >
-            <Plus className="w-4 h-4" />
-            Új beszélgetés
-          </button>
-          {showPatientSelector && (
-            <div className="mb-3">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="text"
-                    value={patientSearchQuery}
-                    onChange={(e) => setPatientSearchQuery(e.target.value)}
-                    placeholder="Beteg keresése..."
-                    className="form-input pl-10 w-full"
-                    autoFocus
-                  />
-                </div>
-                <button
-                  onClick={() => {
-                    setShowPatientSelector(false);
-                    setPatientSearchQuery('');
-                  }}
-                  className="p-2 hover:bg-gray-200 rounded transition-colors"
-                  title="Bezárás"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              {patientSearchQuery && (
-                <div className="max-h-60 overflow-y-auto border border-gray-200 rounded bg-white">
-                  {loadingPatients ? (
-                    <div className="p-4 text-center text-gray-500 text-sm">Betöltés...</div>
-                  ) : availablePatients.length === 0 ? (
-                    <div className="p-4 text-center text-gray-500 text-sm">Nincs találat</div>
-                  ) : (
-                    availablePatients
-                      .filter(p => 
-                        p.nev.toLowerCase().includes(patientSearchQuery.toLowerCase()) ||
-                        (p.email && p.email.toLowerCase().includes(patientSearchQuery.toLowerCase()))
-                      )
-                      .slice(0, 10)
-                      .map((patient) => (
-                        <div
-                          key={patient.id}
-                          onClick={() => {
-                            if (!patient.email || patient.email.trim() === '') {
-                              showToast('Ennek a betegnek nincs email címe, ezért nem küldhet üzenetet', 'error');
-                              return;
-                            }
-                            setSelectedPatientId(patient.id);
-                            setSelectedPatientName(patient.nev);
-                            setShowPatientSelector(false);
-                            setPatientSearchQuery('');
-                            messagesLoadedRef.current.clear();
-                            // Refresh conversations to include new patient
-                            setTimeout(() => fetchConversations(), 500);
-                          }}
-                          className="p-2 cursor-pointer hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
-                        >
-                          <div className="font-medium text-sm">{patient.nev}</div>
-                          {patient.email && (
-                            <div className="text-xs text-gray-500">{patient.email}</div>
-                          )}
-                        </div>
-                      ))
-                  )}
-                </div>
-              )}
+          {conv.lastMessage && (
+            <div className="text-xs text-gray-500 mt-1 truncate">
+              {conv.lastMessage.message.substring(0, 50)}
+              {conv.lastMessage.message.length > 50 ? '...' : ''}
             </div>
           )}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Beteg keresése..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="form-input pl-10 w-full"
-            />
+        </div>
+      );
+    })
+  );
+
+  // Detail header content
+  const detailHeaderContent = selectedPatientId ? (
+    <>
+      <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">
+        {selectedPatientName}
+      </h3>
+      <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 mt-1 sm:mt-0">
+        {isConnected && (
+          <div className="w-2 h-2 bg-green-500 rounded-full animate-connection-pulse" title="Kapcsolódva" />
+        )}
+        {unreadCount > 0 && (
+          <span className="px-2 py-1 text-xs font-semibold text-white bg-red-500 rounded-full">
+            {unreadCount}
+          </span>
+        )}
+      </div>
+    </>
+  ) : null;
+
+  // Detail content (messages + input)
+  const detailContent = selectedPatientId ? (
+    <>
+      {/* Messages */}
+      {loadingMessages ? (
+        <div className="flex-1 flex items-center justify-center bg-gray-50">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-500">Üzenetek betöltése...</p>
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto">
-          {filteredConversations.length === 0 ? (
-            <div className="p-4 text-center text-gray-500 text-sm">
-              {searchQuery ? 'Nincs találat' : 'Még nincsenek beszélgetések'}
-              <p className="text-xs mt-2 text-gray-400">
-                {!searchQuery && 'A betegekkel folytatott beszélgetések itt jelennek meg'}
-              </p>
+      ) : (
+        <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-2 sm:p-4 bg-gray-50 space-y-3 scroll-smooth">
+          {messages.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <MessageCircle className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+              <p>Még nincsenek üzenetek</p>
             </div>
           ) : (
-            filteredConversations.map((conv) => {
-              const isSelected = selectedPatientId === conv.patientId;
+            messages.map((message) => {
+              // Orvos oldalon: orvos üzenetei JOBBRA (kék), beteg üzenetei BALRA (fehér)
+              const isFromMe = currentUserId ? message.senderType === 'doctor' && message.senderId === currentUserId : message.senderType === 'doctor';
+              const isPending = message.pending === true;
+              const isRead = message.readAt !== null;
               
+              const senderName = isFromMe 
+                ? (message.senderEmail || 'Én')
+                : (selectedPatientName || 'Beteg');
+              const lastName = getLastName(senderName);
+              const monogram = getMonogram(senderName);
+
               return (
                 <div
-                  key={conv.patientId}
-                  onClick={() => {
-                    setSelectedPatientId(conv.patientId);
-                    setSelectedPatientName(conv.patientName);
-                    messagesLoadedRef.current.clear();
-                  }}
-                  className={`p-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${
-                    isSelected ? 'bg-blue-50' : ''
-                  }`}
+                  key={message.id}
+                  data-message-id={message.id}
+                  className={`flex flex-col ${isFromMe ? 'items-end' : 'items-start'}`}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <div className="font-medium text-sm truncate">
-                        {conv.patientName}
+                  {/* Sender name and monogram */}
+                  {!isFromMe && (
+                    <div className="flex items-center gap-1.5 mb-1 px-1">
+                      <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center text-xs font-semibold text-green-700">
+                        {monogram}
                       </div>
-                    </div>
-                    {conv.unreadCount > 0 && (
-                      <span className="px-2 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full flex-shrink-0">
-                        {conv.unreadCount}
-                      </span>
-                    )}
-                  </div>
-                  {conv.lastMessage && (
-                    <div className="text-xs text-gray-500 mt-1 truncate">
-                      {conv.lastMessage.message.substring(0, 50)}
-                      {conv.lastMessage.message.length > 50 ? '...' : ''}
+                      <span className="text-xs font-medium text-gray-700">{lastName}</span>
                     </div>
                   )}
+                  <div
+                    className={`max-w-[75%] rounded-lg px-4 py-2 ${
+                      isFromMe
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-900 border border-gray-200'
+                    }`}
+                  >
+                    <div className="text-sm">
+                      <MessageTextRenderer 
+                        text={message.message} 
+                        chatType="doctor-view-patient"
+                        patientId={selectedPatientId}
+                        messageId={message.id}
+                        senderId={message.senderId}
+                        currentUserId={currentUserId || undefined}
+                        onSendMessage={async (messageText) => {
+                          setNewMessage(messageText);
+                          await handleSendMessage();
+                        }}
+                      />
+                    </div>
+                    <div className={`text-xs mt-1 flex items-center gap-1.5 ${
+                      isFromMe ? 'text-blue-100' : 'text-gray-500'
+                    }`}>
+                      <span>{format(new Date(message.createdAt), 'HH:mm', { locale: hu })}</span>
+                      {isFromMe && (
+                        <span className="ml-1">
+                          {isPending ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : isRead ? (
+                            <CheckCheck className="w-3 h-3" />
+                          ) : (
+                            <Check className="w-3 h-3 opacity-70" />
+                          )}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
               );
             })
           )}
+          <div ref={messagesEndRef} />
+        </div>
+      )}
+
+      {/* Message Input */}
+      <div className="border-t bg-white p-2 sm:p-4">
+        <div className="flex flex-col sm:flex-row gap-2">
+          <textarea
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            className="form-input flex-1 resize-none w-full min-h-[60px] sm:min-h-0"
+            rows={2}
+            placeholder="Írja be üzenetét..."
+            disabled={sending}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (newMessage.trim() && !sending) {
+                  handleSendMessage();
+                }
+              }
+            }}
+          />
+          <button
+            onClick={handleSendMessage}
+            disabled={sending || !newMessage.trim()}
+            className="btn-primary flex items-center justify-center gap-2 px-4 py-2 sm:self-end w-full sm:w-auto mobile-touch-target"
+          >
+            <Send className="w-4 h-4" />
+            <span className="sm:inline">{sending ? '...' : 'Küldés'}</span>
+          </button>
         </div>
       </div>
+    </>
+  ) : (
+    <div className="flex-1 flex items-center justify-center text-gray-500">
+      <div className="text-center">
+        <MessageCircle className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+        <p>Válasszon egy beszélgetést</p>
+        <p className="text-sm mt-2 text-gray-400">
+          Válasszon egy beteget a bal oldali listából
+        </p>
+      </div>
+    </div>
+  );
 
-      {/* Chat Area */}
-      <div className="flex-1 flex flex-col">
-        {selectedPatientId ? (
-          <>
-            {/* Header */}
-            <div className="p-3 sm:p-4 border-b border-gray-200 bg-gray-50">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">
-                      {selectedPatientName}
-                    </h3>
-                    <button
-                      onClick={() => router.push(`/patients/${selectedPatientId}/view`)}
-                      className="btn-secondary flex items-center gap-1 text-sm px-2 py-1 flex-shrink-0"
-                      title="Beteg részletei"
-                    >
-                      <User className="w-4 h-4" />
-                      <span className="hidden sm:inline">Részletek</span>
-                      <ArrowRight className="w-3 h-3 sm:hidden" />
-                    </button>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-                  {isConnected && (
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-connection-pulse" title="Kapcsolódva" />
-                  )}
-                  {unreadCount > 0 && (
-                    <span className="px-2 py-1 text-xs font-semibold text-white bg-red-500 rounded-full">
-                      {unreadCount}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Messages */}
-            {loadingMessages ? (
-              <div className="flex-1 flex items-center justify-center bg-gray-50">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                  <p className="text-gray-500">Üzenetek betöltése...</p>
-                </div>
-              </div>
+  // New chat content
+  const newChatContent = showPatientSelector ? (
+    <>
+      {/* New Chat Header */}
+      <div className="p-3 sm:p-4 border-b border-gray-200 bg-gray-50">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900">Új beszélgetés</h3>
+          <button
+            onClick={() => {
+              setShowPatientSelector(false);
+              setPatientSearchQuery('');
+            }}
+            className="p-1 hover:bg-gray-200 rounded transition-colors mobile-touch-target"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="relative mb-3">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            value={patientSearchQuery}
+            onChange={(e) => setPatientSearchQuery(e.target.value)}
+            placeholder="Beteg keresése..."
+            className="form-input pl-10 w-full"
+            autoFocus
+          />
+        </div>
+        {patientSearchQuery && (
+          <div className="max-h-60 overflow-y-auto border border-gray-200 rounded bg-white">
+            {loadingPatients ? (
+              <div className="p-4 text-center text-gray-500 text-sm">Betöltés...</div>
+            ) : availablePatients.length === 0 ? (
+              <div className="p-4 text-center text-gray-500 text-sm">Nincs találat</div>
             ) : (
-              <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-2 sm:p-4 bg-gray-50 space-y-3 scroll-smooth">
-                {messages.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <MessageCircle className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                    <p>Még nincsenek üzenetek</p>
-                  </div>
-                ) : (
-                  messages.map((message) => {
-                    // Orvos oldalon: orvos üzenetei JOBBRA (kék), beteg üzenetei BALRA (fehér)
-                    const isFromMe = currentUserId ? message.senderType === 'doctor' && message.senderId === currentUserId : message.senderType === 'doctor';
-                    const isPending = message.pending === true;
-                    const isRead = message.readAt !== null;
-                    
-                    const senderName = isFromMe 
-                      ? (message.senderEmail || 'Én')
-                      : (selectedPatientName || 'Beteg');
-                    const lastName = getLastName(senderName);
-                    const monogram = getMonogram(senderName);
-
-                    return (
-                      <div
-                        key={message.id}
-                        data-message-id={message.id}
-                        className={`flex flex-col ${isFromMe ? 'items-end' : 'items-start'}`}
-                      >
-                        {/* Sender name and monogram */}
-                        {!isFromMe && (
-                          <div className="flex items-center gap-1.5 mb-1 px-1">
-                            <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center text-xs font-semibold text-green-700">
-                              {monogram}
-                            </div>
-                            <span className="text-xs font-medium text-gray-700">{lastName}</span>
-                          </div>
-                        )}
-                        <div
-                          className={`max-w-[75%] rounded-lg px-4 py-2 ${
-                            isFromMe
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-white text-gray-900 border border-gray-200'
-                          }`}
-                        >
-                          <div className="text-sm">
-                            <MessageTextRenderer 
-                              text={message.message} 
-                              chatType="doctor-view-patient"
-                              patientId={selectedPatientId}
-                              messageId={message.id}
-                              senderId={message.senderId}
-                              currentUserId={currentUserId || undefined}
-                              onSendMessage={async (messageText) => {
-                                setNewMessage(messageText);
-                                await handleSendMessage();
-                              }}
-                            />
-                          </div>
-                          <div className={`text-xs mt-1 flex items-center gap-1.5 ${
-                            isFromMe ? 'text-blue-100' : 'text-gray-500'
-                          }`}>
-                            <span>{format(new Date(message.createdAt), 'HH:mm', { locale: hu })}</span>
-                            {isFromMe && (
-                              <span className="ml-1">
-                                {isPending ? (
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                ) : isRead ? (
-                                  <CheckCheck className="w-3 h-3" />
-                                ) : (
-                                  <Check className="w-3 h-3 opacity-70" />
-                                )}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-                <div ref={messagesEndRef} />
-              </div>
-            )}
-
-            {/* Message Input */}
-            <div className="border-t bg-white p-2 sm:p-4">
-              <div className="flex flex-col sm:flex-row gap-2">
-                <textarea
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  className="form-input flex-1 resize-none w-full min-h-[60px] sm:min-h-0"
-                  rows={2}
-                  placeholder="Írja be üzenetét..."
-                  disabled={sending}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      if (newMessage.trim() && !sending) {
-                        handleSendMessage();
+              availablePatients
+                .filter(p => 
+                  p.nev.toLowerCase().includes(patientSearchQuery.toLowerCase()) ||
+                  (p.email && p.email.toLowerCase().includes(patientSearchQuery.toLowerCase()))
+                )
+                .slice(0, 10)
+                .map((patient) => (
+                  <div
+                    key={patient.id}
+                    onClick={() => {
+                      if (!patient.email || patient.email.trim() === '') {
+                        showToast('Ennek a betegnek nincs email címe, ezért nem küldhet üzenetet', 'error');
+                        return;
                       }
-                    }
-                  }}
-                />
-                <button
-                  onClick={handleSendMessage}
-                  disabled={sending || !newMessage.trim()}
-                  className="btn-primary flex items-center justify-center gap-2 px-4 py-2 sm:self-end w-full sm:w-auto"
-                >
-                  <Send className="w-4 h-4" />
-                  <span className="sm:inline">{sending ? '...' : 'Küldés'}</span>
-                </button>
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-500">
-            <div className="text-center">
-              <MessageCircle className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-              <p>Válasszon egy beszélgetést</p>
-              <p className="text-sm mt-2 text-gray-400">
-                Válasszon egy beteget a bal oldali listából
-              </p>
-            </div>
+                      setSelectedPatientId(patient.id);
+                      setSelectedPatientName(patient.nev);
+                      setShowPatientSelector(false);
+                      setPatientSearchQuery('');
+                      messagesLoadedRef.current.clear();
+                      // Refresh conversations to include new patient
+                      setTimeout(() => fetchConversations(), 500);
+                    }}
+                    className="p-2 cursor-pointer hover:bg-gray-50 border-b border-gray-100 last:border-b-0 mobile-touch-target"
+                  >
+                    <div className="font-medium text-sm">{patient.nev}</div>
+                    {patient.email && (
+                      <div className="text-xs text-gray-500">{patient.email}</div>
+                    )}
+                  </div>
+                ))
+            )}
           </div>
         )}
       </div>
+      <div className="flex-1 flex items-center justify-center text-gray-500">
+        <div className="text-center">
+          <MessageCircle className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+          <p>Válasszon beteget a beszélgetéshez</p>
+        </div>
+      </div>
+    </>
+  ) : null;
+
+  // List header content (search)
+  const listHeaderContent = (
+    <div className="relative">
+      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+      <input
+        type="text"
+        placeholder="Beteg keresése..."
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        className="form-input pl-10 w-full"
+      />
     </div>
+  );
+
+  return (
+    <MessagesShell
+      listTitle="Betegek"
+      listIcon={<MessageCircle className="w-5 h-5" />}
+      unreadCount={totalUnreadCount}
+      onNewChat={() => setShowPatientSelector(true)}
+      conversationsList={conversationsListContent}
+      listHeaderContent={listHeaderContent}
+      showDetail={!!selectedPatientId}
+      onBack={() => {
+        setSelectedPatientId(null);
+        setSelectedPatientName(null);
+      }}
+      detailHeader={detailHeaderContent}
+      detailContent={detailContent}
+      detailActions={detailActions}
+      showNewChat={showPatientSelector}
+      newChatContent={newChatContent}
+    />
   );
 }

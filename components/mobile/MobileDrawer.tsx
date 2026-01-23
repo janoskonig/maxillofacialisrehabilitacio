@@ -32,14 +32,9 @@ export function MobileDrawer({
   const contentRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
 
-  // Don't render on desktop
-  if (!isMobile) {
-    return null;
-  }
-
   // ESC key handler
   useEffect(() => {
-    if (!open) return;
+    if (!open || !isMobile) return;
 
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -49,11 +44,11 @@ export function MobileDrawer({
 
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [open, onOpenChange]);
+  }, [open, onOpenChange, isMobile]);
 
   // Focus trap
   useEffect(() => {
-    if (!open || !contentRef.current) return;
+    if (!open || !isMobile || !contentRef.current) return;
 
     const content = contentRef.current;
     const focusableElements = content.querySelectorAll(
@@ -83,10 +78,12 @@ export function MobileDrawer({
 
     document.addEventListener('keydown', handleTab);
     return () => document.removeEventListener('keydown', handleTab);
-  }, [open]);
+  }, [open, isMobile]);
 
   // Prevent body scroll when open
   useEffect(() => {
+    if (!isMobile) return;
+    
     if (open) {
       document.body.style.overflow = 'hidden';
     } else {
@@ -95,9 +92,12 @@ export function MobileDrawer({
     return () => {
       document.body.style.overflow = '';
     };
-  }, [open]);
+  }, [open, isMobile]);
 
-  if (!open) return null;
+  // Don't render on desktop or when closed
+  if (!isMobile || !open) {
+    return null;
+  }
 
   const handleOverlayClick = (e: React.MouseEvent) => {
     if (e.target === overlayRef.current) {
