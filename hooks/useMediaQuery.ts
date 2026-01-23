@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useBreakpoint } from './useBreakpoint';
 
 export function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(false);
@@ -38,15 +39,19 @@ export function useMediaQuery(query: string): boolean {
 }
 
 // Convenience hooks for common breakpoints
+// Updated to use useBreakpoint for consistency
 export function useIsMobile(): boolean {
-  return useMediaQuery('(max-width: 767px)');
+  const breakpoint = useBreakpoint();
+  return breakpoint === 'mobile';
 }
 
 export function useIsTablet(): boolean {
-  return useMediaQuery('(min-width: 768px) and (max-width: 1023px)');
+  const breakpoint = useBreakpoint();
+  return breakpoint === 'tablet';
 }
 
 export function useIsDesktop(): boolean {
-  return useMediaQuery('(min-width: 1024px)');
+  const breakpoint = useBreakpoint();
+  return breakpoint === 'desktop';
 }
 

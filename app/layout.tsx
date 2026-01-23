@@ -10,7 +10,11 @@ import { ToastContainer } from '@/components/ToastContainer'
 import { SocketProvider } from '@/contexts/SocketContext'
 import PWARegister from '@/components/PWARegister'
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ 
+  subsets: ['latin'],
+  display: 'swap',
+  fallback: ['system-ui', 'arial']
+})
 
 export const metadata: Metadata = {
   applicationName: "MaxRehab",

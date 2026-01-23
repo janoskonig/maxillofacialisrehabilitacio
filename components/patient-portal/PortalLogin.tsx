@@ -188,7 +188,7 @@ export function PortalLogin() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="form-input"
+                  className="form-input mobile-touch-target"
                   placeholder="pelda@email.hu"
                   required
                   disabled={loading}
@@ -205,7 +205,7 @@ export function PortalLogin() {
                   type="text"
                   value={taj}
                   onChange={(e) => handleTajChange(e.target.value)}
-                  className="form-input"
+                  className="form-input mobile-touch-target"
                   placeholder="123-456-789"
                   required
                   disabled={loading}
@@ -226,14 +226,14 @@ export function PortalLogin() {
                   type="text"
                   value={nev}
                   onChange={(e) => setNev(e.target.value)}
-                  className="form-input"
+                  className="form-input mobile-touch-target"
                   placeholder="Kovács János"
                   required
                   disabled={loading}
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+              <div className="grid grid-cols-1 gap-3 sm:gap-4">
                 <div>
                   <label htmlFor="szuletesiDatum" className="form-label flex items-center gap-2">
                     <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -244,7 +244,7 @@ export function PortalLogin() {
                     type="date"
                     value={szuletesiDatum}
                     onChange={(e) => setSzuletesiDatum(e.target.value)}
-                    className="form-input text-sm sm:text-base"
+                    className="form-input text-sm sm:text-base mobile-touch-target"
                     required
                     disabled={loading}
                     max={new Date().toISOString().split('T')[0]}
@@ -259,7 +259,7 @@ export function PortalLogin() {
                     id="nem"
                     value={nem}
                     onChange={(e) => setNem(e.target.value as 'ferfi' | 'no' | 'nem_ismert' | '')}
-                    className="form-input text-sm sm:text-base"
+                    className="form-input text-sm sm:text-base mobile-touch-target"
                     required
                     disabled={loading}
                   >
@@ -281,7 +281,7 @@ export function PortalLogin() {
                   type="tel"
                   value={telefonszam}
                   onChange={(e) => setTelefonszam(e.target.value)}
-                  className="form-input"
+                  className="form-input mobile-touch-target"
                   placeholder="+36-30-123-4567"
                   disabled={loading}
                 />
@@ -304,13 +304,13 @@ export function PortalLogin() {
                   type="text"
                   value={cim}
                   onChange={(e) => setCim(e.target.value)}
-                  className="form-input text-sm sm:text-base"
+                  className="form-input text-sm sm:text-base mobile-touch-target"
                   placeholder="Utca, házszám"
                   disabled={loading}
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+              <div className="grid grid-cols-1 gap-3 sm:gap-4">
                 <div>
                   <label htmlFor="varos" className="form-label">
                     Város
@@ -320,7 +320,7 @@ export function PortalLogin() {
                     type="text"
                     value={varos}
                     onChange={(e) => setVaros(e.target.value)}
-                    className="form-input"
+                    className="form-input mobile-touch-target"
                     placeholder="Budapest"
                     disabled={loading}
                   />
@@ -335,7 +335,7 @@ export function PortalLogin() {
                     type="text"
                     value={iranyitoszam}
                     onChange={(e) => setIranyitoszam(e.target.value)}
-                    className="form-input"
+                    className="form-input mobile-touch-target"
                     placeholder="1011"
                     disabled={loading}
                     maxLength={10}
@@ -360,7 +360,7 @@ export function PortalLogin() {
                   type="text"
                   value={beutaloOrvos}
                   onChange={(e) => setBeutaloOrvos(e.target.value)}
-                  className="form-input"
+                  className="form-input mobile-touch-target"
                   placeholder="Dr. Kovács János"
                   disabled={loading}
                 />
@@ -375,7 +375,7 @@ export function PortalLogin() {
                   id="beutaloIndokolas"
                   value={beutaloIndokolas}
                   onChange={(e) => setBeutaloIndokolas(e.target.value)}
-                  className="form-input"
+                  className="form-input mobile-touch-target"
                   placeholder="Beutalás indokának leírása..."
                   rows={4}
                   disabled={loading}
@@ -396,7 +396,7 @@ export function PortalLogin() {
             <button
               type="submit"
               disabled={loading}
-              className="btn-primary flex-1 flex items-center justify-center gap-2 py-2 sm:py-2.5 text-sm sm:text-base"
+              className="btn-primary flex-1 flex items-center justify-center gap-2 py-2 sm:py-2.5 text-sm sm:text-base mobile-touch-target"
             >
               {loading ? (
                 <>
@@ -468,7 +468,7 @@ export function PortalLogin() {
         <button
           type="submit"
           disabled={checking || loading}
-          className="btn-primary w-full flex items-center justify-center gap-2 py-2 sm:py-2.5 text-sm sm:text-base"
+          className="btn-primary w-full flex items-center justify-center gap-2 py-2 sm:py-2.5 text-sm sm:text-base mobile-touch-target"
         >
           {checking ? (
             <>

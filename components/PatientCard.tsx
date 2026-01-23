@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { Patient } from '@/lib/types';
 import { Phone, Mail, Calendar, Eye, Pencil, Trash2, Image, Camera, CheckCircle2, XCircle, Clock, Clock as ClockIcon, History, User } from 'lucide-react';
 import { formatDateForDisplay, calculateAge } from '@/lib/dateUtils';
@@ -29,7 +30,7 @@ interface PatientCardProps {
   userRole?: 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
 }
 
-export function PatientCard({
+function PatientCardComponent({
   patient,
   appointment,
   opDocumentCount = 0,
@@ -260,4 +261,7 @@ export function PatientCard({
     </div>
   );
 }
+
+// Memoize to prevent unnecessary re-renders
+export const PatientCard = memo(PatientCardComponent);
 

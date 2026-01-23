@@ -2,6 +2,9 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { MobileTable } from './mobile/MobileTable';
+import { MobileKeyValueGrid } from './mobile/MobileKeyValueGrid';
+import { Eye } from 'lucide-react';
 
 interface WaitingPatient {
   id: string;
@@ -107,55 +110,86 @@ export function WaitingPatientsList({ osszes, pending, nincsIdopont, betegek }: 
       </div>
 
       {/* Táblázat */}
-      {filteredPatients.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
-          Nincs beteg a kiválasztott szűrővel
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Név</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">TAJ</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kezelőorvos</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Beteg létrehozva</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Státusz</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Műveletek</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredPatients.map((patient) => (
-                <tr key={patient.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-sm text-gray-900">
-                    {patient.nev || '-'}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-900">
-                    {patient.taj || '-'}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-900">
-                    {patient.kezeleoorvos || '-'}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-900">
-                    {formatDate(patient.betegLetrehozva)}
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    {getStatusBadge(patient.status)}
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    <button
-                      onClick={() => router.push(`/?patientId=${patient.id}`)}
-                      className="text-blue-600 hover:text-blue-800 font-medium"
-                    >
-                      Megtekintés
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <MobileTable
+        items={filteredPatients}
+        renderRow={(patient) => (
+          <>
+            <td className="px-4 py-3 text-sm text-gray-900">
+              {patient.nev || '-'}
+            </td>
+            <td className="px-4 py-3 text-sm text-gray-900">
+              {patient.taj || '-'}
+            </td>
+            <td className="px-4 py-3 text-sm text-gray-900">
+              {patient.kezeleoorvos || '-'}
+            </td>
+            <td className="px-4 py-3 text-sm text-gray-900">
+              {formatDate(patient.betegLetrehozva)}
+            </td>
+            <td className="px-4 py-3 text-sm">
+              {getStatusBadge(patient.status)}
+            </td>
+            <td className="px-4 py-3 text-sm">
+              <button
+                onClick={() => router.push(`/?patientId=${patient.id}`)}
+                className="text-blue-600 hover:text-blue-800 font-medium mobile-touch-target"
+              >
+                Megtekintés
+              </button>
+            </td>
+          </>
+        )}
+        renderCard={(patient) => (
+          <div className="mobile-card">
+            {/* Top row: Név + Státusz */}
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-semibold text-gray-900 truncate flex-1">
+                {patient.nev || '-'}
+              </h3>
+              <div className="flex-shrink-0 ml-2">
+                {getStatusBadge(patient.status)}
+              </div>
+            </div>
+
+            {/* Middle: Key-value sorok */}
+            <MobileKeyValueGrid
+              items={[
+                { key: 'TAJ', value: patient.taj || '-' },
+                { key: 'Kezelőorvos', value: patient.kezeleoorvos || '-' },
+                { key: 'Beteg létrehozva', value: formatDate(patient.betegLetrehozva) },
+              ]}
+              className="mb-3"
+            />
+
+            {/* Bottom: Actions */}
+            <div className="pt-3 border-t border-gray-200">
+              <button
+                onClick={() => router.push(`/?patientId=${patient.id}`)}
+                className="w-full btn-primary flex items-center justify-center gap-2 mobile-touch-target"
+              >
+                <Eye className="w-4 h-4" />
+                Megtekintés
+              </button>
+            </div>
+          </div>
+        )}
+        keyExtractor={(patient) => patient.id}
+        emptyState={
+          <div className="text-center py-8 text-gray-500">
+            Nincs beteg a kiválasztott szűrővel
+          </div>
+        }
+        renderHeader={() => (
+          <>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Név</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">TAJ</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kezelőorvos</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Beteg létrehozva</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Státusz</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Műveletek</th>
+          </>
+        )}
+      />
     </div>
   );
 }

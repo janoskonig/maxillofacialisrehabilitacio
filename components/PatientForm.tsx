@@ -13,7 +13,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { DatePicker } from './DatePicker';
 import { savePatient, ApiError, TimeoutError } from '@/lib/storage';
 import { logEvent } from '@/lib/event-logger';
-import { getMissingRequiredFields } from '@/lib/clinical-rules';
+import { getMissingRequiredFields, REQUIRED_FIELDS } from '@/lib/clinical-rules';
 import { ClinicalChecklist } from './ClinicalChecklist';
 
 // Sentry import (conditional, only if enabled)
@@ -29,6 +29,8 @@ import { BNOAutocomplete } from './BNOAutocomplete';
 import { PatientDocuments } from './PatientDocuments';
 import { useToast } from '@/contexts/ToastContext';
 import { EQUITY_REQUEST_CONFIG } from '@/lib/equity-request-config';
+import { PatientFormSectionNavigation, Section } from './mobile/PatientFormSectionNavigation';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 
 
 // Fog állapot típus
@@ -921,6 +923,15 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
 
   // Manual submit - használja a RHF data paramétert
   const onSubmit = async (data: Patient) => {
+    // Check for validation errors before submitting
+    const hasErrors = errors && Object.keys(errors).length > 0;
+    if (hasErrors) {
+      // Scroll to first invalid field
+      scrollToFirstInvalid();
+      showToast('Kérjük, javítsa ki a hibákat az űrlapban', 'error');
+      return;
+    }
+
     try {
       await performSave('manual', data);
     } catch (error) {
@@ -1956,27 +1967,210 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
   // Watch kezelésre érkezés indoka for conditional logic
   const selectedIndok = watch('kezelesreErkezesIndoka');
 
+  // Section navigation
+  const breakpoint = useBreakpoint();
+  const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
+  
+  // Define sections
+  const allSections: Section[] = [
+    { id: 'alapadatok', label: 'Alapadatok', icon: <User className="w-4 h-4" /> },
+    { id: 'szemelyes', label: 'Személyes adatok', icon: <MapPin className="w-4 h-4" /> },
+    { id: 'beutalo', label: 'Beutaló', icon: <FileText className="w-4 h-4" /> },
+    { id: 'kezeloorvos', label: 'Kezelőorvos', icon: <User className="w-4 h-4" /> },
+    { id: 'anamnezis', label: 'Anamnézis', icon: <Calendar className="w-4 h-4" /> },
+    { id: 'betegvizsgalat', label: 'Betegvizsgálat', icon: <Calendar className="w-4 h-4" /> },
+    { id: 'adminisztracio', label: 'Adminisztráció', icon: <FileText className="w-4 h-4" /> },
+    { id: 'idopont', label: 'Időpont', icon: <Calendar className="w-4 h-4" /> },
+  ];
+
+  // Filter sections based on showOnlySections
+  const visibleSections = showOnlySections && showOnlySections.length > 0
+    ? allSections.filter(s => showOnlySections.includes(s.id))
+    : allSections;
+
+  // Get active section index
+  const activeIndex = visibleSections.findIndex(s => s.id === activeSectionId);
+
+  // Track active section based on scroll position
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = visibleSections.map(s => ({
+        id: s.id,
+        element: document.getElementById(`section-${s.id}`),
+      })).filter(s => s.element);
+
+      if (sections.length === 0) return;
+
+      const scrollPosition = window.scrollY + (breakpoint === 'mobile' ? 100 : 150);
+      
+      for (let i = sections.length - 1; i >= 0; i--) {
+        const section = sections[i];
+        if (section.element && section.element.offsetTop <= scrollPosition) {
+          setActiveSectionId(section.id);
+          break;
+        }
+      }
+    };
+
+    // Set initial active section
+    if (visibleSections.length > 0 && !activeSectionId) {
+      setActiveSectionId(visibleSections[0].id);
+    }
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll(); // Initial check
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, [visibleSections, activeSectionId, breakpoint]);
+
+  // Map fields to sections
+  const fieldToSectionMap: Record<string, string> = {
+    // alapadatok
+    nev: 'alapadatok',
+    taj: 'alapadatok',
+    telefonszam: 'alapadatok',
+    // szemelyes
+    szuletesiDatum: 'szemelyes',
+    nem: 'szemelyes',
+    email: 'szemelyes',
+    cim: 'szemelyes',
+    varos: 'szemelyes',
+    iranyitoszam: 'szemelyes',
+    // beutalo
+    beutaloOrvos: 'beutalo',
+    beutaloIntezmeny: 'beutalo',
+    beutaloIndokolas: 'beutalo',
+    mutetIdeje: 'beutalo',
+    szovettaniDiagnozis: 'beutalo',
+    nyakiBlokkdisszekcio: 'beutalo',
+    // kezeloorvos
+    kezeleoorvos: 'kezeloorvos',
+    // anamnezis
+    alkoholfogyasztas: 'anamnezis',
+    dohanyzasSzam: 'anamnezis',
+    kezelesreErkezesIndoka: 'anamnezis',
+    maxilladefektusVan: 'anamnezis',
+    brownFuggolegesOsztaly: 'anamnezis',
+    brownVizszintesKomponens: 'anamnezis',
+    mandibuladefektusVan: 'anamnezis',
+    kovacsDobakOsztaly: 'anamnezis',
+    nyelvmozgásokAkadályozottak: 'anamnezis',
+    gombocosBeszed: 'anamnezis',
+    nyalmirigyAllapot: 'anamnezis',
+    tnmStaging: 'anamnezis',
+    // betegvizsgalat - fogazati státusz mezők (sok, de a legfontosabbak)
+    // Note: betegvizsgalat section has many fields, we'll count all errors that don't belong to other sections
+  };
+
+  // Calculate section errors (using existing errors from useForm)
+  const sectionErrors: Record<string, number> = useMemo(() => {
+    const sectionErrorCounts: Record<string, number> = {};
+    visibleSections.forEach(section => {
+      sectionErrorCounts[section.id] = 0;
+    });
+
+    // Count errors by section
+    if (errors) {
+      Object.keys(errors).forEach(fieldName => {
+        const sectionId = fieldToSectionMap[fieldName] || 'betegvizsgalat'; // Default to betegvizsgalat if not mapped
+        if (visibleSections.some(s => s.id === sectionId)) {
+          sectionErrorCounts[sectionId] = (sectionErrorCounts[sectionId] || 0) + 1;
+        }
+      });
+    }
+
+    return sectionErrorCounts;
+  }, [visibleSections, errors, fieldToSectionMap]);
+
+  // Scroll to first invalid field
+  const scrollToFirstInvalid = useCallback(() => {
+    if (!errors || Object.keys(errors).length === 0) return;
+
+    // Find first error field
+    const firstErrorField = Object.keys(errors)[0];
+    const sectionId = fieldToSectionMap[firstErrorField] || 'betegvizsgalat';
+    
+    // First scroll to section
+    const sectionElement = document.getElementById(`section-${sectionId}`);
+    if (sectionElement) {
+      const headerOffset = breakpoint === 'mobile' ? 100 : 150;
+      const elementPosition = sectionElement.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + (window.scrollY || window.pageYOffset) - headerOffset;
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: 'smooth',
+      });
+    }
+
+    // Then scroll to field
+    setTimeout(() => {
+      const fieldElement = document.querySelector(`[name="${firstErrorField}"]`);
+      if (fieldElement) {
+        fieldElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Focus the field
+        (fieldElement as HTMLElement).focus();
+      }
+    }, 300);
+  }, [errors, fieldToSectionMap, breakpoint]);
+
   return (
     <div className="p-3 sm:p-6 relative pb-20 sm:pb-24">
-      {/* Floating Save Button */}
+      {/* Sticky Submit Bar */}
       {!isViewOnly && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 pt-3 pb-3 sm:pt-4 sm:pb-4 bg-white border-t border-gray-200 shadow-soft-xl px-3 sm:px-6 md:px-8">
-          <div className="max-w-4xl mx-auto flex justify-end gap-2 sm:gap-3">
-            <button
-              type="button"
-              onClick={handleCancel}
-              className="btn-secondary text-xs sm:text-sm px-3 sm:px-5 py-2 sm:py-2.5"
-              data-patient-form-cancel
-            >
-              Mégse
-            </button>
-            <button
-              type="submit"
-              form="patient-form"
-              className="btn-primary text-xs sm:text-sm px-3 sm:px-5 py-2 sm:py-2.5"
-            >
-              {patient ? 'Beteg frissítése' : 'Beteg mentése'}
-            </button>
+        <div className="mobile-cta-bar fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-soft-xl px-3 sm:px-6 md:px-8">
+          <div className="max-w-4xl mx-auto flex flex-col sm:flex-row justify-between gap-2 sm:gap-3 py-3 sm:py-4">
+            {/* Left: Next section button (mobile only if not last section) */}
+            {breakpoint === 'mobile' && (() => {
+              const currentActiveIndex = visibleSections.findIndex(s => s.id === activeSectionId);
+              return currentActiveIndex >= 0 && currentActiveIndex < visibleSections.length - 1;
+            })() && (
+              <button
+                type="button"
+                onClick={() => {
+                  const currentActiveIndex = visibleSections.findIndex(s => s.id === activeSectionId);
+                  const nextSection = visibleSections[currentActiveIndex + 1];
+                  if (nextSection) {
+                    setActiveSectionId(nextSection.id);
+                    setTimeout(() => {
+                      const element = document.getElementById(`section-${nextSection.id}`);
+                      if (element) {
+                        const headerOffset = 100;
+                        const elementPosition = element.getBoundingClientRect().top;
+                        const offsetPosition = elementPosition + (window.scrollY || window.pageYOffset) - headerOffset;
+                        window.scrollTo({
+                          top: offsetPosition,
+                          behavior: 'smooth',
+                        });
+                      }
+                    }, 100);
+                  }
+                }}
+                className="btn-secondary text-xs sm:text-sm px-3 sm:px-5 py-2 sm:py-2.5 mobile-touch-target w-full sm:w-auto order-2 sm:order-1"
+              >
+                Következő szekció →
+              </button>
+            )}
+            
+            {/* Right: Cancel and Save buttons */}
+            <div className="flex gap-2 sm:gap-3 w-full sm:w-auto order-1 sm:order-2">
+              <button
+                type="button"
+                onClick={handleCancel}
+                className="btn-secondary text-xs sm:text-sm px-3 sm:px-5 py-2 sm:py-2.5 mobile-touch-target flex-1 sm:flex-none"
+                data-patient-form-cancel
+              >
+                Mégse
+              </button>
+              <button
+                type="submit"
+                form="patient-form"
+                className="btn-primary text-xs sm:text-sm px-3 sm:px-5 py-2 sm:py-2.5 mobile-touch-target flex-1 sm:flex-none"
+              >
+                {patient ? 'Beteg frissítése' : 'Beteg mentése'}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -2004,6 +2198,16 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
           <X className="w-6 h-6" />
         </button>
       </div>
+
+      {/* Section Navigation */}
+      {visibleSections.length > 1 && (
+        <PatientFormSectionNavigation
+          sections={visibleSections}
+          activeSectionId={activeSectionId}
+          onSectionChange={setActiveSectionId}
+          sectionErrors={sectionErrors}
+        />
+      )}
 
       {/* Auto-save conflict banner */}
       {showConflictBanner && 
@@ -2127,14 +2331,21 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
       <form id="patient-form" onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         {/* ALAPADATOK */}
         {shouldShowSection('alapadatok') && (
-        <div className="card">
+        <div id="section-alapadatok" className="card scroll-mt-20 sm:scroll-mt-24">
           <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <User className="w-5 h-5 mr-2 text-medical-primary" />
             ALAPADATOK
+            {sectionErrors['alapadatok'] > 0 && (
+              <span className="ml-2 px-2 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full">
+                {sectionErrors['alapadatok']}
+              </span>
+            )}
           </h4>
           <div className="space-y-4">
             <div>
-              <label className="form-label">NÉV</label>
+              <label className={`form-label ${REQUIRED_FIELDS.some(f => f.key === 'nev') ? 'form-label-required' : ''}`}>
+                NÉV
+              </label>
               <input
                 {...register('nev')}
                 className="form-input"
@@ -2146,7 +2357,9 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
               )}
             </div>
             <div>
-              <label className="form-label">TAJ</label>
+              <label className={`form-label ${REQUIRED_FIELDS.some(f => f.key === 'taj') ? 'form-label-required' : ''}`}>
+                TAJ
+              </label>
               <input
                 {...register('taj')}
                 onChange={handleTAJChange}
@@ -2154,15 +2367,16 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
                 placeholder="000-000-000"
                 readOnly={isViewOnly}
               />
-              {errors.taj && (
+              {errors.taj ? (
                 <p className="text-red-500 text-sm mt-1">{errors.taj.message}</p>
-              )}
-              {!errors.taj && (
+              ) : (
                 <p className="text-gray-500 text-xs mt-1">Formátum: XXX-XXX-XXX (9 számjegy)</p>
               )}
             </div>
             <div>
-              <label className="form-label">TELEFONSZÁM</label>
+              <label className="form-label">
+                TELEFONSZÁM
+              </label>
               <input
                 {...register('telefonszam')}
                 onChange={handlePhoneChange}
@@ -2170,15 +2384,16 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
                 placeholder="+36..."
                 readOnly={isViewOnly}
               />
-              {errors.telefonszam && (
+              {errors.telefonszam ? (
                 <p className="text-red-500 text-sm mt-1">{errors.telefonszam.message}</p>
-              )}
-              {!errors.telefonszam && (
+              ) : (
                 <p className="text-gray-500 text-xs mt-1">Formátum: +36XXXXXXXXX (pl. +36123456789)</p>
               )}
             </div>
             <div>
-              <label className="form-label">EMAIL</label>
+              <label className={`form-label ${REQUIRED_FIELDS.some(f => f.key === 'email') ? 'form-label-required' : ''}`}>
+                EMAIL
+              </label>
               <input
                 {...register('email')}
                 type="email"
@@ -2186,10 +2401,9 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
                 placeholder="nev@example.com"
                 readOnly={isViewOnly}
               />
-              {errors.email && (
+              {errors.email ? (
                 <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>
-              )}
-              {!errors.email && (
+              ) : (
                 <p className="text-gray-500 text-xs mt-1">Formátum: nev@example.com</p>
               )}
             </div>
@@ -2199,10 +2413,15 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
 
         {/* SZEMÉLYES ADATOK */}
         {shouldShowSection('szemelyes') && (
-        <div className="card">
+        <div id="section-szemelyes" className="card scroll-mt-20 sm:scroll-mt-24">
           <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <MapPin className="w-5 h-5 mr-2 text-medical-primary" />
             SZEMÉLYES ADATOK
+            {sectionErrors['szemelyes'] > 0 && (
+              <span className="ml-2 px-2 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full">
+                {sectionErrors['szemelyes']}
+              </span>
+            )}
           </h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -2272,7 +2491,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
 
         {/* BEUTALÓ */}
         {shouldShowSection('beutalo') && (
-        <div className="card">
+        <div id="section-beutalo" className="card scroll-mt-20 sm:scroll-mt-24">
           <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <FileText className="w-5 h-5 mr-2 text-medical-primary" />
             BEUTALÓ
@@ -2342,7 +2561,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
 
         {/* KEZELŐORVOS */}
         {shouldShowSection('kezeloorvos') && (
-        <div className="card">
+        <div id="section-kezeloorvos" className="card scroll-mt-20 sm:scroll-mt-24">
           <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <User className="w-5 h-5 mr-2 text-medical-primary" />
             KEZELŐORVOS
@@ -2376,14 +2595,21 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
 
         {/* ANAMNÉZIS */}
         {shouldShowSection('anamnezis') && (
-        <div className="card">
+        <div id="section-anamnezis" className="card scroll-mt-20 sm:scroll-mt-24">
           <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <Calendar className="w-5 h-5 mr-2 text-medical-primary" />
             ANAMNÉZIS
+            {sectionErrors['anamnezis'] > 0 && (
+              <span className="ml-2 px-2 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full">
+                {sectionErrors['anamnezis']}
+              </span>
+            )}
           </h4>
           <div className="space-y-4">
             <div>
-              <label className="form-label">Kezelésre érkezés indoka</label>
+              <label className={`form-label ${REQUIRED_FIELDS.some(f => f.key === 'kezelesreErkezesIndoka') ? 'form-label-required' : ''}`}>
+                Kezelésre érkezés indoka
+              </label>
               <select {...register('kezelesreErkezesIndoka')} className="form-input" disabled={isViewOnly}>
                 <option value="">Válasszon...</option>
                 <option value="traumás sérülés">traumás sérülés</option>
@@ -2427,7 +2653,9 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
             </div>
             {/* Diagnózis mező - mindenkitől kérjük */}
             <div>
-              <label className="form-label">Diagnózis</label>
+              <label className={`form-label ${REQUIRED_FIELDS.some(f => f.key === 'diagnozis') ? 'form-label-required' : ''}`}>
+                Diagnózis
+              </label>
               <input
                 {...register('diagnozis')}
                 className="form-input"
@@ -2635,16 +2863,26 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
 
         {/* BETEGVIZSGÁLAT */}
         {shouldShowSection('betegvizsgalat') && (
-        <div className="card">
+        <div id="section-betegvizsgalat" className="card scroll-mt-20 sm:scroll-mt-24">
           <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <Calendar className="w-5 h-5 mr-2 text-medical-primary" />
             BETEGVIZSGÁLAT
+            {sectionErrors['betegvizsgalat'] > 0 && (
+              <span className="ml-2 px-2 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full">
+                {sectionErrors['betegvizsgalat']}
+              </span>
+            )}
           </h4>
           <div className="space-y-4">
             {/* Fogazati státusz */}
             <div className="border-t pt-4 mt-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-                <h5 className="text-base sm:text-md font-semibold text-gray-900">Felvételi státusz</h5>
+                <div className="flex items-center gap-2">
+                  <h5 className="text-base sm:text-md font-semibold text-gray-900">Felvételi státusz</h5>
+                  {REQUIRED_FIELDS.some(f => f.key === 'meglevoFogak') && (
+                    <span className="text-medical-error text-sm">*</span>
+                  )}
+                </div>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <button
                     type="button"
@@ -3596,14 +3834,16 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
 
         {/* Documents Section */}
         {shouldShowSection('adminisztracio') && (
-        <PatientDocuments
-          patientId={patientId}
-          isViewOnly={isViewOnly}
-          canUpload={userRole === 'admin' || userRole === 'editor' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos'}
-          canDelete={userRole === 'admin'}
-          onSavePatientBeforeUpload={!isViewOnly ? savePatientSilently : undefined}
-          isPatientDirty={!isViewOnly && hasUnsavedChanges()}
-        />
+        <div id="section-adminisztracio" className="scroll-mt-20 sm:scroll-mt-24">
+          <PatientDocuments
+            patientId={patientId}
+            isViewOnly={isViewOnly}
+            canUpload={userRole === 'admin' || userRole === 'editor' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos'}
+            canDelete={userRole === 'admin'}
+            onSavePatientBeforeUpload={!isViewOnly ? savePatientSilently : undefined}
+            isPatientDirty={!isViewOnly && hasUnsavedChanges()}
+          />
+        </div>
         )}
 
         {/* Méltányossági kérelemhez szükséges adatok */}
@@ -4021,26 +4261,28 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
         {/* Appointment Booking Section */}
         {/* For surgeons, always allow editing appointments even if form is view-only */}
         {shouldShowSection('idopont') && (
-        <AppointmentBookingSection 
-          patientId={patientId} 
-          isViewOnly={userRole === 'sebészorvos' ? false : isViewOnly}
-          onSavePatientBeforeBooking={!isViewOnly ? savePatientForBooking : undefined}
-          isPatientDirty={!isViewOnly && hasUnsavedChanges()}
-          isNewPatient={isNewPatient}
-          onPatientSaved={(savedPatient) => {
-            updateCurrentPatient(savedPatient);
-            // Also notify parent component
-            onSave(savedPatient);
-          }}
-        />
-        )}
-
-        {/* Conditional Appointment Booking Section - Only for admins */}
-        {shouldShowSection('idopont') && userRole === 'admin' && patientId && (
-          <ConditionalAppointmentBooking 
-            patientId={patientId}
-            patientEmail={currentPatient?.email || null}
+        <div id="section-idopont" className="scroll-mt-20 sm:scroll-mt-24">
+          <AppointmentBookingSection 
+            patientId={patientId} 
+            isViewOnly={userRole === 'sebészorvos' ? false : isViewOnly}
+            onSavePatientBeforeBooking={!isViewOnly ? savePatientForBooking : undefined}
+            isPatientDirty={!isViewOnly && hasUnsavedChanges()}
+            isNewPatient={isNewPatient}
+            onPatientSaved={(savedPatient) => {
+              updateCurrentPatient(savedPatient);
+              // Also notify parent component
+              onSave(savedPatient);
+            }}
           />
+
+          {/* Conditional Appointment Booking Section - Only for admins */}
+          {userRole === 'admin' && patientId && (
+            <ConditionalAppointmentBooking 
+              patientId={patientId}
+              patientEmail={currentPatient?.email || null}
+            />
+          )}
+        </div>
         )}
 
         {/* Form Actions - Warning message only, buttons are in floating bar */}

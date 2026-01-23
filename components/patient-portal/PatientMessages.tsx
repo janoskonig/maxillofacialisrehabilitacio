@@ -9,6 +9,8 @@ import { useRouter } from 'next/navigation';
 import { getMonogram, getLastName } from '@/lib/utils';
 import { MessageTextRenderer } from '@/components/MessageTextRenderer';
 import { useSocket } from '@/contexts/SocketContext';
+import { MessagesShell } from '@/components/mobile/MessagesShell';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 
 interface Message {
   id: string;
@@ -49,6 +51,10 @@ export function PatientMessages() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesLoadedRef = useRef<Set<string>>(new Set());
+  
+  // Hooks must be called unconditionally at the top level
+  const breakpoint = useBreakpoint();
+  const isMobile = breakpoint === 'mobile';
 
   // Fetch patient info
   useEffect(() => {
@@ -369,32 +375,30 @@ export function PatientMessages() {
     );
   }
 
-  return (
-    <div className="card flex flex-col h-[calc(100vh-180px)] sm:h-[calc(100vh-200px)] min-h-[500px] sm:min-h-[600px]">
-      {/* Header */}
-      <div className="flex items-center justify-between pb-4 border-b px-4 sm:px-6 pt-4 sm:pt-6 bg-white">
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          <MessageCircle className="w-5 h-5 text-blue-600 flex-shrink-0" />
-          <div className="min-w-0 flex-1">
-            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 truncate">Üzenetek</h2>
-            {doctorName && (
-              <p className="text-xs sm:text-sm text-gray-500 truncate">{doctorName}</p>
-            )}
-          </div>
-          {isConnected && (
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-connection-pulse" title="Kapcsolódva" />
-            </div>
-          )}
-          {unreadCount > 0 && (
-            <span className="px-2 py-1 text-xs font-semibold text-white bg-red-500 rounded-full flex-shrink-0">
-              {unreadCount}
-            </span>
-          )}
-        </div>
+  // Detail header content
+  const detailHeaderContent = (
+    <>
+      <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">Üzenetek</h3>
+      {doctorName && (
+        <p className="text-xs sm:text-sm text-gray-500 truncate mt-1">{doctorName}</p>
+      )}
+      <div className="flex items-center gap-2 flex-shrink-0 mt-1 sm:mt-0">
+        {isConnected && (
+          <div className="w-2 h-2 bg-green-500 rounded-full animate-connection-pulse" title="Kapcsolódva" />
+        )}
+        {unreadCount > 0 && (
+          <span className="px-2 py-1 text-xs font-semibold text-white bg-red-500 rounded-full">
+            {unreadCount}
+          </span>
+        )}
       </div>
+    </>
+  );
 
-      {/* Messages Container */}
+  // Detail content (messages + input)
+  const detailContent = (
+    <>
+      {/* Messages */}
       <div ref={messagesContainerRef} className="flex-1 overflow-y-auto bg-gradient-to-b from-gray-50 to-gray-100 p-4 space-y-4 scroll-smooth">
         {messages.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
@@ -510,7 +514,7 @@ export function PatientMessages() {
               <button
                 type="button"
                 onClick={() => setShowRecipientSelector(!showRecipientSelector)}
-                className="w-full px-3 py-2 text-left text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 flex items-center justify-between transition-all duration-200"
+                className="w-full px-3 py-2 text-left text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 flex items-center justify-between transition-all duration-200 mobile-touch-target"
               >
                 <span className="truncate">
                   {selectedRecipientId
@@ -534,7 +538,7 @@ export function PatientMessages() {
                           setSelectedRecipientId(recipient.id);
                           setShowRecipientSelector(false);
                         }}
-                        className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 transition-colors duration-200 ${
+                        className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 transition-colors duration-200 mobile-touch-target ${
                           selectedRecipientId === recipient.id ? 'bg-blue-50 text-blue-700' : 'text-gray-900'
                         }`}
                       >
@@ -582,7 +586,7 @@ export function PatientMessages() {
           <button
             onClick={handleSendMessage}
             disabled={sending || !newMessage.trim() || !selectedRecipientId}
-            className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 sm:px-6 py-2.5 flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 shadow-sm hover:shadow-md"
+            className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 sm:px-6 py-2.5 flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 shadow-sm hover:shadow-md mobile-touch-target"
           >
             {sending ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -593,6 +597,29 @@ export function PatientMessages() {
           </button>
         </div>
       </div>
+    </>
+  );
+
+  // Empty conversations list (portal has no list, only single conversation)
+  const conversationsListContent = (
+    <div className="p-4 text-center text-gray-500 text-sm">
+      <MessageCircle className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+      <p>Üzenetek</p>
+    </div>
+  );
+
+  return (
+    <div className="card">
+      <MessagesShell
+        listTitle="Üzenetek"
+        listIcon={<MessageCircle className="w-5 h-5" />}
+        unreadCount={unreadCount}
+        conversationsList={conversationsListContent}
+        showDetail={true}
+        detailHeader={detailHeaderContent}
+        detailContent={detailContent}
+        detailActions={[]}
+      />
     </div>
   );
 }

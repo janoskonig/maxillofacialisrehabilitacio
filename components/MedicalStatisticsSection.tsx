@@ -1,15 +1,38 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { BNOChart } from './charts/BNOChart';
-import { ReferringDoctorsChart } from './charts/ReferringDoctorsChart';
-import { DMFDistributionChart } from './charts/DMFDistributionChart';
-import { ToothPositionsChart } from './charts/ToothPositionsChart';
-import { ImplantPositionsChart } from './charts/ImplantPositionsChart';
-import { WaitingTimeChart } from './charts/WaitingTimeChart';
-import { DoctorWorkloadChart } from './charts/DoctorWorkloadChart';
+import { useState, useEffect, Suspense } from 'react';
+import dynamic from 'next/dynamic';
 import { WaitingPatientsList } from './WaitingPatientsList';
 import type { MedicalStats } from '@/lib/types';
+
+// Lazy load heavy chart components (recharts is large)
+const BNOChart = dynamic(() => import('./charts/BNOChart').then(mod => ({ default: mod.BNOChart })), {
+  loading: () => <div className="h-64 flex items-center justify-center"><p className="text-gray-500">Diagram betöltése...</p></div>
+});
+
+const ReferringDoctorsChart = dynamic(() => import('./charts/ReferringDoctorsChart').then(mod => ({ default: mod.ReferringDoctorsChart })), {
+  loading: () => <div className="h-64 flex items-center justify-center"><p className="text-gray-500">Diagram betöltése...</p></div>
+});
+
+const DMFDistributionChart = dynamic(() => import('./charts/DMFDistributionChart').then(mod => ({ default: mod.DMFDistributionChart })), {
+  loading: () => <div className="h-64 flex items-center justify-center"><p className="text-gray-500">Diagram betöltése...</p></div>
+});
+
+const ToothPositionsChart = dynamic(() => import('./charts/ToothPositionsChart').then(mod => ({ default: mod.ToothPositionsChart })), {
+  loading: () => <div className="h-64 flex items-center justify-center"><p className="text-gray-500">Diagram betöltése...</p></div>
+});
+
+const ImplantPositionsChart = dynamic(() => import('./charts/ImplantPositionsChart').then(mod => ({ default: mod.ImplantPositionsChart })), {
+  loading: () => <div className="h-64 flex items-center justify-center"><p className="text-gray-500">Diagram betöltése...</p></div>
+});
+
+const WaitingTimeChart = dynamic(() => import('./charts/WaitingTimeChart').then(mod => ({ default: mod.WaitingTimeChart })), {
+  loading: () => <div className="h-64 flex items-center justify-center"><p className="text-gray-500">Diagram betöltése...</p></div>
+});
+
+const DoctorWorkloadChart = dynamic(() => import('./charts/DoctorWorkloadChart').then(mod => ({ default: mod.DoctorWorkloadChart })), {
+  loading: () => <div className="h-64 flex items-center justify-center"><p className="text-gray-500">Diagram betöltése...</p></div>
+});
 
 export function MedicalStatisticsSection() {
   const [stats, setStats] = useState<MedicalStats | null>(null);
