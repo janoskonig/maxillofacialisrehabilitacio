@@ -6,3 +6,5 @@ export { MobileKeyValueGrid } from './MobileKeyValueGrid';
 export { MobileSkeletonCard } from './MobileSkeletonCard';
 export { MessagesShell } from './MessagesShell';
 export { MobileTable } from './MobileTable';
+export { PatientFormSectionNavigation } from './PatientFormSectionNavigation';
+export type { Section } from './PatientFormSectionNavigation';
