@@ -35,6 +35,11 @@ export function PatientFormSectionNavigation({
   const isMobile = breakpoint === 'mobile';
   const [showMobileSelector, setShowMobileSelector] = useState(false);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Edge case: empty sections array
+  if (sections.length === 0) {
+    return null;
+  }
+  
   const activeIndex = sections.findIndex(s => s.id === activeSectionId);
   const activeSection = activeIndex >= 0 ? sections[activeIndex] : null;
   const totalSections = sections.length;

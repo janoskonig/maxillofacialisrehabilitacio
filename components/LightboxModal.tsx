@@ -154,8 +154,10 @@ export function LightboxModal({
     const domDoc = typeof window !== 'undefined' ? window.document : null;
     if (!domDoc) return;
 
-    // Lock background scroll
+    // Lock background scroll (with counter for multiple modals)
     if (domDoc.body) {
+      const currentCount = parseInt(domDoc.body.dataset.scrollLockCount || '0', 10);
+      domDoc.body.dataset.scrollLockCount = String(currentCount + 1);
       domDoc.body.style.overflow = 'hidden';
     }
 
@@ -204,8 +206,14 @@ export function LightboxModal({
 
     return () => {
       domDoc.removeEventListener('keydown', handleKeyDown);
+      // Unlock background scroll (with counter for multiple modals)
       if (domDoc.body) {
-        domDoc.body.style.overflow = '';
+        const currentCount = parseInt(domDoc.body.dataset.scrollLockCount || '0', 10);
+        const newCount = Math.max(0, currentCount - 1);
+        domDoc.body.dataset.scrollLockCount = String(newCount);
+        if (newCount === 0) {
+          domDoc.body.style.overflow = '';
+        }
       }
     };
   }, [isOpen, onClose, handlePrevious, handleNext]);
