@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { formatDateForDisplay, calculateAge } from '@/lib/dateUtils';
 import { PatientCard } from './PatientCard';
 import { useIsMobile } from '@/hooks/useMediaQuery';
+import { MobileTable } from './mobile/MobileTable';
 
 interface PatientListProps {
   patients: Patient[];
@@ -226,96 +227,64 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
     );
   };
 
-  if (sortedPatients.length === 0) {
-    return (
-      <div className="card text-center py-6">
-        <FileText className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-        <h3 className="text-base font-medium text-gray-900 mb-1">Nincs találat</h3>
-        <p className="text-sm text-gray-500">
-          {patients.length === 0 
-            ? "Kezdje az első betegadat hozzáadásával."
-            : "Próbálja módosítani a keresési feltételeket."
-          }
-        </p>
-      </div>
-    );
-  }
+  // Empty state
+  const emptyState = (
+    <div className="card text-center py-6">
+      <FileText className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+      <h3 className="text-base font-medium text-gray-900 mb-1">Nincs találat</h3>
+      <p className="text-sm text-gray-500">
+        {patients.length === 0 
+          ? "Kezdje az első betegadat hozzáadásával."
+          : "Próbálja módosítani a keresési feltételeket."
+        }
+      </p>
+    </div>
+  );
 
-  // Mobile: Card view
-  if (isMobile) {
-    return (
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 gap-4">
-          {sortedPatients.map((patient) => {
-            const appointment = appointments[patient.id || ''];
-            return (
-              <PatientCard
-                key={patient.id}
-                patient={patient}
-                appointment={appointment}
-                opDocumentCount={opDocuments[patient.id || ''] || 0}
-                fotoDocumentCount={fotoDocuments[patient.id || ''] || 0}
-                onView={onView}
-                onEdit={canEdit ? onEdit : undefined}
-                onDelete={canDelete ? onDelete : undefined}
-                onViewOP={onViewOP}
-                onViewFoto={onViewFoto}
-                canEdit={canEdit}
-                canDelete={canDelete}
-                userRole={userRole}
-              />
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
+  // Desktop table header
+  const renderTableHeader = () => (
+    <>
+      {renderSortableHeader(searchQuery.trim() ? 'Keresési eredmény' : 'Beteg', 'nev')}
+      <th className="px-3 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider w-20">
+        Foto
+      </th>
+      <th className="px-3 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider w-20">
+        OP
+      </th>
+      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+        TAJ szám
+      </th>
+      <th className="px-2 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-32">
+        Kapcsolat
+      </th>
+      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+        Kezelőorvos
+      </th>
+      {renderSortableHeader('Következő időpont', 'idopont', 'w-32')}
+      {renderSortableHeader('Létrehozva', 'createdAt')}
+      <th className="px-3 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+        Műveletek
+      </th>
+    </>
+  );
 
-  // Desktop: Table view
-  return (
-    <div className="card p-0 overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gradient-to-r from-gray-50 to-gray-100/50">
-            <tr>
-              {renderSortableHeader(searchQuery.trim() ? 'Keresési eredmény' : 'Beteg', 'nev')}
-              <th className="px-3 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider w-20">
-                Foto
-              </th>
-              <th className="px-3 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider w-20">
-                OP
-              </th>
-              <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                TAJ szám
-              </th>
-              <th className="px-2 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-32">
-                Kapcsolat
-              </th>
-              <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                Kezelőorvos
-              </th>
-              {renderSortableHeader('Következő időpont', 'idopont', 'w-32')}
-              {renderSortableHeader('Létrehozva', 'createdAt')}
-              <th className="px-3 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                Műveletek
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-100">
-            {sortedPatients.map((patient, index) => {
-              const hasNoDoctor = !patient.kezeleoorvos;
-              const isEven = index % 2 === 0;
-              return (
-              <tr 
-                key={patient.id} 
-                className={`transition-all duration-150 ${
-                  hasNoDoctor 
-                    ? "bg-red-50/50 hover:bg-red-100/70 border-l-2 border-l-medical-error" 
-                    : isEven 
-                      ? "bg-white hover:bg-gray-50/80" 
-                      : "bg-gray-50/30 hover:bg-gray-100/60"
-                }`}
-              >
+  // Desktop table row className
+  const getRowClassName = (patient: Patient, index: number) => {
+    const hasNoDoctor = !patient.kezeleoorvos;
+    const isEven = index % 2 === 0;
+    return `transition-all duration-150 ${
+      hasNoDoctor 
+        ? "bg-red-50/50 hover:bg-red-100/70 border-l-2 border-l-medical-error" 
+        : isEven 
+          ? "bg-white hover:bg-gray-50/80" 
+          : "bg-gray-50/30 hover:bg-gray-100/60"
+    }`;
+  };
+
+  // Desktop table row
+  const renderTableRow = (patient: Patient, index: number) => {
+    return (
+      <>
                 <td className="px-3 py-3 whitespace-nowrap">
                   <div className="flex items-center">
                     <div className="flex-shrink-0 h-9 w-9">
@@ -569,13 +538,41 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                     )}
                   </div>
                 </td>
-              </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
+              </>
+    );
+  };
+
+  // Mobile card
+  const renderMobileCard = (patient: Patient) => {
+    const appointment = appointments[patient.id || ''];
+    return (
+      <PatientCard
+        patient={patient}
+        appointment={appointment}
+        opDocumentCount={opDocuments[patient.id || ''] || 0}
+        fotoDocumentCount={fotoDocuments[patient.id || ''] || 0}
+        onView={onView}
+        onEdit={canEdit ? onEdit : undefined}
+        onDelete={canDelete ? onDelete : undefined}
+        onViewOP={onViewOP}
+        onViewFoto={onViewFoto}
+        canEdit={canEdit}
+        canDelete={canDelete}
+        userRole={userRole}
+      />
+    );
+  };
+
+  return (
+    <MobileTable
+      items={sortedPatients}
+      renderRow={renderTableRow}
+      renderCard={renderMobileCard}
+      keyExtractor={(patient) => patient.id || ''}
+      emptyState={emptyState}
+      renderHeader={renderTableHeader}
+      rowClassName={getRowClassName}
+    />
   );
 }
 

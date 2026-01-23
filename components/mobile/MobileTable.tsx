@@ -1,12 +1,13 @@
 'use client';
 
 import { ReactNode } from 'react';
+import React from 'react';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { MobileSkeletonCard } from './MobileSkeletonCard';
 
 interface MobileTableProps<T> {
   items: T[];
-  renderRow: (item: T, index: number) => ReactNode; // Desktop table row
+  renderRow: (item: T, index: number) => ReactNode; // Desktop table row (td elements)
   renderCard: (item: T, index: number) => ReactNode; // Mobile card
   keyExtractor: (item: T, index: number) => string | number;
   emptyState?: ReactNode;
@@ -14,6 +15,8 @@ interface MobileTableProps<T> {
   skeletonCount?: number;
   className?: string;
   mobileCardClassName?: string;
+  renderHeader?: () => ReactNode; // Optional desktop table header
+  rowClassName?: (item: T, index: number) => string; // Optional row className callback
 }
 
 /**
@@ -33,6 +36,8 @@ export function MobileTable<T>({
   skeletonCount = 5,
   className = '',
   mobileCardClassName = '',
+  renderHeader,
+  rowClassName,
 }: MobileTableProps<T>) {
   const breakpoint = useBreakpoint();
   const isMobile = breakpoint === 'mobile';
@@ -97,12 +102,26 @@ export function MobileTable<T>({
     <div className={`card p-0 overflow-hidden ${className}`}>
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
-          <tbody className="bg-white divide-y divide-gray-200">
-            {items.map((item, index) => (
-              <tr key={keyExtractor(item, index)} className="hover:bg-gray-50">
-                {renderRow(item, index)}
+          {renderHeader && (
+            <thead className="bg-gradient-to-r from-gray-50 to-gray-100/50">
+              <tr>
+                {renderHeader()}
               </tr>
-            ))}
+            </thead>
+          )}
+          <tbody className="bg-white divide-y divide-gray-200">
+            {items.map((item, index) => {
+              const rowContent = renderRow(item, index);
+              const defaultClassName = "hover:bg-gray-50";
+              const customClassName = rowClassName ? rowClassName(item, index) : '';
+              const finalClassName = customClassName ? `${defaultClassName} ${customClassName}` : defaultClassName;
+              
+              return (
+                <tr key={keyExtractor(item, index)} className={finalClassName}>
+                  {rowContent}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
