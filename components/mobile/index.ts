@@ -5,3 +5,4 @@ export { MobileActionMenu } from './MobileActionMenu';
 export { MobileKeyValueGrid } from './MobileKeyValueGrid';
 export { MobileSkeletonCard } from './MobileSkeletonCard';
 export { MessagesShell } from './MessagesShell';
+export { MobileTable } from './MobileTable';
