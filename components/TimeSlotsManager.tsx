@@ -4,6 +4,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { Calendar, Plus, Trash2, Edit2, Clock, X, ChevronDown, ChevronUp, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth';
 import { DateTimePicker } from './DateTimePicker';
+import { MobileTable } from './mobile/MobileTable';
+import { MobileKeyValueGrid } from './mobile/MobileKeyValueGrid';
+import { MobileBottomSheet } from './mobile/MobileBottomSheet';
 
 interface TimeSlot {
   id: string;
@@ -730,180 +733,314 @@ export function TimeSlotsManager() {
     const allSelected = bookedSlotsInTable.length > 0 && 
                         bookedSlotsInTable.every(s => selectedAppointmentIds.has(appointments[s.id].id));
 
-    return (
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className={isPast ? "bg-gray-100" : "bg-gray-50"}>
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-12">
-                {bookedSlotsInTable.length > 0 && (
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    onChange={() => handleSelectAllAppointments(slots)}
-                    className="form-checkbox"
-                    title="Összes kijelölése"
-                  />
+    // Desktop table header
+    const renderTableHeader = () => (
+      <>
+        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-12">
+          {bookedSlotsInTable.length > 0 && (
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={() => handleSelectAllAppointments(slots)}
+              className="form-checkbox"
+              title="Összes kijelölése"
+            />
+          )}
+        </th>
+        {renderSortableHeader('Időpont', 'startTime')}
+        {renderSortableHeader('Cím', 'cim')}
+        {renderSortableHeader('Teremszám', 'teremszam')}
+        {renderSortableHeader('Fogpótlástanász', 'dentistName')}
+        {renderSortableHeader('Státusz', 'status')}
+        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+          Lefoglalva
+        </th>
+        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+          Műveletek
+        </th>
+      </>
+    );
+
+    // Desktop table row
+    const renderTableRow = (slot: TimeSlot) => {
+      const appointment = appointments[slot.id];
+      return (
+        <>
+          <td className="px-4 py-4 whitespace-nowrap">
+            {slot.status === 'booked' && appointment ? (
+              <input
+                type="checkbox"
+                checked={selectedAppointmentIds.has(appointment.id)}
+                onChange={() => handleToggleAppointmentSelection(appointment.id)}
+                className="form-checkbox"
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <span className="w-4"></span>
+            )}
+          </td>
+          <td className="px-6 py-4 whitespace-nowrap">
+            <div className="flex items-center">
+              <Clock className={`w-4 h-4 mr-2 ${isPast ? 'text-gray-400' : 'text-gray-400'}`} />
+              <span className={`text-sm ${isPast ? 'text-gray-500' : 'text-gray-900'}`}>
+                {formatDateTime(slot.startTime)}
+              </span>
+            </div>
+          </td>
+          <td className="px-6 py-4">
+            <span className={`text-sm ${isPast ? 'text-gray-500' : 'text-gray-600'}`}>
+              {slot.cim || '1088 Budapest, Szentkirályi utca 47'}
+            </span>
+          </td>
+          <td className="px-6 py-4 whitespace-nowrap">
+            <span className={`text-sm ${isPast ? 'text-gray-500' : 'text-gray-600'}`}>
+              {slot.teremszam || '-'}
+            </span>
+          </td>
+          <td className="px-6 py-4 whitespace-nowrap">
+            <span className={`text-sm ${isPast ? 'text-gray-500' : 'text-gray-600'}`}>
+              {slot.dentistName || slot.userEmail || '-'}
+            </span>
+          </td>
+          <td className="px-6 py-4 whitespace-nowrap">
+            <span
+              className={`px-2 py-1 text-xs font-medium rounded-full ${
+                slot.status === 'available'
+                  ? isPast 
+                    ? 'bg-gray-200 text-gray-600'
+                    : 'bg-green-100 text-green-800'
+                  : isPast
+                    ? 'bg-gray-200 text-gray-600'
+                    : 'bg-red-100 text-red-800'
+              }`}
+            >
+              {slot.status === 'available' ? 'Szabad' : 'Lefoglalva'}
+            </span>
+          </td>
+          <td className="px-6 py-4">
+            {appointment ? (
+              <div className={`text-sm space-y-1 ${isPast ? 'text-gray-500' : ''}`}>
+                <div>
+                  <span className="text-xs font-medium text-gray-500 uppercase">Beteg:</span>
+                  <div className={`font-medium mt-0.5 ${isPast ? 'text-gray-500' : 'text-gray-900'}`}>
+                    {appointment.patientName || 'Név nélküli beteg'}
+                  </div>
+                  {appointment.patientTaj && (
+                    <div className="text-xs text-gray-500">
+                      TAJ: {appointment.patientTaj}
+                    </div>
+                  )}
+                </div>
+                <div className="pt-1 border-t border-gray-200">
+                  <span className="text-xs font-medium text-gray-500 uppercase">Foglalta:</span>
+                  <div className={`text-xs mt-0.5 ${isPast ? 'text-gray-500' : 'text-gray-700'}`}>
+                    {appointment.bookedBy}
+                  </div>
+                </div>
+                {appointment.appointmentType && (
+                  <div className="pt-1 border-t border-gray-200">
+                    <span className="text-xs font-medium text-gray-500 uppercase">Típus:</span>
+                    <div className={`text-xs mt-0.5 ${isPast ? 'text-gray-500' : 'text-gray-700'}`}>
+                      {appointment.appointmentType === 'elso_konzultacio' && 'Első konzultáció'}
+                      {appointment.appointmentType === 'munkafazis' && 'Munkafázis'}
+                      {appointment.appointmentType === 'kontroll' && 'Kontroll'}
+                    </div>
+                  </div>
                 )}
-              </th>
-              {renderSortableHeader('Időpont', 'startTime')}
-              {renderSortableHeader('Cím', 'cim')}
-              {renderSortableHeader('Teremszám', 'teremszam')}
-              {renderSortableHeader('Fogpótlástanász', 'dentistName')}
-              {renderSortableHeader('Státusz', 'status')}
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Lefoglalva
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                Műveletek
-              </th>
-            </tr>
-          </thead>
-          <tbody className={isPast ? "bg-gray-50 divide-y divide-gray-200" : "bg-white divide-y divide-gray-200"}>
-            {slots.map((slot) => {
-              const appointment = appointments[slot.id];
-              return (
-                <tr 
-                  key={slot.id} 
-                  className={`${isPast ? 'opacity-60' : ''} ${
-                    slot.status === 'booked' ? 'bg-red-50' : ''
+              </div>
+            ) : slot.status === 'booked' ? (
+              <span className={`text-sm ${isPast ? 'text-gray-500' : 'text-gray-500'}`}>Lefoglalva (adatok betöltése...)</span>
+            ) : (
+              <span className={`text-sm ${isPast ? 'text-gray-400' : 'text-gray-400'}`}>-</span>
+            )}
+          </td>
+          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+            <div className="flex items-center justify-end gap-2">
+              {slot.status === 'available' && (
+                <button
+                  onClick={() => handleDeleteTimeSlot(slot.id)}
+                  className={`${isPast ? 'text-gray-500 hover:text-gray-700' : 'text-red-600 hover:text-red-900'} mobile-touch-target`}
+                  title="Törlés"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+              {slot.status === 'booked' && appointment && (
+                <>
+                  <button
+                    onClick={() => handleEditAppointmentType(appointment.id, appointment.appointmentType || null)}
+                    className={`${isPast ? 'text-gray-500 hover:text-gray-700' : 'text-blue-600 hover:text-blue-900'} flex items-center gap-1 text-xs mobile-touch-target`}
+                    title="Időpont típusa módosítása"
+                  >
+                    <Edit2 className="w-3 h-3" />
+                    <span className="hidden sm:inline">Típus</span>
+                  </button>
+                  <button
+                    onClick={() => handleModifyAppointment(appointment.id, slot.id, slot.startTime)}
+                    className={`${isPast ? 'text-gray-500 hover:text-gray-700' : 'text-amber-600 hover:text-amber-900'} flex items-center gap-1 mobile-touch-target`}
+                    title="Időpont módosítása"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                    <span className="hidden sm:inline">Módosítás</span>
+                  </button>
+                  <button
+                    onClick={() => handleCancelAppointment(appointment.id)}
+                    className={`${isPast ? 'text-gray-500 hover:text-gray-700' : 'text-red-600 hover:text-red-900'} flex items-center gap-1 mobile-touch-target`}
+                    title="Időpont lemondása"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span className="hidden sm:inline">Lemondás</span>
+                  </button>
+                </>
+              )}
+            </div>
+          </td>
+        </>
+      );
+    };
+
+    // Mobile card
+    const renderMobileCard = (slot: TimeSlot) => {
+      const appointment = appointments[slot.id];
+      const statusBadge = (
+        <span
+          className={`px-2 py-1 text-xs font-medium rounded-full ${
+            slot.status === 'available'
+              ? isPast 
+                ? 'bg-gray-200 text-gray-600'
+                : 'bg-green-100 text-green-800'
+              : isPast
+                ? 'bg-gray-200 text-gray-600'
+                : 'bg-red-100 text-red-800'
+          }`}
+        >
+          {slot.status === 'available' ? 'Szabad' : 'Lefoglalva'}
+        </span>
+      );
+
+      return (
+        <div className={`mobile-card ${isPast ? 'opacity-60' : ''} ${slot.status === 'booked' ? 'bg-red-50' : ''}`}>
+          {/* Top row: Időpont + Státusz */}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <Clock className={`w-4 h-4 flex-shrink-0 ${isPast ? 'text-gray-400' : 'text-gray-400'}`} />
+              <h3 className={`text-base font-semibold ${isPast ? 'text-gray-500' : 'text-gray-900'} truncate`}>
+                {formatDateTime(slot.startTime)}
+              </h3>
+            </div>
+            <div className="flex-shrink-0 ml-2">
+              {statusBadge}
+            </div>
+          </div>
+
+          {/* Middle: Key-value sorok */}
+          <MobileKeyValueGrid
+            items={[
+              { key: 'Cím', value: slot.cim || '1088 Budapest, Szentkirályi utca 47' },
+              { key: 'Teremszám', value: slot.teremszam || '-' },
+              { key: 'Fogpótlástanász', value: slot.dentistName || slot.userEmail || '-' },
+            ]}
+            className="mb-3"
+          />
+
+          {/* Appointment info */}
+          {appointment && (
+            <div className={`mb-3 p-3 bg-gray-50 rounded-lg ${isPast ? 'text-gray-500' : ''}`}>
+              <div className="text-sm space-y-2">
+                <div>
+                  <span className="text-xs font-medium text-gray-500 uppercase">Beteg:</span>
+                  <div className={`font-medium mt-0.5 ${isPast ? 'text-gray-500' : 'text-gray-900'}`}>
+                    {appointment.patientName || 'Név nélküli beteg'}
+                  </div>
+                  {appointment.patientTaj && (
+                    <div className="text-xs text-gray-500">
+                      TAJ: {appointment.patientTaj}
+                    </div>
+                  )}
+                </div>
+                <div className="pt-1 border-t border-gray-200">
+                  <span className="text-xs font-medium text-gray-500 uppercase">Foglalta:</span>
+                  <div className={`text-xs mt-0.5 ${isPast ? 'text-gray-500' : 'text-gray-700'}`}>
+                    {appointment.bookedBy}
+                  </div>
+                </div>
+                {appointment.appointmentType && (
+                  <div className="pt-1 border-t border-gray-200">
+                    <span className="text-xs font-medium text-gray-500 uppercase">Típus:</span>
+                    <div className={`text-xs mt-0.5 ${isPast ? 'text-gray-500' : 'text-gray-700'}`}>
+                      {appointment.appointmentType === 'elso_konzultacio' && 'Első konzultáció'}
+                      {appointment.appointmentType === 'munkafazis' && 'Munkafázis'}
+                      {appointment.appointmentType === 'kontroll' && 'Kontroll'}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Bottom: Actions */}
+          <div className="pt-3 border-t border-gray-200 flex flex-col gap-2">
+            {slot.status === 'available' && (
+              <button
+                onClick={() => handleDeleteTimeSlot(slot.id)}
+                className={`w-full btn-secondary flex items-center justify-center gap-2 mobile-touch-target ${
+                  isPast ? 'text-gray-500' : 'text-red-600'
+                }`}
+              >
+                <Trash2 className="w-4 h-4" />
+                Törlés
+              </button>
+            )}
+            {slot.status === 'booked' && appointment && (
+              <>
+                <button
+                  onClick={() => handleEditAppointmentType(appointment.id, appointment.appointmentType || null)}
+                  className={`w-full btn-secondary flex items-center justify-center gap-2 mobile-touch-target ${
+                    isPast ? 'text-gray-500' : 'text-blue-600'
                   }`}
                 >
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    {slot.status === 'booked' && appointment ? (
-                      <input
-                        type="checkbox"
-                        checked={selectedAppointmentIds.has(appointment.id)}
-                        onChange={() => handleToggleAppointmentSelection(appointment.id)}
-                        className="form-checkbox"
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    ) : (
-                      <span className="w-4"></span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <Clock className={`w-4 h-4 mr-2 ${isPast ? 'text-gray-400' : 'text-gray-400'}`} />
-                      <span className={`text-sm ${isPast ? 'text-gray-500' : 'text-gray-900'}`}>
-                        {formatDateTime(slot.startTime)}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`text-sm ${isPast ? 'text-gray-500' : 'text-gray-600'}`}>
-                      {slot.cim || '1088 Budapest, Szentkirályi utca 47'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`text-sm ${isPast ? 'text-gray-500' : 'text-gray-600'}`}>
-                      {slot.teremszam || '-'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`text-sm ${isPast ? 'text-gray-500' : 'text-gray-600'}`}>
-                      {slot.dentistName || slot.userEmail || '-'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        slot.status === 'available'
-                          ? isPast 
-                            ? 'bg-gray-200 text-gray-600'
-                            : 'bg-green-100 text-green-800'
-                          : isPast
-                            ? 'bg-gray-200 text-gray-600'
-                            : 'bg-red-100 text-red-800'
-                      }`}
-                    >
-                      {slot.status === 'available' ? 'Szabad' : 'Lefoglalva'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    {appointment ? (
-                      <div className={`text-sm space-y-1 ${isPast ? 'text-gray-500' : ''}`}>
-                        <div>
-                          <span className="text-xs font-medium text-gray-500 uppercase">Beteg:</span>
-                          <div className={`font-medium mt-0.5 ${isPast ? 'text-gray-500' : 'text-gray-900'}`}>
-                            {appointment.patientName || 'Név nélküli beteg'}
-                          </div>
-                          {appointment.patientTaj && (
-                            <div className="text-xs text-gray-500">
-                              TAJ: {appointment.patientTaj}
-                            </div>
-                          )}
-                        </div>
-                        <div className="pt-1 border-t border-gray-200">
-                          <span className="text-xs font-medium text-gray-500 uppercase">Foglalta:</span>
-                          <div className={`text-xs mt-0.5 ${isPast ? 'text-gray-500' : 'text-gray-700'}`}>
-                            {appointment.bookedBy}
-                          </div>
-                        </div>
-                        {appointment.appointmentType && (
-                          <div className="pt-1 border-t border-gray-200">
-                            <span className="text-xs font-medium text-gray-500 uppercase">Típus:</span>
-                            <div className={`text-xs mt-0.5 ${isPast ? 'text-gray-500' : 'text-gray-700'}`}>
-                              {appointment.appointmentType === 'elso_konzultacio' && 'Első konzultáció'}
-                              {appointment.appointmentType === 'munkafazis' && 'Munkafázis'}
-                              {appointment.appointmentType === 'kontroll' && 'Kontroll'}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ) : slot.status === 'booked' ? (
-                      <span className={`text-sm ${isPast ? 'text-gray-500' : 'text-gray-500'}`}>Lefoglalva (adatok betöltése...)</span>
-                    ) : (
-                      <span className={`text-sm ${isPast ? 'text-gray-400' : 'text-gray-400'}`}>-</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <div className="flex items-center justify-end gap-2">
-                      {slot.status === 'available' && (
-                        <button
-                          onClick={() => handleDeleteTimeSlot(slot.id)}
-                          className={`${isPast ? 'text-gray-500 hover:text-gray-700' : 'text-red-600 hover:text-red-900'}`}
-                          title="Törlés"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                      {slot.status === 'booked' && appointment && (
-                        <>
-                          <button
-                            onClick={() => handleEditAppointmentType(appointment.id, appointment.appointmentType || null)}
-                            className={`${isPast ? 'text-gray-500 hover:text-gray-700' : 'text-blue-600 hover:text-blue-900'} flex items-center gap-1 text-xs`}
-                            title="Időpont típusa módosítása"
-                          >
-                            <Edit2 className="w-3 h-3" />
-                            Típus
-                          </button>
-                          <button
-                            onClick={() => handleModifyAppointment(appointment.id, slot.id, slot.startTime)}
-                            className={`${isPast ? 'text-gray-500 hover:text-gray-700' : 'text-amber-600 hover:text-amber-900'} flex items-center gap-1`}
-                            title="Időpont módosítása"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                            Módosítás
-                          </button>
-                          <button
-                            onClick={() => handleCancelAppointment(appointment.id)}
-                            className={`${isPast ? 'text-gray-500 hover:text-gray-700' : 'text-red-600 hover:text-red-900'} flex items-center gap-1`}
-                            title="Időpont lemondása"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                            Lemondás
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                  <Edit2 className="w-4 h-4" />
+                  Típus módosítása
+                </button>
+                <button
+                  onClick={() => handleModifyAppointment(appointment.id, slot.id, slot.startTime)}
+                  className={`w-full btn-secondary flex items-center justify-center gap-2 mobile-touch-target ${
+                    isPast ? 'text-gray-500' : 'text-amber-600'
+                  }`}
+                >
+                  <Edit2 className="w-4 h-4" />
+                  Időpont módosítása
+                </button>
+                <button
+                  onClick={() => handleCancelAppointment(appointment.id)}
+                  className={`w-full btn-secondary flex items-center justify-center gap-2 mobile-touch-target ${
+                    isPast ? 'text-gray-500' : 'text-red-600'
+                  }`}
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Lemondás
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      );
+    };
+
+    // Row className
+    const getRowClassName = (slot: TimeSlot) => {
+      return `${isPast ? 'opacity-60' : ''} ${slot.status === 'booked' ? 'bg-red-50' : ''}`;
+    };
+
+    return (
+      <MobileTable
+        items={slots}
+        renderRow={renderTableRow}
+        renderCard={renderMobileCard}
+        keyExtractor={(slot) => slot.id}
+        renderHeader={renderTableHeader}
+        rowClassName={getRowClassName}
+      />
     );
   };
 
