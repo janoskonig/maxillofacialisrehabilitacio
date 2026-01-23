@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, Upload, FileText, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
+import { MobileBottomSheet } from './mobile/MobileBottomSheet';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 
 interface Patient {
   id: string;
