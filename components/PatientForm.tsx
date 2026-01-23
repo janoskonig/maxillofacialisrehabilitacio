@@ -13,7 +13,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { DatePicker } from './DatePicker';
 import { savePatient, ApiError, TimeoutError } from '@/lib/storage';
 import { logEvent } from '@/lib/event-logger';
-import { getMissingRequiredFields } from '@/lib/clinical-rules';
+import { getMissingRequiredFields, REQUIRED_FIELDS } from '@/lib/clinical-rules';
 import { ClinicalChecklist } from './ClinicalChecklist';
 
 // Sentry import (conditional, only if enabled)
@@ -2343,7 +2343,9 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
           </h4>
           <div className="space-y-4">
             <div>
-              <label className="form-label">NÉV</label>
+              <label className={`form-label ${REQUIRED_FIELDS.some(f => f.key === 'nev') ? 'form-label-required' : ''}`}>
+                NÉV
+              </label>
               <input
                 {...register('nev')}
                 className="form-input"
@@ -2355,7 +2357,9 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
               )}
             </div>
             <div>
-              <label className="form-label">TAJ</label>
+              <label className={`form-label ${REQUIRED_FIELDS.some(f => f.key === 'taj') ? 'form-label-required' : ''}`}>
+                TAJ
+              </label>
               <input
                 {...register('taj')}
                 onChange={handleTAJChange}
@@ -2363,15 +2367,16 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
                 placeholder="000-000-000"
                 readOnly={isViewOnly}
               />
-              {errors.taj && (
+              {errors.taj ? (
                 <p className="text-red-500 text-sm mt-1">{errors.taj.message}</p>
-              )}
-              {!errors.taj && (
+              ) : (
                 <p className="text-gray-500 text-xs mt-1">Formátum: XXX-XXX-XXX (9 számjegy)</p>
               )}
             </div>
             <div>
-              <label className="form-label">TELEFONSZÁM</label>
+              <label className="form-label">
+                TELEFONSZÁM
+              </label>
               <input
                 {...register('telefonszam')}
                 onChange={handlePhoneChange}
@@ -2379,15 +2384,16 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
                 placeholder="+36..."
                 readOnly={isViewOnly}
               />
-              {errors.telefonszam && (
+              {errors.telefonszam ? (
                 <p className="text-red-500 text-sm mt-1">{errors.telefonszam.message}</p>
-              )}
-              {!errors.telefonszam && (
+              ) : (
                 <p className="text-gray-500 text-xs mt-1">Formátum: +36XXXXXXXXX (pl. +36123456789)</p>
               )}
             </div>
             <div>
-              <label className="form-label">EMAIL</label>
+              <label className={`form-label ${REQUIRED_FIELDS.some(f => f.key === 'email') ? 'form-label-required' : ''}`}>
+                EMAIL
+              </label>
               <input
                 {...register('email')}
                 type="email"
@@ -2395,10 +2401,9 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
                 placeholder="nev@example.com"
                 readOnly={isViewOnly}
               />
-              {errors.email && (
+              {errors.email ? (
                 <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>
-              )}
-              {!errors.email && (
+              ) : (
                 <p className="text-gray-500 text-xs mt-1">Formátum: nev@example.com</p>
               )}
             </div>
@@ -2602,7 +2607,9 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
           </h4>
           <div className="space-y-4">
             <div>
-              <label className="form-label">Kezelésre érkezés indoka</label>
+              <label className={`form-label ${REQUIRED_FIELDS.some(f => f.key === 'kezelesreErkezesIndoka') ? 'form-label-required' : ''}`}>
+                Kezelésre érkezés indoka
+              </label>
               <select {...register('kezelesreErkezesIndoka')} className="form-input" disabled={isViewOnly}>
                 <option value="">Válasszon...</option>
                 <option value="traumás sérülés">traumás sérülés</option>
@@ -2646,7 +2653,9 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
             </div>
             {/* Diagnózis mező - mindenkitől kérjük */}
             <div>
-              <label className="form-label">Diagnózis</label>
+              <label className={`form-label ${REQUIRED_FIELDS.some(f => f.key === 'diagnozis') ? 'form-label-required' : ''}`}>
+                Diagnózis
+              </label>
               <input
                 {...register('diagnozis')}
                 className="form-input"
@@ -2868,7 +2877,12 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
             {/* Fogazati státusz */}
             <div className="border-t pt-4 mt-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-                <h5 className="text-base sm:text-md font-semibold text-gray-900">Felvételi státusz</h5>
+                <div className="flex items-center gap-2">
+                  <h5 className="text-base sm:text-md font-semibold text-gray-900">Felvételi státusz</h5>
+                  {REQUIRED_FIELDS.some(f => f.key === 'meglevoFogak') && (
+                    <span className="text-medical-error text-sm">*</span>
+                  )}
+                </div>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <button
                     type="button"
