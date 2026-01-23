@@ -4,6 +4,8 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Calendar, Clock, User, Mail, AlertCircle, Plus, X } from 'lucide-react';
 import { Patient } from '@/lib/types';
 import { DateTimePicker } from './DateTimePicker';
+import { MobileTable } from './mobile/MobileTable';
+import { MobileKeyValueGrid } from './mobile/MobileKeyValueGrid';
 
 interface TimeSlot {
   id: string;
@@ -588,83 +590,106 @@ export function ConditionalAppointmentBooking({ patientId, patientEmail }: Condi
             {patientId ? 'Jóváhagyásra váró időpontok (ehhez a beteghez)' : 'Jóváhagyásra váró időpontok'}
           </h3>
         </div>
-        {pendingAppointments.length === 0 ? (
-          <div className="text-center py-8">
-            <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500">Jelenleg nincs jóváhagyásra váró időpont.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Beteg
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Email
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Időpont
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Létrehozva
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Státusz
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {pendingAppointments.map((appointment) => (
-                  <tr key={appointment.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <User className="w-4 h-4 text-gray-400 mr-2" />
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {appointment.patientName || 'Név nélküli'}
-                          </div>
-                          {appointment.patientTaj && (
-                            <div className="text-sm text-gray-500">
-                              TAJ: {appointment.patientTaj}
-                            </div>
-                          )}
-                        </div>
+        <MobileTable
+          items={pendingAppointments}
+          renderRow={(appointment) => (
+            <>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <div className="flex items-center">
+                  <User className="w-4 h-4 text-gray-400 mr-2" />
+                  <div>
+                    <div className="text-sm font-medium text-gray-900">
+                      {appointment.patientName || 'Név nélküli'}
+                    </div>
+                    {appointment.patientTaj && (
+                      <div className="text-sm text-gray-500">
+                        TAJ: {appointment.patientTaj}
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <Mail className="w-4 h-4 text-gray-400 mr-2" />
-                        <span className="text-sm text-gray-900">
-                          {appointment.patientEmail || 'Nincs email'}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <Clock className="w-4 h-4 text-gray-400 mr-2" />
-                        <span className="text-sm text-gray-900">
-                          {formatDateTime(appointment.startTime)}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm text-gray-500">
-                        {new Date(appointment.createdAt).toLocaleString('hu-HU')}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                        Várakozik
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                    )}
+                  </div>
+                </div>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <div className="flex items-center">
+                  <Mail className="w-4 h-4 text-gray-400 mr-2" />
+                  <span className="text-sm text-gray-900">
+                    {appointment.patientEmail || 'Nincs email'}
+                  </span>
+                </div>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <div className="flex items-center">
+                  <Clock className="w-4 h-4 text-gray-400 mr-2" />
+                  <span className="text-sm text-gray-900">
+                    {formatDateTime(appointment.startTime)}
+                  </span>
+                </div>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <span className="text-sm text-gray-500">
+                  {new Date(appointment.createdAt).toLocaleString('hu-HU')}
+                </span>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                  Várakozik
+                </span>
+              </td>
+            </>
+          )}
+          renderCard={(appointment) => (
+            <div className="mobile-card">
+              {/* Top row: Beteg név + Státusz */}
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  <h3 className="text-base font-semibold text-gray-900 truncate">
+                    {appointment.patientName || 'Név nélküli'}
+                  </h3>
+                </div>
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 flex-shrink-0">
+                  Várakozik
+                </span>
+              </div>
+
+              {/* Middle: Key-value sorok */}
+              <MobileKeyValueGrid
+                items={[
+                  { key: 'Email', value: appointment.patientEmail || 'Nincs email' },
+                  { key: 'Időpont', value: formatDateTime(appointment.startTime) },
+                  { key: 'Létrehozva', value: new Date(appointment.createdAt).toLocaleString('hu-HU') },
+                  ...(appointment.patientTaj ? [{ key: 'TAJ', value: appointment.patientTaj }] : []),
+                ]}
+              />
+            </div>
+          )}
+          keyExtractor={(appointment) => appointment.id}
+          emptyState={
+            <div className="text-center py-8">
+              <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500">Jelenleg nincs jóváhagyásra váró időpont.</p>
+            </div>
+          }
+          renderHeader={() => (
+            <>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                Beteg
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                Email
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                Időpont
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                Létrehozva
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                Státusz
+              </th>
+            </>
+          )}
+        />
       </div>
 
       {/* Rejected Appointments */}
@@ -676,76 +701,100 @@ export function ConditionalAppointmentBooking({ patientId, patientEmail }: Condi
               {patientId ? 'Elutasított időpontok (ehhez a beteghez)' : 'Elutasított időpontok'}
             </h3>
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Beteg
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Email
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Időpont
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Létrehozva
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Státusz
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {rejectedAppointments.map((appointment) => (
-                  <tr key={appointment.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <User className="w-4 h-4 text-gray-400 mr-2" />
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {appointment.patientName || 'Név nélküli'}
-                          </div>
-                          {appointment.patientTaj && (
-                            <div className="text-sm text-gray-500">
-                              TAJ: {appointment.patientTaj}
-                            </div>
-                          )}
+          <MobileTable
+            items={rejectedAppointments}
+            renderRow={(appointment) => (
+              <>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex items-center">
+                    <User className="w-4 h-4 text-gray-400 mr-2" />
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">
+                        {appointment.patientName || 'Név nélküli'}
+                      </div>
+                      {appointment.patientTaj && (
+                        <div className="text-sm text-gray-500">
+                          TAJ: {appointment.patientTaj}
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <Mail className="w-4 h-4 text-gray-400 mr-2" />
-                        <span className="text-sm text-gray-900">
-                          {appointment.patientEmail || 'Nincs email'}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <Clock className="w-4 h-4 text-gray-400 mr-2" />
-                        <span className="text-sm text-gray-900">
-                          {formatDateTime(appointment.startTime)}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm text-gray-500">
-                        {new Date(appointment.createdAt).toLocaleString('hu-HU')}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                        Elutasítva
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      )}
+                    </div>
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex items-center">
+                    <Mail className="w-4 h-4 text-gray-400 mr-2" />
+                    <span className="text-sm text-gray-900">
+                      {appointment.patientEmail || 'Nincs email'}
+                    </span>
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex items-center">
+                    <Clock className="w-4 h-4 text-gray-400 mr-2" />
+                    <span className="text-sm text-gray-900">
+                      {formatDateTime(appointment.startTime)}
+                    </span>
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className="text-sm text-gray-500">
+                    {new Date(appointment.createdAt).toLocaleString('hu-HU')}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                    Elutasítva
+                  </span>
+                </td>
+              </>
+            )}
+            renderCard={(appointment) => (
+              <div className="mobile-card">
+                {/* Top row: Beteg név + Státusz */}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                    <h3 className="text-base font-semibold text-gray-900 truncate">
+                      {appointment.patientName || 'Név nélküli'}
+                    </h3>
+                  </div>
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 flex-shrink-0">
+                    Elutasítva
+                  </span>
+                </div>
+
+                {/* Middle: Key-value sorok */}
+                <MobileKeyValueGrid
+                  items={[
+                    { key: 'Email', value: appointment.patientEmail || 'Nincs email' },
+                    { key: 'Időpont', value: formatDateTime(appointment.startTime) },
+                    { key: 'Létrehozva', value: new Date(appointment.createdAt).toLocaleString('hu-HU') },
+                    ...(appointment.patientTaj ? [{ key: 'TAJ', value: appointment.patientTaj }] : []),
+                  ]}
+                />
+              </div>
+            )}
+            keyExtractor={(appointment) => appointment.id}
+            renderHeader={() => (
+              <>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Beteg
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Email
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Időpont
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Létrehozva
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Státusz
+                </th>
+              </>
+            )}
+          />
         </div>
       )}
     </div>
