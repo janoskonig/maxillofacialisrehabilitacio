@@ -34,30 +34,67 @@ export function PatientFormSectionNavigation({
   const breakpoint = useBreakpoint();
   const isMobile = breakpoint === 'mobile';
   const [showMobileSelector, setShowMobileSelector] = useState(false);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const activeIndex = sections.findIndex(s => s.id === activeSectionId);
   const activeSection = activeIndex >= 0 ? sections[activeIndex] : null;
   const totalSections = sections.length;
   const currentSectionNumber = activeIndex >= 0 ? activeIndex + 1 : 0;
 
-  // Scroll to section on change
+  // Scroll to section on change (edge case: element might not exist yet)
   const scrollToSection = (sectionId: string) => {
+    if (typeof window === 'undefined') return;
+    
     const element = document.getElementById(`section-${sectionId}`);
-    if (element) {
-      const headerOffset = isMobile ? 80 : 100; // Account for sticky header
-      const elementPosition = element.getBoundingClientRect().top;
-      const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
-
-      window.scrollTo({
-        top: offsetPosition,
-        behavior: 'smooth',
-      });
+    if (!element) {
+      // Edge case: element not found, try again after a short delay
+      setTimeout(() => {
+        const retryElement = document.getElementById(`section-${sectionId}`);
+        if (retryElement) {
+          const headerOffset = isMobile ? 80 : 100;
+          const elementPosition = retryElement.getBoundingClientRect().top;
+          const offsetPosition = elementPosition + (window.scrollY || window.pageYOffset) - headerOffset;
+          window.scrollTo({
+            top: offsetPosition,
+            behavior: 'smooth',
+          });
+        }
+      }, 200);
+      return;
     }
+    
+    const headerOffset = isMobile ? 80 : 100; // Account for sticky header
+    const elementPosition = element.getBoundingClientRect().top;
+    const offsetPosition = elementPosition + (window.scrollY || window.pageYOffset) - headerOffset;
+
+    window.scrollTo({
+      top: offsetPosition,
+      behavior: 'smooth',
+    });
   };
 
+  // Cleanup scroll timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const handleSectionSelect = (sectionId: string) => {
+    // Clear any pending scroll
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+    
     onSectionChange(sectionId);
     setShowMobileSelector(false);
-    setTimeout(() => scrollToSection(sectionId), 100);
+    
+    // Scroll after a short delay to ensure DOM is updated
+    scrollTimeoutRef.current = setTimeout(() => {
+      scrollToSection(sectionId);
+      scrollTimeoutRef.current = null;
+    }, 100);
   };
 
   // Mobile: Sticky top selector

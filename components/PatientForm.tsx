@@ -2097,7 +2097,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
     if (sectionElement) {
       const headerOffset = breakpoint === 'mobile' ? 100 : 150;
       const elementPosition = sectionElement.getBoundingClientRect().top;
-      const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+      const offsetPosition = elementPosition + (window.scrollY || window.pageYOffset) - headerOffset;
       window.scrollTo({
         top: offsetPosition,
         behavior: 'smooth',
@@ -2138,7 +2138,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
                       if (element) {
                         const headerOffset = 100;
                         const elementPosition = element.getBoundingClientRect().top;
-                        const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+                        const offsetPosition = elementPosition + (window.scrollY || window.pageYOffset) - headerOffset;
                         window.scrollTo({
                           top: offsetPosition,
                           behavior: 'smooth',
