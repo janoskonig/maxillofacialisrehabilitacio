@@ -26,11 +26,13 @@ interface MobileActionMenuProps {
  * - Guard: doesn't render if 0-1 items
  */
 export function MobileActionMenu({ items, trigger }: MobileActionMenuProps) {
+  // All hooks must be called unconditionally at the top level
   const breakpoint = useBreakpoint();
   const isMobile = breakpoint === 'mobile';
   const [isOpen, setIsOpen] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
-  // Guard: don't render if 0 items
+  // Guard: don't render if 0 items (after all hooks)
   if (items.length === 0) {
     return null;
   }
@@ -39,6 +41,7 @@ export function MobileActionMenu({ items, trigger }: MobileActionMenuProps) {
     if (item.disabled) return;
     item.onClick();
     setIsOpen(false);
+    setIsDropdownOpen(false);
   };
 
   // Mobile: BottomSheet
@@ -95,7 +98,6 @@ export function MobileActionMenu({ items, trigger }: MobileActionMenuProps) {
   }
 
   // Desktop: Dropdown menu
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   return (
     <div className="relative">
