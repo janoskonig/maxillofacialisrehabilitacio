@@ -9,7 +9,7 @@ import { PatientList } from '@/components/PatientList';
 import { OPImageViewer } from '@/components/OPImageViewer';
 import { FotoImageViewer } from '@/components/FotoImageViewer';
 import { useToast } from '@/contexts/ToastContext';
-import { Plus, Search, Users, LogOut, Shield, Settings, Calendar, CalendarDays, MessageCircle, Filter } from 'lucide-react';
+import { Plus, Search, Users, LogOut, Shield, Settings, Calendar, CalendarDays, MessageCircle, Filter, Download, Bell, X } from 'lucide-react';
 import { getCurrentUser, getUserEmail, getUserRole, logout } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
 import { MobileMenu } from '@/components/MobileMenu';
@@ -39,6 +39,7 @@ export default function Home() {
   const [opViewerPatient, setOpViewerPatient] = useState<Patient | null>(null);
   const [fotoViewerPatient, setFotoViewerPatient] = useState<Patient | null>(null);
   const [showMessageModal, setShowMessageModal] = useState(false);
+  const [showPWAAnnouncement, setShowPWAAnnouncement] = useState(false);
   const { showToast, confirm: confirmDialog } = useToast();
 
   useEffect(() => {
@@ -88,6 +89,23 @@ export default function Home() {
     };
     checkAuth();
   }, [router]);
+
+  // Check if PWA announcement should be shown
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const dismissed = localStorage.getItem('pwa-announcement-dismissed');
+      if (!dismissed) {
+        setShowPWAAnnouncement(true);
+      }
+    }
+  }, []);
+
+  const handleDismissPWAAnnouncement = () => {
+    setShowPWAAnnouncement(false);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('pwa-announcement-dismissed', 'true');
+    }
+  };
 
   // Sync view from URL on mount
   useEffect(() => {
@@ -463,6 +481,49 @@ export default function Home() {
           )}
         </div>
       </div>
+
+          {/* PWA Announcement Banner */}
+          {showPWAAnnouncement && (
+            <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg shadow-sm p-4 relative">
+              <button
+                onClick={handleDismissPWAAnnouncement}
+                className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 transition-colors"
+                aria-label="Bezárás"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <div className="flex items-start gap-3 pr-8">
+                <div className="flex-shrink-0 mt-0.5">
+                  <div className="flex items-center gap-2">
+                    <Download className="w-5 h-5 text-blue-600" />
+                    <Bell className="w-5 h-5 text-indigo-600" />
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-1">
+                    Új funkciók: Telepíthető alkalmazás és push értesítések
+                  </h3>
+                  <p className="text-sm text-gray-700 mb-2">
+                    Az alkalmazás mostantól <strong>telepíthető</strong> asztali és mobil eszközökre, és <strong>push értesítéseket</strong> is küldhet időpont foglalásokról, üzenetekről és emlékeztetőkről.
+                  </p>
+                  <div className="flex flex-wrap gap-2 text-xs text-gray-600">
+                    <span className="flex items-center gap-1">
+                      <Download className="w-3.5 h-3.5" />
+                      Telepíthető PWA
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Bell className="w-3.5 h-3.5" />
+                      Push értesítések
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Settings className="w-3.5 h-3.5" />
+                      Beállításokban engedélyezhető
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Dashboard Section */}
           <div className="mb-6">
