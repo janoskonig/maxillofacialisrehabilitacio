@@ -109,7 +109,7 @@ export function PortalRegister() {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="form-input"
+            className="form-input mobile-touch-target"
             placeholder="pelda@email.hu"
             required
             disabled={loading}
@@ -126,7 +126,7 @@ export function PortalRegister() {
             type="text"
             value={taj}
             onChange={(e) => setTaj(e.target.value)}
-            className="form-input"
+            className="form-input mobile-touch-target"
             placeholder="123-456-789"
             required
             disabled={loading}
@@ -147,7 +147,7 @@ export function PortalRegister() {
             type="text"
             value={nev}
             onChange={(e) => setNev(e.target.value)}
-            className="form-input"
+            className="form-input mobile-touch-target"
             placeholder="Kovács János"
             required
             disabled={loading}
@@ -171,7 +171,7 @@ export function PortalRegister() {
                 type="tel"
                 value={telefonszam}
                 onChange={(e) => setTelefonszam(e.target.value)}
-                className="form-input"
+                className="form-input mobile-touch-target"
                 placeholder="+36123456789"
                 disabled={loading}
               />
@@ -187,7 +187,7 @@ export function PortalRegister() {
                 type="date"
                 value={szuletesiDatum}
                 onChange={(e) => setSzuletesiDatum(e.target.value)}
-                className="form-input"
+                className="form-input mobile-touch-target"
                 disabled={loading}
               />
             </div>
@@ -201,7 +201,7 @@ export function PortalRegister() {
                 id="reg-nem"
                 value={nem}
                 onChange={(e) => setNem(e.target.value as 'ferfi' | 'no' | '')}
-                className="form-input"
+                className="form-input mobile-touch-target"
                 disabled={loading}
               >
                 <option value="">Válasszon...</option>
@@ -220,13 +220,13 @@ export function PortalRegister() {
                 type="text"
                 value={cim}
                 onChange={(e) => setCim(e.target.value)}
-                className="form-input"
+                className="form-input mobile-touch-target"
                 placeholder="Utca, házszám"
                 disabled={loading}
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="reg-varos" className="form-label">
                   Város
@@ -236,7 +236,7 @@ export function PortalRegister() {
                   type="text"
                   value={varos}
                   onChange={(e) => setVaros(e.target.value)}
-                  className="form-input"
+                  className="form-input mobile-touch-target"
                   placeholder="Budapest"
                   disabled={loading}
                 />
@@ -251,7 +251,7 @@ export function PortalRegister() {
                   type="text"
                   value={iranyitoszam}
                   onChange={(e) => setIranyitoszam(e.target.value)}
-                  className="form-input"
+                  className="form-input mobile-touch-target"
                   placeholder="1088"
                   disabled={loading}
                 />
@@ -277,7 +277,7 @@ export function PortalRegister() {
                 type="text"
                 value={beutaloOrvos}
                 onChange={(e) => setBeutaloOrvos(e.target.value)}
-                className="form-input"
+                className="form-input mobile-touch-target"
                 placeholder="Dr. Kovács János"
                 disabled={loading}
               />
@@ -292,7 +292,7 @@ export function PortalRegister() {
                 id="reg-beutalo-indokolas"
                 value={beutaloIndokolas}
                 onChange={(e) => setBeutaloIndokolas(e.target.value)}
-                className="form-input"
+                className="form-input mobile-touch-target"
                 placeholder="Beutalás indokának leírása..."
                 rows={3}
                 disabled={loading}
@@ -304,7 +304,7 @@ export function PortalRegister() {
         <button
           type="submit"
           disabled={loading}
-          className="btn-primary w-full flex items-center justify-center gap-2 py-2.5"
+          className="btn-primary w-full flex items-center justify-center gap-2 py-2.5 mobile-touch-target"
         >
           {loading ? (
             <>

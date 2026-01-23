@@ -343,8 +343,35 @@ export function PortalDashboard() {
         </div>
       )}
 
+      {/* Messages Card */}
+      <div className="mobile-card">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5 text-medical-primary" />
+            Üzenetek
+          </h2>
+          {unreadMessageCount > 0 && (
+            <span className="px-2 py-1 text-xs font-semibold text-white bg-red-500 rounded-full">
+              {unreadMessageCount}
+            </span>
+          )}
+        </div>
+        <p className="text-sm sm:text-base text-gray-600 mb-4">
+          {unreadMessageCount > 0
+            ? `${unreadMessageCount} olvasatlan üzenet`
+            : 'Nincs olvasatlan üzenet'}
+        </p>
+        <button
+          onClick={() => router.push('/patient-portal/messages')}
+          className="btn-primary w-full sm:w-auto flex items-center gap-2 text-sm sm:text-base px-4 sm:px-6 py-2 sm:py-2.5 mobile-touch-target justify-center"
+        >
+          <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" />
+          Üzenetek megtekintése
+        </button>
+      </div>
+
       {/* Document Upload Button */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+      <div className="mobile-card">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
@@ -357,7 +384,7 @@ export function PortalDashboard() {
           </div>
           <button
             onClick={() => router.push('/patient-portal/documents')}
-            className="btn-primary flex items-center gap-2 text-sm sm:text-base px-4 sm:px-6 py-2 sm:py-2.5 w-full sm:w-auto justify-center"
+            className="btn-primary flex items-center gap-2 text-sm sm:text-base px-4 sm:px-6 py-2 sm:py-2.5 w-full sm:w-auto mobile-touch-target justify-center"
           >
             <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
             Dokumentumok feltöltése
