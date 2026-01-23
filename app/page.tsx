@@ -1,13 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense, useCallback, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { Patient, patientSchema } from '@/lib/types';
 import { getAllPatients, savePatient, searchPatients, getPatientById } from '@/lib/storage';
-import { PatientForm } from '@/components/PatientForm';
 import { PatientList } from '@/components/PatientList';
-import { OPImageViewer } from '@/components/OPImageViewer';
-import { FotoImageViewer } from '@/components/FotoImageViewer';
 import { useToast } from '@/contexts/ToastContext';
 import { Plus, Search, Users, LogOut, Shield, Settings, Calendar, CalendarDays, MessageCircle, Filter, Download, Bell, X } from 'lucide-react';
 import { getCurrentUser, getUserEmail, getUserRole, logout } from '@/lib/auth';
@@ -15,7 +13,26 @@ import { Logo } from '@/components/Logo';
 import { MobileMenu } from '@/components/MobileMenu';
 import { Dashboard } from '@/components/Dashboard';
 import { FeedbackButtonTrigger } from '@/components/FeedbackButton';
-import { SendMessageModal } from '@/components/SendMessageModal';
+
+// Lazy load heavy components
+const PatientForm = dynamic(() => import('@/components/PatientForm').then(mod => ({ default: mod.PatientForm })), {
+  loading: () => <div className="card text-center py-12"><p className="text-gray-600">Beteg űrlap betöltése...</p></div>,
+  ssr: false
+});
+
+const OPImageViewer = dynamic(() => import('@/components/OPImageViewer').then(mod => ({ default: mod.OPImageViewer })), {
+  loading: () => <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"><p className="text-white">Kép betöltése...</p></div>,
+  ssr: false
+});
+
+const FotoImageViewer = dynamic(() => import('@/components/FotoImageViewer').then(mod => ({ default: mod.FotoImageViewer })), {
+  loading: () => <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"><p className="text-white">Kép betöltése...</p></div>,
+  ssr: false
+});
+
+const SendMessageModal = dynamic(() => import('@/components/SendMessageModal').then(mod => ({ default: mod.SendMessageModal })), {
+  ssr: false
+});
 
 type UserRoleType = 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
 
@@ -275,7 +292,7 @@ export default function Home() {
     router.push(`/patients/${patient.id}/view`);
   };
 
-  const handleCloseForm = async () => {
+  const handleCloseForm = useCallback(async () => {
     // This will be called by PatientForm's handleCancel after checking for unsaved changes
     setShowForm(false);
     setEditingPatient(null);
@@ -283,7 +300,7 @@ export default function Home() {
     
     // Reload patients list to get latest data from database
     await loadPatients();
-  };
+  }, [loadPatients]);
 
   const handleLogout = () => {
     logout();
@@ -602,7 +619,7 @@ export default function Home() {
                   userRole={userRole}
                   sortField={sortField}
                   sortDirection={sortDirection}
-                  onSort={(field: 'nev' | 'idopont' | 'createdAt') => {
+                  onSort={useCallback((field: 'nev' | 'idopont' | 'createdAt') => {
                     if (sortField === field) {
                       // Toggle direction if same field
                       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -611,7 +628,7 @@ export default function Home() {
                       setSortField(field);
                       setSortDirection('asc');
                     }
-                  }}
+                  }, [sortField, sortDirection])}
                   searchQuery={searchQuery}
                 />
               )}

@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode } from 'react';
+import { ReactNode, memo } from 'react';
 import React from 'react';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { MobileSkeletonCard } from './MobileSkeletonCard';
@@ -26,7 +26,7 @@ interface MobileTableProps<T> {
  * - Handles loading (skeleton) and empty states
  * - Consistent styling across the app
  */
-export function MobileTable<T>({
+function MobileTableComponent<T>({
   items,
   renderRow,
   renderCard,
@@ -128,3 +128,6 @@ export function MobileTable<T>({
     </div>
   );
 }
+
+// Memoize to prevent unnecessary re-renders
+export const MobileTable = memo(MobileTableComponent) as typeof MobileTableComponent;
