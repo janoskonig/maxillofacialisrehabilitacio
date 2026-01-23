@@ -606,11 +606,11 @@ export function PatientMessagesList() {
 
   // Detail header content
   const detailHeaderContent = selectedPatientId ? (
-    <>
-      <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">
+    <div className="flex items-center justify-between gap-2 w-full">
+      <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate flex-1 min-w-0">
         {selectedPatientName}
       </h3>
-      <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 mt-1 sm:mt-0">
+      <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
         {isConnected && (
           <div className="w-2 h-2 bg-green-500 rounded-full animate-connection-pulse" title="Kapcsolódva" />
         )}
@@ -620,12 +620,12 @@ export function PatientMessagesList() {
           </span>
         )}
       </div>
-    </>
+    </div>
   ) : null;
 
   // Detail content (messages + input)
   const detailContent = selectedPatientId ? (
-    <>
+    <div className="flex flex-col h-full">
       {/* Messages */}
       {loadingMessages ? (
         <div className="flex-1 flex items-center justify-center bg-gray-50">
@@ -744,7 +744,7 @@ export function PatientMessagesList() {
           </button>
         </div>
       </div>
-    </>
+    </div>
   ) : (
     <div className="flex-1 flex items-center justify-center text-gray-500">
       <div className="text-center">
