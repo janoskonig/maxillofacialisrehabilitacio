@@ -923,6 +923,15 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
 
   // Manual submit - használja a RHF data paramétert
   const onSubmit = async (data: Patient) => {
+    // Check for validation errors before submitting
+    const hasErrors = errors && Object.keys(errors).length > 0;
+    if (hasErrors) {
+      // Scroll to first invalid field
+      scrollToFirstInvalid();
+      showToast('Kérjük, javítsa ki a hibákat az űrlapban', 'error');
+      return;
+    }
+
     try {
       await performSave('manual', data);
     } catch (error) {
@@ -1979,6 +1988,9 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
     ? allSections.filter(s => showOnlySections.includes(s.id))
     : allSections;
 
+  // Get active section index
+  const activeIndex = visibleSections.findIndex(s => s.id === activeSectionId);
+
   // Track active section based on scroll position
   useEffect(() => {
     const handleScroll = () => {
@@ -2013,16 +2025,95 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
     };
   }, [visibleSections, activeSectionId, breakpoint]);
 
+  // Map fields to sections
+  const fieldToSectionMap: Record<string, string> = {
+    // alapadatok
+    nev: 'alapadatok',
+    taj: 'alapadatok',
+    telefonszam: 'alapadatok',
+    // szemelyes
+    szuletesiDatum: 'szemelyes',
+    nem: 'szemelyes',
+    email: 'szemelyes',
+    cim: 'szemelyes',
+    varos: 'szemelyes',
+    iranyitoszam: 'szemelyes',
+    // beutalo
+    beutaloOrvos: 'beutalo',
+    beutaloIntezmeny: 'beutalo',
+    beutaloIndokolas: 'beutalo',
+    mutetIdeje: 'beutalo',
+    szovettaniDiagnozis: 'beutalo',
+    nyakiBlokkdisszekcio: 'beutalo',
+    // kezeloorvos
+    kezeleoorvos: 'kezeloorvos',
+    // anamnezis
+    alkoholfogyasztas: 'anamnezis',
+    dohanyzasSzam: 'anamnezis',
+    kezelesreErkezesIndoka: 'anamnezis',
+    maxilladefektusVan: 'anamnezis',
+    brownFuggolegesOsztaly: 'anamnezis',
+    brownVizszintesKomponens: 'anamnezis',
+    mandibuladefektusVan: 'anamnezis',
+    kovacsDobakOsztaly: 'anamnezis',
+    nyelvmozgásokAkadályozottak: 'anamnezis',
+    gombocosBeszed: 'anamnezis',
+    nyalmirigyAllapot: 'anamnezis',
+    tnmStaging: 'anamnezis',
+    // betegvizsgalat - fogazati státusz mezők (sok, de a legfontosabbak)
+    // Note: betegvizsgalat section has many fields, we'll count all errors that don't belong to other sections
+  };
+
   // Calculate section errors (using existing errors from useForm)
   const sectionErrors: Record<string, number> = useMemo(() => {
     const sectionErrorCounts: Record<string, number> = {};
     visibleSections.forEach(section => {
-      // Count errors in this section (simplified - would need to check actual form errors)
-      // TODO: Implement actual error counting based on errors object from useForm
       sectionErrorCounts[section.id] = 0;
     });
+
+    // Count errors by section
+    if (errors) {
+      Object.keys(errors).forEach(fieldName => {
+        const sectionId = fieldToSectionMap[fieldName] || 'betegvizsgalat'; // Default to betegvizsgalat if not mapped
+        if (visibleSections.some(s => s.id === sectionId)) {
+          sectionErrorCounts[sectionId] = (sectionErrorCounts[sectionId] || 0) + 1;
+        }
+      });
+    }
+
     return sectionErrorCounts;
-  }, [visibleSections]);
+  }, [visibleSections, errors, fieldToSectionMap]);
+
+  // Scroll to first invalid field
+  const scrollToFirstInvalid = useCallback(() => {
+    if (!errors || Object.keys(errors).length === 0) return;
+
+    // Find first error field
+    const firstErrorField = Object.keys(errors)[0];
+    const sectionId = fieldToSectionMap[firstErrorField] || 'betegvizsgalat';
+    
+    // First scroll to section
+    const sectionElement = document.getElementById(`section-${sectionId}`);
+    if (sectionElement) {
+      const headerOffset = breakpoint === 'mobile' ? 100 : 150;
+      const elementPosition = sectionElement.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: 'smooth',
+      });
+    }
+
+    // Then scroll to field
+    setTimeout(() => {
+      const fieldElement = document.querySelector(`[name="${firstErrorField}"]`);
+      if (fieldElement) {
+        fieldElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Focus the field
+        (fieldElement as HTMLElement).focus();
+      }
+    }, 300);
+  }, [errors, fieldToSectionMap, breakpoint]);
 
   return (
     <div className="p-3 sm:p-6 relative pb-20 sm:pb-24">
@@ -2031,11 +2122,15 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
         <div className="mobile-cta-bar fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-soft-xl px-3 sm:px-6 md:px-8">
           <div className="max-w-4xl mx-auto flex flex-col sm:flex-row justify-between gap-2 sm:gap-3 py-3 sm:py-4">
             {/* Left: Next section button (mobile only if not last section) */}
-            {breakpoint === 'mobile' && activeIndex >= 0 && activeIndex < visibleSections.length - 1 && (
+            {breakpoint === 'mobile' && (() => {
+              const currentActiveIndex = visibleSections.findIndex(s => s.id === activeSectionId);
+              return currentActiveIndex >= 0 && currentActiveIndex < visibleSections.length - 1;
+            })() && (
               <button
                 type="button"
                 onClick={() => {
-                  const nextSection = visibleSections[activeIndex + 1];
+                  const currentActiveIndex = visibleSections.findIndex(s => s.id === activeSectionId);
+                  const nextSection = visibleSections[currentActiveIndex + 1];
                   if (nextSection) {
                     setActiveSectionId(nextSection.id);
                     setTimeout(() => {
