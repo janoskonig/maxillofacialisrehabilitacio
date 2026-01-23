@@ -30,8 +30,8 @@ export function MobileActionMenu({ items, trigger }: MobileActionMenuProps) {
   const isMobile = breakpoint === 'mobile';
   const [isOpen, setIsOpen] = useState(false);
 
-  // Guard: don't render if 0-1 items
-  if (items.length <= 1) {
+  // Guard: don't render if 0 items
+  if (items.length === 0) {
     return null;
   }
 
