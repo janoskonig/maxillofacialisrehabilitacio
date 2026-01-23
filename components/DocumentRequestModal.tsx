@@ -42,6 +42,8 @@ export function DocumentRequestModal({
   messageId,
 }: DocumentRequestModalProps) {
   const { showToast } = useToast();
+  const breakpoint = useBreakpoint();
+  const isMobile = breakpoint === 'mobile';
   const [selectedType, setSelectedType] = useState<string | null>(requestedTag || null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [description, setDescription] = useState('');
@@ -206,6 +208,176 @@ export function DocumentRequestModal({
   const needsPatientSelection = chatType === 'doctor-doctor' && !selectedPatientId && !requestedPatientId;
   const canUpload = !needsPatientSelection || selectedPatientIdLocal;
 
+  const modalContent = (
+    <>
+      {/* Beteg választó (csak orvos-orvos chatben, ha nincs kiválasztva) */}
+      {(needsPatientSelection || (chatType === 'doctor-doctor' && requestedPatientId && !selectedPatientId)) && (
+        <div>
+          <label className="form-label block mb-2">
+            Beteg <span className="text-red-500">*</span>
+          </label>
+          {loadingPatients ? (
+            <div className="flex items-center gap-2 text-gray-500">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Betegek betöltése...</span>
+            </div>
+          ) : (
+            <select
+              value={selectedPatientIdLocal || ''}
+              onChange={(e) => setSelectedPatientIdLocal(e.target.value || null)}
+              className="form-input w-full"
+              disabled={uploading}
+            >
+              <option value="">-- Válasszon beteget --</option>
+              {patients.map((patient) => (
+                <option key={patient.id} value={patient.id}>
+                  {patient.nev || patient.email || 'Névtelen beteg'}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
+
+      {/* Dokumentum típus választó */}
+      <div>
+        <label className="form-label block mb-3">
+          Dokumentum típusa <span className="text-red-500">*</span>
+        </label>
+        <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-2'} gap-3`}>
+          {DOCUMENT_TYPES.map((type) => {
+            const Icon = type.icon;
+            const isSelected = selectedType === type.value;
+            return (
+              <button
+                key={type.value || 'general'}
+                type="button"
+                onClick={() => setSelectedType(type.value)}
+                disabled={uploading}
+                className={`p-4 border-2 rounded-lg text-left transition-colors mobile-touch-target ${
+                  isSelected
+                    ? 'border-medical-primary bg-blue-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                } ${uploading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+              >
+                <div className="flex items-start gap-3">
+                  <div className={`p-2 rounded-lg ${isSelected ? 'bg-medical-primary text-white' : 'bg-gray-100 text-gray-600'}`}>
+                    <Icon className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1">
+                    <div className={`font-medium ${isSelected ? 'text-medical-primary' : 'text-gray-900'}`}>
+                      {type.label}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">{type.description}</div>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Fájl választó */}
+      <div>
+        <label className="form-label block mb-2">
+          Fájl <span className="text-red-500">*</span>
+        </label>
+        <input
+          ref={fileInputRef}
+          type="file"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) handleFileSelect(file);
+          }}
+          className="hidden"
+          accept={selectedType === 'op' || selectedType === 'foto' ? 'image/*' : undefined}
+          disabled={uploading}
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="btn-secondary w-full flex items-center justify-center gap-2 py-3 mobile-touch-target"
+        >
+          <Upload className="w-5 h-5" />
+          {selectedFile ? selectedFile.name : 'Fájl kiválasztása'}
+        </button>
+        {selectedFile && (
+          <div className="mt-2 text-sm text-gray-600">
+            Kiválasztva: <span className="font-medium">{selectedFile.name}</span>
+            {' '}({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
+          </div>
+        )}
+      </div>
+
+      {/* Leírás mező */}
+      <div>
+        <label className="form-label block mb-2">
+          Leírás (opcionális)
+        </label>
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          className="form-input w-full"
+          rows={3}
+          placeholder="Dokumentum leírása..."
+          disabled={uploading}
+        />
+      </div>
+    </>
+  );
+
+  const modalActions = (
+    <>
+      <button
+        onClick={onClose}
+        disabled={uploading}
+        className="btn-secondary px-4 py-2 mobile-touch-target flex-1 sm:flex-none"
+      >
+        Mégse
+      </button>
+      <button
+        onClick={handleUpload}
+        disabled={uploading || !canUpload || !selectedFile || selectedType === null}
+        className="btn-primary px-4 py-2 flex items-center gap-2 mobile-touch-target flex-1 sm:flex-none"
+      >
+        {uploading ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span className="hidden sm:inline">Feltöltés...</span>
+            <span className="sm:hidden">Feltöltés...</span>
+          </>
+        ) : (
+          <>
+            <Upload className="w-4 h-4" />
+            <span className="hidden sm:inline">Feltöltés és küldés</span>
+            <span className="sm:hidden">Feltöltés</span>
+          </>
+        )}
+      </button>
+    </>
+  );
+
+  // Mobile: BottomSheet
+  if (isMobile) {
+    return (
+      <MobileBottomSheet
+        open={isOpen}
+        onOpenChange={onClose}
+        title="Dokumentum feltöltése"
+        type="dialog"
+      >
+        <div className="space-y-6 pb-4">
+          {modalContent}
+        </div>
+        <div className="flex items-center gap-3 pt-4 border-t bg-gray-50 -mx-4 -mb-4 px-4 pb-4 mobile-safe-bottom">
+          {modalActions}
+        </div>
+      </MobileBottomSheet>
+    );
+  }
+
+  // Desktop: Modal
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
@@ -223,148 +395,12 @@ export function DocumentRequestModal({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Beteg választó (csak orvos-orvos chatben, ha nincs kiválasztva) */}
-          {(needsPatientSelection || (chatType === 'doctor-doctor' && requestedPatientId && !selectedPatientId)) && (
-            <div>
-              <label className="form-label block mb-2">
-                Beteg <span className="text-red-500">*</span>
-              </label>
-              {loadingPatients ? (
-                <div className="flex items-center gap-2 text-gray-500">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Betegek betöltése...</span>
-                </div>
-              ) : (
-                <select
-                  value={selectedPatientIdLocal || ''}
-                  onChange={(e) => setSelectedPatientIdLocal(e.target.value || null)}
-                  className="form-input w-full"
-                  disabled={uploading}
-                >
-                  <option value="">-- Válasszon beteget --</option>
-                  {patients.map((patient) => (
-                    <option key={patient.id} value={patient.id}>
-                      {patient.nev || patient.email || 'Névtelen beteg'}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-          )}
-
-          {/* Dokumentum típus választó */}
-          <div>
-            <label className="form-label block mb-3">
-              Dokumentum típusa <span className="text-red-500">*</span>
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {DOCUMENT_TYPES.map((type) => {
-                const Icon = type.icon;
-                const isSelected = selectedType === type.value;
-                return (
-                  <button
-                    key={type.value || 'general'}
-                    type="button"
-                    onClick={() => setSelectedType(type.value)}
-                    disabled={uploading}
-                    className={`p-4 border-2 rounded-lg text-left transition-colors ${
-                      isSelected
-                        ? 'border-medical-primary bg-blue-50'
-                        : 'border-gray-200 hover:border-gray-300'
-                    } ${uploading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className={`p-2 rounded-lg ${isSelected ? 'bg-medical-primary text-white' : 'bg-gray-100 text-gray-600'}`}>
-                        <Icon className="w-5 h-5" />
-                      </div>
-                      <div className="flex-1">
-                        <div className={`font-medium ${isSelected ? 'text-medical-primary' : 'text-gray-900'}`}>
-                          {type.label}
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">{type.description}</div>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Fájl választó */}
-          <div>
-            <label className="form-label block mb-2">
-              Fájl <span className="text-red-500">*</span>
-            </label>
-            <input
-              ref={fileInputRef}
-              type="file"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleFileSelect(file);
-              }}
-              className="hidden"
-              accept={selectedType === 'op' || selectedType === 'foto' ? 'image/*' : undefined}
-              disabled={uploading}
-            />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              className="btn-secondary w-full flex items-center justify-center gap-2 py-3"
-            >
-              <Upload className="w-5 h-5" />
-              {selectedFile ? selectedFile.name : 'Fájl kiválasztása'}
-            </button>
-            {selectedFile && (
-              <div className="mt-2 text-sm text-gray-600">
-                Kiválasztva: <span className="font-medium">{selectedFile.name}</span>
-                {' '}({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
-              </div>
-            )}
-          </div>
-
-          {/* Leírás mező */}
-          <div>
-            <label className="form-label block mb-2">
-              Leírás (opcionális)
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="form-input w-full"
-              rows={3}
-              placeholder="Dokumentum leírása..."
-              disabled={uploading}
-            />
-          </div>
+          {modalContent}
         </div>
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-3 p-4 border-t bg-gray-50">
-          <button
-            onClick={onClose}
-            disabled={uploading}
-            className="btn-secondary px-4 py-2"
-          >
-            Mégse
-          </button>
-          <button
-            onClick={handleUpload}
-            disabled={uploading || !canUpload || !selectedFile || selectedType === null}
-            className="btn-primary px-4 py-2 flex items-center gap-2"
-          >
-            {uploading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Feltöltés...
-              </>
-            ) : (
-              <>
-                <Upload className="w-4 h-4" />
-                Feltöltés és küldés
-              </>
-            )}
-          </button>
+          {modalActions}
         </div>
       </div>
     </div>
