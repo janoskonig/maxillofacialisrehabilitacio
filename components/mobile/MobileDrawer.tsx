@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, ReactNode } from 'react';
+import { useEffect, useRef, useState, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
@@ -31,6 +31,19 @@ export function MobileDrawer({
   const isMobile = breakpoint === 'mobile';
   const contentRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
+  
+  // SSR-safe mounting
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Close drawer when breakpoint changes from mobile to desktop
+  useEffect(() => {
+    if (open && !isMobile) {
+      onOpenChange(false);
+    }
+  }, [isMobile, open, onOpenChange]);
 
   // ESC key handler
   useEffect(() => {
@@ -54,6 +67,10 @@ export function MobileDrawer({
     const focusableElements = content.querySelectorAll(
       'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
     );
+    
+    // Edge case: no focusable elements
+    if (focusableElements.length === 0) return;
+    
     const firstElement = focusableElements[0] as HTMLElement;
     const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
 
@@ -73,29 +90,48 @@ export function MobileDrawer({
       }
     };
 
-    // Focus first element
-    firstElement?.focus();
+    // Focus first element (only if it exists)
+    if (firstElement) {
+      firstElement.focus();
+    }
 
     document.addEventListener('keydown', handleTab);
     return () => document.removeEventListener('keydown', handleTab);
   }, [open, isMobile]);
 
-  // Prevent body scroll when open
+  // Prevent body scroll when open (with counter for multiple modals)
   useEffect(() => {
     if (!isMobile) return;
     
     if (open) {
+      // Increment lock counter
+      const currentCount = parseInt(document.body.dataset.scrollLockCount || '0', 10);
+      document.body.dataset.scrollLockCount = String(currentCount + 1);
       document.body.style.overflow = 'hidden';
     } else {
-      document.body.style.overflow = '';
+      // Decrement lock counter
+      const currentCount = parseInt(document.body.dataset.scrollLockCount || '0', 10);
+      const newCount = Math.max(0, currentCount - 1);
+      document.body.dataset.scrollLockCount = String(newCount);
+      
+      // Only unlock if no other modals are open
+      if (newCount === 0) {
+        document.body.style.overflow = '';
+      }
     }
     return () => {
-      document.body.style.overflow = '';
+      // Cleanup: ensure we don't leave body locked
+      const currentCount = parseInt(document.body.dataset.scrollLockCount || '0', 10);
+      const newCount = Math.max(0, currentCount - 1);
+      document.body.dataset.scrollLockCount = String(newCount);
+      if (newCount === 0) {
+        document.body.style.overflow = '';
+      }
     };
   }, [open, isMobile]);
 
-  // Don't render on desktop or when closed
-  if (!isMobile || !open) {
+  // Don't render on desktop, when closed, or before mount
+  if (!mounted || !isMobile || !open) {
     return null;
   }
 
@@ -141,7 +177,7 @@ export function MobileDrawer({
             </h2>
             <button
               onClick={() => onOpenChange(false)}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              className="text-gray-400 hover:text-gray-600 transition-colors mobile-touch-target"
               aria-label="Bezárás"
             >
               <X className="w-5 h-5" />
@@ -157,10 +193,10 @@ export function MobileDrawer({
     </div>
   );
 
-  // Use portal for better z-index management
-  if (typeof window !== 'undefined') {
-    return createPortal(content, document.body);
+  // Use portal for better z-index management (SSR-safe)
+  if (!mounted) {
+    return null;
   }
 
-  return null;
+  return createPortal(content, document.body);
 }

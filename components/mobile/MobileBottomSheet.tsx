@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, ReactNode } from 'react';
+import { useEffect, useRef, useState, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
@@ -33,6 +33,12 @@ export function MobileBottomSheet({
   const isMobile = breakpoint === 'mobile';
   const contentRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
+  
+  // SSR-safe mounting
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // ESC key handler
   useEffect(() => {
@@ -56,6 +62,10 @@ export function MobileBottomSheet({
     const focusableElements = content.querySelectorAll(
       'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
     );
+    
+    // Edge case: no focusable elements
+    if (focusableElements.length === 0) return;
+    
     const firstElement = focusableElements[0] as HTMLElement;
     const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
 
@@ -75,26 +85,46 @@ export function MobileBottomSheet({
       }
     };
 
-    // Focus first element
-    firstElement?.focus();
+    // Focus first element (only if it exists)
+    if (firstElement) {
+      firstElement.focus();
+    }
 
     document.addEventListener('keydown', handleTab);
     return () => document.removeEventListener('keydown', handleTab);
   }, [open]);
 
-  // Prevent body scroll when open
+  // Prevent body scroll when open (with counter for multiple modals)
   useEffect(() => {
     if (open) {
+      // Increment lock counter
+      const currentCount = parseInt(document.body.dataset.scrollLockCount || '0', 10);
+      document.body.dataset.scrollLockCount = String(currentCount + 1);
       document.body.style.overflow = 'hidden';
     } else {
-      document.body.style.overflow = '';
+      // Decrement lock counter
+      const currentCount = parseInt(document.body.dataset.scrollLockCount || '0', 10);
+      const newCount = Math.max(0, currentCount - 1);
+      document.body.dataset.scrollLockCount = String(newCount);
+      
+      // Only unlock if no other modals are open
+      if (newCount === 0) {
+        document.body.style.overflow = '';
+      }
     }
     return () => {
-      document.body.style.overflow = '';
+      // Cleanup: ensure we don't leave body locked
+      const currentCount = parseInt(document.body.dataset.scrollLockCount || '0', 10);
+      const newCount = Math.max(0, currentCount - 1);
+      document.body.dataset.scrollLockCount = String(newCount);
+      if (newCount === 0) {
+        document.body.style.overflow = '';
+      }
     };
   }, [open]);
 
-  if (!open) return null;
+  // Don't render when closed or before mount
+  if (!mounted || !open) return null;
 
   const handleOverlayClick = (e: React.MouseEvent) => {
     if (e.target === overlayRef.current) {
@@ -162,7 +192,7 @@ export function MobileBottomSheet({
         {!isMobile && (
           <button
             onClick={() => onOpenChange(false)}
-            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors mobile-touch-target"
             aria-label="Bezárás"
           >
             <X className="w-5 h-5" />
@@ -172,10 +202,10 @@ export function MobileBottomSheet({
     </div>
   );
 
-  // Use portal for better z-index management
-  if (typeof window !== 'undefined') {
-    return createPortal(content, document.body);
+  // Use portal for better z-index management (SSR-safe)
+  if (!mounted) {
+    return null;
   }
 
-  return null;
+  return createPortal(content, document.body);
 }

@@ -179,7 +179,7 @@ export function MessagesShell({
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <button
                       onClick={() => setDrawerOpen(true)}
-                      className="p-2 text-gray-600 hover:text-gray-900 transition-colors mobile-touch-target"
+                      className="p-2 text-gray-600 hover:text-gray-900 transition-colors mobile-touch-target flex items-center justify-center"
                       aria-label="Beszélgetések"
                     >
                       <MessageCircle className="w-5 h-5" />
