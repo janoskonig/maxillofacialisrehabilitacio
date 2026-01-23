@@ -11,6 +11,8 @@
   
   body {
     @apply text-gray-900 bg-gray-50;
+    overflow-x: hidden; /* Prevent horizontal scroll */
+    overscroll-behavior-y: contain; /* Prevent overscroll bounce on mobile */
   }
 }
 
@@ -320,6 +322,17 @@
   /* Better scrolling on mobile */
   * {
     -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Prevent horizontal scroll on mobile */
+  body, html {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+  
+  /* Prevent overscroll bounce */
+  body {
+    overscroll-behavior-y: contain;
   }
 }
 
