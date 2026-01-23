@@ -132,9 +132,7 @@ export function MessagesShell({
                   {detailHeader}
                 </div>
                 <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-                  {detailActions.length > 0 && (
-                    <MobileActionMenu items={detailActions} />
-                  )}
+                  <MobileActionMenu items={detailActions} />
                 </div>
               </div>
             </div>
@@ -184,9 +182,7 @@ export function MessagesShell({
                     >
                       <MessageCircle className="w-5 h-5" />
                     </button>
-                    {detailActions.length > 0 && (
-                      <MobileActionMenu items={detailActions} />
-                    )}
+                    <MobileActionMenu items={detailActions} />
                   </div>
                 </div>
               </div>
