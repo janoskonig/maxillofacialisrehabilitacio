@@ -300,7 +300,18 @@ export default function Home() {
     
     // Reload patients list to get latest data from database
     await loadPatients();
-  }, [loadPatients]);
+  }, []);
+
+  const handleSort = useCallback((field: 'nev' | 'idopont' | 'createdAt') => {
+    if (sortField === field) {
+      // Toggle direction if same field
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // New field, default to ascending
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  }, [sortField, sortDirection]);
 
   const handleLogout = () => {
     logout();
@@ -619,16 +630,7 @@ export default function Home() {
                   userRole={userRole}
                   sortField={sortField}
                   sortDirection={sortDirection}
-                  onSort={useCallback((field: 'nev' | 'idopont' | 'createdAt') => {
-                    if (sortField === field) {
-                      // Toggle direction if same field
-                      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-                    } else {
-                      // New field, default to ascending
-                      setSortField(field);
-                      setSortDirection('asc');
-                    }
-                  }, [sortField, sortDirection])}
+                  onSort={handleSort}
                   searchQuery={searchQuery}
                 />
               )}
