@@ -26,6 +26,9 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "MaxRehab"
   },
+  other: {
+    "mobile-web-app-capable": "yes"
+  },
   icons: {
     icon: [
       { url: "/favicon.ico" },

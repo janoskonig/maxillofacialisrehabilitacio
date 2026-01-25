@@ -87,16 +87,18 @@ export default function PWARegister() {
     localStorage.setItem("pwa-update-dismissed", Date.now().toString());
   };
 
-  // (Opcionális) Install prompt kezelés – UI nélkül csak elmentjük későbbre
+  // Install prompt kezelés – nem akadályozzuk meg, hogy a böngésző natív promptot mutasson
+  // Ha később custom UI-t szeretnénk, itt elmenthetjük az event-et és state-ben tárolhatjuk
   useEffect(() => {
-    const handler = (e: Event) => {
-      e.preventDefault();
-      // Itt elmentheted state-be és kirakhatsz "Install" gombot
-      // const bipEvent = e as BeforeInstallPromptEvent;
-    };
-
-    window.addEventListener("beforeinstallprompt", handler);
-    return () => window.removeEventListener("beforeinstallprompt", handler);
+    // Nem hívjuk meg preventDefault()-ot, így a böngésző natív promptja működik
+    // Ha később custom promptot szeretnénk, akkor itt elmenthetjük az event-et:
+    // const handler = (e: Event) => {
+    //   const bipEvent = e as BeforeInstallPromptEvent;
+    //   setInstallPromptEvent(bipEvent);
+    //   e.preventDefault();
+    // };
+    // window.addEventListener("beforeinstallprompt", handler);
+    // return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
 
   // Update prompt komponens (ha updateAvailable)

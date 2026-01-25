@@ -6,8 +6,7 @@ const STATIC_ASSETS = [
   "/manifest.json",
   "/icon-192x192.png",
   "/icon-512x512.png",
-  "/apple-touch-icon.png",
-  "/favicon.ico"
+  "/apple-touch-icon.png"
 ];
 
 // Install: előcache-eljünk minimális dolgokat (installálhatóság + ikonok gyorsak)
