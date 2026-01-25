@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, memo } from 'react';
 import { Patient } from '@/lib/types';
-import { Phone, Mail, Calendar, FileText, Eye, Pencil, CheckCircle2, XCircle, Clock, Trash2, ArrowUp, ArrowDown, Image, Camera, AlertCircle, Clock as ClockIcon, MessageCircle } from 'lucide-react';
+import { Phone, Mail, Calendar, FileText, Eye, Pencil, CheckCircle2, XCircle, Clock, Trash2, ArrowUp, ArrowDown, Image, Camera, AlertCircle, Clock as ClockIcon, MessageCircle, Search } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { formatDateForDisplay, calculateAge } from '@/lib/dateUtils';
 import { PatientCard } from './PatientCard';
@@ -23,6 +23,7 @@ interface PatientListProps {
   sortDirection?: 'asc' | 'desc';
   onSort?: (field: 'nev' | 'idopont' | 'createdAt') => void;
   searchQuery?: string;
+  showEmptyState?: boolean;
 }
 
 interface AppointmentInfo {
@@ -35,7 +36,7 @@ interface AppointmentInfo {
   isLate?: boolean;
 }
 
-function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, onViewFoto, canEdit = false, canDelete = false, userRole, sortField, sortDirection = 'asc', onSort, searchQuery = '' }: PatientListProps) {
+function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, onViewFoto, canEdit = false, canDelete = false, userRole, sortField, sortDirection = 'asc', onSort, searchQuery = '', showEmptyState = false }: PatientListProps) {
   const [appointments, setAppointments] = useState<Record<string, AppointmentInfo>>({});
   const [loadingAppointments, setLoadingAppointments] = useState(false);
   const [opDocuments, setOpDocuments] = useState<Record<string, number>>({});
@@ -228,7 +229,17 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
   };
 
   // Empty state
-  const emptyState = (
+  const emptyState = showEmptyState ? (
+    <div className="card text-center py-12">
+      <Search className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+      <h3 className="text-lg font-semibold text-gray-900 mb-2">
+        Keresés a betegek között
+      </h3>
+      <p className="text-gray-600 mb-4">
+        Kezdjen el gépelni a keresőmezőben a beteg neve, TAJ száma vagy telefonszáma alapján.
+      </p>
+    </div>
+  ) : (
     <div className="card text-center py-6">
       <FileText className="w-8 h-8 text-gray-400 mx-auto mb-2" />
       <h3 className="text-base font-medium text-gray-900 mb-1">Nincs találat</h3>
@@ -591,6 +602,7 @@ export const PatientList = memo(PatientListComponent, (prevProps, nextProps) => 
     prevProps.onDelete === nextProps.onDelete &&
     prevProps.onViewOP === nextProps.onViewOP &&
     prevProps.onViewFoto === nextProps.onViewFoto &&
-    prevProps.onSort === nextProps.onSort
+    prevProps.onSort === nextProps.onSort &&
+    prevProps.showEmptyState === nextProps.showEmptyState
   );
 });

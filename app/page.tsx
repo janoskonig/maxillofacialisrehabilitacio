@@ -187,7 +187,7 @@ export default function Home() {
     };
     
     loadPatientsData();
-  }, [searchQuery, selectedView, sortField, sortDirection, refreshKey]);
+  }, [searchQuery, selectedView, sortField, sortDirection, refreshKey, showToast]);
 
   const loadPatients = async () => {
     // Force reload by incrementing refreshKey
@@ -616,37 +616,24 @@ export default function Home() {
                 </div>
               )}
 
-              {/* Patient List - only show when searching or view selected */}
-              {(searchQuery.trim() || selectedView !== 'all') && (
-                <PatientList
-                  patients={filteredPatients}
-                  onView={handleViewPatient}
-                  onEdit={handleEditPatient}
-                  onDelete={userRole === 'admin' ? handleDeletePatient : undefined}
-                  onViewOP={handleViewOP}
-                  onViewFoto={handleViewFoto}
-                  canEdit={userRole === 'admin' || userRole === 'editor' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos'}
-                  canDelete={userRole === 'admin'}
-                  userRole={userRole}
-                  sortField={sortField}
-                  sortDirection={sortDirection}
-                  onSort={handleSort}
-                  searchQuery={searchQuery}
-                />
-              )}
-
-              {/* Empty state when no search and no view */}
-              {!searchQuery.trim() && selectedView === 'all' && (
-                <div className="card text-center py-12">
-                  <Search className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    Keresés a betegek között
-                  </h3>
-                  <p className="text-gray-600 mb-4">
-                    Kezdjen el gépelni a keresőmezőben a beteg neve, TAJ száma vagy telefonszáma alapján.
-                  </p>
-                </div>
-              )}
+              {/* Patient List - always rendered to maintain stable hook order */}
+              {/* Pass empty array when no search/view to let PatientList handle empty state */}
+              <PatientList
+                patients={searchQuery.trim() || selectedView !== 'all' ? filteredPatients : []}
+                onView={handleViewPatient}
+                onEdit={handleEditPatient}
+                onDelete={userRole === 'admin' ? handleDeletePatient : undefined}
+                onViewOP={handleViewOP}
+                onViewFoto={handleViewFoto}
+                canEdit={userRole === 'admin' || userRole === 'editor' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos'}
+                canDelete={userRole === 'admin'}
+                userRole={userRole}
+                sortField={sortField}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+                searchQuery={searchQuery}
+                showEmptyState={!searchQuery.trim() && selectedView === 'all'}
+              />
             </>
 
       {/* Patient Form Modal */}
