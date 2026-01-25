@@ -193,7 +193,7 @@ export function PatientFormSectionNavigation({
 
   // Desktop: Stepper
   return (
-    <div className="mb-6">
+    <div className="mb-6 sticky top-0 z-40 bg-white pt-4 pb-2 border-b border-gray-200">
       {/* Progress indicator */}
       {activeSection && (
         <div className="text-sm text-gray-600 mb-4">
