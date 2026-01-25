@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { MessageSquare, Phone, User, Mail, Plus, Filter } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
@@ -53,12 +53,9 @@ export function CommunicationLog({ patientId, patientName }: CommunicationLogPro
     content: '',
   });
 
-  useEffect(() => {
-    fetchLogs();
-  }, [patientId, filterType]);
-
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async () => {
     try {
+      setLoading(true);
       const url = `/api/communication-logs?patientId=${patientId}${
         filterType !== 'all' ? `&communicationType=${filterType}` : ''
       }`;
@@ -67,18 +64,37 @@ export function CommunicationLog({ patientId, patientName }: CommunicationLogPro
       });
 
       if (!response.ok) {
-        throw new Error('Hiba az érintkezési napló betöltésekor');
+        let errorMessage = 'Hiba az érintkezési napló betöltésekor';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch {
+          // Ha nem JSON a válasz, használjuk az alapértelmezett üzenetet
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Hiba az érintkezési napló betöltésekor');
+      }
+      
       setLogs(data.logs || []);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Hiba az érintkezési napló betöltésekor:', error);
-      showToast('Hiba történt az érintkezési napló betöltésekor', 'error');
+      showToast(
+        error.message || 'Hiba történt az érintkezési napló betöltésekor',
+        'error'
+      );
+      setLogs([]); // Üres lista hiba esetén
     } finally {
       setLoading(false);
     }
-  };
+  }, [patientId, filterType, showToast]);
+
+  useEffect(() => {
+    fetchLogs();
+  }, [fetchLogs]);
 
   const handleAddLog = async () => {
     if (!formData.content.trim()) {
