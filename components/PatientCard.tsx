@@ -1,7 +1,7 @@
 'use client';
 
 import { memo } from 'react';
-import { Patient } from '@/lib/types';
+import { Patient, patientStageOptions } from '@/lib/types';
 import { Phone, Mail, Calendar, Eye, Pencil, Trash2, Image, Camera, CheckCircle2, XCircle, Clock, Clock as ClockIcon, History, User } from 'lucide-react';
 import { formatDateForDisplay, calculateAge } from '@/lib/dateUtils';
 import { useRouter } from 'next/navigation';
@@ -20,6 +20,7 @@ interface PatientCardProps {
   appointment?: AppointmentInfo;
   opDocumentCount?: number;
   fotoDocumentCount?: number;
+  stage?: { stage: string; stageDate?: string; notes?: string };
   onView: (patient: Patient) => void;
   onEdit?: (patient: Patient) => void;
   onDelete?: (patient: Patient) => void;
@@ -35,6 +36,7 @@ function PatientCardComponent({
   appointment,
   opDocumentCount = 0,
   fotoDocumentCount = 0,
+  stage,
   onView,
   onEdit,
   onDelete,
@@ -100,18 +102,44 @@ function PatientCardComponent({
   const statusInfo = appointment ? getStatusInfo(appointment.appointmentStatus, appointment.isLate) : null;
   const StatusIcon = statusInfo?.icon;
 
+  const getStageLabel = (stageValue: string) => {
+    return patientStageOptions.find(opt => opt.value === stageValue)?.label || stageValue;
+  };
+
+  const getStageColor = (stageValue: string) => {
+    const colors: Record<string, string> = {
+      uj_beteg: 'bg-blue-100 text-blue-800',
+      onkologiai_kezeles_kesz: 'bg-purple-100 text-purple-800',
+      arajanlatra_var: 'bg-yellow-100 text-yellow-800',
+      implantacios_sebeszi_tervezesre_var: 'bg-orange-100 text-orange-800',
+      fogpotlasra_var: 'bg-amber-100 text-amber-800',
+      fogpotlas_keszul: 'bg-indigo-100 text-indigo-800',
+      fogpotlas_kesz: 'bg-green-100 text-green-800',
+      gondozas_alatt: 'bg-gray-100 text-gray-800',
+    };
+    return colors[stageValue] || 'bg-gray-100 text-gray-800';
+  };
+
   return (
     <div className="card card-interactive space-y-3 animate-fade-in">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h3 className="text-base font-semibold text-gray-900 truncate">
               {patient.nev || 'Név nélküli beteg'}
             </h3>
             {patient.halalDatum && (
               <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-200 text-gray-700 flex-shrink-0" title={`Halál dátuma: ${formatDateForDisplay(patient.halalDatum)}`}>
                 ✝
+              </span>
+            )}
+            {stage && (
+              <span
+                className={`px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${getStageColor(stage.stage)}`}
+                title={stage.notes || getStageLabel(stage.stage)}
+              >
+                {getStageLabel(stage.stage)}
               </span>
             )}
           </div>
