@@ -169,20 +169,20 @@ export async function GET(request: NextRequest) {
 
     // 6. Átlagos első időpontra való várakozási idő
     // Csak az első konzultációkat számoljuk (appointment_type = 'elso_konzultacio' vagy NULL a kompatibilitásért)
+    // A várakozási időt az IDŐPONT LÉTREHOZÁSÁTÓL számoljuk (amikor a páciens megkapta az időpontot)
     const waitingTimeResult = await pool.query(`
       WITH first_appointments AS (
-        SELECT 
+        SELECT DISTINCT ON (p.id)
           p.id as patient_id,
-          p.created_at as beteg_letrehozva,
-          MIN(ats.start_time) FILTER (WHERE a.appointment_type IS NULL OR a.appointment_type = 'elso_konzultacio') as elso_idopont,
-          EXTRACT(EPOCH FROM (MIN(ats.start_time) FILTER (WHERE a.appointment_type IS NULL OR a.appointment_type = 'elso_konzultacio') - p.created_at)) / 86400 as varakozasi_ido_napokban
+          ats.start_time as elso_idopont,
+          a.created_at as idopont_letrehozas,
+          EXTRACT(EPOCH FROM (ats.start_time - a.created_at)) / 86400 as varakozasi_ido_napokban
         FROM patients p
         JOIN appointments a ON p.id = a.patient_id
         JOIN available_time_slots ats ON a.time_slot_id = ats.id
-        WHERE ats.start_time > p.created_at
+        WHERE ats.start_time > a.created_at
           AND (a.appointment_type IS NULL OR a.appointment_type = 'elso_konzultacio')
-        GROUP BY p.id, p.created_at
-        HAVING MIN(ats.start_time) FILTER (WHERE a.appointment_type IS NULL OR a.appointment_type = 'elso_konzultacio') IS NOT NULL
+        ORDER BY p.id, ats.start_time ASC, a.created_at ASC
       )
       SELECT 
         ROUND(AVG(varakozasi_ido_napokban)::numeric, 1) as atlag_varakozasi_ido_napokban,
