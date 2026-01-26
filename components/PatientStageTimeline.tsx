@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { PatientStageTimeline, PatientStageEntry, patientStageOptions } from '@/lib/types';
+import type { PatientStageTimeline, PatientStageEntry } from '@/lib/types';
+import { patientStageOptions } from '@/lib/types';
 import { useToast } from '@/contexts/ToastContext';
 import { Calendar, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import { format } from 'date-fns';
