@@ -50,15 +50,15 @@ WHERE a.appointment_status IN ('cancelled_by_patient', 'cancelled_by_doctor')
 BEGIN;
 
 -- Törlés előtt: logoljuk, hogy mit törlünk (opcionális, de ajánlott)
--- CREATE TABLE IF NOT EXISTS deleted_appointments_log AS
--- SELECT 
---     a.*,
---     CURRENT_TIMESTAMP as deleted_at
--- FROM appointments a
--- JOIN available_time_slots ats ON a.time_slot_id = ats.id
--- WHERE a.appointment_status IN ('cancelled_by_patient', 'cancelled_by_doctor')
---   AND ats.status = 'available'
---   AND ats.start_time > NOW();
+CREATE TABLE IF NOT EXISTS deleted_appointments_log AS
+SELECT 
+    a.*,
+    CURRENT_TIMESTAMP as deleted_at
+FROM appointments a
+JOIN available_time_slots ats ON a.time_slot_id = ats.id
+WHERE a.appointment_status IN ('cancelled_by_patient', 'cancelled_by_doctor')
+  AND ats.status = 'available'
+  AND ats.start_time > NOW();
 
 -- Töröljük a konfliktusos cancelled appointmenteket
 -- Ezek a rekordok blokkolják az újrafoglalást, mert a time_slot available,
