@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, memo } from 'react';
-import { Patient } from '@/lib/types';
+import { Patient, patientStageOptions } from '@/lib/types';
 import { Phone, Mail, Calendar, FileText, Eye, Pencil, CheckCircle2, XCircle, Clock, Trash2, ArrowUp, ArrowDown, Image, Camera, AlertCircle, Clock as ClockIcon, MessageCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { formatDateForDisplay, calculateAge } from '@/lib/dateUtils';
@@ -40,6 +40,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
   const [loadingAppointments, setLoadingAppointments] = useState(false);
   const [opDocuments, setOpDocuments] = useState<Record<string, number>>({});
   const [fotoDocuments, setFotoDocuments] = useState<Record<string, number>>({});
+  const [stages, setStages] = useState<Record<string, { stage: string; stageDate?: string; notes?: string }>>({});
   const isMobile = useIsMobile();
   const router = useRouter();
 
@@ -67,6 +68,15 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
   useEffect(() => {
     if (patientIdsString) {
       loadFotoDocuments();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patientIdsString]);
+
+  // Load stages for quick access
+  // Optimalizálás: csak akkor töltjük újra, ha a betegek ID-ja változott
+  useEffect(() => {
+    if (patientIdsString) {
+      loadStages();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patientIdsString]);
@@ -134,6 +144,39 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
       // Silently fail - not critical
       console.error('Error loading foto documents batch:', error);
       setFotoDocuments({});
+    }
+  };
+
+  const loadStages = async () => {
+    // Optimalizálás: batch API hívás minden beteghez egyszerre
+    const patientIds = patients.filter(p => p.id).map(p => p.id!);
+    
+    if (patientIds.length === 0) {
+      setStages({});
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/patients/stages/batch', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ patientIds }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setStages(data.stages || {});
+      } else {
+        console.error('Failed to load stages batch');
+        setStages({});
+      }
+    } catch (error) {
+      // Silently fail - not critical
+      console.error('Error loading stages batch:', error);
+      setStages({});
     }
   };
 
@@ -250,6 +293,9 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
       </th>
       <th className="px-3 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider w-20">
         OP
+      </th>
+      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+        Stádium
       </th>
       <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
         TAJ szám
@@ -370,6 +416,36 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                   ) : (
                     <span className="text-xs text-gray-300">-</span>
                   )}
+                </td>
+                <td className="px-3 py-2 whitespace-nowrap">
+                  {(() => {
+                    const patientStage = stages[patient.id || ''];
+                    if (!patientStage) {
+                      return <span className="text-xs text-gray-400">-</span>;
+                    }
+                    const stageLabel = patientStageOptions.find(opt => opt.value === patientStage.stage)?.label || patientStage.stage;
+                    const getStageColor = (stage: string) => {
+                      const colors: Record<string, string> = {
+                        uj_beteg: 'bg-blue-100 text-blue-800',
+                        onkologiai_kezeles_kesz: 'bg-purple-100 text-purple-800',
+                        arajanlatra_var: 'bg-yellow-100 text-yellow-800',
+                        implantacios_sebeszi_tervezesre_var: 'bg-orange-100 text-orange-800',
+                        fogpotlasra_var: 'bg-amber-100 text-amber-800',
+                        fogpotlas_keszul: 'bg-indigo-100 text-indigo-800',
+                        fogpotlas_kesz: 'bg-green-100 text-green-800',
+                        gondozas_alatt: 'bg-gray-100 text-gray-800',
+                      };
+                      return colors[stage] || 'bg-gray-100 text-gray-800';
+                    };
+                    return (
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStageColor(patientStage.stage)}`}
+                        title={patientStage.notes || stageLabel}
+                      >
+                        {stageLabel}
+                      </span>
+                    );
+                  })()}
                 </td>
                 <td className="px-3 py-2 whitespace-nowrap">
                   <div className="text-xs text-gray-900">{patient.taj || '-'}</div>
@@ -545,12 +621,14 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
   // Mobile card
   const renderMobileCard = (patient: Patient) => {
     const appointment = appointments[patient.id || ''];
+    const patientStage = stages[patient.id || ''];
     return (
       <PatientCard
         patient={patient}
         appointment={appointment}
         opDocumentCount={opDocuments[patient.id || ''] || 0}
         fotoDocumentCount={fotoDocuments[patient.id || ''] || 0}
+        stage={patientStage}
         onView={onView}
         onEdit={canEdit ? onEdit : undefined}
         onDelete={canDelete ? onDelete : undefined}

@@ -31,6 +31,8 @@ import { useToast } from '@/contexts/ToastContext';
 import { EQUITY_REQUEST_CONFIG } from '@/lib/equity-request-config';
 import { PatientFormSectionNavigation, Section } from './mobile/PatientFormSectionNavigation';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { PatientStageSection } from './PatientStageSection';
+import { OHIP14Section } from './OHIP14Section';
 
 
 // Fog állapot típus
@@ -1977,8 +1979,11 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
     { id: 'szemelyes', label: 'Személyes adatok', icon: <MapPin className="w-4 h-4" /> },
     { id: 'beutalo', label: 'Beutaló', icon: <FileText className="w-4 h-4" /> },
     { id: 'kezeloorvos', label: 'Kezelőorvos', icon: <User className="w-4 h-4" /> },
+    { id: 'stadium', label: 'Stádium', icon: <Calendar className="w-4 h-4" /> },
     { id: 'anamnezis', label: 'Anamnézis', icon: <Calendar className="w-4 h-4" /> },
     { id: 'betegvizsgalat', label: 'Betegvizsgálat', icon: <Calendar className="w-4 h-4" /> },
+    { id: 'ohip14', label: 'OHIP-14', icon: <FileText className="w-4 h-4" /> },
+    { id: 'kezelesi_terv', label: 'Kezelési terv', icon: <FileText className="w-4 h-4" /> },
     { id: 'adminisztracio', label: 'Adminisztráció', icon: <FileText className="w-4 h-4" /> },
     { id: 'idopont', label: 'Időpont', icon: <Calendar className="w-4 h-4" /> },
   ];
@@ -2533,6 +2538,13 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
               </select>
             </div>
           </div>
+        </div>
+        )}
+
+        {/* STÁDIUM */}
+        {shouldShowSection('stadium') && patientId && (
+        <div id="section-stadium" className="card scroll-mt-20 sm:scroll-mt-24">
+          <PatientStageSection patientId={patientId} patientName={currentPatient?.nev || null} />
         </div>
         )}
 
@@ -3510,9 +3522,16 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
         </div>
         )}
 
+        {/* OHIP-14 Kérdőív */}
+        {shouldShowSection('ohip14') && patientId && (
+        <div id="section-ohip14" className="card scroll-mt-20 sm:scroll-mt-24">
+          <OHIP14Section patientId={patientId} isViewOnly={isViewOnly} />
+        </div>
+        )}
+
         {/* KEZELÉSI TERV */}
-        {shouldShowSection('betegvizsgalat') && (
-        <div className="card">
+        {shouldShowSection('kezelesi_terv') && (
+        <div id="section-kezelesi_terv" className="card scroll-mt-20 sm:scroll-mt-24">
           <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <FileText className="w-5 h-5 mr-2 text-medical-primary" />
             KEZELÉSI TERV

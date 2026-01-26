@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { PatientForm } from '@/components/PatientForm';
-import { Patient } from '@/lib/types';
+import { Patient, patientStageOptions, PatientStageEntry } from '@/lib/types';
 import { ArrowLeft, User, FileText, Calendar, ClipboardList, MessageCircle, Users } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { MobileMenu } from '@/components/MobileMenu';
@@ -25,6 +25,7 @@ export default function PatientViewPage() {
   const [patientEmail, setPatientEmail] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('alapadatok');
   const [loadedTabs, setLoadedTabs] = useState<Set<TabType>>(new Set<TabType>(['alapadatok']));
+  const [currentStage, setCurrentStage] = useState<PatientStageEntry | null>(null);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -59,6 +60,20 @@ export default function PatientViewPage() {
           setPatient(data.patient);
           setPatientEmail(data.patient?.email || null);
           setAuthorized(true);
+
+          // Fetch current stage
+          try {
+            const stagesResponse = await fetch(`/api/patients/${patientId}/stages`, {
+              credentials: 'include',
+            });
+
+            if (stagesResponse.ok) {
+              const stagesData = await stagesResponse.json();
+              setCurrentStage(stagesData.timeline?.currentStage || null);
+            }
+          } catch (error) {
+            console.error('Error fetching current stage:', error);
+          }
         } catch (error) {
           console.error('Error fetching patient:', error);
           router.push('/');
@@ -160,9 +175,35 @@ export default function PatientViewPage() {
                 <h1 className="text-base sm:text-lg lg:text-xl font-bold text-medical-primary truncate">
                   Beteg profil
                 </h1>
-                {patient.nev && (
-                  <p className="text-xs sm:text-sm text-gray-600 truncate">{patient.nev}</p>
-                )}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {patient.nev && (
+                    <p className="text-xs sm:text-sm text-gray-600 truncate">{patient.nev}</p>
+                  )}
+                  {currentStage && (() => {
+                    const stageLabel = patientStageOptions.find(opt => opt.value === currentStage.stage)?.label || currentStage.stage;
+                    const getStageColor = (stage: string) => {
+                      const colors: Record<string, string> = {
+                        uj_beteg: 'bg-blue-100 text-blue-800',
+                        onkologiai_kezeles_kesz: 'bg-purple-100 text-purple-800',
+                        arajanlatra_var: 'bg-yellow-100 text-yellow-800',
+                        implantacios_sebeszi_tervezesre_var: 'bg-orange-100 text-orange-800',
+                        fogpotlasra_var: 'bg-amber-100 text-amber-800',
+                        fogpotlas_keszul: 'bg-indigo-100 text-indigo-800',
+                        fogpotlas_kesz: 'bg-green-100 text-green-800',
+                        gondozas_alatt: 'bg-gray-100 text-gray-800',
+                      };
+                      return colors[stage] || 'bg-gray-100 text-gray-800';
+                    };
+                    return (
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStageColor(currentStage.stage)}`}
+                        title={currentStage.notes || stageLabel}
+                      >
+                        {stageLabel}
+                      </span>
+                    );
+                  })()}
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
@@ -223,7 +264,7 @@ export default function PatientViewPage() {
               isViewOnly={false}
               onSave={handleSavePatient}
               onCancel={handleBack}
-              showOnlySections={['alapadatok', 'szemelyes', 'beutalo', 'kezeloorvos']}
+              showOnlySections={['alapadatok', 'szemelyes', 'beutalo', 'kezeloorvos', 'stadium']}
             />
           )}
 
@@ -233,7 +274,7 @@ export default function PatientViewPage() {
               isViewOnly={false}
               onSave={handleSavePatient}
               onCancel={handleBack}
-              showOnlySections={['anamnezis', 'betegvizsgalat']}
+              showOnlySections={['anamnezis', 'betegvizsgalat', 'ohip14', 'kezelesi_terv']}
             />
           )}
 
