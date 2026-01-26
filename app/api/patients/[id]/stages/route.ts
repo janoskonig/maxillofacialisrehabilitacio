@@ -80,14 +80,22 @@ export async function GET(
     // Build episodes array
     const episodes = Array.from(episodesMap.entries()).map(([episodeId, episodeStages]) => {
       const sortedStages = episodeStages.sort(
-        (a, b) => new Date(a.stageDate).getTime() - new Date(b.stageDate).getTime()
+        (a, b) => {
+          const dateA = a.stageDate ? new Date(a.stageDate).getTime() : 0;
+          const dateB = b.stageDate ? new Date(b.stageDate).getTime() : 0;
+          return dateA - dateB;
+        }
       );
       return {
         episodeId,
         startDate: sortedStages[0]?.stageDate || new Date().toISOString(),
-        endDate: sortedStages.length > 1 ? sortedStages[sortedStages.length - 1]?.stageDate : undefined,
+        endDate: sortedStages.length > 1 ? (sortedStages[sortedStages.length - 1]?.stageDate ?? undefined) : undefined,
         stages: episodeStages.sort(
-          (a, b) => new Date(b.stageDate).getTime() - new Date(a.stageDate).getTime()
+          (a, b) => {
+            const dateA = a.stageDate ? new Date(a.stageDate).getTime() : 0;
+            const dateB = b.stageDate ? new Date(b.stageDate).getTime() : 0;
+            return dateB - dateA;
+          }
         ),
       };
     });

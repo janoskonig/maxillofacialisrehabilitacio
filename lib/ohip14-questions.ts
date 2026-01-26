@@ -1,4 +1,4 @@
-import { OHIP14Question, OHIP14Dimension } from './types';
+import { OHIP14Question, OHIP14Dimension, OHIP14Response } from './types';
 
 /**
  * OHIP-14 kérdések és dimenziók
