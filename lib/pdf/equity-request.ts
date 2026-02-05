@@ -1,4 +1,4 @@
-import { PDFDocument, PDFName, PDFBool } from 'pdf-lib';
+import { PDFDocument, StandardFonts } from 'pdf-lib';
 import fs from 'fs';
 import path from 'path';
 import { Patient } from '@/lib/types';
@@ -11,6 +11,15 @@ interface BNOCode {
 }
 
 const bnoCodes = bnoCodesData as BNOCode[];
+
+/** WinAnsi (Helvetica) nem kódolja ő/ű – cseréljük ö/ü-re, hogy az appearance és flatten ne hibázzon */
+function toWinAnsiSafe(text: string): string {
+  return String(text)
+    .replace(/ő/g, 'ö')
+    .replace(/Ő/g, 'Ö')
+    .replace(/ű/g, 'ü')
+    .replace(/Ű/g, 'Ü');
+}
 
 /**
  * Méltányossági kérelem PDF generálása beteg adataiból
@@ -239,15 +248,15 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
   
   // Segédfüggvény mező kitöltéséhez
   const fillField = (field: any, value: string, fieldName: string, mappingKey: string): boolean => {
+    const safeValue = toWinAnsiSafe(value);
     try {
       // Type guard használata a típus ellenőrzéshez
       if (field.constructor.name === 'PDFTextField') {
-        // Próbáljuk meg az updateAppearances opcióval is
+        // WinAnsi-safe szöveg kell, különben updateFieldAppearances/flatten hibázik (ő, ű)
         try {
-          (field as any).setText(String(value), { updateAppearances: true });
+          (field as any).setText(safeValue, { updateAppearances: true });
         } catch {
-          // Ha nem támogatja, próbáljuk meg anélkül
-          (field as any).setText(String(value));
+          (field as any).setText(safeValue);
         }
         filledFields++;
         matchedFields.push({ fieldName, mappingKey, value });
@@ -269,7 +278,7 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
         try {
           const acroField = (field as any).acroField;
           const fieldDict = acroField.dict;
-          fieldDict.set('V', pdfDoc.context.obj(String(value)));
+          fieldDict.set('V', pdfDoc.context.obj(safeValue));
           filledFields++;
           matchedFields.push({ fieldName, mappingKey, value });
           console.log(`Mező kitöltve (közvetlen): ${fieldName} (kulcs: ${mappingKey}) = ${value}`);
@@ -366,29 +375,32 @@ Talált mezők: ${allFieldNames.slice(0, 20).join(', ')}${allFieldNames.length >
     }
   }
   
-  // NeedAppearances flag beállítása az AcroForm-on
-  // Ez biztosítja, hogy a PDF viewerek újragenerálják a mezők megjelenését,
-  // így a kitöltött értékek láthatók lesznek kattintás nélkül is
-  // Megjegyzés: A pdf-lib-ben az acroForm.set() metódus nem elérhető,
-  // de a save() updateFieldAppearances: true opciója kezeli ezt
-  
-  // PDF mentése - fontos: updateFieldAppearances: true kell, hogy a kitöltött mezők láthatók legyenek
+  // 1) Explicit appearance stream generálás – így a kitöltött szöveg minden nézegetőben látszik
+  try {
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    form.updateFieldAppearances(font);
+    console.log('PDF form mezők megjelenése frissítve (updateFieldAppearances)');
+  } catch (appearanceError) {
+    console.warn('Hiba az appearance frissítésekor (folytatás flatten nélkül):', appearanceError);
+  }
+
+  // 2) Form flatten – mezők tartalma a lapokra kerül, nem maradnak szerkeszthető mezők, mindig látszik a szöveg
+  try {
+    form.flatten({ updateFieldAppearances: true });
+    console.log('PDF form flatten sikeres – mezők tartalma beolvasztva a lapokba');
+  } catch (flattenError) {
+    console.warn('Flatten sikertelen, PDF mentése mezőkkel:', flattenError);
+  }
+
+  // PDF mentése
   let pdfBytes: Uint8Array;
   try {
-    // Először próbáljuk meg az appearance frissítéssel (ez biztosítja, hogy a mezők láthatók legyenek)
-    pdfBytes = await pdfDoc.save({ updateFieldAppearances: true });
-    console.log('PDF sikeresen mentve appearance frissítéssel');
+    pdfBytes = await pdfDoc.save();
+    console.log('PDF sikeresen mentve');
   } catch (saveError) {
-    console.warn('Hiba az appearance frissítéssel, próbáljuk meg anélkül:', saveError);
-    try {
-      // Ha nem sikerül, próbáljuk meg anélkül
-      pdfBytes = await pdfDoc.save({ updateFieldAppearances: false });
-      console.warn('PDF mentve appearance frissítés nélkül - a mezők lehet, hogy nem láthatók');
-    } catch (saveError2) {
-      throw new Error(`PDF mentési hiba: ${(saveError2 as Error).message}`);
-    }
+    throw new Error(`PDF mentési hiba: ${(saveError as Error).message}`);
   }
-  
+
   return Buffer.from(pdfBytes);
 }
 
