@@ -196,10 +196,19 @@ export async function GET(
     });
   } catch (error) {
     console.error('Hiba a PDF generálása során:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Ismeretlen hiba';
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
+    // Részletesebb hibaüzenet a konzolban
+    if (errorStack) {
+      console.error('Hiba stack trace:', errorStack);
+    }
+    
     return NextResponse.json(
       { 
         error: 'Hiba történt a PDF generálása során',
-        details: error instanceof Error ? error.message : 'Ismeretlen hiba'
+        details: errorMessage,
+        ...(process.env.NODE_ENV === 'development' && errorStack ? { stack: errorStack } : {})
       },
       { status: 500 }
     );
