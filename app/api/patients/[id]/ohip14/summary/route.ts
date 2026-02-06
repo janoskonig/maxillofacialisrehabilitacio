@@ -47,6 +47,7 @@ export async function GET(
         patient_id as "patientId",
         episode_id as "episodeId",
         timepoint,
+        stage_code as "stageCode",
         completed_at as "completedAt",
         completed_by_patient as "completedByPatient",
         total_score as "totalScore",
@@ -80,6 +81,7 @@ export async function GET(
       if (!timepointMap[row.timepoint]) {
         timepointMap[row.timepoint] = {
           timepoint: row.timepoint,
+          stageCode: row.stageCode ?? null,
           totalScore: row.totalScore,
           functionalLimitationScore: row.functionalLimitationScore,
           physicalPainScore: row.physicalPainScore,

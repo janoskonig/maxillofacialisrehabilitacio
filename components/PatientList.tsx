@@ -40,7 +40,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
   const [loadingAppointments, setLoadingAppointments] = useState(false);
   const [opDocuments, setOpDocuments] = useState<Record<string, number>>({});
   const [fotoDocuments, setFotoDocuments] = useState<Record<string, number>>({});
-  const [stages, setStages] = useState<Record<string, { stage: string; stageDate?: string; notes?: string }>>({});
+  const [stages, setStages] = useState<Record<string, { stage: string; stageDate?: string; notes?: string; stageLabel?: string }>>({});
   const isMobile = useIsMobile();
   const router = useRouter();
 
@@ -423,9 +423,9 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                     if (!patientStage) {
                       return <span className="text-xs text-gray-400">-</span>;
                     }
-                    const stageLabel = patientStageOptions.find(opt => opt.value === patientStage.stage)?.label || patientStage.stage;
+                    const label = patientStage.stageLabel ?? patientStageOptions.find(opt => opt.value === patientStage.stage)?.label ?? patientStage.stage;
                     const getStageColor = (stage: string) => {
-                      const colors: Record<string, string> = {
+                      const legacy: Record<string, string> = {
                         uj_beteg: 'bg-blue-100 text-blue-800',
                         onkologiai_kezeles_kesz: 'bg-purple-100 text-purple-800',
                         arajanlatra_var: 'bg-yellow-100 text-yellow-800',
@@ -435,14 +435,24 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                         fogpotlas_kesz: 'bg-green-100 text-green-800',
                         gondozas_alatt: 'bg-gray-100 text-gray-800',
                       };
-                      return colors[stage] || 'bg-gray-100 text-gray-800';
+                      const byCode: Record<string, string> = {
+                        STAGE_0: 'bg-blue-100 text-blue-800',
+                        STAGE_1: 'bg-blue-200 text-blue-900',
+                        STAGE_2: 'bg-yellow-100 text-yellow-800',
+                        STAGE_3: 'bg-violet-100 text-violet-800',
+                        STAGE_4: 'bg-amber-100 text-amber-800',
+                        STAGE_5: 'bg-indigo-100 text-indigo-800',
+                        STAGE_6: 'bg-green-100 text-green-800',
+                        STAGE_7: 'bg-gray-100 text-gray-800',
+                      };
+                      return legacy[stage] ?? byCode[stage] ?? 'bg-gray-100 text-gray-800';
                     };
                     return (
                       <span
                         className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStageColor(patientStage.stage)}`}
-                        title={patientStage.notes || stageLabel}
+                        title={patientStage.notes || label}
                       >
-                        {stageLabel}
+                        {label}
                       </span>
                     );
                   })()}

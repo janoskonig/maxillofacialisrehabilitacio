@@ -176,6 +176,10 @@ export const GET = withCorrelation(async (request: NextRequest, { correlationId 
     const query = searchParams.get('q');
     const forMention = searchParams.get('forMention') === 'true';
     const view = searchParams.get('view') as ViewPreset | null;
+    const limitParam = searchParams.get('limit');
+    const offsetParam = searchParams.get('offset');
+    const limit = forMention ? undefined : (limitParam ? Math.min(Math.max(1, parseInt(limitParam, 10)), 500) : undefined);
+    const offset = forMention ? undefined : (offsetParam ? Math.max(0, parseInt(offsetParam, 10)) : undefined);
 
     // Ellenőrizzük a felhasználó szerepkörét és jogosultságait
     const auth = await verifyAuth(request);
@@ -271,13 +275,21 @@ export const GET = withCorrelation(async (request: NextRequest, { correlationId 
       const countQuery = `SELECT COUNT(*) as total ${fromClause} WHERE ${searchCondition}`;
       countResult = await pool.query(countQuery, queryParams);
       
-      // Data query without pagination - get all results
+      let dataQueryParams: unknown[] = queryParams;
+      let limitOffset = '';
+      if (limit !== undefined && offset !== undefined) {
+        dataQueryParams = [...queryParams, limit, offset];
+        limitOffset = ` LIMIT $${dataQueryParams.length - 1} OFFSET $${dataQueryParams.length}`;
+      } else if (limit !== undefined) {
+        dataQueryParams = [...queryParams, limit];
+        limitOffset = ` LIMIT $${dataQueryParams.length}`;
+      }
       result = await pool.query(
         `SELECT ${selectFields}
          ${fromClause}
          WHERE ${searchCondition}
-         ORDER BY ${orderBy} DESC`,
-        queryParams
+         ORDER BY ${orderBy} DESC${limitOffset}`,
+        dataQueryParams
       );
     } else {
       // Összes beteg vagy view preset
@@ -326,13 +338,21 @@ export const GET = withCorrelation(async (request: NextRequest, { correlationId 
         finalQueryParams
       );
       
-      // Data query without pagination - get all results
+      let dataQueryParams: unknown[] = finalQueryParams;
+      let limitOffset = '';
+      if (limit !== undefined && offset !== undefined) {
+        dataQueryParams = [...finalQueryParams, limit, offset];
+        limitOffset = ` LIMIT $${dataQueryParams.length - 1} OFFSET $${dataQueryParams.length}`;
+      } else if (limit !== undefined) {
+        dataQueryParams = [...finalQueryParams, limit];
+        limitOffset = ` LIMIT $${dataQueryParams.length}`;
+      }
       result = await pool.query(
         `SELECT ${selectFields}
          ${fromClause}
          ${whereClause}
-         ORDER BY ${orderBy} DESC`,
-        finalQueryParams
+         ORDER BY ${orderBy} DESC${limitOffset}`,
+        dataQueryParams
       );
     }
     
@@ -392,7 +412,8 @@ export const GET = withCorrelation(async (request: NextRequest, { correlationId 
     }
 
     const response = NextResponse.json({ 
-      patients: result.rows
+      patients: result.rows,
+      total: total
     }, { status: 200 });
     response.headers.set('x-correlation-id', correlationId);
     return response;
