@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { MessageCircle, Send, Check, CheckCheck, Loader2, Users, Search, UserPlus, Plus, Edit2, X, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
@@ -48,9 +48,31 @@ export function DoctorMessages() {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
+  // Scroll state and refs
+  const [isNearBottom, setIsNearBottom] = useState(false);
+  const shouldAutoScrollRef = useRef(false);
+  const prevConversationKeyRef = useRef<string | null>(null);
+  const prevMessageCountRef = useRef<number>(0);
+  const hasInitializedScrollRef = useRef(false);
+  const thresholdPx = 100;
+  
   // Hooks must be called unconditionally at the top level
   const breakpoint = useBreakpoint();
   const isMobile = breakpoint === 'mobile';
+  
+  // ConversationKey - stable calculation before hooks
+  const conversationKey = useMemo(() => {
+    if (selectedGroupId) return `group:${selectedGroupId}`;
+    if (selectedDoctorId) return `doc:${selectedDoctorId}`;
+    return null;
+  }, [selectedGroupId, selectedDoctorId]);
+  
+  // Scroll to bottom helper
+  const scrollToBottom = (behavior: ScrollBehavior = "auto") => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior });
+  };
 
   // Fetch conversations and unread count
   useEffect(() => {
@@ -281,34 +303,83 @@ export function DoctorMessages() {
     };
   }, [socket, isConnected, selectedGroupId]);
 
-  // Scroll to bottom when messages change or loading finishes
+  // Scroll listener: tracks if user is near bottom
+  // Use ref to track scroll position for immediate access
+  const isNearBottomRef = useRef(false);
+  
   useEffect(() => {
-    if (!loading) {
-      // Use requestAnimationFrame to ensure DOM is updated
-      requestAnimationFrame(() => {
-        setTimeout(() => {
-          if (messagesContainerRef.current) {
-            messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
-          } else if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: 'auto', block: 'end' });
-          }
-        }, 50);
-      });
+    const el = messagesContainerRef.current;
+    if (!el) return;
+
+    const handleScroll = () => {
+      const distanceFromBottom =
+        el.scrollHeight - el.scrollTop - el.clientHeight;
+      const nearBottom = distanceFromBottom < thresholdPx;
+      isNearBottomRef.current = nearBottom;
+      setIsNearBottom(nearBottom);
+      hasInitializedScrollRef.current = true;
+    };
+
+    // init
+    handleScroll();
+    hasInitializedScrollRef.current = true;
+
+    el.addEventListener("scroll", handleScroll, { passive: true });
+    return () => el.removeEventListener("scroll", handleScroll);
+  }, [conversationKey]);
+
+  // New conversation selected: always scroll to bottom (hygienic reset)
+  useEffect(() => {
+    if (!conversationKey || loading) return;
+
+    if (prevConversationKeyRef.current !== conversationKey) {
+      prevConversationKeyRef.current = conversationKey;
+      
+      // Hygienic reset - don't carry over old state
+      shouldAutoScrollRef.current = true;
+      prevMessageCountRef.current = 0; // Important if messages start empty then load
+      hasInitializedScrollRef.current = false; // Reset so first messages-effect can't auto-follow
+      setIsNearBottom(true);
+      
+      // queueMicrotask + rAF combo for stable scroll (handles markdown/image render)
+      queueMicrotask(() => requestAnimationFrame(() => scrollToBottom("auto")));
+    }
+  }, [conversationKey, loading]);
+
+  // Messages list changed: only scroll if justified (scroll init check + flag consume)
+  useEffect(() => {
+    if (loading) return;
+    if (!messagesContainerRef.current) return;
+
+    const currentCount = messages?.length ?? 0;
+    const prevCount = prevMessageCountRef.current;
+    const messageAppended = currentCount > prevCount;
+    prevMessageCountRef.current = currentCount;
+
+    // Only scroll if a message was actually appended (not just content changed)
+    if (!messageAppended) {
+      return; // Don't scroll on read status updates, etc.
+    }
+
+    // Check current scroll position immediately (use ref for latest value)
+    const el = messagesContainerRef.current;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const currentlyNearBottom = distanceFromBottom < thresholdPx;
+
+    // Near-bottom case: natural auto-follow (only if scroll init happened!)
+    // Use ref value for immediate check, not state (which might be stale)
+    if (currentlyNearBottom && hasInitializedScrollRef.current) {
+      shouldAutoScrollRef.current = false; // Consume the flag
+      requestAnimationFrame(() => scrollToBottom("auto"));
+      return;
+    }
+
+    // Not near-bottom: only with explicit permission (e.g. user sent message)
+    if (shouldAutoScrollRef.current) {
+      shouldAutoScrollRef.current = false;
+      requestAnimationFrame(() => scrollToBottom("smooth"));
     }
   }, [messages, loading]);
-
-  // Force scroll to bottom when doctor or group is selected
-  useEffect(() => {
-    if ((selectedDoctorId || selectedGroupId) && !loading) {
-      setTimeout(() => {
-        if (messagesContainerRef.current) {
-          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
-        } else if (messagesEndRef.current) {
-          messagesEndRef.current.scrollIntoView({ behavior: 'auto', block: 'end' });
-        }
-      }, 200);
-    }
-  }, [selectedDoctorId, selectedGroupId, loading]);
 
   const fetchConversations = async () => {
     try {
@@ -564,6 +635,9 @@ export function DoctorMessages() {
 
     try {
       setSending(true);
+      
+      // Set flag to allow auto-scroll when sending message
+      shouldAutoScrollRef.current = true;
       
       // Pending message
       const tempId = `pending-${Date.now()}`;
@@ -945,31 +1019,35 @@ export function DoctorMessages() {
         {selectedGroupId && <Users className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0" />}
         <span className="truncate">{selectedDoctorId ? selectedDoctorName : (selectedGroupName || 'Csoportos beszélgetés')}</span>
       </h3>
-      {selectedGroupId && groupParticipants.length > 0 && (
-        <div className="mt-2">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Users className="w-3 h-3 text-blue-600 flex-shrink-0" />
-            <span className="text-xs text-gray-600">Résztvevők:</span>
-            {(showAllParticipants ? groupParticipants : groupParticipants.slice(0, 2)).map((participant) => (
-              <span
-                key={participant.userId}
-                className="text-xs text-gray-700 bg-gray-100 px-2 py-0.5 rounded-full"
-                title={participant.userEmail}
-              >
-                {participant.userName || participant.userEmail}
-              </span>
-            ))}
-            {groupParticipants.length > 2 && (
-              <button
-                onClick={() => setShowAllParticipants(!showAllParticipants)}
-                className="text-xs text-blue-600 hover:text-blue-700 font-medium"
-              >
-                {showAllParticipants ? 'Kevesebb' : `+${groupParticipants.length - 2} több`}
-              </button>
-            )}
+      {/* Renderben, közvetlenül a használat előtt (derivált állapot, ne effectben!) */}
+      {(() => {
+        const hasGroupName = Boolean(selectedGroupName?.trim());
+        return selectedGroupId && groupParticipants.length > 0 && (!isMobile || !hasGroupName) ? (
+          <div className="mt-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Users className="w-3 h-3 text-blue-600 flex-shrink-0" />
+              <span className="text-xs text-gray-600">Résztvevők:</span>
+              {(showAllParticipants ? groupParticipants : groupParticipants.slice(0, 2)).map((participant) => (
+                <span
+                  key={participant.userId}
+                  className="text-xs text-gray-700 bg-gray-100 px-2 py-0.5 rounded-full"
+                  title={participant.userEmail}
+                >
+                  {participant.userName || participant.userEmail}
+                </span>
+              ))}
+              {groupParticipants.length > 2 && (
+                <button
+                  onClick={() => setShowAllParticipants(!showAllParticipants)}
+                  className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  {showAllParticipants ? 'Kevesebb' : `+${groupParticipants.length - 2} több`}
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        ) : null;
+      })()}
     </>
   );
 

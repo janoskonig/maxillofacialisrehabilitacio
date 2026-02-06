@@ -1,4 +1,4 @@
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, StandardFonts } from 'pdf-lib';
 import fs from 'fs';
 import path from 'path';
 import { Patient } from '@/lib/types';
@@ -11,6 +11,15 @@ interface BNOCode {
 }
 
 const bnoCodes = bnoCodesData as BNOCode[];
+
+/** WinAnsi (Helvetica) nem kódolja ő/ű – cseréljük ö/ü-re, hogy az appearance és flatten ne hibázzon */
+function toWinAnsiSafe(text: string): string {
+  return String(text)
+    .replace(/ő/g, 'ö')
+    .replace(/Ő/g, 'Ö')
+    .replace(/ű/g, 'ü')
+    .replace(/Ű/g, 'Ü');
+}
 
 /**
  * Méltányossági kérelem PDF generálása beteg adataiból
@@ -81,6 +90,12 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
     form = pdfDoc.getForm();
     formFields = form.getFields();
     console.log(`PDF form sikeresen betöltve. Mezők száma: ${formFields.length}`);
+    
+    // Debug: listázzuk az összes mezőnevet
+    if (formFields.length > 0) {
+      const allFieldNamesDebug = formFields.map(f => f.getName());
+      console.log(`PDF mezőnevek (első 50): ${allFieldNamesDebug.slice(0, 50).join(', ')}${allFieldNamesDebug.length > 50 ? `... (összesen ${allFieldNamesDebug.length})` : ''}`);
+    }
   } catch (formError) {
     console.error('Hiba a PDF form lekérésekor:', formError);
     throw new Error(`Nem sikerült betölteni a PDF form mezőket: ${(formError as Error).message}`);
@@ -227,8 +242,62 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
   let filledFields = 0;
   const errors: Array<{ field: string; error: string }> = [];
   const allFieldNames: string[] = [];
+  const matchedFields: Array<{ fieldName: string; mappingKey: string; value: string }> = [];
   
   console.log(`PDF form mezők száma: ${formFields.length}`);
+  
+  // Segédfüggvény mező kitöltéséhez
+  const fillField = (field: any, value: string, fieldName: string, mappingKey: string): boolean => {
+    const safeValue = toWinAnsiSafe(value);
+    try {
+      // Type guard használata a típus ellenőrzéshez
+      if (field.constructor.name === 'PDFTextField') {
+        // WinAnsi-safe szöveg kell, különben updateFieldAppearances/flatten hibázik (ő, ű)
+        try {
+          (field as any).setText(safeValue, { updateAppearances: true });
+        } catch {
+          (field as any).setText(safeValue);
+        }
+        filledFields++;
+        matchedFields.push({ fieldName, mappingKey, value });
+        console.log(`Mező kitöltve: ${fieldName} (kulcs: ${mappingKey}) = ${value}`);
+        return true;
+      } else if (field.constructor.name === 'PDFCheckBox') {
+        const stringValue = String(value);
+        if (stringValue === 'Igen' || stringValue === 'igen' || stringValue.toLowerCase() === 'true') {
+          (field as any).check();
+          filledFields++;
+          matchedFields.push({ fieldName, mappingKey, value });
+          console.log(`Checkbox bejelölve: ${fieldName} (kulcs: ${mappingKey})`);
+          return true;
+        }
+      }
+    } catch (err: any) {
+      // Ha hiba van (pl. ékezetes karakterek miatt), próbáljuk meg közvetlenül beállítani
+      if (err.message && (err.message.includes('WinAnsi cannot encode') || err.message.includes('encoding'))) {
+        try {
+          const acroField = (field as any).acroField;
+          const fieldDict = acroField.dict;
+          fieldDict.set('V', pdfDoc.context.obj(safeValue));
+          filledFields++;
+          matchedFields.push({ fieldName, mappingKey, value });
+          console.log(`Mező kitöltve (közvetlen): ${fieldName} (kulcs: ${mappingKey}) = ${value}`);
+          return true;
+        } catch (directErr) {
+          const errorMsg = (directErr as Error).message;
+          errors.push({ field: fieldName, error: errorMsg });
+          console.error(`Hiba a mező kitöltésekor (közvetlen): ${fieldName} - ${errorMsg}`);
+          return false;
+        }
+      } else {
+        const errorMsg = err.message || 'Ismeretlen hiba';
+        errors.push({ field: fieldName, error: errorMsg });
+        console.error(`Hiba a mező kitöltésekor: ${fieldName} - ${errorMsg}`);
+        return false;
+      }
+    }
+    return false;
+  };
   
   formFields.forEach(field => {
     const fieldName = field.getName();
@@ -237,71 +306,40 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
     // Pontos mezőnév egyezés keresése
     if (fieldMapping.hasOwnProperty(fieldName)) {
       const value = fieldMapping[fieldName];
-      try {
-        // Type guard használata a típus ellenőrzéshez
-        if (field.constructor.name === 'PDFTextField') {
-          // Próbáljuk meg az updateAppearances opcióval is
-          try {
-            (field as any).setText(String(value), { updateAppearances: true });
-          } catch {
-            // Ha nem támogatja, próbáljuk meg anélkül
-            (field as any).setText(String(value));
-          }
-          filledFields++;
-          console.log(`Mező kitöltve: ${fieldName} = ${value}`);
-        } else if (field.constructor.name === 'PDFCheckBox') {
-          const stringValue = String(value);
-          if (stringValue === 'Igen' || stringValue === 'igen' || stringValue.toLowerCase() === 'true') {
-            (field as any).check();
-            filledFields++;
-            console.log(`Checkbox bejelölve: ${fieldName}`);
-          }
-        }
-      } catch (err: any) {
-        // Ha hiba van (pl. ékezetes karakterek miatt), próbáljuk meg közvetlenül beállítani
-        if (err.message && err.message.includes('WinAnsi cannot encode')) {
-          try {
-            const acroField = (field as any).acroField;
-            const fieldDict = acroField.dict;
-            fieldDict.set('V', pdfDoc.context.obj(String(value)));
-            filledFields++;
-            console.log(`Mező kitöltve (közvetlen): ${fieldName} = ${value}`);
-          } catch (directErr) {
-            const errorMsg = (directErr as Error).message;
-            errors.push({ field: fieldName, error: errorMsg });
-            console.error(`Hiba a mező kitöltésekor (közvetlen): ${fieldName} - ${errorMsg}`);
-          }
-        } else {
-          const errorMsg = err.message || 'Ismeretlen hiba';
-          errors.push({ field: fieldName, error: errorMsg });
-          console.error(`Hiba a mező kitöltésekor: ${fieldName} - ${errorMsg}`);
-        }
+      if (value && String(value).trim() !== '') {
+        fillField(field, value, fieldName, fieldName);
       }
     } else {
       // Ha nincs pontos egyezés, próbáljuk meg részleges egyezéssel
-      const fieldNameLower = fieldName.toLowerCase();
+      const fieldNameLower = fieldName.toLowerCase().trim();
       let matched = false;
+      
+      // Először próbáljuk meg a teljes egyezést (kis/nagybetű és szóközök nélkül)
       for (const [key, value] of Object.entries(fieldMapping)) {
-        if (fieldNameLower.includes(key.toLowerCase()) || key.toLowerCase().includes(fieldNameLower)) {
-          try {
-            if (field.constructor.name === 'PDFTextField') {
-              // Próbáljuk meg az updateAppearances opcióval is
-              try {
-                (field as any).setText(String(value), { updateAppearances: true });
-              } catch {
-                // Ha nem támogatja, próbáljuk meg anélkül
-                (field as any).setText(String(value));
-              }
-              filledFields++;
-              matched = true;
-              console.log(`Mező kitöltve (részleges egyezés): ${fieldName} (kulcs: ${key}) = ${value}`);
-              break;
-            }
-          } catch (err) {
-            // Folytatjuk a következő mezővel
+        const keyLower = key.toLowerCase().trim();
+        if (fieldNameLower === keyLower) {
+          if (value && String(value).trim() !== '') {
+            matched = fillField(field, value, fieldName, key);
+            if (matched) break;
           }
         }
       }
+      
+      // Ha még nem találtunk egyezést, próbáljuk meg a részleges egyezést
+      if (!matched) {
+        for (const [key, value] of Object.entries(fieldMapping)) {
+          const keyLower = key.toLowerCase().trim();
+          // Részleges egyezés: tartalmazza-e a mezőnév a kulcsot vagy fordítva
+          if ((fieldNameLower.includes(keyLower) || keyLower.includes(fieldNameLower)) && 
+              keyLower.length > 3 && fieldNameLower.length > 3) {
+            if (value && String(value).trim() !== '') {
+              matched = fillField(field, value, fieldName, key);
+              if (matched) break;
+            }
+          }
+        }
+      }
+      
       if (!matched) {
         console.log(`Mező nem található a mapping-ben: ${fieldName}`);
       }
@@ -309,8 +347,11 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
   });
   
   console.log(`Összesen ${filledFields} mező lett kitöltve a ${formFields.length} mezőből`);
-  console.log(`Elérhető mezőnevek: ${allFieldNames.join(', ')}`);
-  console.log(`Mapping kulcsok: ${Object.keys(fieldMapping).join(', ')}`);
+  if (matchedFields.length > 0) {
+    console.log(`Kitöltött mezők: ${matchedFields.map(m => `${m.fieldName} (${m.mappingKey})`).join(', ')}`);
+  }
+  console.log(`Elérhető mezőnevek: ${allFieldNames.slice(0, 30).join(', ')}${allFieldNames.length > 30 ? `... (összesen ${allFieldNames.length})` : ''}`);
+  console.log(`Mapping kulcsok: ${Object.keys(fieldMapping).slice(0, 30).join(', ')}${Object.keys(fieldMapping).length > 30 ? `... (összesen ${Object.keys(fieldMapping).length})` : ''}`);
   
   if (errors.length > 0) {
     console.error(`Hibák a PDF kitöltésekor:`, errors);
@@ -323,29 +364,43 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
       throw new Error('A PDF template nem tartalmaz kitölthető form mezőket. Ellenőrizze, hogy a template fájl helyes-e.');
     } else {
       console.warn('FIGYELEM: Egyetlen mező sem lett kitöltve! A PDF üres lehet.');
-      console.warn(`Talált mezők a PDF-ben: ${allFieldNames.slice(0, 20).join(', ')}${allFieldNames.length > 20 ? '...' : ''}`);
-      console.warn(`Mapping kulcsok: ${Object.keys(fieldMapping).slice(0, 20).join(', ')}${Object.keys(fieldMapping).length > 20 ? '...' : ''}`);
-      throw new Error(`Nem sikerült kitölteni a PDF mezőket. Talált mezők: ${allFieldNames.slice(0, 10).join(', ')}${allFieldNames.length > 10 ? '...' : ''}. Ellenőrizze, hogy a mezőnevek egyeznek-e a template-tel.`);
+      console.warn(`Talált mezők a PDF-ben (első 30): ${allFieldNames.slice(0, 30).join(', ')}${allFieldNames.length > 30 ? `... (összesen ${allFieldNames.length})` : ''}`);
+      console.warn(`Mapping kulcsok (első 30): ${Object.keys(fieldMapping).slice(0, 30).join(', ')}${Object.keys(fieldMapping).length > 30 ? `... (összesen ${Object.keys(fieldMapping).length})` : ''}`);
+      
+      // Részletesebb hibaüzenet
+      const errorDetails = `PDF mezők száma: ${formFields.length}, Mapping kulcsok száma: ${Object.keys(fieldMapping).length}. 
+Talált mezők: ${allFieldNames.slice(0, 20).join(', ')}${allFieldNames.length > 20 ? '...' : ''}`;
+      
+      throw new Error(`Nem sikerült kitölteni a PDF mezőket. ${errorDetails}`);
     }
   }
   
-  // PDF mentése - fontos: updateFieldAppearances: true kell, hogy a kitöltött mezők láthatók legyenek
+  // 1) Explicit appearance stream generálás – így a kitöltött szöveg minden nézegetőben látszik
+  try {
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    form.updateFieldAppearances(font);
+    console.log('PDF form mezők megjelenése frissítve (updateFieldAppearances)');
+  } catch (appearanceError) {
+    console.warn('Hiba az appearance frissítésekor (folytatás flatten nélkül):', appearanceError);
+  }
+
+  // 2) Form flatten – mezők tartalma a lapokra kerül, nem maradnak szerkeszthető mezők, mindig látszik a szöveg
+  try {
+    form.flatten({ updateFieldAppearances: true });
+    console.log('PDF form flatten sikeres – mezők tartalma beolvasztva a lapokba');
+  } catch (flattenError) {
+    console.warn('Flatten sikertelen, PDF mentése mezőkkel:', flattenError);
+  }
+
+  // PDF mentése
   let pdfBytes: Uint8Array;
   try {
-    // Először próbáljuk meg az appearance frissítéssel (ez biztosítja, hogy a mezők láthatók legyenek)
-    pdfBytes = await pdfDoc.save({ updateFieldAppearances: true });
-    console.log('PDF sikeresen mentve appearance frissítéssel');
+    pdfBytes = await pdfDoc.save();
+    console.log('PDF sikeresen mentve');
   } catch (saveError) {
-    console.warn('Hiba az appearance frissítéssel, próbáljuk meg anélkül:', saveError);
-    try {
-      // Ha nem sikerül, próbáljuk meg anélkül
-      pdfBytes = await pdfDoc.save({ updateFieldAppearances: false });
-      console.warn('PDF mentve appearance frissítés nélkül - a mezők lehet, hogy nem láthatók');
-    } catch (saveError2) {
-      throw new Error(`PDF mentési hiba: ${(saveError2 as Error).message}`);
-    }
+    throw new Error(`PDF mentési hiba: ${(saveError as Error).message}`);
   }
-  
+
   return Buffer.from(pdfBytes);
 }
 

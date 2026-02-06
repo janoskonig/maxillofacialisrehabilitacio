@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type { PatientStageTimeline, PatientStageEntry } from '@/lib/types';
+import type { PatientStageTimeline, PatientStageEntry, StageEventTimeline, StageCatalogEntry } from '@/lib/types';
 import { patientStageOptions } from '@/lib/types';
 import { useToast } from '@/contexts/ToastContext';
 import { Calendar, Clock, ChevronDown, ChevronUp } from 'lucide-react';
@@ -13,12 +13,23 @@ interface PatientStageTimelineProps {
   onRefresh?: () => void;
 }
 
+type TimelineData = PatientStageTimeline | StageEventTimeline;
+
+function isStageEventEntry(s: unknown): s is { stageCode: string; at: string; note?: string | null } {
+  return typeof s === 'object' && s != null && 'stageCode' in s;
+}
+
+function isLegacyStage(s: unknown): s is { stage: string; stageDate?: string | null; notes?: string | null } {
+  return typeof s === 'object' && s != null && 'stage' in s;
+}
+
 export function PatientStageTimeline({
   patientId,
   onRefresh,
 }: PatientStageTimelineProps) {
   const { showToast } = useToast();
-  const [timeline, setTimeline] = useState<PatientStageTimeline | null>(null);
+  const [timeline, setTimeline] = useState<TimelineData | null>(null);
+  const [catalog, setCatalog] = useState<StageCatalogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedEpisodes, setExpandedEpisodes] = useState<Set<string>>(new Set());
 
@@ -36,9 +47,16 @@ export function PatientStageTimeline({
       const data = await response.json();
       setTimeline(data.timeline);
 
-      // Auto-expand first episode
       if (data.timeline?.episodes?.length > 0) {
         setExpandedEpisodes(new Set([data.timeline.episodes[0].episodeId]));
+        const reason = data.timeline.episodes[0].episode?.reason;
+        if (data.useNewModel && reason) {
+          const catRes = await fetch(`/api/stage-catalog?reason=${encodeURIComponent(reason)}`, { credentials: 'include' });
+          if (catRes.ok) {
+            const catData = await catRes.json();
+            setCatalog(catData.catalog ?? []);
+          }
+        }
       }
     } catch (error) {
       console.error('Error fetching timeline:', error);
@@ -49,27 +67,24 @@ export function PatientStageTimeline({
   };
 
   useEffect(() => {
-    if (patientId) {
-      fetchTimeline();
-    }
+    if (patientId) fetchTimeline();
   }, [patientId]);
 
   const toggleEpisode = (episodeId: string) => {
     const newExpanded = new Set(expandedEpisodes);
-    if (newExpanded.has(episodeId)) {
-      newExpanded.delete(episodeId);
-    } else {
-      newExpanded.add(episodeId);
-    }
+    if (newExpanded.has(episodeId)) newExpanded.delete(episodeId);
+    else newExpanded.add(episodeId);
     setExpandedEpisodes(newExpanded);
   };
 
-  const getStageLabel = (stage: string) => {
-    return patientStageOptions.find((opt) => opt.value === stage)?.label || stage;
+  const getStageLabel = (stageOrCode: string) => {
+    const fromCatalog = catalog.find((c) => c.code === stageOrCode)?.labelHu;
+    if (fromCatalog) return fromCatalog;
+    return patientStageOptions.find((opt) => opt.value === stageOrCode)?.label || stageOrCode;
   };
 
-  const getStageColor = (stage: string) => {
-    const colors: Record<string, string> = {
+  const getStageColor = (stageOrCode: string) => {
+    const legacyColors: Record<string, string> = {
       uj_beteg: 'bg-blue-100 text-blue-800',
       onkologiai_kezeles_kesz: 'bg-purple-100 text-purple-800',
       arajanlatra_var: 'bg-yellow-100 text-yellow-800',
@@ -79,8 +94,16 @@ export function PatientStageTimeline({
       fogpotlas_kesz: 'bg-green-100 text-green-800',
       gondozas_alatt: 'bg-gray-100 text-gray-800',
     };
-    return colors[stage] || 'bg-gray-100 text-gray-800';
+    if (legacyColors[stageOrCode]) return legacyColors[stageOrCode];
+    const stageNum = stageOrCode.replace('STAGE_', '');
+    const palette = ['bg-blue-100 text-blue-800', 'bg-purple-100 text-purple-800', 'bg-yellow-100 text-yellow-800', 'bg-orange-100 text-orange-800', 'bg-amber-100 text-amber-800', 'bg-indigo-100 text-indigo-800', 'bg-green-100 text-green-800', 'bg-gray-100 text-gray-800'];
+    return palette[parseInt(stageNum, 10) % palette.length] || 'bg-gray-100 text-gray-800';
   };
+
+  const currentStage = timeline?.currentStage;
+  const currentStageKey = currentStage && isStageEventEntry(currentStage) ? currentStage.stageCode : currentStage && isLegacyStage(currentStage) ? currentStage.stage : null;
+  const currentStageDate = currentStage && (isStageEventEntry(currentStage) ? currentStage.at : isLegacyStage(currentStage) ? currentStage.stageDate : null);
+  const currentStageNote = currentStage && (isStageEventEntry(currentStage) ? currentStage.note : isLegacyStage(currentStage) ? currentStage.notes : null);
 
   if (loading) {
     return (
@@ -115,31 +138,25 @@ export function PatientStageTimeline({
       </div>
 
       {/* Current Stage */}
-      {timeline.currentStage && (
+      {currentStage && currentStageKey && (
         <div className="mb-6 p-4 bg-medical-primary/10 border border-medical-primary/20 rounded-lg">
           <div className="flex items-center gap-2 mb-2">
             <Calendar className="w-5 h-5 text-medical-primary" />
             <span className="text-sm font-medium text-gray-600">Jelenlegi stádium</span>
           </div>
           <div className="flex items-center gap-3">
-            <span
-              className={`px-3 py-1 rounded-full text-sm font-medium ${getStageColor(
-                timeline.currentStage.stage
-              )}`}
-            >
-              {getStageLabel(timeline.currentStage.stage)}
+            <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStageColor(currentStageKey)}`}>
+              {getStageLabel(currentStageKey)}
             </span>
-            {timeline.currentStage.stageDate && (
+            {currentStageDate && (
               <span className="text-sm text-gray-600 flex items-center gap-1">
                 <Clock className="w-4 h-4" />
-                {format(new Date(timeline.currentStage.stageDate), 'yyyy. MMMM d. HH:mm', {
-                  locale: hu,
-                })}
+                {format(new Date(currentStageDate), 'yyyy. MMMM d. HH:mm', { locale: hu })}
               </span>
             )}
           </div>
-          {timeline.currentStage.notes && (
-            <p className="text-sm text-gray-700 mt-2">{timeline.currentStage.notes}</p>
+          {currentStageNote && (
+            <p className="text-sm text-gray-700 mt-2">{currentStageNote}</p>
           )}
         </div>
       )}
@@ -161,7 +178,9 @@ export function PatientStageTimeline({
                 >
                   <div className="flex items-center gap-3">
                     <span className="text-sm font-medium text-gray-900">
-                      Epizód {episodeIndex + 1}
+                      {'episode' in episode && episode.episode?.chiefComplaint
+                        ? episode.episode.chiefComplaint
+                        : `Epizód ${episodeIndex + 1}`}
                     </span>
                     <span className="text-xs text-gray-500">
                       {format(new Date(episode.startDate), 'yyyy. MMMM d.', { locale: hu })}
@@ -181,40 +200,35 @@ export function PatientStageTimeline({
 
                 {isExpanded && (
                   <div className="p-4 space-y-3">
-                    {episode.stages.map((stage, stageIndex) => (
-                      <div
-                        key={stage.id}
-                        className="flex items-start gap-4 pb-3 border-b border-gray-100 last:border-b-0 last:pb-0"
-                      >
-                        <div className="flex-shrink-0 w-2 h-2 rounded-full bg-medical-primary mt-2"></div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span
-                              className={`px-2 py-1 rounded text-xs font-medium ${getStageColor(
-                                stage.stage
-                              )}`}
-                            >
-                              {getStageLabel(stage.stage)}
-                            </span>
-                            {stage.stageDate && (
-                              <span className="text-xs text-gray-500">
-                                {format(new Date(stage.stageDate), 'yyyy. MMMM d. HH:mm', {
-                                  locale: hu,
-                                })}
+                    {episode.stages.map((stage: unknown, stageIndex: number) => {
+                      const key = isStageEventEntry(stage) ? stage.stageCode : isLegacyStage(stage) ? stage.stage : String(stageIndex);
+                      const date = isStageEventEntry(stage) ? stage.at : isLegacyStage(stage) ? stage.stageDate : null;
+                      const note = isStageEventEntry(stage) ? stage.note : isLegacyStage(stage) ? stage.notes : null;
+                      const createdBy = stage && typeof stage === 'object' && 'createdBy' in stage ? (stage as { createdBy?: string }).createdBy : null;
+                      const id = stage && typeof stage === 'object' && 'id' in stage ? (stage as { id: string }).id : `stage-${episodeIndex}-${stageIndex}`;
+                      return (
+                        <div
+                          key={id}
+                          className="flex items-start gap-4 pb-3 border-b border-gray-100 last:border-b-0 last:pb-0"
+                        >
+                          <div className="flex-shrink-0 w-2 h-2 rounded-full bg-medical-primary mt-2" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={`px-2 py-1 rounded text-xs font-medium ${getStageColor(key)}`}>
+                                {getStageLabel(key)}
                               </span>
-                            )}
+                              {date && (
+                                <span className="text-xs text-gray-500">
+                                  {format(new Date(date), 'yyyy. MMMM d. HH:mm', { locale: hu })}
+                                </span>
+                              )}
+                            </div>
+                            {note && <p className="text-sm text-gray-600 mt-1">{note}</p>}
+                            {createdBy && <p className="text-xs text-gray-400 mt-1">{createdBy}</p>}
                           </div>
-                          {stage.notes && (
-                            <p className="text-sm text-gray-600 mt-1">{stage.notes}</p>
-                          )}
-                          {stage.createdBy && (
-                            <p className="text-xs text-gray-400 mt-1">
-                              {stage.createdBy}
-                            </p>
-                          )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -227,36 +241,32 @@ export function PatientStageTimeline({
       {(!timeline.episodes || timeline.episodes.length === 0) && timeline.history && timeline.history.length > 0 && (
         <div className="space-y-3">
           <h4 className="text-base font-medium text-gray-900 mb-3">Teljes történet</h4>
-          {timeline.history.map((stage) => (
-            <div
-              key={stage.id}
-              className="flex items-start gap-4 pb-3 border-b border-gray-100 last:border-b-0 last:pb-0"
-            >
-              <div className="flex-shrink-0 w-2 h-2 rounded-full bg-medical-primary mt-2"></div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span
-                    className={`px-2 py-1 rounded text-xs font-medium ${getStageColor(
-                      stage.stage
-                    )}`}
-                  >
-                    {getStageLabel(stage.stage)}
-                  </span>
-                  {stage.stageDate && (
-                    <span className="text-xs text-gray-500">
-                      {format(new Date(stage.stageDate), 'yyyy. MMMM d. HH:mm', { locale: hu })}
+          {timeline.history.map((stage: unknown, idx: number) => {
+            const key = isStageEventEntry(stage) ? stage.stageCode : isLegacyStage(stage) ? stage.stage : String(idx);
+            const date = isStageEventEntry(stage) ? stage.at : isLegacyStage(stage) ? stage.stageDate : null;
+            const note = isStageEventEntry(stage) ? stage.note : isLegacyStage(stage) ? stage.notes : null;
+            const createdBy = stage && typeof stage === 'object' && 'createdBy' in stage ? (stage as { createdBy?: string }).createdBy : null;
+            const id = stage && typeof stage === 'object' && 'id' in stage ? (stage as { id: string }).id : `hist-${idx}`;
+            return (
+              <div key={id} className="flex items-start gap-4 pb-3 border-b border-gray-100 last:border-b-0 last:pb-0">
+                <div className="flex-shrink-0 w-2 h-2 rounded-full bg-medical-primary mt-2" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${getStageColor(key)}`}>
+                      {getStageLabel(key)}
                     </span>
-                  )}
+                    {date && (
+                      <span className="text-xs text-gray-500">
+                        {format(new Date(date), 'yyyy. MMMM d. HH:mm', { locale: hu })}
+                      </span>
+                    )}
+                  </div>
+                  {note && <p className="text-sm text-gray-600 mt-1">{note}</p>}
+                  {createdBy && <p className="text-xs text-gray-400 mt-1">{createdBy}</p>}
                 </div>
-                {stage.notes && (
-                  <p className="text-sm text-gray-600 mt-1">{stage.notes}</p>
-                )}
-                {stage.createdBy && (
-                  <p className="text-xs text-gray-400 mt-1">{stage.createdBy}</p>
-                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

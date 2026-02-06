@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { TodaysAppointmentsWidget } from './widgets/TodaysAppointmentsWidget';
 import { PendingApprovalsWidget } from './widgets/PendingApprovalsWidget';
 import { SendMessageWidget } from './widgets/SendMessageWidget';
 import { WaitingTimeWidget } from './widgets/WaitingTimeWidget';
-import { ChevronDown, ChevronUp, LayoutDashboard, UserPlus } from 'lucide-react';
+import { ChevronDown, ChevronUp, LayoutDashboard, UserPlus, Clock } from 'lucide-react';
+import { DashboardWidget } from './DashboardWidget';
 import { PatientList } from './PatientList';
 import { Patient } from '@/lib/types';
 
@@ -23,12 +25,20 @@ interface DashboardProps {
   onViewFoto?: (patient: Patient) => void;
 }
 
+interface LongInPreparatoryPatient {
+  patientId: string;
+  patientName: string;
+  stageCode: string;
+  stageSince: string;
+}
+
 export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, onViewFoto }: DashboardProps) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'new-registrations'>('overview');
+  const [longInPreparatory, setLongInPreparatory] = useState<LongInPreparatoryPatient[]>([]);
 
   const canEdit = userRole === 'admin' || userRole === 'editor' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos';
 
@@ -78,6 +88,15 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
       refreshData();
     }
   }, [activeTab, loading, data, refreshData]);
+
+  const canSeeStages = userRole === 'admin' || userRole === 'sebészorvos' || userRole === 'fogpótlástanász';
+  useEffect(() => {
+    if (!canSeeStages) return;
+    fetch('/api/patients/stages/long-in-preparatory', { credentials: 'include' })
+      .then((res) => res.ok ? res.json() : { patients: [] })
+      .then((d) => setLongInPreparatory(d.patients ?? []))
+      .catch(() => setLongInPreparatory([]));
+  }, [canSeeStages]);
 
   if (loading) {
     return (
@@ -218,6 +237,34 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
               {/* Pending Appointments */}
               {data.pendingAppointments.length > 0 && (
                 <PendingApprovalsWidget approvals={data.pendingAppointments} />
+              )}
+
+              {/* 4. Előkészítő stádiumban */}
+              {canSeeStages && (
+                <DashboardWidget
+                  title="Előkészítő stádiumban"
+                  icon={<Clock className="w-5 h-5" />}
+                >
+                  {longInPreparatory.length === 0 ? (
+                    <p className="text-sm text-gray-500">Nincs ilyen beteg.</p>
+                  ) : (
+                    <ul className="space-y-1.5">
+                      {longInPreparatory.map((p) => (
+                        <li key={p.patientId}>
+                          <Link
+                            href={`/patients/${p.patientId}/view`}
+                            className="text-sm text-medical-primary hover:underline"
+                          >
+                            {p.patientName}
+                          </Link>
+                          <span className="text-xs text-gray-500 ml-2">
+                            ({new Date(p.stageSince).toLocaleDateString('hu-HU')} óta)
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </DashboardWidget>
               )}
 
               {/* Waiting Times Widget */}

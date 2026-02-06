@@ -519,7 +519,7 @@ export interface PatientStageTimeline {
   }[]; // Epizódok szerint csoportosítva
 }
 
-// Patient stage options for UI
+// Patient stage options for UI (régi, backward compat - új rendszer stage_catalogot használ)
 export const patientStageOptions: Array<{ value: PatientStage; label: string }> = [
   { value: 'uj_beteg', label: 'Új beteg' },
   { value: 'onkologiai_kezeles_kesz', label: 'Onkológiai kezelés kész' },
@@ -530,6 +530,76 @@ export const patientStageOptions: Array<{ value: PatientStage; label: string }> 
   { value: 'fogpotlas_kesz', label: 'Fogpótlás kész' },
   { value: 'gondozas_alatt', label: 'Gondozás alatt' },
 ];
+
+// --- Episode + Stage catalog + Stage events + Milestones (új modell) ---
+export const REASON_VALUES = ['traumás sérülés', 'veleszületett rendellenesség', 'onkológiai kezelés utáni állapot'] as const;
+export type ReasonType = typeof REASON_VALUES[number];
+
+export const EPISODE_STATUS_VALUES = ['open', 'closed', 'paused'] as const;
+export type EpisodeStatus = typeof EPISODE_STATUS_VALUES[number];
+
+export const TRIGGER_TYPE_VALUES = ['recidiva', 'fogelvesztes', 'potlasvesztes', 'kontrollbol_uj_panasz', 'egyeb'] as const;
+export type TriggerType = typeof TRIGGER_TYPE_VALUES[number];
+
+export interface PatientEpisode {
+  id: string;
+  patientId: string;
+  reason: ReasonType;
+  pathwayCode?: string | null;
+  chiefComplaint: string;
+  caseTitle?: string | null;
+  status: EpisodeStatus;
+  openedAt: string;
+  closedAt?: string | null;
+  parentEpisodeId?: string | null;
+  triggerType?: TriggerType | null;
+  createdAt?: string | null;
+  createdBy?: string | null;
+}
+
+export interface StageCatalogEntry {
+  code: string;
+  reason: ReasonType;
+  labelHu: string;
+  orderIndex: number;
+  isTerminal: boolean;
+  defaultDurationDays?: number | null;
+}
+
+export interface StageEventEntry {
+  id: string;
+  patientId: string;
+  episodeId: string;
+  stageCode: string;
+  at: string;
+  note?: string | null;
+  createdBy?: string | null;
+  createdAt?: string | null;
+}
+
+export interface PatientMilestoneEntry {
+  id: string;
+  patientId: string;
+  episodeId: string;
+  code: string;
+  at: string;
+  params?: Record<string, unknown> | null;
+  note?: string | null;
+  createdBy?: string | null;
+  createdAt?: string | null;
+}
+
+export interface StageEventTimeline {
+  currentStage: StageEventEntry | null;
+  history: StageEventEntry[];
+  episodes: {
+    episodeId: string;
+    episode?: PatientEpisode;
+    startDate: string;
+    endDate?: string;
+    stages: StageEventEntry[];
+  }[];
+}
 
 // OHIP-14 types
 export type OHIP14Timepoint = 'T0' | 'T1' | 'T2';
@@ -543,6 +613,7 @@ export const ohip14ResponseSchema = z.object({
   patientId: z.string().min(1, 'Beteg ID kötelező'),
   episodeId: z.string().optional().nullable(),
   timepoint: z.enum(['T0', 'T1', 'T2']),
+  stageCode: z.string().optional().nullable(),
   completedAt: z.string().optional().nullable(),
   completedByPatient: z.boolean().default(true),
   q1_functional_limitation: z.number().int().min(0).max(4).nullable(),

@@ -50,9 +50,12 @@ export default function Home() {
   const [userInstitution, setUserInstitution] = useState<string | null>(null);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [sortField, setSortField] = useState<'nev' | 'idopont' | 'createdAt' | null>('idopont');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [sortField, setSortField] = useState<'nev' | 'idopont' | 'createdAt' | null>('createdAt');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [refreshKey, setRefreshKey] = useState<number>(0);
+  const [page, setPage] = useState(1);
+  const [totalPatients, setTotalPatients] = useState(0);
+  const PAGE_SIZE = 25;
   const [opViewerPatient, setOpViewerPatient] = useState<Patient | null>(null);
   const [fotoViewerPatient, setFotoViewerPatient] = useState<Patient | null>(null);
   const [showMessageModal, setShowMessageModal] = useState(false);
@@ -134,21 +137,24 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    // Load patients when there's a search query or a view selected
-    const loadPatientsData = async () => {
-      // Only load if there's a search query or a view selected
-      if (!searchQuery.trim() && selectedView === 'all') {
-        setPatients([]);
-        setFilteredPatients([]);
-        return;
-      }
+    setPage(1);
+  }, [searchQuery, selectedView]);
 
+  useEffect(() => {
+    const loadPatientsData = async () => {
       try {
         const viewOption = selectedView !== 'all' ? { view: selectedView } : undefined;
-        const allPatients = await searchPatients(searchQuery, viewOption);
-        setPatients(allPatients);
-        
-        // Update URL with view param
+        const result = await searchPatients(searchQuery, {
+          ...viewOption,
+          limit: PAGE_SIZE,
+          offset: (page - 1) * PAGE_SIZE,
+        });
+        const isPaginated = typeof result === 'object' && 'patients' in result && 'total' in result;
+        const list = isPaginated ? (result as { patients: Patient[]; total: number }).patients : (result as Patient[]);
+        const total = isPaginated ? (result as { patients: Patient[]; total: number }).total : list.length;
+        setPatients(list);
+        setTotalPatients(total);
+
         const url = new URL(window.location.href);
         if (selectedView !== 'all') {
           url.searchParams.set('view', selectedView);
@@ -156,13 +162,11 @@ export default function Home() {
           url.searchParams.delete('view');
         }
         window.history.replaceState({}, '', url.toString());
-        
-        // Apply sorting (only for fields that don't need appointment data)
-        let sortedResults = [...allPatients];
+
+        let sortedResults = [...list];
         if (sortField === 'nev' || sortField === 'createdAt') {
           sortedResults = sortedResults.sort((a, b) => {
             let comparison = 0;
-            
             if (sortField === 'nev') {
               const nameA = (a.nev || '').toLowerCase();
               const nameB = (b.nev || '').toLowerCase();
@@ -172,22 +176,18 @@ export default function Home() {
               const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
               comparison = dateA - dateB;
             }
-            
             return sortDirection === 'asc' ? comparison : -comparison;
           });
         }
-        // Note: appointment sorting (idopont) is handled in PatientList component
-        // as it needs appointment data
-        
         setFilteredPatients(sortedResults);
       } catch (error) {
         console.error('Hiba a betegek betöltésekor:', error);
         showToast('Hiba történt a betegek betöltésekor. Kérjük, próbálja újra.', 'error');
       }
     };
-    
+
     loadPatientsData();
-  }, [searchQuery, selectedView, sortField, sortDirection, refreshKey]);
+  }, [searchQuery, selectedView, sortField, sortDirection, refreshKey, page]);
 
   const loadPatients = async () => {
     // Force reload by incrementing refreshKey
@@ -595,55 +595,78 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Stats - only show when searching or view selected */}
-              {(searchQuery.trim() || selectedView !== 'all') && (
-                <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
-                  <div className="card card-hover p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-medical-primary/10 rounded-lg">
-                        <Users className="w-5 h-5 text-medical-primary" />
-                      </div>
-                      <div>
-                        <p className="text-body-sm text-gray-500">
-                          Keresési eredmények
-                        </p>
-                        <p className="text-2xl font-bold text-gray-900 mt-0.5">
-                          {filteredPatients.length}
-                        </p>
-                      </div>
+              {/* Stats */}
+              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
+                <div className="card card-hover p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-medical-primary/10 rounded-lg">
+                      <Users className="w-5 h-5 text-medical-primary" />
                     </div>
+                    <div>
+                      <p className="text-body-sm text-gray-500">
+                        {searchQuery.trim() || selectedView !== 'all' ? 'Keresési eredmények' : 'Páciensek'}
+                      </p>
+                      <p className="text-2xl font-bold text-gray-900 mt-0.5">
+                        {totalPatients}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Patient List - 25 per page */}
+              <PatientList
+                patients={filteredPatients}
+                onView={handleViewPatient}
+                onEdit={handleEditPatient}
+                onDelete={userRole === 'admin' ? handleDeletePatient : undefined}
+                onViewOP={handleViewOP}
+                onViewFoto={handleViewFoto}
+                canEdit={userRole === 'admin' || userRole === 'editor' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos'}
+                canDelete={userRole === 'admin'}
+                userRole={userRole}
+                sortField={sortField}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+                searchQuery={searchQuery}
+              />
+
+              {/* Pagination - 25 per page */}
+              {totalPatients > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-3 py-3">
+                  <p className="text-sm text-gray-600">
+                    {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, totalPatients)} / Összesen {totalPatients}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={page <= 1}
+                      className="btn-secondary text-sm px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Előző
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPage((p) => p + 1)}
+                      disabled={page * PAGE_SIZE >= totalPatients}
+                      className="btn-secondary text-sm px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Következő
+                    </button>
                   </div>
                 </div>
               )}
 
-              {/* Patient List - only show when searching or view selected */}
-              {(searchQuery.trim() || selectedView !== 'all') && (
-                <PatientList
-                  patients={filteredPatients}
-                  onView={handleViewPatient}
-                  onEdit={handleEditPatient}
-                  onDelete={userRole === 'admin' ? handleDeletePatient : undefined}
-                  onViewOP={handleViewOP}
-                  onViewFoto={handleViewFoto}
-                  canEdit={userRole === 'admin' || userRole === 'editor' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos'}
-                  canDelete={userRole === 'admin'}
-                  userRole={userRole}
-                  sortField={sortField}
-                  sortDirection={sortDirection}
-                  onSort={handleSort}
-                  searchQuery={searchQuery}
-                />
-              )}
-
-              {/* Empty state when no search and no view */}
-              {!searchQuery.trim() && selectedView === 'all' && (
+              {/* Empty state */}
+              {totalPatients === 0 && !searchQuery.trim() && selectedView === 'all' && (
                 <div className="card text-center py-12">
                   <Search className="w-16 h-16 mx-auto mb-4 text-gray-300" />
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">
                     Keresés a betegek között
                   </h3>
                   <p className="text-gray-600 mb-4">
-                    Kezdjen el gépelni a keresőmezőben a beteg neve, TAJ száma vagy telefonszáma alapján.
+                    Kezdjen el gépelni a keresőmezőben, vagy válasszon szűrőt a listához.
                   </p>
                 </div>
               )}

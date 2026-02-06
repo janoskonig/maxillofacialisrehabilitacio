@@ -20,7 +20,7 @@ interface PatientCardProps {
   appointment?: AppointmentInfo;
   opDocumentCount?: number;
   fotoDocumentCount?: number;
-  stage?: { stage: string; stageDate?: string; notes?: string };
+  stage?: { stage: string; stageDate?: string; notes?: string; stageLabel?: string };
   onView: (patient: Patient) => void;
   onEdit?: (patient: Patient) => void;
   onDelete?: (patient: Patient) => void;
@@ -102,12 +102,12 @@ function PatientCardComponent({
   const statusInfo = appointment ? getStatusInfo(appointment.appointmentStatus, appointment.isLate) : null;
   const StatusIcon = statusInfo?.icon;
 
-  const getStageLabel = (stageValue: string) => {
-    return patientStageOptions.find(opt => opt.value === stageValue)?.label || stageValue;
+  const getStageLabel = (s: { stage: string; stageLabel?: string }) => {
+    return s.stageLabel ?? patientStageOptions.find(opt => opt.value === s.stage)?.label ?? s.stage;
   };
 
   const getStageColor = (stageValue: string) => {
-    const colors: Record<string, string> = {
+    const legacy: Record<string, string> = {
       uj_beteg: 'bg-blue-100 text-blue-800',
       onkologiai_kezeles_kesz: 'bg-purple-100 text-purple-800',
       arajanlatra_var: 'bg-yellow-100 text-yellow-800',
@@ -117,7 +117,17 @@ function PatientCardComponent({
       fogpotlas_kesz: 'bg-green-100 text-green-800',
       gondozas_alatt: 'bg-gray-100 text-gray-800',
     };
-    return colors[stageValue] || 'bg-gray-100 text-gray-800';
+    const byCode: Record<string, string> = {
+      STAGE_0: 'bg-blue-100 text-blue-800',
+      STAGE_1: 'bg-blue-200 text-blue-900',
+      STAGE_2: 'bg-yellow-100 text-yellow-800',
+      STAGE_3: 'bg-violet-100 text-violet-800',
+      STAGE_4: 'bg-amber-100 text-amber-800',
+      STAGE_5: 'bg-indigo-100 text-indigo-800',
+      STAGE_6: 'bg-green-100 text-green-800',
+      STAGE_7: 'bg-gray-100 text-gray-800',
+    };
+    return legacy[stageValue] ?? byCode[stageValue] ?? 'bg-gray-100 text-gray-800';
   };
 
   return (
@@ -137,9 +147,9 @@ function PatientCardComponent({
             {stage && (
               <span
                 className={`px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${getStageColor(stage.stage)}`}
-                title={stage.notes || getStageLabel(stage.stage)}
+                title={stage.notes || getStageLabel(stage)}
               >
-                {getStageLabel(stage.stage)}
+                {getStageLabel(stage)}
               </span>
             )}
           </div>

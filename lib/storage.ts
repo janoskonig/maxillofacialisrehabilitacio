@@ -339,16 +339,12 @@ export async function getAllPatients(): Promise<Patient[]> {
   }
 }
 
-// Beteg keresése (pagination nélkül)
+// Beteg keresése (opcionális lapozással)
 export async function searchPatients(
   query: string,
-  options?: { view?: 'neak_pending' | 'missing_docs' }
-): Promise<Patient[]> {
+  options?: { view?: 'neak_pending' | 'missing_docs'; limit?: number; offset?: number }
+): Promise<Patient[] | { patients: Patient[]; total: number }> {
   try {
-    if (!query.trim() && !options?.view) {
-      return getAllPatients();
-    }
-    
     const params = new URLSearchParams();
     if (query.trim()) {
       params.append('q', query);
@@ -356,7 +352,13 @@ export async function searchPatients(
     if (options?.view) {
       params.append('view', options.view);
     }
-    
+    if (options?.limit != null) {
+      params.append('limit', String(options.limit));
+    }
+    if (options?.offset != null) {
+      params.append('offset', String(options.offset));
+    }
+
     const response = await fetchWithTimeout(
       `${API_BASE_URL}?${params.toString()}`,
       {
@@ -364,10 +366,16 @@ export async function searchPatients(
       },
       30000 // 30 másodperc timeout
     );
-    const data = await handleApiResponse<{ patients: Patient[] }>(response);
+    const data = await handleApiResponse<{ patients: Patient[]; total?: number }>(response);
+    if (options?.limit != null && typeof data.total === 'number') {
+      return { patients: data.patients, total: data.total };
+    }
     return data.patients;
   } catch (error) {
     console.error('Hiba a kereséskor:', error);
+    if (options?.limit != null) {
+      return { patients: [], total: 0 };
+    }
     return [];
   }
 }
