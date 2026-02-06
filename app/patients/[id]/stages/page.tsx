@@ -214,7 +214,12 @@ export default function PatientStagesPage() {
           )}
 
           {/* Timeline */}
-          <PatientStageTimeline key={refreshKey} patientId={patientId} />
+          <PatientStageTimeline
+            key={refreshKey}
+            patientId={patientId}
+            onRefresh={handleStageChanged}
+            canEditStageStart={userRole === 'admin'}
+          />
         </div>
       </main>
     </div>

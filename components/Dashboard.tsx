@@ -261,7 +261,7 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
                   }`}
                 >
                   <BarChart3 className="w-4 h-4" />
-                  Áttekintés
+                  GANTT
                 </button>
               )}
             </nav>
