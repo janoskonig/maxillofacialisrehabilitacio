@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { Patient } from '@/lib/types';
-import type { PatientEpisode } from '@/lib/types';
+import type { PatientEpisode, PatientStageEntry, StageEventEntry } from '@/lib/types';
 import Link from 'next/link';
 import { ArrowLeft, BarChart3, Calendar } from 'lucide-react';
 import { Logo } from '@/components/Logo';
@@ -23,7 +23,7 @@ export default function PatientStagesPage() {
   const [patient, setPatient] = useState<Patient | null>(null);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string | null>(null);
-  const [currentStage, setCurrentStage] = useState<unknown>(null);
+  const [currentStage, setCurrentStage] = useState<PatientStageEntry | StageEventEntry | null>(null);
   const [episodes, setEpisodes] = useState<PatientEpisode[]>([]);
   const [useNewModel, setUseNewModel] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -112,7 +112,9 @@ export default function PatientStagesPage() {
   const handleStageChanged = () => refreshStagesAndEpisodes();
 
   const activeEpisode = episodes.find((e) => e.status === 'open') ?? null;
-  const patientReason = patient?.kezelesreErkezesIndoka ?? activeEpisode?.reason ?? null;
+  const rawReason = patient?.kezelesreErkezesIndoka ?? activeEpisode?.reason ?? null;
+  const patientReason =
+    rawReason === '' || rawReason == null ? undefined : (rawReason as 'traumás sérülés' | 'veleszületett rendellenesség' | 'onkológiai kezelés utáni állapot');
 
   if (loading) {
     return (

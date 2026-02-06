@@ -66,7 +66,7 @@ export async function GET(
 
       const currentStage: StageEventEntry | null = events.length > 0 ? events[0] : null;
 
-      const episodeIds = [...new Set(events.map((e) => e.episodeId))];
+      const episodeIds = Array.from(new Set(events.map((e) => e.episodeId)));
       const episodesData = await pool.query(
         `SELECT id, patient_id as "patientId", reason, chief_complaint as "chiefComplaint", status, opened_at as "openedAt", closed_at as "closedAt"
          FROM patient_episodes WHERE id = ANY($1::uuid[])`,

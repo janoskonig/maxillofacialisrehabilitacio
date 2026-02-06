@@ -120,7 +120,7 @@ export async function POST(
     const episodeId = body.episodeId as string;
     const code = (body.code as string)?.trim?.();
     const at = body.at ? new Date(body.at) : new Date();
-    const params = body.params && typeof body.params === 'object' ? body.params : null;
+    const milestoneParams = body.params && typeof body.params === 'object' ? body.params : null;
     const note = (body.note as string)?.trim?.() || null;
 
     if (!episodeId || !code) {
@@ -151,7 +151,7 @@ export async function POST(
       `INSERT INTO patient_milestones (patient_id, episode_id, code, at, params, note, created_by)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id, patient_id as "patientId", episode_id as "episodeId", code, at, params, note, created_by as "createdBy", created_at as "createdAt"`,
-      [patientId, episodeId, code, at, params ? JSON.stringify(params) : null, note, auth.email]
+[patientId, episodeId, code, at, milestoneParams ? JSON.stringify(milestoneParams) : null, note, auth.email]
     );
 
     const milestone = rowToMilestone(insertResult.rows[0]);
