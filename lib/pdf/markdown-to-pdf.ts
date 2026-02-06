@@ -1,246 +1,172 @@
 /**
- * Markdown → HTML → PDF konverzió modul
- * Sokkal jobb minőségű PDF-eket generál, mint a pdf-lib
+ * Markdown → PDF konverzió modul (pdf-lib, Chromium/Puppeteer nélkül)
  */
 
 import { marked } from 'marked';
-import puppeteer from 'puppeteer';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
-// Markdown → HTML konverzió
-async function markdownToHTML(markdown: string, title?: string): Promise<string> {
-  // Configure marked options
+/** HTML → egyszerű szöveg (sorok listája) */
+function htmlToPlainLines(html: string): string[] {
+  const withNewlines = html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<\/h[1-6]>/gi, '\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<\/tr>/gi, '\n')
+    .replace(/<\/td>/gi, '\t')
+    .replace(/<\/th>/gi, '\t');
+  const stripped = withNewlines.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
+  return stripped.split('\n').map((s) => s.trim()).filter(Boolean);
+}
+
+/** Markdown → HTML (marked), majd HTML → szövegsorok */
+async function markdownToPlainLines(markdown: string): Promise<string[]> {
   let html: string;
   try {
-    // marked v12+ API - marked.parse() vagy marked() használata
     if (typeof marked.parse === 'function') {
-      // marked v12+ has parse method
       html = await marked.parse(markdown, { breaks: true, gfm: true });
     } else if (typeof marked === 'function') {
-      // marked v4+ direct function call
       html = await marked(markdown, { breaks: true, gfm: true });
     } else {
-      // Fallback: use default export
       const { marked: markedDefault } = await import('marked');
       html = await markedDefault(markdown, { breaks: true, gfm: true });
     }
-  } catch (error) {
-    console.error('[markdown-to-pdf] Error parsing markdown:', error);
-    // Fallback: escape HTML and wrap in <pre>
+  } catch {
     html = `<pre>${markdown.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`;
   }
+  return htmlToPlainLines(html);
+}
 
-  return `<!DOCTYPE html>
-<html lang="hu">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title || 'Export'}</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
-      font-size: 11pt;
-      line-height: 1.6;
-      color: #333;
-      padding: 40px;
-      max-width: 800px;
-      margin: 0 auto;
-      background: white;
-    }
-    
-    h1 {
-      font-size: 24pt;
-      font-weight: bold;
-      margin-bottom: 20px;
-      color: #1a1a1a;
-      border-bottom: 2px solid #333;
-      padding-bottom: 10px;
-    }
-    
-    h2 {
-      font-size: 18pt;
-      font-weight: bold;
-      margin-top: 24px;
-      margin-bottom: 12px;
-      color: #2a2a2a;
-      border-bottom: 1px solid #ddd;
-      padding-bottom: 6px;
-    }
-    
-    h3 {
-      font-size: 14pt;
-      font-weight: bold;
-      margin-top: 18px;
-      margin-bottom: 10px;
-      color: #3a3a3a;
-    }
-    
-    p {
-      margin-bottom: 12px;
-      text-align: justify;
-    }
-    
-    ul, ol {
-      margin-left: 24px;
-      margin-bottom: 12px;
-    }
-    
-    li {
-      margin-bottom: 6px;
-    }
-    
-    strong {
-      font-weight: bold;
-      color: #1a1a1a;
-    }
-    
-    em {
-      font-style: italic;
-    }
-    
-    code {
-      font-family: 'Courier New', monospace;
-      background-color: #f5f5f5;
-      padding: 2px 6px;
-      border-radius: 3px;
-      font-size: 10pt;
-    }
-    
-    blockquote {
-      border-left: 4px solid #ddd;
-      padding-left: 16px;
-      margin-left: 0;
-      margin-bottom: 12px;
-      color: #666;
-      font-style: italic;
-    }
-    
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 16px;
-    }
-    
-    th, td {
-      border: 1px solid #ddd;
-      padding: 8px;
-      text-align: left;
-    }
-    
-    th {
-      background-color: #f5f5f5;
-      font-weight: bold;
-    }
-    
-    hr {
-      border: none;
-      border-top: 1px solid #ddd;
-      margin: 24px 0;
-    }
-    
-    .footer {
-      margin-top: 40px;
-      padding-top: 20px;
-      border-top: 1px solid #ddd;
-      font-size: 9pt;
-      color: #666;
-      text-align: center;
-    }
-    
-    @media print {
-      body {
-        padding: 20px;
-      }
-      
-      @page {
-        margin: 1cm;
-      }
-    }
-  </style>
-</head>
-<body>
-  ${html}
-  <div class="footer">
-    <p>Export dátuma: ${new Date().toLocaleString('hu-HU')}</p>
-  </div>
-</body>
-</html>`;
+/** ő/ű → ö/ü (Helvetica WinAnsi fallback) */
+function replaceLongAccents(text: string): string {
+  return text
+    .replace(/ő/g, 'ö')
+    .replace(/Ő/g, 'Ö')
+    .replace(/ű/g, 'ü')
+    .replace(/Ű/g, 'Ü');
+}
+
+function replaceAllAccentedChars(text: string): string {
+  const replacements: Record<string, string> = {
+    'á': 'a', 'Á': 'A', 'é': 'e', 'É': 'E', 'í': 'i', 'Í': 'I',
+    'ó': 'o', 'Ó': 'O', 'ö': 'o', 'Ö': 'O', 'ő': 'o', 'Ő': 'O',
+    'ú': 'u', 'Ú': 'U', 'ü': 'u', 'Ü': 'U', 'ű': 'u', 'Ű': 'U',
+  };
+  return text.replace(/[áéíóöőúüűÁÉÍÓÖŐÚÜŰ]/g, (c) => replacements[c] ?? c);
+}
+
+function safeTextForPdf(text: string): string {
+  try {
+    // pdf-lib StandardFonts WinAnsi: próbáljuk ő/ű nélkül
+    return replaceLongAccents(text);
+  } catch {
+    return replaceAllAccentedChars(text);
+  }
 }
 
 /**
- * Markdown → PDF konverzió Puppeteer-rel
+ * Markdown → PDF konverzió pdf-lib-bal (böngésző/Chromium nélkül)
  */
 export async function markdownToPDF(
   markdown: string,
   title?: string,
   options?: {
     format?: 'A4' | 'Letter';
-    margin?: {
-      top?: string;
-      right?: string;
-      bottom?: string;
-      left?: string;
-    };
+    margin?: { top?: number; right?: number; bottom?: number; left?: number };
   }
 ): Promise<Buffer> {
-  let browser;
-  try {
-    const html = await markdownToHTML(markdown, title);
-    
-    // Puppeteer browser indítása
-    browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--disable-gpu',
-      ],
-    });
-    
-    const page = await browser.newPage();
-    
-    // HTML betöltése
-    await page.setContent(html, { 
-      waitUntil: 'networkidle0',
-      timeout: 30000, // 30s timeout
-    });
-    
-    // PDF generálása
-    const pdfBuffer = await page.pdf({
-      format: options?.format || 'A4',
-      margin: options?.margin || {
-        top: '20mm',
-        right: '15mm',
-        bottom: '20mm',
-        left: '15mm',
-      },
-      printBackground: true,
-      preferCSSPageSize: true,
-      timeout: 30000, // 30s timeout
-    });
-    
-    return Buffer.from(pdfBuffer);
-  } catch (error) {
-    console.error('[markdown-to-pdf] Error generating PDF:', error);
-    throw new Error(
-      `PDF generálás sikertelen: ${error instanceof Error ? error.message : 'Ismeretlen hiba'}`
-    );
-  } finally {
-    if (browser) {
-      try {
-        await browser.close();
-      } catch (closeError) {
-        console.error('[markdown-to-pdf] Error closing browser:', closeError);
+  const lines = await markdownToPlainLines(markdown);
+  const pdfDoc = await PDFDocument.create();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fontSize = 11;
+  const lineHeight = fontSize * 1.35;
+  const marginTop = options?.margin?.top ?? 56;
+  const marginBottom = options?.margin?.bottom ?? 56;
+  const marginLeft = options?.margin?.left ?? 42;
+  const marginRight = options?.margin?.right ?? 42;
+  const pageWidth = options?.format === 'Letter' ? 612 : 595.28;
+  const pageHeight = options?.format === 'Letter' ? 792 : 841.89;
+  const maxTextWidth = pageWidth - marginLeft - marginRight;
+
+  let page = pdfDoc.addPage([pageWidth, pageHeight]);
+  let y = pageHeight - marginTop;
+
+  function drawLine(text: string): void {
+    const safe = safeTextForPdf(text);
+    const width = font.widthOfTextAtSize(safe, fontSize);
+    if (width <= maxTextWidth) {
+      if (y < marginBottom) {
+        page = pdfDoc.addPage([pageWidth, pageHeight]);
+        y = pageHeight - marginTop;
+      }
+      page.drawText(safe, {
+        x: marginLeft,
+        y,
+        size: fontSize,
+        font,
+        color: rgb(0.1, 0.1, 0.1),
+      });
+      y -= lineHeight;
+      return;
+    }
+    const words = safe.split(/\s+/);
+    let currentLine = '';
+    for (const word of words) {
+      const candidate = currentLine ? `${currentLine} ${word}` : word;
+      if (font.widthOfTextAtSize(candidate, fontSize) <= maxTextWidth) {
+        currentLine = candidate;
+      } else {
+        if (currentLine) {
+          if (y < marginBottom) {
+            page = pdfDoc.addPage([pageWidth, pageHeight]);
+            y = pageHeight - marginTop;
+          }
+          page.drawText(currentLine, {
+            x: marginLeft,
+            y,
+            size: fontSize,
+            font,
+            color: rgb(0.1, 0.1, 0.1),
+          });
+          y -= lineHeight;
+        }
+        currentLine = word;
       }
     }
+    if (currentLine) {
+      if (y < marginBottom) {
+        page = pdfDoc.addPage([pageWidth, pageHeight]);
+        y = pageHeight - marginTop;
+      }
+      page.drawText(currentLine, {
+        x: marginLeft,
+        y,
+        size: fontSize,
+        font,
+        color: rgb(0.1, 0.1, 0.1),
+      });
+      y -= lineHeight;
+    }
   }
+
+  for (const line of lines) {
+    drawLine(line);
+  }
+
+  const footer = `Export dátuma: ${new Date().toLocaleString('hu-HU')}`;
+  const footerSafe = safeTextForPdf(footer);
+  const lastPage = pdfDoc.getPages()[pdfDoc.getPageCount() - 1];
+  lastPage.drawText(footerSafe, {
+    x: marginLeft,
+    y: marginBottom - lineHeight,
+    size: 9,
+    font,
+    color: rgb(0.4, 0.4, 0.4),
+  });
+
+  const pdfBytes = await pdfDoc.save();
+  return Buffer.from(pdfBytes);
 }
 
 /**
@@ -261,37 +187,21 @@ export function generatePatientSummaryMarkdown(
   requiredDocRules?: Array<{ label: string; tag: string; minCount: number }>
 ): string {
   const lines: string[] = [];
-  
   lines.push('# NEAK Export - Beteg Összefoglaló\n');
-  
   lines.push('## Beteg Azonosítók\n');
   if (patient.nev) lines.push(`**Név:** ${patient.nev}`);
   if (patient.taj) lines.push(`**TAJ:** ${patient.taj}`);
   lines.push('');
-  
-  if (patient.diagnozis) {
-    lines.push(`**Diagnózis:** ${patient.diagnozis}`);
-  }
-  if (patient.mutetIdeje) {
-    lines.push(`**Műtét ideje:** ${patient.mutetIdeje}`);
-  }
+  if (patient.diagnozis) lines.push(`**Diagnózis:** ${patient.diagnozis}`);
+  if (patient.mutetIdeje) lines.push(`**Műtét ideje:** ${patient.mutetIdeje}`);
   lines.push('');
-  
   lines.push('## Checklist Összefoglaló\n');
-  
-  const fieldsStatus = checklistStatus.missingFields.length === 0 
-    ? '✓ Minden megvan' 
-    : `✗ ${checklistStatus.missingFields.length} hiányzik`;
+  const fieldsStatus = checklistStatus.missingFields.length === 0 ? '✓ Minden megvan' : `✗ ${checklistStatus.missingFields.length} hiányzik`;
   lines.push(`**Kötelező mezők:** ${fieldsStatus}`);
   lines.push('');
-  
-  const docsStatus = checklistStatus.missingDocs.length === 0 
-    ? '✓ Minden megvan' 
-    : `✗ ${checklistStatus.missingDocs.length} hiányzik`;
+  const docsStatus = checklistStatus.missingDocs.length === 0 ? '✓ Minden megvan' : `✗ ${checklistStatus.missingDocs.length} hiányzik`;
   lines.push(`**Kötelező dokumentumok:** ${docsStatus}`);
   lines.push('');
-  
-  // Részletes dokumentum lista
   if (requiredDocRules && requiredDocRules.length > 0) {
     lines.push('### Kötelező dokumentumok részletei\n');
     requiredDocRules.forEach((rule) => {
@@ -304,7 +214,6 @@ export function generatePatientSummaryMarkdown(
     });
     lines.push('');
   }
-  
   return lines.join('\n');
 }
 
@@ -319,17 +228,13 @@ export function generateMedicalHistoryMarkdown(
   anamnesisSummary: string
 ): string {
   const lines: string[] = [];
-  
   lines.push('# NEAK Export - Kórtörténet\n');
-  
   lines.push('## Beteg Azonosítók\n');
   if (patient.nev) lines.push(`**Név:** ${patient.nev}`);
   if (patient.taj) lines.push(`**TAJ:** ${patient.taj}`);
   lines.push('');
-  
   lines.push('## Anamnézis Összefoglaló\n');
   lines.push(anamnesisSummary);
   lines.push('');
-  
   return lines.join('\n');
 }

@@ -11,8 +11,6 @@ services:
         fromDatabase:
           name: maxillofacial-rehab-db
           property: connectionString
-      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
-        value: "true"
 
   - type: cron
     name: google-calendar-sync
