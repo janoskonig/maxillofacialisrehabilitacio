@@ -6,10 +6,12 @@ import { TodaysAppointmentsWidget } from './widgets/TodaysAppointmentsWidget';
 import { PendingApprovalsWidget } from './widgets/PendingApprovalsWidget';
 import { SendMessageWidget } from './widgets/SendMessageWidget';
 import { WaitingTimeWidget } from './widgets/WaitingTimeWidget';
-import { ChevronDown, ChevronUp, LayoutDashboard, UserPlus, Clock } from 'lucide-react';
+import { ChevronDown, ChevronUp, LayoutDashboard, UserPlus, Clock, BarChart3 } from 'lucide-react';
 import { DashboardWidget } from './DashboardWidget';
 import { PatientList } from './PatientList';
 import { Patient } from '@/lib/types';
+import { StagesGanttChart, type GanttEpisode, type GanttInterval } from './StagesGanttChart';
+import type { StageCatalogEntry } from '@/lib/types';
 
 interface DashboardData {
   nextAppointments: any[];
@@ -37,8 +39,12 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'new-registrations'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'new-registrations' | 'gantt'>('overview');
   const [longInPreparatory, setLongInPreparatory] = useState<LongInPreparatoryPatient[]>([]);
+  const [ganttEpisodes, setGanttEpisodes] = useState<GanttEpisode[]>([]);
+  const [ganttIntervals, setGanttIntervals] = useState<GanttInterval[]>([]);
+  const [ganttCatalog, setGanttCatalog] = useState<StageCatalogEntry[]>([]);
+  const [ganttLoading, setGanttLoading] = useState(false);
 
   const canEdit = userRole === 'admin' || userRole === 'editor' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos';
 
@@ -90,6 +96,7 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
   }, [activeTab, loading, data, refreshData]);
 
   const canSeeStages = userRole === 'admin' || userRole === 'sebészorvos' || userRole === 'fogpótlástanász';
+
   useEffect(() => {
     if (!canSeeStages) return;
     fetch('/api/patients/stages/long-in-preparatory', { credentials: 'include' })
@@ -97,6 +104,31 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
       .then((d) => setLongInPreparatory(d.patients ?? []))
       .catch(() => setLongInPreparatory([]));
   }, [canSeeStages]);
+
+  // GANTT adatok (összes beteg) – csak ha a GANTT fül aktív és van jogosultság
+  useEffect(() => {
+    if (!canSeeStages || activeTab !== 'gantt') return;
+    setGanttLoading(true);
+    Promise.all([
+      fetch('/api/patients/stages/gantt?status=all', { credentials: 'include' }).then((r) =>
+        r.ok ? r.json() : { episodes: [], intervals: [] }
+      ),
+      fetch('/api/stage-catalog', { credentials: 'include' }).then((r) =>
+        r.ok ? r.json() : { catalog: [] }
+      ),
+    ])
+      .then(([ganttData, catalogData]) => {
+        setGanttEpisodes(ganttData.episodes ?? []);
+        setGanttIntervals(ganttData.intervals ?? []);
+        setGanttCatalog(catalogData.catalog ?? []);
+      })
+      .catch(() => {
+        setGanttEpisodes([]);
+        setGanttIntervals([]);
+        setGanttCatalog([]);
+      })
+      .finally(() => setGanttLoading(false));
+  }, [canSeeStages, activeTab]);
 
   if (loading) {
     return (
@@ -219,6 +251,19 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
                   </span>
                 )}
               </button>
+              {canSeeStages && (
+                <button
+                  onClick={() => setActiveTab('gantt')}
+                  className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                    activeTab === 'gantt'
+                      ? 'text-medical-primary border-medical-primary'
+                      : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
+                  }`}
+                >
+                  <BarChart3 className="w-4 h-4" />
+                  Áttekintés
+                </button>
+              )}
             </nav>
           </div>
 
@@ -294,6 +339,35 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
                   userRole={userRole as any}
                   sortField="createdAt"
                   sortDirection="asc"
+                />
+              )}
+            </div>
+          )}
+
+          {activeTab === 'gantt' && canSeeStages && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Az összes beteg ellátási epizódjai és stádium intervallumai idővonalon.
+              </p>
+              {ganttLoading && ganttEpisodes.length === 0 ? (
+                <div className="card flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-2 border-medical-primary/20 border-t-medical-primary" />
+                  <span className="ml-3 text-body-sm">GANTT betöltése…</span>
+                </div>
+              ) : (
+                <StagesGanttChart
+                  episodes={ganttEpisodes}
+                  intervals={ganttIntervals}
+                  catalog={Array.from(
+                    ganttCatalog
+                      .slice()
+                      .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0))
+                      .reduce((acc, c) => {
+                        if (!acc.has(c.code)) acc.set(c.code, { code: c.code, labelHu: c.labelHu, orderIndex: c.orderIndex ?? 0 });
+                        return acc;
+                      }, new Map<string, { code: string; labelHu: string; orderIndex: number }>())
+                      .values()
+                  )}
                 />
               )}
             </div>

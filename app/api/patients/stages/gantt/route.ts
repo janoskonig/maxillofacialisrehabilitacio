@@ -24,9 +24,10 @@ export async function GET(request: NextRequest) {
     const reason = request.nextUrl.searchParams.get('reason');
     const patientId = request.nextUrl.searchParams.get('patientId');
     const cohortMode = !patientId;
-    if (cohortMode && (!reason || !REASON_VALUES.includes(reason))) {
+    // Cohort mode: reason optional – ha nincs megadva, összes beteg (összes étiológia)
+    if (cohortMode && reason && !REASON_VALUES.includes(reason)) {
       return NextResponse.json(
-        { error: 'reason kötelező és érvényes értékű (traumás sérülés | veleszületett rendellenesség | onkológiai kezelés utáni állapot)' },
+        { error: 'reason érvényes értékű kell legyen (traumás sérülés | veleszületett rendellenesség | onkológiai kezelés utáni állapot)' },
         { status: 400 }
       );
     }
