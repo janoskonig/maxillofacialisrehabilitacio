@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { patientStageSchema, PatientStageEntry, PatientStageTimeline } from '@/lib/types';
+import type { StageEventEntry, StageEventTimeline, PatientEpisode } from '@/lib/types';
 import { logActivity } from '@/lib/activity';
 
 /**
  * Get patient stages timeline
  * GET /api/patients/[id]/stages
+ * Uses stage_events + patient_episodes when available, else patient_stages (legacy).
  */
 export async function GET(
   request: NextRequest,
@@ -24,7 +26,6 @@ export async function GET(
     const pool = getDbPool();
     const patientId = params.id;
 
-    // Check if patient exists
     const patientCheck = await pool.query(
       'SELECT id FROM patients WHERE id = $1',
       [patientId]
@@ -37,7 +38,79 @@ export async function GET(
       );
     }
 
-    // Get all stages for this patient, ordered by date descending
+    const hasNewTables = await pool.query(
+      `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'stage_events'`
+    );
+
+    if (hasNewTables.rows.length > 0) {
+      const eventsResult = await pool.query(
+        `SELECT 
+          se.id, se.patient_id as "patientId", se.episode_id as "episodeId",
+          se.stage_code as "stageCode", se.at, se.note, se.created_by as "createdBy", se.created_at as "createdAt"
+        FROM stage_events se
+        WHERE se.patient_id = $1
+        ORDER BY se.at DESC`,
+        [patientId]
+      );
+
+      const events: StageEventEntry[] = eventsResult.rows.map((row) => ({
+        id: row.id,
+        patientId: row.patientId,
+        episodeId: row.episodeId,
+        stageCode: row.stageCode,
+        at: (row.at as Date)?.toISOString?.() ?? String(row.at),
+        note: row.note ?? null,
+        createdBy: row.createdBy ?? null,
+        createdAt: (row.createdAt as Date)?.toISOString?.() ?? null,
+      }));
+
+      const currentStage: StageEventEntry | null = events.length > 0 ? events[0] : null;
+
+      const episodeIds = Array.from(new Set(events.map((e) => e.episodeId)));
+      const episodesData = await pool.query(
+        `SELECT id, patient_id as "patientId", reason, chief_complaint as "chiefComplaint", status, opened_at as "openedAt", closed_at as "closedAt"
+         FROM patient_episodes WHERE id = ANY($1::uuid[])`,
+        [episodeIds]
+      );
+      const episodeMap = new Map<string, PatientEpisode>();
+      episodesData.rows.forEach((row) => {
+        episodeMap.set(row.id, {
+          id: row.id,
+          patientId: row.patientId,
+          reason: row.reason,
+          chiefComplaint: row.chiefComplaint,
+          status: row.status,
+          openedAt: (row.openedAt as Date)?.toISOString?.() ?? String(row.openedAt),
+          closedAt: row.closedAt ? (row.closedAt as Date)?.toISOString?.() ?? null : null,
+        });
+      });
+
+      const episodesMap = new Map<string, StageEventEntry[]>();
+      events.forEach((e) => {
+        if (!episodesMap.has(e.episodeId)) episodesMap.set(e.episodeId, []);
+        episodesMap.get(e.episodeId)!.push(e);
+      });
+
+      const episodes = Array.from(episodesMap.entries()).map(([episodeId, evs]) => {
+        const sorted = [...evs].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+        return {
+          episodeId,
+          episode: episodeMap.get(episodeId) ?? undefined,
+          startDate: sorted[0]?.at ?? new Date().toISOString(),
+          endDate: sorted.length > 1 ? sorted[sorted.length - 1]?.at : undefined,
+          stages: [...evs].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()),
+        };
+      });
+
+      const timeline: StageEventTimeline = {
+        currentStage,
+        history: events,
+        episodes,
+      };
+      return NextResponse.json({ timeline, useNewModel: true });
+    }
+
+    // Legacy: patient_stages
     const stagesResult = await pool.query(
       `SELECT 
         id,
@@ -65,37 +138,23 @@ export async function GET(
       createdBy: row.createdBy,
     }));
 
-    // Get current stage (most recent)
     const currentStage = stages.length > 0 ? stages[0] : null;
-
-    // Group stages by episode
     const episodesMap = new Map<string, PatientStageEntry[]>();
     stages.forEach((stage) => {
-      if (!episodesMap.has(stage.episodeId)) {
-        episodesMap.set(stage.episodeId, []);
-      }
+      if (!episodesMap.has(stage.episodeId)) episodesMap.set(stage.episodeId, []);
       episodesMap.get(stage.episodeId)!.push(stage);
     });
 
-    // Build episodes array
     const episodes = Array.from(episodesMap.entries()).map(([episodeId, episodeStages]) => {
-      const sortedStages = episodeStages.sort(
-        (a, b) => {
-          const dateA = a.stageDate ? new Date(a.stageDate).getTime() : 0;
-          const dateB = b.stageDate ? new Date(b.stageDate).getTime() : 0;
-          return dateA - dateB;
-        }
+      const sortedStages = [...episodeStages].sort(
+        (a, b) => (a.stageDate ? new Date(a.stageDate).getTime() : 0) - (b.stageDate ? new Date(b.stageDate).getTime() : 0)
       );
       return {
         episodeId,
         startDate: sortedStages[0]?.stageDate || new Date().toISOString(),
         endDate: sortedStages.length > 1 ? (sortedStages[sortedStages.length - 1]?.stageDate ?? undefined) : undefined,
-        stages: episodeStages.sort(
-          (a, b) => {
-            const dateA = a.stageDate ? new Date(a.stageDate).getTime() : 0;
-            const dateB = b.stageDate ? new Date(b.stageDate).getTime() : 0;
-            return dateB - dateA;
-          }
+        stages: [...episodeStages].sort(
+          (a, b) => (b.stageDate ? new Date(b.stageDate).getTime() : 0) - (a.stageDate ? new Date(a.stageDate).getTime() : 0)
         ),
       };
     });
@@ -119,6 +178,8 @@ export async function GET(
 /**
  * Create new patient stage
  * POST /api/patients/[id]/stages
+ * New model: body { episodeId, stageCode, at?, note? }
+ * Legacy: body { stage, notes?, stageDate?, startNewEpisode? }
  */
 export async function POST(
   request: NextRequest,
@@ -133,7 +194,6 @@ export async function POST(
       );
     }
 
-    // Only admin and doctors can set stages
     if (auth.role !== 'admin' && auth.role !== 'sebészorvos' && auth.role !== 'fogpótlástanász') {
       return NextResponse.json(
         { error: 'Nincs jogosultsága a stádium beállításához' },
@@ -144,7 +204,6 @@ export async function POST(
     const pool = getDbPool();
     const patientId = params.id;
 
-    // Check if patient exists
     const patientCheck = await pool.query(
       'SELECT id FROM patients WHERE id = $1',
       [patientId]
@@ -157,7 +216,84 @@ export async function POST(
       );
     }
 
+    const hasStageEvents = await pool.query(
+      `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'stage_events'`
+    );
+
     const body = await request.json();
+
+    if (hasStageEvents.rows.length > 0 && (body.episodeId != null || body.stageCode != null)) {
+      const episodeId = body.episodeId as string;
+      const stageCode = (body.stageCode as string)?.trim?.();
+      const at = body.at ? new Date(body.at) : new Date();
+      const note = (body.note as string)?.trim?.() || null;
+
+      if (!episodeId || !stageCode) {
+        return NextResponse.json(
+          { error: 'episodeId és stageCode kötelező (új modell)' },
+          { status: 400 }
+        );
+      }
+
+      const episodeRow = await pool.query(
+        `SELECT id, patient_id, reason, status FROM patient_episodes WHERE id = $1 AND patient_id = $2`,
+        [episodeId, patientId]
+      );
+      if (episodeRow.rows.length === 0) {
+        return NextResponse.json(
+          { error: 'Epizód nem található vagy nem ehhez a beteghez tartozik' },
+          { status: 404 }
+        );
+      }
+      if (episodeRow.rows[0].status !== 'open') {
+        return NextResponse.json(
+          { error: 'Csak aktív (open) epizódhoz lehet új stádiumot rögzíteni' },
+          { status: 400 }
+        );
+      }
+
+      const reason = episodeRow.rows[0].reason;
+      const catalogCheck = await pool.query(
+        `SELECT 1 FROM stage_catalog WHERE code = $1 AND reason = $2`,
+        [stageCode, reason]
+      );
+      if (catalogCheck.rows.length === 0) {
+        return NextResponse.json(
+          { error: `Érvénytelen stádium kód (${stageCode}) az adott etiológiához` },
+          { status: 400 }
+        );
+      }
+
+      const insertResult = await pool.query(
+        `INSERT INTO stage_events (patient_id, episode_id, stage_code, at, note, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id, patient_id as "patientId", episode_id as "episodeId", stage_code as "stageCode", at, note, created_by as "createdBy", created_at as "createdAt"`,
+        [patientId, episodeId, stageCode, at, note, auth.email]
+      );
+
+      const row = insertResult.rows[0];
+      const newStage: StageEventEntry = {
+        id: row.id,
+        patientId: row.patientId,
+        episodeId: row.episodeId,
+        stageCode: row.stageCode,
+        at: (row.at as Date)?.toISOString?.() ?? new Date().toISOString(),
+        note: row.note ?? null,
+        createdBy: row.createdBy ?? null,
+        createdAt: (row.createdAt as Date)?.toISOString?.() ?? null,
+      };
+
+      await logActivity(
+        request,
+        auth.email,
+        'patient_stage_created',
+        JSON.stringify({ patientId, stageCode, episodeId })
+      );
+
+      return NextResponse.json({ stage: newStage, useNewModel: true }, { status: 201 });
+    }
+
+    // Legacy: patient_stages
     const { stage, notes, stageDate, startNewEpisode } = body;
 
     if (!stage) {
@@ -167,7 +303,6 @@ export async function POST(
       );
     }
 
-    // Validate stage
     const validStages = [
       'uj_beteg',
       'onkologiai_kezeles_kesz',
@@ -186,32 +321,25 @@ export async function POST(
       );
     }
 
-    // Determine episode_id
     let episodeId: string;
 
     if (startNewEpisode || stage === 'uj_beteg') {
-      // Start new episode - generate new episode_id
       const newEpisodeResult = await pool.query('SELECT generate_uuid() as id');
       episodeId = newEpisodeResult.rows[0].id;
     } else {
-      // Use current active episode
       const currentStageResult = await pool.query(
-        `SELECT episode_id 
-         FROM patient_current_stage 
-         WHERE patient_id = $1`,
+        `SELECT episode_id FROM patient_current_stage WHERE patient_id = $1`,
         [patientId]
       );
 
       if (currentStageResult.rows.length > 0) {
         episodeId = currentStageResult.rows[0].episode_id;
       } else {
-        // No current stage, start new episode
         const newEpisodeResult = await pool.query('SELECT generate_uuid() as id');
         episodeId = newEpisodeResult.rows[0].id;
       }
     }
 
-    // Insert new stage
     const insertResult = await pool.query(
       `INSERT INTO patient_stages (
         patient_id,
@@ -251,7 +379,6 @@ export async function POST(
       createdBy: insertResult.rows[0].createdBy,
     };
 
-    // Log activity
     await logActivity(
       request,
       auth.email,

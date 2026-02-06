@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { OHIP14Response, OHIP14Timepoint } from '@/lib/types';
 import { calculateOHIP14Scores } from '@/lib/ohip14-questions';
+import { getCurrentStageCodeForOhip } from '@/lib/ohip14-stage';
 import { logActivity } from '@/lib/activity';
 
 /**
@@ -43,6 +44,7 @@ export async function GET(
         patient_id as "patientId",
         episode_id as "episodeId",
         timepoint,
+        stage_code as "stageCode",
         completed_at as "completedAt",
         completed_by_patient as "completedByPatient",
         q1_functional_limitation,
@@ -200,6 +202,8 @@ export async function POST(
       // For now, we allow it for admin/doctor, but could be made stricter
     }
 
+    const stageCode = await getCurrentStageCodeForOhip(pool, patientId, finalEpisodeId);
+
     // Check if response already exists
     const existingResult = await pool.query(
       `SELECT id, locked_at 
@@ -259,35 +263,37 @@ export async function POST(
       // Update existing
       const updateResult = await pool.query(
         `UPDATE ohip14_responses SET
-          q1_functional_limitation = $1,
-          q2_functional_limitation = $2,
-          q3_physical_pain = $3,
-          q4_physical_pain = $4,
-          q5_psychological_discomfort = $5,
-          q6_psychological_discomfort = $6,
-          q7_physical_disability = $7,
-          q8_physical_disability = $8,
-          q9_psychological_disability = $9,
-          q10_psychological_disability = $10,
-          q11_social_disability = $11,
-          q12_social_disability = $12,
-          q13_handicap = $13,
-          q14_handicap = $14,
-          total_score = $15,
-          functional_limitation_score = $16,
-          physical_pain_score = $17,
-          psychological_discomfort_score = $18,
-          physical_disability_score = $19,
-          psychological_disability_score = $20,
-          social_disability_score = $21,
-          handicap_score = $22,
-          notes = $23,
+          stage_code = $1,
+          q1_functional_limitation = $2,
+          q2_functional_limitation = $3,
+          q3_physical_pain = $4,
+          q4_physical_pain = $5,
+          q5_psychological_discomfort = $6,
+          q6_psychological_discomfort = $7,
+          q7_physical_disability = $8,
+          q8_physical_disability = $9,
+          q9_psychological_disability = $10,
+          q10_psychological_disability = $11,
+          q11_social_disability = $12,
+          q12_social_disability = $13,
+          q13_handicap = $14,
+          q14_handicap = $15,
+          total_score = $16,
+          functional_limitation_score = $17,
+          physical_pain_score = $18,
+          psychological_discomfort_score = $19,
+          physical_disability_score = $20,
+          psychological_disability_score = $21,
+          social_disability_score = $22,
+          handicap_score = $23,
+          notes = $24,
           completed_at = CURRENT_TIMESTAMP,
-          completed_by_patient = $24,
-          updated_by = $25
-        WHERE id = $26
+          completed_by_patient = $25,
+          updated_by = $26
+        WHERE id = $27
         RETURNING *`,
         [
+          stageCode ?? null,
           body.q1_functional_limitation,
           body.q2_functional_limitation,
           body.q3_physical_pain,
@@ -335,6 +341,7 @@ export async function POST(
           patient_id,
           episode_id,
           timepoint,
+          stage_code,
           completed_by_patient,
           q1_functional_limitation,
           q2_functional_limitation,
@@ -360,12 +367,13 @@ export async function POST(
           handicap_score,
           notes,
           created_by
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)
         RETURNING *`,
         [
           patientId,
           finalEpisodeId,
           timepoint,
+          stageCode ?? null,
           body.completedByPatient !== undefined ? body.completedByPatient : false,
           body.q1_functional_limitation,
           body.q2_functional_limitation,
@@ -424,6 +432,7 @@ function mapRowToResponse(row: any): OHIP14Response {
     patientId: row.patient_id || row.patientId,
     episodeId: row.episode_id || row.episodeId,
     timepoint: row.timepoint,
+    stageCode: row.stage_code ?? row.stageCode ?? null,
     completedAt: row.completed_at?.toISOString() || row.completedAt,
     completedByPatient: row.completed_by_patient !== undefined ? row.completed_by_patient : row.completedByPatient,
     q1_functional_limitation: row.q1_functional_limitation,

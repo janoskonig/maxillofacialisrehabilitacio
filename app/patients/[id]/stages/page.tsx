@@ -1,14 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { Patient } from '@/lib/types';
-import { ArrowLeft, Calendar } from 'lucide-react';
+import type { PatientEpisode, PatientStageEntry, StageEventEntry } from '@/lib/types';
+import Link from 'next/link';
+import { ArrowLeft, BarChart3, Calendar } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { MobileMenu } from '@/components/MobileMenu';
 import { PatientStageSelector } from '@/components/PatientStageSelector';
 import { PatientStageTimeline } from '@/components/PatientStageTimeline';
+import { PatientEpisodeForm } from '@/components/PatientEpisodeForm';
 import { useToast } from '@/contexts/ToastContext';
 
 export default function PatientStagesPage() {
@@ -20,8 +23,25 @@ export default function PatientStagesPage() {
   const [patient, setPatient] = useState<Patient | null>(null);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string | null>(null);
-  const [currentStage, setCurrentStage] = useState<any>(null);
+  const [currentStage, setCurrentStage] = useState<PatientStageEntry | StageEventEntry | null>(null);
+  const [episodes, setEpisodes] = useState<PatientEpisode[]>([]);
+  const [useNewModel, setUseNewModel] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  const refreshStagesAndEpisodes = useCallback(() => {
+    setRefreshKey((k) => k + 1);
+    fetch(`/api/patients/${patientId}/stages`, { credentials: 'include' })
+      .then((res) => res.json())
+      .then((data) => {
+        setCurrentStage(data.timeline?.currentStage ?? null);
+        setUseNewModel(!!data.useNewModel);
+      })
+      .catch(() => {});
+    fetch(`/api/patients/${patientId}/episodes`, { credentials: 'include' })
+      .then((res) => res.json())
+      .then((data) => setEpisodes(data.episodes ?? []))
+      .catch(() => setEpisodes([]));
+  }, [patientId]);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -34,31 +54,19 @@ export default function PatientStagesPage() {
 
         setUserRole(user.role);
 
-        // Only admin and doctors can access this page
         if (user.role !== 'admin' && user.role !== 'sebészorvos' && user.role !== 'fogpótlástanász') {
           showToast('Nincs jogosultsága az oldal megtekintéséhez', 'error');
           router.push('/');
           return;
         }
 
-        // Fetch patient data
         try {
-          const response = await fetch(`/api/patients/${patientId}`, {
-            credentials: 'include',
-          });
-
+          const response = await fetch(`/api/patients/${patientId}`, { credentials: 'include' });
           if (!response.ok) {
-            if (response.status === 403) {
-              router.push('/');
-              return;
-            }
-            if (response.status === 404) {
-              router.push('/');
-              return;
-            }
-            throw new Error('Failed to fetch patient');
+            if (response.status === 403 || response.status === 404) router.push('/');
+            else throw new Error('Failed to fetch patient');
+            return;
           }
-
           const data = await response.json();
           setPatient(data.patient);
           setAuthorized(true);
@@ -68,18 +76,25 @@ export default function PatientStagesPage() {
           return;
         }
 
-        // Fetch current stage
         try {
-          const stagesResponse = await fetch(`/api/patients/${patientId}/stages`, {
-            credentials: 'include',
-          });
-
+          const stagesResponse = await fetch(`/api/patients/${patientId}/stages`, { credentials: 'include' });
           if (stagesResponse.ok) {
             const stagesData = await stagesResponse.json();
-            setCurrentStage(stagesData.timeline?.currentStage || null);
+            setCurrentStage(stagesData.timeline?.currentStage ?? null);
+            setUseNewModel(!!stagesData.useNewModel);
           }
         } catch (error) {
           console.error('Error fetching current stage:', error);
+        }
+
+        try {
+          const epRes = await fetch(`/api/patients/${patientId}/episodes`, { credentials: 'include' });
+          if (epRes.ok) {
+            const epData = await epRes.json();
+            setEpisodes(epData.episodes ?? []);
+          }
+        } catch (error) {
+          console.error('Error fetching episodes:', error);
         }
       } catch (error) {
         console.error('Auth check error:', error);
@@ -89,29 +104,17 @@ export default function PatientStagesPage() {
       }
     };
 
-    if (patientId) {
-      checkAuth();
-    }
+    if (patientId) checkAuth();
   }, [router, patientId, showToast]);
 
-  const handleBack = () => {
-    router.back();
-  };
+  const handleBack = () => router.back();
 
-  const handleStageChanged = () => {
-    setRefreshKey((prev) => prev + 1);
-    // Refresh current stage
-    fetch(`/api/patients/${patientId}/stages`, {
-      credentials: 'include',
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        setCurrentStage(data.timeline?.currentStage || null);
-      })
-      .catch((error) => {
-        console.error('Error refreshing stage:', error);
-      });
-  };
+  const handleStageChanged = () => refreshStagesAndEpisodes();
+
+  const activeEpisode = episodes.find((e) => e.status === 'open') ?? null;
+  const rawReason = patient?.kezelesreErkezesIndoka ?? activeEpisode?.reason ?? null;
+  const patientReason =
+    rawReason === '' || rawReason == null ? undefined : (rawReason as 'traumás sérülés' | 'veleszületett rendellenesség' | 'onkológiai kezelés utáni állapot');
 
   if (loading) {
     return (
@@ -149,23 +152,64 @@ export default function PatientStagesPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Calendar className="w-6 h-6 text-medical-primary" />
-            Betegstádiumok - {patient.nev || 'Névtelen beteg'}
-          </h1>
-          <p className="text-gray-600 mt-1">
-            Stádiumok kezelése és timeline megtekintése
-          </p>
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+              <Calendar className="w-6 h-6 text-medical-primary" />
+              Betegstádiumok - {patient.nev || 'Névtelen beteg'}
+            </h1>
+            <p className="text-gray-600 mt-1">
+              Stádiumok kezelése és timeline megtekintése
+            </p>
+          </div>
+          <Link
+            href="/patients/stages/gantt"
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            <BarChart3 className="w-4 h-4" />
+            GANTT nézet
+          </Link>
         </div>
 
         <div className="space-y-6">
-          {/* Stage Selector - only for admin and doctors */}
+          {/* Epizódok (új modell) */}
+          {episodes.length > 0 && (
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Ellátási epizódok</h3>
+              <ul className="space-y-1 text-sm text-gray-700">
+                {episodes.slice(0, 10).map((ep) => (
+                  <li key={ep.id} className="flex items-center gap-2">
+                    <span className={ep.status === 'open' ? 'text-green-600 font-medium' : 'text-gray-500'}>
+                      {ep.status === 'open' ? '● Aktív' : '○ Zárt'}
+                    </span>
+                    <span>{ep.chiefComplaint}</span>
+                    <span className="text-gray-400">
+                      {new Date(ep.openedAt).toLocaleDateString('hu-HU')}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Új ellátási epizód indítása */}
+          {(userRole === 'admin' || userRole === 'sebészorvos' || userRole === 'fogpótlástanász') && (
+            <PatientEpisodeForm
+              patientId={patientId}
+              patientReason={patientReason}
+              onEpisodeCreated={() => refreshStagesAndEpisodes()}
+            />
+          )}
+
+          {/* Stage Selector */}
           {(userRole === 'admin' || userRole === 'sebészorvos' || userRole === 'fogpótlástanász') && (
             <PatientStageSelector
               patientId={patientId}
               currentStage={currentStage}
               onStageChanged={handleStageChanged}
+              activeEpisodeId={activeEpisode?.id ?? null}
+              reason={patientReason}
+              useNewModel={useNewModel}
             />
           )}
 
