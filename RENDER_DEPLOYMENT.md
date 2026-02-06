@@ -279,6 +279,34 @@ Az ingyenes Render csomag korlátai:
 5. **Monitoring**: Használjon monitoring eszközöket
 6. **Environment Variables Security**: Ne commitoljon bizalmas adatokat a kódba
 
+## Build memória (Next.js) – OOM / 512 MB korlát
+
+Ha a build memória miatt (OOM) hibázik (pl. 512 MB Render plan):
+
+### Teendősorrend (változtatás/haszon)
+
+1. **Bekapcsolva:** `experimental.webpackBuildWorker: true`, **kikapcsolva:** `experimental.serverSourceMaps: false`, `productionBrowserSourceMaps: false` (a `next.config.js` már ezeket használja).
+2. **Cache:** először Next Memory guide szerint cache memória-típusra állítás (`Object.freeze({ type: 'memory' })`); ha kevés, kipróbálható a teljes kikapcsolás (`config.cache = false`).
+3. Ha a hiba **„Generating static pages”** (prerender) fázisban jön: opcionális `experimental.enablePrerenderSourceMaps: false`.
+4. Ha még OOM: Next legalább 14.2.x, majd egyszer `next build --experimental-debug-memory-usage` diagnosztikára (a webpack build workerrel nem kompatibilis – debugoláskor workert ki kell kapcsolni).
+
+### NODE_OPTIONS (Render 512 MB)
+
+A heap limit értelmes, de 512 MB-nál a `--max-old-space-size=460` gyakran túl közel van a plafonhoz (nem-heap: native, wasm, mmap). **Ajánlott próbálkozási sor:** `384` → `416` → `448` (MB).
+
+- **Beállítás:** Render Dashboard → Web Service → Environment → **NODE_OPTIONS** = `--max-old-space-size=384` (vagy 416/448).
+- A `render.yaml` nem tartalmaz NODE_OPTIONS-t; szükség esetén adható hozzá az `envVars`-hoz.
+
+### Konkrét ellenőrzés (Next 14.0.4)
+
+Futtasd a buildet, és figyeld: van-e warning a `next.config.js` feldolgozásakor; változik-e a build fázisoknál a memória/progress (worker, cache, sourcemap hatás). Ha „Generating static pages” után dől el, az `enablePrerenderSourceMaps: false` releváns.
+
+### Next 15+ esetén
+
+A Next Memory guide említi az `experimental.webpackMemoryOptimizations` flaget (csak v15+). Frissítéskor érdemes a hivatalos [Memory Usage](https://nextjs.org/docs/app/building-your-application/deploying/production#memory-usage) dokumentációt megnézni.
+
+---
+
 ## További Segítség
 
 - **Render Dokumentáció**: [render.com/docs](https://render.com/docs)

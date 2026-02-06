@@ -4,8 +4,12 @@ const { withSentryConfig } = require('@sentry/nextjs');
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Enable instrumentation hook (for Sentry)
+  // Build memory: webpackBuildWorker (opt-out custom webpacknél, kézzel kényszeríthető), serverSourceMaps off
   experimental: {
     instrumentationHook: true,
+    webpackBuildWorker: true,
+    serverSourceMaps: false,
+    // enablePrerenderSourceMaps: false,  // opcionális: prerender fázis OOM esetén
   },
   
   // Production optimalizációk
@@ -76,7 +80,13 @@ const nextConfig = {
         type: 'asset/resource',
       });
     }
-    
+
+    // Build memory: cache memória-típusra állítása (Next Memory guide). Ne írjuk felül, ha már explicit false.
+    if (config.cache !== false && !dev) {
+      config.cache = Object.freeze({ type: 'memory' });
+    }
+    // Ha ez nem elég, kipróbálható teljes kikapcsolás: if (!dev) config.cache = false
+
     return config;
   },
 }
