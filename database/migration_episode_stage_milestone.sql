@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS stage_catalog (
 );
 
 INSERT INTO stage_catalog (code, reason, label_hu, order_index, is_terminal, default_duration_days) VALUES
-('STAGE_0', 'onkológiai kezelés utáni állapot', 'Intake / első konzultációra vár', 0, false, null),
+('STAGE_0', 'onkológiai kezelés utáni állapot', 'Beutalás utáni első konzultációra vár', 0, false, null),
 ('STAGE_1', 'onkológiai kezelés utáni állapot', 'Diagnosztika & dokumentáció folyamatban', 1, false, null),
 ('STAGE_2', 'onkológiai kezelés utáni állapot', 'Terv & árajánlat készül / egyeztetés', 2, false, null),
 ('STAGE_3', 'onkológiai kezelés utáni állapot', 'Elfogadva / finanszírozás-rendelés előkészítés', 3, false, null),
