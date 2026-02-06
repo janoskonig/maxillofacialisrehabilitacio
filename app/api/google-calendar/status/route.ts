@@ -5,6 +5,8 @@ import { getDbPool } from '@/lib/db';
 /**
  * Google Calendar kapcsolat státusz lekérdezése
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const auth = await verifyAuth(request);

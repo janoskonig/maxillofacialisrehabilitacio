@@ -5,6 +5,8 @@ import { verifyAuth } from '@/lib/auth-server';
 /**
  * GET /api/users/doctors/by-institution?institution=xxx - Orvosok lekérése intézmény szerint
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;

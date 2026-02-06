@@ -8,6 +8,8 @@ import { calculateOHIP14Scores } from '@/lib/ohip14-questions';
  * Get patient's OHIP-14 responses
  * GET /api/patient-portal/ohip14
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const patientId = await verifyPatientPortalSession(request);

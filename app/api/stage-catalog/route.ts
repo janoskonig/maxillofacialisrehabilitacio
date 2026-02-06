@@ -9,6 +9,8 @@ const REASON_VALUES: ReasonType[] = ['traumás sérülés', 'veleszületett rend
  * Get stage catalog, optionally filtered by reason
  * GET /api/stage-catalog?reason=onkológiai kezelés utáni állapot
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const auth = await verifyAuth(request);

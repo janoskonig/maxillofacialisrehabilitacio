@@ -4,6 +4,8 @@ import { verifyAuth } from '@/lib/auth-server';
 import type { MedicalStats } from '@/lib/types';
 
 // Szakmai statisztikák API végpont
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     // Csak admin hozzáférés

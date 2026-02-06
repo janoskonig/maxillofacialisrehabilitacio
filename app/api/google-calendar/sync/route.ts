@@ -6,6 +6,8 @@ import { syncTimeSlotsFromGoogleCalendar } from '@/lib/google-calendar';
 /**
  * Szinkronizációs státusz lekérdezése
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const auth = await verifyAuth(request);

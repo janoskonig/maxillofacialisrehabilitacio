@@ -7,6 +7,8 @@ import { sendConditionalAppointmentRequestToPatient } from '@/lib/email';
  * Reject a pending appointment (via email link)
  * This cancels the pending appointment and frees the time slot
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;

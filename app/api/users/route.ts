@@ -25,6 +25,8 @@ async function verifyAuth(request: NextRequest): Promise<{ userId: string; email
 }
 
 // Felhasználók listázása (csak admin)
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const auth = await verifyAuth(request);

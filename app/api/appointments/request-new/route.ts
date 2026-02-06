@@ -7,6 +7,8 @@ import { handleApiError } from '@/lib/api-error-handler';
  * Request a new appointment (via email link)
  * This endpoint is no longer available - patients can only approve or reject appointments
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     // This endpoint is disabled - patients can only approve or reject appointments

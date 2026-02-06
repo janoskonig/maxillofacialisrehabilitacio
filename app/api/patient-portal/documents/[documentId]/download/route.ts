@@ -7,6 +7,8 @@ import { downloadFile } from '@/lib/ftp-client';
  * Download document for patient portal
  * GET /api/patient-portal/documents/[documentId]/download
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { documentId: string } }

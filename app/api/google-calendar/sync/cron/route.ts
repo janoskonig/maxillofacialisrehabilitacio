@@ -10,6 +10,8 @@ export const maxDuration = 300; // 5 minutes (max for Render)
  * Cron job endpoint automatikus szinkronizációhoz
  * Védve API kulccsal
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
   console.log(`[${new Date().toISOString()}] Cron sync started`);

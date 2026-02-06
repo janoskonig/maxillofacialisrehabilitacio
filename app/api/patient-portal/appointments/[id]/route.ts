@@ -10,6 +10,8 @@ import { deleteGoogleCalendarEvent, createGoogleCalendarEvent } from '@/lib/goog
  * PUT /api/patient-portal/appointments/[id]
  * DISABLED: Patients are not allowed to modify appointments
  */
+export const dynamic = 'force-dynamic';
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }

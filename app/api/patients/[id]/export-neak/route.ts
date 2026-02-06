@@ -171,6 +171,8 @@ function generateReadme(
  * Export endpoint: Generate and download NEAK package
  * GET /api/patients/[id]/export-neak
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }

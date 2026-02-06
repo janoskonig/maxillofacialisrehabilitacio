@@ -7,6 +7,8 @@ import { OHIP14Response } from '@/lib/types';
  * Get OHIP-14 summary with comparison across timepoints
  * GET /api/patients/[id]/ohip14/summary
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }

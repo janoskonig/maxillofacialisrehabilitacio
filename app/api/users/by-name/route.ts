@@ -3,6 +3,8 @@ import { getDbPool } from '@/lib/db';
 import { verifyAuth, AuthPayload } from '@/lib/auth-server';
 
 // Orvos neve alapján intézmény lekérdezése
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     // Ellenőrizzük, hogy a felhasználó be van-e jelentkezve

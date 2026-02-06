@@ -9,6 +9,8 @@ import { withCorrelation } from '@/lib/api/withCorrelation';
 import { handleApiError } from '@/lib/api-error-handler';
 
 // Egy beteg lekérdezése ID alapján
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }

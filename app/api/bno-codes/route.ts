@@ -8,6 +8,8 @@ interface BNOCode {
   nev: string;
 }
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     // Az Excel fájl elérési útja

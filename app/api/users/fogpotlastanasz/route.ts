@@ -4,6 +4,8 @@ import { verifyAuth, AuthPayload } from '@/lib/auth-server';
 
 // Fogpótlástanász szerepű felhasználók lekérdezése
 // Ez az endpoint a kezelőorvos választáshoz használatos
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     // Ellenőrizzük, hogy a felhasználó be van-e jelentkezve

@@ -38,6 +38,8 @@ function getBaseUrl(request: NextRequest): string {
  * Verify magic link token and create portal session
  * GET /api/patient-portal/auth/verify?token=xxx
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   console.log('[verify] ===== VERIFY ROUTE CALLED =====');
   console.log('[verify] Request URL:', request.url);

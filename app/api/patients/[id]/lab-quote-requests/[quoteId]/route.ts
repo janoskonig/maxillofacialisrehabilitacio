@@ -6,6 +6,8 @@ import { labQuoteRequestSchema } from '@/lib/types';
 /**
  * Árajánlatkérő frissítése
  */
+export const dynamic = 'force-dynamic';
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string; quoteId: string } }

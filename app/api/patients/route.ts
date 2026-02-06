@@ -424,6 +424,8 @@ export const GET = withCorrelation(async (request: NextRequest, { correlationId 
 });
 
 // Új beteg létrehozása
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     // Hitelesítés ellenőrzése

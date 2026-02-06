@@ -14,6 +14,8 @@ const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
  * Query params:
  * - apiKey: API key for authentication (optional, can use header x-api-key)
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     // API key authentication (optional, for cron jobs)

@@ -36,6 +36,8 @@ function getBaseUrl(request: NextRequest): string {
  * Verify email verification token and activate patient account
  * GET /api/patient-portal/auth/verify-email?token=xxx
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const baseUrl = getBaseUrl(request);

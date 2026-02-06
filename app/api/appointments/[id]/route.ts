@@ -6,6 +6,8 @@ import { generateIcsFile } from '@/lib/calendar';
 import { deleteGoogleCalendarEvent, updateGoogleCalendarEvent, createGoogleCalendarEvent } from '@/lib/google-calendar';
 
 // Update an appointment (change time slot)
+export const dynamic = 'force-dynamic';
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }

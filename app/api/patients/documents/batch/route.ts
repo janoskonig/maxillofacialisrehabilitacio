@@ -4,6 +4,8 @@ import { verifyAuth } from '@/lib/auth-server';
 
 // Batch lekérdezés a dokumentumok számához beteg ID-k alapján
 // Optimalizálás: egyetlen lekérdezésben visszaadja az összes beteg dokumentumszámát
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     const auth = await verifyAuth(request);

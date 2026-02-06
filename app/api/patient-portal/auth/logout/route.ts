@@ -5,6 +5,8 @@ import { clearPatientPortalSession } from '@/lib/patient-portal-server';
  * Logout from patient portal
  * POST /api/patient-portal/auth/logout
  */
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     await clearPatientPortalSession();

@@ -25,6 +25,8 @@ async function verifyAuth(request: NextRequest): Promise<{ userId: string; email
 }
 
 // Felhasználó frissítése (csak admin, vagy saját profil)
+export const dynamic = 'force-dynamic';
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }

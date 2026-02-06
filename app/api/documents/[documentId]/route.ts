@@ -7,6 +7,8 @@ import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
  * Get document by ID
  * GET /api/documents/[documentId]
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { documentId: string } }

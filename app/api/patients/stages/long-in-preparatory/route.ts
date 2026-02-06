@@ -8,6 +8,8 @@ const PREPARATORY_STAGES = ['STAGE_0', 'STAGE_1', 'STAGE_2', 'STAGE_3', 'STAGE_4
  * Betegek, akik előkészítő (nem fogpótlás/protetikai) stádiumban vannak.
  * GET /api/patients/stages/long-in-preparatory
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const auth = await verifyAuth(request);

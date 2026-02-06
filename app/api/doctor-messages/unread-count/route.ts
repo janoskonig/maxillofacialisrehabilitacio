@@ -5,6 +5,8 @@ import { getUnreadDoctorMessageCount } from '@/lib/doctor-communication';
 /**
  * GET /api/doctor-messages/unread-count - Olvasatlan üzenetek száma
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     // Ellenőrizzük a jogosultságot

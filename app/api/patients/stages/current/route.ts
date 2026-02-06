@@ -6,6 +6,8 @@ import { verifyAuth } from '@/lib/auth-server';
  * Get current stages for all patients (for filtering)
  * GET /api/patients/stages/current
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const auth = await verifyAuth(request);

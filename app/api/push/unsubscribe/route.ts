@@ -3,6 +3,8 @@ import { verifyAuth } from '@/lib/auth-server';
 import { getDbPool } from '@/lib/db';
 import { handleApiError } from '@/lib/api-error-handler';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     const auth = await verifyAuth(request);

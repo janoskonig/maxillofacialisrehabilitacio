@@ -9,6 +9,8 @@ import { createGoogleCalendarEvent, deleteGoogleCalendarEvent } from '@/lib/goog
  * Get patient's appointments
  * GET /api/patient-portal/appointments
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const patientId = await verifyPatientPortalSession(request);

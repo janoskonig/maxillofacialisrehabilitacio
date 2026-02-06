@@ -28,6 +28,8 @@ function rowToEpisode(row: Record<string, unknown>): PatientEpisode {
  * Get all episodes for a patient
  * GET /api/patients/[id]/episodes
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }

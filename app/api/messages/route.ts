@@ -13,6 +13,8 @@ import { sendPushNotification } from '@/lib/push-notifications';
 /**
  * POST /api/messages - Új üzenet küldése
  */
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();

@@ -7,6 +7,8 @@ import { emitDoctorMessageRead } from '@/lib/socket-server';
 /**
  * PUT /api/doctor-messages/[id]/read - Üzenet olvasottnak jelölése
  */
+export const dynamic = 'force-dynamic';
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }

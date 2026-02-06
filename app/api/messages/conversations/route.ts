@@ -6,6 +6,8 @@ import { Message } from '@/lib/communication';
 /**
  * GET /api/messages/conversations - Beteg beszélgetések listája az orvos számára
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const auth = await verifyAuth(request);

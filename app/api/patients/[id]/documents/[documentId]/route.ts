@@ -5,6 +5,8 @@ import { downloadFile, deleteFile } from '@/lib/ftp-client';
 import { logActivity, logActivityWithAuth } from '@/lib/activity';
 
 // Download a document
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string; documentId: string } }

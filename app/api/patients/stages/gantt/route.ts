@@ -9,6 +9,8 @@ const REASON_VALUES = ['traumás sérülés', 'veleszületett rendellenesség', 
  * Cohort: reason kötelező. Betegszintű: reason opcionális, patientId kötelező.
  * GET /api/patients/stages/gantt?reason=...&patientId=...&status=open|closed|all&from=...&to=...
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const auth = await verifyAuth(request);

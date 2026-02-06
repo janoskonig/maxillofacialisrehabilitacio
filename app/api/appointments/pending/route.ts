@@ -9,6 +9,8 @@ import { randomBytes } from 'crypto';
  * Create a pending appointment (admin only)
  * This creates an appointment that requires patient approval via email
  */
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     const auth = await verifyAuth(request);

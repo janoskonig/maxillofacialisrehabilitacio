@@ -9,6 +9,8 @@ import { Patient, patientSchema } from '@/lib/types';
  * Register new patient for portal access
  * POST /api/patient-portal/auth/register
  */
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();

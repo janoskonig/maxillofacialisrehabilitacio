@@ -10,6 +10,8 @@ import { handleApiError } from '@/lib/api-error-handler';
  * Approve a pending appointment (via patient portal)
  * This converts a pending appointment to an approved/booked appointment
  */
+export const dynamic = 'force-dynamic';
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }

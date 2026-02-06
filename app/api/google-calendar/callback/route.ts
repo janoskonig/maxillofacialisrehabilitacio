@@ -109,6 +109,8 @@ function getBaseUrl(request: NextRequest): string {
 /**
  * OAuth2 callback feldolgozása
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   // Base URL meghatározása a handler elején (minden redirect előtt)
   const baseUrl = getBaseUrl(request);

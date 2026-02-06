@@ -8,6 +8,8 @@ import { Patient, patientSchema, LabQuoteRequest } from '@/lib/types';
  * Árajánlatkérő PDF generálása beteg adataiból
  * Query paraméter: quoteId - az árajánlatkérő ID-ja
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }

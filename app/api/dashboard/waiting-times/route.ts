@@ -5,6 +5,8 @@ import { getDbPool } from '@/lib/db';
 /**
  * GET /api/dashboard/waiting-times - Várakozási idők lekérése első konzultációra és munkafázisra
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const auth = await verifyAuth(request);

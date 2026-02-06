@@ -8,6 +8,8 @@ import { logActivity } from '@/lib/activity';
  * Lock patient's OHIP-14 response (prevent patient from modifying)
  * POST /api/patients/[id]/ohip14/[timepoint]/lock
  */
+export const dynamic = 'force-dynamic';
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string; timepoint: string } }

@@ -6,6 +6,8 @@ import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
  * Get patient's current stage (patient portal)
  * GET /api/patient-portal/stages/current
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const patientId = await verifyPatientPortalSession(request);

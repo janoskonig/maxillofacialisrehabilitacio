@@ -15,6 +15,8 @@ function getCorrelationIdFromRequest(request: NextRequest): string {
 }
 
 // GET /api/patients/[id]/snapshots/[snapshotId] - Get snapshot detail
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string; snapshotId: string } }

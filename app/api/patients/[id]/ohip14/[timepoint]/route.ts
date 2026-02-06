@@ -10,6 +10,8 @@ import { logActivity } from '@/lib/activity';
  * Get patient's OHIP-14 response for a specific timepoint
  * GET /api/patients/[id]/ohip14/[timepoint]
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string; timepoint: string } }

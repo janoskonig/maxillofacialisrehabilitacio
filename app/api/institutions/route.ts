@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 
 // Intézmények listázása a users táblából
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const pool = getDbPool();

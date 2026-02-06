@@ -6,6 +6,8 @@ import { getDbPool } from '@/lib/db';
 /**
  * Google Calendar naptárak listázása
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const auth = await verifyAuth(request);

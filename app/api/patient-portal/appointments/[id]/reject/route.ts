@@ -8,6 +8,8 @@ import { sendConditionalAppointmentRequestToPatient } from '@/lib/email';
  * Reject a pending appointment (via patient portal)
  * This cancels the pending appointment and frees the time slot
  */
+export const dynamic = 'force-dynamic';
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }

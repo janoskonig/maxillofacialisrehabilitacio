@@ -8,6 +8,8 @@ import { getDbPool } from '@/lib/db';
 /**
  * GET /api/communication-logs?patientId=xxx - Érintkezési napló lekérése
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;

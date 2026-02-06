@@ -12,6 +12,8 @@ import { hu } from 'date-fns/locale';
  * Approve a pending appointment (via email link)
  * This converts a pending appointment to an approved/booked appointment
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;

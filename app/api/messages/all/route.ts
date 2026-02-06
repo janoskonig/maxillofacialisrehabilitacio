@@ -5,6 +5,8 @@ import { getDbPool } from '@/lib/db';
 /**
  * GET /api/messages/all - Összes üzenet lekérése az orvos számára (minden betegtől)
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;

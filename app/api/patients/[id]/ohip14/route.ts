@@ -7,6 +7,8 @@ import { OHIP14Response } from '@/lib/types';
  * Get patient's OHIP-14 responses
  * GET /api/patients/[id]/ohip14
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }

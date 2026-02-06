@@ -7,6 +7,8 @@ import { generateDentalStatusPDF } from '@/lib/pdf/generateDentalStatusPDF';
  * Export patient dental status as PDF
  * GET /api/patients/[id]/dental-status-export
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }

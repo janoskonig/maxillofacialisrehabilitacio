@@ -6,6 +6,8 @@ import { documentSchema } from '@/lib/types';
 import { logActivity, logActivityWithAuth } from '@/lib/activity';
 
 // List all documents for a patient
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }

@@ -9,6 +9,8 @@ import { getCurrentStageCodeForOhip } from '@/lib/ohip14-stage';
  * Get patient's OHIP-14 response for a specific timepoint
  * GET /api/patient-portal/ohip14/[timepoint]
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { timepoint: string } }

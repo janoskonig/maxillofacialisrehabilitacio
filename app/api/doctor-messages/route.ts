@@ -15,6 +15,8 @@ import { sendPushNotification } from '@/lib/push-notifications';
  * - subject: opcionális tárgy
  * - message: üzenet tartalma
  */
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();

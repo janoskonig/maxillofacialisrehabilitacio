@@ -7,6 +7,8 @@ import { isFtpConfigured, uploadFile, getMaxFileSize } from '@/lib/ftp-client';
  * Get patient's documents
  * GET /api/patient-portal/documents
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const patientId = await verifyPatientPortalSession(request);

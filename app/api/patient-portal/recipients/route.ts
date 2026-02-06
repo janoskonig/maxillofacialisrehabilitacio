@@ -6,6 +6,8 @@ import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
  * GET /api/patient-portal/recipients - Kezelőorvos és admin adatainak lekérése
  * A páciensek ezt használhatják, hogy kiválasszák, kinek küldenek üzenetet
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     // Ellenőrizzük, hogy a páciens be van-e jelentkezve

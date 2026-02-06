@@ -8,6 +8,8 @@ import { logActivity } from '@/lib/activity';
  * Start new episode for patient
  * POST /api/patients/[id]/stages/new-episode
  */
+export const dynamic = 'force-dynamic';
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }

@@ -4,6 +4,8 @@ import { verifyAuth } from '@/lib/auth-server';
 import { handleApiError } from '@/lib/api-error-handler';
 
 // Update appointment status
+export const dynamic = 'force-dynamic';
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }

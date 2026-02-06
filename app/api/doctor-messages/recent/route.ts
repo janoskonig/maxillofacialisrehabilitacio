@@ -8,6 +8,8 @@ import { DoctorMessage } from '@/lib/doctor-communication';
  * Query params:
  * - limit: hány üzenetet kérjünk le (alapértelmezett: 5)
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;

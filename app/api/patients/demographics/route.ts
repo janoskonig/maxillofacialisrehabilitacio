@@ -3,6 +3,8 @@ import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 
 // Korfa, etiológia és DMF-T index statisztikák
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     // Ellenőrizzük a felhasználó szerepkörét és jogosultságait

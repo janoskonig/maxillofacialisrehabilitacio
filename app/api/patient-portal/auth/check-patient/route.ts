@@ -5,6 +5,8 @@ import { getDbPool } from '@/lib/db';
  * Check if patient exists
  * POST /api/patient-portal/auth/check-patient
  */
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();

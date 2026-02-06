@@ -16,6 +16,8 @@ const JWT_EXPIRES_IN = 7 * 24 * 60 * 60 * 1000; // 7 nap milliszekundumban
  * POST /api/auth/impersonate
  * Body: { userId: string }
  */
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     // Ellenőrizzük, hogy az aktuális felhasználó admin-e

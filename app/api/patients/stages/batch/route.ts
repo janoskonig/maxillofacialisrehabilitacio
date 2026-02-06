@@ -7,6 +7,8 @@ import { verifyAuth } from '@/lib/auth-server';
  * Új modell: stage_events + stage_catalog (stage_code + label_hu).
  * Régi modell: patient_current_stage (patient_stages).
  */
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     const auth = await verifyAuth(request);

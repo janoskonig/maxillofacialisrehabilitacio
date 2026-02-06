@@ -6,6 +6,8 @@ import { verifyAuth } from '@/lib/auth-server';
  * Get all episodes for a patient
  * GET /api/patients/[id]/stages/episodes
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }

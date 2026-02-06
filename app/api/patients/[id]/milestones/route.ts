@@ -21,6 +21,8 @@ function rowToMilestone(row: Record<string, unknown>): PatientMilestoneEntry {
  * Get milestones for a patient, optionally filtered by episode
  * GET /api/patients/[id]/milestones?episodeId=...
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }

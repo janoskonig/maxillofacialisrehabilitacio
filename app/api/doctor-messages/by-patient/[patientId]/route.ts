@@ -6,6 +6,8 @@ import { DoctorMessage } from '@/lib/doctor-communication';
 /**
  * GET /api/doctor-messages/by-patient/[patientId] - Betegre hivatkozó orvos-orvos üzenetek lekérése
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { patientId: string } }

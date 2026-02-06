@@ -6,6 +6,8 @@ import { logActivityWithAuth } from '@/lib/activity';
 /**
  * PATCH /api/doctor-messages/groups/[groupId] - Csoportos beszélgetés átnevezése
  */
+export const dynamic = 'force-dynamic';
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { groupId: string } }

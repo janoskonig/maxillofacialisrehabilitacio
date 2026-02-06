@@ -7,6 +7,8 @@ import { sendPatientMagicLink, getPatientEmailInfo } from '@/lib/patient-portal-
  * Request magic link - handles both existing and new patients
  * POST /api/patient-portal/auth/request-link
  */
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();

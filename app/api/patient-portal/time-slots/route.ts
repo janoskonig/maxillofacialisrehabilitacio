@@ -6,6 +6,8 @@ import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
  * Get available time slots for patient portal
  * GET /api/patient-portal/time-slots
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const patientId = await verifyPatientPortalSession(request);

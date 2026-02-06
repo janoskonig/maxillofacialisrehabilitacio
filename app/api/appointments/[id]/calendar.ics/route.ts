@@ -4,6 +4,8 @@ import { verifyAuth } from '@/lib/auth-server';
 import { generateIcsFile } from '@/lib/calendar';
 
 // Download .ics file for an appointment
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }

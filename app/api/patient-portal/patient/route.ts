@@ -6,6 +6,8 @@ import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
  * Get patient's own data (limited subset)
  * GET /api/patient-portal/patient
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const patientId = await verifyPatientPortalSession(request);

@@ -10,6 +10,8 @@ import { logActivity } from '@/lib/activity';
  * GET /api/patients/[id]/stages
  * Uses stage_events + patient_episodes when available, else patient_stages (legacy).
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }

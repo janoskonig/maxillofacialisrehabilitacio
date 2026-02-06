@@ -11,6 +11,8 @@ const JWT_SECRET = new TextEncoder().encode(
 // JWT token lejárat ideje: 7 nap
 const JWT_EXPIRES_IN = 7 * 24 * 60 * 60 * 1000; // 7 nap milliszekundumban
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();

@@ -17,6 +17,8 @@ import { createGoogleCalendarEvent, deleteGoogleCalendarEvent } from '@/lib/goog
  * - Creates a new event with patient name in target calendar
  * - Updates the appointment with the new event ID
  */
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     const auth = await verifyAuth(request);

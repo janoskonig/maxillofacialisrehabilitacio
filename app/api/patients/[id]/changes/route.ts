@@ -6,6 +6,8 @@ import { verifyAuth } from '@/lib/auth-server';
  * Get patient change history
  * GET /api/patients/[id]/changes
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }

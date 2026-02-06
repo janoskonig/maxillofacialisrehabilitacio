@@ -12,6 +12,8 @@ const REPLY_TO_EMAIL = 'konig.janos@semmelweis.hu';
 /**
  * Árajánlatkérő PDF email küldése a laboratóriumnak
  */
+export const dynamic = 'force-dynamic';
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string; quoteId: string } }

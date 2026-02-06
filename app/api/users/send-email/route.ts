@@ -4,6 +4,8 @@ import { verifyAuth } from '@/lib/auth-server';
 import { sendEmail } from '@/lib/email';
 
 // E-mail küldése felhasználóknak szerepkör szerint
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     const auth = await verifyAuth(request);

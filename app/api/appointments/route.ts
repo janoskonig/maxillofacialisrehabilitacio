@@ -10,6 +10,8 @@ import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 
 // Get all appointments
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const auth = await verifyAuth(request);

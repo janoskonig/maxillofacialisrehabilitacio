@@ -34,6 +34,8 @@ function getBaseUrl(request: NextRequest): string {
  * POST /api/patient-portal/auth/impersonate
  * Body: { patientId: string }
  */
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     // Ellenőrizzük, hogy az aktuális felhasználó admin-e

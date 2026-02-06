@@ -7,6 +7,8 @@ import { logActivityWithAuth } from '@/lib/activity';
 /**
  * GET /api/doctor-messages/groups/[groupId]/participants - Csoport résztvevőinek lekérése
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { groupId: string } }
