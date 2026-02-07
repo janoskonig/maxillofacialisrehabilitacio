@@ -3,7 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
 import { OHIP14Response, OHIP14Timepoint } from '@/lib/types';
 import { calculateOHIP14Scores } from '@/lib/ohip14-questions';
-import { getCurrentStageCodeForOhip } from '@/lib/ohip14-stage';
+import { getCurrentStageCodeForOhip, getCurrentEpisodeAndStage, isTimepointAllowedForStage } from '@/lib/ohip14-stage';
 
 /**
  * Get patient's OHIP-14 response for a specific timepoint
@@ -34,18 +34,7 @@ export async function GET(
     }
 
     const pool = getDbPool();
-
-    // Get current active episode
-    const currentStageResult = await pool.query(
-      `SELECT episode_id 
-       FROM patient_current_stage 
-       WHERE patient_id = $1`,
-      [patientId]
-    );
-
-    const activeEpisodeId = currentStageResult.rows.length > 0 
-      ? currentStageResult.rows[0].episode_id 
-      : null;
+    const { episodeId: activeEpisodeId } = await getCurrentEpisodeAndStage(pool, patientId);
 
     // Get response for this timepoint
     const result = await pool.query(
@@ -168,20 +157,7 @@ export async function POST(
     const pool = getDbPool();
     const body = await request.json();
 
-    // Get current active episode and stage
-    const currentStageResult = await pool.query(
-      `SELECT episode_id, stage
-       FROM patient_current_stage 
-       WHERE patient_id = $1`,
-      [patientId]
-    );
-
-    const activeEpisodeId = currentStageResult.rows.length > 0 
-      ? currentStageResult.rows[0].episode_id 
-      : null;
-    const currentStage = currentStageResult.rows.length > 0
-      ? currentStageResult.rows[0].stage
-      : null;
+    const { episodeId: activeEpisodeId, stageCode: currentStageCode, stage, useNewModel } = await getCurrentEpisodeAndStage(pool, patientId);
 
     if (!activeEpisodeId) {
       return NextResponse.json(
@@ -190,18 +166,14 @@ export async function POST(
       );
     }
 
-    // Validate stage for timepoint
-    const timepointStageMap: Record<OHIP14Timepoint, string> = {
-      T0: 'uj_beteg',
-      T1: 'onkologiai_kezeles_kesz',
-      T2: 'gondozas_alatt',
-    };
-
-    const requiredStage = timepointStageMap[timepoint];
-    if (currentStage !== requiredStage) {
+    const currentStageOrCode = useNewModel ? currentStageCode : stage;
+    if (!isTimepointAllowedForStage(timepoint, currentStageOrCode, useNewModel)) {
+      const requiredLabel = useNewModel
+        ? (timepoint === 'T0' ? 'STAGE_0 (első konzultáció)' : timepoint === 'T1' ? 'STAGE_4 (rehabilitáció előtt)' : 'STAGE_7 (gondozás)')
+        : (timepoint === 'T0' ? 'Új beteg' : timepoint === 'T1' ? 'Onkológiai kezelés kész' : 'Gondozás alatt');
       return NextResponse.json(
-        { 
-          error: `Ez a timepoint csak "${requiredStage === 'uj_beteg' ? 'Új beteg' : requiredStage === 'onkologiai_kezeles_kesz' ? 'Onkológiai kezelés kész' : 'Gondozás alatt'}" stádiumban kitölthető. Jelenlegi stádium: ${currentStage || 'Nincs'}.` 
+        {
+          error: `Ez a timepoint csak a megfelelő stádiumban kitölthető (${requiredLabel}). Jelenlegi stádium: ${currentStageOrCode || 'Nincs'}.`,
         },
         { status: 403 }
       );
@@ -225,7 +197,7 @@ export async function POST(
       );
     }
 
-    const stageCode = await getCurrentStageCodeForOhip(pool, patientId, activeEpisodeId);
+    const ohipStageCode = await getCurrentStageCodeForOhip(pool, patientId, activeEpisodeId);
 
     // Calculate scores
     const scores = calculateOHIP14Scores(body);
@@ -297,7 +269,7 @@ export async function POST(
         WHERE id = $25
         RETURNING *`,
         [
-          stageCode ?? null,
+          ohipStageCode ?? null,
           body.q1_functional_limitation,
           body.q2_functional_limitation,
           body.q3_physical_pain,
@@ -368,7 +340,7 @@ export async function POST(
           patientId,
           activeEpisodeId,
           timepoint,
-          stageCode ?? null,
+          ohipStageCode ?? null,
           true,
           body.q1_functional_limitation,
           body.q2_functional_limitation,

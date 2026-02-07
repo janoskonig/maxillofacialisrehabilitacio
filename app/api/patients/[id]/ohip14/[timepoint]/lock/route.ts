@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { getCurrentEpisodeAndStage } from '@/lib/ohip14-stage';
 import { OHIP14Timepoint } from '@/lib/types';
 import { logActivity } from '@/lib/activity';
 
@@ -42,17 +43,7 @@ export async function POST(
       );
     }
 
-    // Get active episode
-    const currentStageResult = await pool.query(
-      `SELECT episode_id 
-       FROM patient_current_stage 
-       WHERE patient_id = $1`,
-      [patientId]
-    );
-
-    const activeEpisodeId = currentStageResult.rows.length > 0 
-      ? currentStageResult.rows[0].episode_id 
-      : null;
+    const { episodeId: activeEpisodeId } = await getCurrentEpisodeAndStage(pool, patientId);
 
     if (!activeEpisodeId) {
       return NextResponse.json(

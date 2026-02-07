@@ -3,7 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { OHIP14Response, OHIP14Timepoint } from '@/lib/types';
 import { calculateOHIP14Scores } from '@/lib/ohip14-questions';
-import { getCurrentStageCodeForOhip } from '@/lib/ohip14-stage';
+import { getCurrentStageCodeForOhip, getCurrentEpisodeAndStage, isTimepointAllowedForStage } from '@/lib/ohip14-stage';
 import { logActivity } from '@/lib/activity';
 
 /**
@@ -87,17 +87,10 @@ export async function GET(
       query += ` AND episode_id = $3`;
       queryParams.push(episodeId);
     } else {
-      // Get active episode
-      const currentStageResult = await pool.query(
-        `SELECT episode_id 
-         FROM patient_current_stage 
-         WHERE patient_id = $1`,
-        [patientId]
-      );
-
-      if (currentStageResult.rows.length > 0) {
+      const { episodeId: activeEpisodeId } = await getCurrentEpisodeAndStage(pool, patientId);
+      if (activeEpisodeId) {
         query += ` AND episode_id = $3`;
-        queryParams.push(currentStageResult.rows[0].episode_id);
+        queryParams.push(activeEpisodeId);
       }
     }
 
@@ -149,59 +142,26 @@ export async function POST(
     }
 
     const body = await request.json();
-    const episodeId = body.episodeId || null;
+    const episodeIdParam = body.episodeId || null;
 
-    // If episodeId not provided, use active episode
-    let finalEpisodeId = episodeId;
-    let currentStage: string | null = null;
-    
+    let finalEpisodeId = episodeIdParam;
+    const current = await getCurrentEpisodeAndStage(pool, patientId);
+
     if (!finalEpisodeId) {
-      const currentStageResult = await pool.query(
-        `SELECT episode_id, stage
-         FROM patient_current_stage 
-         WHERE patient_id = $1`,
-        [patientId]
-      );
-
-      if (currentStageResult.rows.length > 0) {
-        finalEpisodeId = currentStageResult.rows[0].episode_id;
-        currentStage = currentStageResult.rows[0].stage;
-      } else {
+      finalEpisodeId = current.episodeId;
+      if (!finalEpisodeId) {
         return NextResponse.json(
           { error: 'Nincs aktív epizód. Kérjük, állítson be stádiumot.' },
           { status: 400 }
         );
       }
-    } else {
-      // Get stage for the specified episode
-      const stageResult = await pool.query(
-        `SELECT stage
-         FROM patient_stages
-         WHERE patient_id = $1 AND episode_id = $2
-         ORDER BY stage_date DESC
-         LIMIT 1`,
-        [patientId, finalEpisodeId]
-      );
-      if (stageResult.rows.length > 0) {
-        currentStage = stageResult.rows[0].stage;
-      }
     }
 
-    // Validate stage for timepoint (only for patient portal submissions, admin can override)
-    // But we still check and warn
-    const timepointStageMap: Record<OHIP14Timepoint, string> = {
-      T0: 'uj_beteg',
-      T1: 'onkologiai_kezeles_kesz',
-      T2: 'gondozas_alatt',
-    };
-
-    const requiredStage = timepointStageMap[timepoint];
-    if (currentStage && currentStage !== requiredStage) {
-      // Admin/doctor can still save, but we log a warning
+    const stageCodeOrLegacy = current.useNewModel ? current.stageCode : current.stage;
+    if (stageCodeOrLegacy && !isTimepointAllowedForStage(timepoint, stageCodeOrLegacy, current.useNewModel)) {
       console.warn(
-        `OHIP-14 timepoint ${timepoint} saved for patient ${patientId} in stage ${currentStage}, but required stage is ${requiredStage}`
+        `OHIP-14 timepoint ${timepoint} saved for patient ${patientId} in stage ${stageCodeOrLegacy}, which is not the typical stage for this timepoint`
       );
-      // For now, we allow it for admin/doctor, but could be made stricter
     }
 
     const stageCode = await getCurrentStageCodeForOhip(pool, patientId, finalEpisodeId);

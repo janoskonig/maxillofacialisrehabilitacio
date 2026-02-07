@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { getCurrentEpisodeAndStage } from '@/lib/ohip14-stage';
 import { OHIP14Response } from '@/lib/types';
 
 /**
@@ -27,19 +28,10 @@ export async function GET(
     const searchParams = request.nextUrl.searchParams;
     const episodeId = searchParams.get('episodeId');
 
-    // Get active episode if not specified
-    let finalEpisodeId = episodeId;
+    let finalEpisodeId: string | null = episodeId;
     if (!finalEpisodeId) {
-      const currentStageResult = await pool.query(
-        `SELECT episode_id 
-         FROM patient_current_stage 
-         WHERE patient_id = $1`,
-        [patientId]
-      );
-
-      if (currentStageResult.rows.length > 0) {
-        finalEpisodeId = currentStageResult.rows[0].episode_id;
-      }
+      const { episodeId: activeEpisodeId } = await getCurrentEpisodeAndStage(pool, patientId);
+      finalEpisodeId = activeEpisodeId;
     }
 
     // Get all responses for this patient and episode

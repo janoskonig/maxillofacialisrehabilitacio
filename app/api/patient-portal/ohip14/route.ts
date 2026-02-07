@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
+import { getCurrentEpisodeAndStage } from '@/lib/ohip14-stage';
+
 /**
  * Get patient's OHIP-14 responses
  * GET /api/patient-portal/ohip14
@@ -19,18 +21,7 @@ export async function GET(request: NextRequest) {
     }
 
     const pool = getDbPool();
-
-    // Get current active episode
-    const currentStageResult = await pool.query(
-      `SELECT episode_id 
-       FROM patient_current_stage 
-       WHERE patient_id = $1`,
-      [patientId]
-    );
-
-    const activeEpisodeId = currentStageResult.rows.length > 0 
-      ? currentStageResult.rows[0].episode_id 
-      : null;
+    const { episodeId: activeEpisodeId } = await getCurrentEpisodeAndStage(pool, patientId);
 
     // Get all responses for this patient (prefer active episode, but include all)
     const result = await pool.query(

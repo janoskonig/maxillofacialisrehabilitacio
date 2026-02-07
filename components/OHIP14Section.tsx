@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { OHIP14Response, OHIP14Timepoint, ohip14TimepointOptions, ohip14ResponseValueOptions, PatientStage } from '@/lib/types';
 import { ohip14Questions, calculateOHIP14Scores } from '@/lib/ohip14-questions';
+import { isTimepointAllowedForStage, getTimepointForStage } from '@/lib/ohip14-timepoint-stage';
 import { useToast } from '@/contexts/ToastContext';
 import { FileText, Save, Loader2, CheckCircle, AlertCircle, Lock } from 'lucide-react';
 import { patientStageOptions } from '@/lib/types';
@@ -29,11 +30,15 @@ export function OHIP14Section({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<OHIP14Timepoint | null>(null);
   const [activeTimepoint, setActiveTimepoint] = useState<OHIP14Timepoint | null>(null);
+  /** Régi modell: patient_stages.stage; új modell: null (akkor stageCode van) */
   const [currentStage, setCurrentStage] = useState<PatientStage | null>(null);
+  /** Új modell: stage_events.stage_code (STAGE_0..STAGE_7) */
+  const [currentStageCode, setCurrentStageCode] = useState<string | null>(null);
+  const [useNewStageModel, setUseNewStageModel] = useState(false);
   /** Betegportál: mely timepointok már kitöltve (egyszer kitölthető, utána nem látható) */
   const [completedTimepoints, setCompletedTimepoints] = useState<OHIP14Timepoint[]>([]);
 
-  // Timepoint to stage mapping
+  // Régi modell: timepoint → patient_stages.stage (megjelenítéshez)
   const timepointStageMap: Record<OHIP14Timepoint, PatientStage> = {
     T0: 'uj_beteg',
     T1: 'onkologiai_kezeles_kesz',
@@ -45,10 +50,8 @@ export function OHIP14Section({
     fetchResponses();
   }, [patientId]);
 
-  // Betegportál: automatikusan a jelenlegi stádiumhoz tartozó timepoint legyen kiválasztva
-  const currentTimepointForStage: OHIP14Timepoint | null = currentStage
-    ? (['T0', 'T1', 'T2'] as const).find((tp) => timepointStageMap[tp] === currentStage) ?? null
-    : null;
+  const stageOrCode = useNewStageModel ? currentStageCode : currentStage;
+  const currentTimepointForStage = getTimepointForStage(stageOrCode, useNewStageModel);
   useEffect(() => {
     if (isPatientPortal && currentTimepointForStage) {
       setActiveTimepoint(currentTimepointForStage);
@@ -67,18 +70,21 @@ export function OHIP14Section({
 
       if (response.ok) {
         const data = await response.json();
-        const stage = isPatientPortal
-          ? data.currentStage?.stage
-          : data.timeline?.currentStage?.stage;
-        
-        console.log('OHIP-14: Fetched stage data:', { 
-          isPatientPortal, 
-          data, 
-          stage,
-          timepointStageMap 
-        });
-        
-        setCurrentStage(stage || null);
+        if (isPatientPortal) {
+          setCurrentStage(data.currentStage?.stage ?? null);
+          setCurrentStageCode(data.currentStage?.stageCode ?? null);
+          setUseNewStageModel(!!data.currentStage?.useNewModel);
+        } else {
+          const useNew = !!data.useNewModel;
+          setUseNewStageModel(useNew);
+          if (useNew) {
+            setCurrentStageCode(data.timeline?.currentStage?.stageCode ?? null);
+            setCurrentStage(null);
+          } else {
+            setCurrentStage(data.timeline?.currentStage?.stage ?? null);
+            setCurrentStageCode(null);
+          }
+        }
       } else {
         console.error('OHIP-14: Failed to fetch stage:', response.status, response.statusText);
       }
@@ -88,19 +94,7 @@ export function OHIP14Section({
   };
 
   const isTimepointAllowed = (timepoint: OHIP14Timepoint): boolean => {
-    if (!currentStage) {
-      console.log('OHIP-14: No current stage, timepoint not allowed:', timepoint);
-      return false;
-    }
-    const requiredStage = timepointStageMap[timepoint];
-    const isAllowed = currentStage === requiredStage;
-    console.log('OHIP-14: Timepoint check:', {
-      timepoint,
-      currentStage,
-      requiredStage,
-      isAllowed
-    });
-    return isAllowed;
+    return isTimepointAllowedForStage(timepoint, stageOrCode, useNewStageModel);
   };
 
   const fetchResponses = async () => {
@@ -407,7 +401,9 @@ export function OHIP14Section({
                 }`}
                 title={
                   !isAllowed
-                    ? `Ez a timepoint csak "${patientStageOptions.find(s => s.value === timepointStageMap[tp.value])?.label}" stádiumban kitölthető. Jelenlegi stádium: ${currentStage ? patientStageOptions.find(s => s.value === currentStage)?.label : 'Nincs'}.`
+                    ? useNewStageModel
+                      ? `Ez a timepoint csak ${tp.value === 'T0' ? 'STAGE_0' : tp.value === 'T1' ? 'STAGE_4' : 'STAGE_7'} stádiumban kitölthető. Jelenlegi: ${currentStageCode ?? 'Nincs'}.`
+                      : `Ez a timepoint csak "${patientStageOptions.find(s => s.value === timepointStageMap[tp.value])?.label}" stádiumban kitölthető. Jelenlegi: ${currentStage ? patientStageOptions.find(s => s.value === currentStage)?.label : 'Nincs'}.`
                     : isLocked
                       ? 'Ez a kérdőív le van zárva'
                       : undefined
@@ -428,13 +424,20 @@ export function OHIP14Section({
             );
           })}
         </div>
-        {currentStage && (
+        {stageOrCode && (
           <p className="text-sm text-gray-600 mt-2">
-            Jelenlegi stádium: <strong>{patientStageOptions.find(s => s.value === currentStage)?.label}</strong>
-            <span className="ml-2 text-xs text-gray-400">({currentStage})</span>
+            Jelenlegi stádium:{' '}
+            <strong>
+              {useNewStageModel
+                ? currentStageCode
+                : patientStageOptions.find((s) => s.value === currentStage)?.label}
+            </strong>
+            {!useNewStageModel && currentStage && (
+              <span className="ml-2 text-xs text-gray-400">({currentStage})</span>
+            )}
           </p>
         )}
-        {!currentStage && (
+        {!stageOrCode && (
           <p className="text-sm text-yellow-600 mt-2">
             ⚠️ Nincs stádium beállítva. Kérjük, állítson be stádiumot a kérdőív kitöltéséhez.
           </p>
@@ -569,9 +572,15 @@ export function OHIP14Section({
             <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
               <p className="text-sm text-yellow-800">
                 <strong>Figyelem:</strong> Ez a timepoint csak{' '}
-                <strong>{patientStageOptions.find(s => s.value === timepointStageMap[activeTimepoint])?.label}</strong>{' '}
+                <strong>
+                  {useNewStageModel
+                    ? (activeTimepoint === 'T0' ? 'STAGE_0' : activeTimepoint === 'T1' ? 'STAGE_4' : 'STAGE_7')
+                    : patientStageOptions.find((s) => s.value === timepointStageMap[activeTimepoint])?.label}
+                </strong>{' '}
                 stádiumban kitölthető. Jelenlegi stádium:{' '}
-                <strong>{currentStage ? patientStageOptions.find(s => s.value === currentStage)?.label : 'Nincs'}</strong>.
+                <strong>
+                  {useNewStageModel ? currentStageCode : (currentStage ? patientStageOptions.find((s) => s.value === currentStage)?.label : 'Nincs')}
+                </strong>.
               </p>
             </div>
           )}
