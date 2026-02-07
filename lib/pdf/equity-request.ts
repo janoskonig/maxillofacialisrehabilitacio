@@ -190,15 +190,19 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
     // Szakorvosi vélemény
     'Szakorvosi vélemény': patient.szakorvosiVelemény || '',
     
-    // Nyilatkozat
+    // Nyilatkozat (sablon lehet rövid vagy hosszú mezőnévvel)
     'Nyilatkozat': nyilatkozat,
-    
-    // Szolgáltató információk
+    'Nyilatkozat a kezelési tervben rögzített tervezett ellátás vállalásáról': nyilatkozat,
+
+    // Szolgáltató információk (sablon mezőnevek: pontosan ahogy a PDF-ben)
     'Fogorvos neve': 'Schmidt Péter Dr.',
+    'Fogorvos pecsét száma': EQUITY_REQUEST_CONFIG.pecsetszam,
     'Szolgáltató neve': EQUITY_REQUEST_CONFIG.szolgaltatoNeve,
     'Szolgáltató címe': EQUITY_REQUEST_CONFIG.cim,
     'Vármegyekód': EQUITY_REQUEST_CONFIG.varmegyeKod,
+    'Szolgálttó vármegyekód': EQUITY_REQUEST_CONFIG.varmegyeKod, // sablon elírás: dupla t
     'NEAK kód': EQUITY_REQUEST_CONFIG.neakKod,
+    'Szolgáltató NEAK kód': EQUITY_REQUEST_CONFIG.neakKod,
     'Pecsétszám': EQUITY_REQUEST_CONFIG.pecsetszam,
     'pecsétszám': EQUITY_REQUEST_CONFIG.pecsetszam,
     'Pecsét': EQUITY_REQUEST_CONFIG.pecsetszam,
@@ -235,7 +239,8 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
   fieldMapping['Munkahely 9jegyű azonosítója'] = munkahelyAzonosito;
   fieldMapping['Munkahely azonosítója'] = munkahelyAzonosito;
   fieldMapping['9jegyű azonosító'] = munkahelyAzonosito;
-  
+  fieldMapping['Szolgáltató munkahely 9 jegyű azonosító'] = munkahelyAzonosito;
+
   // Form mezők kitöltése
   let filledFields = 0;
   const errors: Array<{ field: string; error: string }> = [];
