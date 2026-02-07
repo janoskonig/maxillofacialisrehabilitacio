@@ -7,6 +7,8 @@ import { getCurrentUser } from '@/lib/auth';
 import { formatDateForDisplay } from '@/lib/dateUtils';
 import { useToast } from '@/contexts/ToastContext';
 import { logEvent } from '@/lib/event-logger';
+import { DocumentCard } from './DocumentCard';
+import { LightboxModal } from './LightboxModal';
 
 interface PatientDocumentsProps {
   patientId: string | null;
@@ -51,6 +53,7 @@ export function PatientDocuments({
     isReady: boolean;
     missingDocTags: string[];
   } | null>(null);
+  const [previewDocument, setPreviewDocument] = useState<PatientDocument | null>(null);
 
   useEffect(() => {
     const checkRole = async () => {
@@ -902,68 +905,31 @@ export function PatientDocuments({
           <p>Nincsenek dokumentumok</p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {documents.map((doc) => (
-            <div
+            <DocumentCard
               key={doc.id}
-              className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
-            >
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <File className="w-5 h-5 text-gray-400 flex-shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-gray-900 truncate">
-                      {doc.filename}
-                    </p>
-                    <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
-                      <span>{formatFileSize(doc.fileSize || 0)}</span>
-                      {doc.uploadedAt && (
-                        <span>{formatDateForDisplay(doc.uploadedAt)}</span>
-                      )}
-                      {doc.uploadedByName && (
-                        <span>Feltöltötte: {doc.uploadedByName}</span>
-                      )}
-                    </div>
-                    {doc.description && (
-                      <p className="text-xs text-gray-600 mt-1">{doc.description}</p>
-                    )}
-                    {doc.tags && Array.isArray(doc.tags) && doc.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {doc.tags.map((tag: string) => (
-                          <span
-                            key={tag}
-                            className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700"
-                          >
-                            <Tag className="w-3 h-3 mr-1" />
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 ml-4">
-                <button
-                  onClick={() => handleDownload(doc)}
-                  className="p-2 text-gray-600 hover:text-medical-primary hover:bg-gray-100 rounded"
-                  title="Letöltés"
-                >
-                  <Download className="w-5 h-5" />
-                </button>
-                {canDelete && (
-                  <button
-                    onClick={() => handleDelete(doc)}
-                    className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded"
-                    title="Törlés"
-                  >
-                    <Trash2 className="w-5 h-5" />
-                  </button>
-                )}
-              </div>
-            </div>
+              document={doc}
+              patientId={patientId}
+              canDelete={canDelete}
+              onDownload={handleDownload}
+              onDelete={handleDelete}
+              onPreview={(d) => setPreviewDocument(d)}
+              formatFileSize={formatFileSize}
+            />
           ))}
         </div>
+      )}
+
+      {patientId && (
+        <LightboxModal
+          isOpen={!!previewDocument}
+          document={previewDocument}
+          documents={documents}
+          patientId={patientId}
+          onClose={() => setPreviewDocument(null)}
+          onDownload={handleDownload}
+        />
       )}
     </div>
   );
