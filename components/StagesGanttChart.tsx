@@ -45,21 +45,30 @@ interface StagesGanttChartProps {
   catalog: StageCatalogEntry[];
   /** Ha megadva, csak ezek az epizódok jelennek meg (pl. egy beteg szűrésénél) */
   episodeOrder?: string[];
+  /** Ha megadva, az ábra időtengelye és a sávok erre a tartományra vágódnak (pl. utolsó 3 hónap) */
+  viewStart?: string;
+  viewEnd?: string;
 }
 
-export function StagesGanttChart({ episodes, intervals, catalog, episodeOrder }: StagesGanttChartProps) {
+export function StagesGanttChart({ episodes, intervals, catalog, episodeOrder, viewStart, viewEnd }: StagesGanttChartProps) {
   const order = episodeOrder ?? episodes.map((e) => e.id);
   const displayedEpisodes = order
     .map((id) => episodes.find((e) => e.id === id))
     .filter(Boolean) as GanttEpisode[];
 
-  const allStarts = intervals.map((i) => new Date(i.start).getTime());
-  const allEnds = intervals.map((i) => new Date(i.end).getTime());
-  const tMin = Math.min(...allStarts, ...displayedEpisodes.map((e) => new Date(e.openedAt).getTime()));
-  const tMax = Math.max(
-    ...allEnds,
-    ...displayedEpisodes.map((e) => (e.closedAt ? new Date(e.closedAt).getTime() : Date.now()))
-  );
+  const hasViewRange = viewStart && viewEnd;
+  const tMin = hasViewRange
+    ? new Date(viewStart).getTime()
+    : Math.min(
+        ...intervals.map((i) => new Date(i.start).getTime()),
+        ...displayedEpisodes.map((e) => new Date(e.openedAt).getTime())
+      );
+  const tMax = hasViewRange
+    ? new Date(viewEnd).getTime()
+    : Math.max(
+        ...intervals.map((i) => new Date(i.end).getTime()),
+        ...displayedEpisodes.map((e) => (e.closedAt ? new Date(e.closedAt).getTime() : Date.now()))
+      );
   const rangeMs = Math.max(tMax - tMin, 1);
   const toPercent = (t: number) => ((t - tMin) / rangeMs) * 100;
   const toPercentWidth = (start: number, end: number) => ((end - start) / rangeMs) * 100;
@@ -153,8 +162,13 @@ export function StagesGanttChart({ episodes, intervals, catalog, episodeOrder }:
                 style={{ height: rowHeight, minWidth: 800 }}
               >
                 {epIntervals.map((iv) => {
-                  const startMs = new Date(iv.start).getTime();
-                  const endMs = new Date(iv.end).getTime();
+                  let startMs = new Date(iv.start).getTime();
+                  let endMs = new Date(iv.end).getTime();
+                  if (hasViewRange) {
+                    startMs = Math.max(startMs, tMin);
+                    endMs = Math.min(endMs, tMax);
+                    if (startMs >= endMs) return null;
+                  }
                   const left = toPercent(startMs);
                   const width = toPercentWidth(startMs, endMs);
                   const label = catalogByCode.get(iv.stageCode)?.labelHu ?? iv.stageCode;

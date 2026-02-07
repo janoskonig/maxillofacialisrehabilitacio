@@ -372,6 +372,13 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
                       }, new Map<string, { code: string; labelHu: string; orderIndex: number }>())
                       .values()
                   )}
+                  viewStart={(() => {
+                    const end = new Date();
+                    const start = new Date(end);
+                    start.setMonth(start.getMonth() - 3);
+                    return start.toISOString();
+                  })()}
+                  viewEnd={new Date().toISOString()}
                 />
               )}
             </div>
