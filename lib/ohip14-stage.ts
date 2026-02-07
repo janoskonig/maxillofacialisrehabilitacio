@@ -45,15 +45,17 @@ export async function getCurrentEpisodeAndStage(
       [patientId]
     );
     const episodeId = openEp.rows[0]?.id ?? null;
-    if (!episodeId) {
-      return { episodeId: null, stageCode: null, stage: null, useNewModel: true };
+    if (episodeId) {
+      const row = await pool.query(
+        `SELECT stage_code FROM stage_events WHERE patient_id = $1 AND episode_id = $2 ORDER BY at DESC LIMIT 1`,
+        [patientId, episodeId]
+      );
+      const stageCode = row.rows[0]?.stage_code ?? null;
+      if (stageCode) {
+        return { episodeId, stageCode, stage: null, useNewModel: true };
+      }
     }
-    const row = await pool.query(
-      `SELECT stage_code FROM stage_events WHERE patient_id = $1 AND episode_id = $2 ORDER BY at DESC LIMIT 1`,
-      [patientId, episodeId]
-    );
-    const stageCode = row.rows[0]?.stage_code ?? null;
-    return { episodeId, stageCode, stage: null, useNewModel: true };
+    // Új táblák léteznek, de ehhez a beteghez nincs epizód/stage_events → fallback legacy (patient_stages)
   }
 
   const legacy = await pool.query(

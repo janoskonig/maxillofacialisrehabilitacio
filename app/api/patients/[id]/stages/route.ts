@@ -66,7 +66,10 @@ export async function GET(
         createdAt: (row.createdAt as Date)?.toISOString?.() ?? null,
       }));
 
-      const currentStage: StageEventEntry | null = events.length > 0 ? events[0] : null;
+      if (events.length === 0) {
+        // Új táblák léteznek, de ehhez a beteghez nincs stage_events → fallback legacy (lent)
+      } else {
+      const currentStage: StageEventEntry = events[0];
 
       const episodeIds = Array.from(new Set(events.map((e) => e.episodeId)));
       const episodesData = await pool.query(
@@ -110,6 +113,7 @@ export async function GET(
         episodes,
       };
       return NextResponse.json({ timeline, useNewModel: true });
+      }
     }
 
     // Legacy: patient_stages
