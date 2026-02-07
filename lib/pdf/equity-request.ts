@@ -4,6 +4,7 @@ import path from 'path';
 import { Patient } from '@/lib/types';
 import { EQUITY_REQUEST_CONFIG } from '@/lib/equity-request-config';
 import bnoCodesData from '@/lib/bno-codes.json';
+import { readFileFromCandidates, projectRootCandidates, resolveExistingPath } from '@/lib/pdf/fs';
 
 interface BNOCode {
   kod: string;
@@ -21,22 +22,21 @@ function toWinAnsiSafe(text: string): string {
     .replace(/Ű/g, 'Ü');
 }
 
+function getEquityTemplateBytes(): Buffer {
+  const candidates = [
+    ...projectRootCandidates('public', 'templates', 'FNMT.152.K.pdf'),
+    path.join(process.cwd(), 'public', 'templates', 'FNMT.152.K.pdf'),
+  ];
+  return readFileFromCandidates(candidates);
+}
+
 /**
  * Méltányossági kérelem PDF generálása beteg adataiból
  */
 export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer> {
-  // PDF template elérési útja
-  const templatePath = path.join(process.cwd(), 'public', 'templates', 'FNMT.152.K.pdf');
-  
-  // Ellenőrizzük, hogy létezik-e a PDF fájl
-  if (!fs.existsSync(templatePath)) {
-    throw new Error(`PDF template nem található: ${templatePath}`);
-  }
+  const templateBytes = getEquityTemplateBytes();
+  const pdfDoc = await PDFDocument.load(new Uint8Array(templateBytes), { ignoreEncryption: true });
 
-  // PDF betöltése
-  const existingPdfBytes = fs.readFileSync(templatePath);
-  const pdfDoc = await PDFDocument.load(existingPdfBytes);
-  
   // Logo betöltése és hozzáadása az első oldalhoz (ha létezik PNG verzió) - logo_1 balra, logo_2 jobbra
   const pages = pdfDoc.getPages();
   if (pages.length > 0) {
@@ -45,41 +45,39 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
     const margin = 50;
     const logoWidth = 50;
     const topMargin = 30;
-    
-    try {
-      const logo1Path = path.join(process.cwd(), 'public', 'logo_1.png');
-      if (fs.existsSync(logo1Path)) {
+
+    const logo1Path = resolveExistingPath(projectRootCandidates('public', 'logo_1.png'));
+    if (logo1Path) {
+      try {
         const logoBytes = fs.readFileSync(logo1Path);
         const logoImage1 = await pdfDoc.embedPng(logoBytes);
         const logoHeight1 = (logoImage1.height / logoImage1.width) * logoWidth;
-        // Logo 1 hozzáadása balra igazítva
         firstPage.drawImage(logoImage1, {
           x: margin,
           y: firstPage.getSize().height - logoHeight1 - topMargin,
           width: logoWidth,
           height: logoHeight1,
         });
+      } catch (error) {
+        console.warn('Logo 1 betöltése sikertelen:', error);
       }
-    } catch (error) {
-      console.warn('Logo 1 betöltése sikertelen:', error);
     }
-    
-    try {
-      const logo2Path = path.join(process.cwd(), 'public', 'logo_2.png');
-      if (fs.existsSync(logo2Path)) {
+
+    const logo2Path = resolveExistingPath(projectRootCandidates('public', 'logo_2.png'));
+    if (logo2Path) {
+      try {
         const logoBytes = fs.readFileSync(logo2Path);
         const logoImage2 = await pdfDoc.embedPng(logoBytes);
         const logoHeight2 = (logoImage2.height / logoImage2.width) * logoWidth;
-        // Logo 2 hozzáadása jobbra igazítva
         firstPage.drawImage(logoImage2, {
           x: pageWidth - logoWidth - margin,
           y: firstPage.getSize().height - logoHeight2 - topMargin,
           width: logoWidth,
           height: logoHeight2,
         });
+      } catch (error) {
+        console.warn('Logo 2 betöltése sikertelen:', error);
       }
-    } catch (error) {
-      console.warn('Logo 2 betöltése sikertelen:', error);
     }
   }
   
@@ -357,22 +355,17 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
     console.error(`Hibák a PDF kitöltésekor:`, errors);
   }
   
-  // Ha egyetlen mező sem lett kitöltve, figyelmeztetés
   if (filledFields === 0) {
-    if (formFields.length === 0) {
-      console.warn('FIGYELEM: A PDF template-nek nincsenek form mezői! A PDF üres lesz.');
-      throw new Error('A PDF template nem tartalmaz kitölthető form mezőket. Ellenőrizze, hogy a template fájl helyes-e.');
-    } else {
-      console.warn('FIGYELEM: Egyetlen mező sem lett kitöltve! A PDF üres lehet.');
-      console.warn(`Talált mezők a PDF-ben (első 30): ${allFieldNames.slice(0, 30).join(', ')}${allFieldNames.length > 30 ? `... (összesen ${allFieldNames.length})` : ''}`);
-      console.warn(`Mapping kulcsok (első 30): ${Object.keys(fieldMapping).slice(0, 30).join(', ')}${Object.keys(fieldMapping).length > 30 ? `... (összesen ${Object.keys(fieldMapping).length})` : ''}`);
-      
-      // Részletesebb hibaüzenet
-      const errorDetails = `PDF mezők száma: ${formFields.length}, Mapping kulcsok száma: ${Object.keys(fieldMapping).length}. 
-Talált mezők: ${allFieldNames.slice(0, 20).join(', ')}${allFieldNames.length > 20 ? '...' : ''}`;
-      
-      throw new Error(`Nem sikerült kitölteni a PDF mezőket. ${errorDetails}`);
-    }
+    const err =
+      formFields.length === 0
+        ? new Error('A PDF template nem tartalmaz kitölthető form mezőket. Ellenőrizze, hogy a template fájl helyes-e.')
+        : new Error('Equity template loaded but no field names matched mapping.');
+    (err as Error & { details?: { foundFieldNames: string[]; mappingKeys: string[] } }).details = {
+      foundFieldNames: allFieldNames,
+      mappingKeys: Object.keys(fieldMapping),
+    };
+    console.warn('Equity PDF field mismatch:', (err as Error & { details?: unknown }).details);
+    throw err;
   }
   
   // 1) Explicit appearance stream generálás – így a kitöltött szöveg minden nézegetőben látszik

@@ -5,13 +5,13 @@ import { handleApiError } from '@/lib/api-error-handler';
 import { REQUIRED_DOC_TAGS, REQUIRED_DOC_RULES, getMissingRequiredDocRules, getMissingRequiredDocTags, getChecklistStatus, getMissingRequiredFields } from '@/lib/clinical-rules';
 import { Patient, LabQuoteRequest } from '@/lib/types';
 import { downloadFile } from '@/lib/ftp-client';
-// pdf-lib csak a dental status PDF-hez kell még (generateDentalStatusPDF)
 import archiver from 'archiver';
 import { Readable } from 'stream';
 import { generateAnamnesisSummary } from '@/lib/openai-client';
 import { shouldCallAI, normalizeTags, safeFilename, ExportLimiter, ExportLimits } from '@/lib/utils';
 import { generateDentalStatusPDF } from '@/lib/pdf/generateDentalStatusPDF';
 import { markdownToPDF, generatePatientSummaryMarkdown, generateMedicalHistoryMarkdown } from '@/lib/pdf/markdown-to-pdf';
+import { createPlaceholderPdf } from '@/lib/pdf/placeholder-pdf';
 
 // Force Node.js runtime (required for archiver, pdf-lib, Buffer operations)
 export const runtime = 'nodejs';
@@ -134,7 +134,8 @@ function generateReadme(
   exportDate: Date,
   files: Array<{ name: string; size: number }>,
   aiGenerated: boolean,
-  documentCount?: number
+  documentCount?: number,
+  dentalPdfFailed?: boolean
 ): string {
   const lines: string[] = [];
   lines.push('NEAK EXPORT README');
@@ -158,6 +159,10 @@ function generateReadme(
   if (aiGenerated) {
     lines.push('MEGJEGYZES:');
     lines.push('A medical_history.pdf tartalmazhat AI-generált összefoglalót — ellenőrzendő.');
+  }
+  if (dentalPdfFailed) {
+    lines.push('');
+    lines.push('MEGJEGYZES: A fogazati státusz PDF generálása sikertelen volt. A dental_status.pdf placeholder tartalmat tartalmaz.');
   }
 
   return lines.join('\n');
@@ -494,15 +499,25 @@ export async function GET(
       );
     }
 
-    // Dental status PDF (használva a meglévő függvényt)
+    // Dental status PDF (optional: on failure use placeholder so ZIP always contains dental_status.pdf)
     let dentalStatusBuffer: Buffer;
+    let dentalPdfFailed = false;
     try {
       dentalStatusBuffer = await generateDentalStatusPDF(patient);
       limiter.addFile(dentalStatusBuffer.length);
     } catch (error) {
-      console.error('[NEAK Export] Error generating dental status PDF:', error);
-      // Ne robbanjon az export, ha a dental status PDF hibázik
-      dentalStatusBuffer = Buffer.from('');
+      console.error('[NEAK Export] Dental status PDF generation failed (DENTAL_PDF_GEN_FAILED):', error);
+      dentalPdfFailed = true;
+      if (process.env.ENABLE_SENTRY === 'true') {
+        try {
+          const Sentry = await import('@sentry/nextjs');
+          Sentry.captureException(error, { tags: { error_fingerprint: 'DENTAL_PDF_GEN_FAILED' } });
+        } catch {
+          /* ignore */
+        }
+      }
+      dentalStatusBuffer = await createPlaceholderPdf('Fogazati státusz PDF generálása sikertelen.');
+      limiter.addFile(dentalStatusBuffer.length);
     }
 
     // 2. TXT fájlok
@@ -553,9 +568,7 @@ export async function GET(
     // 1. PDF-ek
     archive.append(patientSummaryBuffer, { name: 'patient_summary.pdf' });
     archive.append(medicalHistoryBuffer, { name: 'medical_history.pdf' });
-    if (dentalStatusBuffer.length > 0) {
-      archive.append(dentalStatusBuffer, { name: 'dental_status.pdf' });
-    }
+    archive.append(dentalStatusBuffer, { name: 'dental_status.pdf' });
 
     // 2. TXT-k
     archive.append(treatmentPlanBuffer, { name: 'treatment_plan.txt' });
@@ -567,7 +580,7 @@ export async function GET(
 
     // 3. README.txt (deterministic position: after TXT files, before documents)
     // Include document count info
-    const readmeText = generateReadme(exportDate, files, aiGenerated, sortedDocuments.length);
+    const readmeText = generateReadme(exportDate, files, aiGenerated, sortedDocuments.length, dentalPdfFailed);
     const readmeBuffer = Buffer.from(readmeText, 'utf-8');
     limiter.addFile(readmeBuffer.length);
     archive.append(readmeBuffer, { name: 'README.txt' });

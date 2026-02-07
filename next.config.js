@@ -66,20 +66,6 @@ const nextConfig = {
         minimize: true,
       };
     }
-    
-    // Fix pdfkit font files issue
-    if (isServer) {
-      config.resolve.alias = {
-        ...config.resolve.alias,
-        'pdfkit': require.resolve('pdfkit/js/pdfkit.es.js'),
-      };
-      
-      // Copy pdfkit font files
-      config.module.rules.push({
-        test: /\.afm$/,
-        type: 'asset/resource',
-      });
-    }
 
     // Build memory: cache memória-típusra állítása (Next Memory guide). Ne írjuk felül, ha már explicit false.
     if (config.cache !== false && !dev) {

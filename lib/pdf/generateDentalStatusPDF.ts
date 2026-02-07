@@ -1,12 +1,12 @@
-import PDFDocument from 'pdfkit';
-import path from 'path';
+import { PDFDocument, StandardFonts, rgb, PDFPage } from 'pdf-lib';
 import fs from 'fs';
+import { resolveExistingPath, projectRootCandidates } from '@/lib/pdf/fs';
 
 interface Patient {
   id?: string;
   nev?: string | null;
   taj?: string | null;
-  meglevoFogak?: Record<string, any>;
+  meglevoFogak?: Record<string, unknown>;
   felsoFogpotlasVan?: boolean;
   felsoFogpotlasMikor?: string | null;
   felsoFogpotlasKeszito?: string | null;
@@ -30,465 +30,441 @@ type ToothStatus = { status?: 'D' | 'F' | 'M'; description?: string } | string;
 
 function normalizeToothData(value: ToothStatus | undefined): { status?: 'D' | 'F' | 'M'; description?: string } | null {
   if (!value) return null;
-  if (typeof value === 'string') {
-    return { description: value };
-  }
+  if (typeof value === 'string') return { description: value };
   return value;
 }
 
+function toWinAnsiSafe(text: string): string {
+  return String(text)
+    .replace(/ő/g, 'ö')
+    .replace(/Ő/g, 'Ö')
+    .replace(/ű/g, 'ü')
+    .replace(/Ű/g, 'Ü');
+}
+
+const A4 = { width: 595.28, height: 841.89 };
+const MARGIN = 50;
+const PAGE_END = MARGIN + 40;
+
+function addPageIfNeeded(
+  pdf: PDFDocument,
+  state: { page: PDFPage; y: number },
+  _font: Awaited<ReturnType<PDFDocument['embedFont']>>,
+  _fontBold: Awaited<ReturnType<PDFDocument['embedFont']>>
+): void {
+  if (state.y >= PAGE_END) return;
+  state.page = pdf.addPage([A4.width, A4.height]);
+  state.y = A4.height - MARGIN;
+}
+
+function drawToothStatus(
+  page: PDFPage,
+  x: number,
+  y: number,
+  cellWidth: number,
+  cellHeight: number,
+  status: 'M' | 'present' | null,
+  description?: string
+): void {
+  const centerX = x + cellWidth / 2;
+  const centerY = y + cellHeight / 2;
+  const size = 7;
+
+  if (status === 'M') {
+    page.drawLine({
+      start: { x: centerX - size, y: centerY - size },
+      end: { x: centerX + size, y: centerY + size },
+      thickness: 2,
+      color: rgb(0.42, 0.45, 0.5),
+    });
+    page.drawLine({
+      start: { x: centerX + size, y: centerY - size },
+      end: { x: centerX - size, y: centerY + size },
+      thickness: 2,
+      color: rgb(0.42, 0.45, 0.5),
+    });
+  } else if (status === 'present') {
+    const desc = (description || '').toLowerCase();
+    const hasRemenytelen = desc.includes('reménytelen');
+    const hasKerdeses = desc.includes('kérdéses');
+    if (hasRemenytelen) {
+      page.drawLine({
+        start: { x: centerX, y: centerY - size },
+        end: { x: centerX, y: centerY + size / 3 },
+        thickness: 2.5,
+        color: rgb(0.86, 0.15, 0.15),
+      });
+      page.drawCircle({ x: centerX, y: centerY + size * 0.8, size: 1.8, color: rgb(0.86, 0.15, 0.15) });
+    } else if (hasKerdeses) {
+      page.drawCircle({
+        x: centerX,
+        y: centerY - size / 2,
+        size: size / 2.2,
+        borderColor: rgb(0.92, 0.7, 0.03),
+        borderWidth: 2,
+      });
+      page.drawCircle({ x: centerX, y: centerY + size * 0.75, size: 1.5, color: rgb(0.92, 0.7, 0.03) });
+    } else {
+      page.drawLine({
+        start: { x: centerX - size, y: centerY },
+        end: { x: centerX - size / 3, y: centerY + size },
+        thickness: 2.5,
+        color: rgb(0.06, 0.73, 0.51),
+      });
+      page.drawLine({
+        start: { x: centerX - size / 3, y: centerY + size },
+        end: { x: centerX + size, y: centerY - size },
+        thickness: 2.5,
+        color: rgb(0.06, 0.73, 0.51),
+      });
+    }
+  }
+}
+
 export async function generateDentalStatusPDF(patient: Patient): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    // Fix pdfkit font path issue in Next.js
-    const fontDataPath = path.join(process.cwd(), 'node_modules', 'pdfkit', 'js', 'data');
-    const originalReadFileSync = fs.readFileSync;
-    
-    // Helper function to restore original readFileSync
-    const restoreReadFileSync = () => {
-      (fs as any).readFileSync = originalReadFileSync;
-    };
-    
+  const pdf = await PDFDocument.create();
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const state: { page: PDFPage; y: number } = {
+    page: pdf.addPage([A4.width, A4.height]),
+    y: A4.height - MARGIN,
+  };
+
+  const draw = (text: string, size: number, bold: boolean, options?: { align?: 'left' | 'center' }) => {
+    addPageIfNeeded(pdf, state, font, fontBold);
+    const safe = toWinAnsiSafe(text);
+    const f = bold ? fontBold : font;
+    const width = f.widthOfTextAtSize(safe, size);
+    const x = options?.align === 'center' ? (A4.width - width) / 2 : MARGIN;
+    state.page.drawText(safe, { x, y: state.y - size, size, font: f, color: rgb(0, 0, 0) });
+    state.y -= size + 6;
+  };
+
+  // Logos
+  const logo1Path = resolveExistingPath(projectRootCandidates('public', 'logo_1.png'));
+  const logo2Path = resolveExistingPath(projectRootCandidates('public', 'logo_2.png'));
+  const logoWidth = 60;
+  const logoHeight = 60;
+  let hasLogo = false;
+  if (logo1Path) {
     try {
-      (fs as any).readFileSync = function(filePath: string, ...args: any[]) {
-        if (filePath.includes('.afm') && (filePath.includes('vendor-chunks') || filePath.includes('.next'))) {
-          const afmFile = path.basename(filePath);
-          const afmPath = path.join(fontDataPath, afmFile);
-          if (fs.existsSync(afmPath)) {
-            return originalReadFileSync.call(this, afmPath, ...args);
-          }
-        }
-        return originalReadFileSync.call(this, filePath, ...args);
-      };
-      
-      const doc = new PDFDocument({ 
-        size: 'A4', 
-        margin: 50,
-        autoFirstPage: true,
-        lang: 'hu',
-      });
-      const buffers: Buffer[] = [];
+      const logoBytes = fs.readFileSync(logo1Path);
+      const img = await pdf.embedPng(logoBytes);
+      const h = (img.height / img.width) * logoWidth;
+      state.page.drawImage(img, { x: MARGIN, y: state.y - h, width: logoWidth, height: h });
+      hasLogo = true;
+    } catch {
+      /* ignore */
+    }
+  }
+  if (logo2Path) {
+    try {
+      const logoBytes = fs.readFileSync(logo2Path);
+      const img = await pdf.embedPng(logoBytes);
+      const h = (img.height / img.width) * logoWidth;
+      state.page.drawImage(img, { x: A4.width - MARGIN - logoWidth, y: state.y - h, width: logoWidth, height: h });
+      hasLogo = true;
+    } catch {
+      /* ignore */
+    }
+  }
+  if (hasLogo) state.y -= logoHeight + 8;
 
-      doc.on('data', buffers.push.bind(buffers));
-      doc.on('end', () => {
-        restoreReadFileSync();
-        const pdfBuffer = Buffer.concat(buffers);
-        resolve(pdfBuffer);
-      });
-      doc.on('error', (error) => {
-        restoreReadFileSync();
-        reject(error);
-      });
+  draw('SEMMELWEIS EGYETEM', 18, true, { align: 'center' });
+  draw('Fogorvostudományi Kar', 15, false, { align: 'center' });
+  draw('Fogpótlástani Klinika', 14, false, { align: 'center' });
+  draw('Igazgató: Prof. Dr. Hermann Péter', 11, false, { align: 'center' });
+  state.y -= 12;
 
-      // Logo betöltése és hozzáadása (ha létezik PNG verzió) - logo_1 balra, logo_2 jobbra
-      const margin = 50;
-      const logoWidth = 60;
-      const logoHeight = 60;
-      const docPageWidth = doc.page.width;
-      let hasLogo = false;
-      
-      try {
-        const logo1Path = path.join(process.cwd(), 'public', 'logo_1.png');
-        if (fs.existsSync(logo1Path)) {
-          // Logo 1 hozzáadása balra igazítva
-          doc.image(logo1Path, margin, doc.y, {
-            fit: [logoWidth, logoHeight],
-          });
-          hasLogo = true;
-        }
-      } catch (error) {
-        console.warn('Logo 1 betöltése sikertelen:', error);
+  const currentDate = new Date().toLocaleDateString('hu-HU', { year: 'numeric', month: 'long', day: 'numeric' });
+  const dateText = toWinAnsiSafe(`Dátum: ${currentDate}`);
+  const dateW = font.widthOfTextAtSize(dateText, 9);
+  state.page.drawText(dateText, { x: A4.width - MARGIN - dateW, y: state.y - 9, size: 9, font, color: rgb(0.4, 0.4, 0.4) });
+  state.y -= 24;
+
+  state.page.drawLine({
+    start: { x: MARGIN, y: state.y },
+    end: { x: 545, y: state.y },
+    thickness: 1,
+    color: rgb(0, 0, 0),
+  });
+  state.y -= 20;
+
+  draw('PÁCIENS ADATOK', 12, true);
+  draw(`Beteg neve: ${patient.nev || 'Név nélküli beteg'}`, 11, false);
+  if (patient.taj) draw(`TAJ szám: ${patient.taj}`, 11, false);
+  state.y -= 16;
+
+  draw('FOGAZATI STÁTUSZ', 12, true);
+  state.y -= 10;
+
+  const fogak = patient.meglevoFogak || {};
+  const upperLeft = [18, 17, 16, 15, 14, 13, 12, 11];
+  const upperRight = [21, 22, 23, 24, 25, 26, 27, 28];
+  const lowerLeft = [48, 47, 46, 45, 44, 43, 42, 41];
+  const lowerRight = [31, 32, 33, 34, 35, 36, 37, 38];
+
+  const pageWidth = 545 - MARGIN;
+  const numTeethPerRow = 8;
+  const spacing = 2;
+  const gapBetweenSides = 10;
+  const cellWidth = Math.floor((pageWidth - numTeethPerRow * spacing - gapBetweenSides) / (numTeethPerRow * 2));
+  const cellHeight = 18;
+  const startX = MARGIN;
+
+  const drawRow = (teeth: number[]) => {
+    let xPos = startX;
+    for (const tooth of teeth) {
+      addPageIfNeeded(pdf, state, font, fontBold);
+      state.page.drawRectangle({
+        x: xPos,
+        y: state.y - cellHeight,
+        width: cellWidth,
+        height: cellHeight,
+        borderColor: rgb(0, 0, 0),
+      });
+      state.page.drawText(tooth.toString(), {
+        x: xPos + 1,
+        y: state.y - 10,
+        size: 7,
+        font: fontBold,
+        color: rgb(0, 0, 0),
+      });
+      const value = fogak[tooth.toString()];
+      const norm = normalizeToothData(value as ToothStatus | undefined);
+      if (norm) {
+        const st: 'M' | 'present' | null = norm.status === 'M' ? 'M' : 'present';
+        drawToothStatus(state.page, xPos, state.y - cellHeight, cellWidth, cellHeight, st, norm.description);
       }
-      
-      try {
-        const logo2Path = path.join(process.cwd(), 'public', 'logo_2.png');
-        if (fs.existsSync(logo2Path)) {
-          // Logo 2 hozzáadása jobbra igazítva
-          const logo2X = docPageWidth - logoWidth - margin;
-          doc.image(logo2Path, logo2X, doc.y, {
-            fit: [logoWidth, logoHeight],
-          });
-          hasLogo = true;
-        }
-      } catch (error) {
-        console.warn('Logo 2 betöltése sikertelen:', error);
-      }
-      
-      if (hasLogo) {
-        doc.moveDown(1);
-      }
+      xPos += cellWidth + spacing;
+    }
+  };
 
-      // Header
-      doc.fontSize(18).font('Helvetica-Bold').fillColor('#000000').text('SEMMELWEIS EGYETEM', { align: 'center' });
-      doc.moveDown(0.3);
-      doc.fontSize(15).font('Helvetica').text('Fogorvostudományi Kar', { align: 'center' });
-      doc.moveDown(0.2);
-      doc.fontSize(14).text('Fogpótlástani Klinika', { align: 'center' });
-      doc.moveDown(0.2);
-      doc.fontSize(11).text('Igazgató: Prof. Dr. Hermann Péter', { align: 'center' });
-      doc.moveDown(1.2);
-      
-      // Date
-      const currentDate = new Date().toLocaleDateString('hu-HU', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      });
-      doc.fontSize(9).font('Helvetica').fillColor('#666666').text(`Dátum: ${currentDate}`, { align: 'right' });
-      doc.moveDown(1);
-      
-      // Separator line
-      doc.moveTo(50, doc.y).lineTo(545, doc.y).lineWidth(1).stroke('#000000');
-      doc.moveDown(1.5);
+  drawRow(upperLeft);
+  let xPos = startX + (cellWidth + spacing) * 8 + gapBetweenSides;
+  for (const tooth of upperRight) {
+    addPageIfNeeded(pdf, state, font, fontBold);
+    state.page.drawRectangle({ x: xPos, y: state.y - cellHeight, width: cellWidth, height: cellHeight, borderColor: rgb(0, 0, 0) });
+    state.page.drawText(tooth.toString(), { x: xPos + 1, y: state.y - 10, size: 7, font: fontBold, color: rgb(0, 0, 0) });
+    const value = fogak[tooth.toString()];
+    const norm = normalizeToothData(value as ToothStatus | undefined);
+    if (norm) {
+      const st: 'M' | 'present' | null = norm.status === 'M' ? 'M' : 'present';
+      drawToothStatus(state.page, xPos, state.y - cellHeight, cellWidth, cellHeight, st, norm.description);
+    }
+    xPos += cellWidth + spacing;
+  }
+  state.y -= cellHeight + 10;
 
-      // Patient Info
-      doc.fontSize(12).font('Helvetica-Bold').fillColor('#000000').text('PÁCIENS ADATOK', 50, doc.y);
-      doc.moveDown(0.8);
-      doc.fontSize(11).font('Helvetica').fillColor('#000000');
-      doc.text(`Beteg neve: ${patient.nev || 'Név nélküli beteg'}`, 50, doc.y);
-      if (patient.taj) {
-        doc.moveDown(0.5);
-        doc.text(`TAJ szám: ${patient.taj}`, 50, doc.y);
-      }
-      doc.moveDown(1.5);
+  drawRow(lowerLeft);
+  xPos = startX + (cellWidth + spacing) * 8 + gapBetweenSides;
+  for (const tooth of lowerRight) {
+    addPageIfNeeded(pdf, state, font, fontBold);
+    state.page.drawRectangle({ x: xPos, y: state.y - cellHeight, width: cellWidth, height: cellHeight, borderColor: rgb(0, 0, 0) });
+    state.page.drawText(tooth.toString(), { x: xPos + 1, y: state.y - 10, size: 7, font: fontBold, color: rgb(0, 0, 0) });
+    const value = fogak[tooth.toString()];
+    const norm = normalizeToothData(value as ToothStatus | undefined);
+    if (norm) {
+      const st: 'M' | 'present' | null = norm.status === 'M' ? 'M' : 'present';
+      drawToothStatus(state.page, xPos, state.y - cellHeight, cellWidth, cellHeight, st, norm.description);
+    }
+    xPos += cellWidth + spacing;
+  }
+  state.y -= cellHeight + 18;
 
-      // Dental Status Section
-      doc.fontSize(12).font('Helvetica-Bold').fillColor('#000000').text('FOGAZATI STÁTUSZ', 50, doc.y);
-      doc.moveDown(0.8);
-      
-      const fogak = patient.meglevoFogak || {};
-      
-      // Zsigmondy Cross - Compact table format fitting page width
-      const upperLeft = [18, 17, 16, 15, 14, 13, 12, 11];
-      const upperRight = [21, 22, 23, 24, 25, 26, 27, 28];
-      const lowerLeft = [48, 47, 46, 45, 44, 43, 42, 41];
-      const lowerRight = [31, 32, 33, 34, 35, 36, 37, 38];
+  const legend = toWinAnsiSafe(
+    'Jelentés: ✓ = Megvan (zöld), ? = Kérdéses (sárga), ! = Reménytelen (piros), X = Hiányzik (szürke)'
+  );
+  state.page.drawText(legend, { x: MARGIN, y: state.y - 8, size: 8, font, color: rgb(0.4, 0.4, 0.4) });
+  state.y -= 20;
 
-      // Helper function to draw tooth status symbol
-      const drawToothStatus = (doc: PDFKit.PDFDocument, x: number, y: number, cellWidth: number, cellHeight: number, status: 'M' | 'present' | null, description?: string) => {
-        const centerX = x + cellWidth / 2;
-        const centerY = y + cellHeight / 2;
-        const size = 7; // Symbol size
-        
-        if (status === 'M') {
-          // Draw gray X
-          doc.strokeColor('#6b7280').lineWidth(2);
-          doc.moveTo(centerX - size, centerY - size)
-            .lineTo(centerX + size, centerY + size)
-            .moveTo(centerX + size, centerY - size)
-            .lineTo(centerX - size, centerY + size)
-            .stroke();
-        } else if (status === 'present') {
-          // Ellenőrizzük a szabadszavas leírást az ikon meghatározáshoz
-          const descriptionLower = (description || '').toLowerCase();
-          const hasKerdeses = descriptionLower.includes('kérdéses');
-          const hasRemenytelen = descriptionLower.includes('reménytelen');
-          
-          if (hasRemenytelen) {
-            // Reménytelen → piros felkiáltójel
-            doc.strokeColor('#dc2626').lineWidth(2.5);
-            doc.fillColor('#dc2626');
-            // Felkiáltójel függőleges vonal
-            doc.moveTo(centerX, centerY - size)
-              .lineTo(centerX, centerY + size / 3)
-              .stroke();
-            // Pont alul
-            doc.circle(centerX, centerY + size * 0.8, 1.8).fill();
-          } else if (hasKerdeses) {
-            // Kérdéses → sárga kérdőjel
-            doc.strokeColor('#eab308').lineWidth(2);
-            doc.fillColor('#eab308');
-            // Kérdőjel felső része (körív)
-            const radius = size / 2.2;
-            doc.circle(centerX, centerY - size / 2, radius).stroke();
-            // Kérdőjel görbe alsó része
-            doc.moveTo(centerX - size / 3, centerY + size / 4)
-              .quadraticCurveTo(centerX, centerY + size / 2, centerX + size / 3, centerY + size / 4)
-              .stroke();
-            // Pont alul
-            doc.circle(centerX, centerY + size * 0.75, 1.5).fill();
-          } else {
-            // Normál → zöld pipa
-            doc.strokeColor('#10b981').lineWidth(2.5);
-            doc.moveTo(centerX - size, centerY)
-              .lineTo(centerX - size / 3, centerY + size)
-              .lineTo(centerX + size, centerY - size)
-              .stroke();
-          }
-        }
-      };
-
-      // Calculate cell width to fit all teeth in page width
-      const pageWidth = 545 - 50; // Available width
-      const numTeethPerRow = 8; // 8 teeth per row
-      const spacing = 2; // Space between cells
-      const gapBetweenSides = 10; // Gap between left and right sides
-      const cellWidth = Math.floor((pageWidth - (numTeethPerRow * spacing) - gapBetweenSides) / (numTeethPerRow * 2));
-      const cellHeight = 18;
-      const startX = 50;
-      
-      const tableY = doc.y;
-      
-      // Upper jaw - single row with left and right sides
-      let xPos = startX;
-      
-      // Upper left row (18-11, fordítva: 2. kvadráns, 11 az utolsó)
-      upperLeft.forEach(tooth => {
-        doc.rect(xPos, tableY, cellWidth, cellHeight).stroke('#000000');
-        doc.fontSize(7).font('Helvetica-Bold').fillColor('#000000').text(tooth.toString(), xPos + 1, tableY + 1);
-        const toothStr = tooth.toString();
-        const value = fogak[toothStr];
-        const normalized = normalizeToothData(value);
-        if (normalized) {
-          const status = normalized.status === 'M' ? 'M' : 'present';
-          drawToothStatus(doc, xPos, tableY, cellWidth, cellHeight, status, normalized.description);
-        }
-        xPos += cellWidth + spacing;
-      });
-      
-      // Space between left and right
-      xPos += gapBetweenSides;
-      
-      // Upper right row (21-28, 1. kvadráns)
-      upperRight.forEach(tooth => {
-        doc.rect(xPos, tableY, cellWidth, cellHeight).stroke('#000000');
-        doc.fontSize(7).font('Helvetica-Bold').fillColor('#000000').text(tooth.toString(), xPos + 1, tableY + 1);
-        const toothStr = tooth.toString();
-        const value = fogak[toothStr];
-        const normalized = normalizeToothData(value);
-        if (normalized) {
-          const status = normalized.status === 'M' ? 'M' : 'present';
-          drawToothStatus(doc, xPos, tableY, cellWidth, cellHeight, status, normalized.description);
-        }
-        xPos += cellWidth + spacing;
-      });
-      
-      doc.y = tableY + cellHeight + 10;
-
-      // Lower jaw - single row with left and right sides
-      const lowerTableY = doc.y;
-      xPos = startX;
-      
-      // Lower left row (48-41, fordítva: 4. kvadráns)
-      lowerLeft.forEach(tooth => {
-        doc.rect(xPos, lowerTableY, cellWidth, cellHeight).stroke('#000000');
-        doc.fontSize(7).font('Helvetica-Bold').fillColor('#000000').text(tooth.toString(), xPos + 1, lowerTableY + 1);
-        const toothStr = tooth.toString();
-        const value = fogak[toothStr];
-        const normalized = normalizeToothData(value);
-        if (normalized) {
-          const status = normalized.status === 'M' ? 'M' : 'present';
-          drawToothStatus(doc, xPos, lowerTableY, cellWidth, cellHeight, status, normalized.description);
-        }
-        xPos += cellWidth + spacing;
-      });
-      
-      // Space between left and right
-      xPos += gapBetweenSides;
-      
-      // Lower right row (31-38)
-      lowerRight.forEach(tooth => {
-        doc.rect(xPos, lowerTableY, cellWidth, cellHeight).stroke('#000000');
-        doc.fontSize(7).font('Helvetica-Bold').fillColor('#000000').text(tooth.toString(), xPos + 1, lowerTableY + 1);
-        const toothStr = tooth.toString();
-        const value = fogak[toothStr];
-        const normalized = normalizeToothData(value);
-        if (normalized) {
-          const status = normalized.status === 'M' ? 'M' : 'present';
-          drawToothStatus(doc, xPos, lowerTableY, cellWidth, cellHeight, status, normalized.description);
-        }
-        xPos += cellWidth + spacing;
-      });
-      
-      doc.y = lowerTableY + cellHeight + 15;
-
-      // Legend
-      doc.fontSize(8).font('Helvetica').fillColor('#666666');
-      doc.text('Jelentés: ✓ = Megvan (zöld), ? = Kérdéses (sárga), ! = Reménytelen (piros), X = Hiányzik (szürke)', 50, doc.y, { width: 495 });
-      doc.moveDown(1);
-
-      // DMF-T Index
-      let dCount = 0;
-      let fCount = 0;
-      let mCount = 0;
-
-      Object.values(fogak).forEach(value => {
-        const normalized = normalizeToothData(value);
-        if (normalized) {
-          if (normalized.status === 'D') dCount++;
-          else if (normalized.status === 'F') fCount++;
-          else if (normalized.status === 'M') mCount++;
-        }
-      });
-
-      const dmft = dCount + fCount + mCount;
-
-      const dmftY = doc.y;
-      doc.rect(50, dmftY, 495, 50).fillAndStroke('#e0f2fe', '#93c5fd');
-      doc.fontSize(11).font('Helvetica-Bold').fillColor('#000000').text('DMF-T INDEX', 60, dmftY + 8);
-      
-      doc.fontSize(10).font('Helvetica').fillColor('#dc2626').text(`D (szuvas): ${dCount}`, 60, dmftY + 25);
-      doc.fillColor('#2563eb').text(`F (tömött): ${fCount}`, 200, dmftY + 25);
-      doc.fillColor('#6b7280').text(`M (hiányzik): ${mCount}`, 340, dmftY + 25);
-      doc.font('Helvetica-Bold').fillColor('#000000').text(`DMF-T összesen: ${dmft} / 32`, 450, dmftY + 25);
-      
-      doc.y = dmftY + 60;
-
-      // Tooth Details - Separated by upper and lower jaw
-      // Helper function to format tooth details
-      const formatToothDetail = (toothNumber: string, normalized: { status?: 'D' | 'F' | 'M'; description?: string } | null): string => {
-        if (!normalized) return '';
-        
-        let description = normalized.description || '';
-        const status = normalized.status;
-
-        // Ha nincs leírás, akkor a státusz jelentését írjuk ki
-        if (!description && status) {
-          if (status === 'D') description = 'Szuvas';
-          else if (status === 'F') description = 'Tömött';
-          else if (status === 'M') description = 'Hiányzik';
-        }
-
-        // Format: "fogszám: leírás (DMF-T jelzés)"
-        let statusText = '';
-        if (status === 'D') statusText = ' (D)';
-        else if (status === 'F') statusText = ' (F)';
-        else if (status === 'M') statusText = ' (M)';
-
-        return `${toothNumber}: ${description}${statusText}`;
-      };
-
-      // Upper teeth (11-18, 21-28)
-      const upperTeeth = [11, 12, 13, 14, 15, 16, 17, 18, 21, 22, 23, 24, 25, 26, 27, 28];
-      const upperTeethWithData = upperTeeth
-        .map(t => t.toString())
-        .filter(toothNumber => {
-          const value = fogak[toothNumber];
-          const normalized = normalizeToothData(value);
-          return normalized && (normalized.description || normalized.status);
-        })
-        .sort((a, b) => parseInt(a) - parseInt(b));
-
-      if (upperTeethWithData.length > 0) {
-        doc.moveDown(0.5);
-        doc.fontSize(11).font('Helvetica-Bold').fillColor('#000000').text('FELSÖ FOGAK', 50, doc.y);
-        doc.moveDown(0.5);
-
-        upperTeethWithData.forEach(toothNumber => {
-          const value = fogak[toothNumber];
-          const normalized = normalizeToothData(value);
-          const formattedText = formatToothDetail(toothNumber, normalized);
-          
-          if (formattedText) {
-            doc.fontSize(10).font('Helvetica').fillColor('#000000').text(formattedText, 50, doc.y, { width: 495 });
-            doc.moveDown(0.4);
-          }
-        });
-
-        // Fábián- és Fejérdy-féle protetikai foghiányosztályozás for upper jaw
-        if (patient.fabianFejerdyProtetikaiOsztalyFelso) {
-          doc.moveDown(0.5);
-          doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000').text('Fábián- és Fejérdy-féle protetikai foghiányosztályozás:', 50, doc.y);
-          doc.fontSize(10).font('Helvetica').fillColor('#000000').text(patient.fabianFejerdyProtetikaiOsztalyFelso, 50, doc.y);
-          doc.moveDown(0.5);
-        } else {
-          doc.moveDown(0.5);
-          doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000').text('Fábián- és Fejérdy-féle protetikai foghiányosztályozás:', 50, doc.y);
-          doc.moveDown(0.5);
-        }
-      }
-
-      // Lower teeth (31-38, 41-48)
-      const lowerTeeth = [31, 32, 33, 34, 35, 36, 37, 38, 41, 42, 43, 44, 45, 46, 47, 48];
-      const lowerTeethWithData = lowerTeeth
-        .map(t => t.toString())
-        .filter(toothNumber => {
-          const value = fogak[toothNumber];
-          const normalized = normalizeToothData(value);
-          return normalized && (normalized.description || normalized.status);
-        })
-        .sort((a, b) => parseInt(a) - parseInt(b));
-
-      if (lowerTeethWithData.length > 0) {
-        doc.moveDown(0.5);
-        doc.fontSize(11).font('Helvetica-Bold').fillColor('#000000').text('ALSÓ FOGAK', 50, doc.y);
-        doc.moveDown(0.5);
-
-        lowerTeethWithData.forEach(toothNumber => {
-          const value = fogak[toothNumber];
-          const normalized = normalizeToothData(value);
-          const formattedText = formatToothDetail(toothNumber, normalized);
-          
-          if (formattedText) {
-            doc.fontSize(10).font('Helvetica').fillColor('#000000').text(formattedText, 50, doc.y, { width: 495 });
-            doc.moveDown(0.4);
-          }
-        });
-
-        // Fábián- és Fejérdy-féle protetikai foghiányosztályozás for lower jaw
-        if (patient.fabianFejerdyProtetikaiOsztalyAlso) {
-          doc.moveDown(0.5);
-          doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000').text('Fábián- és Fejérdy-féle protetikai foghiányosztályozás:', 50, doc.y);
-          doc.fontSize(10).font('Helvetica').fillColor('#000000').text(patient.fabianFejerdyProtetikaiOsztalyAlso, 50, doc.y);
-          doc.moveDown(0.5);
-        } else {
-          doc.moveDown(0.5);
-          doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000').text('Fábián- és Fejérdy-féle protetikai foghiányosztályozás:', 50, doc.y);
-          doc.moveDown(0.5);
-        }
-      }
-
-
-      // Implants
-      if ((patient.meglevoImplantatumok && Object.keys(patient.meglevoImplantatumok).length > 0) || patient.nemIsmertPoziciokbanImplantatum) {
-        doc.moveDown(1);
-        doc.fontSize(11).font('Helvetica-Bold').fillColor('#000000').text('IMPLANTATUMOK', 50, doc.y);
-        doc.moveDown(0.5);
-        
-        if (patient.meglevoImplantatumok && Object.keys(patient.meglevoImplantatumok).length > 0) {
-          Object.keys(patient.meglevoImplantatumok)
-            .sort((a, b) => parseInt(a) - parseInt(b))
-            .forEach(toothNumber => {
-              doc.fontSize(10).font('Helvetica').fillColor('#000000').text(`${toothNumber}. fog: ${patient.meglevoImplantatumok![toothNumber]}`, 50, doc.y);
-              doc.moveDown(0.4);
-            });
-        }
-        
-        if (patient.nemIsmertPoziciokbanImplantatum) {
-          doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000').text('Nem ismert pozíciókban implantátum', 50, doc.y);
-          doc.moveDown(0.3);
-          if (patient.nemIsmertPoziciokbanImplantatumRészletek) {
-            doc.fontSize(9).font('Helvetica').fillColor('#4b5563').text(patient.nemIsmertPoziciokbanImplantatumRészletek, 60, doc.y, { width: 485 });
-            doc.moveDown(0.4);
-          }
-        }
-      }
-
-      // Footer
-      const footerY = Math.max(doc.y + 40, 750);
-      doc.moveTo(50, footerY).lineTo(545, footerY).lineWidth(0.5).stroke('#000000');
-      doc.fontSize(7).font('Helvetica').fillColor('#000000');
-      
-      // Left footer
-      doc.text('Cím: 1088 Budapest, Szentkirályi utca 47.', 50, footerY + 8);
-      doc.text('Postacím: 1085 Budapest, Üllői út 26.; 1428 Budapest Pf. 2.', 50, footerY + 16);
-      doc.text('E-mail: fogpotlastan@dent.semmelweis-univ.hu', 50, footerY + 24);
-      
-      // Right footer
-      const telText = 'Tel: 06-1 338-4380, 06-1 459-1500/59326';
-      const telWidth = doc.widthOfString(telText);
-      doc.text(telText, 545 - telWidth, footerY + 8);
-      
-      const faxText = 'Fax: (06-1) 317-5270';
-      const faxWidth = doc.widthOfString(faxText);
-      doc.text(faxText, 545 - faxWidth, footerY + 16);
-      
-      const webText = 'web: http://semmelweis-hu/fogpotlastan';
-      const webWidth = doc.widthOfString(webText);
-      doc.text(webText, 545 - webWidth, footerY + 24);
-
-      doc.end();
-    } catch (error) {
-      restoreReadFileSync();
-      reject(error);
+  let dCount = 0,
+    fCount = 0,
+    mCount = 0;
+  Object.values(fogak).forEach((value) => {
+    const norm = normalizeToothData(value as ToothStatus | undefined);
+    if (norm) {
+      if (norm.status === 'D') dCount++;
+      else if (norm.status === 'F') fCount++;
+      else if (norm.status === 'M') mCount++;
     }
   });
+  const dmft = dCount + fCount + mCount;
+
+  addPageIfNeeded(pdf, state, font, fontBold);
+  state.page.drawRectangle({
+    x: MARGIN,
+    y: state.y - 50,
+    width: 495,
+    height: 50,
+    color: rgb(0.88, 0.95, 1),
+    borderColor: rgb(0.58, 0.77, 0.99),
+  });
+  state.page.drawText('DMF-T INDEX', { x: 60, y: state.y - 18, size: 11, font: fontBold, color: rgb(0, 0, 0) });
+  state.page.drawText(`D (szuvas): ${dCount}`, { x: 60, y: state.y - 35, size: 10, font, color: rgb(0.86, 0.15, 0.15) });
+  state.page.drawText(`F (tömött): ${fCount}`, { x: 200, y: state.y - 35, size: 10, font, color: rgb(0.15, 0.39, 0.92) });
+  state.page.drawText(`M (hiányzik): ${mCount}`, { x: 340, y: state.y - 35, size: 10, font, color: rgb(0.42, 0.45, 0.5) });
+  state.page.drawText(toWinAnsiSafe(`DMF-T összesen: ${dmft} / 32`), {
+    x: 450,
+    y: state.y - 35,
+    size: 10,
+    font: fontBold,
+    color: rgb(0, 0, 0),
+  });
+  state.y -= 60;
+
+  const formatToothDetail = (
+    toothNumber: string,
+    norm: { status?: 'D' | 'F' | 'M'; description?: string } | null
+  ): string => {
+    if (!norm) return '';
+    let desc = norm.description || '';
+    if (!desc && norm.status) {
+      if (norm.status === 'D') desc = 'Szuvas';
+      else if (norm.status === 'F') desc = 'Tömött';
+      else if (norm.status === 'M') desc = 'Hiányzik';
+    }
+    const st = norm.status === 'D' ? ' (D)' : norm.status === 'F' ? ' (F)' : norm.status === 'M' ? ' (M)' : '';
+    return `${toothNumber}: ${desc}${st}`;
+  };
+
+  const upperTeeth = [11, 12, 13, 14, 15, 16, 17, 18, 21, 22, 23, 24, 25, 26, 27, 28];
+  const upperTeethWithData = upperTeeth
+    .map((t) => t.toString())
+    .filter((num) => {
+      const v = fogak[num];
+      const n = normalizeToothData(v as ToothStatus | undefined);
+      return n && (n.description || n.status);
+    })
+    .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+
+  if (upperTeethWithData.length > 0) {
+    state.y -= 8;
+    draw('FELSÖ FOGAK', 11, true);
+    for (const num of upperTeethWithData) {
+      const n = normalizeToothData(fogak[num] as ToothStatus | undefined);
+      const line = formatToothDetail(num, n);
+      if (line) {
+        addPageIfNeeded(pdf, state, font, fontBold);
+        state.page.drawText(toWinAnsiSafe(line), { x: MARGIN, y: state.y - 10, size: 10, font, color: rgb(0, 0, 0) });
+        state.y -= 14;
+      }
+    }
+    draw('Fábián- és Fejérdy-féle protetikai foghiányosztályozás:', 10, true);
+    if (patient.fabianFejerdyProtetikaiOsztalyFelso) {
+      state.page.drawText(toWinAnsiSafe(patient.fabianFejerdyProtetikaiOsztalyFelso), {
+        x: MARGIN,
+        y: state.y - 10,
+        size: 10,
+        font,
+        color: rgb(0, 0, 0),
+      });
+      state.y -= 14;
+    }
+    state.y -= 8;
+  }
+
+  const lowerTeeth = [31, 32, 33, 34, 35, 36, 37, 38, 41, 42, 43, 44, 45, 46, 47, 48];
+  const lowerTeethWithData = lowerTeeth
+    .map((t) => t.toString())
+    .filter((num) => {
+      const v = fogak[num];
+      const n = normalizeToothData(v as ToothStatus | undefined);
+      return n && (n.description || n.status);
+    })
+    .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+
+  if (lowerTeethWithData.length > 0) {
+    draw('ALSÓ FOGAK', 11, true);
+    for (const num of lowerTeethWithData) {
+      const n = normalizeToothData(fogak[num] as ToothStatus | undefined);
+      const line = formatToothDetail(num, n);
+      if (line) {
+        addPageIfNeeded(pdf, state, font, fontBold);
+        state.page.drawText(toWinAnsiSafe(line), { x: MARGIN, y: state.y - 10, size: 10, font, color: rgb(0, 0, 0) });
+        state.y -= 14;
+      }
+    }
+    draw('Fábián- és Fejérdy-féle protetikai foghiányosztályozás:', 10, true);
+    if (patient.fabianFejerdyProtetikaiOsztalyAlso) {
+      state.page.drawText(toWinAnsiSafe(patient.fabianFejerdyProtetikaiOsztalyAlso), {
+        x: MARGIN,
+        y: state.y - 10,
+        size: 10,
+        font,
+        color: rgb(0, 0, 0),
+      });
+      state.y -= 14;
+    }
+    state.y -= 8;
+  }
+
+  if (
+    (patient.meglevoImplantatumok && Object.keys(patient.meglevoImplantatumok).length > 0) ||
+    patient.nemIsmertPoziciokbanImplantatum
+  ) {
+    state.y -= 12;
+    draw('IMPLANTATUMOK', 11, true);
+    if (patient.meglevoImplantatumok && Object.keys(patient.meglevoImplantatumok).length > 0) {
+      for (const num of Object.keys(patient.meglevoImplantatumok).sort((a, b) => parseInt(a, 10) - parseInt(b, 10))) {
+        addPageIfNeeded(pdf, state, font, fontBold);
+        state.page.drawText(toWinAnsiSafe(`${num}. fog: ${patient.meglevoImplantatumok[num]}`), {
+          x: MARGIN,
+          y: state.y - 10,
+          size: 10,
+          font,
+          color: rgb(0, 0, 0),
+        });
+        state.y -= 14;
+      }
+    }
+    if (patient.nemIsmertPoziciokbanImplantatum) {
+      draw('Nem ismert pozíciókban implantátum', 10, true);
+      if (patient.nemIsmertPoziciokbanImplantatumRészletek) {
+        state.page.drawText(toWinAnsiSafe(patient.nemIsmertPoziciokbanImplantatumRészletek), {
+          x: 60,
+          y: state.y - 9,
+          size: 9,
+          font,
+          color: rgb(0.29, 0.34, 0.39),
+        });
+        state.y -= 16;
+      }
+    }
+  }
+
+  const footerY = Math.max(state.y - 20, 80);
+  state.page.drawLine({
+    start: { x: MARGIN, y: footerY },
+    end: { x: 545, y: footerY },
+    thickness: 0.5,
+    color: rgb(0, 0, 0),
+  });
+  state.page.drawText('Cím: 1088 Budapest, Szentkirályi utca 47.', { x: MARGIN, y: footerY - 8, size: 7, font, color: rgb(0, 0, 0) });
+  state.page.drawText('Postacím: 1085 Budapest, Üllői út 26.; 1428 Budapest Pf. 2.', {
+    x: MARGIN,
+    y: footerY - 16,
+    size: 7,
+    font,
+    color: rgb(0, 0, 0),
+  });
+  state.page.drawText('E-mail: fogpotlastan@dent.semmelweis-univ.hu', {
+    x: MARGIN,
+    y: footerY - 24,
+    size: 7,
+    font,
+    color: rgb(0, 0, 0),
+  });
+  const telText = 'Tel: 06-1 338-4380, 06-1 459-1500/59326';
+  const telW = font.widthOfTextAtSize(telText, 7);
+  state.page.drawText(telText, { x: 545 - telW, y: footerY - 8, size: 7, font, color: rgb(0, 0, 0) });
+  const faxText = 'Fax: (06-1) 317-5270';
+  const faxW = font.widthOfTextAtSize(faxText, 7);
+  state.page.drawText(faxText, { x: 545 - faxW, y: footerY - 16, size: 7, font, color: rgb(0, 0, 0) });
+  const webText = 'web: http://semmelweis-hu/fogpotlastan';
+  const webW = font.widthOfTextAtSize(webText, 7);
+  state.page.drawText(webText, { x: 545 - webW, y: footerY - 24, size: 7, font, color: rgb(0, 0, 0) });
+
+  const bytes = await pdf.save();
+  return Buffer.from(bytes);
 }
