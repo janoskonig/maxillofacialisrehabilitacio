@@ -3,7 +3,7 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Logo } from '@/components/Logo';
-import { LogOut, LayoutDashboard, Calendar, FileText, User, MessageCircle, Menu, X } from 'lucide-react';
+import { LogOut, LayoutDashboard, Calendar, FileText, User, MessageCircle, Menu, X, ClipboardList } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
 
 interface PortalLayoutProps {
@@ -143,6 +143,18 @@ export function PortalLayout({ children }: PortalLayoutProps) {
                   Dokumentumok
                 </a>
                 <a
+                  href="/patient-portal/ohip14"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-l-4 transition-colors ${
+                    pathname === '/patient-portal/ohip14'
+                      ? 'text-medical-primary border-medical-primary bg-medical-primary/5'
+                      : 'text-gray-700 border-transparent hover:text-medical-primary hover:border-medical-primary hover:bg-gray-50'
+                  }`}
+                >
+                  <ClipboardList className="w-4 h-4" />
+                  OHIP-14 kérdőív
+                </a>
+                <a
                   href="/patient-portal/messages"
                   onClick={() => setMobileMenuOpen(false)}
                   className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-l-4 transition-colors ${
@@ -206,6 +218,18 @@ export function PortalLayout({ children }: PortalLayoutProps) {
             >
               <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               Dokumentumok
+            </a>
+            <a
+              href="/patient-portal/ohip14"
+              className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
+                pathname === '/patient-portal/ohip14'
+                  ? 'text-medical-primary border-medical-primary'
+                  : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
+              }`}
+            >
+              <ClipboardList className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="hidden xs:inline">OHIP-14</span>
+              <span className="xs:hidden">OHIP</span>
             </a>
             <a
               href="/patient-portal/messages"

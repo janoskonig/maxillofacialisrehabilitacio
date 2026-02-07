@@ -95,7 +95,6 @@ export async function GET(
     );
 
     if (result.rows.length === 0) {
-      // Return empty response object
       return NextResponse.json({
         response: {
           patientId,
@@ -103,6 +102,7 @@ export async function GET(
           timepoint,
           stageCode: null,
           completedByPatient: true,
+          completed: false as const,
           q1_functional_limitation: null,
           q2_functional_limitation: null,
           q3_physical_pain: null,
@@ -122,41 +122,11 @@ export async function GET(
     }
 
     const row = result.rows[0];
-    const response: OHIP14Response = {
-      id: row.id,
-      patientId: row.patientId,
-      episodeId: row.episodeId,
+    // Patient portal: never return answers or scores after completion – one fill per stage
+    const response = {
       timepoint: row.timepoint,
       completedAt: row.completedAt?.toISOString(),
-      completedByPatient: row.completedByPatient,
-      q1_functional_limitation: row.q1_functional_limitation,
-      q2_functional_limitation: row.q2_functional_limitation,
-      q3_physical_pain: row.q3_physical_pain,
-      q4_physical_pain: row.q4_physical_pain,
-      q5_psychological_discomfort: row.q5_psychological_discomfort,
-      q6_psychological_discomfort: row.q6_psychological_discomfort,
-      q7_physical_disability: row.q7_physical_disability,
-      q8_physical_disability: row.q8_physical_disability,
-      q9_psychological_disability: row.q9_psychological_disability,
-      q10_psychological_disability: row.q10_psychological_disability,
-      q11_social_disability: row.q11_social_disability,
-      q12_social_disability: row.q12_social_disability,
-      q13_handicap: row.q13_handicap,
-      q14_handicap: row.q14_handicap,
-      totalScore: row.totalScore,
-      functionalLimitationScore: row.functionalLimitationScore,
-      physicalPainScore: row.physicalPainScore,
-      psychologicalDiscomfortScore: row.psychologicalDiscomfortScore,
-      physicalDisabilityScore: row.physicalDisabilityScore,
-      psychologicalDisabilityScore: row.psychologicalDisabilityScore,
-      socialDisabilityScore: row.socialDisabilityScore,
-      handicapScore: row.handicapScore,
-      notes: row.notes,
-      lockedAt: row.lockedAt?.toISOString(),
-      createdAt: row.createdAt?.toISOString(),
-      updatedAt: row.updatedAt?.toISOString(),
-      createdBy: row.createdBy,
-      updatedBy: row.updatedBy,
+      completed: true as const,
     };
 
     return NextResponse.json({ response });
@@ -247,14 +217,12 @@ export async function POST(
       [patientId, timepoint, activeEpisodeId]
     );
 
+    // Patient portal: one fill per stage – no update, no viewing after
     if (existingResult.rows.length > 0) {
-      const existing = existingResult.rows[0];
-      if (existing.locked_at) {
-        return NextResponse.json(
-          { error: 'Ez a kérdőív le van zárva, nem módosítható' },
-          { status: 403 }
-        );
-      }
+      return NextResponse.json(
+        { error: 'Egy stádiumban csak egyszer töltheti ki a kérdőívet. A kérdőív már kitöltve.' },
+        { status: 409 }
+      );
     }
 
     const stageCode = await getCurrentStageCodeForOhip(pool, patientId, activeEpisodeId);

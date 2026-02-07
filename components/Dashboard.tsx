@@ -105,12 +105,16 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
       .catch(() => setLongInPreparatory([]));
   }, [canSeeStages]);
 
-  // GANTT adatok (összes beteg) – csak ha a GANTT fül aktív és van jogosultság
+  // GANTT adatok (összes beteg) – csak az utolsó 3 hónap, ha a GANTT fül aktív
   useEffect(() => {
     if (!canSeeStages || activeTab !== 'gantt') return;
     setGanttLoading(true);
+    const to = new Date();
+    const from = new Date(to);
+    from.setMonth(from.getMonth() - 3);
+    const q = new URLSearchParams({ status: 'all', from: from.toISOString(), to: to.toISOString() });
     Promise.all([
-      fetch('/api/patients/stages/gantt?status=all', { credentials: 'include' }).then((r) =>
+      fetch(`/api/patients/stages/gantt?${q.toString()}`, { credentials: 'include' }).then((r) =>
         r.ok ? r.json() : { episodes: [], intervals: [] }
       ),
       fetch('/api/stage-catalog', { credentials: 'include' }).then((r) =>

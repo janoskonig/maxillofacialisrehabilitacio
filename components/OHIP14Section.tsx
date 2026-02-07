@@ -30,6 +30,8 @@ export function OHIP14Section({
   const [saving, setSaving] = useState<OHIP14Timepoint | null>(null);
   const [activeTimepoint, setActiveTimepoint] = useState<OHIP14Timepoint | null>(null);
   const [currentStage, setCurrentStage] = useState<PatientStage | null>(null);
+  /** Betegportál: mely timepointok már kitöltve (egyszer kitölthető, utána nem látható) */
+  const [completedTimepoints, setCompletedTimepoints] = useState<OHIP14Timepoint[]>([]);
 
   // Timepoint to stage mapping
   const timepointStageMap: Record<OHIP14Timepoint, PatientStage> = {
@@ -42,6 +44,16 @@ export function OHIP14Section({
     fetchCurrentStage();
     fetchResponses();
   }, [patientId]);
+
+  // Betegportál: automatikusan a jelenlegi stádiumhoz tartozó timepoint legyen kiválasztva
+  const currentTimepointForStage: OHIP14Timepoint | null = currentStage
+    ? (['T0', 'T1', 'T2'] as const).find((tp) => timepointStageMap[tp] === currentStage) ?? null
+    : null;
+  useEffect(() => {
+    if (isPatientPortal && currentTimepointForStage) {
+      setActiveTimepoint(currentTimepointForStage);
+    }
+  }, [isPatientPortal, currentTimepointForStage]);
 
   const fetchCurrentStage = async () => {
     try {
@@ -113,15 +125,28 @@ export function OHIP14Section({
         T2: null,
       };
 
-      if (data.responses && Array.isArray(data.responses)) {
-        data.responses.forEach((resp: OHIP14Response) => {
-          if (resp.timepoint === 'T0' || resp.timepoint === 'T1' || resp.timepoint === 'T2') {
-            responsesMap[resp.timepoint] = resp;
-          }
-        });
+      if (isPatientPortal) {
+        // Betegportál: csak azt tároljuk, mely timepointok kitöltve; a válaszokat nem kapjuk meg
+        const completed: OHIP14Timepoint[] = [];
+        if (data.responses && Array.isArray(data.responses)) {
+          data.responses.forEach((r: { timepoint?: string }) => {
+            if (r.timepoint === 'T0' || r.timepoint === 'T1' || r.timepoint === 'T2') {
+              completed.push(r.timepoint);
+            }
+          });
+        }
+        setCompletedTimepoints(completed);
+        setResponses(responsesMap);
+      } else {
+        if (data.responses && Array.isArray(data.responses)) {
+          data.responses.forEach((resp: OHIP14Response) => {
+            if (resp.timepoint === 'T0' || resp.timepoint === 'T1' || resp.timepoint === 'T2') {
+              responsesMap[resp.timepoint] = resp;
+            }
+          });
+        }
+        setResponses(responsesMap);
       }
-
-      setResponses(responsesMap);
     } catch (error) {
       console.error('Error fetching OHIP-14 responses:', error);
       showToast('Hiba a válaszok betöltésekor', 'error');
@@ -319,6 +344,9 @@ export function OHIP14Section({
     );
   }
 
+  const isCurrentTimepointCompleted =
+    isPatientPortal && activeTimepoint !== null && completedTimepoints.includes(activeTimepoint);
+
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
       <div className="flex items-center justify-between mb-6">
@@ -341,28 +369,39 @@ export function OHIP14Section({
         )}
       </div>
 
+      {isPatientPortal && (
+        <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+          <p className="text-sm text-amber-800">
+            <strong>Szabály:</strong> Egy stádiumban csak egyszer töltheti ki a kérdőívet. Kitöltés
+            után a válaszokat és az eredményt nem tekintheti meg.
+          </p>
+        </div>
+      )}
+
       {/* Timepoint selector */}
       <div className="mb-6">
         <div className="flex flex-wrap gap-2">
           {ohip14TimepointOptions.map((tp) => {
             const completed = getCompletedCount(tp.value);
-            const isComplete = completed === 14;
+            const isCompletePatient = isPatientPortal && completedTimepoints.includes(tp.value);
+            const isComplete = isCompletePatient || completed === 14;
             const response = responses[tp.value];
             const isAllowed = isTimepointAllowed(tp.value);
-            const isLocked = !!response?.lockedAt; // Only locked if lockedAt has a truthy value
+            const isLocked = !isPatientPortal && !!response?.lockedAt; // Only locked if lockedAt has a truthy value (admin)
+            const isCompletedNoView = isPatientPortal && completedTimepoints.includes(tp.value); // Betegportál: kitöltve, nem szerkeszthető
 
             return (
               <button
                 key={tp.value}
                 type="button"
-                onClick={() => isAllowed && !isLocked && setActiveTimepoint(tp.value)}
-                disabled={!isAllowed || isLocked}
+                onClick={() => (isAllowed || isCompletedNoView) && !isLocked && setActiveTimepoint(tp.value)}
+                disabled={(!isAllowed && !isCompletedNoView) || isLocked}
                 className={`px-4 py-2 rounded-lg border transition-colors ${
-                  !isAllowed || isLocked
+                  (!isAllowed && !isCompletedNoView) || isLocked
                     ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
                     : activeTimepoint === tp.value
                       ? 'bg-medical-primary text-white border-medical-primary'
-                      : response
+                      : isComplete || (response && !isPatientPortal)
                         ? 'bg-green-50 text-green-700 border-green-300 hover:bg-green-100'
                         : 'bg-gray-50 text-gray-700 border-gray-300 hover:bg-gray-100'
                 }`}
@@ -405,6 +444,18 @@ export function OHIP14Section({
       {/* Questions for active timepoint */}
       {activeTimepoint && (
         <div className="space-y-6">
+          {isCurrentTimepointCompleted ? (
+            <div className="p-6 bg-gray-50 border border-gray-200 rounded-lg text-center">
+              <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-3" />
+              <p className="text-gray-700 font-medium">
+                A jelenlegi stádiumhoz tartozó kérdőív már kitöltve.
+              </p>
+              <p className="text-sm text-gray-500 mt-1">
+                A válaszokat és az eredményt a szabályok szerint nem tekintheti meg.
+              </p>
+            </div>
+          ) : (
+            <>
           <div className="flex items-center justify-between">
             <h5 className="text-base font-semibold text-gray-900">
               {ohip14TimepointOptions.find((tp) => tp.value === activeTimepoint)?.label} -{' '}
@@ -523,6 +574,8 @@ export function OHIP14Section({
                 <strong>{currentStage ? patientStageOptions.find(s => s.value === currentStage)?.label : 'Nincs'}</strong>.
               </p>
             </div>
+          )}
+            </>
           )}
         </div>
       )}
