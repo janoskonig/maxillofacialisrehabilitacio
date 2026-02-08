@@ -266,26 +266,25 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
   
   console.log(`PDF form mezők száma: ${formFields.length}`);
   
-  // Segédfüggvény mező kitöltéséhez
+  // Segédfüggvény mező kitöltéséhez (duck typing: setText/check létezik, mert a minifikáció eltorzíthatja constructor.name)
   const fillField = (field: any, value: string, fieldName: string, mappingKey: string): boolean => {
     const safeValue = toWinAnsiSafe(value);
     try {
-      // Type guard használata a típus ellenőrzéshez
-      if (field.constructor.name === 'PDFTextField') {
-        // WinAnsi-safe szöveg kell, különben updateFieldAppearances/flatten hibázik (ő, ű)
+      if (typeof field.setText === 'function') {
         try {
-          (field as any).setText(safeValue, { updateAppearances: true });
+          field.setText(safeValue, { updateAppearances: true });
         } catch {
-          (field as any).setText(safeValue);
+          field.setText(safeValue);
         }
         filledFields++;
         matchedFields.push({ fieldName, mappingKey, value });
         console.log(`Mező kitöltve: ${fieldName} (kulcs: ${mappingKey}) = ${value}`);
         return true;
-      } else if (field.constructor.name === 'PDFCheckBox') {
+      }
+      if (typeof field.check === 'function') {
         const stringValue = String(value);
         if (stringValue === 'Igen' || stringValue === 'igen' || stringValue.toLowerCase() === 'true') {
-          (field as any).check();
+          field.check();
           filledFields++;
           matchedFields.push({ fieldName, mappingKey, value });
           console.log(`Checkbox bejelölve: ${fieldName} (kulcs: ${mappingKey})`);
@@ -320,12 +319,12 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
   };
   
   formFields.forEach(field => {
-    const fieldName = field.getName();
+    const fieldName = (field.getName() || '').trim();
     allFieldNames.push(fieldName);
     let matched = false;
 
     // 1) Pontos mezőnév egyezés
-    if (fieldMapping.hasOwnProperty(fieldName)) {
+    if (fieldName && fieldMapping.hasOwnProperty(fieldName)) {
       const value = fieldMapping[fieldName];
       if (value != null && String(value).trim() !== '') {
         matched = fillField(field, value, fieldName, fieldName);
