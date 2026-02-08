@@ -15,6 +15,7 @@ export function Logo({ width = 120, height = 140, className = '' }: LogoProps) {
         width={width}
         height={height}
         className="object-contain flex-shrink-0"
+        style={{ width: 'auto', height: 'auto' }}
         priority
       />
     </div>

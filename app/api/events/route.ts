@@ -12,6 +12,9 @@ const ALLOWED_EVENT_TYPES = [
   'manualsave_attempt',
   'manualsave_success',
   'manualsave_fail',
+  'neak_export_attempt',
+  'neak_export_success',
+  'neak_export_fail',
 ] as const;
 
 type EventType = typeof ALLOWED_EVENT_TYPES[number];
