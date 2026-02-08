@@ -4,14 +4,18 @@ import { verifyAuth } from '@/lib/auth-server';
 import { handleApiError } from '@/lib/api-error-handler';
 import { REQUIRED_DOC_TAGS, REQUIRED_DOC_RULES, getMissingRequiredDocRules, getMissingRequiredDocTags, getChecklistStatus, getMissingRequiredFields } from '@/lib/clinical-rules';
 import { Patient, LabQuoteRequest } from '@/lib/types';
+import { patientSelectSql, normalizePatientRow } from '@/lib/patient-select';
 import { downloadFile } from '@/lib/ftp-client';
 import archiver from 'archiver';
 import { Readable } from 'stream';
 import { generateAnamnesisSummary } from '@/lib/openai-client';
 import { shouldCallAI, normalizeTags, safeFilename, ExportLimiter, ExportLimits } from '@/lib/utils';
+import { hasTag } from '@/lib/doc-tags';
 import { generateDentalStatusPDF } from '@/lib/pdf/generateDentalStatusPDF';
 import { markdownToPDF, generatePatientSummaryMarkdown, generateMedicalHistoryMarkdown } from '@/lib/pdf/markdown-to-pdf';
 import { createPlaceholderPdf } from '@/lib/pdf/placeholder-pdf';
+import { generateEquityRequestPDF } from '@/lib/pdf/equity-request';
+import { generatePatientDataEquityPDF } from '@/lib/pdf/equity-request-patient';
 
 // Force Node.js runtime (required for archiver, pdf-lib, Buffer operations)
 export const runtime = 'nodejs';
@@ -135,7 +139,8 @@ function generateReadme(
   files: Array<{ name: string; size: number }>,
   aiGenerated: boolean,
   documentCount?: number,
-  dentalPdfFailed?: boolean
+  dentalPdfFailed?: boolean,
+  missingFields?: string[]
 ): string {
   const lines: string[] = [];
   lines.push('NEAK EXPORT README');
@@ -163,6 +168,10 @@ function generateReadme(
   if (dentalPdfFailed) {
     lines.push('');
     lines.push('MEGJEGYZES: A fogazati státusz PDF generálása sikertelen volt. A dental_status.pdf placeholder tartalmat tartalmaz.');
+  }
+  if (missingFields && missingFields.length > 0) {
+    lines.push('');
+    lines.push('Nem áll rendelkezésre (FNMT.150.K): ' + missingFields.join(', '));
   }
 
   return lines.join('\n');
@@ -232,34 +241,8 @@ export async function GET(
 
     const pool = getDbPool();
 
-    // Get patient data (bővített lekérdezés - anamnézis, kezelési terv, fogászati státusz mezőkkel)
-    const patientResult = await pool.query(
-      `SELECT 
-        id, nev, taj, diagnozis, szuletesi_datum as "szuletesiDatum", 
-        mutet_ideje as "mutetIdeje", created_at as "createdAt",
-        kezelesre_erkezes_indoka as "kezelesreErkezesIndoka",
-        alkoholfogyasztas, dohanyzas_szam as "dohanyzasSzam",
-        baleset_idopont as "balesetIdopont", baleset_etiologiaja as "balesetEtiologiaja", baleset_egyeb as "balesetEgyeb",
-        primer_mutet_leirasa as "primerMutetLeirasa", bno, szovettani_diagnozis as "szovettaniDiagnozis", tnm_staging as "tnmStaging",
-        radioterapia, radioterapia_dozis as "radioterapiaDozis", radioterapia_datum_intervallum as "radioterapiaDatumIntervallum",
-        chemoterapia, chemoterapia_leiras as "chemoterapiaLeiras",
-        kezelesi_terv_felso as "kezelesiTervFelso", kezelesi_terv_also as "kezelesiTervAlso", kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
-        meglevo_fogak as "meglevoFogak", meglevo_implantatumok as "meglevoImplantatumok",
-        kortorteneti_osszefoglalo as "kortortenetiOsszefoglalo",
-        felso_fogpotlas_van as "felsoFogpotlasVan", felso_fogpotlas_mikor as "felsoFogpotlasMikor",
-        felso_fogpotlas_keszito as "felsoFogpotlasKeszito", felso_fogpotlas_elegedett as "felsoFogpotlasElegedett",
-        felso_fogpotlas_problema as "felsoFogpotlasProblema", felso_fogpotlas_tipus as "felsoFogpotlasTipus",
-        fabian_fejerdy_protetikai_osztaly_felso as "fabianFejerdyProtetikaiOsztalyFelso",
-        also_fogpotlas_van as "alsoFogpotlasVan", also_fogpotlas_mikor as "alsoFogpotlasMikor",
-        also_fogpotlas_keszito as "alsoFogpotlasKeszito", also_fogpotlas_elegedett as "alsoFogpotlasElegedett",
-        also_fogpotlas_problema as "alsoFogpotlasProblema", also_fogpotlas_tipus as "alsoFogpotlasTipus",
-        fabian_fejerdy_protetikai_osztaly_also as "fabianFejerdyProtetikaiOsztalyAlso",
-        nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
-        nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek"
-      FROM patients 
-      WHERE id = $1`,
-      [patientId]
-    );
+    // Get patient data (közös patient SELECT – lib/patient-select)
+    const patientResult = await pool.query(patientSelectSql(), [patientId]);
 
     if (patientResult.rows.length === 0) {
       return NextResponse.json(
@@ -272,7 +255,7 @@ export async function GET(
       );
     }
 
-    const patient = patientResult.rows[0] as Patient;
+    const patient = normalizePatientRow(patientResult.rows[0]) as Patient;
 
     // Get lab quote requests (LIMIT 20)
     const quoteRequestsResult = await pool.query(
@@ -286,10 +269,11 @@ export async function GET(
     );
     const quoteRequests = quoteRequestsResult.rows as LabQuoteRequest[];
 
-    // Get documents with tags
+    // Get documents with tags and uploaded_at for last-quote ordering
     const documentsResult = await pool.query(
       `SELECT 
-        id, filename, tags, file_size as "fileSize", file_path as "filePath"
+        id, filename, tags, file_size as "fileSize", file_path as "filePath",
+        uploaded_at as "uploadedAt", created_at as "createdAt"
       FROM patient_documents
       WHERE patient_id = $1`,
       [patientId]
@@ -302,27 +286,36 @@ export async function GET(
     const missingDocTags = missingDocRules.map((rule) => rule.tag);
 
     // Get documents that match required rules (for includedDocuments list)
-    // Include: REQUIRED_DOC_RULES tags + arajanlat + allergiavizsgálat
+    // Include: REQUIRED_DOC_RULES tags + technikus_meltanyossagi + only last arajanlat + allergiavizsgálat
     const includedDocuments: Array<{
       id: string;
       tags: string[];
       filename?: string;
       sizeBytes?: number;
-      category: 'required' | 'quote' | 'allergy';
+      category: 'required' | 'quote' | 'allergy' | 'technikus_meltanyossagi';
     }> = [];
+
+    // ts for ordering: uploaded_at ?? created_at (ISO), tie-break id DESC
+    const ts = (d: { uploadedAt?: Date | string; createdAt?: Date | string }) => {
+      const v = d.uploadedAt ?? d.createdAt;
+      if (v instanceof Date) return v.getTime();
+      if (typeof v === 'string') {
+        const n = Date.parse(v);
+        return Number.isNaN(n) ? 0 : n;
+      }
+      return 0;
+    };
+
+    const quoteDocs: Array<{ id: string; tags: string[]; filename?: string; sizeBytes?: number; uploadedAt?: Date | string; createdAt?: Date | string }> = [];
 
     documents.forEach((doc: any) => {
       const docTags = normalizeTags(doc.tags);
-      
-      // Check for required tags
+
       const hasRequiredTag = REQUIRED_DOC_RULES.some((rule) =>
         docTags.includes(rule.tag.toLowerCase())
       );
-
-      // Check for quote tag
+      const hasTechnikusTag = hasTag(doc.tags, 'technikus méltányossági');
       const hasQuoteTag = docTags.includes('arajanlat');
-
-      // Check for allergy tag
       const hasAllergyTag = docTags.includes('allergiavizsgalat');
 
       if (hasRequiredTag) {
@@ -333,13 +326,22 @@ export async function GET(
           sizeBytes: doc.fileSize || undefined,
           category: 'required',
         });
-      } else if (hasQuoteTag) {
+      } else if (hasTechnikusTag) {
         includedDocuments.push({
           id: doc.id,
           tags: docTags,
           filename: doc.filename || undefined,
           sizeBytes: doc.fileSize || undefined,
-          category: 'quote',
+          category: 'technikus_meltanyossagi',
+        });
+      } else if (hasQuoteTag) {
+        quoteDocs.push({
+          id: doc.id,
+          tags: docTags,
+          filename: doc.filename || undefined,
+          sizeBytes: doc.fileSize || undefined,
+          uploadedAt: doc.uploadedAt,
+          createdAt: doc.createdAt,
         });
       } else if (hasAllergyTag) {
         includedDocuments.push({
@@ -351,6 +353,24 @@ export async function GET(
         });
       }
     });
+
+    // Only the last quote (by uploaded_at DESC, id DESC) goes into the ZIP
+    if (quoteDocs.length > 0) {
+      const sorted = [...quoteDocs].sort((a, b) => {
+        const ta = ts(a);
+        const tb = ts(b);
+        if (tb !== ta) return tb - ta;
+        return (b.id || '').localeCompare(a.id || '');
+      });
+      const lastQuote = sorted[0];
+      includedDocuments.push({
+        id: lastQuote.id,
+        tags: lastQuote.tags,
+        filename: lastQuote.filename,
+        sizeBytes: lastQuote.sizeBytes,
+        category: 'quote',
+      });
+    }
 
     // Calculate estimated total bytes (sum of included documents)
     const estimatedTotalBytes = includedDocuments.reduce(
@@ -520,6 +540,33 @@ export async function GET(
       limiter.addFile(dentalStatusBuffer.length);
     }
 
+    // Fogorvosi méltányossági (FNMT.152.K)
+    let equityDentalBuffer: Buffer;
+    try {
+      equityDentalBuffer = await generateEquityRequestPDF(patient);
+      limiter.addFile(equityDentalBuffer.length);
+    } catch (error) {
+      console.error('[NEAK Export] Equity request dental PDF failed:', error);
+      throw new Error(
+        `Méltányossági kérelem (152) PDF generálás sikertelen: ${error instanceof Error ? error.message : 'Ismeretlen hiba'}`
+      );
+    }
+
+    // Páciens adatok (FNMT.150.K)
+    let equityPatientBuffer: Buffer;
+    let equityPatientMissingFields: string[] = [];
+    try {
+      const result = await generatePatientDataEquityPDF(patient);
+      equityPatientBuffer = result.pdf;
+      equityPatientMissingFields = result.missingFields;
+      limiter.addFile(equityPatientBuffer.length);
+    } catch (error) {
+      console.error('[NEAK Export] Equity request patient data PDF failed:', error);
+      throw new Error(
+        `Méltányossági páciens adat (150) PDF generálás sikertelen: ${error instanceof Error ? error.message : 'Ismeretlen hiba'}`
+      );
+    }
+
     // 2. TXT fájlok
     const treatmentPlanText = formatTreatmentPlan(patient);
     const treatmentPlanBuffer = Buffer.from(treatmentPlanText, 'utf-8');
@@ -535,6 +582,8 @@ export async function GET(
       { name: 'patient_summary.pdf', size: patientSummaryBuffer.length },
       { name: 'medical_history.pdf', size: medicalHistoryBuffer.length },
       { name: 'dental_status.pdf', size: dentalStatusBuffer.length },
+      { name: 'equity_request_dental.pdf', size: equityDentalBuffer.length },
+      { name: 'equity_request_patient_data.pdf', size: equityPatientBuffer.length },
       { name: 'treatment_plan.txt', size: treatmentPlanBuffer.length },
       { name: 'quote_requests.txt', size: quoteRequestsBuffer.length },
     ];
@@ -569,6 +618,8 @@ export async function GET(
     archive.append(patientSummaryBuffer, { name: 'patient_summary.pdf' });
     archive.append(medicalHistoryBuffer, { name: 'medical_history.pdf' });
     archive.append(dentalStatusBuffer, { name: 'dental_status.pdf' });
+    archive.append(equityDentalBuffer, { name: 'equity_request_dental.pdf' });
+    archive.append(equityPatientBuffer, { name: 'equity_request_patient_data.pdf' });
 
     // 2. TXT-k
     archive.append(treatmentPlanBuffer, { name: 'treatment_plan.txt' });
@@ -579,8 +630,15 @@ export async function GET(
     const sortedDocuments = [...includedDocuments].sort((a, b) => a.id.localeCompare(b.id));
 
     // 3. README.txt (deterministic position: after TXT files, before documents)
-    // Include document count info
-    const readmeText = generateReadme(exportDate, files, aiGenerated, sortedDocuments.length, dentalPdfFailed);
+    // Include document count info; missingFields from FNMT.150.K
+    const readmeText = generateReadme(
+      exportDate,
+      files,
+      aiGenerated,
+      sortedDocuments.length,
+      dentalPdfFailed,
+      equityPatientMissingFields.length > 0 ? equityPatientMissingFields : undefined
+    );
     const readmeBuffer = Buffer.from(readmeText, 'utf-8');
     limiter.addFile(readmeBuffer.length);
     archive.append(readmeBuffer, { name: 'README.txt' });
@@ -618,13 +676,14 @@ export async function GET(
         // Determine file path based on category
         const safeName = safeFilename(docData.filename || `document_${doc.id}`);
         let filePath: string;
-        
+
         if (doc.category === 'quote') {
           filePath = `documents/quotes/${doc.id}_${safeName}`;
         } else if (doc.category === 'allergy') {
           filePath = `documents/allergy/${doc.id}_${safeName}`;
+        } else if (doc.category === 'technikus_meltanyossagi') {
+          filePath = `documents/technikus_meltanyossagi/${doc.id}_${safeName}`;
         } else {
-          // required documents
           filePath = `documents/${doc.id}_${safeName}`;
         }
 

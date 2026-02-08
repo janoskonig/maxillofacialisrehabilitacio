@@ -22,6 +22,16 @@ function toWinAnsiSafe(text: string): string {
     .replace(/Ű/g, 'Ü');
 }
 
+/** Normalize field name for matching (NFD, strip accents, lowercase, remove all spaces). */
+function normalizeFieldNameForMatch(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .trim();
+}
+
 function getEquityTemplateBytes(): Buffer {
   const candidates = [
     ...projectRootCandidates('public', 'templates', 'FNMT.152.K.pdf'),
@@ -241,6 +251,13 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
   fieldMapping['9jegyű azonosító'] = munkahelyAzonosito;
   fieldMapping['Szolgáltató munkahely 9 jegyű azonosító'] = munkahelyAzonosito;
 
+  // Normalized lookup so PDF field names that differ only by Unicode/whitespace still match
+  const normalizedMap = new Map<string, string>();
+  for (const [key, value] of Object.entries(fieldMapping)) {
+    const n = normalizeFieldNameForMatch(key);
+    if (n && value !== undefined) normalizedMap.set(n, value);
+  }
+
   // Form mezők kitöltése
   let filledFields = 0;
   const errors: Array<{ field: string; error: string }> = [];
@@ -305,47 +322,51 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
   formFields.forEach(field => {
     const fieldName = field.getName();
     allFieldNames.push(fieldName);
-    
-    // Pontos mezőnév egyezés keresése
+    let matched = false;
+
+    // 1) Pontos mezőnév egyezés
     if (fieldMapping.hasOwnProperty(fieldName)) {
       const value = fieldMapping[fieldName];
-      if (value && String(value).trim() !== '') {
-        fillField(field, value, fieldName, fieldName);
+      if (value != null && String(value).trim() !== '') {
+        matched = fillField(field, value, fieldName, fieldName);
       }
-    } else {
-      // Ha nincs pontos egyezés, próbáljuk meg részleges egyezéssel
-      const fieldNameLower = fieldName.toLowerCase().trim();
-      let matched = false;
-      
-      // Először próbáljuk meg a teljes egyezést (kis/nagybetű és szóközök nélkül)
-      for (const [key, value] of Object.entries(fieldMapping)) {
-        const keyLower = key.toLowerCase().trim();
-        if (fieldNameLower === keyLower) {
-          if (value && String(value).trim() !== '') {
-            matched = fillField(field, value, fieldName, key);
-            if (matched) break;
-          }
-        }
+    }
+    if (matched) return;
+
+    // 2) Normalizált egyezés (különböző Unicode/szóköz a sablonban)
+    const fieldNameNorm = normalizeFieldNameForMatch(fieldName);
+    const valueFromNorm = fieldNameNorm ? normalizedMap.get(fieldNameNorm) : undefined;
+    if (valueFromNorm != null && String(valueFromNorm).trim() !== '') {
+      matched = fillField(field, valueFromNorm, fieldName, '(normalized)');
+    }
+    if (matched) return;
+
+    // 3) Kis/nagybetű egyezés
+    const fieldNameLower = fieldName.toLowerCase().trim();
+    for (const [key, value] of Object.entries(fieldMapping)) {
+      if (fieldNameLower === key.toLowerCase().trim() && value != null && String(value).trim() !== '') {
+        matched = fillField(field, value, fieldName, key);
+        if (matched) break;
       }
-      
-      // Ha még nem találtunk egyezést, próbáljuk meg a részleges egyezést
-      if (!matched) {
-        for (const [key, value] of Object.entries(fieldMapping)) {
-          const keyLower = key.toLowerCase().trim();
-          // Részleges egyezés: tartalmazza-e a mezőnév a kulcsot vagy fordítva
-          if ((fieldNameLower.includes(keyLower) || keyLower.includes(fieldNameLower)) && 
-              keyLower.length > 3 && fieldNameLower.length > 3) {
-            if (value && String(value).trim() !== '') {
-              matched = fillField(field, value, fieldName, key);
-              if (matched) break;
-            }
-          }
-        }
+    }
+    if (matched) return;
+
+    // 4) Részleges egyezés
+    for (const [key, value] of Object.entries(fieldMapping)) {
+      const keyLower = key.toLowerCase().trim();
+      if (
+        (fieldNameLower.includes(keyLower) || keyLower.includes(fieldNameLower)) &&
+        keyLower.length > 3 &&
+        fieldNameLower.length > 3 &&
+        value != null &&
+        String(value).trim() !== ''
+      ) {
+        matched = fillField(field, value, fieldName, key);
+        if (matched) break;
       }
-      
-      if (!matched) {
-        console.log(`Mező nem található a mapping-ben: ${fieldName}`);
-      }
+    }
+    if (!matched) {
+      console.log(`Mező nem található a mapping-ben: ${fieldName}`);
     }
   });
   
