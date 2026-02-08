@@ -34,12 +34,15 @@ function normalizeToothData(value: ToothStatus | undefined): { status?: 'D' | 'F
   return value;
 }
 
+/** WinAnsi (Helvetica) nem kódolja ő/ű, ✓ (U+2713), ✗ (U+2717) – cseréljük ASCII-ra */
 function toWinAnsiSafe(text: string): string {
   return String(text)
     .replace(/ő/g, 'ö')
     .replace(/Ő/g, 'Ö')
     .replace(/ű/g, 'ü')
-    .replace(/Ű/g, 'Ü');
+    .replace(/Ű/g, 'Ü')
+    .replace(/\u2713/g, '+') // ✓ → +
+    .replace(/\u2717/g, 'X'); // ✗ → X
 }
 
 const A4 = { width: 595.28, height: 841.89 };
