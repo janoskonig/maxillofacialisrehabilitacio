@@ -59,7 +59,10 @@ function replaceAllAccentedChars(text: string): string {
 function safeTextForPdf(text: string): string {
   try {
     // pdf-lib StandardFonts WinAnsi: próbáljuk ő/ű nélkül
-    return replaceLongAccents(text);
+    let out = replaceLongAccents(text);
+    // WinAnsi cannot encode ✓ (U+2713) / ✗ (U+2717) – replace with ASCII
+    out = out.replace(/\u2713/g, '[+]').replace(/\u2717/g, 'X');
+    return out;
   } catch {
     return replaceAllAccentedChars(text);
   }
