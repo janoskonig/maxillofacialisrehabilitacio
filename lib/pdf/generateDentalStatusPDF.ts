@@ -34,15 +34,20 @@ function normalizeToothData(value: ToothStatus | undefined): { status?: 'D' | 'F
   return value;
 }
 
-/** WinAnsi (Helvetica) nem kódolja ő/ű, ✓ (U+2713), ✗ (U+2717) – cseréljük ASCII-ra */
+/** WinAnsi (Helvetica / Windows-1252) – ő/ű, ✓/✗, sortörések és egyéb nem kódolható karakterek cseréje */
 function toWinAnsiSafe(text: string): string {
-  return String(text)
+  let out = String(text)
+    .replace(/\r\n/g, ' ')
+    .replace(/\n/g, ' ')
+    .replace(/\r/g, ' ')
     .replace(/ő/g, 'ö')
     .replace(/Ő/g, 'Ö')
     .replace(/ű/g, 'ü')
     .replace(/Ű/g, 'Ü')
     .replace(/\u2713/g, '+') // ✓ → +
     .replace(/\u2717/g, 'X'); // ✗ → X
+  // Bármi ami még mindig nem fér el WinAnsiban (pl. egyéb Unicode a betegadatokból) → ?
+  return out.replace(/[^\x00-\xFF]/g, '?');
 }
 
 const A4 = { width: 595.28, height: 841.89 };
@@ -276,7 +281,7 @@ export async function generateDentalStatusPDF(patient: Patient): Promise<Buffer>
   state.y -= cellHeight + 18;
 
   const legend = toWinAnsiSafe(
-    'Jelentés: ✓ = Megvan (zöld), ? = Kérdéses (sárga), ! = Reménytelen (piros), X = Hiányzik (szürke)'
+    'Jelentés: + = Megvan (zöld), ? = Kérdéses (sárga), ! = Reménytelen (piros), X = Hiányzik (szürke)'
   );
   state.page.drawText(legend, { x: MARGIN, y: state.y - 8, size: 8, font, color: rgb(0.4, 0.4, 0.4) });
   state.y -= 20;
@@ -303,10 +308,10 @@ export async function generateDentalStatusPDF(patient: Patient): Promise<Buffer>
     color: rgb(0.88, 0.95, 1),
     borderColor: rgb(0.58, 0.77, 0.99),
   });
-  state.page.drawText('DMF-T INDEX', { x: 60, y: state.y - 18, size: 11, font: fontBold, color: rgb(0, 0, 0) });
-  state.page.drawText(`D (szuvas): ${dCount}`, { x: 60, y: state.y - 35, size: 10, font, color: rgb(0.86, 0.15, 0.15) });
-  state.page.drawText(`F (tömött): ${fCount}`, { x: 200, y: state.y - 35, size: 10, font, color: rgb(0.15, 0.39, 0.92) });
-  state.page.drawText(`M (hiányzik): ${mCount}`, { x: 340, y: state.y - 35, size: 10, font, color: rgb(0.42, 0.45, 0.5) });
+  state.page.drawText(toWinAnsiSafe('DMF-T INDEX'), { x: 60, y: state.y - 18, size: 11, font: fontBold, color: rgb(0, 0, 0) });
+  state.page.drawText(toWinAnsiSafe(`D (szuvas): ${dCount}`), { x: 60, y: state.y - 35, size: 10, font, color: rgb(0.86, 0.15, 0.15) });
+  state.page.drawText(toWinAnsiSafe(`F (tömött): ${fCount}`), { x: 200, y: state.y - 35, size: 10, font, color: rgb(0.15, 0.39, 0.92) });
+  state.page.drawText(toWinAnsiSafe(`M (hiányzik): ${mCount}`), { x: 340, y: state.y - 35, size: 10, font, color: rgb(0.42, 0.45, 0.5) });
   state.page.drawText(toWinAnsiSafe(`DMF-T összesen: ${dmft} / 32`), {
     x: 450,
     y: state.y - 35,
@@ -443,28 +448,28 @@ export async function generateDentalStatusPDF(patient: Patient): Promise<Buffer>
     thickness: 0.5,
     color: rgb(0, 0, 0),
   });
-  state.page.drawText('Cím: 1088 Budapest, Szentkirályi utca 47.', { x: MARGIN, y: footerY - 8, size: 7, font, color: rgb(0, 0, 0) });
-  state.page.drawText('Postacím: 1085 Budapest, Üllői út 26.; 1428 Budapest Pf. 2.', {
+  state.page.drawText(toWinAnsiSafe('Cím: 1088 Budapest, Szentkirályi utca 47.'), { x: MARGIN, y: footerY - 8, size: 7, font, color: rgb(0, 0, 0) });
+  state.page.drawText(toWinAnsiSafe('Postacím: 1085 Budapest, Üllői út 26.; 1428 Budapest Pf. 2.'), {
     x: MARGIN,
     y: footerY - 16,
     size: 7,
     font,
     color: rgb(0, 0, 0),
   });
-  state.page.drawText('E-mail: fogpotlastan@dent.semmelweis-univ.hu', {
+  state.page.drawText(toWinAnsiSafe('E-mail: fogpotlastan@dent.semmelweis-univ.hu'), {
     x: MARGIN,
     y: footerY - 24,
     size: 7,
     font,
     color: rgb(0, 0, 0),
   });
-  const telText = 'Tel: 06-1 338-4380, 06-1 459-1500/59326';
+  const telText = toWinAnsiSafe('Tel: 06-1 338-4380, 06-1 459-1500/59326');
   const telW = font.widthOfTextAtSize(telText, 7);
   state.page.drawText(telText, { x: 545 - telW, y: footerY - 8, size: 7, font, color: rgb(0, 0, 0) });
-  const faxText = 'Fax: (06-1) 317-5270';
+  const faxText = toWinAnsiSafe('Fax: (06-1) 317-5270');
   const faxW = font.widthOfTextAtSize(faxText, 7);
   state.page.drawText(faxText, { x: 545 - faxW, y: footerY - 16, size: 7, font, color: rgb(0, 0, 0) });
-  const webText = 'web: http://semmelweis-hu/fogpotlastan';
+  const webText = toWinAnsiSafe('web: http://semmelweis-hu/fogpotlastan');
   const webW = font.widthOfTextAtSize(webText, 7);
   state.page.drawText(webText, { x: 545 - webW, y: footerY - 24, size: 7, font, color: rgb(0, 0, 0) });
 

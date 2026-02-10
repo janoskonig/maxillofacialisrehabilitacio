@@ -908,10 +908,8 @@ export function AppointmentBookingSection({
                                 <span>Sikeresen teljesült</span>
                               </div>
                               {appointment.completionNotes && (
-                                <div className="text-xs text-gray-600 mt-0.5" title={appointment.completionNotes}>
-                                  {appointment.completionNotes.length > 50 
-                                    ? `${appointment.completionNotes.substring(0, 50)}...` 
-                                    : appointment.completionNotes}
+                                <div className="text-xs text-gray-600 mt-0.5 whitespace-pre-wrap break-words">
+                                  {appointment.completionNotes}
                                 </div>
                               )}
                             </div>
