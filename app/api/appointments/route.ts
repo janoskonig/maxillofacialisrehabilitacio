@@ -335,7 +335,14 @@ export async function POST(request: NextRequest) {
       );
 
       const appointment = appointmentResult.rows[0];
-      
+      if (!appointment) {
+        await db.query('ROLLBACK');
+        return NextResponse.json(
+          { error: 'Ez az időpont már le van foglalva (aktív foglalás van az időponton)' },
+          { status: 409 }
+        );
+      }
+
       // Google Calendar event ID inicializálása (null)
       let googleCalendarEventId: string | null = null;
 
