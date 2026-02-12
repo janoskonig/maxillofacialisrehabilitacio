@@ -9,6 +9,8 @@ import { sendPushNotification } from '@/lib/push-notifications';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { checkOneHardNext, getAppointmentRiskSettings } from '@/lib/scheduling-service';
+import { getSchedulingFeatureFlag } from '@/lib/scheduling-feature-flags';
+import { emitSchedulingEvent } from '@/lib/scheduling-events';
 
 // Get all appointments
 export const dynamic = 'force-dynamic';
@@ -130,7 +132,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { patientId, timeSlotId, cim, teremszam, appointmentType, episodeId, pool = 'work' } = body;
+    const { patientId, timeSlotId, cim, teremszam, appointmentType, episodeId, pool = 'work', overrideReason } = body;
 
     if (!patientId || !timeSlotId) {
       return NextResponse.json(
@@ -164,6 +166,7 @@ export async function POST(request: NextRequest) {
     // Note: Surgeons can book appointments for any patient, but can only edit their own patients
 
     const createdVia = auth.role === 'admin' ? 'admin_override' : 'worklist';
+    let usedOverride = false;
     const durationMinutes = 30;
 
     let noShowRisk = 0;
@@ -201,11 +204,25 @@ export async function POST(request: NextRequest) {
         }
         const oneHardNext = await checkOneHardNext(episodeId, 'work');
         if (!oneHardNext.allowed) {
-          await db.query('ROLLBACK');
-          return NextResponse.json(
-            { error: oneHardNext.reason ?? 'Episode already has a future work appointment (one-hard-next)', code: 'ONE_HARD_NEXT_VIOLATION' },
-            { status: 409 }
-          );
+          const strictOneHardNext = await getSchedulingFeatureFlag('strict_one_hard_next');
+          const mayOverride = !strictOneHardNext && (auth.role === 'admin' || auth.role === 'sebészorvos') && overrideReason && typeof overrideReason === 'string' && overrideReason.trim().length >= 10;
+          if (mayOverride) {
+            await db.query(
+              `INSERT INTO scheduling_override_audit (episode_id, user_id, override_reason) VALUES ($1, $2, $3)`,
+              [episodeId, auth.email, overrideReason.trim()]
+            );
+            usedOverride = true;
+          } else {
+            await db.query('ROLLBACK');
+            return NextResponse.json(
+              {
+                error: oneHardNext.reason ?? 'Episode already has a future work appointment (one-hard-next)',
+                code: 'ONE_HARD_NEXT_VIOLATION',
+                overrideHint: 'Provide overrideReason (min 10 chars) to bypass. Admin/sebészorvos only.',
+              },
+              { status: 409 }
+            );
+          }
         }
       }
 
@@ -303,7 +320,7 @@ export async function POST(request: NextRequest) {
            appointment_type as "appointmentType",
            pool,
            duration_minutes as "durationMinutes"`,
-        [patientId, episodeId || null, timeSlotId, auth.email, timeSlot.dentist_email, appointmentType || null, poolValue, durationMinutes, noShowRisk, requiresConfirmation, holdExpiresAt, createdVia]
+        [patientId, episodeId || null, timeSlotId, auth.email, timeSlot.dentist_email, appointmentType || null, poolValue, durationMinutes, noShowRisk, requiresConfirmation, holdExpiresAt, usedOverride ? 'admin_override' : createdVia]
       );
 
       const appointment = appointmentResult.rows[0];
@@ -336,6 +353,14 @@ export async function POST(request: NextRequest) {
 
       await db.query('COMMIT');
       committed = true;
+
+      if (episodeId) {
+        try {
+          await emitSchedulingEvent('appointment', appointment.id, 'created');
+        } catch {
+          // Non-blocking
+        }
+      }
 
       // Re-fetch time slot to get updated teremszam (post-commit; no ROLLBACK on failure)
       const updatedTimeSlotResult = await db.query(
