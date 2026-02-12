@@ -73,7 +73,7 @@ export async function GET(
         cadenceDays = analytics.median_cadence_days != null ? Number(analytics.median_cadence_days) : 14;
         assumptions = ['calibrated-pathway', 'cadence-from-analytics'];
       } else {
-        const workSteps = steps?.filter((s) => s.pool === 'work').length ?? 4;
+        const workSteps = (steps?.filter((s) => s.pool === 'work') ?? []).length || 4;
         remainingVisitsP50 = Math.max(1, Math.ceil(workSteps * 0.6));
         remainingVisitsP80 = Math.max(remainingVisitsP50, Math.ceil(workSteps * 0.9));
         cadenceDays = 14;

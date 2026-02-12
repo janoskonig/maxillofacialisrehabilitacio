@@ -229,6 +229,7 @@ export async function POST(request: NextRequest) {
 
     // Start transaction
     await db.query('BEGIN');
+    let committed = false;
 
     try {
       // Create or update appointment (UPSERT)
@@ -307,8 +308,9 @@ export async function POST(request: NextRequest) {
       );
 
       await db.query('COMMIT');
-      
-      // Re-fetch time slot to get updated teremszam
+      committed = true;
+
+      // Re-fetch time slot to get updated teremszam (post-commit; no ROLLBACK on failure)
       const updatedTimeSlotResult = await db.query(
         `SELECT ats.*, u.email as dentist_email, u.id as dentist_user_id
          FROM available_time_slots ats
@@ -558,7 +560,9 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({ appointment }, { status: 201 });
     } catch (error) {
-      await db.query('ROLLBACK');
+      if (!committed) {
+        await db.query('ROLLBACK');
+      }
       throw error;
     }
   } catch (error) {

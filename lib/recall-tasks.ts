@@ -29,8 +29,9 @@ export async function ensureRecallTasksForEpisode(episodeId: string): Promise<nu
     : { rows: [] };
 
   const steps = pathwayResult.rows[0]?.steps_json as Array<{ step_code: string; pool: string; default_days_offset?: number }> | null;
-  const controlSteps = steps?.filter((s) => s.pool === 'control').sort((a, b) => (a.default_days_offset ?? 0) - (b.default_days_offset ?? 0));
-  const recallDays = controlSteps?.map((s) => s.default_days_offset ?? 180).slice(0, 2) ?? RECALL_SCHEDULE_DAYS;
+  const controlSteps = (steps?.filter((s) => s.pool === 'control') ?? []).sort((a, b) => (a.default_days_offset ?? 0) - (b.default_days_offset ?? 0));
+  const mapped = controlSteps.map((s) => s.default_days_offset ?? 180).slice(0, 2);
+  const recallDays = mapped.length > 0 ? mapped : RECALL_SCHEDULE_DAYS;
 
   const existing = await pool.query(
     `SELECT task_type FROM episode_tasks WHERE episode_id = $1 AND task_type = 'recall_due'`,
