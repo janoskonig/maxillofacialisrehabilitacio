@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
-import { checkOneHardNext } from '@/lib/scheduling-service';
+import { checkOneHardNext, getAppointmentRiskSettings } from '@/lib/scheduling-service';
 import { handleApiError } from '@/lib/api-error-handler';
 
 /**
@@ -127,12 +127,25 @@ export async function POST(
       const startTime = new Date(slot.start_time);
       const durationMinutes = intent.duration_minutes || 30;
 
+      let noShowRisk = 0;
+      let requiresConfirmation = false;
+      let holdExpiresAt: Date | null = null;
+      try {
+        const riskSettings = await getAppointmentRiskSettings(intent.patientId, startTime, auth.email);
+        noShowRisk = riskSettings.noShowRisk;
+        requiresConfirmation = riskSettings.requiresConfirmation;
+        holdExpiresAt = riskSettings.holdExpiresAt;
+      } catch {
+        holdExpiresAt = new Date();
+        holdExpiresAt.setHours(holdExpiresAt.getHours() + 48);
+      }
+
       const apptResult = await pool.query(
         `INSERT INTO appointments (
           patient_id, episode_id, time_slot_id, created_by, dentist_email,
-          pool, duration_minutes, created_via, start_time, end_time
+          pool, duration_minutes, no_show_risk, requires_confirmation, hold_expires_at, created_via, start_time, end_time
         )
-        SELECT $1, $2, $3, $4, u.email, $5, $6, 'worklist', $7, $8
+        SELECT $1, $2, $3, $4, u.email, $5, $6, $7, $8, $9, 'worklist', $10, $11
         FROM available_time_slots ats
         JOIN users u ON ats.user_id = u.id
         WHERE ats.id = $3
@@ -145,6 +158,9 @@ export async function POST(
           auth.email,
           intent.pool,
           durationMinutes,
+          noShowRisk,
+          requiresConfirmation,
+          holdExpiresAt,
           startTime,
           new Date(startTime.getTime() + durationMinutes * 60 * 1000),
         ]

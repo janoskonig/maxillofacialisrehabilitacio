@@ -62,7 +62,8 @@ export async function GET(request: NextRequest) {
         pool.query(
           `SELECT
             COALESCE(SUM(COALESCE(ats.duration_minutes, 30)), 0)::int as available_minutes,
-            COALESCE(SUM(CASE WHEN a.id IS NOT NULL AND (a.appointment_status IS NULL OR a.appointment_status = 'completed') AND a.start_time > CURRENT_TIMESTAMP THEN COALESCE(a.duration_minutes, 30) ELSE 0 END), 0)::int as booked_minutes,
+            COALESCE(SUM(CASE WHEN a.id IS NOT NULL AND (a.appointment_status IS NULL OR a.appointment_status = 'completed') AND a.start_time > CURRENT_TIMESTAMP
+              AND (a.hold_expires_at IS NULL OR a.hold_expires_at <= CURRENT_TIMESTAMP) THEN COALESCE(a.duration_minutes, 30) ELSE 0 END), 0)::int as booked_minutes,
             COALESCE(SUM(CASE WHEN a.id IS NOT NULL AND a.hold_expires_at IS NOT NULL AND a.hold_expires_at > CURRENT_TIMESTAMP THEN COALESCE(a.duration_minutes, 30) ELSE 0 END), 0)::int as held_minutes
            FROM available_time_slots ats
            LEFT JOIN appointments a ON a.time_slot_id = ats.id
@@ -71,11 +72,12 @@ export async function GET(request: NextRequest) {
           [doc.id, horizonEnd]
         ),
         pool.query(
-          `SELECT COALESCE(SUM(a.duration_minutes), 0)::int as booked
+          `SELECT COALESCE(SUM(COALESCE(a.duration_minutes, 30)), 0)::int as booked
            FROM appointments a
            JOIN available_time_slots ats ON a.time_slot_id = ats.id
            WHERE ats.user_id = $1 AND a.start_time > CURRENT_TIMESTAMP AND a.start_time <= $2
-           AND (a.appointment_status IS NULL OR a.appointment_status = 'completed')`,
+           AND (a.appointment_status IS NULL OR a.appointment_status = 'completed')
+           AND (a.hold_expires_at IS NULL OR a.hold_expires_at <= CURRENT_TIMESTAMP)`,
           [doc.id, horizonEnd]
         ),
         pool.query(
