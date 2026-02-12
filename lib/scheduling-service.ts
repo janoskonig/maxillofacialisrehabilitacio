@@ -6,7 +6,7 @@
 import { getDbPool } from './db';
 import { computeNoShowRiskWithConfig, getPatientNoShowsLast12m } from './no-show-risk';
 
-export type CreatedVia = 'worklist' | 'patient_self' | 'admin_override' | 'migration' | 'google_import';
+export type CreatedVia = 'worklist' | 'patient_self' | 'admin_override' | 'surgeon_override' | 'migration' | 'google_import';
 
 export interface OneHardNextCheckResult {
   allowed: boolean;

@@ -58,19 +58,26 @@ async function getActiveBlocks(pool: Awaited<ReturnType<typeof getDbPool>>, epis
   return r.rows.map((row: { key: string; expires_at: Date }) => ({ key: row.key, expires_at: row.expires_at }));
 }
 
-/** Get last completed appointment for episode (by type / pool) */
-async function getLastCompletedAppointment(
+/** Get completed appointment stats for episode: count and anchor date.
+ * Used to compute next step index (completedCount) and window anchor (lastCompletedAt).
+ * Anchors to start_time (when the appointment occurred), not created_at (when it was booked). */
+async function getCompletedAppointmentStats(
   pool: Awaited<ReturnType<typeof getDbPool>>,
   episodeId: string
-): Promise<{ completed_at: Date; appointment_type?: string } | null> {
+): Promise<{ completedCount: number; lastCompletedAt: Date | null }> {
   const r = await pool.query(
-    `SELECT a.created_at as completed_at, a.appointment_type
+    `SELECT
+       COUNT(*)::int as completed_count,
+       MAX(COALESCE(a.start_time, a.created_at)) as last_completed_at
      FROM appointments a
-     WHERE a.episode_id = $1 AND a.appointment_status = 'completed'
-     ORDER BY a.created_at DESC LIMIT 1`,
+     WHERE a.episode_id = $1 AND a.appointment_status = 'completed'`,
     [episodeId]
   );
-  return r.rows[0] ?? null;
+  const row = r.rows[0];
+  return {
+    completedCount: row?.completed_count ?? 0,
+    lastCompletedAt: row?.last_completed_at ? new Date(row.last_completed_at) : null,
+  };
 }
 
 /** Get pathway steps for episode */
@@ -96,10 +103,10 @@ async function getPathwaySteps(
 export async function nextRequiredStep(episodeId: string): Promise<NextRequiredStepResult> {
   const pool = getDbPool();
 
-  const [blocks, pathwaySteps, lastCompleted] = await Promise.all([
+  const [blocks, pathwaySteps, completedStats] = await Promise.all([
     getActiveBlocks(pool, episodeId),
     getPathwaySteps(pool, episodeId),
-    getLastCompletedAppointment(pool, episodeId),
+    getCompletedAppointmentStats(pool, episodeId),
   ]);
 
   // If episode has active blocks → BLOCKED
@@ -123,12 +130,10 @@ export async function nextRequiredStep(episodeId: string): Promise<NextRequiredS
   }
 
   const currentStage = await getCurrentStage(pool, episodeId);
-  const anchorDate = lastCompleted
-    ? new Date(lastCompleted.completed_at)
-    : new Date();
+  const anchorDate = completedStats.lastCompletedAt ?? new Date();
 
-  // Linear progression: last completed -> next step index
-  const nextStepIndex = lastCompleted ? 1 : 0;
+  // Linear progression: next step index = number of completed appointments (0, 1, 2, ...)
+  const nextStepIndex = completedStats.completedCount;
 
   // For STAGE_0 (pre-consult): next step is first consult
   if (currentStage === 'STAGE_0') {
@@ -167,7 +172,8 @@ export async function nextRequiredStep(episodeId: string): Promise<NextRequiredS
     reason: `Pathway step ${step.step_code}`,
     anchor: anchorDate.toISOString(),
     inputs_used: {
-      last_completed: lastCompleted?.completed_at,
+      completed_count: completedStats.completedCount,
+      last_completed_at: completedStats.lastCompletedAt?.toISOString(),
       stage: currentStage,
       step_index: nextStepIndex,
     },

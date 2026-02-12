@@ -320,7 +320,7 @@ export async function POST(request: NextRequest) {
            appointment_type as "appointmentType",
            pool,
            duration_minutes as "durationMinutes"`,
-        [patientId, episodeId || null, timeSlotId, auth.email, timeSlot.dentist_email, appointmentType || null, poolValue, durationMinutes, noShowRisk, requiresConfirmation, holdExpiresAt, usedOverride ? 'admin_override' : createdVia]
+        [patientId, episodeId || null, timeSlotId, auth.email, timeSlot.dentist_email, appointmentType || null, poolValue, durationMinutes, noShowRisk, requiresConfirmation, holdExpiresAt, usedOverride ? (auth.role === 'admin' ? 'admin_override' : 'surgeon_override') : createdVia]
       );
 
       const appointment = appointmentResult.rows[0];
