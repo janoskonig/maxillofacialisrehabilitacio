@@ -51,18 +51,38 @@ export async function GET(
     }
 
     let steps: Array<{ step_code: string; pool: string }> | null = null;
-    if (episode.carePathwayId) {
-      const pathwayResult = await pool.query(
-        `SELECT steps_json FROM care_pathways WHERE id = $1`,
-        [episode.carePathwayId]
-      );
-      steps = pathwayResult.rows[0]?.steps_json as Array<{ step_code: string; pool: string }> | null;
-    }
-    const workSteps = steps?.filter((s) => s.pool === 'work').length ?? 4;
-    const remainingVisitsP50 = Math.max(1, Math.ceil(workSteps * 0.6));
-    const remainingVisitsP80 = Math.max(remainingVisitsP50, Math.ceil(workSteps * 0.9));
+    let remainingVisitsP50: number;
+    let remainingVisitsP80: number;
+    let cadenceDays: number;
+    let assumptions: string[] = ['level0-pathway', 'cadence-from-steps', 'noShow-adjustment-off'];
 
-    const cadenceDays = 14;
+    if (episode.carePathwayId) {
+      const [pathwayResult, analyticsResult] = await Promise.all([
+        pool.query(`SELECT steps_json FROM care_pathways WHERE id = $1`, [episode.carePathwayId]),
+        pool.query(
+          `SELECT median_visits, p80_visits, median_cadence_days FROM care_pathway_analytics WHERE care_pathway_id = $1`,
+          [episode.carePathwayId]
+        ),
+      ]);
+      steps = pathwayResult.rows[0]?.steps_json as Array<{ step_code: string; pool: string }> | null;
+      const analytics = analyticsResult.rows[0];
+
+      if (analytics?.median_visits != null && analytics?.p80_visits != null) {
+        remainingVisitsP50 = Math.max(1, Math.ceil(Number(analytics.median_visits)));
+        remainingVisitsP80 = Math.max(remainingVisitsP50, Math.ceil(Number(analytics.p80_visits)));
+        cadenceDays = analytics.median_cadence_days != null ? Number(analytics.median_cadence_days) : 14;
+        assumptions = ['calibrated-pathway', 'cadence-from-analytics'];
+      } else {
+        const workSteps = steps?.filter((s) => s.pool === 'work').length ?? 4;
+        remainingVisitsP50 = Math.max(1, Math.ceil(workSteps * 0.6));
+        remainingVisitsP80 = Math.max(remainingVisitsP50, Math.ceil(workSteps * 0.9));
+        cadenceDays = 14;
+      }
+    } else {
+      remainingVisitsP50 = 4;
+      remainingVisitsP80 = 6;
+      cadenceDays = 14;
+    }
     const completionWindowStart = new Date(nextStepResult.earliest_date);
     completionWindowStart.setDate(completionWindowStart.getDate() + remainingVisitsP50 * cadenceDays);
     const completionWindowEnd = new Date(nextStepResult.latest_date);
@@ -79,7 +99,7 @@ export async function GET(
         start: nextStepResult.earliest_date.toISOString(),
         end: nextStepResult.latest_date.toISOString(),
       },
-      assumptions: ['level0-pathway', 'cadence-from-steps', 'noShow-adjustment-off'],
+      assumptions,
     });
   } catch (error) {
     console.error('Error fetching episode forecast:', error);

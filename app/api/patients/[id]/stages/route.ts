@@ -296,6 +296,15 @@ export async function POST(
         JSON.stringify({ patientId, stageCode, episodeId })
       );
 
+      if (stageCode === 'STAGE_6') {
+        try {
+          const { ensureRecallTasksForEpisode } = await import('@/lib/recall-tasks');
+          await ensureRecallTasksForEpisode(episodeId);
+        } catch (e) {
+          console.error('Failed to create recall tasks:', e);
+        }
+      }
+
       return NextResponse.json({ stage: newStage, useNewModel: true }, { status: 201 });
     }
 

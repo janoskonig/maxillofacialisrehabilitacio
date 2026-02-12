@@ -6,6 +6,7 @@ import { TodaysAppointmentsWidget } from './widgets/TodaysAppointmentsWidget';
 import { PendingApprovalsWidget } from './widgets/PendingApprovalsWidget';
 import { SendMessageWidget } from './widgets/SendMessageWidget';
 import { WaitingTimeWidget } from './widgets/WaitingTimeWidget';
+import { BusynessOMeter } from './widgets/BusynessOMeter';
 import { ChevronDown, ChevronUp, LayoutDashboard, UserPlus, Clock, BarChart3 } from 'lucide-react';
 import { DashboardWidget } from './DashboardWidget';
 import { PatientList } from './PatientList';
@@ -318,6 +319,9 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
 
               {/* Waiting Times Widget */}
               <WaitingTimeWidget />
+
+              {/* Busyness-o-Meter (orvos terhelés) */}
+              {canSeeStages && <BusynessOMeter />}
             </div>
           )}
 

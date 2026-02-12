@@ -4,7 +4,7 @@
  */
 
 import { getDbPool } from './db';
-import { computeNoShowRisk, getPatientNoShowsLast12m } from './no-show-risk';
+import { computeNoShowRiskWithConfig, getPatientNoShowsLast12m } from './no-show-risk';
 
 export type CreatedVia = 'worklist' | 'patient_self' | 'admin_override' | 'migration' | 'google_import';
 
@@ -60,7 +60,7 @@ export async function getAppointmentRiskSettings(
   const appointmentStartHour = timeSlotStart.getHours();
   const patientNoShowsLast12m = await getPatientNoShowsLast12m(patientId);
 
-  const result = computeNoShowRisk({
+  const result = await computeNoShowRiskWithConfig({
     patientId,
     leadTimeDays,
     appointmentStartHour,
