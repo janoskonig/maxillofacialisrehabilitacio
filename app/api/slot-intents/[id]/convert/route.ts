@@ -45,48 +45,71 @@ export async function POST(
 
     const intent = intentResult.rows[0];
 
-    // One-hard-next check for work pool
-    const oneHardNext = await checkOneHardNext(intent.episode_id, intent.pool as 'work' | 'consult' | 'control');
-    if (!oneHardNext.allowed) {
-      return NextResponse.json(
-        { error: oneHardNext.reason, code: 'ONE_HARD_NEXT_VIOLATION' },
-        { status: 409 }
+    await pool.query('BEGIN');
+
+    try {
+      // Lock intent to prevent double convert
+      const intentLock = await pool.query(
+        `SELECT id FROM slot_intents WHERE id = $1 AND state = 'open' FOR UPDATE`,
+        [intentId]
       );
-    }
-
-    let slotId = timeSlotId;
-
-    if (!slotId) {
-      // Find first free slot in window matching pool and duration
-      const windowStart = intent.window_start ? new Date(intent.window_start) : new Date();
-      const windowEnd = intent.window_end ? new Date(intent.window_end) : new Date(windowStart.getTime() + 14 * 24 * 60 * 60 * 1000);
-
-      const slotResult = await pool.query(
-        `SELECT id FROM available_time_slots
-         WHERE state = 'free' AND (slot_purpose = $1 OR slot_purpose IS NULL)
-         AND start_time >= $2 AND start_time <= $3
-         AND (duration_minutes >= $4 OR duration_minutes IS NULL)
-         ORDER BY start_time ASC LIMIT 1
-         FOR UPDATE SKIP LOCKED`,
-        [intent.pool, windowStart, windowEnd, intent.duration_minutes]
-      );
-
-      if (slotResult.rows.length === 0) {
+      if (intentLock.rows.length === 0) {
+        await pool.query('ROLLBACK');
         return NextResponse.json(
-          { error: 'Nincs szabad időpont a megadott ablakban' },
+          { error: 'Intent nem található vagy már nem open' },
           { status: 404 }
         );
       }
 
-      slotId = slotResult.rows[0].id;
-    }
+      // Lock episode and enforce one-hard-next (inside TX)
+      const episodeLock = await pool.query(
+        `SELECT id FROM patient_episodes WHERE id = $1 FOR UPDATE`,
+        [intent.episode_id]
+      );
+      if (episodeLock.rows.length === 0) {
+        await pool.query('ROLLBACK');
+        return NextResponse.json({ error: 'Epizód nem található' }, { status: 404 });
+      }
 
-    await pool.query('BEGIN');
+      const oneHardNext = await checkOneHardNext(intent.episode_id, intent.pool as 'work' | 'consult' | 'control');
+      if (!oneHardNext.allowed) {
+        await pool.query('ROLLBACK');
+        return NextResponse.json(
+          { error: oneHardNext.reason, code: 'ONE_HARD_NEXT_VIOLATION' },
+          { status: 409 }
+        );
+      }
 
-    try {
-      // Verify slot is free
+      let slotId = timeSlotId;
+
+      if (!slotId) {
+        const windowStart = intent.window_start ? new Date(intent.window_start) : new Date();
+        const windowEnd = intent.window_end ? new Date(intent.window_end) : new Date(windowStart.getTime() + 14 * 24 * 60 * 60 * 1000);
+
+        const slotResult = await pool.query(
+          `SELECT id FROM available_time_slots
+           WHERE state = 'free' AND (slot_purpose = $1 OR slot_purpose IS NULL)
+           AND start_time >= $2 AND start_time <= $3
+           AND (duration_minutes >= $4 OR duration_minutes IS NULL)
+           ORDER BY start_time ASC LIMIT 1
+           FOR UPDATE SKIP LOCKED`,
+          [intent.pool, windowStart, windowEnd, intent.duration_minutes]
+        );
+
+        if (slotResult.rows.length === 0) {
+          await pool.query('ROLLBACK');
+          return NextResponse.json(
+            { error: 'Nincs szabad időpont a megadott ablakban' },
+            { status: 404 }
+          );
+        }
+
+        slotId = slotResult.rows[0].id;
+      }
+
+      // Lock slot and verify free
       const slotCheck = await pool.query(
-        `SELECT id, start_time, user_id FROM available_time_slots WHERE id = $1 FOR UPDATE`,
+        `SELECT id, start_time, user_id, state FROM available_time_slots WHERE id = $1 FOR UPDATE`,
         [slotId]
       );
 
@@ -96,12 +119,7 @@ export async function POST(
       }
 
       const slot = slotCheck.rows[0];
-      const slotStateCheck = await pool.query(
-        'SELECT state FROM available_time_slots WHERE id = $1',
-        [slotId]
-      );
-
-      if (slotStateCheck.rows[0]?.state !== 'free') {
+      if (slot.state !== 'free') {
         await pool.query('ROLLBACK');
         return NextResponse.json({ error: 'Az időpont már nem szabad' }, { status: 400 });
       }

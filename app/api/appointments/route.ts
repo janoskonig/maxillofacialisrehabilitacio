@@ -142,16 +142,6 @@ export async function POST(request: NextRequest) {
     const validPools = ['consult', 'work', 'control'];
     const poolValue = validPools.includes(pool) ? pool : 'work';
 
-    if (episodeId && poolValue === 'work') {
-      const oneHardNext = await checkOneHardNext(episodeId, 'work');
-      if (!oneHardNext.allowed) {
-        return NextResponse.json(
-          { error: oneHardNext.reason ?? 'Episode already has a future work appointment (one-hard-next)', code: 'ONE_HARD_NEXT_VIOLATION' },
-          { status: 409 }
-        );
-      }
-    }
-
     const db = getDbPool();
 
     // Check if patient exists and was created by this surgeon
@@ -173,52 +163,16 @@ export async function POST(request: NextRequest) {
     // For admins: can book for any patient
     // Note: Surgeons can book appointments for any patient, but can only edit their own patients
 
-    // Check if time slot exists and is available
-    const timeSlotResult = await db.query(
-      `SELECT ats.*, u.email as dentist_email, u.id as dentist_user_id
-       FROM available_time_slots ats
-       JOIN users u ON ats.user_id = u.id
-       WHERE ats.id = $1`,
-      [timeSlotId]
-    );
-    
-    // Default cím érték
-    const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
-
-    if (timeSlotResult.rows.length === 0) {
-      return NextResponse.json(
-        { error: 'Időpont nem található' },
-        { status: 404 }
-      );
-    }
-
-    const timeSlot = timeSlotResult.rows[0];
-
-    if (timeSlot.status !== 'available') {
-      return NextResponse.json(
-        { error: 'Ez az időpont már le van foglalva' },
-        { status: 400 }
-      );
-    }
-
-    // Check if time slot is in the future
-    const startTime = new Date(timeSlot.start_time);
-    if (startTime <= new Date()) {
-      return NextResponse.json(
-        { error: 'Csak jövőbeli időpontot lehet lefoglalni' },
-        { status: 400 }
-      );
-    }
-
     const createdVia = auth.role === 'admin' ? 'admin_override' : 'worklist';
     const durationMinutes = 30;
 
     let noShowRisk = 0;
     let requiresConfirmation = false;
     let holdExpiresAt: Date | null = null;
-
+    const now = new Date();
+    const roughStart = new Date(now.getTime() + 24 * 60 * 60 * 1000);
     try {
-      const riskSettings = await getAppointmentRiskSettings(patientId, startTime, auth.email);
+      const riskSettings = await getAppointmentRiskSettings(patientId, roughStart, auth.email);
       noShowRisk = riskSettings.noShowRisk;
       requiresConfirmation = riskSettings.requiresConfirmation;
       holdExpiresAt = riskSettings.holdExpiresAt;
@@ -227,11 +181,84 @@ export async function POST(request: NextRequest) {
       holdExpiresAt.setHours(holdExpiresAt.getHours() + 48);
     }
 
-    // Start transaction
+    // Start transaction — all slot/episode checks + locks inside TX
     await db.query('BEGIN');
     let committed = false;
 
     try {
+      // 1) Lock episode first (consistent lock order) and enforce one-hard-next
+      if (episodeId && poolValue === 'work') {
+        const episodeLock = await db.query(
+          `SELECT id FROM patient_episodes WHERE id = $1 FOR UPDATE`,
+          [episodeId]
+        );
+        if (episodeLock.rows.length === 0) {
+          await db.query('ROLLBACK');
+          return NextResponse.json(
+            { error: 'Epizód nem található' },
+            { status: 404 }
+          );
+        }
+        const oneHardNext = await checkOneHardNext(episodeId, 'work');
+        if (!oneHardNext.allowed) {
+          await db.query('ROLLBACK');
+          return NextResponse.json(
+            { error: oneHardNext.reason ?? 'Episode already has a future work appointment (one-hard-next)', code: 'ONE_HARD_NEXT_VIOLATION' },
+            { status: 409 }
+          );
+        }
+      }
+
+      // 2) Lock time slot and verify free
+      const timeSlotResult = await db.query(
+        `SELECT ats.*, u.email as dentist_email, u.id as dentist_user_id
+         FROM available_time_slots ats
+         JOIN users u ON ats.user_id = u.id
+         WHERE ats.id = $1
+         FOR UPDATE`,
+        [timeSlotId]
+      );
+
+      if (timeSlotResult.rows.length === 0) {
+        await db.query('ROLLBACK');
+        return NextResponse.json(
+          { error: 'Időpont nem található' },
+          { status: 404 }
+        );
+      }
+
+      const timeSlot = timeSlotResult.rows[0];
+      const slotState = timeSlot.state ?? (timeSlot.status === 'available' ? 'free' : 'booked');
+      if (slotState !== 'free') {
+        await db.query('ROLLBACK');
+        return NextResponse.json(
+          { error: 'Ez az időpont már le van foglalva' },
+          { status: 400 }
+        );
+      }
+
+      const startTime = new Date(timeSlot.start_time);
+      if (startTime <= now) {
+        await db.query('ROLLBACK');
+        return NextResponse.json(
+          { error: 'Csak jövőbeli időpontot lehet lefoglalni' },
+          { status: 400 }
+        );
+      }
+
+      // Refine risk settings with actual start time
+      try {
+        const riskSettings = await getAppointmentRiskSettings(patientId, startTime, auth.email);
+        noShowRisk = riskSettings.noShowRisk;
+        requiresConfirmation = riskSettings.requiresConfirmation;
+        holdExpiresAt = riskSettings.holdExpiresAt;
+      } catch {
+        // keep defaults from pre-fetch
+      }
+
+      // Default cím érték
+      const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
+
       // Create or update appointment (UPSERT)
       // If there's a cancelled appointment for this time slot, update it instead of creating new
       // created_by: surgeon/admin who booked the appointment
