@@ -8,6 +8,7 @@ import { handleApiError } from '@/lib/api-error-handler';
 import { sendPushNotification } from '@/lib/push-notifications';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
+import { checkOneHardNext, getAppointmentRiskSettings } from '@/lib/scheduling-service';
 
 // Get all appointments
 export const dynamic = 'force-dynamic';
@@ -129,7 +130,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { patientId, timeSlotId, cim, teremszam, appointmentType } = body;
+    const { patientId, timeSlotId, cim, teremszam, appointmentType, episodeId, pool = 'work' } = body;
 
     if (!patientId || !timeSlotId) {
       return NextResponse.json(
@@ -138,10 +139,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const pool = getDbPool();
+    const validPools = ['consult', 'work', 'control'];
+    const poolValue = validPools.includes(pool) ? pool : 'work';
+
+    if (episodeId && poolValue === 'work') {
+      const oneHardNext = await checkOneHardNext(episodeId, 'work');
+      if (!oneHardNext.allowed) {
+        return NextResponse.json(
+          { error: oneHardNext.reason ?? 'Episode already has a future work appointment (one-hard-next)', code: 'ONE_HARD_NEXT_VIOLATION' },
+          { status: 409 }
+        );
+      }
+    }
+
+    const db = getDbPool();
 
     // Check if patient exists and was created by this surgeon
-    const patientResult = await pool.query(
+    const patientResult = await db.query(
       'SELECT id, nev, taj, email, nem, created_by FROM patients WHERE id = $1',
       [patientId]
     );
@@ -160,7 +174,7 @@ export async function POST(request: NextRequest) {
     // Note: Surgeons can book appointments for any patient, but can only edit their own patients
 
     // Check if time slot exists and is available
-    const timeSlotResult = await pool.query(
+    const timeSlotResult = await db.query(
       `SELECT ats.*, u.email as dentist_email, u.id as dentist_user_id
        FROM available_time_slots ats
        JOIN users u ON ats.user_id = u.id
@@ -196,23 +210,50 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const createdVia = auth.role === 'admin' ? 'admin_override' : 'worklist';
+    const durationMinutes = 30;
+
+    let noShowRisk = 0;
+    let requiresConfirmation = false;
+    let holdExpiresAt: Date | null = null;
+
+    try {
+      const riskSettings = await getAppointmentRiskSettings(patientId, startTime, auth.email);
+      noShowRisk = riskSettings.noShowRisk;
+      requiresConfirmation = riskSettings.requiresConfirmation;
+      holdExpiresAt = riskSettings.holdExpiresAt;
+    } catch {
+      holdExpiresAt = new Date();
+      holdExpiresAt.setHours(holdExpiresAt.getHours() + 48);
+    }
+
     // Start transaction
-    await pool.query('BEGIN');
+    await db.query('BEGIN');
 
     try {
       // Create or update appointment (UPSERT)
       // If there's a cancelled appointment for this time slot, update it instead of creating new
       // created_by: surgeon/admin who booked the appointment
       // dentist_email: dentist who created the time slot
-      const appointmentResult = await pool.query(
-        `INSERT INTO appointments (patient_id, time_slot_id, created_by, dentist_email, appointment_type)
-         VALUES ($1, $2, $3, $4, $5)
+      const appointmentResult = await db.query(
+        `INSERT INTO appointments (
+          patient_id, episode_id, time_slot_id, created_by, dentist_email, appointment_type,
+          pool, duration_minutes, no_show_risk, requires_confirmation, hold_expires_at, created_via
+        )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
          ON CONFLICT (time_slot_id) 
          DO UPDATE SET
            patient_id = EXCLUDED.patient_id,
+           episode_id = EXCLUDED.episode_id,
            created_by = EXCLUDED.created_by,
            dentist_email = EXCLUDED.dentist_email,
            appointment_type = EXCLUDED.appointment_type,
+           pool = EXCLUDED.pool,
+           duration_minutes = EXCLUDED.duration_minutes,
+           no_show_risk = EXCLUDED.no_show_risk,
+           requires_confirmation = EXCLUDED.requires_confirmation,
+           hold_expires_at = EXCLUDED.hold_expires_at,
+           created_via = EXCLUDED.created_via,
            appointment_status = NULL,
            completion_notes = NULL,
            google_calendar_event_id = NULL,
@@ -226,12 +267,15 @@ export async function POST(request: NextRequest) {
          RETURNING 
            id,
            patient_id as "patientId",
+           episode_id as "episodeId",
            time_slot_id as "timeSlotId",
            created_by as "createdBy",
            dentist_email as "dentistEmail",
            created_at as "createdAt",
-           appointment_type as "appointmentType"`,
-        [patientId, timeSlotId, auth.email, timeSlot.dentist_email, appointmentType || null]
+           appointment_type as "appointmentType",
+           pool,
+           duration_minutes as "durationMinutes"`,
+        [patientId, episodeId || null, timeSlotId, auth.email, timeSlot.dentist_email, appointmentType || null, poolValue, durationMinutes, noShowRisk, requiresConfirmation, holdExpiresAt, createdVia]
       );
 
       const appointment = appointmentResult.rows[0];
@@ -239,8 +283,8 @@ export async function POST(request: NextRequest) {
       // Google Calendar event ID inicializálása (null)
       let googleCalendarEventId: string | null = null;
 
-      // Update time slot status to booked and optionally update cim and teremszam
-      const updateFields: string[] = ['status = $1'];
+      // Update time slot status and state to booked
+      const updateFields: string[] = ['status = $1', 'state = $1'];
       const updateValues: (string | null)[] = ['booked'];
       let paramIndex = 2;
       
@@ -257,15 +301,15 @@ export async function POST(request: NextRequest) {
       }
       
       updateValues.push(timeSlotId);
-      await pool.query(
+      await db.query(
         `UPDATE available_time_slots SET ${updateFields.join(', ')} WHERE id = $${paramIndex}`,
         updateValues
       );
 
-      await pool.query('COMMIT');
+      await db.query('COMMIT');
       
       // Re-fetch time slot to get updated teremszam
-      const updatedTimeSlotResult = await pool.query(
+      const updatedTimeSlotResult = await db.query(
         `SELECT ats.*, u.email as dentist_email, u.id as dentist_user_id
          FROM available_time_slots ats
          JOIN users u ON ats.user_id = u.id
@@ -289,8 +333,8 @@ export async function POST(request: NextRequest) {
       // Optimalizálás: admin email-eket és dentist full name-t egyszer lekérdezzük
       // ICS fájlt is egyszer generáljuk és újrahasznosítjuk
       const [adminResult, dentistUserResult] = await Promise.all([
-        pool.query('SELECT email FROM users WHERE role = $1 AND active = true', ['admin']),
-        pool.query(`SELECT doktor_neve FROM users WHERE email = $1`, [timeSlot.dentist_email])
+        db.query('SELECT email FROM users WHERE role = $1 AND active = true', ['admin']),
+        db.query(`SELECT doktor_neve FROM users WHERE email = $1`, [timeSlot.dentist_email])
       ]);
       
       const adminEmails = adminResult.rows.map((row: { email: string }) => row.email);
@@ -342,7 +386,7 @@ export async function POST(request: NextRequest) {
               let finalEventId: string | null = null;
 
               // Naptár ID-k lekérése a felhasználó beállításaiból
-              const userCalendarResult = await pool.query(
+              const userCalendarResult = await db.query(
                 `SELECT google_calendar_source_calendar_id, google_calendar_target_calendar_id 
                  FROM users 
                  WHERE id = $1`,
@@ -402,7 +446,7 @@ export async function POST(request: NextRequest) {
 
               if (finalEventId) {
                 // Event ID mentése az appointments táblába
-                await pool.query(
+                await db.query(
                   'UPDATE appointments SET google_calendar_event_id = $1 WHERE id = $2',
                   [finalEventId, appointment.id]
                 );
@@ -468,7 +512,7 @@ export async function POST(request: NextRequest) {
       // Send push notification to patient (if patient portal user exists)
       try {
         // Check if patient has a portal account (users table with patient_id)
-        const patientUserResult = await pool.query(
+        const patientUserResult = await db.query(
           'SELECT id FROM users WHERE email = $1 AND active = true',
           [patient.email]
         );
@@ -514,7 +558,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({ appointment }, { status: 201 });
     } catch (error) {
-      await pool.query('ROLLBACK');
+      await db.query('ROLLBACK');
       throw error;
     }
   } catch (error) {
