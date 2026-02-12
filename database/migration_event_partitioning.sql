@@ -158,7 +158,7 @@ BEGIN
     ) LOOP
         -- Extract YYYY_MM from partition name (e.g. ..._2020_01)
         m := regexp_match(r.partition_name, '_(\d{4})_(\d{2})$');
-        IF m IS NOT NULL AND array_length(m, 1) >= 3 THEN
+        IF m IS NOT NULL AND array_length(m, 1) >= 2 THEN
             part_month := (m[1] || '-' || m[2] || '-01')::date;
             -- Partition holds data for part_month; upper bound is part_month + 1.
             -- Drop if part_month + 1 month < cutoff (i.e. partition completely before cutoff)

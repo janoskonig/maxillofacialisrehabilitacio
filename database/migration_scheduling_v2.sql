@@ -41,7 +41,7 @@ ALTER TABLE appointments ADD COLUMN IF NOT EXISTS no_show_risk NUMERIC(3,2) NOT 
 ALTER TABLE appointments ADD COLUMN IF NOT EXISTS requires_confirmation BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE appointments ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ;
 ALTER TABLE appointments ADD COLUMN IF NOT EXISTS hold_expires_at TIMESTAMPTZ;
-ALTER TABLE appointments ADD COLUMN IF NOT EXISTS created_via VARCHAR(30) NOT NULL DEFAULT 'migration' CHECK (created_via IN ('worklist', 'patient_self', 'admin_override', 'migration', 'google_import'));
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS created_via VARCHAR(30) NOT NULL DEFAULT 'migration' CHECK (created_via IN ('worklist', 'patient_self', 'admin_override', 'surgeon_override', 'migration', 'google_import'));
 ALTER TABLE appointments ADD COLUMN IF NOT EXISTS override_reason TEXT;
 ALTER TABLE appointments ADD COLUMN IF NOT EXISTS requires_precommit BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE appointments ADD COLUMN IF NOT EXISTS start_time TIMESTAMPTZ;
