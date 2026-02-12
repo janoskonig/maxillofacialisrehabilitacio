@@ -3,7 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { generateEquityRequestPDF } from '@/lib/pdf/equity-request';
 import { Patient, patientSchema } from '@/lib/types';
-import { patientSelectSql } from '@/lib/patient-select';
+import { patientSelectSql, normalizePatientRow } from '@/lib/patient-select';
 import { uploadFile, isFtpConfigured, generateDocumentFilename } from '@/lib/ftp-client';
 import { logActivity } from '@/lib/activity';
 
@@ -49,30 +49,9 @@ export async function GET(
 
     const patientData = result.rows[0];
     
-    // Konvertáljuk a dátum mezőket string formátumba (PostgreSQL Date objektumokat ad vissza)
-    const normalizedPatientData = {
-      ...patientData,
-      szuletesiDatum: patientData.szuletesiDatum 
-        ? (patientData.szuletesiDatum instanceof Date 
-            ? patientData.szuletesiDatum.toISOString().split('T')[0]
-            : String(patientData.szuletesiDatum))
-        : null,
-      mutetIdeje: patientData.mutetIdeje 
-        ? (patientData.mutetIdeje instanceof Date 
-            ? patientData.mutetIdeje.toISOString().split('T')[0]
-            : String(patientData.mutetIdeje))
-        : null,
-      felvetelDatuma: patientData.felvetelDatuma 
-        ? (patientData.felvetelDatuma instanceof Date 
-            ? patientData.felvetelDatuma.toISOString().split('T')[0]
-            : String(patientData.felvetelDatuma))
-        : null,
-      balesetIdopont: patientData.balesetIdopont 
-        ? (patientData.balesetIdopont instanceof Date 
-            ? patientData.balesetIdopont.toISOString().split('T')[0]
-            : String(patientData.balesetIdopont))
-        : null,
-    };
+    // Normalizáljuk a dátum mezőket string formátumba (PostgreSQL Date objektumokat ad vissza)
+    // Ez kezeli az összes dátum mezőt, beleértve a createdAt-et is
+    const normalizedPatientData = normalizePatientRow(patientData);
     
     // Validáljuk a beteg adatait a schema szerint
     const patient = patientSchema.parse(normalizedPatientData) as Patient;
