@@ -7,7 +7,7 @@ import { PendingApprovalsWidget } from './widgets/PendingApprovalsWidget';
 import { SendMessageWidget } from './widgets/SendMessageWidget';
 import { WaitingTimeWidget } from './widgets/WaitingTimeWidget';
 import { BusynessOMeter } from './widgets/BusynessOMeter';
-import { ChevronDown, ChevronUp, LayoutDashboard, UserPlus, Clock, BarChart3 } from 'lucide-react';
+import { ChevronDown, ChevronUp, LayoutDashboard, UserPlus, Clock, BarChart3, Activity } from 'lucide-react';
 import { DashboardWidget } from './DashboardWidget';
 import { PatientList } from './PatientList';
 import { Patient } from '@/lib/types';
@@ -40,7 +40,7 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'new-registrations' | 'gantt'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'new-registrations' | 'gantt' | 'workload'>('overview');
   const [longInPreparatory, setLongInPreparatory] = useState<LongInPreparatoryPatient[]>([]);
   const [ganttEpisodes, setGanttEpisodes] = useState<GanttEpisode[]>([]);
   const [ganttIntervals, setGanttIntervals] = useState<GanttInterval[]>([]);
@@ -269,6 +269,19 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
                   GANTT
                 </button>
               )}
+              {canSeeStages && (
+                <button
+                  onClick={() => setActiveTab('workload')}
+                  className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                    activeTab === 'workload'
+                      ? 'text-medical-primary border-medical-primary'
+                      : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
+                  }`}
+                >
+                  <Activity className="w-4 h-4" />
+                  Orvos terhelés
+                </button>
+              )}
             </nav>
           </div>
 
@@ -319,9 +332,15 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
 
               {/* Waiting Times Widget */}
               <WaitingTimeWidget />
+            </div>
+          )}
 
-              {/* Busyness-o-Meter (orvos terhelés) */}
-              {canSeeStages && <BusynessOMeter />}
+          {activeTab === 'workload' && canSeeStages && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Fogpótlástanász és admin kihasználtság a következő 30 napra.
+              </p>
+              <BusynessOMeter />
             </div>
           )}
 

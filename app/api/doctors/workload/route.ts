@@ -16,8 +16,8 @@ function getLevel(score: number): Level {
 
 /**
  * GET /api/doctors/workload
- * Params: horizonDays=7|28, includeDetails=true|false
- * Busyness-o-meter: utilization + pipeline pressure per doctor
+ * Params: horizonDays=7..180 (default 30), includeDetails=true|false
+ * Busyness-o-meter: utilization + pipeline pressure per doctor (1 hónapos időablak)
  */
 export async function GET(request: NextRequest) {
   try {
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Bejelentkezés szükséges' }, { status: 401 });
     }
 
-    const horizonDays = Math.min(28, Math.max(7, parseInt(request.nextUrl.searchParams.get('horizonDays') || '7', 10)));
+    const horizonDays = Math.min(180, Math.max(7, parseInt(request.nextUrl.searchParams.get('horizonDays') || '30', 10)));
     const includeDetails = request.nextUrl.searchParams.get('includeDetails') !== 'false';
 
     const pool = getDbPool();
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
 
     const doctorsResult = await pool.query(
       `SELECT id, email, doktor_neve FROM users
-       WHERE active = true AND (role IN ('sebészorvos', 'fogpótlástanász', 'admin') OR doktor_neve IS NOT NULL)
+       WHERE active = true AND role IN ('fogpótlástanász', 'admin')
        AND doktor_neve IS NOT NULL AND doktor_neve != ''
        ORDER BY doktor_neve ASC`
     );

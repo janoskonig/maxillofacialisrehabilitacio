@@ -23,7 +23,7 @@ export function BusynessOMeter() {
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
-    fetch('/api/doctors/workload?horizonDays=7&includeDetails=true', { credentials: 'include' })
+    fetch('/api/doctors/workload?horizonDays=30&includeDetails=true', { credentials: 'include' })
       .then((r) => (r.ok ? r.json() : { doctors: [] }))
       .then((d) => setDoctors(d.doctors ?? []))
       .catch(() => setDoctors([]))
@@ -60,27 +60,27 @@ export function BusynessOMeter() {
     <DashboardWidget title="Orvos terhelés" icon={<Activity className="w-5 h-5" />}>
       <div className="space-y-2">
         {displayed.map((d) => (
-          <div key={d.userId} className="flex items-center justify-between gap-2">
-            <div className="min-w-0 flex-1">
+          <div key={d.userId} className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1">
+            <div className="min-w-0">
               <div className="text-sm font-medium truncate">{d.name}</div>
               {expanded && d.availableMinutes !== undefined && (
                 <div className="text-xs text-gray-500">
-                  {d.utilizationPct}% kihasználtság · {d.bookedMinutes ?? 0} / {d.availableMinutes ?? 0} perc
+                  {d.utilizationPct}% kihasználtság · {d.bookedMinutes ?? 0} / {d.availableMinutes ?? 0} perc (30 nap)
                   {d.overdueCount !== undefined && d.overdueCount > 0 && (
                     <span className="ml-1 text-orange-600">{d.overdueCount} lejárt</span>
                   )}
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
+            <div className="flex items-center gap-2 min-w-[140px] justify-end">
+              <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden shrink-0">
                 <div
                   className={`h-full rounded-full transition-all ${levelColors[d.level] || 'bg-gray-400'}`}
                   style={{ width: `${Math.min(100, d.busynessScore)}%` }}
                 />
               </div>
-              <span className="text-xs font-medium w-8">{d.busynessScore}</span>
-              <span className={`text-xs hidden sm:inline ${d.level === 'critical' ? 'text-red-600' : d.level === 'high' ? 'text-orange-600' : ''}`}>
+              <span title="Terhelési pontszám 0–100: kihasználtság + tartott slotok + várólista" className="text-xs font-medium w-8 text-right tabular-nums">{d.busynessScore}</span>
+              <span className={`text-xs hidden sm:inline w-20 text-right ${d.level === 'critical' ? 'text-red-600' : d.level === 'high' ? 'text-orange-600' : ''}`}>
                 {levelLabels[d.level] || d.level}
               </span>
             </div>
