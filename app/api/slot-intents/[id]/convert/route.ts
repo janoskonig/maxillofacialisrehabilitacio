@@ -71,12 +71,36 @@ export async function POST(
         return NextResponse.json({ error: 'Epizód nem található' }, { status: 404 });
       }
 
-      const oneHardNext = await checkOneHardNext(intent.episode_id, intent.pool as 'work' | 'consult' | 'control');
+      // Check if step has requires_precommit (pathway step)
+      let requiresPrecommit = false;
+      if (intent.pool === 'work') {
+        const pathwayResult = await pool.query(
+          `SELECT cp.steps_json FROM patient_episodes pe
+           JOIN care_pathways cp ON pe.care_pathway_id = cp.id
+           WHERE pe.id = $1`,
+          [intent.episode_id]
+        );
+        const steps = pathwayResult.rows[0]?.steps_json as Array<{ step_code: string; requires_precommit?: boolean }> | null;
+        const step = steps?.find((s) => s.step_code === intent.step_code);
+        requiresPrecommit = step?.requires_precommit === true;
+      }
+
+      const oneHardNext = await checkOneHardNext(intent.episode_id, intent.pool as 'work' | 'consult' | 'control', {
+        requiresPrecommit,
+        stepCode: intent.step_code,
+      });
       if (!oneHardNext.allowed) {
         await pool.query('ROLLBACK');
         return NextResponse.json(
           { error: oneHardNext.reason, code: 'ONE_HARD_NEXT_VIOLATION' },
           { status: 409 }
+        );
+      }
+
+      if (requiresPrecommit && intent.episode_id) {
+        await pool.query(
+          `INSERT INTO scheduling_override_audit (episode_id, user_id, override_reason) VALUES ($1, $2, $3)`,
+          [intent.episode_id, auth.email, `precommit: ${intent.step_code}`]
         );
       }
 
@@ -143,9 +167,9 @@ export async function POST(
       const apptResult = await pool.query(
         `INSERT INTO appointments (
           patient_id, episode_id, time_slot_id, created_by, dentist_email,
-          pool, duration_minutes, no_show_risk, requires_confirmation, hold_expires_at, created_via, start_time, end_time
+          pool, duration_minutes, no_show_risk, requires_confirmation, hold_expires_at, created_via, requires_precommit, start_time, end_time
         )
-        SELECT $1, $2, $3, $4, u.email, $5, $6, $7, $8, $9, 'worklist', $10, $11
+        SELECT $1, $2, $3, $4, u.email, $5, $6, $7, $8, $9, 'worklist', $10, $11, $12
         FROM available_time_slots ats
         JOIN users u ON ats.user_id = u.id
         WHERE ats.id = $3
@@ -161,6 +185,7 @@ export async function POST(
           noShowRisk,
           requiresConfirmation,
           holdExpiresAt,
+          requiresPrecommit,
           startTime,
           new Date(startTime.getTime() + durationMinutes * 60 * 1000),
         ]

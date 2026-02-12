@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { patientId, timeSlotId, cim, teremszam, appointmentType, episodeId, pool = 'work', overrideReason } = body;
+    const { patientId, timeSlotId, cim, teremszam, appointmentType, episodeId, pool = 'work', overrideReason, requiresPrecommit, stepCode } = body;
 
     if (!patientId || !timeSlotId) {
       return NextResponse.json(
@@ -202,7 +202,10 @@ export async function POST(request: NextRequest) {
             { status: 404 }
           );
         }
-        const oneHardNext = await checkOneHardNext(episodeId, 'work');
+        const oneHardNext = await checkOneHardNext(episodeId, 'work', {
+          requiresPrecommit: requiresPrecommit === true,
+          stepCode: typeof stepCode === 'string' ? stepCode : undefined,
+        });
         if (!oneHardNext.allowed) {
           const strictOneHardNext = await getSchedulingFeatureFlag('strict_one_hard_next');
           const mayOverride = !strictOneHardNext && (auth.role === 'admin' || auth.role === 'sebészorvos') && overrideReason && typeof overrideReason === 'string' && overrideReason.trim().length >= 10;
@@ -223,6 +226,12 @@ export async function POST(request: NextRequest) {
               { status: 409 }
             );
           }
+        } else if (requiresPrecommit === true && episodeId) {
+          // Audit: precommit exception allows 2nd future work appointment
+          await db.query(
+            `INSERT INTO scheduling_override_audit (episode_id, user_id, override_reason) VALUES ($1, $2, $3)`,
+            [episodeId, auth.email, `precommit: ${typeof stepCode === 'string' ? stepCode : 'unknown'}`]
+          );
         }
       }
 
@@ -280,12 +289,13 @@ export async function POST(request: NextRequest) {
       // If there's a cancelled appointment for this time slot, update it instead of creating new
       // created_by: surgeon/admin who booked the appointment
       // dentist_email: dentist who created the time slot
+      const reqPrecommit = requiresPrecommit === true;
       const appointmentResult = await db.query(
         `INSERT INTO appointments (
           patient_id, episode_id, time_slot_id, created_by, dentist_email, appointment_type,
-          pool, duration_minutes, no_show_risk, requires_confirmation, hold_expires_at, created_via
+          pool, duration_minutes, no_show_risk, requires_confirmation, hold_expires_at, created_via, requires_precommit
         )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
          ON CONFLICT (time_slot_id) 
          DO UPDATE SET
            patient_id = EXCLUDED.patient_id,
@@ -299,6 +309,7 @@ export async function POST(request: NextRequest) {
            requires_confirmation = EXCLUDED.requires_confirmation,
            hold_expires_at = EXCLUDED.hold_expires_at,
            created_via = EXCLUDED.created_via,
+           requires_precommit = EXCLUDED.requires_precommit,
            appointment_status = NULL,
            completion_notes = NULL,
            google_calendar_event_id = NULL,
@@ -320,7 +331,7 @@ export async function POST(request: NextRequest) {
            appointment_type as "appointmentType",
            pool,
            duration_minutes as "durationMinutes"`,
-        [patientId, episodeId || null, timeSlotId, auth.email, timeSlot.dentist_email, appointmentType || null, poolValue, durationMinutes, noShowRisk, requiresConfirmation, holdExpiresAt, usedOverride ? (auth.role === 'admin' ? 'admin_override' : 'surgeon_override') : createdVia]
+        [patientId, episodeId || null, timeSlotId, auth.email, timeSlot.dentist_email, appointmentType || null, poolValue, durationMinutes, noShowRisk, requiresConfirmation, holdExpiresAt, usedOverride ? (auth.role === 'admin' ? 'admin_override' : 'surgeon_override') : createdVia, reqPrecommit]
       );
 
       const appointment = appointmentResult.rows[0];
