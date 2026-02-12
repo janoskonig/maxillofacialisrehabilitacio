@@ -52,9 +52,9 @@ export async function PATCH(
 
     const pool = getDbPool();
 
-    // Check if appointment exists
+    // Check if appointment exists and get current status
     const appointmentResult = await pool.query(
-      'SELECT id FROM appointments WHERE id = $1',
+      'SELECT id, appointment_status as "appointmentStatus" FROM appointments WHERE id = $1',
       [appointmentId]
     );
 
@@ -64,6 +64,8 @@ export async function PATCH(
         { status: 404 }
       );
     }
+
+    const oldStatus = appointmentResult.rows[0].appointmentStatus ?? null;
 
     // Build update query dynamically
     const updateFields: string[] = [];
@@ -127,6 +129,17 @@ export async function PATCH(
          appointment_type as "appointmentType"`,
       updateValues
     );
+
+    // Emit appointment_status_events for audit (immutable event log)
+    if (appointmentStatus !== undefined) {
+      const newStatus = updateResult.rows[0]?.appointmentStatus ?? appointmentStatus;
+      const createdBy = auth.email ?? auth.userId ?? 'unknown';
+      await pool.query(
+        `INSERT INTO appointment_status_events (appointment_id, old_status, new_status, created_by)
+         VALUES ($1, $2, $3, $4)`,
+        [appointmentId, oldStatus, newStatus, createdBy]
+      );
+    }
 
     return NextResponse.json({ 
       appointment: updateResult.rows[0]
