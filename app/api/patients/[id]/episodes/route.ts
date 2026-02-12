@@ -156,6 +156,19 @@ export async function POST(
     }
 
     // MVP: egyszerre 1 open epizód – a régi open epizódokat closed-re állítjuk
+    const closingResult = await pool.query(
+      `SELECT id FROM patient_episodes WHERE patient_id = $1 AND status = 'open'`,
+      [patientId]
+    );
+    const closingIds = closingResult.rows.map((r: { id: string }) => r.id);
+    if (closingIds.length > 0) {
+      try {
+        const { invalidateIntentsForEpisodes } = await import('@/lib/intent-invalidation');
+        await invalidateIntentsForEpisodes(closingIds, 'episode_closed');
+      } catch (e) {
+        console.error('Failed to invalidate intents for closed episodes:', e);
+      }
+    }
     await pool.query(
       `UPDATE patient_episodes SET status = 'closed', closed_at = CURRENT_TIMESTAMP WHERE patient_id = $1 AND status = 'open'`,
       [patientId]
