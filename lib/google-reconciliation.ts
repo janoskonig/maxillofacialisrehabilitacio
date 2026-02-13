@@ -167,7 +167,7 @@ export async function reconcileUserWithGoogle(userId: string): Promise<Reconcili
     }
 
     // Apply blocks: mark conflicting slots as blocked
-    const slotIdsToBlock = [...new Set(result.conflicts.map((c) => c.slotId))];
+    const slotIdsToBlock = Array.from(new Set(result.conflicts.map((c) => c.slotId)));
     for (const slotId of slotIdsToBlock) {
       const updateResult = await pool.query(
         `UPDATE available_time_slots 

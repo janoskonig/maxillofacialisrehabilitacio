@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { nextRequiredStep, isBlocked } from '@/lib/next-step-engine';
+import type { WorklistItemBackend } from '@/lib/worklist-types';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,10 +20,16 @@ export async function GET(request: NextRequest) {
 
     const pool = getDbPool();
 
+    // serverNowISO – offsetes ISO, egyetlen forrás (clock drift ellen)
+    const serverNow = new Date();
+    const serverNowISO = serverNow.toISOString();
+
     // WIP episodes: status=open, stage in STAGE_1..STAGE_6 (not STAGE_0 or STAGE_7)
     const episodesResult = await pool.query(
-      `SELECT DISTINCT pe.id as "episodeId", pe.patient_id as "patientId", pe.assigned_provider_id as "assignedProviderId"
+      `SELECT DISTINCT pe.id as "episodeId", pe.patient_id as "patientId", pe.assigned_provider_id as "assignedProviderId",
+              p.nev as "patientName", pe.opened_at as "openedAt"
        FROM patient_episodes pe
+       JOIN patients p ON pe.patient_id = p.id
        LEFT JOIN (
          SELECT DISTINCT ON (episode_id) episode_id, stage_code
          FROM stage_events ORDER BY episode_id, at DESC
@@ -32,21 +39,7 @@ export async function GET(request: NextRequest) {
        ORDER BY pe.opened_at ASC`
     );
 
-    const items: Array<{
-      episodeId: string;
-      patientId: string;
-      currentStage: string;
-      nextStep: string;
-      overdueByDays: number;
-      windowStart: string | null;
-      windowEnd: string | null;
-      durationMinutes: number;
-      pool: string;
-      priorityScore: number;
-      noShowRisk: number;
-      status?: 'ready' | 'blocked';
-      blockedReason?: string;
-    }> = [];
+    const items: WorklistItemBackend[] = [];
 
     for (const row of episodesResult.rows) {
       const result = await nextRequiredStep(row.episodeId);
@@ -59,8 +52,10 @@ export async function GET(request: NextRequest) {
         items.push({
           episodeId: row.episodeId,
           patientId: row.patientId,
+          patientName: row.patientName ?? null,
           currentStage: stageRow.rows[0]?.stage_code ?? 'STAGE_0',
           nextStep: '-',
+          stepCode: undefined,
           overdueByDays: 0,
           windowStart: null,
           windowEnd: null,
@@ -98,8 +93,10 @@ export async function GET(request: NextRequest) {
       items.push({
         episodeId: row.episodeId,
         patientId: row.patientId,
+        patientName: row.patientName ?? null,
         currentStage,
         nextStep: result.step_code,
+        stepCode: result.step_code,
         overdueByDays,
         windowStart: result.earliest_date.toISOString(),
         windowEnd: result.latest_date.toISOString(),
@@ -112,7 +109,10 @@ export async function GET(request: NextRequest) {
 
     items.sort((a, b) => b.priorityScore - a.priorityScore);
 
-    return NextResponse.json({ items });
+    return NextResponse.json({
+      items,
+      serverNowISO,
+    });
   } catch (error) {
     console.error('Error fetching WIP worklist:', error);
     return NextResponse.json(

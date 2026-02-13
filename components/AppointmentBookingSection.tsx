@@ -36,6 +36,8 @@ interface Appointment {
 
 interface AppointmentBookingSectionProps {
   patientId: string | null | undefined;
+  episodeId?: string | null;
+  pool?: 'consult' | 'work' | 'control';
   isViewOnly?: boolean;
   onSavePatientBeforeBooking?: () => Promise<Patient>;
   isPatientDirty?: boolean;
@@ -45,6 +47,8 @@ interface AppointmentBookingSectionProps {
 
 export function AppointmentBookingSection({ 
   patientId, 
+  episodeId,
+  pool = 'work',
   isViewOnly = false,
   onSavePatientBeforeBooking,
   isPatientDirty = false,
@@ -242,6 +246,8 @@ export function AppointmentBookingSection({
         body: JSON.stringify({
           patientId: currentPatientId,
           timeSlotId: selectedSlot,
+          episodeId: episodeId ?? null,
+          pool: pool ?? 'work',
           cim: customCim || (availableCims.length === 1 ? DEFAULT_CIM : null),
           teremszam: customTeremszam.trim() || null,
           appointmentType: selectedAppointmentType || null,

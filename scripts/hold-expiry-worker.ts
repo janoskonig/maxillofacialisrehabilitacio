@@ -2,7 +2,7 @@
  * Hold expiry worker (run every 5–10 min via cron).
  * Usage: npx ts-node scripts/hold-expiry-worker.ts
  *
- * Cron example: */5 * * * * cd /path && npx ts-node scripts/hold-expiry-worker.ts
+ * Cron example (every 5 min): 0,5,10,15,20,25,30,35,40,45,50,55 * * * * cd /path && npx ts-node scripts/hold-expiry-worker.ts
  */
 
 import 'dotenv/config';

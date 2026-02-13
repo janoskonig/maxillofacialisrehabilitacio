@@ -2,7 +2,7 @@
  * Intent TTL expiry worker (run daily or every few hours via cron).
  * Usage: npx ts-node scripts/intent-expiry-worker.ts
  *
- * Cron example: 0 */6 * * * cd /path && npx ts-node scripts/intent-expiry-worker.ts
+ * Cron example (every 6 h): 0 0,6,12,18 * * * cd /path && npx ts-node scripts/intent-expiry-worker.ts
  */
 
 import 'dotenv/config';

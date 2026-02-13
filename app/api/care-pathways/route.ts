@@ -45,18 +45,16 @@ export async function GET(request: NextRequest) {
        GROUP BY cp.id`
     );
 
-    const governanceByPathway = new Map(
-      governanceResult.rows.map((r: { pathwayId: string }) => [r.pathwayId, r])
+    type GovRow = { pathwayId: string; episodeCount: number; overrideCount: number; overrideRatePct: number };
+    const governanceByPathway = new Map<string, GovRow>(
+      governanceResult.rows.map((r: GovRow) => [r.pathwayId, r])
     );
 
     const DEGRADED_THRESHOLD_PCT = 20;
 
+    const defaultGov: GovRow = { pathwayId: '', episodeCount: 0, overrideCount: 0, overrideRatePct: 0 };
     const items = pathways.map((p: { id: string; name: string }) => {
-      const gov = governanceByPathway.get(p.id) ?? {
-        episodeCount: 0,
-        overrideCount: 0,
-        overrideRatePct: 0,
-      };
+      const gov = governanceByPathway.get(p.id) ?? defaultGov;
       return {
         ...p,
         governance: {

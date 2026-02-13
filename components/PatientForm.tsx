@@ -9,6 +9,7 @@ import { X, Calendar, User, Phone, Mail, MapPin, FileText, AlertTriangle, Plus, 
 import { useRouter } from 'next/navigation';
 import { AppointmentBookingSection } from './AppointmentBookingSection';
 import { ConditionalAppointmentBooking } from './ConditionalAppointmentBooking';
+import { ContextBanner } from './ContextBanner';
 import { getCurrentUser } from '@/lib/auth';
 import { DatePicker } from './DatePicker';
 import { savePatient, ApiError, TimeoutError } from '@/lib/storage';
@@ -312,6 +313,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
   const [labQuoteRequests, setLabQuoteRequests] = useState<Array<{ id: string; szoveg: string; datuma: string }>>([]);
   const [newQuoteSzoveg, setNewQuoteSzoveg] = useState<string>('');
   const [newQuoteDatuma, setNewQuoteDatuma] = useState<Date | null>(null);
+  const [activeEpisodeId, setActiveEpisodeId] = useState<string | null>(null);
 
   // State for "vanBeutalo" toggle (default true if bármely beutaló-adat van, or always true for new patients if surgeon role)
   // Note: userRole might not be loaded yet, so we'll update it in useEffect
@@ -382,6 +384,30 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
     };
     loadInstitutionOptions();
   }, []);
+
+  // Load active (open) episode for WIP context banner + appointment booking
+  useEffect(() => {
+    if (!patientId) {
+      setActiveEpisodeId(null);
+      return;
+    }
+    const loadEpisodes = async () => {
+      try {
+        const res = await fetch(`/api/patients/${patientId}/episodes`, { credentials: 'include' });
+        if (!res.ok) {
+          setActiveEpisodeId(null);
+          return;
+        }
+        const data = await res.json();
+        const episodes = data.episodes ?? [];
+        const openEpisode = episodes.find((e: { status?: string }) => e.status === 'open');
+        setActiveEpisodeId(openEpisode?.id ?? null);
+      } catch {
+        setActiveEpisodeId(null);
+      }
+    };
+    loadEpisodes();
+  }, [patientId]);
 
   // Load doctor options from API (for beutaló orvos autocomplete)
   useEffect(() => {
@@ -4224,8 +4250,21 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
         {/* For surgeons, always allow editing appointments even if form is view-only */}
         {shouldShowSection('idopont') && (
         <div id="section-idopont" className="scroll-mt-20 sm:scroll-mt-24">
+          {activeEpisodeId && (userRole === 'admin' || userRole === 'sebészorvos' || userRole === 'fogpótlástanász') && (
+            <div className="mb-4">
+              <ContextBanner
+                variant="info"
+                title="WIP eset"
+                message="WIP esetben a munkalistát használd."
+                primaryLink={{ label: 'Megnyitás', href: '/?tab=worklist' }}
+                dismissKey="wip-worklist-banner-dismissed"
+              />
+            </div>
+          )}
           <AppointmentBookingSection 
             patientId={patientId} 
+            episodeId={activeEpisodeId}
+            pool={activeEpisodeId ? 'work' : undefined}
             isViewOnly={userRole === 'sebészorvos' ? false : isViewOnly}
             onSavePatientBeforeBooking={!isViewOnly ? savePatientForBooking : undefined}
             isPatientDirty={!isViewOnly && hasUnsavedChanges()}

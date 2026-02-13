@@ -89,9 +89,19 @@ export async function GET(request: NextRequest) {
 
     const slots = result.rows.filter((s: { state: string }) => canConsumeSlot(s.state));
 
+    // queryEcho – debug és cache-koherencia (support 10 mp alatt látja UI vs backend félreértést)
+    const queryEcho = {
+      pool,
+      duration: durationMinutes,
+      windowStartISO: windowStart ?? null,
+      windowEndISO: windowEnd ?? null,
+      provider: providerId ?? 'all',
+    };
+
     return NextResponse.json({
       slots,
       filters: { pool, durationMinutes, windowStart, windowEnd, providerId },
+      queryEcho,
     });
   } catch (error) {
     console.error('Error fetching slots for booking:', error);
