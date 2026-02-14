@@ -52,73 +52,78 @@ export async function PATCH(
 
     const pool = getDbPool();
 
-    // Check if appointment exists and get current status
-    const appointmentResult = await pool.query(
-      'SELECT id, appointment_status as "appointmentStatus" FROM appointments WHERE id = $1',
-      [appointmentId]
-    );
-
-    if (appointmentResult.rows.length === 0) {
-      return NextResponse.json(
-        { error: 'Időpont nem található' },
-        { status: 404 }
+    await pool.query('BEGIN');
+    try {
+      // Lock appointment row and get current status (prevents race: correct oldStatus for audit)
+      const appointmentResult = await pool.query(
+        'SELECT id, appointment_status as "appointmentStatus" FROM appointments WHERE id = $1 FOR UPDATE',
+        [appointmentId]
       );
-    }
 
-    const oldStatus = appointmentResult.rows[0].appointmentStatus ?? null;
-
-    // Build update query dynamically
-    const updateFields: string[] = [];
-    const updateValues: unknown[] = [];
-    let paramIndex = 1;
-
-    if (appointmentStatus !== undefined) {
-      updateFields.push(`appointment_status = $${paramIndex}`);
-      updateValues.push(appointmentStatus);
-      paramIndex++;
-    }
-
-    if (completionNotes !== undefined) {
-      updateFields.push(`completion_notes = $${paramIndex}`);
-      updateValues.push(completionNotes && completionNotes.trim() !== '' ? completionNotes.trim() : null);
-      paramIndex++;
-    }
-
-    if (isLate !== undefined) {
-      updateFields.push(`is_late = $${paramIndex}`);
-      updateValues.push(isLate === true);
-      paramIndex++;
-    }
-
-    if (appointmentType !== undefined) {
-      // Validate appointmentType if provided
-      if (appointmentType !== null && appointmentType !== undefined) {
-        const validTypes = ['elso_konzultacio', 'munkafazis', 'kontroll'];
-        if (!validTypes.includes(appointmentType)) {
-          return NextResponse.json(
-            { error: 'Érvénytelen időpont típus érték' },
-            { status: 400 }
-          );
-        }
+      if (appointmentResult.rows.length === 0) {
+        await pool.query('ROLLBACK');
+        return NextResponse.json(
+          { error: 'Időpont nem található' },
+          { status: 404 }
+        );
       }
-      updateFields.push(`appointment_type = $${paramIndex}`);
-      updateValues.push(appointmentType || null);
-      paramIndex++;
-    }
 
-    if (updateFields.length === 0) {
-      return NextResponse.json(
-        { error: 'Nincs módosítandó mező' },
-        { status: 400 }
-      );
-    }
+      const oldStatus = appointmentResult.rows[0].appointmentStatus ?? null;
 
-    // Add appointment ID to params
-    updateValues.push(appointmentId);
+      // Build update query dynamically
+      const updateFields: string[] = [];
+      const updateValues: unknown[] = [];
+      let paramIndex = 1;
 
-    // Update appointment
-    const updateResult = await pool.query(
-      `UPDATE appointments 
+      if (appointmentStatus !== undefined) {
+        updateFields.push(`appointment_status = $${paramIndex}`);
+        updateValues.push(appointmentStatus);
+        paramIndex++;
+      }
+
+      if (completionNotes !== undefined) {
+        updateFields.push(`completion_notes = $${paramIndex}`);
+        updateValues.push(completionNotes && completionNotes.trim() !== '' ? completionNotes.trim() : null);
+        paramIndex++;
+      }
+
+      if (isLate !== undefined) {
+        updateFields.push(`is_late = $${paramIndex}`);
+        updateValues.push(isLate === true);
+        paramIndex++;
+      }
+
+      if (appointmentType !== undefined) {
+        // Validate appointmentType if provided
+        if (appointmentType !== null && appointmentType !== undefined) {
+          const validTypes = ['elso_konzultacio', 'munkafazis', 'kontroll'];
+          if (!validTypes.includes(appointmentType)) {
+            await pool.query('ROLLBACK');
+            return NextResponse.json(
+              { error: 'Érvénytelen időpont típus érték' },
+              { status: 400 }
+            );
+          }
+        }
+        updateFields.push(`appointment_type = $${paramIndex}`);
+        updateValues.push(appointmentType || null);
+        paramIndex++;
+      }
+
+      if (updateFields.length === 0) {
+        await pool.query('ROLLBACK');
+        return NextResponse.json(
+          { error: 'Nincs módosítandó mező' },
+          { status: 400 }
+        );
+      }
+
+      // Add appointment ID to params
+      updateValues.push(appointmentId);
+
+      // Update appointment
+      const updateResult = await pool.query(
+        `UPDATE appointments 
        SET ${updateFields.join(', ')} 
        WHERE id = $${paramIndex}
        RETURNING 
@@ -127,23 +132,28 @@ export async function PATCH(
          completion_notes as "completionNotes",
          is_late as "isLate",
          appointment_type as "appointmentType"`,
-      updateValues
-    );
-
-    // Emit appointment_status_events for audit (immutable event log)
-    if (appointmentStatus !== undefined) {
-      const newStatus = updateResult.rows[0]?.appointmentStatus ?? appointmentStatus;
-      const createdBy = auth.email ?? auth.userId ?? 'unknown';
-      await pool.query(
-        `INSERT INTO appointment_status_events (appointment_id, old_status, new_status, created_by)
-         VALUES ($1, $2, $3, $4)`,
-        [appointmentId, oldStatus, newStatus, createdBy]
+        updateValues
       );
-    }
 
-    return NextResponse.json({ 
-      appointment: updateResult.rows[0]
-    }, { status: 200 });
+      // Emit appointment_status_events for audit (immutable event log)
+      if (appointmentStatus !== undefined) {
+        const newStatus = updateResult.rows[0]?.appointmentStatus ?? appointmentStatus;
+        const createdBy = auth.email ?? auth.userId ?? 'unknown';
+        await pool.query(
+          `INSERT INTO appointment_status_events (appointment_id, old_status, new_status, created_by)
+           VALUES ($1, $2, $3, $4)`,
+          [appointmentId, oldStatus, newStatus, createdBy]
+        );
+      }
+
+      await pool.query('COMMIT');
+      return NextResponse.json({ 
+        appointment: updateResult.rows[0]
+      }, { status: 200 });
+    } catch (txError) {
+      await pool.query('ROLLBACK');
+      throw txError;
+    }
   } catch (error) {
     return handleApiError(error, 'Hiba történt az időpont státuszának frissítésekor');
   }

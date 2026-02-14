@@ -310,12 +310,13 @@ export async function POST(request: NextRequest) {
       // dentist_email: dentist who created the time slot
       // When usedOverride: must set requires_precommit=true to bypass UNIQUE(episode_id) WHERE requires_precommit=false
       const reqPrecommit = requiresPrecommit === true || usedOverride;
+      const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
       const appointmentResult = await db.query(
         `INSERT INTO appointments (
           patient_id, episode_id, time_slot_id, created_by, dentist_email, appointment_type,
-          pool, duration_minutes, no_show_risk, requires_confirmation, hold_expires_at, created_via, requires_precommit
+          pool, duration_minutes, no_show_risk, requires_confirmation, hold_expires_at, created_via, requires_precommit, start_time, end_time
         )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
          ON CONFLICT (time_slot_id) 
          DO UPDATE SET
            patient_id = EXCLUDED.patient_id,
@@ -330,6 +331,8 @@ export async function POST(request: NextRequest) {
            hold_expires_at = EXCLUDED.hold_expires_at,
            created_via = EXCLUDED.created_via,
            requires_precommit = EXCLUDED.requires_precommit,
+           start_time = EXCLUDED.start_time,
+           end_time = EXCLUDED.end_time,
            appointment_status = NULL,
            completion_notes = NULL,
            google_calendar_event_id = NULL,
@@ -351,7 +354,7 @@ export async function POST(request: NextRequest) {
            appointment_type as "appointmentType",
            pool,
            duration_minutes as "durationMinutes"`,
-        [patientId, episodeId || null, timeSlotId, auth.email, timeSlot.dentist_email, appointmentType || null, poolValue, durationMinutes, noShowRisk, requiresConfirmation, holdExpiresAt, usedOverride ? (auth.role === 'admin' ? 'admin_override' : 'surgeon_override') : createdVia, reqPrecommit]
+        [patientId, episodeId || null, timeSlotId, auth.email, timeSlot.dentist_email, appointmentType || null, poolValue, durationMinutes, noShowRisk, requiresConfirmation, holdExpiresAt, usedOverride ? (auth.role === 'admin' ? 'admin_override' : 'surgeon_override') : createdVia, reqPrecommit, startTime, endTime]
       );
 
       const appointment = appointmentResult.rows[0];
