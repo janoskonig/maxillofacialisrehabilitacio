@@ -124,6 +124,7 @@ export function WorklistWidget() {
         requiresPrecommit: false,
         stepCode: item.nextStep,
         overrideReason: overrideReason || undefined,
+        createdVia: 'worklist',
       }),
     });
     const data = await res.json();
@@ -189,6 +190,7 @@ export function WorklistWidget() {
           pool: pool || 'work',
           requiresPrecommit: false,
           stepCode: nextStep,
+          createdVia: 'worklist',
         }),
       });
       const data = await res.json();
@@ -267,6 +269,7 @@ export function WorklistWidget() {
           overrideReason,
           requiresPrecommit: false,
           stepCode: retryData.nextStep,
+          createdVia: 'worklist',
         }),
       });
       const data = await res.json();

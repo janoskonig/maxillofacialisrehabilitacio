@@ -116,6 +116,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
           pool: pool || 'work',
           requiresPrecommit: false,
           stepCode: nextStep,
+          createdVia: 'worklist',
         }),
       });
       const data = await res.json();
@@ -196,6 +197,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
           overrideReason,
           requiresPrecommit: false,
           stepCode: retryData.nextStep,
+          createdVia: 'worklist',
         }),
       });
       const data = await res.json();

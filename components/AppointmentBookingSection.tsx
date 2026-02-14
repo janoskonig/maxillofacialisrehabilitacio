@@ -251,6 +251,7 @@ export function AppointmentBookingSection({
           cim: customCim || (availableCims.length === 1 ? DEFAULT_CIM : null),
           teremszam: customTeremszam.trim() || null,
           appointmentType: selectedAppointmentType || null,
+          createdVia: 'patient_form',
         }),
       });
 
@@ -541,6 +542,7 @@ export function AppointmentBookingSection({
           cim: newSlotCim || DEFAULT_CIM,
           teremszam: newSlotTeremszam.trim() || null,
           appointmentType: newSlotAppointmentType || null,
+          createdVia: 'patient_form',
         }),
       });
 

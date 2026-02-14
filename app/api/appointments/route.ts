@@ -132,9 +132,14 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { patientId, timeSlotId, cim, teremszam, appointmentType, episodeId, pool = 'work', overrideReason, stepCode } = body;
+    const { patientId, timeSlotId, cim, teremszam, appointmentType, episodeId, pool = 'work', overrideReason, stepCode, createdVia: createdViaParam } = body;
     // Explicit boolean validation — reject truthy non-booleans (e.g. "true" string)
     const requiresPrecommit = body.requiresPrecommit === true;
+
+    const validCreatedVia = ['worklist', 'patient_form', 'patient_self', 'admin_override', 'surgeon_override', 'migration', 'google_import'] as const;
+    const createdVia = typeof createdViaParam === 'string' && validCreatedVia.includes(createdViaParam as (typeof validCreatedVia)[number])
+      ? createdViaParam
+      : 'worklist';
 
     if (!patientId || !timeSlotId) {
       return NextResponse.json(
@@ -167,7 +172,6 @@ export async function POST(request: NextRequest) {
     // For admins: can book for any patient
     // Note: Surgeons can book appointments for any patient, but can only edit their own patients
 
-    const createdVia = 'worklist';
     let usedOverride = false;
     const durationMinutes = 30;
 
