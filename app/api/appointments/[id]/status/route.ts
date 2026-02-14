@@ -136,14 +136,19 @@ export async function PATCH(
       );
 
       // Emit appointment_status_events for audit (immutable event log)
+      // Use only DB result for newStatus — never fall back to request param (audit must reflect persisted state)
       if (appointmentStatus !== undefined) {
-        const newStatus = updateResult.rows[0]?.appointmentStatus ?? appointmentStatus;
-        const createdBy = auth.email ?? auth.userId ?? 'unknown';
-        await pool.query(
-          `INSERT INTO appointment_status_events (appointment_id, old_status, new_status, created_by)
-           VALUES ($1, $2, $3, $4)`,
-          [appointmentId, oldStatus, newStatus, createdBy]
-        );
+        const newStatus = updateResult.rows[0]?.appointmentStatus;
+        if (newStatus !== undefined && newStatus !== null) {
+          const createdBy = auth.email ?? auth.userId ?? 'unknown';
+          await pool.query(
+            `INSERT INTO appointment_status_events (appointment_id, old_status, new_status, created_by)
+             VALUES ($1, $2, $3, $4)`,
+            [appointmentId, oldStatus, newStatus, createdBy]
+          );
+        } else {
+          console.warn('[appointment_status_events] Skipping emit: UPDATE succeeded but RETURNING did not contain appointmentStatus', { appointmentId });
+        }
       }
 
       await pool.query('COMMIT');

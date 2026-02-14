@@ -132,7 +132,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { patientId, timeSlotId, cim, teremszam, appointmentType, episodeId, pool = 'work', overrideReason, requiresPrecommit, stepCode } = body;
+    const { patientId, timeSlotId, cim, teremszam, appointmentType, episodeId, pool = 'work', overrideReason, stepCode } = body;
+    // Explicit boolean validation — reject truthy non-booleans (e.g. "true" string)
+    const requiresPrecommit = body.requiresPrecommit === true;
 
     if (!patientId || !timeSlotId) {
       return NextResponse.json(
@@ -360,8 +362,13 @@ export async function POST(request: NextRequest) {
       const appointment = appointmentResult.rows[0];
       if (!appointment) {
         await db.query('ROLLBACK');
+        // ON CONFLICT DO UPDATE returned 0 rows: slot was free but an active (non-cancelled) appointment exists on it — data integrity issue or race
         return NextResponse.json(
-          { error: 'Ez az időpont már le van foglalva (aktív foglalás van az időponton)' },
+          {
+            error: 'Ez az időpont már le van foglalva (aktív foglalás van az időponton)',
+            code: 'SLOT_CONFLICT',
+            hint: 'A slot szabadnak látszik, de már van aktív foglalás rajta. Próbálja újra, vagy forduljon az adminisztrátorhoz.',
+          },
           { status: 409 }
         );
       }
@@ -394,6 +401,7 @@ export async function POST(request: NextRequest) {
 
       await db.query('COMMIT');
       committed = true;
+      // Post-commit: emit events, refetch, send notifications. Errors here must NOT trigger rollback (tx already committed).
 
       if (episodeId) {
         try {

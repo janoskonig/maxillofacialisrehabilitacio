@@ -21,9 +21,9 @@ export async function GET(request: NextRequest) {
 
     const pool = getDbPool();
 
-    // G3: Patient portal — only consult/flexible slots; exclude work/control (admin assigns those)
+    // G3: Patient portal — only consult/flexible slots; exclude work/control and NULL (admin assigns work/control; NULL may be work-only or incomplete data)
     const whereClause = `WHERE ats.start_time >= NOW() AND ats.status = 'available'
-      AND (ats.slot_purpose IS NULL OR ats.slot_purpose IN ('consult', 'flexible'))`;
+      AND ats.slot_purpose IN ('consult', 'flexible')`;
     const queryParams: unknown[] = [];
 
     const query = `
