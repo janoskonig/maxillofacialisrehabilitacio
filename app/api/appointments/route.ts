@@ -279,6 +279,7 @@ export async function POST(request: NextRequest) {
       }
 
       const timeSlot = timeSlotResult.rows[0];
+      // state (slot state machine) is authoritative; fallback to status (legacy) for backward compat
       const slotState = timeSlot.state ?? (timeSlot.status === 'available' ? 'free' : 'booked');
       if (slotState !== 'free') {
         await db.query('ROLLBACK');
@@ -380,10 +381,11 @@ export async function POST(request: NextRequest) {
       // Google Calendar event ID inicializálása (null)
       let googleCalendarEventId: string | null = null;
 
-      // Update time slot status and state to booked
-      const updateFields: string[] = ['status = $1', 'state = $1'];
-      const updateValues: (string | null)[] = ['booked'];
-      let paramIndex = 2;
+      // Update time slot: status (legacy) and state (slot state machine) both to booked
+      // Use explicit literals for consistency with slot-intents convert and hold-expiry
+      const updateFields: string[] = ["status = 'booked'", "state = 'booked'"];
+      const updateValues: (string | null)[] = [];
+      let paramIndex = 1;
       
       if (cim !== undefined && cim !== null && cim.trim() !== '') {
         updateFields.push(`cim = $${paramIndex}`);
