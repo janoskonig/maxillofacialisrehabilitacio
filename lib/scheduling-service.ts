@@ -22,6 +22,29 @@ export function canConsumeSlot(state: string | null): boolean {
 export function isRebalanceEligible(state: string | null): boolean {
   return state === SLOT_STATE_REBALANCE_TARGET;
 }
+
+/**
+ * Check if there is at least one free slot in the window for the given pool.
+ * Shared by slots-for-booking and BLOCKED_CAPACITY check.
+ */
+export async function hasFreeSlotInWindow(
+  pool: 'consult' | 'work' | 'control',
+  windowStart: Date,
+  windowEnd: Date,
+  durationMinutes: number
+): Promise<boolean> {
+  const db = getDbPool();
+  const r = await db.query(
+    `SELECT 1 FROM available_time_slots ats
+     WHERE ats.state = 'free' AND ats.start_time > CURRENT_TIMESTAMP
+       AND ats.start_time >= $1 AND ats.start_time <= $2
+       AND (ats.slot_purpose = $3 OR ats.slot_purpose IS NULL)
+       AND (ats.duration_minutes >= $4 OR ats.duration_minutes IS NULL)
+     LIMIT 1`,
+    [windowStart.toISOString(), windowEnd.toISOString(), pool, durationMinutes]
+  );
+  return (r.rowCount ?? 0) > 0;
+}
 import { computeNoShowRiskWithConfig, getPatientNoShowsLast12m } from './no-show-risk';
 
 export type CreatedVia = 'worklist' | 'patient_self' | 'admin_override' | 'surgeon_override' | 'migration' | 'google_import';

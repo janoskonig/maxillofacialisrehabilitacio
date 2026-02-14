@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { invalidateIntentsForEpisode } from '@/lib/intent-invalidation';
+import { createInitialSlotIntentsForEpisode } from '@/lib/episode-activation';
 
 export const dynamic = 'force-dynamic';
 
@@ -92,8 +93,18 @@ export async function PATCH(
       `SELECT id, care_pathway_id as "carePathwayId", care_pathway_version as "carePathwayVersion", assigned_provider_id as "assignedProviderId" FROM patient_episodes WHERE id = $1`,
       [episodeId]
     );
+    const episode = after.rows[0];
 
-    return NextResponse.json({ episode: after.rows[0] });
+    // G1: Episode activation — create initial slot_intents for next 2 work steps when both pathway and provider are set
+    if (episode?.carePathwayId && episode?.assignedProviderId) {
+      try {
+        await createInitialSlotIntentsForEpisode(episodeId);
+      } catch (e) {
+        console.error('Failed to create initial slot intents on episode activation:', e);
+      }
+    }
+
+    return NextResponse.json({ episode });
   } catch (error) {
     console.error('Error updating episode:', error);
     return NextResponse.json(

@@ -233,6 +233,19 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
 
     const timeSlot = timeSlotResult.rows[0];
 
+    // G3: Patient portal — block direct booking of work/control slots (admin assigns via worklist)
+    const slotPurpose = timeSlot.slot_purpose;
+    if (slotPurpose === 'work' || slotPurpose === 'control') {
+      await pool.query('ROLLBACK');
+      return NextResponse.json(
+        {
+          error: 'Ez az időpont típusa nem foglalható közvetlenül a páciens portálon. Kérjük, kérjen időpontot az adminisztrációtól.',
+          code: 'WORK_CONTROL_SLOT_NOT_ALLOWED',
+        },
+        { status: 403 }
+      );
+    }
+
     if (timeSlot.status !== 'available') {
       await pool.query('ROLLBACK');
       return NextResponse.json(
