@@ -11,6 +11,7 @@ import { MobileMenu } from '@/components/MobileMenu';
 import { CommunicationLog } from '@/components/CommunicationLog';
 import { PatientMessages } from '@/components/PatientMessages';
 import { DoctorMessagesForPatient } from '@/components/DoctorMessagesForPatient';
+import { PatientWorklistWidget } from '@/components/PatientWorklistWidget';
 
 type TabType = 'alapadatok' | 'anamnezis' | 'adminisztracio' | 'idopont' | 'konzilium' | 'uzenet';
 
@@ -289,13 +290,28 @@ export default function PatientViewPage() {
           )}
 
           {activeTab === 'idopont' && loadedTabs.has('idopont') && (
-            <PatientForm
-              patient={patient}
-              isViewOnly={false}
-              onSave={handleSavePatient}
-              onCancel={handleBack}
-              showOnlySections={['idopont']}
-            />
+            <>
+              {['admin', 'sebészorvos', 'fogpótlástanász'].includes(userRole ?? '') && (
+                <div className="space-y-2">
+                  <h2 className="text-lg font-semibold text-gray-900">Következő lépés – munkalista</h2>
+                  <p className="text-sm text-gray-600">
+                    A beteg WIP epizódjainak következő lépései. Foglalás egy kattintással.
+                  </p>
+                  <PatientWorklistWidget
+                    patientId={patient.id}
+                    patientName={patient.nev}
+                    visible={true}
+                  />
+                </div>
+              )}
+              <PatientForm
+                patient={patient}
+                isViewOnly={false}
+                onSave={handleSavePatient}
+                onCancel={handleBack}
+                showOnlySections={['idopont']}
+              />
+            </>
           )}
 
           {activeTab === 'konzilium' && loadedTabs.has('konzilium') && patient?.id && (

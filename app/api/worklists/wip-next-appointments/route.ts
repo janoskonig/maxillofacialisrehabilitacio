@@ -20,6 +20,10 @@ export async function GET(request: NextRequest) {
 
     const pool = getDbPool();
 
+    // patientId: opcionális szűrés – beteg profilnál per-patient worklist
+    const { searchParams } = new URL(request.url);
+    const patientId = searchParams.get('patientId');
+
     // serverNowISO – offsetes ISO, egyetlen forrás (clock drift ellen)
     const serverNow = new Date();
     const serverNowISO = serverNow.toISOString();
@@ -36,7 +40,9 @@ export async function GET(request: NextRequest) {
        ) se ON pe.id = se.episode_id
        WHERE pe.status = 'open'
        AND (se.stage_code IS NULL OR se.stage_code IN ('STAGE_1','STAGE_2','STAGE_3','STAGE_4','STAGE_5','STAGE_6'))
-       ORDER BY pe.opened_at ASC`
+       ${patientId ? 'AND pe.patient_id = $1' : ''}
+       ORDER BY pe.opened_at ASC`,
+      patientId ? [patientId] : []
     );
 
     const items: WorklistItemBackend[] = [];
