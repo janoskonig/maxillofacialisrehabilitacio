@@ -23,7 +23,7 @@ export async function GET(
     const pathwayResult = await pool.query(
       `SELECT cp.id, cp.name, cp.reason, cp.steps_json, cp.version, cp.priority,
               cp.owner_id as "ownerId",
-              u.name as "ownerName",
+              u.doktor_neve as "ownerName",
               cp.created_at as "createdAt", cp.updated_at as "updatedAt"
        FROM care_pathways cp
        LEFT JOIN users u ON cp.owner_id = u.id
