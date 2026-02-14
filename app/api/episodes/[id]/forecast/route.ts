@@ -37,9 +37,9 @@ export async function GET(
     const nextStepResult = await nextRequiredStep(episodeId);
 
     if (isBlocked(nextStepResult)) {
-      return NextResponse.json({
+      const payload = {
         carePathwayId: episode.carePathwayId,
-        status: 'blocked',
+        status: 'blocked' as const,
         blockedReason: nextStepResult.reason,
         requiredPrereqs: nextStepResult.required_prereq_keys,
         remainingVisitsP50: null,
@@ -47,6 +47,10 @@ export async function GET(
         completionWindowStart: null,
         completionWindowEnd: null,
         assumptions: ['blocked', 'pathway-level0'],
+        ...(nextStepResult.code && { code: nextStepResult.code }),
+      };
+      return NextResponse.json(payload, {
+        status: nextStepResult.code === 'NO_CARE_PATHWAY' ? 409 : 200,
       });
     }
 

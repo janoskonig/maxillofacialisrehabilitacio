@@ -65,6 +65,7 @@ export async function GET(request: NextRequest) {
           noShowRisk: 0,
           status: 'blocked',
           blockedReason: result.reason,
+          ...(result.code && { blockedCode: result.code }),
         });
         continue;
       }

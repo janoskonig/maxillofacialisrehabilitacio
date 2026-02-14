@@ -11,9 +11,10 @@ export type PoolType = 'consult' | 'work' | 'control';
 export interface PathwayStep {
   step_code: string;
   pool: PoolType;
-  duration_minutes: number;
-  default_days_offset: number;
+  duration_minutes: number; // kötelező; fallback 30 ha hiányzik
+  default_days_offset: number; // kötelező; fallback 14 ha hiányzik
   requires_precommit?: boolean;
+  optional?: boolean; // későbbi fázis: kihagyható step
 }
 
 export interface NextStepResult {
@@ -32,6 +33,8 @@ export interface BlockedResult {
   required_prereq_keys: string[];
   reason: string;
   block_keys: string[];
+  /** API 409 code when care_pathway missing */
+  code?: 'NO_CARE_PATHWAY';
 }
 
 export type NextRequiredStepResult = NextStepResult | BlockedResult;
@@ -133,13 +136,14 @@ export async function nextRequiredStep(episodeId: string): Promise<NextRequiredS
     };
   }
 
-  // No pathway → cannot compute
+  // No pathway → cannot compute (explicit üzenet)
   if (!pathwaySteps || pathwaySteps.length === 0) {
     return {
       status: 'blocked',
       required_prereq_keys: ['care_pathway'],
-      reason: 'No care pathway assigned',
+      reason: 'Epizódhoz nincs hozzárendelve kezelési út. Először válasszon pathway-t.',
       block_keys: [],
+      code: 'NO_CARE_PATHWAY',
     };
   }
 
@@ -162,7 +166,7 @@ export async function nextRequiredStep(episodeId: string): Promise<NextRequiredS
       return {
         step_code: consultStep.step_code,
         pool: consultStep.pool,
-        duration_minutes: consultStep.duration_minutes,
+        duration_minutes: consultStep.duration_minutes ?? 30,
         earliest_date: earliest,
         latest_date: latest,
         reason: 'First consultation',
@@ -181,7 +185,7 @@ export async function nextRequiredStep(episodeId: string): Promise<NextRequiredS
   return {
     step_code: step.step_code,
     pool: step.pool,
-    duration_minutes: step.duration_minutes,
+    duration_minutes: step.duration_minutes ?? 30,
     earliest_date: earliest,
     latest_date: latest,
     reason: `Pathway step ${step.step_code}`,

@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
     // For admins: can book for any patient
     // Note: Surgeons can book appointments for any patient, but can only edit their own patients
 
-    const createdVia = auth.role === 'admin' ? 'admin_override' : 'worklist';
+    const createdVia = 'worklist';
     let usedOverride = false;
     const durationMinutes = 30;
 
@@ -184,15 +184,23 @@ export async function POST(request: NextRequest) {
       holdExpiresAt.setHours(holdExpiresAt.getHours() + 48);
     }
 
+    // G2: Work pool requires episodeId (kivéve override — override csak one-hard-next fail esetén, ami episodeId-t igényel)
+    if (poolValue === 'work' && !episodeId) {
+      return NextResponse.json(
+        { error: 'Work pool foglaláshoz epizód ID kötelező (episodeId)', code: 'EPISODE_ID_REQUIRED' },
+        { status: 400 }
+      );
+    }
+
     // Start transaction — all slot/episode checks + locks inside TX
     await db.query('BEGIN');
     let committed = false;
 
     try {
-      // 1) Lock episode first (consistent lock order) and enforce one-hard-next
+      // 1) Lock episode first (consistent lock order) and enforce one-hard-next + care_pathway check
       if (episodeId && poolValue === 'work') {
         const episodeLock = await db.query(
-          `SELECT id FROM patient_episodes WHERE id = $1 FOR UPDATE`,
+          `SELECT id, care_pathway_id FROM patient_episodes WHERE id = $1 FOR UPDATE`,
           [episodeId]
         );
         if (episodeLock.rows.length === 0) {
@@ -202,13 +210,24 @@ export async function POST(request: NextRequest) {
             { status: 404 }
           );
         }
+        if (!episodeLock.rows[0].care_pathway_id) {
+          await db.query('ROLLBACK');
+          return NextResponse.json(
+            {
+              error: 'Epizódhoz nincs hozzárendelve kezelési út. Először válasszon pathway-t.',
+              code: 'NO_CARE_PATHWAY',
+              overrideHint: 'Assign care_pathway_id to episode before booking work pool.',
+            },
+            { status: 409 }
+          );
+        }
         const oneHardNext = await checkOneHardNext(episodeId, 'work', {
           requiresPrecommit: requiresPrecommit === true,
           stepCode: typeof stepCode === 'string' ? stepCode : undefined,
         });
         if (!oneHardNext.allowed) {
           const strictOneHardNext = await getSchedulingFeatureFlag('strict_one_hard_next');
-          const mayOverride = !strictOneHardNext && (auth.role === 'admin' || auth.role === 'sebészorvos') && overrideReason && typeof overrideReason === 'string' && overrideReason.trim().length >= 10;
+          const mayOverride = !strictOneHardNext && (auth.role === 'admin' || auth.role === 'sebészorvos' || auth.role === 'fogpótlástanász') && overrideReason && typeof overrideReason === 'string' && overrideReason.trim().length >= 10;
           if (mayOverride) {
             await db.query(
               `INSERT INTO scheduling_override_audit (episode_id, user_id, override_reason) VALUES ($1, $2, $3)`,
@@ -221,7 +240,7 @@ export async function POST(request: NextRequest) {
               {
                 error: oneHardNext.reason ?? 'Episode already has a future work appointment (one-hard-next)',
                 code: 'ONE_HARD_NEXT_VIOLATION',
-                overrideHint: 'Provide overrideReason (min 10 chars) to bypass. Admin/sebészorvos only.',
+                overrideHint: 'Provide overrideReason (min 10 chars) to bypass. Admin/sebészorvos/fogpótlástanász only.',
               },
               { status: 409 }
             );
@@ -289,7 +308,8 @@ export async function POST(request: NextRequest) {
       // If there's a cancelled appointment for this time slot, update it instead of creating new
       // created_by: surgeon/admin who booked the appointment
       // dentist_email: dentist who created the time slot
-      const reqPrecommit = requiresPrecommit === true;
+      // When usedOverride: must set requires_precommit=true to bypass UNIQUE(episode_id) WHERE requires_precommit=false
+      const reqPrecommit = requiresPrecommit === true || usedOverride;
       const appointmentResult = await db.query(
         `INSERT INTO appointments (
           patient_id, episode_id, time_slot_id, created_by, dentist_email, appointment_type,
@@ -631,7 +651,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ appointment }, { status: 201 });
     } catch (error) {
       if (!committed) {
-        await db.query('ROLLBACK');
+        try {
+          await db.query('ROLLBACK');
+        } catch (rollbackError) {
+          console.error('Rollback failed:', rollbackError);
+        }
       }
       throw error;
     }

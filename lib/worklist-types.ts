@@ -57,6 +57,8 @@ export interface WorklistItemBackend {
   noShowRisk: number;
   status?: 'ready' | 'blocked';
   blockedReason?: string;
+  /** NO_CARE_PATHWAY: epizódhoz nincs pathway, először válasszon kezelési utat */
+  blockedCode?: 'NO_CARE_PATHWAY';
 }
 
 export interface WorklistLocalState {
