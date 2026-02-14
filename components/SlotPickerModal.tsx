@@ -92,14 +92,16 @@ export function SlotPickerModal({
     if (posting) return;
     setSelectedSlotId(slotId);
     setPosting(true);
+    setSlotError(null);
     try {
       await onSelectSlot(slotId);
       onClose();
-    } catch {
-      setPosting(false);
+    } catch (e) {
+      setSlotError(e instanceof Error ? e.message : 'Hiba történt');
       setSelectedSlotId(null);
+    } finally {
+      setPosting(false);
     }
-    setPosting(false);
   };
 
   const groupedByDay = slots.reduce<Record<string, Slot[]>>((acc, slot) => {

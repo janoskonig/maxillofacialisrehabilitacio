@@ -47,12 +47,16 @@ export function ContextBanner({
   dismissibleOnlyAfterAction = true,
 }: ContextBannerProps) {
   const [dismissed, setDismissed] = useState(false);
+  const [hasTakenAction, setHasTakenAction] = useState(false);
 
   useEffect(() => {
     if (!dismissKey) return;
     try {
       const stored = localStorage.getItem(dismissKey);
       if (stored === 'true') setDismissed(true);
+      const actionKey = `${dismissKey}-action-taken`;
+      const actionStored = localStorage.getItem(actionKey);
+      if (actionStored === 'true') setHasTakenAction(true);
     } catch {
       // ignore
     }
@@ -68,8 +72,21 @@ export function ContextBanner({
     }
   };
 
+  const handlePrimaryLinkClick = () => {
+    setHasTakenAction(true);
+    try {
+      if (dismissKey) {
+        localStorage.setItem(`${dismissKey}-action-taken`, 'true');
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   const style = VARIANT_STYLES[variant];
-  const canDismiss = !!dismissKey;
+  const showDismissButton =
+    !!dismissKey &&
+    (!dismissibleOnlyAfterAction || !primaryLink || hasTakenAction);
 
   if (dismissed) return null;
 
@@ -86,13 +103,14 @@ export function ContextBanner({
         {primaryLink && (
           <Link
             href={primaryLink.href}
+            onClick={handlePrimaryLinkClick}
             className="inline-block mt-2 text-sm font-medium text-medical-primary hover:underline"
           >
             {primaryLink.label}
           </Link>
         )}
       </div>
-      {canDismiss && (
+      {showDismissButton && (
         <button
           onClick={handleDismiss}
           className="text-gray-500 hover:text-gray-700 p-1 rounded"
