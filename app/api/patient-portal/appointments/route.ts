@@ -233,9 +233,9 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
 
     const timeSlot = timeSlotResult.rows[0];
 
-    // G3: Patient portal — block direct booking of work/control slots (admin assigns via worklist)
+    // G3: Patient portal — only consult/flexible slots; reject work/control and NULL (admin assigns work/control; NULL may be work-only)
     const slotPurpose = timeSlot.slot_purpose;
-    if (slotPurpose === 'work' || slotPurpose === 'control') {
+    if (slotPurpose !== 'consult' && slotPurpose !== 'flexible') {
       await pool.query('ROLLBACK');
       return NextResponse.json(
         {

@@ -164,22 +164,27 @@ export async function POST(
         holdExpiresAt.setHours(holdExpiresAt.getHours() + 48);
       }
 
+      // appointment_type: align with main POST /api/appointments (elso_konzultacio | munkafazis | kontroll)
+      const appointmentType =
+        intent.pool === 'consult' ? 'elso_konzultacio' : intent.pool === 'control' ? 'kontroll' : 'munkafazis';
+
       const apptResult = await pool.query(
         `INSERT INTO appointments (
-          patient_id, episode_id, time_slot_id, created_by, dentist_email,
+          patient_id, episode_id, time_slot_id, created_by, dentist_email, appointment_type,
           pool, duration_minutes, no_show_risk, requires_confirmation, hold_expires_at, created_via, requires_precommit, start_time, end_time
         )
-        SELECT $1, $2, $3, $4, u.email, $5, $6, $7, $8, $9, 'worklist', $10, $11, $12
+        SELECT $1, $2, $3, $4, u.email, $5, $6, $7, $8, $9, $10, 'worklist', $11, $12, $13
         FROM available_time_slots ats
         JOIN users u ON ats.user_id = u.id
         WHERE ats.id = $3
         RETURNING id, patient_id as "patientId", episode_id as "episodeId",
-          time_slot_id as "timeSlotId", pool, duration_minutes as "durationMinutes"`,
+          time_slot_id as "timeSlotId", pool, duration_minutes as "durationMinutes", appointment_type as "appointmentType"`,
         [
           intent.patientId,
           intent.episode_id,
           slotId,
           auth.email,
+          appointmentType,
           intent.pool,
           durationMinutes,
           noShowRisk,
