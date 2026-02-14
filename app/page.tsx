@@ -3,11 +3,12 @@
 import { useState, useEffect, Suspense, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Patient, patientSchema } from '@/lib/types';
 import { getAllPatients, savePatient, searchPatients, getPatientById } from '@/lib/storage';
 import { PatientList } from '@/components/PatientList';
 import { useToast } from '@/contexts/ToastContext';
-import { Plus, Search, Users, LogOut, Shield, Settings, Calendar, CalendarDays, MessageCircle, Filter, Download, Bell, X } from 'lucide-react';
+import { Plus, Search, Users, LogOut, Shield, Settings, Calendar, CalendarDays, MessageCircle, Filter, Download, Bell, X, BookOpen } from 'lucide-react';
 import { getCurrentUser, getUserEmail, getUserRole, logout } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
 import { MobileMenu } from '@/components/MobileMenu';
@@ -451,6 +452,13 @@ export default function Home() {
                   <Settings className="w-3.5 h-3.5" />
                   Beállítások
                 </button>
+                <Link
+                  href="/docs/kezelesi-ut-utmutato"
+                  className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2"
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  Útmutató
+                </Link>
                 <button
                   onClick={handleLogout}
                   className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2"
@@ -670,6 +678,17 @@ export default function Home() {
                   </p>
                 </div>
               )}
+
+              {/* Footer: Utmutató link */}
+              <div className="mt-8 pt-6 border-t border-gray-200 flex justify-center">
+                <Link
+                  href="/docs/kezelesi-ut-utmutato"
+                  className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-medical-primary transition-colors"
+                >
+                  <BookOpen className="w-4 h-4" />
+                  Kezelési út és ütemezés — Használati útmutató
+                </Link>
+              </div>
             </>
 
       {/* Patient Form Modal */}
