@@ -135,10 +135,19 @@ export async function PATCH(
         updateValues
       );
 
+      const appointment = updateResult.rows[0];
+      if (!appointment) {
+        await pool.query('ROLLBACK');
+        return NextResponse.json(
+          { error: 'Az időpont frissítése sikertelen volt (adatbázis nem adott vissza eredményt)' },
+          { status: 500 }
+        );
+      }
+
       // Emit appointment_status_events for audit (immutable event log)
       // Use only DB result for newStatus — never fall back to request param (audit must reflect persisted state)
       if (appointmentStatus !== undefined) {
-        const newStatus = updateResult.rows[0]?.appointmentStatus;
+        const newStatus = appointment.appointmentStatus;
         if (newStatus !== undefined && newStatus !== null) {
           const createdBy = auth.email ?? auth.userId ?? 'unknown';
           await pool.query(
@@ -153,7 +162,7 @@ export async function PATCH(
 
       await pool.query('COMMIT');
       return NextResponse.json({ 
-        appointment: updateResult.rows[0]
+        appointment
       }, { status: 200 });
     } catch (txError) {
       await pool.query('ROLLBACK');
