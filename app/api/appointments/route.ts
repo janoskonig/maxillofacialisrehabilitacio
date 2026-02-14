@@ -427,7 +427,6 @@ export async function POST(request: NextRequest) {
 
       // Send email notification to dentist and create Google Calendar event (parallel)
       const updatedStartTime = new Date(updatedTimeSlot.start_time);
-      const endTime = new Date(updatedStartTime.getTime() + durationMinutes * 60 * 1000);
       
       // Format date for notifications
       const formattedDate = format(updatedStartTime, "yyyy. MM. dd. HH:mm", { locale: hu });
