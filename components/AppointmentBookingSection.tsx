@@ -48,7 +48,7 @@ interface AppointmentBookingSectionProps {
 export function AppointmentBookingSection({ 
   patientId, 
   episodeId,
-  pool = 'work',
+  pool = 'consult',
   isViewOnly = false,
   onSavePatientBeforeBooking,
   isPatientDirty = false,
@@ -247,7 +247,7 @@ export function AppointmentBookingSection({
           patientId: currentPatientId,
           timeSlotId: selectedSlot,
           episodeId: episodeId ?? null,
-          pool: pool ?? 'work',
+          pool: pool ?? (episodeId ? 'work' : 'consult'),
           cim: customCim || (availableCims.length === 1 ? DEFAULT_CIM : null),
           teremszam: customTeremszam.trim() || null,
           appointmentType: selectedAppointmentType || null,
