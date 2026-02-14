@@ -291,7 +291,7 @@ export default function PatientViewPage() {
 
           {activeTab === 'idopont' && loadedTabs.has('idopont') && (
             <>
-              {['admin', 'sebészorvos', 'fogpótlástanász'].includes(userRole ?? '') && (
+              {['admin', 'sebészorvos', 'fogpótlástanász'].includes(userRole ?? '') && patient.id && (
                 <div className="space-y-2">
                   <h2 className="text-lg font-semibold text-gray-900">Következő lépés – munkalista</h2>
                   <p className="text-sm text-gray-600">

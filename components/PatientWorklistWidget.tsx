@@ -11,6 +11,7 @@ import {
 import { formatShortDateRange } from '@/lib/datetime';
 import { SlotPickerModal } from './SlotPickerModal';
 import { OverrideModal } from './OverrideModal';
+import { EpisodePathwayModal } from './EpisodePathwayModal';
 
 export interface PatientWorklistWidgetProps {
   patientId: string;
@@ -30,6 +31,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
   const [status, setStatus] = useState<number | null>(null);
   const [local, setLocal] = useState<WorklistLocalState>({});
   const [slotPickerItem, setSlotPickerItem] = useState<WorklistItemBackend | null>(null);
+  const [pathwayModalItem, setPathwayModalItem] = useState<WorklistItemBackend | null>(null);
   const [override429, setOverride429] = useState<{
     error: string;
     overrideHint?: string;
@@ -337,6 +339,14 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                         Foglalás
                       </button>
                     )}
+                    {state === 'BLOCKED' && item.blockedCode === 'NO_CARE_PATHWAY' && (
+                      <button
+                        onClick={() => setPathwayModalItem(item)}
+                        className="text-sm text-medical-primary hover:underline font-medium"
+                      >
+                        Kezelési út hozzárendelése
+                      </button>
+                    )}
                     {state === 'BOOKING_IN_PROGRESS' && (
                       <span className="text-sm text-gray-500">Foglalás…</span>
                     )}
@@ -347,6 +357,18 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
           </tbody>
         </table>
       </div>
+
+      {pathwayModalItem && (
+        <EpisodePathwayModal
+          open={!!pathwayModalItem}
+          onClose={() => setPathwayModalItem(null)}
+          episodeId={pathwayModalItem.episodeId}
+          patientName={pathwayModalItem.patientName ?? patientName ?? null}
+          onSaved={async () => {
+            await fetchWorklist();
+          }}
+        />
+      )}
 
       {override429 && (
         <OverrideModal

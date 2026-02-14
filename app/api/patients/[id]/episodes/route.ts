@@ -21,6 +21,10 @@ function rowToEpisode(row: Record<string, unknown>): PatientEpisode {
     triggerType: (row.triggerType as PatientEpisode['triggerType']) || null,
     createdAt: (row.createdAt as Date)?.toISOString?.() ?? null,
     createdBy: (row.createdBy as string) || null,
+    carePathwayId: (row.carePathwayId as string) || null,
+    assignedProviderId: (row.assignedProviderId as string) || null,
+    carePathwayName: (row.carePathwayName as string) || null,
+    assignedProviderName: (row.assignedProviderName as string) || null,
   };
 }
 
@@ -60,22 +64,28 @@ export async function GET(
 
     const result = await pool.query(
       `SELECT 
-        id,
-        patient_id as "patientId",
-        reason,
-        pathway_code as "pathwayCode",
-        chief_complaint as "chiefComplaint",
-        case_title as "caseTitle",
-        status,
-        opened_at as "openedAt",
-        closed_at as "closedAt",
-        parent_episode_id as "parentEpisodeId",
-        trigger_type as "triggerType",
-        created_at as "createdAt",
-        created_by as "createdBy"
-      FROM patient_episodes
-      WHERE patient_id = $1
-      ORDER BY opened_at DESC`,
+        pe.id,
+        pe.patient_id as "patientId",
+        pe.reason,
+        pe.pathway_code as "pathwayCode",
+        pe.chief_complaint as "chiefComplaint",
+        pe.case_title as "caseTitle",
+        pe.status,
+        pe.opened_at as "openedAt",
+        pe.closed_at as "closedAt",
+        pe.parent_episode_id as "parentEpisodeId",
+        pe.trigger_type as "triggerType",
+        pe.created_at as "createdAt",
+        pe.created_by as "createdBy",
+        pe.care_pathway_id as "carePathwayId",
+        pe.assigned_provider_id as "assignedProviderId",
+        cp.name as "carePathwayName",
+        COALESCE(u.doktor_neve, u.email) as "assignedProviderName"
+      FROM patient_episodes pe
+      LEFT JOIN care_pathways cp ON pe.care_pathway_id = cp.id
+      LEFT JOIN users u ON pe.assigned_provider_id = u.id
+      WHERE pe.patient_id = $1
+      ORDER BY pe.opened_at DESC`,
       [patientId]
     );
 

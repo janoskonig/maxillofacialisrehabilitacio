@@ -12,6 +12,7 @@ import { MobileMenu } from '@/components/MobileMenu';
 import { PatientStageSelector } from '@/components/PatientStageSelector';
 import { PatientStageTimeline } from '@/components/PatientStageTimeline';
 import { PatientEpisodeForm } from '@/components/PatientEpisodeForm';
+import { EpisodePathwayEditor } from '@/components/EpisodePathwayEditor';
 import { useToast } from '@/contexts/ToastContext';
 
 export default function PatientStagesPage() {
@@ -178,7 +179,7 @@ export default function PatientStagesPage() {
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Ellátási epizódok</h3>
               <ul className="space-y-1 text-sm text-gray-700">
                 {episodes.slice(0, 10).map((ep) => (
-                  <li key={ep.id} className="flex items-center gap-2">
+                  <li key={ep.id} className="flex items-center gap-2 flex-wrap">
                     <span className={ep.status === 'open' ? 'text-green-600 font-medium' : 'text-gray-500'}>
                       {ep.status === 'open' ? '● Aktív' : '○ Zárt'}
                     </span>
@@ -186,6 +187,11 @@ export default function PatientStagesPage() {
                     <span className="text-gray-400">
                       {new Date(ep.openedAt).toLocaleDateString('hu-HU')}
                     </span>
+                    {(ep.carePathwayName || ep.assignedProviderName) && (
+                      <span className="text-gray-500 text-xs">
+                        {[ep.carePathwayName, ep.assignedProviderName].filter(Boolean).join(' · ')}
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -198,6 +204,18 @@ export default function PatientStagesPage() {
               patientId={patientId}
               patientReason={patientReason}
               onEpisodeCreated={() => refreshStagesAndEpisodes()}
+            />
+          )}
+
+          {/* Kezelési út és felelős orvos (aktív epizód) */}
+          {activeEpisode && (userRole === 'admin' || userRole === 'sebészorvos' || userRole === 'fogpótlástanász') && (
+            <EpisodePathwayEditor
+              episodeId={activeEpisode.id}
+              carePathwayId={activeEpisode.carePathwayId}
+              assignedProviderId={activeEpisode.assignedProviderId}
+              carePathwayName={activeEpisode.carePathwayName}
+              assignedProviderName={activeEpisode.assignedProviderName}
+              onSaved={refreshStagesAndEpisodes}
             />
           )}
 

@@ -555,6 +555,10 @@ export interface PatientEpisode {
   triggerType?: TriggerType | null;
   createdAt?: string | null;
   createdBy?: string | null;
+  carePathwayId?: string | null;
+  assignedProviderId?: string | null;
+  carePathwayName?: string | null;
+  assignedProviderName?: string | null;
 }
 
 export interface StageCatalogEntry {
