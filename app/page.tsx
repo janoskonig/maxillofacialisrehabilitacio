@@ -587,8 +587,7 @@ export default function Home() {
                     className="form-input pl-12 py-3 text-base"
                   />
                 </div>
-                
-                {/* View Dropdown */}
+                {/* View Dropdown - kikommentezve
                 <div className="flex items-center gap-3">
                   <Filter className="w-5 h-5 text-gray-400" />
                   <select
@@ -601,6 +600,7 @@ export default function Home() {
                     <option value="missing_docs">Hiányos dokumentáció</option>
                   </select>
                 </div>
+                */}
               </div>
 
               {/* Stats */}
