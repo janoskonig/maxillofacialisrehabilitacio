@@ -80,6 +80,20 @@ async function getCompletedAppointmentStats(
   };
 }
 
+/** Get episode anchor for window calculation when last_step_completed_at is null.
+ * Fallback: opened_at (episode creation/activation). Deterministic, avoids new Date() drift. */
+async function getEpisodeAnchorFallback(
+  pool: Awaited<ReturnType<typeof getDbPool>>,
+  episodeId: string
+): Promise<Date> {
+  const r = await pool.query(
+    `SELECT opened_at FROM patient_episodes WHERE id = $1`,
+    [episodeId]
+  );
+  const openedAt = r.rows[0]?.opened_at;
+  return openedAt ? new Date(openedAt) : new Date();
+}
+
 /** Get pathway steps for episode */
 async function getPathwaySteps(
   pool: Awaited<ReturnType<typeof getDbPool>>,
@@ -130,7 +144,8 @@ export async function nextRequiredStep(episodeId: string): Promise<NextRequiredS
   }
 
   const currentStage = await getCurrentStage(pool, episodeId);
-  const anchorDate = completedStats.lastCompletedAt ?? new Date();
+  const anchorDate =
+    completedStats.lastCompletedAt ?? (await getEpisodeAnchorFallback(pool, episodeId));
 
   // Linear progression: next step index = number of completed appointments (0, 1, 2, ...)
   const nextStepIndex = completedStats.completedCount;

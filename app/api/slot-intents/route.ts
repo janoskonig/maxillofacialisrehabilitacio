@@ -5,7 +5,8 @@ import { handleApiError } from '@/lib/api-error-handler';
 
 /**
  * POST /api/slot-intents — create soft intent (no slot consumed)
- * Body: { episodeId, stepCode, windowStart, windowEnd, durationMinutes, pool, priority? }
+ * Body: { episodeId, stepCode, stepSeq?, windowStart, windowEnd, durationMinutes, pool, priority? }
+ * stepSeq: steps_json index (0-based) for repeated step_code (e.g. control_6m, control_12m)
  */
 export async function POST(request: NextRequest) {
   try {
@@ -21,6 +22,7 @@ export async function POST(request: NextRequest) {
     const {
       episodeId,
       stepCode,
+      stepSeq = 0,
       windowStart,
       windowEnd,
       durationMinutes,
@@ -34,6 +36,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    const stepSeqVal = typeof stepSeq === 'number' && stepSeq >= 0 ? stepSeq : 0;
 
     const validPools = ['consult', 'work', 'control'];
     if (!validPools.includes(pool)) {
@@ -61,14 +65,14 @@ export async function POST(request: NextRequest) {
 
     const r = await poolDb.query(
       `INSERT INTO slot_intents (
-        episode_id, step_code, window_start, window_end, duration_minutes,
+        episode_id, step_code, step_seq, window_start, window_end, duration_minutes,
         pool, state, priority, expires_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, 'open', $7, $8)
-      RETURNING id, episode_id as "episodeId", step_code as "stepCode",
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'open', $8, $9)
+      RETURNING id, episode_id as "episodeId", step_code as "stepCode", step_seq as "stepSeq",
         window_start as "windowStart", window_end as "windowEnd",
         duration_minutes as "durationMinutes", pool, state, priority,
         expires_at as "expiresAt", created_at as "createdAt"`,
-      [episodeId, stepCode, windowStartTs, windowEndTs, durationMinutes, pool, priority, expiresAt]
+      [episodeId, stepCode, stepSeqVal, windowStartTs, windowEndTs, durationMinutes, pool, priority, expiresAt]
     );
 
     const intent = r.rows[0];
