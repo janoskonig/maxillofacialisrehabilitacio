@@ -154,6 +154,7 @@ export default function AdminPage() {
       return;
     }
       setCurrentUser(user);
+      // Page access: admin or fogpótlástanász (fogpótlástanász only sees folyamatok tab)
       setAuthorized(user.role === 'admin' || user.role === 'fogpótlástanász');
       if (user.role === 'fogpótlástanász') setAdminTab('folyamatok');
       setLoading(false);
@@ -161,8 +162,9 @@ export default function AdminPage() {
     checkAuth();
   }, [router]);
 
-  // Only admin may load user data; fogpótlástanász has access to folyamatok tab only
-  const canManageUsers = authorized && currentUser?.role === 'admin';
+  // User management (users, usage, feedback): admin only. fogpótlástanász has folyamatok tab only.
+  // Derived purely from role to avoid conflating page access (authorized) with feature access.
+  const canManageUsers = currentUser?.role === 'admin';
 
   useEffect(() => {
     const loadUsers = async () => {
