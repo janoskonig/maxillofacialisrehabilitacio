@@ -250,7 +250,7 @@ export async function POST(request: NextRequest) {
           if (mayOverride) {
             await db.query(
               `INSERT INTO scheduling_override_audit (episode_id, user_id, override_reason) VALUES ($1, $2, $3)`,
-              [episodeId, auth.email, overrideReason.trim()]
+              [episodeId, auth.userId, overrideReason.trim()]
             );
             usedOverride = true;
           } else {
@@ -268,7 +268,7 @@ export async function POST(request: NextRequest) {
           // Audit: precommit exception allows 2nd future work appointment
           await db.query(
             `INSERT INTO scheduling_override_audit (episode_id, user_id, override_reason) VALUES ($1, $2, $3)`,
-            [episodeId, auth.email, `precommit: ${typeof stepCode === 'string' ? stepCode : 'unknown'}`]
+            [episodeId, auth.userId, `precommit: ${typeof stepCode === 'string' ? stepCode : 'unknown'}`]
           );
         }
       }

@@ -100,7 +100,7 @@ export async function POST(
       if (requiresPrecommit && intent.episode_id) {
         await pool.query(
           `INSERT INTO scheduling_override_audit (episode_id, user_id, override_reason) VALUES ($1, $2, $3)`,
-          [intent.episode_id, auth.email, `precommit: ${intent.step_code}`]
+          [intent.episode_id, auth.userId, `precommit: ${intent.step_code}`]
         );
       }
 
