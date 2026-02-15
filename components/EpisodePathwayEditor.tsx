@@ -54,7 +54,7 @@ export function EpisodePathwayEditor({
     try {
       const [pathwaysRes, doctorsRes] = await Promise.all([
         fetch('/api/care-pathways', { credentials: 'include' }),
-        fetch('/api/users/doctors', { credentials: 'include' }),
+        fetch('/api/users/fogpotlastanasz', { credentials: 'include' }),
       ]);
       if (!pathwaysRes.ok || !doctorsRes.ok) {
         throw new Error('Nem sikerült betölteni az adatokat');
@@ -68,9 +68,9 @@ export function EpisodePathwayEditor({
         }))
       );
       setDoctors(
-        (doctorsData.doctors ?? []).map((d: { id: string; name?: string; email?: string }) => ({
+        (doctorsData.users ?? []).map((d: { id: string; name?: string; displayName?: string; email?: string }) => ({
           id: d.id,
-          name: d.name ?? d.email ?? d.id,
+          name: d.name ?? d.displayName ?? d.email ?? d.id,
         }))
       );
     } catch (e) {

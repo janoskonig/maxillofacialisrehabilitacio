@@ -206,7 +206,7 @@ export async function POST(request: NextRequest) {
       // 1) Lock episode first (consistent lock order) and enforce one-hard-next + care_pathway check
       if (episodeId && poolValue === 'work') {
         const episodeLock = await db.query(
-          `SELECT id, care_pathway_id FROM patient_episodes WHERE id = $1 FOR UPDATE`,
+          `SELECT id, care_pathway_id, assigned_provider_id FROM patient_episodes WHERE id = $1 FOR UPDATE`,
           [episodeId]
         );
         if (episodeLock.rows.length === 0) {
@@ -226,6 +226,19 @@ export async function POST(request: NextRequest) {
             },
             { status: 409 }
           );
+        }
+        const assignedProviderId = episodeLock.rows[0].assigned_provider_id;
+        if (assignedProviderId && auth.role !== 'admin') {
+          if (auth.userId !== assignedProviderId) {
+            await db.query('ROLLBACK');
+            return NextResponse.json(
+              {
+                error: 'Csak a hozzárendelt felelős orvos (vagy admin) foglalhat work pool időpontot ehhez az epizódhoz.',
+                code: 'ASSIGNED_PROVIDER_ONLY',
+              },
+              { status: 403 }
+            );
+          }
         }
         const oneHardNext = await checkOneHardNext(episodeId, 'work', {
           requiresPrecommit: requiresPrecommit === true,

@@ -28,6 +28,22 @@ export async function GET(request: NextRequest) {
     const serverNow = new Date();
     const serverNowISO = serverNow.toISOString();
 
+    // Work pool foglalás: csak assigned_provider_id = user vagy NULL (admin mindent lát)
+    const queryParams: string[] = [];
+    let paramIndex = 1;
+    const extraConditions: string[] = [];
+    if (patientId) {
+      extraConditions.push(`pe.patient_id = $${paramIndex}`);
+      queryParams.push(patientId);
+      paramIndex++;
+    }
+    if (auth.role !== 'admin') {
+      extraConditions.push(`(pe.assigned_provider_id IS NULL OR pe.assigned_provider_id = $${paramIndex})`);
+      queryParams.push(auth.userId);
+      paramIndex++;
+    }
+    const extraWhere = extraConditions.length ? ' AND ' + extraConditions.join(' AND ') : '';
+
     // WIP episodes: status=open, stage in STAGE_1..STAGE_6 (not STAGE_0 or STAGE_7)
     const episodesResult = await pool.query(
       `SELECT DISTINCT pe.id as "episodeId", pe.patient_id as "patientId", pe.assigned_provider_id as "assignedProviderId",
@@ -40,9 +56,9 @@ export async function GET(request: NextRequest) {
        ) se ON pe.id = se.episode_id
        WHERE pe.status = 'open'
        AND (se.stage_code IS NULL OR se.stage_code IN ('STAGE_1','STAGE_2','STAGE_3','STAGE_4','STAGE_5','STAGE_6'))
-       ${patientId ? 'AND pe.patient_id = $1' : ''}
+       ${extraWhere}
        ORDER BY pe.opened_at ASC`,
-      patientId ? [patientId] : []
+      queryParams
     );
 
     const items: WorklistItemBackend[] = [];
