@@ -160,9 +160,12 @@ export default function AdminPage() {
     checkAuth();
   }, [router]);
 
+  // Only admin may load user data; fogpótlástanász has access to folyamatok tab only
+  const canManageUsers = authorized && currentUser?.role === 'admin';
+
   useEffect(() => {
     const loadUsers = async () => {
-      if (!authorized) return;
+      if (!canManageUsers) return;
       setUsersLoading(true);
       try {
         const res = await fetch('/api/users', {
@@ -179,7 +182,7 @@ export default function AdminPage() {
       }
     };
     loadUsers();
-  }, [authorized]);
+  }, [canManageUsers]);
 
   const updateRole = async (userId: string, role: UserRole) => {
     try {
@@ -262,7 +265,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     const loadUsage = async () => {
-      if (!authorized) return;
+      if (!canManageUsers) return;
       setUsageLoading(true);
       try {
         const res = await fetch('/api/activity', {
@@ -277,11 +280,11 @@ export default function AdminPage() {
       }
     };
     loadUsage();
-  }, [authorized]);
+  }, [canManageUsers]);
 
   useEffect(() => {
     const loadFeedback = async () => {
-      if (!authorized) return;
+      if (!canManageUsers) return;
       setFeedbackLoading(true);
       try {
         const url = feedbackStatusFilter 
@@ -302,7 +305,7 @@ export default function AdminPage() {
       }
     };
     loadFeedback();
-  }, [authorized, feedbackStatusFilter]);
+  }, [canManageUsers, feedbackStatusFilter]);
 
   const updateFeedbackStatus = async (feedbackId: string, newStatus: string) => {
     try {
