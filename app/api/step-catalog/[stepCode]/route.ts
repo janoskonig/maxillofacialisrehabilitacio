@@ -76,8 +76,9 @@ export async function PATCH(
     }
 
     updates.push(`updated_at = now()`, `updated_by = $${idx}`);
-    values.push(auth.userId ?? null, stepCode);
+    values.push(auth.userId ?? null);
     idx++;
+    values.push(stepCode);
 
     await pool.query(
       `UPDATE step_catalog SET ${updates.join(', ')} WHERE step_code = $${idx}`,
