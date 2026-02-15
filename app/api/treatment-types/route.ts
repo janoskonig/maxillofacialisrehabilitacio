@@ -1,6 +1,66 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { treatmentTypeCreateSchema } from '@/lib/admin-process-schemas';
+
+/**
+ * POST /api/treatment-types — create treatment type (admin / fogpótlástanász)
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const auth = await verifyAuth(request);
+    if (!auth) {
+      return NextResponse.json({ error: 'Bejelentkezés szükséges' }, { status: 401 });
+    }
+    if (auth.role !== 'admin' && auth.role !== 'fogpótlástanász') {
+      return NextResponse.json({ error: 'Nincs jogosultság' }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const auditReason =
+      body.auditReason ?? request.nextUrl.searchParams.get('auditReason');
+    const parsed = treatmentTypeCreateSchema.safeParse({ ...body, auditReason });
+    if (!parsed.success) {
+      const msg = parsed.error.errors.map((e: { message: string }) => e.message).join('; ');
+      return NextResponse.json({ error: msg }, { status: 400 });
+    }
+    const data = parsed.data;
+
+    const pool = getDbPool();
+    try {
+      const r = await pool.query(
+        `INSERT INTO treatment_types (code, label_hu)
+         VALUES ($1, $2)
+         RETURNING id, code, label_hu as "labelHu"`,
+        [data.code, data.labelHu]
+      );
+      const row = r.rows[0];
+      console.info('[admin] treatment_type created', {
+        id: row.id,
+        code: row.code,
+        by: auth.email ?? auth.userId,
+        auditReason: data.auditReason,
+      });
+
+      return NextResponse.json({ treatmentType: row });
+    } catch (err: unknown) {
+      const msg = String(err ?? '');
+      if (msg.includes('unique') || msg.includes('duplicate')) {
+        return NextResponse.json(
+          { error: 'A code már létezik.', code: 'CODE_EXISTS' },
+          { status: 409 }
+        );
+      }
+      throw err;
+    }
+  } catch (error) {
+    console.error('Error creating treatment type:', error);
+    return NextResponse.json(
+      { error: 'Hiba történt a kezeléstípus létrehozásakor' },
+      { status: 500 }
+    );
+  }
+}
 
 /**
  * GET /api/treatment-types — lookup for care pathway treatment types (dropdown, reports)

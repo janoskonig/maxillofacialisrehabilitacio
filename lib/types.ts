@@ -149,6 +149,8 @@ export const patientSchema = z.object({
   nemIsmertPoziciokbanImplantatumRészletek: z.string().optional().nullable(),
   
   // KEZELÉSI TERV - FELSŐ ÁLLCSONT (tömb, mert több tervezet lehet)
+  // FIGYELEM: Admin kezeléstípus (treatment_types) szerkesztés NEM hat a PatientForm dropdownra,
+  // amíg a PatientForm nem kapja dinamikusan a GET /api/treatment-types-t. Jelenleg hardcoded enum.
   kezelesiTervFelso: z.array(z.object({
     tipus: z.enum([
       'zárólemez',

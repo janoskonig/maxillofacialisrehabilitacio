@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { carePathwayPatchSchema } from '@/lib/admin-process-schemas';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +22,8 @@ export async function GET(
     const pathwayId = params.id;
 
     const pathwayResult = await pool.query(
-      `SELECT cp.id, cp.name, cp.reason, cp.steps_json, cp.version, cp.priority,
+      `SELECT cp.id, cp.name, cp.reason, cp.treatment_type_id as "treatmentTypeId",
+              cp.steps_json, cp.version, cp.priority,
               cp.owner_id as "ownerId",
               u.doktor_neve as "ownerName",
               cp.created_at as "createdAt", cp.updated_at as "updatedAt"
@@ -85,7 +87,67 @@ export async function GET(
 }
 
 /**
- * PATCH /api/care-pathways/:id — update pathway (admin only). Emits care_pathway_change_events.
+ * DELETE /api/care-pathways/:id — delete pathway. Tiltás ha bármilyen epizód hivatkozik.
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const auth = await verifyAuth(request);
+    if (!auth) {
+      return NextResponse.json({ error: 'Bejelentkezés szükséges' }, { status: 401 });
+    }
+    if (auth.role !== 'admin' && auth.role !== 'fogpótlástanász') {
+      return NextResponse.json({ error: 'Nincs jogosultság' }, { status: 403 });
+    }
+
+    const pathwayId = params.id;
+    const pool = getDbPool();
+
+    const exists = await pool.query(
+      `SELECT 1 FROM care_pathways WHERE id = $1`,
+      [pathwayId]
+    );
+    if (exists.rows.length === 0) {
+      return NextResponse.json({ error: 'Kezelési út nem található' }, { status: 404 });
+    }
+
+    const refs = await pool.query(
+      `SELECT COUNT(*)::int as cnt FROM patient_episodes WHERE care_pathway_id = $1`,
+      [pathwayId]
+    );
+    if ((refs.rows[0]?.cnt ?? 0) > 0) {
+      return NextResponse.json(
+        {
+          error: 'Nem törölhető: legalább egy epizód hivatkozik erre a kezelési útra.',
+          code: 'PATHWAY_IN_USE',
+        },
+        { status: 409 }
+      );
+    }
+
+    await pool.query(`DELETE FROM care_pathways WHERE id = $1`, [pathwayId]);
+
+    const auditReason = request.nextUrl.searchParams.get('auditReason');
+    console.info('[admin] care_pathway deleted', {
+      pathwayId,
+      by: auth.email ?? auth.userId,
+      auditReason: auditReason ?? 'nincs',
+    });
+
+    return NextResponse.json({ deleted: true });
+  } catch (error) {
+    console.error('Error deleting care pathway:', error);
+    return NextResponse.json(
+      { error: 'Hiba történt a kezelési út törlésekor' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * PATCH /api/care-pathways/:id — update pathway (admin / fogpótlástanász). Zod validáció, optimistic concurrency, audit.
  */
 export async function PATCH(
   request: NextRequest,
@@ -102,12 +164,20 @@ export async function PATCH(
 
     const pathwayId = params.id;
     const body = await request.json();
-    const { name, reason, stepsJson, version, priority, ownerId } = body;
+    const auditReason =
+      body.auditReason ?? request.nextUrl.searchParams.get('auditReason');
+    const parsed = carePathwayPatchSchema.safeParse({ ...body, auditReason });
+    if (!parsed.success) {
+      const msg = parsed.error.errors.map((e: { message: string }) => e.message).join('; ');
+      return NextResponse.json({ error: msg }, { status: 400 });
+    }
+    const data = parsed.data;
 
     const pool = getDbPool();
 
     const beforeResult = await pool.query(
-      `SELECT id, name, reason, steps_json, version, priority, owner_id FROM care_pathways WHERE id = $1`,
+      `SELECT id, name, reason, treatment_type_id, steps_json, version, priority, owner_id, updated_at as "updatedAt"
+       FROM care_pathways WHERE id = $1`,
       [pathwayId]
     );
     if (beforeResult.rows.length === 0) {
@@ -115,38 +185,62 @@ export async function PATCH(
     }
     const before = beforeResult.rows[0];
 
+    if (data.expectedUpdatedAt) {
+      const expected = new Date(data.expectedUpdatedAt).getTime();
+      const actual = before.updatedAt ? new Date(before.updatedAt).getTime() : 0;
+      if (Math.abs(expected - actual) > 1000) {
+        return NextResponse.json(
+          {
+            error: 'A kezelési út közben megváltozott. Kérjük frissítse és próbálja újra.',
+            code: 'CONFLICT',
+            current: before,
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     const updates: string[] = [];
     const values: unknown[] = [];
     let idx = 1;
 
-    if (name !== undefined) {
+    if (data.name !== undefined) {
       updates.push(`name = $${idx}`);
-      values.push(name);
+      values.push(data.name);
       idx++;
     }
-    if (reason !== undefined) {
+    if (data.reason !== undefined) {
       updates.push(`reason = $${idx}`);
-      values.push(reason);
-      idx++;
+      values.push(data.reason);
+      updates.push(`treatment_type_id = $${idx + 1}`);
+      values.push(null);
+      idx += 2;
     }
-    if (stepsJson !== undefined) {
+    if (data.treatmentTypeId !== undefined) {
+      updates.push(`treatment_type_id = $${idx}`);
+      values.push(data.treatmentTypeId);
+      updates.push(`reason = $${idx + 1}`);
+      values.push(null);
+      idx += 2;
+    }
+    if (data.stepsJson !== undefined) {
       updates.push(`steps_json = $${idx}`);
-      values.push(JSON.stringify(stepsJson));
+      values.push(JSON.stringify(data.stepsJson));
       idx++;
     }
-    if (version !== undefined) {
+    if (data.version !== undefined) {
       updates.push(`version = $${idx}`);
-      values.push(version);
+      values.push(data.version);
       idx++;
     }
-    if (priority !== undefined) {
+    if (data.priority !== undefined) {
       updates.push(`priority = $${idx}`);
-      values.push(priority);
+      values.push(data.priority);
       idx++;
     }
-    if (ownerId !== undefined) {
+    if (data.ownerId !== undefined) {
       updates.push(`owner_id = $${idx}`);
-      values.push(ownerId || null);
+      values.push(data.ownerId || null);
       idx++;
     }
 
@@ -162,27 +256,35 @@ export async function PATCH(
       values
     );
 
-    // Emit change event for governance
     const changes: Record<string, { old: unknown; new: unknown }> = {};
-    if (name !== undefined) changes.name = { old: before.name, new: name };
-    if (reason !== undefined) changes.reason = { old: before.reason, new: reason };
-    if (stepsJson !== undefined) changes.steps_json = { old: before.steps_json, new: stepsJson };
-    if (version !== undefined) changes.version = { old: before.version, new: version };
-    if (priority !== undefined) changes.priority = { old: before.priority, new: priority };
-    if (ownerId !== undefined) changes.owner_id = { old: before.owner_id, new: ownerId };
+    if (data.name !== undefined) changes.name = { old: before.name, new: data.name };
+    if (data.reason !== undefined) changes.reason = { old: before.reason, new: data.reason };
+    if (data.treatmentTypeId !== undefined)
+      changes.treatment_type_id = { old: before.treatment_type_id, new: data.treatmentTypeId };
+    if (data.stepsJson !== undefined) changes.steps_json = { old: before.steps_json, new: data.stepsJson };
+    if (data.version !== undefined) changes.version = { old: before.version, new: data.version };
+    if (data.priority !== undefined) changes.priority = { old: before.priority, new: data.priority };
+    if (data.ownerId !== undefined) changes.owner_id = { old: before.owner_id, new: data.ownerId };
 
     const changedBy = auth.email ?? auth.userId ?? 'unknown';
-
     await pool.query(
       `INSERT INTO care_pathway_change_events (pathway_id, changed_by, change_type, change_details)
        VALUES ($1, $2, $3, $4)`,
-      [pathwayId, changedBy, 'pathway_updated', JSON.stringify(changes)]
+      [pathwayId, changedBy, 'pathway_updated', JSON.stringify({ ...changes, auditReason: data.auditReason })]
     );
 
+    console.info('[admin] care_pathway updated', {
+      pathwayId,
+      by: changedBy,
+      auditReason: data.auditReason,
+    });
+
     const afterResult = await pool.query(
-      `SELECT cp.id, cp.name, cp.reason, cp.steps_json, cp.version, cp.priority,
+      `SELECT cp.id, cp.name, cp.reason, cp.treatment_type_id as "treatmentTypeId",
+              cp.steps_json, cp.version, cp.priority,
               cp.owner_id as "ownerId",
-              u.doktor_neve as "ownerName"
+              u.doktor_neve as "ownerName",
+              cp.updated_at as "updatedAt"
        FROM care_pathways cp
        LEFT JOIN users u ON cp.owner_id = u.id
        WHERE cp.id = $1`,

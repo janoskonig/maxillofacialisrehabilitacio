@@ -3,7 +3,10 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser, type AuthUser } from '@/lib/auth';
-import { MessageCircle, ChevronDown, ChevronUp, AlertCircle, Bug, Lightbulb, Mail, Send, ArrowUp, ArrowDown, BarChart3, User, LogIn, Search, UserCircle } from 'lucide-react';
+import { MessageCircle, ChevronDown, ChevronUp, AlertCircle, Bug, Lightbulb, Mail, Send, ArrowUp, ArrowDown, BarChart3, User, LogIn, Search, UserCircle, Settings } from 'lucide-react';
+import { CarePathwaysEditor } from '@/components/admin/CarePathwaysEditor';
+import { StageCatalogEditor } from '@/components/admin/StageCatalogEditor';
+import { TreatmentTypesEditor } from '@/components/admin/TreatmentTypesEditor';
 import { Logo } from '@/components/Logo';
 
 type UserRole = 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
@@ -82,6 +85,9 @@ export default function AdminPage() {
   // Rendezés a felhasználók táblázathoz
   const [userSortField, setUserSortField] = useState<'email' | 'role' | 'last_activity' | null>(null);
   const [userSortDirection, setUserSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  // Admin tab: felhasznalok | folyamatok
+  const [adminTab, setAdminTab] = useState<'felhasznalok' | 'folyamatok'>('felhasznalok');
   
   // Rendezett felhasználók
   const sortedUsers = useMemo(() => {
@@ -147,7 +153,8 @@ export default function AdminPage() {
       return;
     }
       setCurrentUser(user);
-      setAuthorized(user.role === 'admin');
+      setAuthorized(user.role === 'admin' || user.role === 'fogpótlástanász');
+      if (user.role === 'fogpótlástanász') setAdminTab('folyamatok');
       setLoading(false);
     };
     checkAuth();
@@ -655,6 +662,27 @@ export default function AdminPage() {
               <h1 className="text-2xl font-bold text-medical-primary">Admin felület</h1>
             </div>
             <div className="flex items-center gap-4">
+              <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+                {currentUser?.role === 'admin' && (
+                  <button
+                    onClick={() => setAdminTab('felhasznalok')}
+                    className={`px-4 py-2 text-sm font-medium transition-colors ${
+                      adminTab === 'felhasznalok' ? 'bg-medical-primary text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    Felhasználók
+                  </button>
+                )}
+                <button
+                  onClick={() => setAdminTab('folyamatok')}
+                  className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1 ${
+                    adminTab === 'folyamatok' ? 'bg-medical-primary text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <Settings className="w-4 h-4" />
+                  Folyamatok
+                </button>
+              </div>
               <button
                 onClick={() => router.push('/')}
                 className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
@@ -677,6 +705,20 @@ export default function AdminPage() {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {adminTab === 'folyamatok' ? (
+          <div className="space-y-8">
+            <div className="card">
+              <CarePathwaysEditor />
+            </div>
+            <div className="card">
+              <StageCatalogEditor />
+            </div>
+            <div className="card">
+              <TreatmentTypesEditor />
+            </div>
+          </div>
+        ) : (
+          <>
         {/* Belépés mint másik felhasználó */}
         <div className="card mb-6 border-l-4 border-blue-500">
           <div className="flex items-center gap-2 mb-4">
@@ -1256,6 +1298,8 @@ export default function AdminPage() {
             </div>
           )}
         </div>
+          </>
+        )}
       </main>
     </div>
   );

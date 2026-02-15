@@ -1,8 +1,74 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { carePathwayCreateSchema } from '@/lib/admin-process-schemas';
 
 export const dynamic = 'force-dynamic';
+
+/**
+ * POST /api/care-pathways — create pathway (admin / fogpótlástanász)
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const auth = await verifyAuth(request);
+    if (!auth) {
+      return NextResponse.json({ error: 'Bejelentkezés szükséges' }, { status: 401 });
+    }
+    if (auth.role !== 'admin' && auth.role !== 'fogpótlástanász') {
+      return NextResponse.json({ error: 'Nincs jogosultság' }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const auditReason =
+      body.auditReason ?? request.nextUrl.searchParams.get('auditReason');
+    const parsed = carePathwayCreateSchema.safeParse({ ...body, auditReason });
+    if (!parsed.success) {
+      const msg = parsed.error.errors.map((e: { message: string }) => e.message).join('; ');
+      return NextResponse.json({ error: msg }, { status: 400 });
+    }
+    const data = parsed.data;
+
+    const pool = getDbPool();
+    const reason = (data.reason as string | null) || null;
+    const treatmentTypeId = (data.treatmentTypeId as string | null) || null;
+
+    const r = await pool.query(
+      `INSERT INTO care_pathways (name, reason, treatment_type_id, steps_json, version, priority, owner_id)
+       VALUES ($1, $2, $3, $4::jsonb, 1, $5, $6)
+       RETURNING id, name, reason, treatment_type_id as "treatmentTypeId", steps_json as "stepsJson", version, priority, owner_id as "ownerId", created_at as "createdAt", updated_at as "updatedAt"`,
+      [
+        data.name,
+        reason,
+        treatmentTypeId,
+        JSON.stringify(data.stepsJson),
+        data.priority,
+        data.ownerId || null,
+      ]
+    );
+
+    const pathway = r.rows[0];
+    const changedBy = auth.email ?? auth.userId ?? 'unknown';
+    await pool.query(
+      `INSERT INTO care_pathway_change_events (pathway_id, changed_by, change_type, change_details)
+       VALUES ($1, $2, 'pathway_created', $3)`,
+      [pathway.id, changedBy, JSON.stringify({ auditReason: data.auditReason })]
+    );
+
+    console.info('[admin] care_pathway created', {
+      pathwayId: pathway.id,
+      by: changedBy,
+      auditReason: data.auditReason,
+    });
+
+    return NextResponse.json({ pathway });
+  } catch (error) {
+    console.error('Error creating care pathway:', error);
+    return NextResponse.json(
+      { error: 'Hiba történt a kezelési út létrehozásakor' },
+      { status: 500 }
+    );
+  }
+}
 
 /**
  * GET /api/care-pathways — list care pathways with governance info
@@ -19,7 +85,8 @@ export async function GET(request: NextRequest) {
     const pool = getDbPool();
 
     const pathwaysResult = await pool.query(
-      `SELECT cp.id, cp.name, cp.reason, cp.steps_json, cp.version, cp.priority,
+      `SELECT cp.id, cp.name, cp.reason, cp.treatment_type_id as "treatmentTypeId",
+              cp.steps_json, cp.version, cp.priority,
               cp.owner_id as "ownerId",
               u.doktor_neve as "ownerName",
               cp.created_at as "createdAt", cp.updated_at as "updatedAt"
