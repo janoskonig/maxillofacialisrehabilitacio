@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { fetchVirtualAppointments } from '@/lib/virtual-appointments-service';
 
 const REASON_VALUES = ['traumás sérülés', 'veleszületett rendellenesség', 'onkológiai kezelés utáni állapot'];
 
@@ -43,6 +44,7 @@ export async function GET(request: NextRequest) {
     const status = request.nextUrl.searchParams.get('status') || 'all';
     const from = request.nextUrl.searchParams.get('from');
     const to = request.nextUrl.searchParams.get('to');
+    const includeVirtual = request.nextUrl.searchParams.get('includeVirtual') === 'true';
 
     let episodeQuery = `
       SELECT e.id, e.patient_id as "patientId", p.nev as "patientName", e.reason, e.chief_complaint as "chiefComplaint",
@@ -94,7 +96,11 @@ export async function GET(request: NextRequest) {
     }));
 
     if (episodeIds.length === 0) {
-      return NextResponse.json({ episodes: episodesList, intervals: [] });
+      return NextResponse.json({
+        episodes: episodesList,
+        intervals: [],
+        ...(includeVirtual && { virtualWindows: [] }),
+      });
     }
 
     const eventsResult = await pool.query(
@@ -132,9 +138,53 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Virtual windows: import service directly (no HTTP)
+    let virtualWindows: Array<{
+      episodeId: string;
+      virtualKey: string;
+      patientName: string;
+      stepCode: string;
+      stepLabel: string;
+      pool: string;
+      durationMinutes: number;
+      windowStartDate: string;
+      windowEndDate: string;
+      worklistUrl: string;
+      worklistParams: { episodeId: string; stepCode: string; pool: string };
+    }> = [];
+    if (includeVirtual) {
+      const rangeStart = from
+        ? new Date(from).toISOString().slice(0, 10)
+        : episodesList[0]?.openedAt?.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
+      const rangeEnd = to
+        ? new Date(to).toISOString().slice(0, 10)
+        : new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const { items } = await fetchVirtualAppointments({
+        rangeStartDate: rangeStart,
+        rangeEndDate: rangeEnd,
+        readyOnly: true,
+      });
+      virtualWindows = items
+        .filter((v) => episodeIds.includes(v.episodeId))
+        .map((v) => ({
+          episodeId: v.episodeId,
+          virtualKey: v.virtualKey,
+          patientName: v.patientName,
+          stepCode: v.stepCode,
+          stepLabel: v.stepLabel,
+          pool: v.pool,
+          durationMinutes: v.durationMinutes,
+          windowStartDate: v.windowStartDate,
+          windowEndDate: v.windowEndDate,
+          worklistUrl: v.worklistUrl,
+          worklistParams: v.worklistParams,
+        }));
+    }
+
     return NextResponse.json({
       episodes: episodesList,
       intervals,
+      ...(includeVirtual && { virtualWindows }),
     });
   } catch (error) {
     console.error('Error fetching GANTT data:', error);

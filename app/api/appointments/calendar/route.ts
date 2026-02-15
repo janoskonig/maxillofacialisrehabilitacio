@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { fetchVirtualAppointments } from '@/lib/virtual-appointments-service';
 
 // Get appointments for calendar view with date range filtering
 export const dynamic = 'force-dynamic';
+
+/** Extract YYYY-MM-DD in Europe/Budapest from ISO string (avoids UTC date shift) */
+function toDateOnlyBudapest(s: string | null): string | null {
+  if (!s) return null;
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('en-CA', { timeZone: 'Europe/Budapest' }); // YYYY-MM-DD
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,6 +33,7 @@ export async function GET(request: NextRequest) {
     const dentistEmail = searchParams.get('dentistEmail');
     const status = searchParams.get('status'); // appointment status filter
     const includeAvailableSlots = searchParams.get('includeAvailableSlots') === 'true';
+    const includeVirtual = searchParams.get('includeVirtual') === 'true';
 
     // Build WHERE clause
     const whereConditions: string[] = [];
@@ -173,12 +183,47 @@ export async function GET(request: NextRequest) {
       slotsByDate[dateKey].push(slot);
     });
 
-    return NextResponse.json({
+    // Virtual appointments: import service directly (no HTTP)
+    let virtualAppointments: any[] = [];
+    let virtualAppointmentsByDate: Record<string, any[]> = {};
+    if (includeVirtual && startDate && endDate) {
+      const rangeStart = toDateOnlyBudapest(startDate);
+      const rangeEnd = toDateOnlyBudapest(endDate);
+      if (rangeStart && rangeEnd && rangeEnd >= rangeStart) {
+        const { items } = await fetchVirtualAppointments({
+          rangeStartDate: rangeStart,
+          rangeEndDate: rangeEnd,
+          readyOnly: true,
+        });
+        virtualAppointments = items;
+        items.forEach((v: any) => {
+          // Virtual spans window; add to each day in window (within view range) for calendar display
+          const start = new Date(v.windowStartDate);
+          const end = new Date(v.windowEndDate);
+          const viewEnd = new Date(rangeEnd);
+          for (let d = new Date(start); d <= end && d <= viewEnd; d.setDate(d.getDate() + 1)) {
+            const dateKey = d.toISOString().slice(0, 10);
+            if (dateKey >= rangeStart && dateKey <= rangeEnd) {
+              if (!virtualAppointmentsByDate[dateKey]) virtualAppointmentsByDate[dateKey] = [];
+              virtualAppointmentsByDate[dateKey].push(v);
+            }
+          }
+        });
+      }
+    }
+
+    const response: Record<string, unknown> = {
       appointments: appointmentsResult.rows,
       appointmentsByDate,
       availableSlots,
       slotsByDate,
-    });
+    };
+    if (includeVirtual) {
+      response.virtualAppointments = virtualAppointments;
+      response.virtualAppointmentsByDate = virtualAppointmentsByDate;
+    }
+
+    return NextResponse.json(response);
   } catch (error) {
     console.error('Error fetching calendar appointments:', error);
     return NextResponse.json(

@@ -1,8 +1,9 @@
 'use client';
 
-import { startOfMonth, endOfMonth, eachDayOfInterval, format, isSameMonth, isToday, isSameDay, startOfWeek, endOfWeek } from 'date-fns';
+import { startOfMonth, endOfMonth, eachDayOfInterval, format, isSameMonth, isToday, startOfWeek, endOfWeek } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { CalendarEvent } from './CalendarEvent';
+import { VirtualLane } from './VirtualLane';
 
 interface Appointment {
   id: string;
@@ -21,6 +22,9 @@ interface MonthViewProps {
   currentDate: Date;
   appointments: Appointment[];
   appointmentsByDate: Record<string, Appointment[]>;
+  virtualAppointments?: any[];
+  virtualAppointmentsByDate?: Record<string, any[]>;
+  includeVirtual?: boolean;
   onDateClick?: (date: Date) => void;
   onAppointmentClick?: (appointment: Appointment) => void;
 }
@@ -29,6 +33,9 @@ export function MonthView({
   currentDate,
   appointments,
   appointmentsByDate,
+  virtualAppointments = [],
+  virtualAppointmentsByDate = {},
+  includeVirtual = false,
   onDateClick,
   onAppointmentClick,
 }: MonthViewProps) {
@@ -103,6 +110,14 @@ export function MonthView({
                     />
                   </div>
                 ))}
+                {includeVirtual && (virtualAppointmentsByDate[format(day, 'yyyy-MM-dd')] || []).length > 0 && (
+                  <VirtualLane
+                    items={virtualAppointmentsByDate[format(day, 'yyyy-MM-dd')] || []}
+                    mode="month"
+                    cellDate={day}
+                    maxVisible={2}
+                  />
+                )}
                 {dayAppointments.length > 3 && (
                   <div className="text-xs text-gray-500 px-1">
                     +{dayAppointments.length - 3} további
