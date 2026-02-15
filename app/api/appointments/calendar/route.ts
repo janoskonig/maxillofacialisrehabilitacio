@@ -198,15 +198,19 @@ export async function GET(request: NextRequest) {
         virtualAppointments = items;
         items.forEach((v: any) => {
           // Virtual spans window; add to each day in window (within view range) for calendar display
-          const start = new Date(v.windowStartDate);
-          const end = new Date(v.windowEndDate);
-          const viewEnd = new Date(rangeEnd);
-          for (let d = new Date(start); d <= end && d <= viewEnd; d.setDate(d.getDate() + 1)) {
-            const dateKey = d.toISOString().slice(0, 10);
-            if (dateKey >= rangeStart && dateKey <= rangeEnd) {
-              if (!virtualAppointmentsByDate[dateKey]) virtualAppointmentsByDate[dateKey] = [];
-              virtualAppointmentsByDate[dateKey].push(v);
+          // Use Budapest timezone consistently for date keys (matches rangeStart/rangeEnd from toDateOnlyBudapest)
+          const startStr = toDateOnlyBudapest(v.windowStartDate);
+          const endStr = toDateOnlyBudapest(v.windowEndDate);
+          if (!startStr || !endStr) return;
+          let current = startStr;
+          while (current <= endStr && current <= rangeEnd) {
+            if (current >= rangeStart) {
+              if (!virtualAppointmentsByDate[current]) virtualAppointmentsByDate[current] = [];
+              virtualAppointmentsByDate[current].push(v);
             }
+            const nextDate = new Date(current + 'T12:00:00Z');
+            nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+            current = nextDate.toLocaleDateString('en-CA', { timeZone: 'Europe/Budapest' });
           }
         });
       }

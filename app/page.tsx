@@ -587,20 +587,6 @@ export default function Home() {
                     className="form-input pl-12 py-3 text-base"
                   />
                 </div>
-                {/* View Dropdown - kikommentezve
-                <div className="flex items-center gap-3">
-                  <Filter className="w-5 h-5 text-gray-400" />
-                  <select
-                    value={selectedView}
-                    onChange={(e) => setSelectedView(e.target.value as 'all' | 'neak_pending' | 'missing_docs')}
-                    className="form-select flex-1 max-w-xs"
-                  >
-                    <option value="all">Minden beteg</option>
-                    <option value="neak_pending">NEAK pending</option>
-                    <option value="missing_docs">Hiányos dokumentáció</option>
-                  </select>
-                </div>
-                */}
               </div>
 
               {/* Stats */}
