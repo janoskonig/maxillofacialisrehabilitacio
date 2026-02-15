@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { carePathwayCreateSchema } from '@/lib/admin-process-schemas';
+import { invalidateStepLabelCache } from '@/lib/step-labels';
+import { invalidateUnmappedCache } from '@/lib/step-catalog-cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,6 +55,9 @@ export async function POST(request: NextRequest) {
        VALUES ($1, $2, 'pathway_created', $3)`,
       [pathway.id, changedBy, JSON.stringify({ auditReason: data.auditReason })]
     );
+
+    invalidateStepLabelCache();
+    invalidateUnmappedCache();
 
     console.info('[admin] care_pathway created', {
       pathwayId: pathway.id,

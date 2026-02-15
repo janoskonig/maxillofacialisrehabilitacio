@@ -122,3 +122,10 @@ export const treatmentTypePatchSchema = z.object({
   auditReason: z.string().min(1, 'auditReason kötelező'),
   expectedUpdatedAt: z.string().datetime().optional(),
 });
+
+/** Step catalog patch — labelHu, labelEn, isActive */
+export const stepCatalogPatchSchema = z.object({
+  labelHu: z.string().min(1).max(255).optional(),
+  labelEn: z.string().max(255).nullable().optional(),
+  isActive: z.boolean().optional(),
+});

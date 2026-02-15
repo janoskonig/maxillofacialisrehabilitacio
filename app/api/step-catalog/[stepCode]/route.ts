@@ -1,0 +1,104 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getDbPool } from '@/lib/db';
+import { verifyAuth } from '@/lib/auth-server';
+import { stepCatalogPatchSchema } from '@/lib/admin-process-schemas';
+import { invalidateStepLabelCache } from '@/lib/step-labels';
+
+const STEP_CODE_REGEX = /^[a-z0-9_]+$/;
+
+export const dynamic = 'force-dynamic';
+
+/**
+ * PATCH /api/step-catalog/[stepCode] — update step label. Cache clear after.
+ * Auth: admin + fogpótlástanász
+ */
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { stepCode: string } }
+) {
+  try {
+    const auth = await verifyAuth(request);
+    if (!auth) {
+      return NextResponse.json({ error: 'Bejelentkezés szükséges' }, { status: 401 });
+    }
+    if (auth.role !== 'admin' && auth.role !== 'fogpótlástanász') {
+      return NextResponse.json({ error: 'Nincs jogosultság' }, { status: 403 });
+    }
+
+    const stepCode = decodeURIComponent(params.stepCode);
+    if (!STEP_CODE_REGEX.test(stepCode)) {
+      return NextResponse.json(
+        { error: 'stepCode csak a-z, 0-9, _ lehet' },
+        { status: 400 }
+      );
+    }
+
+    const body = await request.json();
+    const parsed = stepCatalogPatchSchema.safeParse(body);
+    if (!parsed.success) {
+      const msg = parsed.error.errors.map((e: { message: string }) => e.message).join('; ');
+      return NextResponse.json({ error: msg }, { status: 400 });
+    }
+    const data = parsed.data;
+
+    const pool = getDbPool();
+
+    const exists = await pool.query(
+      `SELECT 1 FROM step_catalog WHERE step_code = $1`,
+      [stepCode]
+    );
+    if (exists.rows.length === 0) {
+      return NextResponse.json({ error: 'Lépés nem található' }, { status: 404 });
+    }
+
+    const updates: string[] = [];
+    const values: unknown[] = [];
+    let idx = 1;
+
+    if (data.labelHu !== undefined) {
+      updates.push(`label_hu = $${idx}`);
+      values.push(data.labelHu);
+      idx++;
+    }
+    if (data.labelEn !== undefined) {
+      updates.push(`label_en = $${idx}`);
+      values.push(data.labelEn);
+      idx++;
+    }
+    if (data.isActive !== undefined) {
+      updates.push(`is_active = $${idx}`);
+      values.push(data.isActive);
+      idx++;
+    }
+
+    if (updates.length === 0) {
+      return NextResponse.json({ error: 'Nincs módosítandó mező' }, { status: 400 });
+    }
+
+    updates.push(`updated_at = now()`, `updated_by = $${idx}`);
+    values.push(auth.userId ?? null, stepCode);
+    idx++;
+
+    await pool.query(
+      `UPDATE step_catalog SET ${updates.join(', ')} WHERE step_code = $${idx}`,
+      values
+    );
+
+    invalidateStepLabelCache();
+
+    const afterResult = await pool.query(
+      `SELECT step_code as "stepCode", label_hu as "labelHu", label_en as "labelEn",
+              is_active as "isActive", updated_at as "updatedAt"
+       FROM step_catalog WHERE step_code = $1`,
+      [stepCode]
+    );
+
+    return NextResponse.json({ item: afterResult.rows[0] });
+  } catch (error) {
+    console.error('Error updating step catalog:', error);
+    return NextResponse.json(
+      { error: 'Hiba történt a lépés módosításakor' },
+      { status: 500 }
+    );
+  }
+}

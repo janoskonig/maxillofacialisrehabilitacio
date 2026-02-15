@@ -6,27 +6,12 @@
 
 import { createHash } from 'crypto';
 import { getDbPool } from './db';
+import { getStepLabelMap } from './step-labels';
 import type { VirtualAppointment, VirtualStatus } from './virtual-appointments-types';
 
 const TIMEZONE = 'Europe/Budapest';
 const DEFAULT_HORIZON_DAYS = 90;
 const ITEM_CAP = 2000;
-
-/** Step code → Hungarian label (fallback when pathway label unavailable) */
-const STEP_LABELS: Record<string, string> = {
-  consult_1: 'Első konzultáció',
-  diagnostic: 'Diagnosztika',
-  impression_1: 'Lenyomat 1',
-  try_in_1: 'Próba 1',
-  try_in_2: 'Próba 2',
-  delivery: 'Átadás',
-  control_6m: '6 hónapos kontroll',
-  control_12m: '12 hónapos kontroll',
-};
-
-function getStepLabel(stepCode: string): string {
-  return STEP_LABELS[stepCode] ?? stepCode;
-}
 
 /** Format Date to YYYY-MM-DD in Budapest timezone (date-only, no time) */
 function toDateOnly(date: Date): string {
@@ -134,6 +119,8 @@ export async function fetchVirtualAppointments(
   const computedAtISO = serverNow.toISOString();
   const itemsBeforeFilter = result.rows.length;
 
+  const stepLabelMap = await getStepLabelMap();
+
   const items: VirtualAppointment[] = [];
   for (const row of result.rows) {
     const windowStart = row.windowStart as Date;
@@ -158,7 +145,7 @@ export async function fetchVirtualAppointments(
       patientId: row.patientId as string,
       patientName: (row.patientName as string) ?? 'Név nélküli',
       stepCode,
-      stepLabel: getStepLabel(stepCode),
+      stepLabel: stepLabelMap.get(stepCode) ?? stepCode,
       pool: poolVal as 'work' | 'consult' | 'control',
       durationMinutes: (row.durationMinutes as number) ?? 30,
       windowStartDate,

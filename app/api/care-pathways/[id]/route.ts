@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { carePathwayPatchSchema } from '@/lib/admin-process-schemas';
+import { invalidateStepLabelCache } from '@/lib/step-labels';
+import { invalidateUnmappedCache } from '@/lib/step-catalog-cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -272,6 +274,9 @@ export async function PATCH(
        VALUES ($1, $2, $3, $4)`,
       [pathwayId, changedBy, 'pathway_updated', JSON.stringify({ ...changes, auditReason: data.auditReason })]
     );
+
+    invalidateStepLabelCache();
+    invalidateUnmappedCache();
 
     console.info('[admin] care_pathway updated', {
       pathwayId,
