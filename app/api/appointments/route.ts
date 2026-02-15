@@ -446,7 +446,8 @@ export async function POST(request: NextRequest) {
 
       // Send email notification to dentist and create Google Calendar event (parallel)
       const updatedStartTime = new Date(updatedTimeSlot.start_time);
-      
+      const updatedEndTime = new Date(updatedStartTime.getTime() + durationMinutes * 60 * 1000);
+
       // Format date for notifications
       const formattedDate = format(updatedStartTime, "yyyy. MM. dd. HH:mm", { locale: hu });
 
@@ -533,7 +534,7 @@ export async function POST(request: NextRequest) {
                     summary: `Betegfogadás - ${patient.nev || 'Név nélküli beteg'}`,
                     description: `Beteg: ${patient.nev || 'Név nélküli'}\nTAJ: ${patient.taj || 'Nincs megadva'}\nBeutaló orvos: ${auth.email}`,
                     startTime: updatedStartTime,
-                    endTime: endTime,
+                    endTime: updatedEndTime,
                     location: 'Maxillofaciális Rehabilitáció',
                     calendarId: targetCalendarId,
                   }
@@ -554,7 +555,7 @@ export async function POST(request: NextRequest) {
                     summary: `Betegfogadás - ${patient.nev || 'Név nélküli beteg'}`,
                     description: `Beteg: ${patient.nev || 'Név nélküli'}\nTAJ: ${patient.taj || 'Nincs megadva'}\nBeutaló orvos: ${auth.email}`,
                     startTime: updatedStartTime,
-                    endTime: endTime,
+                    endTime: updatedEndTime,
                     location: 'Maxillofaciális Rehabilitáció',
                     calendarId: targetCalendarId,
                   }

@@ -296,9 +296,9 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
 
     const appointment = appointmentResult.rows[0];
 
-    // Update time slot status to booked
+    // Update time slot: status (legacy) and state (slot state machine) both to booked
     await pool.query(
-      `UPDATE available_time_slots SET status = 'booked' WHERE id = $1`,
+      `UPDATE available_time_slots SET status = 'booked', state = 'booked' WHERE id = $1`,
       [timeSlotId]
     );
 
