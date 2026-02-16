@@ -87,8 +87,9 @@ export default function AdminPage() {
   const [userSortField, setUserSortField] = useState<'email' | 'role' | 'last_activity' | null>(null);
   const [userSortDirection, setUserSortDirection] = useState<'asc' | 'desc'>('asc');
 
-  // Admin tab: felhasznalok | folyamatok
+  // Admin tab: felhasznalok | folyamatok. fogpótlástanász only sees folyamatok — derive to avoid race.
   const [adminTab, setAdminTab] = useState<'felhasznalok' | 'folyamatok'>('felhasznalok');
+  const effectiveTab = currentUser?.role === 'fogpótlástanász' ? 'folyamatok' : adminTab;
   const [editPathwayId, setEditPathwayId] = useState<string | null>(null);
   const carePathwaysRef = useRef<HTMLDivElement>(null);
   
@@ -158,7 +159,6 @@ export default function AdminPage() {
       setCurrentUser(user);
       // Page access: admin or fogpótlástanász (fogpótlástanász only sees folyamatok tab)
       setAuthorized(user.role === 'admin' || user.role === 'fogpótlástanász');
-      if (user.role === 'fogpótlástanász') setAdminTab('folyamatok');
       setLoading(false);
     };
     checkAuth();
@@ -681,7 +681,7 @@ export default function AdminPage() {
                   <button
                     onClick={() => setAdminTab('felhasznalok')}
                     className={`px-4 py-2 text-sm font-medium transition-colors ${
-                      adminTab === 'felhasznalok' ? 'bg-medical-primary text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                      effectiveTab === 'felhasznalok' ? 'bg-medical-primary text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
                     }`}
                   >
                     Felhasználók
@@ -690,7 +690,7 @@ export default function AdminPage() {
                 <button
                   onClick={() => setAdminTab('folyamatok')}
                   className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1 ${
-                    adminTab === 'folyamatok' ? 'bg-medical-primary text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                    effectiveTab === 'folyamatok' ? 'bg-medical-primary text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
                   }`}
                 >
                   <Settings className="w-4 h-4" />
@@ -719,7 +719,7 @@ export default function AdminPage() {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {adminTab === 'folyamatok' ? (
+        {effectiveTab === 'folyamatok' ? (
           <div className="space-y-8">
             <div ref={carePathwaysRef} className="card">
               <CarePathwaysEditor

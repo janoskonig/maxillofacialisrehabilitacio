@@ -95,50 +95,7 @@ export async function GET(request: NextRequest) {
       closedAt: r.closedAt ? (r.closedAt as Date)?.toISOString?.() ?? r.closedAt : null,
     }));
 
-    if (episodeIds.length === 0) {
-      return NextResponse.json({
-        episodes: episodesList,
-        intervals: [],
-        ...(includeVirtual && { virtualWindows: [] }),
-      });
-    }
-
-    const eventsResult = await pool.query(
-      `SELECT id, episode_id as "episodeId", stage_code as "stageCode", at
-       FROM stage_events
-       WHERE episode_id = ANY($1::uuid[])
-       ORDER BY episode_id, at ASC`,
-      [episodeIds]
-    );
-
-    const eventsByEpisode = new Map<string, { stageCode: string; at: string }[]>();
-    for (const row of eventsResult.rows) {
-      const epId = row.episodeId as string;
-      if (!eventsByEpisode.has(epId)) eventsByEpisode.set(epId, []);
-      eventsByEpisode.get(epId)!.push({
-        stageCode: row.stageCode as string,
-        at: (row.at as Date)?.toISOString?.() ?? String(row.at),
-      });
-    }
-
-    const now = new Date().toISOString();
-    const intervals: { episodeId: string; stageCode: string; start: string; end: string }[] = [];
-
-    for (const epId of episodeIds) {
-      const evs = eventsByEpisode.get(epId) || [];
-      for (let i = 0; i < evs.length; i++) {
-        const start = evs[i].at;
-        const end = i < evs.length - 1 ? evs[i + 1].at : now;
-        intervals.push({
-          episodeId: epId,
-          stageCode: evs[i].stageCode,
-          start,
-          end,
-        });
-      }
-    }
-
-    // Virtual windows: import service directly (no HTTP)
+    let intervals: { episodeId: string; stageCode: string; start: string; end: string }[] = [];
     let virtualWindows: Array<{
       episodeId: string;
       virtualKey: string;
@@ -152,6 +109,43 @@ export async function GET(request: NextRequest) {
       worklistUrl: string;
       worklistParams: { episodeId: string; stepCode: string; pool: string };
     }> = [];
+
+    if (episodeIds.length > 0) {
+      const eventsResult = await pool.query(
+        `SELECT id, episode_id as "episodeId", stage_code as "stageCode", at
+         FROM stage_events
+         WHERE episode_id = ANY($1::uuid[])
+         ORDER BY episode_id, at ASC`,
+        [episodeIds]
+      );
+
+      const eventsByEpisode = new Map<string, { stageCode: string; at: string }[]>();
+      for (const row of eventsResult.rows) {
+        const epId = row.episodeId as string;
+        if (!eventsByEpisode.has(epId)) eventsByEpisode.set(epId, []);
+        eventsByEpisode.get(epId)!.push({
+          stageCode: row.stageCode as string,
+          at: (row.at as Date)?.toISOString?.() ?? String(row.at),
+        });
+      }
+
+      const now = new Date().toISOString();
+      for (const epId of episodeIds) {
+        const evs = eventsByEpisode.get(epId) || [];
+        for (let i = 0; i < evs.length; i++) {
+          const start = evs[i].at;
+          const end = i < evs.length - 1 ? evs[i + 1].at : now;
+          intervals.push({
+            episodeId: epId,
+            stageCode: evs[i].stageCode,
+            start,
+            end,
+          });
+        }
+      }
+    }
+
+    // Virtual windows: only when includeVirtual=true (consistent structure for 0 or N episodes)
     if (includeVirtual) {
       const rangeStart = from
         ? new Date(from).toISOString().slice(0, 10)

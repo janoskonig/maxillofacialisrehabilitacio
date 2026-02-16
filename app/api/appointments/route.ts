@@ -134,7 +134,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { patientId, timeSlotId, cim, teremszam, appointmentType, episodeId, pool = 'work', overrideReason, stepCode, createdVia: createdViaParam } = body;
     // Explicit boolean validation — reject truthy non-booleans (e.g. "true" string)
-    const requiresPrecommit = body.requiresPrecommit === true;
+    // Body param can request precommit; pathway step definition can require it — use OR for effective value
+    const bodyRequiresPrecommit = body.requiresPrecommit === true;
 
     const validCreatedVia = ['worklist', 'patient_form', 'patient_self', 'admin_override', 'surgeon_override', 'migration', 'google_import'] as const;
     const createdVia = typeof createdViaParam === 'string' && validCreatedVia.includes(createdViaParam as (typeof validCreatedVia)[number])
@@ -201,6 +202,8 @@ export async function POST(request: NextRequest) {
     // Start transaction — all slot/episode checks + locks inside TX
     await db.query('BEGIN');
     let committed = false;
+    // Effective requiresPrecommit: pathway step definition OR body param (pathway is authoritative)
+    let requiresPrecommit = bodyRequiresPrecommit;
 
     try {
       // 1) Lock episode first (consistent lock order) and enforce one-hard-next + care_pathway check
@@ -227,6 +230,16 @@ export async function POST(request: NextRequest) {
             { status: 409 }
           );
         }
+        // Derive requiresPrecommit from pathway step (caller cannot bypass step definition)
+        const pathwayResult = await db.query(
+          `SELECT cp.steps_json FROM care_pathways cp WHERE cp.id = $1`,
+          [episodeLock.rows[0].care_pathway_id]
+        );
+        const steps = pathwayResult.rows[0]?.steps_json as Array<{ step_code: string; requires_precommit?: boolean }> | null;
+        const step = typeof stepCode === 'string' ? steps?.find((s) => s.step_code === stepCode) : null;
+        const pathwayStepRequiresPrecommit = step?.requires_precommit === true;
+        requiresPrecommit = pathwayStepRequiresPrecommit || bodyRequiresPrecommit;
+
         const assignedProviderId = episodeLock.rows[0].assigned_provider_id;
         if (assignedProviderId && auth.role !== 'admin') {
           if (auth.userId !== assignedProviderId) {
