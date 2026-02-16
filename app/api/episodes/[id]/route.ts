@@ -26,7 +26,7 @@ export async function PATCH(
     const episodeId = params.id;
     const body = await request.json();
 
-    const { carePathwayId, carePathwayVersion, assignedProviderId } = body;
+    const { carePathwayId, carePathwayVersion, assignedProviderId, treatmentTypeId } = body;
     const updates: string[] = [];
     const values: unknown[] = [];
     let idx = 1;
@@ -46,6 +46,11 @@ export async function PATCH(
       values.push(assignedProviderId || null);
       idx++;
     }
+    if (treatmentTypeId !== undefined) {
+      updates.push(`treatment_type_id = $${idx}`);
+      values.push(treatmentTypeId || null);
+      idx++;
+    }
 
     if (updates.length === 0) {
       return NextResponse.json({ error: 'Nincs módosítandó mező' }, { status: 400 });
@@ -54,7 +59,7 @@ export async function PATCH(
     const pool = getDbPool();
 
     const before = await pool.query(
-      `SELECT care_pathway_id, care_pathway_version, assigned_provider_id FROM patient_episodes WHERE id = $1`,
+      `SELECT care_pathway_id, care_pathway_version, assigned_provider_id, treatment_type_id FROM patient_episodes WHERE id = $1`,
       [episodeId]
     );
     if (before.rows.length === 0) {
@@ -90,7 +95,12 @@ export async function PATCH(
     }
 
     const after = await pool.query(
-      `SELECT id, care_pathway_id as "carePathwayId", care_pathway_version as "carePathwayVersion", assigned_provider_id as "assignedProviderId" FROM patient_episodes WHERE id = $1`,
+      `SELECT pe.id, pe.care_pathway_id as "carePathwayId", pe.care_pathway_version as "carePathwayVersion",
+        pe.assigned_provider_id as "assignedProviderId", pe.treatment_type_id as "treatmentTypeId",
+        tt.code as "treatmentTypeCode", tt.label_hu as "treatmentTypeLabel"
+       FROM patient_episodes pe
+       LEFT JOIN treatment_types tt ON pe.treatment_type_id = tt.id
+       WHERE pe.id = $1`,
       [episodeId]
     );
     const episode = after.rows[0];

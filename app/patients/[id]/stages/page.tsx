@@ -211,10 +211,12 @@ export default function PatientStagesPage() {
           {activeEpisode && (userRole === 'admin' || userRole === 'sebészorvos' || userRole === 'fogpótlástanász') && (
             <EpisodePathwayEditor
               episodeId={activeEpisode.id}
+              patientId={patientId}
               carePathwayId={activeEpisode.carePathwayId}
               assignedProviderId={activeEpisode.assignedProviderId}
               carePathwayName={activeEpisode.carePathwayName}
               assignedProviderName={activeEpisode.assignedProviderName}
+              treatmentTypeId={activeEpisode.treatmentTypeId}
               onSaved={refreshStagesAndEpisodes}
             />
           )}

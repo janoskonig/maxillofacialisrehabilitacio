@@ -129,3 +129,22 @@ export const stepCatalogPatchSchema = z.object({
   labelEn: z.string().max(255).nullable().optional(),
   isActive: z.boolean().optional(),
 });
+
+/** Step catalog batch item — upsert (INSERT or UPDATE) */
+export const stepCatalogBatchItemSchema = z.object({
+  stepCode: z
+    .string()
+    .min(1, 'step_code kötelező')
+    .transform(canonicalizeStepCode)
+    .refine((v) => STEP_CODE_REGEX.test(v), 'step_code csak a-z, 0-9, _ lehet'),
+  labelHu: z.string().min(1, 'label_hu kötelező').max(255),
+  labelEn: z.string().max(255).nullable().optional().default(null),
+  isActive: z.boolean().optional().default(true),
+});
+
+export type StepCatalogBatchItem = z.infer<typeof stepCatalogBatchItemSchema>;
+
+/** Step catalog batch body */
+export const stepCatalogBatchSchema = z.object({
+  items: z.array(stepCatalogBatchItemSchema).min(1, 'Legalább egy elem szükséges'),
+});

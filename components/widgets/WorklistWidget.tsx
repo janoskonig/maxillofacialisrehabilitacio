@@ -439,26 +439,36 @@ export function WorklistWidget() {
                       : '–'}
                   </td>
                   <td className="px-3 py-2">
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded ${
-                        state === 'READY'
-                          ? 'bg-green-100 text-green-800'
-                          : state === 'BLOCKED'
-                            ? 'bg-gray-200 text-gray-700'
-                            : state === 'NEEDS_REVIEW'
-                              ? 'bg-amber-100 text-amber-800'
-                              : state === 'BOOKING_IN_PROGRESS'
-                                ? 'bg-blue-100 text-blue-800'
-                                : 'bg-orange-100 text-orange-800'
-                      }`}
-                    >
-                      {state}
-                      {state === 'BLOCKED' && item.blockedReason && (
-                        <span className="ml-1 truncate max-w-[120px] inline-block" title={item.blockedReason}>
-                          {item.blockedReason.slice(0, 20)}…
+                    <div className="flex flex-col gap-0.5">
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded w-fit ${
+                          state === 'READY'
+                            ? 'bg-green-100 text-green-800'
+                            : state === 'BLOCKED'
+                              ? 'bg-gray-200 text-gray-700'
+                              : state === 'NEEDS_REVIEW'
+                                ? 'bg-amber-100 text-amber-800'
+                                : state === 'BOOKING_IN_PROGRESS'
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : 'bg-orange-100 text-orange-800'
+                        }`}
+                      >
+                        {state}
+                        {state === 'BLOCKED' && item.blockedReason && (
+                          <span className="ml-1 truncate max-w-[120px] inline-block" title={item.blockedReason}>
+                            {item.blockedReason.slice(0, 20)}…
+                          </span>
+                        )}
+                      </span>
+                      {state === 'BLOCKED' && item.blockedCode === 'NO_CARE_PATHWAY' && item.suggestedTreatmentTypeLabel && (
+                        <span className="text-xs text-gray-600">
+                          Javasolt kezeléstípus: {item.suggestedTreatmentTypeLabel}
+                          {item.suggestedTreatmentTypeCode && (
+                            <span className="text-gray-500"> ({item.suggestedTreatmentTypeCode})</span>
+                          )}
                         </span>
                       )}
-                    </span>
+                    </div>
                   </td>
                   <td className="px-3 py-2">
                     {state === 'READY' && (
@@ -493,6 +503,7 @@ export function WorklistWidget() {
           open={!!pathwayModalItem}
           onClose={() => setPathwayModalItem(null)}
           episodeId={pathwayModalItem.episodeId}
+          patientId={pathwayModalItem.patientId}
           patientName={pathwayModalItem.patientName ?? null}
           onSaved={async () => {
             await fetchWorklist();

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { patientSchema } from '@/lib/types';
 import { verifyAuth } from '@/lib/auth-server';
+import { normalizeToTreatmentTypeCode } from '@/lib/treatment-type-normalize';
 import { sendAppointmentTimeSlotFreedNotification } from '@/lib/email';
 import { deleteGoogleCalendarEvent, createGoogleCalendarEvent } from '@/lib/google-calendar';
 import { logActivity, logActivityWithAuth } from '@/lib/activity';
@@ -199,13 +200,74 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const validatedPatient = patientSchema.parse(body);
-    
+    let validatedPatient = patientSchema.parse(body);
+
+    // Kezelési terv: normalizálás + validáció (treatmentTypeCode must exist in treatment_types)
+    const pool = getDbPool();
+    const validCodesResult = await pool.query(
+      `SELECT code FROM treatment_types`
+    );
+    const validCodes = new Set((validCodesResult.rows ?? []).map((r: { code: string }) => r.code));
+
+    const fieldErrors: Array<{ path: string; code: string; value: string }> = [];
+
+    const normalizeAndValidate = (
+      arr: Array<{ tipus?: string | null; treatmentTypeCode?: string | null; tervezettAtadasDatuma?: string | null; elkeszult?: boolean }> | null | undefined,
+      fieldPrefix: string
+    ): Array<{ treatmentTypeCode: string; tervezettAtadasDatuma: string | null; elkeszult: boolean }> => {
+      if (!arr || !Array.isArray(arr)) return [];
+      const out: Array<{ treatmentTypeCode: string; tervezettAtadasDatuma: string | null; elkeszult: boolean }> = [];
+      arr.forEach((item, idx) => {
+        const code =
+          normalizeToTreatmentTypeCode(item.treatmentTypeCode) ??
+          normalizeToTreatmentTypeCode(item.tipus);
+        if (!code || code.trim() === '') {
+          // Üres elem: kiszűrjük (ajánlott)
+          return;
+        }
+        if (!validCodes.has(code)) {
+          fieldErrors.push({
+            path: `${fieldPrefix}.${idx}.treatmentTypeCode`,
+            code: 'UNKNOWN_TREATMENT_TYPE_CODE',
+            value: item.treatmentTypeCode ?? item.tipus ?? '',
+          });
+          return;
+        }
+        out.push({
+          treatmentTypeCode: code,
+          tervezettAtadasDatuma: item.tervezettAtadasDatuma ?? null,
+          elkeszult: item.elkeszult ?? false,
+        });
+      });
+      return out;
+    };
+
+    const normalizedFelso = normalizeAndValidate(validatedPatient.kezelesiTervFelso, 'kezelesi_terv_felso');
+    const normalizedAlso = normalizeAndValidate(validatedPatient.kezelesiTervAlso, 'kezelesi_terv_also');
+
+    if (fieldErrors.length > 0) {
+      const response = NextResponse.json(
+        {
+          error: 'VALIDATION_ERROR',
+          message: 'Invalid treatmentTypeCode',
+          fieldErrors,
+        },
+        { status: 400 }
+      );
+      response.headers.set('x-correlation-id', correlationId);
+      return response;
+    }
+
+    validatedPatient = {
+      ...validatedPatient,
+      kezelesiTervFelso: normalizedFelso,
+      kezelesiTervAlso: normalizedAlso,
+    };
+
     // Read headers (lowercase canonicalization)
     const ifMatch = request.headers.get('if-match');
     const saveSource = request.headers.get('x-save-source'); // auto|manual (for future snapshot use)
     
-    const pool = getDbPool();
     const userEmail = auth.email;
     const userId = auth.userId; // UUID from JWT
     const role = auth.role;

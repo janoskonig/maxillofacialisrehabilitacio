@@ -89,15 +89,21 @@ export async function GET(request: NextRequest) {
 
     const pool = getDbPool();
 
+    const treatmentTypeCode = request.nextUrl.searchParams.get('treatmentTypeCode')?.trim().toLowerCase() || null;
+
     const pathwaysResult = await pool.query(
       `SELECT cp.id, cp.name, cp.reason, cp.treatment_type_id as "treatmentTypeId",
+              tt.code as "treatmentTypeCode",
               cp.steps_json, cp.version, cp.priority,
               cp.owner_id as "ownerId",
               u.doktor_neve as "ownerName",
               cp.created_at as "createdAt", cp.updated_at as "updatedAt"
        FROM care_pathways cp
        LEFT JOIN users u ON cp.owner_id = u.id
-       ORDER BY cp.priority DESC, cp.name ASC`
+       LEFT JOIN treatment_types tt ON cp.treatment_type_id = tt.id
+       WHERE ($1::text IS NULL OR tt.code = $1)
+       ORDER BY cp.priority DESC, cp.name ASC`,
+      [treatmentTypeCode]
     );
 
     const pathways = pathwaysResult.rows;

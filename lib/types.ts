@@ -149,41 +149,19 @@ export const patientSchema = z.object({
   nemIsmertPoziciokbanImplantatumRészletek: z.string().optional().nullable(),
   
   // KEZELÉSI TERV - FELSŐ ÁLLCSONT (tömb, mert több tervezet lehet)
-  // FIGYELEM: Admin kezeléstípus (treatment_types) szerkesztés NEM hat a PatientForm dropdownra,
-  // amíg a PatientForm nem kapja dinamikusan a GET /api/treatment-types-t. Jelenleg hardcoded enum.
+  // READ: elfogad tipus (legacy) és treatmentTypeCode (új). UI-ban treatmentTypeCode.
+  // WRITE: backend normalizál → mindig treatmentTypeCode mentésre.
   kezelesiTervFelso: z.array(z.object({
-    tipus: z.enum([
-      'zárólemez',
-      'részleges akrilátlemezes fogpótlás',
-      'teljes lemezes fogpótlás',
-      'fedőlemezes fogpótlás',
-      'kapocselhorgonyzású részleges fémlemezes fogpótlás',
-      'kombinált fogpótlás kapocselhorgonyzással',
-      'kombinált fogpótlás rejtett elhorgonyzási eszközzel',
-      'rögzített fogpótlás fogakon elhorgonyozva',
-      'cementezett rögzítésű implantációs korona/híd',
-      'csavarozott rögzítésű implantációs korona/híd',
-      'sebészi sablon készítése'
-    ]),
+    tipus: z.string().optional().nullable(), // legacy, backward compat
+    treatmentTypeCode: z.string().optional().nullable(), // = treatment_types.code
     tervezettAtadasDatuma: z.string().optional().nullable(),
     elkeszult: z.boolean().default(false)
   })).optional().nullable().default([]),
   
   // KEZELÉSI TERV - ALSÓ ÁLLCSONT (tömb, mert több tervezet lehet)
   kezelesiTervAlso: z.array(z.object({
-    tipus: z.enum([
-      'zárólemez',
-      'részleges akrilátlemezes fogpótlás',
-      'teljes lemezes fogpótlás',
-      'fedőlemezes fogpótlás',
-      'kapocselhorgonyzású részleges fémlemezes fogpótlás',
-      'kombinált fogpótlás kapocselhorgonyzással',
-      'kombinált fogpótlás rejtett elhorgonyzási eszközzel',
-      'rögzített fogpótlás fogakon elhorgonyozva',
-      'cementezett rögzítésű implantációs korona/híd',
-      'csavarozott rögzítésű implantációs korona/híd',
-      'sebészi sablon készítése'
-    ]),
+    tipus: z.string().optional().nullable(), // legacy, backward compat
+    treatmentTypeCode: z.string().optional().nullable(), // = treatment_types.code
     tervezettAtadasDatuma: z.string().optional().nullable(),
     elkeszult: z.boolean().default(false)
   })).optional().nullable().default([]),
@@ -561,6 +539,9 @@ export interface PatientEpisode {
   assignedProviderId?: string | null;
   carePathwayName?: string | null;
   assignedProviderName?: string | null;
+  treatmentTypeId?: string | null;
+  treatmentTypeCode?: string | null;
+  treatmentTypeLabel?: string | null;
 }
 
 export interface StageCatalogEntry {

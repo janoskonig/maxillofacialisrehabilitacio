@@ -1,12 +1,11 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser, type AuthUser } from '@/lib/auth';
 import { MessageCircle, ChevronDown, ChevronUp, AlertCircle, Bug, Lightbulb, Mail, Send, ArrowUp, ArrowDown, BarChart3, User, LogIn, Search, UserCircle, Settings } from 'lucide-react';
 import { CarePathwaysEditor } from '@/components/admin/CarePathwaysEditor';
 import { StageCatalogEditor } from '@/components/admin/StageCatalogEditor';
-import { StageStepsEditor } from '@/components/admin/StageStepsEditor';
 import { StepCatalogEditor } from '@/components/admin/StepCatalogEditor';
 import { TreatmentTypesEditor } from '@/components/admin/TreatmentTypesEditor';
 import { Logo } from '@/components/Logo';
@@ -90,6 +89,8 @@ export default function AdminPage() {
 
   // Admin tab: felhasznalok | folyamatok
   const [adminTab, setAdminTab] = useState<'felhasznalok' | 'folyamatok'>('felhasznalok');
+  const [editPathwayId, setEditPathwayId] = useState<string | null>(null);
+  const carePathwaysRef = useRef<HTMLDivElement>(null);
   
   // Rendezett felhasználók
   const sortedUsers = useMemo(() => {
@@ -310,6 +311,12 @@ export default function AdminPage() {
     };
     loadFeedback();
   }, [canManageUsers, feedbackStatusFilter]);
+
+  useEffect(() => {
+    if (editPathwayId && carePathwaysRef.current) {
+      carePathwaysRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [editPathwayId]);
 
   const updateFeedbackStatus = async (feedbackId: string, newStatus: string) => {
     try {
@@ -714,22 +721,20 @@ export default function AdminPage() {
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {adminTab === 'folyamatok' ? (
           <div className="space-y-8">
-            <div className="card">
-              <CarePathwaysEditor />
+            <div ref={carePathwaysRef} className="card">
+              <CarePathwaysEditor
+                editPathwayId={editPathwayId}
+                onEditPathwayIdClear={() => setEditPathwayId(null)}
+              />
             </div>
             <div className="card">
               <StageCatalogEditor />
             </div>
-            {currentUser?.role === 'admin' && (
-              <div className="card">
-                <StageStepsEditor />
-              </div>
-            )}
             <div className="card">
               <StepCatalogEditor />
             </div>
             <div className="card">
-              <TreatmentTypesEditor />
+              <TreatmentTypesEditor onEditPathway={(id) => setEditPathwayId(id)} />
             </div>
           </div>
         ) : (

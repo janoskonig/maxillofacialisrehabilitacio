@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { nextRequiredStep, isBlocked } from '@/lib/next-step-engine';
+import { extractSuggestedTreatmentTypeCodes } from '@/lib/treatment-type-normalize';
+import { getEffectiveTreatmentType } from '@/lib/effective-treatment-type';
 import type { WorklistItemBackend } from '@/lib/worklist-types';
 
 export const dynamic = 'force-dynamic';
@@ -71,6 +73,28 @@ export async function GET(request: NextRequest) {
           `SELECT stage_code FROM stage_events WHERE episode_id = $1 ORDER BY at DESC LIMIT 1`,
           [row.episodeId]
         );
+        let suggestedTreatmentTypeCode: string | null = null;
+        let suggestedTreatmentTypeLabel: string | null = null;
+        if (result.code === 'NO_CARE_PATHWAY') {
+          const patientRow = await pool.query(
+            `SELECT kezelesi_terv_felso as "kezelesiTervFelso", kezelesi_terv_also as "kezelesiTervAlso"
+             FROM patients WHERE id = $1`,
+            [row.patientId]
+          );
+          const p = patientRow.rows[0];
+          const suggested = extractSuggestedTreatmentTypeCodes(
+            p?.kezelesiTervFelso,
+            p?.kezelesiTervAlso
+          );
+          if (suggested.length > 0) {
+            suggestedTreatmentTypeCode = suggested[0];
+            const labelRow = await pool.query(
+              `SELECT label_hu FROM treatment_types WHERE code = $1`,
+              [suggestedTreatmentTypeCode]
+            );
+            suggestedTreatmentTypeLabel = labelRow.rows[0]?.label_hu ?? suggestedTreatmentTypeCode;
+          }
+        }
         items.push({
           episodeId: row.episodeId,
           patientId: row.patientId,
@@ -88,6 +112,8 @@ export async function GET(request: NextRequest) {
           status: 'blocked',
           blockedReason: result.reason,
           ...(result.code && { blockedCode: result.code }),
+          ...(suggestedTreatmentTypeCode && { suggestedTreatmentTypeCode }),
+          ...(suggestedTreatmentTypeLabel && { suggestedTreatmentTypeLabel }),
         });
         continue;
       }
@@ -113,7 +139,7 @@ export async function GET(request: NextRequest) {
       );
       const currentStage = stageResult.rows[0]?.stage_code ?? 'STAGE_0';
 
-      items.push({
+      const baseItem: WorklistItemBackend = {
         episodeId: row.episodeId,
         patientId: row.patientId,
         patientName: row.patientName ?? null,
@@ -127,7 +153,37 @@ export async function GET(request: NextRequest) {
         pool: result.pool,
         priorityScore,
         noShowRisk,
-      });
+      };
+
+      if (currentStage === 'STAGE_5') {
+        const epRow = await pool.query(
+          `SELECT pe.treatment_type_id as "episodeTreatmentTypeId", cp.treatment_type_id as "pathwayTreatmentTypeId"
+           FROM patient_episodes pe
+           LEFT JOIN care_pathways cp ON pe.care_pathway_id = cp.id
+           WHERE pe.id = $1`,
+          [row.episodeId]
+        );
+        const patientRow = await pool.query(
+          `SELECT kezelesi_terv_felso as "kezelesiTervFelso", kezelesi_terv_also as "kezelesiTervAlso"
+           FROM patients WHERE id = $1`,
+          [row.patientId]
+        );
+        const ep = epRow.rows[0];
+        const p = patientRow.rows[0];
+        const effective = await getEffectiveTreatmentType(pool, {
+          episodeTreatmentTypeId: ep?.episodeTreatmentTypeId,
+          pathwayTreatmentTypeId: ep?.pathwayTreatmentTypeId,
+          kezelesiTervFelso: p?.kezelesiTervFelso,
+          kezelesiTervAlso: p?.kezelesiTervAlso,
+        });
+        if (effective.code || effective.label || effective.source) {
+          baseItem.treatmentTypeCode = effective.code ?? undefined;
+          baseItem.treatmentTypeLabel = effective.label ?? undefined;
+          baseItem.treatmentTypeSource = effective.source ?? undefined;
+        }
+      }
+
+      items.push(baseItem);
     }
 
     items.sort((a, b) => b.priorityScore - a.priorityScore);

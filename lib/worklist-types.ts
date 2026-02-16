@@ -59,6 +59,14 @@ export interface WorklistItemBackend {
   blockedReason?: string;
   /** NO_CARE_PATHWAY: epizódhoz nincs pathway, először válasszon kezelési utat */
   blockedCode?: 'NO_CARE_PATHWAY';
+  /** Javasolt kezeléstípus a beteg kezelési tervéből (NO_CARE_PATHWAY esetén) */
+  suggestedTreatmentTypeCode?: string | null;
+  suggestedTreatmentTypeLabel?: string | null;
+  /** Effective treatment type (episode > pathway > patient) — STAGE_5 scheduling */
+  treatmentTypeCode?: string | null;
+  treatmentTypeLabel?: string | null;
+  /** Forrás: episode | pathway | patient | null (debug/support) */
+  treatmentTypeSource?: 'episode' | 'pathway' | 'patient' | null;
 }
 
 export interface WorklistLocalState {

@@ -3,13 +3,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/contexts/ToastContext';
 import { Loader2 } from 'lucide-react';
+import { extractSuggestedTreatmentTypeCodes } from '@/lib/treatment-type-normalize';
 
 export interface EpisodePathwayEditorProps {
   episodeId: string;
+  patientId?: string | null;
   carePathwayId?: string | null;
   assignedProviderId?: string | null;
   carePathwayName?: string | null;
   assignedProviderName?: string | null;
+  treatmentTypeId?: string | null;
   onSaved?: () => void | Promise<void>;
   compact?: boolean;
 }
@@ -17,6 +20,15 @@ export interface EpisodePathwayEditorProps {
 interface PathwayOption {
   id: string;
   name: string;
+  treatmentTypeCode?: string | null;
+  treatmentTypeId?: string | null;
+  reason?: string | null;
+}
+
+interface TreatmentTypeOption {
+  id: string;
+  code: string;
+  labelHu: string;
 }
 
 interface DoctorOption {
@@ -26,24 +38,32 @@ interface DoctorOption {
 
 export function EpisodePathwayEditor({
   episodeId,
+  patientId,
   carePathwayId,
   assignedProviderId,
+  treatmentTypeId: initialTreatmentTypeId,
   onSaved,
   compact = false,
 }: EpisodePathwayEditorProps) {
   const { showToast } = useToast();
   const [pathways, setPathways] = useState<PathwayOption[]>([]);
+  const [treatmentTypes, setTreatmentTypes] = useState<TreatmentTypeOption[]>([]);
   const [doctors, setDoctors] = useState<DoctorOption[]>([]);
+  const [suggestedTreatmentTypeCodes, setSuggestedTreatmentTypeCodes] = useState<string[]>([]);
   const [loadingLists, setLoadingLists] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedPathwayId, setSelectedPathwayId] = useState<string>(carePathwayId ?? '');
   const [selectedProviderId, setSelectedProviderId] = useState<string>(assignedProviderId ?? '');
+  const [selectedTreatmentTypeId, setSelectedTreatmentTypeId] = useState<string>(initialTreatmentTypeId ?? '');
 
   const initialPathwayId = carePathwayId ?? '';
   const initialProviderId = assignedProviderId ?? '';
+  const initialTreatmentTypeIdVal = initialTreatmentTypeId ?? '';
   const dirty =
-    selectedPathwayId !== initialPathwayId || selectedProviderId !== initialProviderId;
+    selectedPathwayId !== initialPathwayId ||
+    selectedProviderId !== initialProviderId ||
+    selectedTreatmentTypeId !== initialTreatmentTypeIdVal;
 
   const bothFilled = !!selectedPathwayId && !!selectedProviderId;
   const showG1Guard = (!!selectedPathwayId || !!selectedProviderId) && !bothFilled;
@@ -52,21 +72,39 @@ export function EpisodePathwayEditor({
     setLoadingLists(true);
     setError(null);
     try {
-      const [pathwaysRes, doctorsRes] = await Promise.all([
+      const [pathwaysRes, doctorsRes, patientRes, treatmentTypesRes] = await Promise.all([
         fetch('/api/care-pathways', { credentials: 'include' }),
         fetch('/api/users/fogpotlastanasz', { credentials: 'include' }),
+        patientId ? fetch(`/api/patients/${patientId}`, { credentials: 'include' }) : Promise.resolve(null),
+        fetch('/api/treatment-types', { credentials: 'include' }),
       ]);
       if (!pathwaysRes.ok || !doctorsRes.ok) {
         throw new Error('Nem sikerült betölteni az adatokat');
       }
       const pathwaysData = await pathwaysRes.json();
       const doctorsData = await doctorsRes.json();
+      const treatmentTypesData = treatmentTypesRes.ok ? await treatmentTypesRes.json() : { treatmentTypes: [] };
       setPathways(
-        (pathwaysData.pathways ?? []).map((p: { id: string; name: string }) => ({
+        (pathwaysData.pathways ?? []).map((p: { id: string; name: string; treatmentTypeCode?: string | null; treatmentTypeId?: string | null; reason?: string | null }) => ({
           id: p.id,
           name: p.name,
+          treatmentTypeCode: p.treatmentTypeCode ?? null,
+          treatmentTypeId: p.treatmentTypeId ?? null,
+          reason: p.reason ?? null,
         }))
       );
+      setTreatmentTypes((treatmentTypesData.treatmentTypes ?? []).map((t: { id: string; code: string; labelHu: string }) => ({ id: t.id, code: t.code, labelHu: t.labelHu })));
+      if (patientRes?.ok) {
+        const patientData = await patientRes.json();
+        const patient = patientData.patient;
+        const suggested = extractSuggestedTreatmentTypeCodes(
+          patient?.kezelesiTervFelso,
+          patient?.kezelesiTervAlso
+        );
+        setSuggestedTreatmentTypeCodes(suggested);
+      } else {
+        setSuggestedTreatmentTypeCodes([]);
+      }
       setDoctors(
         (doctorsData.users ?? []).map((d: { id: string; name?: string; displayName?: string; email?: string }) => ({
           id: d.id,
@@ -79,7 +117,7 @@ export function EpisodePathwayEditor({
     } finally {
       setLoadingLists(false);
     }
-  }, [showToast]);
+  }, [showToast, patientId]);
 
   useEffect(() => {
     loadLists();
@@ -88,21 +126,45 @@ export function EpisodePathwayEditor({
   useEffect(() => {
     setSelectedPathwayId(carePathwayId ?? '');
     setSelectedProviderId(assignedProviderId ?? '');
-  }, [carePathwayId, assignedProviderId]);
+    setSelectedTreatmentTypeId(initialTreatmentTypeId ?? '');
+  }, [carePathwayId, assignedProviderId, initialTreatmentTypeId]);
+
+  const selectedPathway = pathways.find((p) => p.id === selectedPathwayId);
+  const isReasonBasedPathway = selectedPathway?.reason != null && selectedPathway.reason !== '';
+  const isTreatmentTypePathway = selectedPathway?.treatmentTypeId != null;
+
+  useEffect(() => {
+    if (selectedPathwayId && pathways.length > 0 && selectedPathway?.treatmentTypeId && !initialTreatmentTypeId) {
+      setSelectedTreatmentTypeId(selectedPathway.treatmentTypeId);
+    }
+  }, [selectedPathwayId, pathways, selectedPathway?.treatmentTypeId, initialTreatmentTypeId]);
 
   const handleSave = async () => {
     if (!dirty || saving) return;
     setSaving(true);
     setError(null);
     try {
+      const body: Record<string, unknown> = {
+        carePathwayId: selectedPathwayId || null,
+        assignedProviderId: selectedProviderId || null,
+      };
+      if (isReasonBasedPathway) {
+        if (selectedTreatmentTypeId) body.treatmentTypeId = selectedTreatmentTypeId;
+        // Reason-based: sose nullázza — omit treatmentTypeId when empty
+      } else if (isTreatmentTypePathway) {
+        if (!initialTreatmentTypeId && selectedPathway?.treatmentTypeId) {
+          body.treatmentTypeId = selectedPathway.treatmentTypeId;
+        } else {
+          body.treatmentTypeId = selectedTreatmentTypeId || null;
+        }
+      } else {
+        body.treatmentTypeId = selectedTreatmentTypeId || null;
+      }
       const res = await fetch(`/api/episodes/${episodeId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({
-          carePathwayId: selectedPathwayId || null,
-          assignedProviderId: selectedProviderId || null,
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -164,9 +226,30 @@ export function EpisodePathwayEditor({
             disabled={saving}
           >
             <option value="">— Nincs beállítva</option>
-            {pathways.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
+            {pathways.map((p) => {
+              const isSuggested = p.treatmentTypeCode && suggestedTreatmentTypeCodes.includes(p.treatmentTypeCode);
+              return (
+                <option key={p.id} value={p.id}>
+                  {p.name}{isSuggested ? ' — Ajánlott' : ''}
+                </option>
+              );
+            })}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Kezeléstípus (opcionális, STAGE_5-hez fontos)
+          </label>
+          <select
+            value={selectedTreatmentTypeId}
+            onChange={(e) => setSelectedTreatmentTypeId(e.target.value)}
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm disabled:opacity-50"
+            disabled={saving}
+          >
+            <option value="">— Nincs beállítva</option>
+            {treatmentTypes.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.labelHu}
               </option>
             ))}
           </select>

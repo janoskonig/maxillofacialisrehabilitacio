@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { Upload, ChevronDown, ChevronUp, Download } from 'lucide-react';
 
 type StepCatalogItem = {
   stepCode: string;
@@ -22,6 +23,11 @@ export function StepCatalogEditor() {
   const [editing, setEditing] = useState<Record<string, { labelHu: string; labelEn: string | null; isActive: boolean }>>({});
   const [rowStatus, setRowStatus] = useState<Record<string, RowStatus>>({});
   const [rowError, setRowError] = useState<Record<string, string>>({});
+  const [batchExpanded, setBatchExpanded] = useState(false);
+  const [batchCsv, setBatchCsv] = useState('');
+  const [batchStatus, setBatchStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
+  const [batchMessage, setBatchMessage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -128,6 +134,52 @@ export function StepCatalogEditor() {
     }
   };
 
+  const handleBatchUpload = async () => {
+    const text = batchCsv.trim();
+    if (!text) {
+      setBatchStatus('error');
+      setBatchMessage('Adjon meg CSV tartalmat vagy töltsön fel fájlt.');
+      return;
+    }
+    setBatchStatus('uploading');
+    setBatchMessage(null);
+    try {
+      const res = await fetch('/api/step-catalog/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/csv; charset=utf-8' },
+        credentials: 'include',
+        body: text,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setBatchStatus('error');
+        setBatchMessage(data.error ?? data.details?.join?.(' ') ?? `Hiba (${res.status})`);
+        return;
+      }
+      setBatchStatus('success');
+      setBatchMessage(
+        `${data.upserted} elem feltöltve.${data.skipped ? ` ${data.skipped} kihagyva.` : ''}`
+      );
+      setBatchCsv('');
+      router.refresh();
+      await load();
+    } catch (e) {
+      setBatchStatus('error');
+      setBatchMessage(e instanceof Error ? e.message : 'Hiba');
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setBatchCsv(String(reader.result ?? ''));
+    };
+    reader.readAsText(file, 'UTF-8');
+    e.target.value = '';
+  };
+
   if (loading) return <p className="text-gray-600">Betöltés...</p>;
 
   return (
@@ -148,6 +200,75 @@ export function StepCatalogEditor() {
           </p>
         </div>
       )}
+
+      <div className="border border-gray-200 rounded-lg overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setBatchExpanded((b) => !b)}
+          className="w-full flex items-center justify-between px-4 py-2 bg-gray-50 hover:bg-gray-100 text-left text-sm font-medium"
+        >
+          <span className="flex items-center gap-2">
+            <Upload className="w-4 h-4" />
+            Batch feltöltés (CSV)
+          </span>
+          {batchExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </button>
+        {batchExpanded && (
+          <div className="p-4 bg-white border-t border-gray-200 space-y-3">
+            <p className="text-xs text-gray-600">
+              CSV formátum: <code className="bg-gray-100 px-1 rounded">step_code,label_hu,label_en,is_active</code> — fejléc opcionális. Elválasztó: vessző vagy pontosvessző.
+            </p>
+            <div className="flex gap-2 flex-wrap items-center">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,.txt,text/csv,text/plain"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 rounded text-sm flex items-center gap-1"
+              >
+                Fájl kiválasztása
+              </button>
+              <a
+                href={`data:text/csv;charset=utf-8,${encodeURIComponent('step_code,label_hu,label_en,is_active\nconsult_1,Első konzultáció,,1\ndiagnostic,Diagnosztika,Diagnostics,1\nimpression_1,Lenyomat 1,,1')}`}
+                download="step_catalog_template.csv"
+                className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 rounded text-sm flex items-center gap-1"
+              >
+                <Download className="w-4 h-4" />
+                Sablon letöltése
+              </a>
+            </div>
+            <textarea
+              value={batchCsv}
+              onChange={(e) => setBatchCsv(e.target.value)}
+              placeholder={'step_code,label_hu,label_en,is_active\nconsult_1,Első konzultáció,,1\ndiagnostic,Diagnosztika,Diagnostics,1'}
+              rows={6}
+              className="w-full font-mono text-sm border border-gray-300 rounded p-2"
+            />
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleBatchUpload}
+                disabled={batchStatus === 'uploading' || !batchCsv.trim()}
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {batchStatus === 'uploading' ? 'Feltöltés…' : 'Feltöltés'}
+              </button>
+              {batchMessage && (
+                <span
+                  className={`text-sm ${batchStatus === 'success' ? 'text-green-700' : batchStatus === 'error' ? 'text-red-600' : 'text-gray-600'}`}
+                >
+                  {batchMessage}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">

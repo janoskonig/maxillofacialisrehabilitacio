@@ -25,6 +25,9 @@ function rowToEpisode(row: Record<string, unknown>): PatientEpisode {
     assignedProviderId: (row.assignedProviderId as string) || null,
     carePathwayName: (row.carePathwayName as string) || null,
     assignedProviderName: (row.assignedProviderName as string) || null,
+    treatmentTypeId: (row.treatmentTypeId as string) || null,
+    treatmentTypeCode: (row.treatmentTypeCode as string) || null,
+    treatmentTypeLabel: (row.treatmentTypeLabel as string) || null,
   };
 }
 
@@ -79,11 +82,15 @@ export async function GET(
         pe.created_by as "createdBy",
         pe.care_pathway_id as "carePathwayId",
         pe.assigned_provider_id as "assignedProviderId",
+        pe.treatment_type_id as "treatmentTypeId",
         cp.name as "carePathwayName",
-        COALESCE(u.doktor_neve, u.email) as "assignedProviderName"
+        COALESCE(u.doktor_neve, u.email) as "assignedProviderName",
+        tt.code as "treatmentTypeCode",
+        tt.label_hu as "treatmentTypeLabel"
       FROM patient_episodes pe
       LEFT JOIN care_pathways cp ON pe.care_pathway_id = cp.id
       LEFT JOIN users u ON pe.assigned_provider_id = u.id
+      LEFT JOIN treatment_types tt ON pe.treatment_type_id = tt.id
       WHERE pe.patient_id = $1
       ORDER BY pe.opened_at DESC`,
       [patientId]
@@ -151,6 +158,7 @@ export async function POST(
     const caseTitle = (body.caseTitle as string)?.trim?.() || null;
     const parentEpisodeId = (body.parentEpisodeId as string) || null;
     const triggerType = body.triggerType as string || null;
+    const treatmentTypeId = (body.treatmentTypeId as string)?.trim?.() || null;
 
     if (!reason || !REASON_VALUES.includes(reason)) {
       return NextResponse.json(
@@ -186,17 +194,34 @@ export async function POST(
 
     const insertResult = await pool.query(
       `INSERT INTO patient_episodes (
-        patient_id, reason, chief_complaint, case_title, status, opened_at, parent_episode_id, trigger_type, created_by
-      ) VALUES ($1, $2, $3, $4, 'open', CURRENT_TIMESTAMP, $5, $6, $7)
-      RETURNING 
-        id, patient_id as "patientId", reason, pathway_code as "pathwayCode",
-        chief_complaint as "chiefComplaint", case_title as "caseTitle", status,
-        opened_at as "openedAt", closed_at as "closedAt", parent_episode_id as "parentEpisodeId",
-        trigger_type as "triggerType", created_at as "createdAt", created_by as "createdBy"`,
-      [patientId, reason, chiefComplaint, caseTitle, parentEpisodeId, triggerType, auth.email]
+        patient_id, reason, chief_complaint, case_title, status, opened_at, parent_episode_id, trigger_type, treatment_type_id, created_by
+      ) VALUES ($1, $2, $3, $4, 'open', CURRENT_TIMESTAMP, $5, $6, $7, $8)
+      RETURNING id`,
+      [patientId, reason, chiefComplaint, caseTitle, parentEpisodeId, triggerType, treatmentTypeId || null, auth.email]
     );
 
-    const episode = rowToEpisode(insertResult.rows[0]);
+    const newId = insertResult.rows[0]?.id;
+    if (!newId) {
+      return NextResponse.json({ error: 'Epizód létrehozása sikertelen' }, { status: 500 });
+    }
+
+    const fetchResult = await pool.query(
+      `SELECT pe.id, pe.patient_id as "patientId", pe.reason, pe.pathway_code as "pathwayCode",
+        pe.chief_complaint as "chiefComplaint", pe.case_title as "caseTitle", pe.status,
+        pe.opened_at as "openedAt", pe.closed_at as "closedAt", pe.parent_episode_id as "parentEpisodeId",
+        pe.trigger_type as "triggerType", pe.created_at as "createdAt", pe.created_by as "createdBy",
+        pe.care_pathway_id as "carePathwayId", pe.assigned_provider_id as "assignedProviderId",
+        pe.treatment_type_id as "treatmentTypeId", cp.name as "carePathwayName",
+        COALESCE(u.doktor_neve, u.email) as "assignedProviderName",
+        tt.code as "treatmentTypeCode", tt.label_hu as "treatmentTypeLabel"
+       FROM patient_episodes pe
+       LEFT JOIN care_pathways cp ON pe.care_pathway_id = cp.id
+       LEFT JOIN users u ON pe.assigned_provider_id = u.id
+       LEFT JOIN treatment_types tt ON pe.treatment_type_id = tt.id
+       WHERE pe.id = $1`,
+      [newId]
+    );
+    const episode = rowToEpisode(fetchResult.rows[0]);
 
     // Kezdő stage_event: STAGE_0
     const stageEventsExists = await pool.query(

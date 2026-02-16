@@ -7,11 +7,13 @@ export interface EpisodePathwayModalProps {
   open: boolean;
   onClose: () => void;
   episodeId: string;
+  patientId?: string | null;
   patientName?: string | null;
   carePathwayId?: string | null;
   assignedProviderId?: string | null;
   carePathwayName?: string | null;
   assignedProviderName?: string | null;
+  treatmentTypeId?: string | null;
   /** Async - modal closes only after this completes (e.g. fetchWorklist) */
   onSaved?: () => void | Promise<void>;
 }
@@ -20,11 +22,13 @@ export function EpisodePathwayModal({
   open,
   onClose,
   episodeId,
+  patientId,
   patientName,
   carePathwayId,
   assignedProviderId,
   carePathwayName,
   assignedProviderName,
+  treatmentTypeId,
   onSaved,
 }: EpisodePathwayModalProps) {
   const handleSaved = async () => {
@@ -65,10 +69,12 @@ export function EpisodePathwayModal({
         <div className="p-3">
           <EpisodePathwayEditor
             episodeId={episodeId}
+            patientId={patientId}
             carePathwayId={carePathwayId}
             assignedProviderId={assignedProviderId}
             carePathwayName={carePathwayName}
             assignedProviderName={assignedProviderName}
+            treatmentTypeId={treatmentTypeId}
             onSaved={handleSaved}
             compact
           />

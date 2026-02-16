@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
+import { normalizeToTreatmentTypeCode } from '@/lib/treatment-type-normalize';
 import { Patient, patientSchema } from '@/lib/types';
 import { verifyAuth } from '@/lib/auth-server';
 import { sendPatientCreationNotification } from '@/lib/email';
@@ -441,10 +442,53 @@ export async function POST(request: NextRequest) {
     console.log('POST /api/patients - Fogadott adatok:', JSON.stringify(body, null, 2));
     
     // Validálás Zod schemával
-    const validatedPatient = patientSchema.parse(body);
+    let validatedPatient = patientSchema.parse(body);
     console.log('Validált adatok:', JSON.stringify(validatedPatient, null, 2));
-    
+
     const pool = getDbPool();
+
+    // Kezelési terv: normalizálás + validáció (treatmentTypeCode must exist in treatment_types)
+    const validCodesResult = await pool.query(`SELECT code FROM treatment_types`);
+    const validCodes = new Set((validCodesResult.rows ?? []).map((r: { code: string }) => r.code));
+    const fieldErrors: Array<{ path: string; code: string; value: string }> = [];
+    const normalizeAndValidate = (
+      arr: Array<{ tipus?: string | null; treatmentTypeCode?: string | null; tervezettAtadasDatuma?: string | null; elkeszult?: boolean }> | null | undefined,
+      fieldPrefix: string
+    ): Array<{ treatmentTypeCode: string; tervezettAtadasDatuma: string | null; elkeszult: boolean }> => {
+      if (!arr || !Array.isArray(arr)) return [];
+      const out: Array<{ treatmentTypeCode: string; tervezettAtadasDatuma: string | null; elkeszult: boolean }> = [];
+      arr.forEach((item, idx) => {
+        const code = normalizeToTreatmentTypeCode(item.treatmentTypeCode) ?? normalizeToTreatmentTypeCode(item.tipus);
+        if (!code || code.trim() === '') return;
+        if (!validCodes.has(code)) {
+          fieldErrors.push({
+            path: `${fieldPrefix}.${idx}.treatmentTypeCode`,
+            code: 'UNKNOWN_TREATMENT_TYPE_CODE',
+            value: item.treatmentTypeCode ?? item.tipus ?? '',
+          });
+          return;
+        }
+        out.push({
+          treatmentTypeCode: code,
+          tervezettAtadasDatuma: item.tervezettAtadasDatuma ?? null,
+          elkeszult: item.elkeszult ?? false,
+        });
+      });
+      return out;
+    };
+    const normalizedFelso = normalizeAndValidate(validatedPatient.kezelesiTervFelso, 'kezelesi_terv_felso');
+    const normalizedAlso = normalizeAndValidate(validatedPatient.kezelesiTervAlso, 'kezelesi_terv_also');
+    if (fieldErrors.length > 0) {
+      return NextResponse.json(
+        { error: 'VALIDATION_ERROR', message: 'Invalid treatmentTypeCode', fieldErrors },
+        { status: 400 }
+      );
+    }
+    validatedPatient = {
+      ...validatedPatient,
+      kezelesiTervFelso: normalizedFelso,
+      kezelesiTervAlso: normalizedAlso,
+    };
     const userEmail = auth.email;
     const role = auth.role;
     

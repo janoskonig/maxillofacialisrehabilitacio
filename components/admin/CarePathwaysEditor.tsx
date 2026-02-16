@@ -25,7 +25,12 @@ type Pathway = {
 
 type TreatmentType = { id: string; code: string; labelHu: string };
 
-export function CarePathwaysEditor() {
+type CarePathwaysEditorProps = {
+  editPathwayId?: string | null;
+  onEditPathwayIdClear?: () => void;
+};
+
+export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: CarePathwaysEditorProps = {}) {
   const router = useRouter();
   const [pathways, setPathways] = useState<Pathway[]>([]);
   const [treatmentTypes, setTreatmentTypes] = useState<TreatmentType[]>([]);
@@ -68,6 +73,13 @@ export function CarePathwaysEditor() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (editPathwayId && pathways.length > 0) {
+      const p = pathways.find((pw) => pw.id === editPathwayId);
+      if (p) handleEdit(p);
+    }
+  }, [editPathwayId, pathways]);
 
   const moveStep = (idx: number, dir: 'up' | 'down') => {
     setFormSteps((prev) => {
@@ -148,6 +160,7 @@ export function CarePathwaysEditor() {
         return;
       }
       setEditingId(null);
+      onEditPathwayIdClear?.();
       router.refresh();
       await load();
     } catch (e) {
@@ -155,6 +168,16 @@ export function CarePathwaysEditor() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const closeEdit = () => {
+    setEditingId(null);
+    onEditPathwayIdClear?.();
+  };
+
+  const closeCreate = () => {
+    setCreating(false);
+    onEditPathwayIdClear?.();
   };
 
   const handleDelete = async (p: Pathway) => {
@@ -172,6 +195,7 @@ export function CarePathwaysEditor() {
         return;
       }
       setEditingId(null);
+      onEditPathwayIdClear?.();
       router.refresh();
       await load();
     } catch (e) {
@@ -454,7 +478,7 @@ export function CarePathwaysEditor() {
                   Mentés
                 </button>
                 <button
-                  onClick={() => setEditingId(null)}
+                  onClick={closeEdit}
                   className="px-3 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
                 >
                   Mégse
@@ -470,7 +494,7 @@ export function CarePathwaysEditor() {
                   Létrehoz
                 </button>
                 <button
-                  onClick={() => setCreating(false)}
+                  onClick={closeCreate}
                   className="px-3 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
                 >
                   Mégse

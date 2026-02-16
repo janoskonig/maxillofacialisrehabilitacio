@@ -5,7 +5,11 @@ import { useRouter } from 'next/navigation';
 
 type TreatmentType = { id: string; code: string; labelHu: string };
 
-export function TreatmentTypesEditor() {
+type TreatmentTypesEditorProps = {
+  onEditPathway?: (pathwayId: string) => void;
+};
+
+export function TreatmentTypesEditor({ onEditPathway }: TreatmentTypesEditorProps = {}) {
   const router = useRouter();
   const [items, setItems] = useState<TreatmentType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -18,6 +22,7 @@ export function TreatmentTypesEditor() {
   const [newLabelHu, setNewLabelHu] = useState('');
   const [auditReason, setAuditReason] = useState('');
   const [createAuditReason, setCreateAuditReason] = useState('');
+  const [pathwayLoading, setPathwayLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -67,6 +72,28 @@ export function TreatmentTypesEditor() {
       setError(e instanceof Error ? e.message : 'Hiba');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleEditPathway = async (item: TreatmentType) => {
+    if (!onEditPathway) return;
+    setPathwayLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/care-pathways', { credentials: 'include' });
+      if (!res.ok) throw new Error('Kezelési utak betöltése sikertelen');
+      const data = await res.json();
+      const pathways = data.pathways ?? [];
+      const pathway = pathways.find((p: { treatmentTypeId: string | null }) => p.treatmentTypeId === item.id);
+      if (pathway) {
+        onEditPathway(pathway.id);
+      } else {
+        setError(`Nincs kezelési út ehhez a típushoz (${item.labelHu}). Hozzon létre egyet a Kezelési utak szerkesztőjében.`);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Hiba');
+    } finally {
+      setPathwayLoading(false);
     }
   };
 
@@ -187,7 +214,17 @@ export function TreatmentTypesEditor() {
                       </button>
                     </div>
                   ) : (
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
+                      {onEditPathway && (
+                        <button
+                          onClick={() => handleEditPathway(item)}
+                          disabled={pathwayLoading || saving}
+                          className="px-2 py-1 bg-amber-600 text-white rounded text-sm hover:bg-amber-700 disabled:opacity-50"
+                          title="Részlépések (kezelési út) szerkesztése"
+                        >
+                          {pathwayLoading ? '…' : 'Részlépések'}
+                        </button>
+                      )}
                       <button
                         onClick={() => handleEdit(item)}
                         className="px-2 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"

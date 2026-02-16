@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo, ReactNode } from 're
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Patient, patientSchema, nyakiBlokkdisszekcioOptions, fabianFejerdyProtetikaiOsztalyOptions, kezelesiTervOptions, kezelesiTervArcotErintoTipusOptions, kezelesiTervArcotErintoElhorgonyzasOptions } from '@/lib/types';
+import { normalizeToTreatmentTypeCode } from '@/lib/treatment-type-normalize';
 import { formatDateForInput } from '@/lib/dateUtils';
 import { X, Calendar, User, Phone, Mail, MapPin, FileText, AlertTriangle, Plus, Trash2, Download, Send, History } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -656,6 +657,15 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
   const kezelesiTervAlso = watch('kezelesiTervAlso') || [];
   const kezelesiTervArcotErinto = watch('kezelesiTervArcotErinto') || [];
 
+  // Kezeléstípusok a dropdownhoz (treatment_types)
+  const [treatmentTypes, setTreatmentTypes] = useState<Array<{ id: string; code: string; labelHu: string }>>([]);
+  useEffect(() => {
+    fetch('/api/treatment-types', { credentials: 'include' })
+      .then((r) => r.ok ? r.json() : Promise.resolve({ treatmentTypes: [] }))
+      .then((data) => setTreatmentTypes(data.treatmentTypes ?? []))
+      .catch(() => setTreatmentTypes([]));
+  }, []);
+
   // Watch all form values - useWatch for memoized snapshot
   const formValues = useWatch({ control });
 
@@ -796,13 +806,14 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
     setValue('meglevoFogak', normalized);
   }, [fogak, setValue]);
 
-  // KEZELÉSI TERV listák kezelése
+  // KEZELÉSI TERV listák kezelése (treatmentTypeCode = treatment_types.code)
+  const defaultTreatmentCode = treatmentTypes[0]?.code ?? 'zarolemez';
   const addKezelesiTervFelso = () => {
     if (isViewOnly) return;
     const current = kezelesiTervFelso || [];
     setValue('kezelesiTervFelso', [
       ...current,
-      { tipus: 'zárólemez', tervezettAtadasDatuma: null, elkeszult: false }
+      { treatmentTypeCode: defaultTreatmentCode, tervezettAtadasDatuma: null, elkeszult: false }
     ]);
   };
 
@@ -812,7 +823,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
     setValue('kezelesiTervFelso', current.filter((_, i) => i !== index));
   };
 
-  const updateKezelesiTervFelso = (index: number, field: 'tipus' | 'tervezettAtadasDatuma' | 'elkeszult', value: any) => {
+  const updateKezelesiTervFelso = (index: number, field: 'treatmentTypeCode' | 'tervezettAtadasDatuma' | 'elkeszult', value: any) => {
     if (isViewOnly) return;
     const current = kezelesiTervFelso || [];
     const updated = [...current];
@@ -825,7 +836,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
     const current = kezelesiTervAlso || [];
     setValue('kezelesiTervAlso', [
       ...current,
-      { tipus: 'zárólemez', tervezettAtadasDatuma: null, elkeszult: false }
+      { treatmentTypeCode: defaultTreatmentCode, tervezettAtadasDatuma: null, elkeszult: false }
     ]);
   };
 
@@ -835,7 +846,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
     setValue('kezelesiTervAlso', current.filter((_, i) => i !== index));
   };
 
-  const updateKezelesiTervAlso = (index: number, field: 'tipus' | 'tervezettAtadasDatuma' | 'elkeszult', value: any) => {
+  const updateKezelesiTervAlso = (index: number, field: 'treatmentTypeCode' | 'tervezettAtadasDatuma' | 'elkeszult', value: any) => {
     if (isViewOnly) return;
     const current = kezelesiTervAlso || [];
     const updated = [...current];
@@ -3601,14 +3612,14 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
                         <div>
                           <label className="form-label">Tervezett fogpótlás típusa</label>
                           <select
-                            value={terv.tipus || ''}
-                            onChange={(e) => updateKezelesiTervFelso(index, 'tipus', e.target.value)}
+                            value={terv.treatmentTypeCode ?? normalizeToTreatmentTypeCode(terv.tipus) ?? ''}
+                            onChange={(e) => updateKezelesiTervFelso(index, 'treatmentTypeCode', e.target.value)}
                             className="form-input"
                             disabled={isViewOnly}
                           >
                             <option value="">Válasszon...</option>
-                            {kezelesiTervOptions.map((option) => (
-                              <option key={option} value={option}>{option}</option>
+                            {treatmentTypes.map((tt) => (
+                              <option key={tt.id} value={tt.code}>{tt.labelHu}</option>
                             ))}
                           </select>
                         </div>
@@ -3681,14 +3692,14 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
                         <div>
                           <label className="form-label">Tervezett fogpótlás típusa</label>
                           <select
-                            value={terv.tipus || ''}
-                            onChange={(e) => updateKezelesiTervAlso(index, 'tipus', e.target.value)}
+                            value={terv.treatmentTypeCode ?? normalizeToTreatmentTypeCode(terv.tipus) ?? ''}
+                            onChange={(e) => updateKezelesiTervAlso(index, 'treatmentTypeCode', e.target.value)}
                             className="form-input"
                             disabled={isViewOnly}
                           >
                             <option value="">Válasszon...</option>
-                            {kezelesiTervOptions.map((option) => (
-                              <option key={option} value={option}>{option}</option>
+                            {treatmentTypes.map((tt) => (
+                              <option key={tt.id} value={tt.code}>{tt.labelHu}</option>
                             ))}
                           </select>
                         </div>
