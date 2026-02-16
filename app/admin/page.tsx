@@ -6,6 +6,7 @@ import { getCurrentUser, type AuthUser } from '@/lib/auth';
 import { MessageCircle, ChevronDown, ChevronUp, AlertCircle, Bug, Lightbulb, Mail, Send, ArrowUp, ArrowDown, BarChart3, User, LogIn, Search, UserCircle, Settings } from 'lucide-react';
 import { CarePathwaysEditor } from '@/components/admin/CarePathwaysEditor';
 import { StageCatalogEditor } from '@/components/admin/StageCatalogEditor';
+import { StageStepsEditor } from '@/components/admin/StageStepsEditor';
 import { StepCatalogEditor } from '@/components/admin/StepCatalogEditor';
 import { TreatmentTypesEditor } from '@/components/admin/TreatmentTypesEditor';
 import { Logo } from '@/components/Logo';
@@ -719,6 +720,11 @@ export default function AdminPage() {
             <div className="card">
               <StageCatalogEditor />
             </div>
+            {currentUser?.role === 'admin' && (
+              <div className="card">
+                <StageStepsEditor />
+              </div>
+            )}
             <div className="card">
               <StepCatalogEditor />
             </div>
