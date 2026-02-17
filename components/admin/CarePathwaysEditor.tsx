@@ -92,9 +92,11 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
   };
 
   const addStep = () => {
+    const tt = formTreatmentTypeId ? treatmentTypes.find((t) => t.id === formTreatmentTypeId) : null;
+    const defaultStepCode = tt?.code ? `${tt.code}_` : 'new_step';
     setFormSteps((prev) => [
       ...prev,
-      { step_code: 'new_step', pool: 'work', duration_minutes: 30, default_days_offset: 14 },
+      { step_code: defaultStepCode, pool: 'work', duration_minutes: 30, default_days_offset: 14 },
     ]);
   };
 

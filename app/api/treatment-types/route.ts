@@ -28,6 +28,7 @@ export async function POST(request: NextRequest) {
 
     const pool = getDbPool();
     try {
+      await pool.query('BEGIN');
       const r = await pool.query(
         `INSERT INTO treatment_types (code, label_hu)
          VALUES ($1, $2)
@@ -35,6 +36,13 @@ export async function POST(request: NextRequest) {
         [data.code, data.labelHu]
       );
       const row = r.rows[0];
+      // Auto-create empty pathway for new treatment type (steps_json = [])
+      await pool.query(
+        `INSERT INTO care_pathways (name, reason, treatment_type_id, steps_json, version, priority)
+         VALUES ($1, NULL, $2, '[]'::jsonb, 1, 0)`,
+        [row.labelHu, row.id]
+      );
+      await pool.query('COMMIT');
       console.info('[admin] treatment_type created', {
         id: row.id,
         code: row.code,
@@ -44,6 +52,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({ treatmentType: row });
     } catch (err: unknown) {
+      await pool.query('ROLLBACK').catch(() => {});
       const msg = String(err ?? '');
       if (msg.includes('unique') || msg.includes('duplicate')) {
         return NextResponse.json(
