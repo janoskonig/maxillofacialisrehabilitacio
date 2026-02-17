@@ -29,6 +29,7 @@ export function GoogleCalendarSettings() {
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [syncingAppointments, setSyncingAppointments] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -199,6 +200,33 @@ export function GoogleCalendarSettings() {
       setError(err instanceof Error ? err.message : 'Hiba történt a szinkronizáció során');
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleSyncAppointments = async () => {
+    try {
+      setSyncingAppointments(true);
+      setError(null);
+      setSuccess(null);
+      
+      const response = await fetch('/api/google-calendar/sync-appointments', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Hiba történt az időpontok szinkronizálásakor');
+      }
+      
+      const data = await response.json();
+      setSuccess(data.message || 'Időpontok sikeresen szinkronizálva');
+      setTimeout(() => setSuccess(null), 5000);
+    } catch (err) {
+      console.error('Error syncing appointments to Google Calendar:', err);
+      setError(err instanceof Error ? err.message : 'Hiba történt az időpontok szinkronizálásakor');
+    } finally {
+      setSyncingAppointments(false);
     }
   };
 
@@ -439,24 +467,46 @@ export function GoogleCalendarSettings() {
 
           {/* Csak akkor jelenítjük meg a szinkronizálás és kapcsolat megszüntetése gombokat, ha aktív állapotban van */}
           {status.status === 'active' && (
-            <div className="flex gap-2">
-              <button
-                onClick={handleSync}
-                disabled={syncing}
-                className="btn-primary flex items-center justify-center gap-2 flex-1"
-              >
-                {syncing ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Szinkronizálás...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="w-4 h-4" />
-                    Szinkronizálás most
-                  </>
-                )}
-              </button>
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSync}
+                  disabled={syncing}
+                  className="btn-primary flex items-center justify-center gap-2 flex-1"
+                >
+                  {syncing ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Szinkronizálás...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-4 h-4" />
+                      Szabad időpontok betöltése
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={handleSyncAppointments}
+                  disabled={syncingAppointments}
+                  className="btn-secondary flex items-center justify-center gap-2 flex-1"
+                >
+                  {syncingAppointments ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Szinkronizálás...
+                    </>
+                  ) : (
+                    <>
+                      <Calendar className="w-4 h-4" />
+                      Időpontok küldése a naptárba
+                    </>
+                  )}
+                </button>
+              </div>
+              <p className="text-xs text-gray-500">
+                „Szabad időpontok betöltése”: a naptárból hozza be a szabad időpontokat. „Időpontok küldése a naptárba”: a korábbi foglalásokat feltölti a Google Naptárba.
+              </p>
               <button
                 onClick={handleDisconnect}
                 disabled={disconnecting}
