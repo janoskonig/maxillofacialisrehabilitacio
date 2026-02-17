@@ -282,11 +282,15 @@ export async function PUT(
             try {
               // Naptár ID-k lekérése a felhasználó beállításaiból
               const userCalendarResult = await pool.query(
-                `SELECT google_calendar_target_calendar_id 
+                `SELECT google_calendar_enabled, google_calendar_target_calendar_id 
                  FROM users 
                  WHERE id = $1`,
                 [newTimeSlot.dentist_user_id]
               );
+              if (userCalendarResult.rows[0]?.google_calendar_enabled !== true) {
+                console.log('[Appointment Reschedule] Slot owner has Google Calendar disabled, skipping sync');
+                return;
+              }
               const targetCalendarId = userCalendarResult.rows[0]?.google_calendar_target_calendar_id || 'primary';
               
               // Ha van régi Google Calendar event ID, töröljük a cél naptárból

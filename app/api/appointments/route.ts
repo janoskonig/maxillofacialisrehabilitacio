@@ -343,11 +343,15 @@ export async function POST(request: NextRequest) {
 
               // Naptár ID-k lekérése a felhasználó beállításaiból
               const userCalendarResult = await pool.query(
-                `SELECT google_calendar_source_calendar_id, google_calendar_target_calendar_id 
+                `SELECT google_calendar_enabled, google_calendar_source_calendar_id, google_calendar_target_calendar_id 
                  FROM users 
                  WHERE id = $1`,
                 [timeSlot.dentist_user_id]
               );
+              if (userCalendarResult.rows[0]?.google_calendar_enabled !== true) {
+                console.log('[Appointment Booking] Slot owner has Google Calendar disabled, skipping sync');
+                return;
+              }
               const sourceCalendarId = userCalendarResult.rows[0]?.google_calendar_source_calendar_id || 'primary';
               const targetCalendarId = userCalendarResult.rows[0]?.google_calendar_target_calendar_id || 'primary';
               
