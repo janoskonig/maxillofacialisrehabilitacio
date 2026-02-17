@@ -135,11 +135,15 @@ export async function POST(
           (async () => {
             try {
               const userCalendarResult = await pool.query(
-                `SELECT google_calendar_source_calendar_id, google_calendar_target_calendar_id 
+                `SELECT google_calendar_enabled, google_calendar_target_calendar_id 
                  FROM users 
                  WHERE id = $1`,
                 [appointment.dentist_user_id]
               );
+              if (userCalendarResult.rows[0]?.google_calendar_enabled !== true) {
+                console.log('[Appointment Approval] Slot owner has Google Calendar disabled, skipping sync');
+                return;
+              }
               const targetCalendarId = userCalendarResult.rows[0]?.google_calendar_target_calendar_id || 'primary';
               
               const newEventId = await createGoogleCalendarEvent(

@@ -663,6 +663,7 @@ export async function createGoogleCalendarEvent(
   eventData: GoogleCalendarEventData
 ): Promise<string | null> {
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+    console.warn('[createGoogleCalendarEvent] Google Calendar credentials not configured');
     return null;
   }
 
@@ -730,7 +731,11 @@ export async function createGoogleCalendarEvent(
       throw error;
     }
 
-    console.error('Error creating Google Calendar event:', error);
+    const reason = error instanceof Error ? error.message : 'Unknown error';
+    console.error(
+      `[createGoogleCalendarEvent] Failed for user ${userId}: ${reason}`,
+      { userId, error }
+    );
     return null;
   }
 }
