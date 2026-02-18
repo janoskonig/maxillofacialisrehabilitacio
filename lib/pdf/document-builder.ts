@@ -25,7 +25,7 @@ import {
  * High-level API for building PDF documents
  */
 export class PDFDocumentBuilder {
-  private pdfDoc!: PDFDocument;
+  private pdfDoc!: PDFDocument; // Set in initialize()
   private state: PDFState;
   private font: PDFFont | null = null;
   private fontBold: PDFFont | null = null;
