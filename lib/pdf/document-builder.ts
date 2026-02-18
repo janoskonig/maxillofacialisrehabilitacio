@@ -25,13 +25,12 @@ import {
  * High-level API for building PDF documents
  */
 export class PDFDocumentBuilder {
-  private pdfDoc: PDFDocument;
+  private pdfDoc!: PDFDocument; // Set in initialize()
   private state: PDFState;
   private font: PDFFont | null = null;
   private fontBold: PDFFont | null = null;
 
   constructor() {
-    this.pdfDoc = PDFDocument.create();
     this.state = {
       page: null as any, // Will be set in initialize()
       y: 0,
@@ -42,6 +41,7 @@ export class PDFDocumentBuilder {
    * Initializes the document with fonts and first page
    */
   async initialize(): Promise<void> {
+    this.pdfDoc = await PDFDocument.create();
     this.font = await getDejaVuFont(this.pdfDoc);
     this.fontBold = await getDejaVuBoldFont(this.pdfDoc);
     this.state.page = this.pdfDoc.addPage([LAYOUT.pageWidth, LAYOUT.pageHeight]);
