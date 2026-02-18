@@ -5,6 +5,14 @@ import { fetchVirtualAppointments } from '@/lib/virtual-appointments-service';
 
 const REASON_VALUES = ['traumás sérülés', 'veleszületett rendellenesség', 'onkológiai kezelés utáni állapot'];
 
+/** Extract YYYY-MM-DD in Europe/Budapest from ISO string or date (avoids UTC date shift) */
+function toDateOnlyBudapest(s: string | Date | null): string | null {
+  if (!s) return null;
+  const d = typeof s === 'string' ? new Date(s) : s;
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('en-CA', { timeZone: 'Europe/Budapest' }); // YYYY-MM-DD
+}
+
 /**
  * GANTT adatok: epizódok stádium intervallumokkal.
  * Cohort: reason kötelező. Betegszintű: reason opcionális, patientId kötelező.
@@ -147,32 +155,35 @@ export async function GET(request: NextRequest) {
 
     // Virtual windows: only when includeVirtual=true (consistent structure for 0 or N episodes)
     if (includeVirtual) {
-      const rangeStart = from
-        ? new Date(from).toISOString().slice(0, 10)
-        : episodesList[0]?.openedAt?.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
-      const rangeEnd = to
-        ? new Date(to).toISOString().slice(0, 10)
-        : new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      const { items } = await fetchVirtualAppointments({
-        rangeStartDate: rangeStart,
-        rangeEndDate: rangeEnd,
-        readyOnly: true,
-      });
-      virtualWindows = items
-        .filter((v) => episodeIds.includes(v.episodeId))
-        .map((v) => ({
-          episodeId: v.episodeId,
-          virtualKey: v.virtualKey,
-          patientName: v.patientName,
-          stepCode: v.stepCode,
-          stepLabel: v.stepLabel,
-          pool: v.pool,
-          durationMinutes: v.durationMinutes,
-          windowStartDate: v.windowStartDate,
-          windowEndDate: v.windowEndDate,
-          worklistUrl: v.worklistUrl,
-          worklistParams: v.worklistParams,
-        }));
+      const rangeStart =
+        toDateOnlyBudapest(from) ??
+        toDateOnlyBudapest(episodesList[0]?.openedAt as string) ??
+        toDateOnlyBudapest(new Date());
+      const rangeEnd =
+        toDateOnlyBudapest(to) ??
+        toDateOnlyBudapest(new Date(Date.now() + 90 * 24 * 60 * 60 * 1000));
+      if (rangeStart && rangeEnd && rangeEnd >= rangeStart) {
+        const { items } = await fetchVirtualAppointments({
+          rangeStartDate: rangeStart,
+          rangeEndDate: rangeEnd,
+          readyOnly: true,
+        });
+        virtualWindows = items
+          .filter((v) => episodeIds.includes(v.episodeId))
+          .map((v) => ({
+            episodeId: v.episodeId,
+            virtualKey: v.virtualKey,
+            patientName: v.patientName,
+            stepCode: v.stepCode,
+            stepLabel: v.stepLabel,
+            pool: v.pool,
+            durationMinutes: v.durationMinutes,
+            windowStartDate: v.windowStartDate,
+            windowEndDate: v.windowEndDate,
+            worklistUrl: v.worklistUrl,
+            worklistParams: v.worklistParams,
+          }));
+      }
     }
 
     return NextResponse.json({
