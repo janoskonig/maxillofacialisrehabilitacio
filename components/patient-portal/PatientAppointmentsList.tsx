@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Calendar, Clock, MapPin, Plus, CheckCircle, XCircle, AlertCircle, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, Clock, MapPin, CheckCircle, XCircle, AlertCircle, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
@@ -36,8 +36,11 @@ export function PatientAppointmentsList() {
   const [loading, setLoading] = useState(true);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([]);
+  const [doctors, setDoctors] = useState<{ email: string; name: string }[]>([]);
+  const [selectedDoctorEmail, setSelectedDoctorEmail] = useState<string | null>(null);
+  const [slotsPage, setSlotsPage] = useState(1);
+  const [slotsPagination, setSlotsPagination] = useState<{ page: number; limit: number; total: number; totalPages: number } | null>(null);
   const [loadingSlots, setLoadingSlots] = useState(false);
-  const [showRequestForm, setShowRequestForm] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [cancellingAppointment, setCancellingAppointment] = useState<Appointment | null>(null);
@@ -49,8 +52,15 @@ export function PatientAppointmentsList() {
 
   useEffect(() => {
     fetchAppointments();
-    fetchAvailableSlots();
   }, []);
+
+  useEffect(() => {
+    setSlotsPage(1);
+  }, [selectedDoctorEmail]);
+
+  useEffect(() => {
+    fetchAvailableSlots();
+  }, [selectedDoctorEmail, slotsPage]);
 
   const fetchAppointments = async () => {
     try {
@@ -77,7 +87,11 @@ export function PatientAppointmentsList() {
   const fetchAvailableSlots = async () => {
     try {
       setLoadingSlots(true);
-      const response = await fetch('/api/patient-portal/time-slots', {
+      const params = new URLSearchParams();
+      if (selectedDoctorEmail) params.set('dentistEmail', selectedDoctorEmail);
+      params.set('page', String(slotsPage));
+      params.set('limit', '50');
+      const response = await fetch(`/api/patient-portal/time-slots?${params}`, {
         credentials: 'include',
       });
 
@@ -87,6 +101,8 @@ export function PatientAppointmentsList() {
 
       const data = await response.json();
       setAvailableSlots(data.timeSlots || []);
+      setDoctors(data.doctors || []);
+      setSlotsPagination(data.pagination || null);
     } catch (error) {
       console.error('Hiba a szabad időpontok betöltésekor:', error);
       showToast('Hiba történt a szabad időpontok betöltésekor', 'error');
@@ -124,7 +140,8 @@ export function PatientAppointmentsList() {
       showToast('Időpont sikeresen lefoglalva!', 'success');
       setSelectedSlot(null);
       // Refresh both appointments and available slots
-      await Promise.all([fetchAppointments(), fetchAvailableSlots()]);
+      await fetchAppointments();
+      await fetchAvailableSlots();
     } catch (error) {
       console.error('Hiba az időpont foglalásakor:', error);
       showToast(
@@ -282,34 +299,7 @@ export function PatientAppointmentsList() {
             Itt találhatja az összes időpontját és foglalhat új időpontot.
           </p>
         </div>
-        <button
-          onClick={() => setShowRequestForm(!showRequestForm)}
-          className="btn-primary flex items-center gap-2 text-sm sm:text-base px-3 sm:px-4 py-1.5 sm:py-2 w-full sm:w-auto justify-center"
-        >
-          <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-          <span className="hidden sm:inline">Új időpont kérése</span>
-          <span className="sm:hidden">Új</span>
-        </button>
       </div>
-
-      {/* Request Appointment Form */}
-      {showRequestForm && (
-        <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
-          <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">
-            Új időpont kérése
-          </h2>
-          <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">
-            Kérjen időpontot. Az adminisztráció felveszi Önnel a kapcsolatot az időpont egyeztetéséhez.
-          </p>
-          <RequestAppointmentForm
-            onSuccess={() => {
-              setShowRequestForm(false);
-              fetchAppointments();
-            }}
-            onCancel={() => setShowRequestForm(false)}
-          />
-        </div>
-      )}
 
       {/* Upcoming Appointments */}
       {upcomingAppointments.length > 0 && (
@@ -462,24 +452,36 @@ export function PatientAppointmentsList() {
           <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">
             Nincsenek időpontok
           </h3>
-          <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">
-            Még nincs rögzített időpontja. Kérjen új időpontot az "Új időpont kérése" gombbal.
+          <p className="text-sm sm:text-base text-gray-600">
+            Még nincs rögzített időpontja. Foglaljon időpontot az alábbi szabad időpontok közül.
           </p>
-          <button
-            onClick={() => setShowRequestForm(true)}
-            className="btn-primary inline-flex items-center gap-2 text-sm sm:text-base px-3 sm:px-4 py-1.5 sm:py-2"
-          >
-            <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            Új időpont kérése
-          </button>
         </div>
       )}
 
       {/* Available Time Slots Section - Last Section */}
       <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
-        <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">
-          Szabad időpontok
-        </h2>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3 sm:mb-4">
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900">
+            Szabad időpontok
+          </h2>
+          {doctors.length > 0 && (
+            <label className="flex items-center gap-2 text-sm">
+              <span className="text-gray-600">Orvos:</span>
+              <select
+                value={selectedDoctorEmail ?? ''}
+                onChange={(e) => setSelectedDoctorEmail(e.target.value || null)}
+                className="border border-gray-300 rounded-md px-2 py-1.5 text-gray-900 bg-white min-w-[160px]"
+              >
+                <option value="">Összes orvos</option>
+                {doctors.map((d) => (
+                  <option key={d.email} value={d.email}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
         {loadingSlots ? (
           <div className="flex items-center justify-center py-8">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-medical-primary"></div>
@@ -536,6 +538,47 @@ export function PatientAppointmentsList() {
             </p>
           </div>
         )}
+        {slotsPagination && slotsPagination.totalPages > 1 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 sm:mt-6 pt-3 sm:pt-4 border-t border-gray-200">
+            <div className="text-xs sm:text-sm text-gray-600">
+              {(slotsPagination.page - 1) * slotsPagination.limit + 1}-
+              {Math.min(slotsPagination.page * slotsPagination.limit, slotsPagination.total)} / {slotsPagination.total} időpont
+            </div>
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <button
+                onClick={() => setSlotsPage((prev) => Math.max(1, prev - 1))}
+                disabled={slotsPagination.page === 1}
+                className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+              >
+                <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span className="hidden xs:inline">Előző</span>
+              </button>
+              <div className="flex items-center gap-0.5 sm:gap-1">
+                {Array.from({ length: slotsPagination.totalPages }, (_, i) => i + 1).map((page) => (
+                  <button
+                    key={page}
+                    onClick={() => setSlotsPage(page)}
+                    className={`px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium rounded-md ${
+                      page === slotsPagination.page
+                        ? 'bg-medical-primary text-white'
+                        : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => setSlotsPage((prev) => Math.min(slotsPagination.totalPages, prev + 1))}
+                disabled={slotsPagination.page === slotsPagination.totalPages}
+                className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+              >
+                <span className="hidden xs:inline">Következő</span>
+                <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Booking Modal */}
@@ -558,116 +601,5 @@ export function PatientAppointmentsList() {
         />
       )}
     </div>
-  );
-}
-
-// Request Appointment Form Component
-function RequestAppointmentForm({
-  onSuccess,
-  onCancel,
-}: {
-  onSuccess: () => void;
-  onCancel: () => void;
-}) {
-  const router = useRouter();
-  const { showToast } = useToast();
-  const [loading, setLoading] = useState(false);
-  const [beutaloOrvos, setBeutaloOrvos] = useState('');
-  const [beutaloIndokolas, setBeutaloIndokolas] = useState('');
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    setLoading(true);
-
-    try {
-      const response = await fetch('/api/patient-portal/appointments', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          beutaloOrvos: beutaloOrvos.trim() || undefined,
-          beutaloIndokolas: beutaloIndokolas.trim() || undefined,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Hiba történt');
-      }
-
-      showToast(
-        'Időpont kérés sikeresen elküldve. Az adminisztráció hamarosan felveszi Önnel a kapcsolatot.',
-        'success'
-      );
-      setBeutaloOrvos('');
-      setBeutaloIndokolas('');
-      onSuccess();
-    } catch (error) {
-      console.error('Hiba az időpont kérésekor:', error);
-      showToast(
-        error instanceof Error ? error.message : 'Hiba történt az időpont kérésekor',
-        'error'
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label htmlFor="beutalo-orvos" className="form-label flex items-center gap-2">
-          <Calendar className="w-4 h-4" />
-          Beutaló orvos neve (opcionális)
-        </label>
-        <input
-          id="beutalo-orvos"
-          type="text"
-          value={beutaloOrvos}
-          onChange={(e) => setBeutaloOrvos(e.target.value)}
-          className="form-input"
-          placeholder="Dr. Kovács János"
-          disabled={loading}
-        />
-      </div>
-
-      <div>
-        <label htmlFor="beutalo-indokolas" className="form-label flex items-center gap-2">
-          <Calendar className="w-4 h-4" />
-          Beutalás indoka (opcionális)
-        </label>
-        <textarea
-          id="beutalo-indokolas"
-          value={beutaloIndokolas}
-          onChange={(e) => setBeutaloIndokolas(e.target.value)}
-          className="form-input"
-          placeholder="Beutalás indokának leírása..."
-          rows={4}
-          disabled={loading}
-        />
-      </div>
-
-      <div className="flex gap-3">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="btn-secondary flex-1"
-          disabled={loading}
-        >
-          Mégse
-        </button>
-        <button
-          type="submit"
-          className="btn-primary flex-1"
-          disabled={loading}
-        >
-          {loading ? 'Küldés...' : 'Időpont kérése'}
-        </button>
-      </div>
-    </form>
   );
 }
