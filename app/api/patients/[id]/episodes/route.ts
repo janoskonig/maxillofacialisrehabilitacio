@@ -221,7 +221,11 @@ export async function POST(
        WHERE pe.id = $1`,
       [newId]
     );
-    const episode = rowToEpisode(fetchResult.rows[0]);
+    const row = fetchResult.rows[0];
+    if (!row) {
+      return NextResponse.json({ error: 'Epizód létrehozása sikertelen' }, { status: 500 });
+    }
+    const episode = rowToEpisode(row);
 
     // Kezdő stage_event: STAGE_0
     const stageEventsExists = await pool.query(
