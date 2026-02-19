@@ -14,6 +14,8 @@ import { PatientList } from './PatientList';
 import { Patient } from '@/lib/types';
 import { StagesGanttChart, type GanttEpisode, type GanttInterval } from './StagesGanttChart';
 import { WorklistWidget } from './widgets/WorklistWidget';
+import { WipForecastWidget } from './widgets/WipForecastWidget';
+import { IntakeRecommendationBadge } from './widgets/IntakeRecommendationBadge';
 import type { StageCatalogEntry } from '@/lib/types';
 
 interface DashboardData {
@@ -217,6 +219,7 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
             <LayoutDashboard className="w-5 h-5 text-medical-primary" />
           </div>
           <h2 className="text-heading-2">Dashboard</h2>
+          {canSeeStages && <IntakeRecommendationBadge />}
         </div>
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
@@ -374,7 +377,10 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
               <p className="text-sm text-gray-600">
                 Fogpótlástanász és admin kihasználtság a következő 30 napra.
               </p>
-              <BusynessOMeter />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <BusynessOMeter />
+                <WipForecastWidget />
+              </div>
             </div>
           )}
 

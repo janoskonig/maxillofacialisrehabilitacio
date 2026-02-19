@@ -382,6 +382,8 @@ export function WorklistWidget() {
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Betegnév</th>
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Stage</th>
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Next step</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">ETA</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Hátralévő</th>
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">SLA / overdue</th>
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Window</th>
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Status</th>
@@ -424,6 +426,29 @@ export function WorklistWidget() {
                     <span className="text-sm font-medium">{item.nextStep}</span>
                     {item.durationMinutes > 0 && (
                       <span className="ml-1 text-xs text-gray-500">{item.durationMinutes} perc</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-sm text-gray-600">
+                    {state !== 'BLOCKED' && item.forecastCompletionEndP80ISO ? (
+                      (() => {
+                        const d = new Date(item.forecastCompletionEndP80ISO);
+                        const m = String(d.getMonth() + 1).padStart(2, '0');
+                        const day = String(d.getDate()).padStart(2, '0');
+                        return `~${m}.${day}`;
+                      })()
+                    ) : (
+                      '–'
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-sm text-gray-600">
+                    {state !== 'BLOCKED' && (item.forecastRemainingP50 != null || item.forecastRemainingP80 != null) ? (
+                      <span
+                        title={`P50: ${item.forecastRemainingP50 ?? '–'} látogatás | P80: ${item.forecastRemainingP80 ?? '–'} látogatás`}
+                      >
+                        P50: {item.forecastRemainingP50 ?? '–'} | P80: {item.forecastRemainingP80 ?? '–'}
+                      </span>
+                    ) : (
+                      '–'
                     )}
                   </td>
                   <td className="px-3 py-2 text-sm">

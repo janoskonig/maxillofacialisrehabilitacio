@@ -6,6 +6,7 @@
 
 import { getDbPool } from '../lib/db';
 import { refreshEpisodeNextStepCache, resolveEpisodeIdFromEvent } from '../lib/refresh-episode-next-step-cache';
+import { refreshEpisodeForecastCache } from '../lib/refresh-episode-forecast-cache';
 
 const BATCH_SIZE = 50;
 
@@ -33,6 +34,7 @@ async function runWorker(): Promise<void> {
       const episodeId = await resolveEpisodeIdFromEvent(pool, ev.entity_type, ev.entity_id);
       if (episodeId) {
         await refreshEpisodeNextStepCache(episodeId);
+        await refreshEpisodeForecastCache(episodeId);
       }
     } catch (err) {
       console.error(`[scheduling-events-worker] Error processing event ${ev.id}:`, err);

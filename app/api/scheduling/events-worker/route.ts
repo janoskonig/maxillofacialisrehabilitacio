@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { refreshEpisodeNextStepCache, resolveEpisodeIdFromEvent } from '@/lib/refresh-episode-next-step-cache';
+import { refreshEpisodeForecastCache } from '@/lib/refresh-episode-forecast-cache';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -42,6 +43,7 @@ export async function POST(request: NextRequest) {
         const episodeId = await resolveEpisodeIdFromEvent(pool, ev.entity_type, ev.entity_id);
         if (episodeId) {
           await refreshEpisodeNextStepCache(episodeId);
+          await refreshEpisodeForecastCache(episodeId);
         }
       } catch (err) {
         console.error(`[events-worker] Error processing event ${ev.id}:`, err);

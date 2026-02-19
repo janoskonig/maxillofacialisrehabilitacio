@@ -67,6 +67,11 @@ export interface WorklistItemBackend {
   treatmentTypeLabel?: string | null;
   /** Forrás: episode | pathway | patient | null (debug/support) */
   treatmentTypeSource?: 'episode' | 'pathway' | 'patient' | null;
+  /** Forecast ETA (backend returns ISO only, UI formats) */
+  forecastCompletionEndP50ISO?: string | null;
+  forecastCompletionEndP80ISO?: string | null;
+  forecastRemainingP50?: number | null;
+  forecastRemainingP80?: number | null;
 }
 
 export interface WorklistLocalState {

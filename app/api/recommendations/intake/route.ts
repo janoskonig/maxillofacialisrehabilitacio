@@ -2,23 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { WIP_STAGE_CODES } from '@/lib/wip-stage';
+import type { IntakeRecommendationResponse } from '@/lib/forecast-types';
 
 export const dynamic = 'force-dynamic';
 
-type Level = 'low' | 'medium' | 'high' | 'critical' | 'unavailable';
-
-function getLevel(score: number): Level {
-  if (score < 0) return 'unavailable';
-  if (score <= 40) return 'low';
-  if (score <= 70) return 'medium';
-  if (score <= 90) return 'high';
-  return 'critical';
-}
-
 /**
- * GET /api/doctors/workload
- * Params: horizonDays=7..180 (default 30), includeDetails=true|false
- * Busyness-o-meter: utilization + pipeline pressure per doctor (1 hónapos időablak)
+ * GET /api/recommendations/intake
+ * Returns GO/CAUTION/STOP for new consultation intake.
+ * Policy: busynessScore, nearCriticalIfNewStarts, wipP80DaysFromNow.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -27,36 +18,24 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Bejelentkezés szükséges' }, { status: 401 });
     }
 
-    const horizonDays = Math.min(180, Math.max(7, parseInt(request.nextUrl.searchParams.get('horizonDays') || '30', 10)));
-    const includeDetails = request.nextUrl.searchParams.get('includeDetails') !== 'false';
-
     const pool = getDbPool();
+    const serverNowResult = await pool.query('SELECT now() as now');
+    const serverNow = new Date(serverNowResult.rows[0].now);
+    const fetchedAt = new Date();
+
+    const horizonDays = 30;
     const horizonEnd = new Date();
     horizonEnd.setDate(horizonEnd.getDate() + horizonDays);
 
     const doctorsResult = await pool.query(
-      `SELECT id, email, doktor_neve FROM users
+      `SELECT id FROM users
        WHERE active = true AND role IN ('fogpótlástanász', 'admin')
        AND doktor_neve IS NOT NULL AND doktor_neve != ''
        ORDER BY doktor_neve ASC`
     );
 
-    const doctors: Array<{
-      userId: string;
-      name: string;
-      busynessScore: number;
-      level: Level;
-      utilizationPct: number;
-      heldPct: number;
-      pipelinePct: number;
-      bookedMinutes: number;
-      availableMinutes: number;
-      heldMinutes: number;
-      wipCount: number;
-      worklistCount: number;
-      overdueCount: number;
-      flags: string[];
-    }> = [];
+    let busynessScore = 0;
+    let nearCriticalIfNewStarts = false;
 
     for (const doc of doctorsResult.rows) {
       const [slotStats, bookedStats, wipResult, worklistResult] = await Promise.all([
@@ -105,45 +84,87 @@ export async function GET(request: NextRequest) {
       const holdPressure = availableMinutes > 0 ? heldMinutes / availableMinutes : 0;
       const pipelineNorm = availableMinutes > 0 ? Math.min(1.5, (wipCount + worklistCount) * 30 / availableMinutes) : 0;
       const raw = 0.7 * utilization + 0.1 * holdPressure + 0.2 * pipelineNorm;
-      const busynessScore = Math.round(100 * Math.min(raw, 1.5) / 1.5);
+      const score = Math.round(100 * Math.min(raw, 1.5) / 1.5);
 
-      const overdueResult = await pool.query(
-        `SELECT COUNT(*)::int as cnt FROM episode_next_step_cache WHERE provider_id = $1 AND overdue_days > 0`,
-        [doc.id]
-      );
-      const overdueCount = overdueResult.rows[0]?.cnt ?? 0;
-
-      const flags: string[] = [];
-      if (busynessScore >= 90) flags.push('near_critical_if_new_starts');
-      if (availableMinutes === 0 && (wipCount + worklistCount) > 0) flags.push('unavailable');
-
-      doctors.push({
-        userId: doc.id,
-        name: doc.doktor_neve || doc.email,
-        busynessScore,
-        level: availableMinutes === 0 ? 'unavailable' : getLevel(busynessScore),
-        utilizationPct: Math.round(utilization * 100),
-        heldPct: Math.round(holdPressure * 100),
-        pipelinePct: Math.round(pipelineNorm * 100),
-        bookedMinutes,
-        availableMinutes,
-        heldMinutes,
-        wipCount,
-        worklistCount,
-        overdueCount,
-        flags,
-      });
+      if (score > busynessScore) busynessScore = score;
+      if (score >= 90) nearCriticalIfNewStarts = true;
+      if (availableMinutes === 0 && (wipCount + worklistCount) > 0) nearCriticalIfNewStarts = true;
     }
 
-    return NextResponse.json({
-      horizonDays,
-      generatedAt: new Date().toISOString(),
-      doctors: includeDetails ? doctors : doctors.map((d) => ({ userId: d.userId, name: d.name, busynessScore: d.busynessScore, level: d.level })),
-    });
+    const wipStageList = WIP_STAGE_CODES.map((c) => `'${c}'`).join(',');
+    const [wipResult, forecastResult, stg0Result] = await Promise.all([
+      pool.query(
+        `SELECT pe.id FROM patient_episodes pe
+         LEFT JOIN (SELECT DISTINCT ON (episode_id) episode_id, stage_code FROM stage_events ORDER BY episode_id, at DESC) se ON pe.id = se.episode_id
+         WHERE pe.status = 'open' AND (se.stage_code IS NULL OR se.stage_code IN (${wipStageList}))`
+      ),
+      pool.query(
+        `SELECT MAX(efc.completion_end_p80) as "wipP80Max"
+         FROM episode_forecast_cache efc
+         JOIN patient_episodes pe ON pe.id = efc.episode_id
+         LEFT JOIN (SELECT DISTINCT ON (episode_id) episode_id, stage_code FROM stage_events ORDER BY episode_id, at DESC) se ON pe.id = se.episode_id
+         WHERE pe.status = 'open' AND efc.status = 'ready'
+         AND (se.stage_code IS NULL OR se.stage_code IN (${wipStageList}))`
+      ),
+      pool.query(
+        `SELECT COUNT(*)::int as cnt FROM patient_episodes pe
+         LEFT JOIN (SELECT DISTINCT ON (episode_id) episode_id, stage_code FROM stage_events ORDER BY episode_id, at DESC) se ON pe.id = se.episode_id
+         WHERE pe.status = 'open' AND se.stage_code = 'STAGE_0'`
+      ),
+    ]);
+
+    const wipCount = wipResult.rows.length;
+    const wipP80Max = forecastResult.rows[0]?.wipP80Max;
+    const wipCompletionP80Max = wipP80Max ? new Date(wipP80Max).toISOString() : null;
+    const wipP80DaysFromNow =
+      wipCompletionP80Max != null
+        ? Math.ceil((new Date(wipCompletionP80Max).getTime() - serverNow.getTime()) / (24 * 60 * 60 * 1000))
+        : null;
+
+    const reasons: string[] = [];
+    let recommendation: 'GO' | 'CAUTION' | 'STOP' = 'GO';
+
+    if (busynessScore >= 90 || nearCriticalIfNewStarts || (wipP80DaysFromNow != null && wipP80DaysFromNow > 28)) {
+      recommendation = 'STOP';
+      if (busynessScore >= 90) reasons.push(`BUSYNESS_${busynessScore}`);
+      if (nearCriticalIfNewStarts) reasons.push('NEAR_CRITICAL_IF_NEW_STARTS');
+      if (wipP80DaysFromNow != null && wipP80DaysFromNow > 28) reasons.push(`WIP_P80_END_+${wipP80DaysFromNow}D`);
+    } else if (
+      (busynessScore >= 75 && busynessScore <= 89) ||
+      (wipP80DaysFromNow != null && wipP80DaysFromNow > 14 && wipP80DaysFromNow <= 28)
+    ) {
+      recommendation = 'CAUTION';
+      if (busynessScore >= 75 && busynessScore <= 89) reasons.push(`BUSYNESS_${busynessScore}`);
+      if (wipP80DaysFromNow != null && wipP80DaysFromNow > 14 && wipP80DaysFromNow <= 28) {
+        reasons.push(`WIP_P80_END_+${wipP80DaysFromNow}D`);
+      }
+    } else {
+      reasons.push('OK');
+    }
+
+    const response: IntakeRecommendationResponse = {
+      recommendation,
+      reasons,
+      explain: {
+        busynessScore,
+        nearCriticalIfNewStarts,
+        source: 'MAX_OVER_DOCTORS',
+        wipCount,
+        wipCompletionP80Max,
+        wipP80DaysFromNow,
+      },
+      meta: {
+        serverNow: serverNow.toISOString(),
+        fetchedAt: fetchedAt.toISOString(),
+        policyVersion: 1,
+      },
+    };
+
+    return NextResponse.json(response);
   } catch (error) {
-    console.error('Error fetching doctors workload:', error);
+    console.error('Error fetching intake recommendation:', error);
     return NextResponse.json(
-      { error: 'Hiba történt a terhelés lekérdezésekor' },
+      { error: 'Hiba történt a javaslat lekérdezésekor' },
       { status: 500 }
     );
   }

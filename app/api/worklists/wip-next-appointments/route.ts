@@ -4,6 +4,12 @@ import { verifyAuth } from '@/lib/auth-server';
 import { nextRequiredStep, isBlocked } from '@/lib/next-step-engine';
 import { extractSuggestedTreatmentTypeCodes } from '@/lib/treatment-type-normalize';
 import { getEffectiveTreatmentType } from '@/lib/effective-treatment-type';
+import { WIP_STAGE_CODES } from '@/lib/wip-stage';
+import {
+  computeInputsHashBatch,
+  computeEpisodeForecast,
+  refreshEpisodeForecastCache,
+} from '@/lib/episode-forecast';
 import type { WorklistItemBackend } from '@/lib/worklist-types';
 
 export const dynamic = 'force-dynamic';
@@ -46,7 +52,8 @@ export async function GET(request: NextRequest) {
     }
     const extraWhere = extraConditions.length ? ' AND ' + extraConditions.join(' AND ') : '';
 
-    // WIP episodes: status=open, stage in STAGE_1..STAGE_6 (not STAGE_0 or STAGE_7)
+    // WIP episodes: status=open, stage in STAGE_1..STAGE_6 (not STAGE_0 or STAGE_7) — matches isWipStage()
+    const wipStageList = WIP_STAGE_CODES.map((c) => `'${c}'`).join(',');
     const episodesResult = await pool.query(
       `SELECT DISTINCT pe.id as "episodeId", pe.patient_id as "patientId", pe.assigned_provider_id as "assignedProviderId",
               p.nev as "patientName", pe.opened_at as "openedAt"
@@ -57,7 +64,7 @@ export async function GET(request: NextRequest) {
          FROM stage_events ORDER BY episode_id, at DESC
        ) se ON pe.id = se.episode_id
        WHERE pe.status = 'open'
-       AND (se.stage_code IS NULL OR se.stage_code IN ('STAGE_1','STAGE_2','STAGE_3','STAGE_4','STAGE_5','STAGE_6'))
+       AND (se.stage_code IS NULL OR se.stage_code IN (${wipStageList}))
        ${extraWhere}
        ORDER BY pe.opened_at ASC`,
       queryParams
@@ -184,6 +191,85 @@ export async function GET(request: NextRequest) {
       }
 
       items.push(baseItem);
+    }
+
+    // Batch attach forecast: fetch cache, validate hashes, recompute differing, attach
+    const forecastEpisodeIds = items.filter((i) => i.status !== 'blocked').map((i) => i.episodeId);
+    const forecastMap: Record<string, { p50: string | null; p80: string | null; rem50: number; rem80: number }> = {};
+
+    if (forecastEpisodeIds.length > 0) {
+      const cacheRows = await pool.query(
+        `SELECT episode_id, completion_end_p50, completion_end_p80, remaining_visits_p50, remaining_visits_p80, status, inputs_hash
+         FROM episode_forecast_cache WHERE episode_id = ANY($1)`,
+        [forecastEpisodeIds]
+      );
+      type ForecastCacheRow = {
+        episode_id: string;
+        completion_end_p50: Date | string | null;
+        completion_end_p80: Date | string | null;
+        remaining_visits_p50: number | null;
+        remaining_visits_p80: number | null;
+        status: string;
+        inputs_hash: string | null;
+      };
+      const cacheByEpisode = new Map<string, ForecastCacheRow>(
+        (cacheRows.rows as ForecastCacheRow[]).map((r) => [r.episode_id, r])
+      );
+      const hashMap = await computeInputsHashBatch(forecastEpisodeIds);
+
+      const toRecompute: string[] = [];
+      for (const id of forecastEpisodeIds) {
+        const cached = cacheByEpisode.get(id);
+        const currentHash = hashMap.get(id);
+        if (cached && cached.inputs_hash === currentHash && cached.status === 'ready') {
+          const p50 = cached.completion_end_p50;
+          const p80 = cached.completion_end_p80;
+          forecastMap[id] = {
+            p50: p50 != null ? new Date(p50).toISOString() : null,
+            p80: p80 != null ? new Date(p80).toISOString() : null,
+            rem50: cached.remaining_visits_p50 ?? 0,
+            rem80: cached.remaining_visits_p80 ?? 0,
+          };
+        } else {
+          toRecompute.push(id);
+        }
+      }
+
+      for (const id of toRecompute) {
+        await refreshEpisodeForecastCache(id);
+      }
+
+      if (toRecompute.length > 0) {
+        const freshCache = await pool.query(
+          `SELECT episode_id, completion_end_p50, completion_end_p80, remaining_visits_p50, remaining_visits_p80, status
+           FROM episode_forecast_cache WHERE episode_id = ANY($1)`,
+          [toRecompute]
+        );
+        for (const r of freshCache.rows) {
+          if (r.status === 'ready') {
+            const p50 = r.completion_end_p50;
+            const p80 = r.completion_end_p80;
+            forecastMap[r.episode_id] = {
+              p50: p50 != null ? new Date(p50).toISOString() : null,
+              p80: p80 != null ? new Date(p80).toISOString() : null,
+              rem50: r.remaining_visits_p50 ?? 0,
+              rem80: r.remaining_visits_p80 ?? 0,
+            };
+          }
+        }
+      }
+
+      for (const item of items) {
+        if (item.status !== 'blocked' && item.episodeId) {
+          const f = forecastMap[item.episodeId];
+          if (f) {
+            item.forecastCompletionEndP50ISO = f.p50 ?? undefined;
+            item.forecastCompletionEndP80ISO = f.p80 ?? undefined;
+            item.forecastRemainingP50 = f.rem50;
+            item.forecastRemainingP80 = f.rem80;
+          }
+        }
+      }
     }
 
     items.sort((a, b) => b.priorityScore - a.priorityScore);
