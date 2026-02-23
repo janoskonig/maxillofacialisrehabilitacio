@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Calendar, Clock } from 'lucide-react';
+import { X, Calendar, Clock, Users } from 'lucide-react';
 import { toBudapestStartOfDayISO } from '@/lib/datetime';
 
 interface Slot {
@@ -48,6 +48,7 @@ export function SlotPickerModal({
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
   const slotsRef = useRef<HTMLDivElement>(null);
+  const [weeklyDemand, setWeeklyDemand] = useState<Map<string, number>>(new Map());
 
   const windowStartISO = toBudapestStartOfDayISO(windowStart);
   const windowEndISO = toBudapestStartOfDayISO(windowEnd);
@@ -88,6 +89,24 @@ export function SlotPickerModal({
     }
   }, [open, fetchSlots]);
 
+  // Fetch intent density for week labels
+  useEffect(() => {
+    if (!open) return;
+    fetch(`/api/capacity-forecast?pool=${pool}&weeks=12`, { credentials: 'include' })
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = await res.json();
+        const map = new Map<string, number>();
+        for (const w of data.weeks ?? []) {
+          const ws = new Date(w.weekStart);
+          const key = `${ws.getFullYear()}-W${String(getISOWeek(ws)).padStart(2, '0')}`;
+          map.set(key, w.softDemand ?? 0);
+        }
+        setWeeklyDemand(map);
+      })
+      .catch(() => {});
+  }, [open, pool]);
+
   const handleSelectSlot = async (slotId: string) => {
     if (posting) return;
     setSelectedSlotId(slotId);
@@ -103,6 +122,19 @@ export function SlotPickerModal({
       setPosting(false);
     }
   };
+
+  function getISOWeek(d: Date): number {
+    const date = new Date(d.valueOf());
+    date.setDate(date.getDate() + 3 - ((date.getDay() + 6) % 7));
+    const week1 = new Date(date.getFullYear(), 0, 4);
+    return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
+  }
+
+  function getDemandForDay(dayStr: string): number {
+    const d = new Date(dayStr);
+    const key = `${d.getFullYear()}-W${String(getISOWeek(d)).padStart(2, '0')}`;
+    return weeklyDemand.get(key) ?? 0;
+  }
 
   const groupedByDay = slots.reduce<Record<string, Slot[]>>((acc, slot) => {
     const d = slot.startTime.split('T')[0];
@@ -156,10 +188,18 @@ export function SlotPickerModal({
           )}
           {!loading && !slotError && dayKeys.length > 0 && (
             <div className="space-y-4">
-              {dayKeys.map((day) => (
+              {dayKeys.map((day) => {
+                const demand = getDemandForDay(day);
+                return (
                 <div key={day}>
-                  <div className="sticky top-0 bg-white py-2 font-medium text-gray-700 border-b">
-                    {new Date(day).toLocaleDateString('hu-HU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                  <div className="sticky top-0 bg-white py-2 font-medium text-gray-700 border-b flex items-center justify-between">
+                    <span>{new Date(day).toLocaleDateString('hu-HU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                    {demand > 0 && (
+                      <span className="flex items-center gap-1 text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full" title="Erre a hétre ennyi beteg demand projection-je esik">
+                        <Users className="w-3 h-3" />
+                        {demand} tervezett
+                      </span>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
                     {groupedByDay[day].map((slot) => {
@@ -184,7 +224,7 @@ export function SlotPickerModal({
                     })}
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
           )}
         </div>

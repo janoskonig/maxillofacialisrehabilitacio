@@ -5,20 +5,23 @@
  */
 
 import { getDbPool } from './db';
+import { computeStepWindow } from './step-window';
 
 export type PoolType = 'consult' | 'work' | 'control';
 
 export interface PathwayStep {
+  label?: string;
   step_code: string;
   pool: PoolType;
-  duration_minutes: number; // kötelező; fallback 30 ha hiányzik
-  default_days_offset: number; // kötelező; fallback 14 ha hiányzik
+  duration_minutes: number;
+  default_days_offset: number;
   requires_precommit?: boolean;
-  optional?: boolean; // későbbi fázis: kihagyható step
+  optional?: boolean;
 }
 
 export interface NextStepResult {
   step_code: string;
+  label?: string;
   pool: PoolType;
   duration_minutes: number;
   earliest_date: Date;
@@ -159,16 +162,14 @@ export async function nextRequiredStep(episodeId: string): Promise<NextRequiredS
     const consultStep = pathwaySteps.find((s) => s.pool === 'consult');
     if (consultStep) {
       const daysOffset = consultStep.default_days_offset ?? 7;
-      const earliest = new Date(anchorDate);
-      earliest.setDate(earliest.getDate() + Math.max(0, daysOffset - 7));
-      const latest = new Date(anchorDate);
-      latest.setDate(latest.getDate() + daysOffset + 14);
+      const { windowStart, windowEnd } = computeStepWindow(anchorDate, daysOffset);
       return {
         step_code: consultStep.step_code,
+        label: consultStep.label,
         pool: consultStep.pool,
         duration_minutes: consultStep.duration_minutes ?? 30,
-        earliest_date: earliest,
-        latest_date: latest,
+        earliest_date: windowStart,
+        latest_date: windowEnd,
         reason: 'First consultation',
         inputs_used: { stage: currentStage },
       };
@@ -177,18 +178,16 @@ export async function nextRequiredStep(episodeId: string): Promise<NextRequiredS
 
   const step = pathwaySteps[Math.min(nextStepIndex, pathwaySteps.length - 1)];
   const daysOffset = step.default_days_offset ?? 14;
-  const earliest = new Date(anchorDate);
-  earliest.setDate(earliest.getDate() + Math.max(0, daysOffset - 7));
-  const latest = new Date(anchorDate);
-  latest.setDate(latest.getDate() + daysOffset + 14);
+  const { windowStart, windowEnd } = computeStepWindow(anchorDate, daysOffset);
 
   return {
     step_code: step.step_code,
+    label: step.label,
     pool: step.pool,
     duration_minutes: step.duration_minutes ?? 30,
-    earliest_date: earliest,
-    latest_date: latest,
-    reason: `Pathway step ${step.step_code}`,
+    earliest_date: windowStart,
+    latest_date: windowEnd,
+    reason: `Pathway step ${step.label ?? step.step_code}`,
     anchor: anchorDate.toISOString(),
     inputs_used: {
       completed_count: completedStats.completedCount,

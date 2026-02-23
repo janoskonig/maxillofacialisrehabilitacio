@@ -7,6 +7,7 @@
  */
 
 import { getDbPool } from './db';
+import { emitSchedulingEvent } from './scheduling-events';
 
 export type InvalidationReason =
   | 'episode_closed'
@@ -28,7 +29,15 @@ export async function invalidateIntentsForEpisode(
      RETURNING id`,
     [episodeId]
   );
-  return r.rowCount ?? 0;
+  const count = r.rowCount ?? 0;
+  if (count > 0 && reason !== 'episode_closed') {
+    try {
+      await emitSchedulingEvent('episode', episodeId, 'REPROJECT_INTENTS');
+    } catch {
+      // Non-blocking
+    }
+  }
+  return count;
 }
 
 /**

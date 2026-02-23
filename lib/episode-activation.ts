@@ -6,6 +6,7 @@
 
 import { getDbPool } from './db';
 import type { PathwayStep } from './next-step-engine';
+import { computeStepWindow } from './step-window';
 
 /** Get pathway steps for episode (requires care_pathway_id) */
 async function getPathwaySteps(
@@ -85,10 +86,7 @@ export async function createInitialSlotIntentsForEpisode(episodeId: string): Pro
   for (const { step, stepSeq } of workSteps) {
     const offset = step.default_days_offset ?? 14;
     const duration = step.duration_minutes ?? 30;
-    const windowStart = new Date(anchor);
-    windowStart.setDate(windowStart.getDate() + Math.max(0, offset - 7));
-    const windowEnd = new Date(anchor);
-    windowEnd.setDate(windowEnd.getDate() + offset + 14);
+    const { windowStart, windowEnd } = computeStepWindow(anchor, offset);
 
     try {
       const result = await pool.query(

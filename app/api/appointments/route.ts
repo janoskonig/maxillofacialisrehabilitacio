@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { patientId, timeSlotId, cim, teremszam, appointmentType, episodeId, pool = 'work', overrideReason, stepCode, createdVia: createdViaParam } = body;
+    const { patientId, timeSlotId, cim, teremszam, appointmentType, episodeId, pool = 'work', overrideReason, stepCode, createdVia: createdViaParam, slotIntentId, stepSeq } = body;
     // Explicit boolean validation — reject truthy non-booleans (e.g. "true" string)
     // Body param can request precommit; pathway step definition can require it — use OR for effective value
     const bodyRequiresPrecommit = body.requiresPrecommit === true;
@@ -344,12 +344,37 @@ export async function POST(request: NextRequest) {
       // When usedOverride: must set requires_precommit=true to bypass UNIQUE(episode_id) WHERE requires_precommit=false
       const reqPrecommit = requiresPrecommit === true || usedOverride;
       const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
+
+      // Validate intent belongs to this episode if provided
+      const effectiveIntentId = typeof slotIntentId === 'string' ? slotIntentId : null;
+      const effectiveStepCode = typeof stepCode === 'string' ? stepCode : null;
+      const effectiveStepSeq = typeof stepSeq === 'number' ? stepSeq : null;
+
+      if (effectiveIntentId && episodeId) {
+        const intentCheck = await db.query(
+          `SELECT episode_id FROM slot_intents WHERE id = $1 AND state = 'open'`,
+          [effectiveIntentId]
+        );
+        if (intentCheck.rows.length === 0) {
+          await db.query('ROLLBACK');
+          return NextResponse.json({ error: 'Intent nem található vagy már nem open' }, { status: 400 });
+        }
+        if (intentCheck.rows[0].episode_id !== episodeId) {
+          await db.query('ROLLBACK');
+          return NextResponse.json(
+            { error: 'Intent episode_id nem egyezik az appointment episode_id-jával' },
+            { status: 400 }
+          );
+        }
+      }
+
       const appointmentResult = await db.query(
         `INSERT INTO appointments (
           patient_id, episode_id, time_slot_id, created_by, dentist_email, appointment_type,
-          pool, duration_minutes, no_show_risk, requires_confirmation, hold_expires_at, created_via, requires_precommit, start_time, end_time
+          pool, duration_minutes, no_show_risk, requires_confirmation, hold_expires_at, created_via, requires_precommit, start_time, end_time,
+          slot_intent_id, step_code, step_seq
         )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
          ON CONFLICT (time_slot_id) 
          DO UPDATE SET
            patient_id = EXCLUDED.patient_id,
@@ -366,6 +391,9 @@ export async function POST(request: NextRequest) {
            requires_precommit = EXCLUDED.requires_precommit,
            start_time = EXCLUDED.start_time,
            end_time = EXCLUDED.end_time,
+           slot_intent_id = EXCLUDED.slot_intent_id,
+           step_code = EXCLUDED.step_code,
+           step_seq = EXCLUDED.step_seq,
            appointment_status = NULL,
            completion_notes = NULL,
            google_calendar_event_id = NULL,
@@ -387,8 +415,16 @@ export async function POST(request: NextRequest) {
            appointment_type as "appointmentType",
            pool,
            duration_minutes as "durationMinutes"`,
-        [patientId, episodeId || null, timeSlotId, auth.email, timeSlot.dentist_email, appointmentType || null, poolValue, durationMinutes, noShowRisk, requiresConfirmation, holdExpiresAt, usedOverride ? (auth.role === 'admin' ? 'admin_override' : 'surgeon_override') : createdVia, reqPrecommit, startTime, endTime]
+        [patientId, episodeId || null, timeSlotId, auth.email, timeSlot.dentist_email, appointmentType || null, poolValue, durationMinutes, noShowRisk, requiresConfirmation, holdExpiresAt, usedOverride ? (auth.role === 'admin' ? 'admin_override' : 'surgeon_override') : createdVia, reqPrecommit, startTime, endTime, effectiveIntentId, effectiveStepCode, effectiveStepSeq]
       );
+
+      // Convert intent state if we're linking an intent
+      if (effectiveIntentId) {
+        await db.query(
+          `UPDATE slot_intents SET state = 'converted', updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND state = 'open'`,
+          [effectiveIntentId]
+        );
+      }
 
       const appointment = appointmentResult.rows[0];
       if (!appointment) {
@@ -438,6 +474,10 @@ export async function POST(request: NextRequest) {
       if (episodeId) {
         try {
           await emitSchedulingEvent('appointment', appointment.id, 'created');
+          // Ad hoc booking (no intent): emit REPROJECT so projector expires the open intent for this step
+          if (!effectiveIntentId) {
+            await emitSchedulingEvent('episode', episodeId, 'REPROJECT_INTENTS');
+          }
         } catch {
           // Non-blocking
         }

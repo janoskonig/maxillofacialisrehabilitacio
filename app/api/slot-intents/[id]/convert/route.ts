@@ -85,6 +85,16 @@ export async function POST(
         requiresPrecommit = step?.requires_precommit === true;
       }
 
+      // Assert: intent belongs to the episode it claims (app-level guard)
+      const episodeCheck = await pool.query(
+        `SELECT id FROM patient_episodes WHERE id = $1`,
+        [intent.episode_id]
+      );
+      if (episodeCheck.rows.length === 0) {
+        await pool.query('ROLLBACK');
+        return NextResponse.json({ error: 'Intent episode_id nem található' }, { status: 400 });
+      }
+
       const oneHardNext = await checkOneHardNext(intent.episode_id, intent.pool as 'work' | 'consult' | 'control', {
         requiresPrecommit,
         stepCode: intent.step_code,
@@ -171,9 +181,11 @@ export async function POST(
       const apptResult = await pool.query(
         `INSERT INTO appointments (
           patient_id, episode_id, time_slot_id, created_by, dentist_email, appointment_type,
-          pool, duration_minutes, no_show_risk, requires_confirmation, hold_expires_at, created_via, requires_precommit, start_time, end_time
+          pool, duration_minutes, no_show_risk, requires_confirmation, hold_expires_at, created_via, requires_precommit, start_time, end_time,
+          slot_intent_id, step_code, step_seq
         )
-        SELECT $1, $2, $3, $4, u.email, $5, $6, $7, $8, $9, $10, 'worklist', $11, $12, $13
+        SELECT $1, $2, $3, $4, u.email, $5, $6, $7, $8, $9, $10, 'worklist', $11, $12, $13,
+               $14, $15, $16
         FROM available_time_slots ats
         JOIN users u ON ats.user_id = u.id
         WHERE ats.id = $3
@@ -193,6 +205,9 @@ export async function POST(
           requiresPrecommit,
           startTime,
           new Date(startTime.getTime() + durationMinutes * 60 * 1000),
+          intentId,
+          intent.step_code,
+          intent.step_seq,
         ]
       );
 

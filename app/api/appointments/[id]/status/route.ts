@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { handleApiError } from '@/lib/api-error-handler';
+import { emitSchedulingEvent } from '@/lib/scheduling-events';
 
 // Update appointment status
 export const dynamic = 'force-dynamic';
@@ -160,7 +161,45 @@ export async function PATCH(
         }
       }
 
+      // Revert converted intent when cancelling/no_show so projector can reopen it
+      const isCancelOrNoShow = appointmentStatus !== undefined &&
+        ['cancelled_by_doctor', 'cancelled_by_patient', 'no_show'].includes(appointmentStatus);
+
+      if (isCancelOrNoShow) {
+        await pool.query(
+          `UPDATE slot_intents si
+           SET state = 'expired', updated_at = CURRENT_TIMESTAMP
+           FROM appointments a
+           WHERE a.id = $1
+             AND a.slot_intent_id = si.id
+             AND si.state = 'converted'`,
+          [appointmentId]
+        );
+
+        const epRow = await pool.query(
+          'SELECT episode_id FROM appointments WHERE id = $1',
+          [appointmentId]
+        );
+        const episodeId = epRow.rows[0]?.episode_id;
+        if (episodeId) {
+          await pool.query(
+            `INSERT INTO scheduling_events (entity_type, entity_id, event_type) VALUES ('episode', $1, 'REPROJECT_INTENTS')`,
+            [episodeId]
+          );
+        }
+      }
+
       await pool.query('COMMIT');
+
+      // Post-commit: emit scheduling event for cache refresh (non-blocking)
+      if (appointmentStatus !== undefined) {
+        try {
+          await emitSchedulingEvent('appointment', appointmentId, 'status_changed');
+        } catch {
+          // Non-blocking
+        }
+      }
+
       return NextResponse.json({ 
         appointment
       }, { status: 200 });
