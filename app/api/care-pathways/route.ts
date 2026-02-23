@@ -56,6 +56,18 @@ export async function POST(request: NextRequest) {
       [pathway.id, changedBy, JSON.stringify({ auditReason: data.auditReason })]
     );
 
+    const stepsToUpsert = (data.stepsJson ?? []).filter(
+      (s: { step_code: string; label?: string }) => s.step_code && s.label
+    );
+    for (const s of stepsToUpsert) {
+      await pool.query(
+        `INSERT INTO step_catalog (step_code, label_hu)
+         VALUES ($1, $2)
+         ON CONFLICT (step_code) DO UPDATE SET label_hu = EXCLUDED.label_hu, updated_at = now()`,
+        [s.step_code, s.label]
+      );
+    }
+
     invalidateStepLabelCache();
     invalidateUnmappedCache();
 
@@ -94,7 +106,7 @@ export async function GET(request: NextRequest) {
     const pathwaysResult = await pool.query(
       `SELECT cp.id, cp.name, cp.reason, cp.treatment_type_id as "treatmentTypeId",
               tt.code as "treatmentTypeCode",
-              cp.steps_json, cp.version, cp.priority,
+              cp.steps_json as "stepsJson", cp.version, cp.priority,
               cp.owner_id as "ownerId",
               u.doktor_neve as "ownerName",
               cp.created_at as "createdAt", cp.updated_at as "updatedAt"

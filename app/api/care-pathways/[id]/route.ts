@@ -275,6 +275,20 @@ export async function PATCH(
       [pathwayId, changedBy, 'pathway_updated', JSON.stringify({ ...changes, auditReason: data.auditReason })]
     );
 
+    if (data.stepsJson) {
+      const stepsToUpsert = data.stepsJson.filter(
+        (s: { step_code: string; label?: string }) => s.step_code && s.label
+      );
+      for (const s of stepsToUpsert) {
+        await pool.query(
+          `INSERT INTO step_catalog (step_code, label_hu)
+           VALUES ($1, $2)
+           ON CONFLICT (step_code) DO UPDATE SET label_hu = EXCLUDED.label_hu, updated_at = now()`,
+          [s.step_code, s.label]
+        );
+      }
+    }
+
     invalidateStepLabelCache();
     invalidateUnmappedCache();
 

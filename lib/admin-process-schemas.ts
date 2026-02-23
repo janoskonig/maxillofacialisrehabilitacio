@@ -17,13 +17,21 @@ export function canonicalizeStepCode(raw: string): string {
     .replace(/[^a-z0-9_]/g, '');
 }
 
-/** Pathway step schema — used in steps_json */
+/** Slugify a Hungarian label into a step_code-safe string */
+export function slugifyLabel(label: string): string {
+  return label
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '');
+}
+
+/** Pathway step schema — used in steps_json. label is the user-facing name; step_code is auto-generated. */
 export const pathwayStepSchema = z.object({
-  step_code: z
-    .string()
-    .min(1, 'step_code kötelező')
-    .transform(canonicalizeStepCode)
-    .refine((v) => STEP_CODE_REGEX.test(v), 'step_code csak a-z, 0-9, _ lehet'),
+  label: z.string().min(1, 'Lépés neve kötelező').max(255),
+  step_code: z.string().optional(),
   pool: z.enum(POOL_VALUES),
   duration_minutes: z.number().int().min(5, 'duration_minutes minimum 5'),
   default_days_offset: z.number().int().min(0).nullable().optional(),
@@ -33,15 +41,17 @@ export const pathwayStepSchema = z.object({
 
 export type PathwayStepInput = z.infer<typeof pathwayStepSchema>;
 
-/** steps_json array — enforces step_code uniqueness within pathway */
+/**
+ * steps_json array with auto-generated step_codes from labels.
+ * step_code = slugify(label) + "_" + arrayIndex — guaranteed unique.
+ */
 export const stepsJsonSchema = z
   .array(pathwayStepSchema)
-  .refine(
-    (steps) => {
-      const codes = steps.map((s) => s.step_code);
-      return new Set(codes).size === codes.length;
-    },
-    { message: 'Duplikált step_code egy pathway-n belül nem megengedett' }
+  .transform((steps) =>
+    steps.map((s, idx) => ({
+      ...s,
+      step_code: `${slugifyLabel(s.label)}_${idx}`,
+    }))
   );
 
 const REASON_VALUES = [

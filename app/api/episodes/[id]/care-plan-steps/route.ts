@@ -9,6 +9,7 @@ export const dynamic = 'force-dynamic';
 type PoolType = 'consult' | 'work' | 'control';
 
 interface PathwayStepRaw {
+  label?: string;
   step_code: string;
   pool: PoolType;
   duration_minutes?: number;
@@ -95,7 +96,7 @@ export async function GET(
         stepCode: s.step_code,
         pool: poolVal,
         orderIndex: idx,
-        labelHu: labelMap.get(s.step_code) ?? s.step_code,
+        labelHu: s.label ?? labelMap.get(s.step_code) ?? s.step_code,
         isProstheticPhase: poolVal === 'work',
       };
     });

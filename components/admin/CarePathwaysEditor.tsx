@@ -1,13 +1,15 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
 const REASONS = ['traumás sérülés', 'veleszületett rendellenesség', 'onkológiai kezelés utáni állapot'] as const;
 const POOLS = ['consult', 'work', 'control'] as const;
+const POOL_LABELS: Record<string, string> = { consult: 'Konzultáció', work: 'Munka', control: 'Kontroll' };
 
 type PathwayStep = {
-  step_code: string;
+  label: string;
+  step_code?: string;
   pool: string;
   duration_minutes: number;
   default_days_offset?: number | null;
@@ -30,10 +32,78 @@ type CarePathwaysEditorProps = {
   onEditPathwayIdClear?: () => void;
 };
 
+function StepLabelInput({
+  value,
+  onChange,
+  suggestions,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  suggestions: string[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [filter, setFilter] = useState('');
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  const filtered = suggestions.filter(
+    (s) => s.toLowerCase().includes((filter || value).toLowerCase()) && s !== value
+  );
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={wrapperRef} className="relative flex-1 min-w-0">
+      <input
+        type="text"
+        placeholder="Lépés neve"
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setFilter(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => {
+          setFilter('');
+          setOpen(true);
+        }}
+        className="form-input text-sm w-full"
+      />
+      {open && filtered.length > 0 && (
+        <ul className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded shadow-lg max-h-48 overflow-y-auto">
+          {filtered.slice(0, 15).map((s) => (
+            <li key={s}>
+              <button
+                type="button"
+                className="w-full text-left px-3 py-1.5 text-sm hover:bg-blue-50 hover:text-blue-800"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onChange(s);
+                  setOpen(false);
+                }}
+              >
+                {s}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: CarePathwaysEditorProps = {}) {
   const router = useRouter();
   const [pathways, setPathways] = useState<Pathway[]>([]);
   const [treatmentTypes, setTreatmentTypes] = useState<TreatmentType[]>([]);
+  const [labelSuggestions, setLabelSuggestions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -52,14 +122,19 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
     setLoading(true);
     setError(null);
     try {
-      const [pwRes, ttRes] = await Promise.all([
+      const [pwRes, ttRes, sugRes] = await Promise.all([
         fetch('/api/care-pathways', { credentials: 'include' }),
         fetch('/api/treatment-types', { credentials: 'include' }),
+        fetch('/api/step-labels/suggestions', { credentials: 'include' }),
       ]);
       if (!pwRes.ok) throw new Error('Betöltési hiba');
       if (ttRes.ok) {
         const ttData = await ttRes.json();
         setTreatmentTypes((ttData.treatmentTypes ?? []).sort((a: TreatmentType, b: TreatmentType) => a.labelHu.localeCompare(b.labelHu)));
+      }
+      if (sugRes.ok) {
+        const sugData = await sugRes.json();
+        setLabelSuggestions(sugData.labels ?? []);
       }
       const pwData = await pwRes.json();
       setPathways(pwData.pathways ?? []);
@@ -92,11 +167,9 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
   };
 
   const addStep = () => {
-    const tt = formTreatmentTypeId ? treatmentTypes.find((t) => t.id === formTreatmentTypeId) : null;
-    const defaultStepCode = tt?.code ? `${tt.code}_` : 'new_step';
     setFormSteps((prev) => [
       ...prev,
-      { step_code: defaultStepCode, pool: 'work', duration_minutes: 30, default_days_offset: 14 },
+      { label: '', pool: 'work', duration_minutes: 30, default_days_offset: 14 },
     ]);
   };
 
@@ -112,15 +185,32 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
     });
   };
 
+  const stepToLabel = (step: PathwayStep): string => {
+    return step.label || step.step_code || '';
+  };
+
   const handleEdit = (p: Pathway) => {
     setEditingId(p.id);
     setFormName(p.name);
     setFormReason(p.reason);
     setFormTreatmentTypeId(p.treatmentTypeId);
-    setFormSteps(Array.isArray(p.stepsJson) ? [...p.stepsJson] : []);
+    const steps: PathwayStep[] = Array.isArray(p.stepsJson) ? p.stepsJson.map((s) => ({
+      ...s,
+      label: s.label || '',
+    })) : [];
+    setFormSteps(steps);
     setFormUpdatedAt((p as { updatedAt?: string }).updatedAt ?? null);
     setAuditReason('');
   };
+
+  const buildStepsPayload = () =>
+    formSteps.map((s) => ({
+      label: s.label.trim(),
+      pool: s.pool,
+      duration_minutes: Math.max(5, Number(s.duration_minutes) || 30),
+      default_days_offset: s.default_days_offset != null ? Number(s.default_days_offset) : null,
+      requires_precommit: s.requires_precommit || false,
+    }));
 
   const handleSaveEdit = async () => {
     if (!editingId || !auditReason.trim()) return;
@@ -135,12 +225,7 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
     try {
       const body: Record<string, unknown> = {
         name: formName.trim(),
-        stepsJson: formSteps.map((s) => ({
-          ...s,
-          step_code: String(s.step_code).trim().toLowerCase().replace(/\s+/g, '_'),
-          duration_minutes: Math.max(5, Number(s.duration_minutes) || 30),
-          default_days_offset: s.default_days_offset != null ? Number(s.default_days_offset) : null,
-        })),
+        stepsJson: buildStepsPayload(),
         auditReason: auditReason.trim(),
       };
       if (reason) body.reason = reason;
@@ -223,12 +308,7 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
     try {
       const body: Record<string, unknown> = {
         name: formName.trim(),
-        stepsJson: formSteps.map((s) => ({
-          ...s,
-          step_code: String(s.step_code).trim().toLowerCase().replace(/\s+/g, '_'),
-          duration_minutes: Math.max(5, Number(s.duration_minutes) || 30),
-          default_days_offset: s.default_days_offset != null ? Number(s.default_days_offset) : null,
-        })),
+        stepsJson: buildStepsPayload(),
         auditReason: createAuditReason.trim(),
       };
       if (reason) body.reason = reason;
@@ -266,8 +346,8 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
     setFormReason('onkológiai kezelés utáni állapot');
     setFormTreatmentTypeId(null);
     setFormSteps([
-      { step_code: 'consult_1', pool: 'consult', duration_minutes: 30, default_days_offset: 0 },
-      { step_code: 'work_1', pool: 'work', duration_minutes: 45, default_days_offset: 14 },
+      { label: 'Első konzultáció', pool: 'consult', duration_minutes: 30, default_days_offset: 0 },
+      { label: 'Lenyomat', pool: 'work', duration_minutes: 45, default_days_offset: 14 },
     ]);
     setCreateAuditReason('');
     setError(null);
@@ -303,7 +383,11 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
                 <td className="px-4 py-2 text-sm text-gray-600">
                   {p.reason ?? (treatmentTypes.find((t) => t.id === p.treatmentTypeId)?.labelHu ?? p.treatmentTypeId ?? '—')}
                 </td>
-                <td className="px-4 py-2 text-sm">{(p.stepsJson ?? []).length}</td>
+                <td className="px-4 py-2 text-sm">
+                  <span title={(p.stepsJson ?? []).map((s, i) => `${i + 1}. ${stepToLabel(s)}`).join('\n')}>
+                    {(p.stepsJson ?? []).length}
+                  </span>
+                </td>
                 <td className="px-4 py-2 text-sm">{p.governance?.episodeCount ?? 0}</td>
                 <td className="px-4 py-2">
                   {editingId === p.id ? null : (
@@ -382,7 +466,7 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
 
           <div>
             <div className="flex justify-between items-center mb-2">
-              <label className="block text-sm font-medium text-gray-700">Munkafázisok (steps)</label>
+              <label className="block text-sm font-medium text-gray-700">Klinikai lépések</label>
               <button
                 onClick={addStep}
                 className="px-2 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
@@ -390,23 +474,37 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
                 + Lépés
               </button>
             </div>
-            <div className="space-y-2 max-h-64 overflow-y-auto">
+
+            <div className="space-y-1 mb-1">
+              <div className="flex gap-2 items-center px-2 text-xs text-gray-500 font-medium">
+                <span className="w-6 text-center">#</span>
+                <span className="flex-1 min-w-0">Lépés neve</span>
+                <span className="w-28 text-center">Típus</span>
+                <span className="w-16 text-center">Perc</span>
+                <span className="w-20 text-center">Nap</span>
+                <span className="w-20">Precommit</span>
+                <span className="w-20"></span>
+              </div>
+            </div>
+
+            <div className="space-y-2 max-h-96 overflow-y-auto">
               {formSteps.map((step, idx) => (
-                <div key={idx} className="flex gap-2 items-center flex-wrap p-2 bg-white rounded border">
-                  <input
-                    type="text"
-                    placeholder="step_code"
-                    value={step.step_code}
-                    onChange={(e) => updateStep(idx, 'step_code', e.target.value)}
-                    className="form-input text-sm w-28 font-mono"
+                <div key={idx} className="flex gap-2 items-center p-2 bg-white rounded border">
+                  <span className="w-6 text-center text-xs text-gray-400 font-mono shrink-0">
+                    {idx + 1}
+                  </span>
+                  <StepLabelInput
+                    value={step.label}
+                    onChange={(v) => updateStep(idx, 'label', v)}
+                    suggestions={labelSuggestions}
                   />
                   <select
                     value={step.pool}
                     onChange={(e) => updateStep(idx, 'pool', e.target.value)}
-                    className="form-input text-sm w-24"
+                    className="form-input text-sm w-28 shrink-0"
                   >
                     {POOLS.map((pool) => (
-                      <option key={pool} value={pool}>{pool}</option>
+                      <option key={pool} value={pool}>{POOL_LABELS[pool]}</option>
                     ))}
                   </select>
                   <input
@@ -414,28 +512,31 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
                     placeholder="perc"
                     value={step.duration_minutes}
                     onChange={(e) => updateStep(idx, 'duration_minutes', parseInt(e.target.value, 10) || 30)}
-                    className="form-input text-sm w-16"
+                    className="form-input text-sm w-16 shrink-0"
+                    title="Időtartam (perc)"
                   />
                   <input
                     type="number"
-                    placeholder="nap offset"
+                    placeholder="nap"
                     value={step.default_days_offset ?? ''}
                     onChange={(e) => updateStep(idx, 'default_days_offset', e.target.value ? parseInt(e.target.value, 10) : null)}
-                    className="form-input text-sm w-20"
+                    className="form-input text-sm w-20 shrink-0"
+                    title="Napok az előző lépés után"
                   />
-                  <label className="flex items-center gap-1 text-sm">
+                  <label className="flex items-center gap-1 text-sm shrink-0 w-20">
                     <input
                       type="checkbox"
                       checked={!!step.requires_precommit}
                       onChange={(e) => updateStep(idx, 'requires_precommit', e.target.checked)}
                     />
-                    precommit
+                    <span className="text-xs">precommit</span>
                   </label>
-                  <div className="flex gap-1">
+                  <div className="flex gap-1 shrink-0">
                     <button
                       onClick={() => moveStep(idx, 'up')}
                       disabled={idx === 0}
                       className="px-1 py-0.5 bg-gray-400 text-white rounded text-xs disabled:opacity-50"
+                      title="Fel"
                     >
                       ↑
                     </button>
@@ -443,18 +544,25 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
                       onClick={() => moveStep(idx, 'down')}
                       disabled={idx === formSteps.length - 1}
                       className="px-1 py-0.5 bg-gray-400 text-white rounded text-xs disabled:opacity-50"
+                      title="Le"
                     >
                       ↓
                     </button>
                     <button
                       onClick={() => removeStep(idx)}
                       className="px-1 py-0.5 bg-red-500 text-white rounded text-xs"
+                      title="Törlés"
                     >
                       ×
                     </button>
                   </div>
                 </div>
               ))}
+              {formSteps.length === 0 && (
+                <p className="text-sm text-gray-400 italic px-2 py-4 text-center">
+                  Nincs lépés. Kattintson a &quot;+ Lépés&quot; gombra.
+                </p>
+              )}
             </div>
           </div>
 

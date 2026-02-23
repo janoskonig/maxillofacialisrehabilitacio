@@ -34,7 +34,7 @@ export function WorklistWidget() {
     overrideHint?: string;
     expectedHardNext?: { stepCode: string; earliestStart: string; latestStart: string; durationMinutes: number };
     existingAppointment?: { id: string; startTime: string; providerName?: string };
-    retryData: { patientId: string; episodeId?: string; slotId: string; pool: string; durationMinutes: number; nextStep: string };
+    retryData: { patientId: string; episodeId?: string; slotId: string; pool: string; durationMinutes: number; nextStep: string; stepCode?: string };
   } | null>(null);
 
   const fetchWorklist = useCallback(async () => {
@@ -122,7 +122,7 @@ export function WorklistWidget() {
         timeSlotId: slotId,
         pool: item.pool || 'work',
         requiresPrecommit: false,
-        stepCode: item.nextStep,
+        stepCode: item.stepCode ?? item.nextStep,
         overrideReason: overrideReason || undefined,
         createdVia: 'worklist',
       }),
@@ -168,7 +168,7 @@ export function WorklistWidget() {
 
   const handleSelectSlot = async (slotId: string) => {
     if (!slotPickerItem) return;
-    const { patientId, episodeId, pool, durationMinutes, nextStep } = slotPickerItem;
+    const { patientId, episodeId, pool, durationMinutes, nextStep, stepCode: itemStepCode } = slotPickerItem;
     const windowStart = slotPickerItem.windowStart ? new Date(slotPickerItem.windowStart) : new Date();
     const windowEnd = slotPickerItem.windowEnd ? new Date(slotPickerItem.windowEnd) : new Date();
 
@@ -189,7 +189,7 @@ export function WorklistWidget() {
           timeSlotId: slotId,
           pool: pool || 'work',
           requiresPrecommit: false,
-          stepCode: nextStep,
+          stepCode: itemStepCode ?? nextStep,
           createdVia: 'worklist',
         }),
       });
@@ -227,6 +227,7 @@ export function WorklistWidget() {
             pool: slotPickerItem.pool || 'work',
             durationMinutes: slotPickerItem.durationMinutes || 30,
             nextStep: slotPickerItem.nextStep,
+            stepCode: slotPickerItem.stepCode,
           },
         });
         return;
@@ -268,7 +269,7 @@ export function WorklistWidget() {
           pool: retryData.pool,
           overrideReason,
           requiresPrecommit: false,
-          stepCode: retryData.nextStep,
+          stepCode: retryData.stepCode ?? retryData.nextStep,
           createdVia: 'worklist',
         }),
       });

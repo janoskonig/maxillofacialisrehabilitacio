@@ -47,6 +47,7 @@ export interface WorklistItemBackend {
   patientName?: string;
   currentStage: string;
   nextStep: string;
+  stepLabel?: string;
   stepCode?: string;
   overdueByDays: number;
   windowStart: string | null;
