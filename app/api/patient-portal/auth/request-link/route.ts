@@ -68,12 +68,12 @@ export async function POST(request: NextRequest) {
 
     const pool = getDbPool();
 
-    // Find patient by email and TAJ
+    // Find patient by TAJ only (one profile per TAJ; email may vary)
     const patientResult = await pool.query(
       `SELECT id, email, nev, taj 
        FROM patients 
-       WHERE LOWER(email) = LOWER($1) AND REPLACE(REPLACE(taj, '-', ''), ' ', '') = $2`,
-      [email.trim(), cleanTaj]
+       WHERE REPLACE(REPLACE(taj, '-', ''), ' ', '') = $1`,
+      [cleanTaj]
     );
 
     let patientId: string;
@@ -148,14 +148,20 @@ export async function POST(request: NextRequest) {
       const insertResult = await pool.query(insertQuery, insertValues);
       patientId = insertResult.rows[0].id;
     } else {
-      // Patient exists - update with provided data if any
+      // Patient exists (found by TAJ) - use existing profile
       patientId = patientResult.rows[0].id;
-      
-      // Update patient data if provided
+      const existingEmail = (patientResult.rows[0].email || '').trim();
+
+      // Update patient data if provided (including email so magic link can be sent to the address they entered)
       const updateFields: string[] = [];
       const updateValues: any[] = [];
       let paramIndex = 1;
 
+      if (email.trim() && email.trim().toLowerCase() !== existingEmail.toLowerCase()) {
+        updateFields.push(`email = $${paramIndex}`);
+        updateValues.push(email.trim());
+        paramIndex++;
+      }
       if (nev && nev.trim()) {
         updateFields.push(`nev = $${paramIndex}`);
         updateValues.push(nev.trim());
@@ -218,7 +224,7 @@ export async function POST(request: NextRequest) {
     // Create magic link token
     const token = await createMagicLinkToken(patientId, ipAddress);
 
-    // Get patient info for email
+    // Get patient name for email (send to the email the user entered so they receive the link there)
     const patientInfo = await getPatientEmailInfo(patientId);
     if (!patientInfo) {
       return NextResponse.json(
@@ -238,8 +244,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Send magic link email
-    await sendPatientMagicLink(patientInfo.email, patientInfo.name, token, baseUrl);
+    // Send magic link to the email the user entered (so they receive it at that address)
+    await sendPatientMagicLink(email.trim(), patientInfo.name, token, baseUrl);
 
     return NextResponse.json({
       success: true,

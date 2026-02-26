@@ -76,28 +76,19 @@ export async function POST(request: NextRequest) {
 
     const pool = getDbPool();
 
-    // Check if patient already exists
-    const existingPatientResult = await pool.query(
+    // Check if patient already exists by TAJ only (one profile per TAJ)
+    const existingByTajResult = await pool.query(
       `SELECT id, email, taj 
        FROM patients 
-       WHERE LOWER(email) = LOWER($1) OR REPLACE(REPLACE(taj, '-', ''), ' ', '') = $2`,
-      [email.trim(), cleanTaj]
+       WHERE REPLACE(REPLACE(taj, '-', ''), ' ', '') = $1`,
+      [cleanTaj]
     );
 
-    if (existingPatientResult.rows.length > 0) {
-      const existing = existingPatientResult.rows[0];
-      if (existing.email && existing.email.toLowerCase() === email.trim().toLowerCase()) {
-        return NextResponse.json(
-          { error: 'Ez az email cím már regisztrálva van. Használja a bejelentkezési oldalt.' },
-          { status: 409 }
-        );
-      }
-      if (existing.taj && existing.taj.replace(/[-\s]/g, '') === cleanTaj) {
-        return NextResponse.json(
-          { error: 'Ez a TAJ szám már regisztrálva van.' },
-          { status: 409 }
-        );
-      }
+    if (existingByTajResult.rows.length > 0) {
+      return NextResponse.json(
+        { error: 'Ez a TAJ szám már regisztrálva van. Használja a bejelentkezési oldalt.' },
+        { status: 409 }
+      );
     }
 
     // Format TAJ with dashes for storage

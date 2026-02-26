@@ -41,12 +41,12 @@ export async function POST(request: NextRequest) {
 
     const pool = getDbPool();
 
-    // Find patient by email and TAJ
+    // Find patient by TAJ only (one profile per TAJ; email may vary)
     const patientResult = await pool.query(
       `SELECT id, email, nev, taj 
        FROM patients 
-       WHERE LOWER(email) = LOWER($1) AND REPLACE(REPLACE(taj, '-', ''), ' ', '') = $2`,
-      [email.trim(), cleanTaj]
+       WHERE REPLACE(REPLACE(taj, '-', ''), ' ', '') = $1`,
+      [cleanTaj]
     );
 
     return NextResponse.json({
