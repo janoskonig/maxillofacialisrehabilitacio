@@ -39,7 +39,9 @@ export async function GET(request: NextRequest) {
 
     const db = getDbPool();
 
-    let whereClause = `WHERE ats.state = 'free' AND ats.start_time > CURRENT_TIMESTAMP`;
+    // Csak manuálisan kiírt szabad slotok (ne a Google Calendar-ból szinkronizáltak)
+    let whereClause = `WHERE ats.state = 'free' AND ats.start_time > CURRENT_TIMESTAMP
+       AND (ats.source = 'manual' OR ats.source IS NULL)`;
     const params: unknown[] = [];
     let paramIndex = 1;
 

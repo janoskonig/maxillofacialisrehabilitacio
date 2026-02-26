@@ -65,13 +65,13 @@ export function formatRelDateTime(date: Date | string, now: Date = new Date()): 
 }
 
 /**
- * Rövid dátum: 02.12–02.19 (window display).
+ * Rövid dátumtartomány: 02.14–03.07 (MM.DD) mindenhol.
  */
 export function formatShortDateRange(startISO: string, endISO: string): string {
   const s = startISO.split('T')[0];
   const e = endISO.split('T')[0];
   if (!s || !e) return '';
-  const [sy, sm, sd] = s.split('-');
-  const [ey, em, ed] = e.split('-');
-  return `${sd}.${sm}–${ed}.${em}`;
+  const [, sm, sd] = s.split('-');
+  const [, em, ed] = e.split('-');
+  return `${sm}.${sd}–${em}.${ed}`;
 }

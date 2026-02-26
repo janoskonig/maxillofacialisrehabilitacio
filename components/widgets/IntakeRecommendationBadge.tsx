@@ -17,21 +17,21 @@ interface IntakeData {
 
 const BADGE_CONFIG = {
   GO: {
-    label: 'Új konzultáció most?',
+    label: 'Fogadhatsz új beteget?',
     sublabel: 'Igen',
     bgClass: 'bg-green-100 text-green-800 border-green-200',
     icon: CheckCircle,
     iconClass: 'text-green-600',
   },
   CAUTION: {
-    label: 'Új konzultáció most?',
+    label: 'Fogadhatsz új beteget?',
     sublabel: 'Óvatosan',
     bgClass: 'bg-amber-100 text-amber-800 border-amber-200',
     icon: AlertTriangle,
     iconClass: 'text-amber-600',
   },
   STOP: {
-    label: 'Új konzultáció most?',
+    label: 'Fogadhatsz új beteget?',
     sublabel: 'Nem ajánlott',
     bgClass: 'bg-red-100 text-red-800 border-red-200',
     icon: XCircle,

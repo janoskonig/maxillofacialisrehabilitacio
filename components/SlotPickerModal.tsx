@@ -1,8 +1,15 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Calendar, Clock, Users } from 'lucide-react';
+import { X, Calendar, Clock, Users, Plus } from 'lucide-react';
 import { toBudapestStartOfDayISO } from '@/lib/datetime';
+
+interface Doctor {
+  id: string;
+  email: string;
+  name: string;
+  intezmeny?: string | null;
+}
 
 interface Slot {
   id: string;
@@ -49,6 +56,14 @@ export function SlotPickerModal({
   const [posting, setPosting] = useState(false);
   const slotsRef = useRef<HTMLDivElement>(null);
   const [weeklyDemand, setWeeklyDemand] = useState<Map<string, number>>(new Map());
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [selectedProviderId, setSelectedProviderId] = useState<string | undefined>(undefined);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [createDate, setCreateDate] = useState('');
+  const [createTime, setCreateTime] = useState('09:00');
+  const [createProviderId, setCreateProviderId] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   const windowStartISO = toBudapestStartOfDayISO(windowStart);
   const windowEndISO = toBudapestStartOfDayISO(windowEnd);
@@ -65,7 +80,8 @@ export function SlotPickerModal({
         windowEnd: windowEnd.toISOString(),
         limit: '50',
       });
-      if (providerId) params.set('providerId', providerId);
+      const effectiveProviderId = selectedProviderId ?? providerId;
+      if (effectiveProviderId) params.set('providerId', effectiveProviderId);
       const res = await fetch(`/api/worklists/slots-for-booking?${params}`, { credentials: 'include' });
       const data = await res.json();
       if (!res.ok) {
@@ -81,7 +97,30 @@ export function SlotPickerModal({
     } finally {
       setLoading(false);
     }
-  }, [open, pool, durationMinutes, windowStart, windowEnd, providerId]);
+  }, [open, pool, durationMinutes, windowStart, windowEnd, providerId, selectedProviderId]);
+
+  useEffect(() => {
+    if (open) {
+      setSelectedProviderId(providerId ?? undefined);
+      setCreateDate(windowStartISO.slice(0, 10));
+      setCreateProviderId(providerId ?? '');
+    }
+  }, [open, providerId, windowStartISO]);
+
+  useEffect(() => {
+    if (open && doctors.length > 0 && !createProviderId) setCreateProviderId(doctors[0].id);
+  }, [open, doctors, createProviderId]);
+
+  useEffect(() => {
+    if (!open) return;
+    fetch('/api/users/doctors?forSlotPicker=1', { credentials: 'include' })
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = await res.json();
+        setDoctors(data.doctors ?? []);
+      })
+      .catch(() => {});
+  }, [open]);
 
   useEffect(() => {
     if (open) {
@@ -123,6 +162,45 @@ export function SlotPickerModal({
     }
   };
 
+  const handleCreateAndBook = async () => {
+    if (!createDate || !createTime || !createProviderId || creating) return;
+    const startTime = new Date(`${createDate}T${createTime}:00`);
+    if (startTime <= new Date()) {
+      setCreateError('Csak jövőbeli időpont adható meg.');
+      return;
+    }
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const res = await fetch('/api/time-slots', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          startTime: startTime.toISOString(),
+          userId: createProviderId,
+          slotPurpose: pool,
+          durationMinutes,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setCreateError(data.error ?? 'Hiba történt');
+        return;
+      }
+      const newSlotId = data.timeSlot?.id;
+      if (!newSlotId) {
+        setCreateError('Hiba: nincs slot id a válaszban');
+        return;
+      }
+      await handleSelectSlot(newSlotId);
+    } catch (e) {
+      setCreateError(e instanceof Error ? e.message : 'Hálózati hiba');
+    } finally {
+      setCreating(false);
+    }
+  };
+
   function getISOWeek(d: Date): number {
     const date = new Date(d.valueOf());
     date.setDate(date.getDate() + 3 - ((date.getDay() + 6) % 7));
@@ -158,13 +236,28 @@ export function SlotPickerModal({
           </button>
         </div>
 
-        <div className="flex flex-wrap gap-2 p-4 border-b bg-gray-50">
+        <div className="flex flex-wrap gap-2 p-4 border-b bg-gray-50 items-center">
           <span className="px-2 py-1 rounded text-xs font-medium bg-medical-primary/20 text-medical-primary">{pool}</span>
           <span className="px-2 py-1 rounded text-xs font-medium bg-gray-200">{durationMinutes} perc</span>
           <span className="px-2 py-1 rounded text-xs font-medium bg-gray-200">
             {windowStartISO} – {windowEndISO}
           </span>
-          {providerId && <span className="px-2 py-1 rounded text-xs font-medium bg-gray-200">Provider: {providerId}</span>}
+          <label className="flex items-center gap-1.5">
+            <span className="text-xs font-medium text-gray-600">Orvos:</span>
+            <select
+              value={selectedProviderId ?? ''}
+              onChange={(e) => setSelectedProviderId(e.target.value || undefined)}
+              className="text-xs rounded border border-gray-300 bg-white px-2 py-1.5 min-w-[140px] focus:outline-none focus:ring-2 focus:ring-medical-primary/50"
+              aria-label="Orvos szűrő"
+            >
+              <option value="">Összes orvos</option>
+              {doctors.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
 
         <div ref={slotsRef} className="flex-1 overflow-y-auto p-4">
@@ -179,13 +272,83 @@ export function SlotPickerModal({
               {slotError}
             </div>
           )}
-          {!loading && !slotError && slots.length === 0 && (
+          {!loading && !slotError && slots.length === 0 && !showCreateForm && (
             <div className="text-center py-8 text-gray-500">
               <Calendar className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-              <p className="font-medium">Nincs elérhető slot az ablakban.</p>
-              <p className="text-sm mt-1">Próbáld a window tágítását vagy más provider-t.</p>
+              <p className="font-medium">Csak a kiírt szabad időpontok jelennek meg.</p>
+              <p className="text-sm mt-1">Nincs ilyen slot az ablakban. Kiírhatsz újat alább, és rögtön lefoglalod.</p>
             </div>
           )}
+
+          <div className="mb-4">
+            {!showCreateForm ? (
+              <button
+                type="button"
+                onClick={() => setShowCreateForm(true)}
+                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-medical-primary border border-medical-primary rounded-lg hover:bg-medical-primary/5"
+              >
+                <Plus className="w-4 h-4" />
+                Új szabad időpont kiírása és lefoglalása
+              </button>
+            ) : (
+              <div className="p-4 border border-gray-200 rounded-lg bg-gray-50 space-y-3">
+                <p className="text-sm font-medium text-gray-700">Új szabad időpont kiírása és lefoglalása</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="block">
+                    <span className="text-xs text-gray-600">Dátum</span>
+                    <input
+                      type="date"
+                      value={createDate}
+                      onChange={(e) => setCreateDate(e.target.value)}
+                      min={windowStartISO.slice(0, 10)}
+                      className="mt-0.5 block w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs text-gray-600">Idő</span>
+                    <input
+                      type="time"
+                      value={createTime}
+                      onChange={(e) => setCreateTime(e.target.value)}
+                      className="mt-0.5 block w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                    />
+                  </label>
+                </div>
+                <label className="block">
+                  <span className="text-xs text-gray-600">Orvos</span>
+                  <select
+                    value={createProviderId}
+                    onChange={(e) => setCreateProviderId(e.target.value)}
+                    className="mt-0.5 block w-full rounded border border-gray-300 px-2 py-1.5 text-sm bg-white"
+                  >
+                    {doctors.map((d) => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                </label>
+                {createError && (
+                  <p className="text-sm text-red-600" role="alert">{createError}</p>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCreateAndBook}
+                    disabled={creating || !createDate || !createTime || !createProviderId}
+                    className="px-3 py-1.5 text-sm font-medium text-white bg-medical-primary rounded-lg hover:bg-medical-primary/90 disabled:opacity-50"
+                  >
+                    {creating ? 'Létrehozás...' : 'Kiírás és lefoglalás'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowCreateForm(false); setCreateError(null); }}
+                    className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    Mégse
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
           {!loading && !slotError && dayKeys.length > 0 && (
             <div className="space-y-4">
               {dayKeys.map((day) => {

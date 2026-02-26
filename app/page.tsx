@@ -452,13 +452,6 @@ export default function Home() {
                   <Settings className="w-3.5 h-3.5" />
                   Beállítások
                 </button>
-                <Link
-                  href="/docs/kezelesi-ut-utmutato"
-                  className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2"
-                >
-                  <BookOpen className="w-3.5 h-3.5" />
-                  Útmutató
-                </Link>
                 <button
                   onClick={handleLogout}
                   className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2"
@@ -466,15 +459,6 @@ export default function Home() {
                   <LogOut className="w-3.5 h-3.5" />
                   Kijelentkezés
                 </button>
-                {(userRole === 'admin' || userRole === 'editor' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos') && (
-                  <button
-                    onClick={handleNewPatient}
-                    className="btn-primary flex items-center gap-1.5 text-sm px-3 py-2"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    Új beteg
-                  </button>
-                )}
               </div>
             </div>
           </div>
