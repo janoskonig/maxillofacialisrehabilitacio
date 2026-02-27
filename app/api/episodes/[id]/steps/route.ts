@@ -5,12 +5,26 @@ import { emitSchedulingEvent } from '@/lib/scheduling-events';
 
 export const dynamic = 'force-dynamic';
 
-const STEP_SELECT = `id, episode_id as "episodeId", step_code as "stepCode",
+const STEP_SELECT_BASE = `id, episode_id as "episodeId", step_code as "stepCode",
   pathway_order_index as "pathwayOrderIndex", pool, duration_minutes as "durationMinutes",
   default_days_offset as "defaultDaysOffset", status,
   appointment_id as "appointmentId", created_at as "createdAt",
   completed_at as "completedAt", source_episode_pathway_id as "sourceEpisodePathwayId",
-  seq, custom_label as "customLabel"`;
+  seq`;
+
+let _hasCustomLabel: boolean | null = null;
+async function hasCustomLabelColumn(pool: ReturnType<typeof getDbPool>): Promise<boolean> {
+  if (_hasCustomLabel !== null) return _hasCustomLabel;
+  try {
+    const colCheck = await pool.query(
+      `SELECT 1 FROM information_schema.columns WHERE table_name = 'episode_steps' AND column_name = 'custom_label' LIMIT 1`
+    );
+    _hasCustomLabel = colCheck.rows.length > 0;
+  } catch {
+    _hasCustomLabel = false;
+  }
+  return _hasCustomLabel;
+}
 
 /**
  * POST /api/episodes/:id/steps — add an individual step (from catalog or ad-hoc).
@@ -95,12 +109,21 @@ export async function POST(
     );
     const nextIdx = (maxIdxRow.rows[0].max_idx ?? -1) + 1;
 
-    const result = await pool.query(
-      `INSERT INTO episode_steps (episode_id, step_code, pathway_order_index, pool, duration_minutes, default_days_offset, seq, custom_label, source_episode_pathway_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL)
-       RETURNING ${STEP_SELECT}`,
-      [episodeId, stepCode, nextIdx, stepPool, durationMinutes, defaultDaysOffset, nextSeq, customLabel]
-    );
+    const hasCol = await hasCustomLabelColumn(pool);
+    const stepSelect = hasCol ? STEP_SELECT_BASE + `, custom_label as "customLabel"` : STEP_SELECT_BASE;
+    const result = hasCol
+      ? await pool.query(
+          `INSERT INTO episode_steps (episode_id, step_code, pathway_order_index, pool, duration_minutes, default_days_offset, seq, custom_label, source_episode_pathway_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL)
+           RETURNING ${stepSelect}`,
+          [episodeId, stepCode, nextIdx, stepPool, durationMinutes, defaultDaysOffset, nextSeq, customLabel]
+        )
+      : await pool.query(
+          `INSERT INTO episode_steps (episode_id, step_code, pathway_order_index, pool, duration_minutes, default_days_offset, seq, source_episode_pathway_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, NULL)
+           RETURNING ${stepSelect}`,
+          [episodeId, stepCode, nextIdx, stepPool, durationMinutes, defaultDaysOffset, nextSeq]
+        );
 
     try {
       await emitSchedulingEvent('episode', episodeId, 'step_added');
