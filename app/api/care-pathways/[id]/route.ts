@@ -211,14 +211,19 @@ export async function PATCH(
       values.push(data.name);
       idx++;
     }
+    if (data.reason !== undefined && data.treatmentTypeId !== undefined) {
+      return NextResponse.json(
+        { error: 'reason és treatmentTypeId egyszerre nem adható meg (XOR constraint)' },
+        { status: 400 }
+      );
+    }
     if (data.reason !== undefined) {
       updates.push(`reason = $${idx}`);
       values.push(data.reason);
       updates.push(`treatment_type_id = $${idx + 1}`);
       values.push(null);
       idx += 2;
-    }
-    if (data.treatmentTypeId !== undefined) {
+    } else if (data.treatmentTypeId !== undefined) {
       updates.push(`treatment_type_id = $${idx}`);
       values.push(data.treatmentTypeId);
       updates.push(`reason = $${idx + 1}`);

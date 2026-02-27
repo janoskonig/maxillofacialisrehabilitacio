@@ -247,9 +247,9 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
       );
     }
 
-    // Check both state (slot state machine) and status (legacy) for availability
+    // state (slot state machine) is authoritative; fallback to status (legacy) for backward compat
     const slotState = timeSlot.state ?? (timeSlot.status === 'available' ? 'free' : 'booked');
-    if (slotState !== 'free' && timeSlot.status !== 'available') {
+    if (slotState !== 'free') {
       await pool.query('ROLLBACK');
       return NextResponse.json(
         { error: 'Ez az időpont már le van foglalva' },
