@@ -225,7 +225,18 @@ export async function POST(request: NextRequest) {
             { status: 404 }
           );
         }
-        if (!episodeLock.rows[0].care_pathway_id) {
+        // Check for pathways: multi-pathway (episode_pathways) OR legacy (care_pathway_id)
+        let hasAnyPathway = !!episodeLock.rows[0].care_pathway_id;
+        if (!hasAnyPathway) {
+          try {
+            const epPwCheck = await db.query(
+              `SELECT 1 FROM episode_pathways WHERE episode_id = $1 LIMIT 1`,
+              [episodeId]
+            );
+            hasAnyPathway = epPwCheck.rows.length > 0;
+          } catch { /* episode_pathways table might not exist */ }
+        }
+        if (!hasAnyPathway) {
           await db.query('ROLLBACK');
           return NextResponse.json(
             {
@@ -237,13 +248,32 @@ export async function POST(request: NextRequest) {
           );
         }
         // Derive requiresPrecommit from pathway step (caller cannot bypass step definition)
-        const pathwayResult = await db.query(
-          `SELECT cp.steps_json FROM care_pathways cp WHERE cp.id = $1`,
-          [episodeLock.rows[0].care_pathway_id]
-        );
-        const steps = pathwayResult.rows[0]?.steps_json as Array<{ step_code: string; requires_precommit?: boolean }> | null;
-        const step = typeof stepCode === 'string' ? steps?.find((s) => s.step_code === stepCode) : null;
-        const pathwayStepRequiresPrecommit = step?.requires_precommit === true;
+        // Multi-pathway: search across all pathway steps for the matching step_code
+        let allPathwaySteps: Array<{ step_code: string; requires_precommit?: boolean }> = [];
+        try {
+          const multiPwResult = await db.query(
+            `SELECT cp.steps_json FROM episode_pathways ep
+             JOIN care_pathways cp ON ep.care_pathway_id = cp.id
+             WHERE ep.episode_id = $1`,
+            [episodeId]
+          );
+          for (const row of multiPwResult.rows) {
+            if (Array.isArray(row.steps_json)) {
+              allPathwaySteps.push(...(row.steps_json as Array<{ step_code: string; requires_precommit?: boolean }>));
+            }
+          }
+        } catch {
+          // Fallback to legacy single pathway
+          if (episodeLock.rows[0].care_pathway_id) {
+            const pathwayResult = await db.query(
+              `SELECT cp.steps_json FROM care_pathways cp WHERE cp.id = $1`,
+              [episodeLock.rows[0].care_pathway_id]
+            );
+            allPathwaySteps = (pathwayResult.rows[0]?.steps_json as Array<{ step_code: string; requires_precommit?: boolean }>) ?? [];
+          }
+        }
+        const matchedStep = typeof stepCode === 'string' ? allPathwaySteps.find((s) => s.step_code === stepCode) : null;
+        const pathwayStepRequiresPrecommit = matchedStep?.requires_precommit === true;
         requiresPrecommit = pathwayStepRequiresPrecommit || bodyRequiresPrecommit;
 
         const assignedProviderId = episodeLock.rows[0].assigned_provider_id;

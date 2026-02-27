@@ -49,12 +49,11 @@ export async function PATCH(
       );
     }
 
-    // Must include all existing steps (no dropping)
-    if (stepIds.length !== existingIds.size) {
-      return NextResponse.json(
-        { error: `Minden lépést meg kell adni a sorrendben (kapott: ${stepIds.length}, szükséges: ${existingIds.size})` },
-        { status: 400 }
-      );
+    // Tolerate count mismatch (concurrent add/delete) — just warn, don't reject.
+    // Any steps not in stepIds keep their current seq (will be appended after reordered ones).
+    const missingIds = Array.from(existingIds).filter((id) => !stepIds.includes(id));
+    if (missingIds.length > 0) {
+      console.warn(`[reorder] ${missingIds.length} step(s) not in stepIds — they will be appended after reordered steps`);
     }
 
     // Build batch update
@@ -67,6 +66,18 @@ export async function PATCH(
           `UPDATE episode_steps SET seq = $1 WHERE id = $2 AND episode_id = $3`,
           [i, stepIds[i], episodeId]
         );
+      }
+
+      // Append steps not in stepIds after the reordered ones
+      if (missingIds.length > 0) {
+        let nextSeq = stepIds.length;
+        for (const missingId of missingIds) {
+          await client.query(
+            `UPDATE episode_steps SET seq = $1 WHERE id = $2 AND episode_id = $3`,
+            [nextSeq, missingId, episodeId]
+          );
+          nextSeq++;
+        }
       }
 
       await client.query('COMMIT');
@@ -89,7 +100,8 @@ export async function PATCH(
               default_days_offset as "defaultDaysOffset",
               status, appointment_id as "appointmentId",
               created_at as "createdAt", completed_at as "completedAt",
-              source_episode_pathway_id as "sourceEpisodePathwayId", seq
+              source_episode_pathway_id as "sourceEpisodePathwayId", seq,
+              custom_label as "customLabel"
        FROM episode_steps WHERE episode_id = $1 ORDER BY COALESCE(seq, pathway_order_index)`,
       [episodeId]
     );

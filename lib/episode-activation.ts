@@ -8,11 +8,30 @@ import { getDbPool } from './db';
 import type { PathwayStep } from './next-step-engine';
 import { computeStepWindow } from './step-window';
 
-/** Get pathway steps for episode (requires care_pathway_id) */
+/** Get pathway steps for episode. Multi-pathway aware: merges all episode_pathways steps.
+ *  Falls back to legacy care_pathway_id when episode_pathways absent. */
 async function getPathwaySteps(
   pool: Awaited<ReturnType<typeof getDbPool>>,
   episodeId: string
 ): Promise<PathwayStep[] | null> {
+  try {
+    const multiRow = await pool.query(
+      `SELECT cp.steps_json FROM episode_pathways ep
+       JOIN care_pathways cp ON ep.care_pathway_id = cp.id
+       WHERE ep.episode_id = $1 ORDER BY ep.ordinal`,
+      [episodeId]
+    );
+    if (multiRow.rows.length > 0) {
+      const merged: PathwayStep[] = [];
+      for (const row of multiRow.rows) {
+        if (Array.isArray(row.steps_json)) merged.push(...(row.steps_json as PathwayStep[]));
+      }
+      return merged.length > 0 ? merged : null;
+    }
+  } catch {
+    // episode_pathways table might not exist yet
+  }
+
   const r = await pool.query(
     `SELECT cp.steps_json FROM patient_episodes pe
      JOIN care_pathways cp ON pe.care_pathway_id = cp.id

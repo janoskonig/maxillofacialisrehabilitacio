@@ -544,6 +544,13 @@ export interface PatientEpisode {
   treatmentTypeLabel?: string | null;
   stageVersion?: number;
   snapshotVersion?: number;
+  episodePathways?: Array<{
+    id: string;
+    carePathwayId: string;
+    ordinal: number;
+    pathwayName: string;
+    stepCount: number;
+  }>;
 }
 
 // --- SSOT: Stage transition rulesets ---

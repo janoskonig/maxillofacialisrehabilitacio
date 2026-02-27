@@ -208,31 +208,36 @@ export default function PatientStagesPage() {
             />
           )}
 
-          {/* Admin: kezelési út és felelős orvos (epizód szerkesztése) — csak admin látja */}
+          {/* Admin: kezelési utak és felelős orvos (epizód szerkesztése) — csak admin látja */}
           {userRole === 'admin' && activeEpisode && (
             <div className="rounded-lg border border-amber-200 bg-amber-50/50">
               <p className="text-xs font-medium text-amber-800 px-4 pt-3 pb-1">
-                Aktív epizód beállításai — Kezelési út és felelős orvos itt választható ehhez az epizódhoz
+                Aktív epizód beállításai — Kezelési utak és felelős orvos itt választható ehhez az epizódhoz
               </p>
               <EpisodePathwayEditor
-              episodeId={activeEpisode.id}
-              patientId={patientId}
-              carePathwayId={activeEpisode.carePathwayId}
-              assignedProviderId={activeEpisode.assignedProviderId}
-              carePathwayName={activeEpisode.carePathwayName}
-              assignedProviderName={activeEpisode.assignedProviderName}
-              treatmentTypeId={activeEpisode.treatmentTypeId}
-              onSaved={refreshStagesAndEpisodes}
+                episodeId={activeEpisode.id}
+                patientId={patientId}
+                carePathwayId={activeEpisode.carePathwayId}
+                assignedProviderId={activeEpisode.assignedProviderId}
+                carePathwayName={activeEpisode.carePathwayName}
+                assignedProviderName={activeEpisode.assignedProviderName}
+                treatmentTypeId={activeEpisode.treatmentTypeId}
+                onSaved={refreshStagesAndEpisodes}
               />
             </div>
           )}
 
-          {/* Kezelési lépések kezelése (átugrás) — aktív epizód + kezelési út szükséges */}
-          {activeEpisode && activeEpisode.carePathwayId && (
+          {/* Kezelési lépések kezelése — aktív epizód + kezelési út szükséges */}
+          {activeEpisode && (activeEpisode.carePathwayId || (activeEpisode.episodePathways && activeEpisode.episodePathways.length > 0)) && (
             <EpisodeStepsManager
               episodeId={activeEpisode.id}
               carePathwayId={activeEpisode.carePathwayId}
               carePathwayName={activeEpisode.carePathwayName}
+              episodePathways={activeEpisode.episodePathways?.map((ep) => ({
+                id: ep.id,
+                carePathwayId: ep.carePathwayId,
+                pathwayName: ep.pathwayName,
+              }))}
               onStepChanged={refreshStagesAndEpisodes}
             />
           )}

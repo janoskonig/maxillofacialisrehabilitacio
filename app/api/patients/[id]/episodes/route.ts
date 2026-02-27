@@ -97,6 +97,41 @@ export async function GET(
     );
 
     const episodes: PatientEpisode[] = result.rows.map(rowToEpisode);
+
+    // Enrich with episodePathways (multi-pathway support)
+    try {
+      const episodeIds = episodes.map((e) => e.id);
+      if (episodeIds.length > 0) {
+        const epPathRows = await pool.query(
+          `SELECT ep.id, ep.episode_id, ep.care_pathway_id as "carePathwayId", ep.ordinal,
+                  cp.name as "pathwayName",
+                  (SELECT COUNT(*)::int FROM episode_steps es WHERE es.source_episode_pathway_id = ep.id) as "stepCount"
+           FROM episode_pathways ep
+           JOIN care_pathways cp ON ep.care_pathway_id = cp.id
+           WHERE ep.episode_id = ANY($1)
+           ORDER BY ep.ordinal`,
+          [episodeIds]
+        );
+        const byEpisode = new Map<string, typeof epPathRows.rows>();
+        for (const row of epPathRows.rows) {
+          const arr = byEpisode.get(row.episode_id) ?? [];
+          arr.push(row);
+          byEpisode.set(row.episode_id, arr);
+        }
+        for (const ep of episodes) {
+          ep.episodePathways = (byEpisode.get(ep.id) ?? []).map((r: Record<string, unknown>) => ({
+            id: r.id as string,
+            carePathwayId: r.carePathwayId as string,
+            ordinal: r.ordinal as number,
+            pathwayName: r.pathwayName as string,
+            stepCount: r.stepCount as number,
+          }));
+        }
+      }
+    } catch {
+      // episode_pathways table might not exist yet (pre-migration)
+    }
+
     return NextResponse.json({ episodes });
   } catch (error) {
     console.error('Error fetching episodes:', error);

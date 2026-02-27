@@ -19,16 +19,8 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
   try {
     await pool.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, [episodeId]);
 
-    const [episodeRow, pathwayRow, apptsRow] = await Promise.all([
+    const [episodeRow, apptsRow] = await Promise.all([
       pool.query(`SELECT opened_at FROM patient_episodes WHERE id = $1 FOR SHARE`, [episodeId]),
-      pool.query(
-        `SELECT cp.steps_json, cp.id as pathway_id,
-                encode(digest(cp.steps_json::text, 'sha256'), 'hex') as pathway_hash
-         FROM patient_episodes pe
-         JOIN care_pathways cp ON pe.care_pathway_id = cp.id
-         WHERE pe.id = $1`,
-        [episodeId]
-      ),
       pool.query(
         `SELECT step_code, step_seq, start_time, appointment_status
          FROM appointments
@@ -40,18 +32,59 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
       ),
     ]);
 
-    if (!pathwayRow.rows[0]) {
-      await pool.query('COMMIT');
-      return { projected: 0, reason: 'NO_PATHWAY' };
-    }
-
     if (!episodeRow.rows[0]) {
       await pool.query('COMMIT');
       return { projected: 0, reason: 'NO_EPISODE' };
     }
 
-    const steps: PathwayStep[] = pathwayRow.rows[0].steps_json;
-    const pathwayHash: string = pathwayRow.rows[0].pathway_hash;
+    // Multi-pathway: merge steps from all episode_pathways, fall back to legacy care_pathway_id
+    let steps: PathwayStep[] = [];
+    let pathwayHash = '';
+    try {
+      const multiPwRow = await pool.query(
+        `SELECT cp.steps_json
+         FROM episode_pathways ep
+         JOIN care_pathways cp ON ep.care_pathway_id = cp.id
+         WHERE ep.episode_id = $1 ORDER BY ep.ordinal`,
+        [episodeId]
+      );
+      if (multiPwRow.rows.length > 0) {
+        const allJson: unknown[] = [];
+        for (const row of multiPwRow.rows) {
+          if (Array.isArray(row.steps_json)) {
+            steps.push(...(row.steps_json as PathwayStep[]));
+            allJson.push(row.steps_json);
+          }
+        }
+        const hashRow = await pool.query(
+          `SELECT encode(digest($1::text, 'sha256'), 'hex') as h`,
+          [JSON.stringify(allJson)]
+        );
+        pathwayHash = hashRow.rows[0]?.h ?? '';
+      }
+    } catch {
+      // episode_pathways table might not exist
+    }
+    if (steps.length === 0) {
+      const pathwayRow = await pool.query(
+        `SELECT cp.steps_json, encode(digest(cp.steps_json::text, 'sha256'), 'hex') as pathway_hash
+         FROM patient_episodes pe
+         JOIN care_pathways cp ON pe.care_pathway_id = cp.id
+         WHERE pe.id = $1`,
+        [episodeId]
+      );
+      if (!pathwayRow.rows[0]) {
+        await pool.query('COMMIT');
+        return { projected: 0, reason: 'NO_PATHWAY' };
+      }
+      steps = pathwayRow.rows[0].steps_json as PathwayStep[];
+      pathwayHash = pathwayRow.rows[0].pathway_hash;
+    }
+
+    if (!steps || steps.length === 0) {
+      await pool.query('COMMIT');
+      return { projected: 0, reason: 'NO_PATHWAY' };
+    }
     const openedAt = new Date(episodeRow.rows[0].opened_at);
 
     const completedBySeq = new Map<number, Date>();

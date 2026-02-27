@@ -9,7 +9,7 @@ const STEP_SELECT = `id, episode_id as "episodeId", step_code as "stepCode",
   default_days_offset as "defaultDaysOffset", status,
   appointment_id as "appointmentId", created_at as "createdAt",
   completed_at as "completedAt", source_episode_pathway_id as "sourceEpisodePathwayId",
-  seq`;
+  seq, custom_label as "customLabel"`;
 
 /**
  * POST /api/episodes/:id/steps/generate — idempotent episode_steps generation.
