@@ -112,6 +112,37 @@ async function syncCalendar(retries = 3, delayMs = 5000) {
   }
 }
 
+/**
+ * Fire a one-shot GET to an API endpoint (non-critical — failures logged but don't abort cron).
+ */
+async function callEndpoint(path, label) {
+  return new Promise((resolve) => {
+    const url = new URL(`${API_URL}${path}`);
+    const isHttps = url.protocol === 'https:';
+    const client = isHttps ? https : http;
+    const options = {
+      hostname: url.hostname,
+      port: url.port || (isHttps ? 443 : 80),
+      path: url.pathname + url.search,
+      method: 'GET',
+      headers: { 'x-api-key': API_KEY || '', 'User-Agent': 'Render-Cron-Job/1.0' },
+      timeout: 120000,
+    };
+    console.log(`[${new Date().toISOString()}] ${label}: calling ${API_URL}${path}`);
+    const req = client.request(options, (res) => {
+      let data = '';
+      res.on('data', (c) => { data += c; });
+      res.on('end', () => {
+        console.log(`[${new Date().toISOString()}] ${label}: status ${res.statusCode} — ${data.slice(0, 300)}`);
+        resolve();
+      });
+    });
+    req.on('error', (e) => { console.error(`[${new Date().toISOString()}] ${label} error:`, e.message); resolve(); });
+    req.on('timeout', () => { req.destroy(); console.error(`[${new Date().toISOString()}] ${label} timeout`); resolve(); });
+    req.end();
+  });
+}
+
 // Fő futtatás
 (async () => {
   try {
@@ -120,12 +151,20 @@ async function syncCalendar(retries = 3, delayMs = 5000) {
     }
     
     await syncCalendar();
+
+    // Weekly OHIP-14 reminders: run on Monday between 08:00-08:01 Budapest time
+    const nowBudapest = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Budapest' }));
+    const isMonday = nowBudapest.getDay() === 1;
+    const hour = nowBudapest.getHours();
+    const minute = nowBudapest.getMinutes();
+    if (isMonday && hour === 8 && minute === 0) {
+      await callEndpoint('/api/ohip14/reminders', 'OHIP-14 reminders');
+    }
+
     console.log(`[${new Date().toISOString()}] Cron job completed successfully`);
     process.exit(0);
   } catch (error) {
     console.error(`[${new Date().toISOString()}] Cron job failed after retries:`, error.message);
-    // Exit(0) hogy ne jelölje hibásnak a cronjob-ot ideiglenes hibák esetén
-    // A következő cron futtatás újra megpróbálja
     process.exit(0);
   }
 })();

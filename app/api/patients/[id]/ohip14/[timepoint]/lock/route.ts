@@ -36,7 +36,7 @@ export async function POST(
     const patientId = params.id;
     const timepoint = params.timepoint as OHIP14Timepoint;
 
-    if (!['T0', 'T1', 'T2'].includes(timepoint)) {
+    if (!['T0', 'T1', 'T2', 'T3'].includes(timepoint)) {
       return NextResponse.json(
         { error: 'Érvénytelen timepoint' },
         { status: 400 }

@@ -1303,3 +1303,71 @@ export async function sendAppointmentReminderEmail(
     html,
   });
 }
+
+/**
+ * Send OHIP-14 questionnaire reminder to patient
+ */
+export async function sendOhipReminderEmail(
+  patientEmail: string,
+  patientName: string | null,
+  patientNem: string | null,
+  timepoint: string,
+  windowClosesAt: Date | null,
+  portalUrl: string,
+): Promise<void> {
+  const timepointLabels: Record<string, string> = {
+    T0: 'Protetikai fázis előtt',
+    T1: 'Átadás után ~1 hónap',
+    T2: 'Átadás után ~6 hónap',
+    T3: 'Átadás után ~3 év',
+  };
+  const label = timepointLabels[timepoint] || timepoint;
+
+  let greeting = 'Tisztelt';
+  if (patientName) {
+    const nameParts = patientName.trim().split(/\s+/);
+    if (nameParts.length >= 2) {
+      const vezeteknev = nameParts[0];
+      const keresztnev = nameParts.slice(1).join(' ');
+      const title = patientNem === 'no' ? 'Hölgy' : patientNem === 'ferfi' ? 'Úr' : '';
+      greeting = `Tisztelt ${vezeteknev} ${keresztnev} ${title}`.trim();
+    } else {
+      greeting = `Tisztelt ${patientName}`;
+    }
+  } else {
+    greeting = 'Tisztelt Beteg';
+  }
+
+  const deadlineHtml = windowClosesAt
+    ? `<p style="color: #b45309; font-size: 14px; margin-top: 15px;">
+        <strong>Határidő:</strong> ${windowClosesAt.toLocaleDateString('hu-HU', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Europe/Budapest' })}
+      </p>`
+    : '';
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #2563eb;">OHIP-14 kérdőív kitöltése</h2>
+      <p>${greeting}!</p>
+      <p>Kérjük, töltse ki a szájegészségével kapcsolatos <strong>OHIP-14</strong> kérdőívet.</p>
+      <p>Kitöltendő mérési pont: <strong>${timepoint} – ${label}</strong></p>
+      ${deadlineHtml}
+      <p style="margin-top: 20px;">A kitöltés néhány percet vesz igénybe, és segít orvosának az Ön kezelésének nyomon követésében.</p>
+      <p style="margin-top: 20px;">
+        <a href="${portalUrl}" style="display: inline-block; background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+          Kérdőív kitöltése
+        </a>
+      </p>
+      <p style="color: #6b7280; font-size: 14px; margin-top: 20px;">
+        Ha a gomb nem működik, másolja be az alábbi linket a böngészőjébe:<br>
+        <a href="${portalUrl}" style="color: #3b82f6;">${portalUrl}</a>
+      </p>
+      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: patientEmail,
+    subject: `OHIP-14 kérdőív kitöltése (${timepoint}) - Maxillofaciális Rehabilitáció`,
+    html,
+  });
+}

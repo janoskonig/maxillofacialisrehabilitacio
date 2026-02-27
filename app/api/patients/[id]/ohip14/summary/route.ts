@@ -94,47 +94,27 @@ export async function GET(
       T0: timepointMap['T0'] || null,
       T1: timepointMap['T1'] || null,
       T2: timepointMap['T2'] || null,
+      T3: timepointMap['T3'] || null,
       episodeId: finalEpisodeId,
     };
 
-    // Calculate changes
+    const calcDiff = (a: any, b: any) => ({
+      totalScore: b.totalScore - a.totalScore,
+      functionalLimitation: b.functionalLimitationScore - a.functionalLimitationScore,
+      physicalPain: b.physicalPainScore - a.physicalPainScore,
+      psychologicalDiscomfort: b.psychologicalDiscomfortScore - a.psychologicalDiscomfortScore,
+      physicalDisability: b.physicalDisabilityScore - a.physicalDisabilityScore,
+      psychologicalDisability: b.psychologicalDisabilityScore - a.psychologicalDisabilityScore,
+      socialDisability: b.socialDisabilityScore - a.socialDisabilityScore,
+      handicap: b.handicapScore - a.handicapScore,
+    });
+
     const changes = {
-      T0toT1: summary.T0 && summary.T1
-        ? {
-            totalScore: summary.T1.totalScore - summary.T0.totalScore,
-            functionalLimitation: summary.T1.functionalLimitationScore - summary.T0.functionalLimitationScore,
-            physicalPain: summary.T1.physicalPainScore - summary.T0.physicalPainScore,
-            psychologicalDiscomfort: summary.T1.psychologicalDiscomfortScore - summary.T0.psychologicalDiscomfortScore,
-            physicalDisability: summary.T1.physicalDisabilityScore - summary.T0.physicalDisabilityScore,
-            psychologicalDisability: summary.T1.psychologicalDisabilityScore - summary.T0.psychologicalDisabilityScore,
-            socialDisability: summary.T1.socialDisabilityScore - summary.T0.socialDisabilityScore,
-            handicap: summary.T1.handicapScore - summary.T0.handicapScore,
-          }
-        : null,
-      T1toT2: summary.T1 && summary.T2
-        ? {
-            totalScore: summary.T2.totalScore - summary.T1.totalScore,
-            functionalLimitation: summary.T2.functionalLimitationScore - summary.T1.functionalLimitationScore,
-            physicalPain: summary.T2.physicalPainScore - summary.T1.physicalPainScore,
-            psychologicalDiscomfort: summary.T2.psychologicalDiscomfortScore - summary.T1.psychologicalDiscomfortScore,
-            physicalDisability: summary.T2.physicalDisabilityScore - summary.T1.physicalDisabilityScore,
-            psychologicalDisability: summary.T2.psychologicalDisabilityScore - summary.T1.psychologicalDisabilityScore,
-            socialDisability: summary.T2.socialDisabilityScore - summary.T1.socialDisabilityScore,
-            handicap: summary.T2.handicapScore - summary.T1.handicapScore,
-          }
-        : null,
-      T0toT2: summary.T0 && summary.T2
-        ? {
-            totalScore: summary.T2.totalScore - summary.T0.totalScore,
-            functionalLimitation: summary.T2.functionalLimitationScore - summary.T0.functionalLimitationScore,
-            physicalPain: summary.T2.physicalPainScore - summary.T0.physicalPainScore,
-            psychologicalDiscomfort: summary.T2.psychologicalDiscomfortScore - summary.T0.psychologicalDiscomfortScore,
-            physicalDisability: summary.T2.physicalDisabilityScore - summary.T0.physicalDisabilityScore,
-            psychologicalDisability: summary.T2.psychologicalDisabilityScore - summary.T0.psychologicalDisabilityScore,
-            socialDisability: summary.T2.socialDisabilityScore - summary.T0.socialDisabilityScore,
-            handicap: summary.T2.handicapScore - summary.T0.handicapScore,
-          }
-        : null,
+      T0toT1: summary.T0 && summary.T1 ? calcDiff(summary.T0, summary.T1) : null,
+      T1toT2: summary.T1 && summary.T2 ? calcDiff(summary.T1, summary.T2) : null,
+      T0toT2: summary.T0 && summary.T2 ? calcDiff(summary.T0, summary.T2) : null,
+      T2toT3: summary.T2 && summary.T3 ? calcDiff(summary.T2, summary.T3) : null,
+      T0toT3: summary.T0 && summary.T3 ? calcDiff(summary.T0, summary.T3) : null,
     };
 
     return NextResponse.json({

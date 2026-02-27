@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Calendar, Clock, User, Plus, CheckCircle, XCircle, AlertCircle, MessageCircle, MapPin, Mail, FileText, CheckCircle2 } from 'lucide-react';
+import { Calendar, Clock, User, Plus, CheckCircle, XCircle, AlertCircle, MessageCircle, MapPin, Mail, FileText, CheckCircle2, ClipboardList } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
@@ -39,6 +39,8 @@ export function PortalDashboard() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
   const [processingAppointment, setProcessingAppointment] = useState<string | null>(null);
+  const [ohipPending, setOhipPending] = useState(false);
+  const [ohipTimepointLabel, setOhipTimepointLabel] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -63,6 +65,33 @@ export function PortalDashboard() {
 
       setPatient(patientData.patient);
       setAppointments(appointmentsData.appointments || []);
+
+      // Fetch OHIP status
+      try {
+        const [ohipRes, stagesRes] = await Promise.all([
+          fetch('/api/patient-portal/ohip14', { credentials: 'include' }),
+          fetch('/api/patient-portal/stages/current', { credentials: 'include' }),
+        ]);
+        if (ohipRes.ok && stagesRes.ok) {
+          const ohipData = await ohipRes.json();
+          const stagesData = await stagesRes.json();
+          const cs = stagesData.currentStage;
+          const stageCode = cs?.stageCode ?? null;
+          const dd = cs?.deliveryDate ? new Date(cs.deliveryDate) : null;
+          const completedTps = (ohipData.responses || []).map((r: any) => r.timepoint);
+
+          const { getTimepointAvailability } = await import('@/lib/ohip14-timepoint-stage');
+          const { ohip14TimepointOptions } = await import('@/lib/types');
+          const pending = ohip14TimepointOptions.find((tp) => {
+            const avail = getTimepointAvailability(tp.value, stageCode, dd);
+            return avail.allowed && !completedTps.includes(tp.value);
+          });
+          setOhipPending(!!pending);
+          setOhipTimepointLabel(pending ? `${pending.label} – ${pending.description}` : null);
+        }
+      } catch (error) {
+        console.error('Error fetching OHIP status:', error);
+      }
 
       // Fetch unread message count
       if (patientData.patient?.id) {
@@ -368,6 +397,36 @@ export function PortalDashboard() {
           <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" />
           Üzenetek megtekintése
         </button>
+      </div>
+
+      {/* OHIP-14 Card */}
+      <div className="mobile-card">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+              <ClipboardList className="w-4 h-4 sm:w-5 sm:h-5 text-medical-primary" />
+              OHIP-14 Kérdőív
+            </h2>
+            {ohipPending ? (
+              <p className="text-sm sm:text-base text-amber-700 font-medium">
+                Kitöltendő kérdőív: {ohipTimepointLabel}
+              </p>
+            ) : (
+              <p className="text-sm sm:text-base text-gray-600">
+                Jelenleg nincs kitöltendő kérdőív
+              </p>
+            )}
+          </div>
+          {ohipPending && (
+            <button
+              onClick={() => router.push('/patient-portal/ohip14')}
+              className="btn-primary flex items-center gap-2 text-sm sm:text-base px-4 sm:px-6 py-2 sm:py-2.5 w-full sm:w-auto mobile-touch-target justify-center"
+            >
+              <ClipboardList className="w-4 h-4 sm:w-5 sm:h-5" />
+              Kérdőív kitöltése
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Document Upload Button */}

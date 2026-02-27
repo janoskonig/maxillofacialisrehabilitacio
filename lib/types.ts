@@ -680,7 +680,7 @@ export interface StageEventTimeline {
 }
 
 // OHIP-14 types
-export type OHIP14Timepoint = 'T0' | 'T1' | 'T2';
+export type OHIP14Timepoint = 'T0' | 'T1' | 'T2' | 'T3';
 
 export type OHIP14ResponseValue = 0 | 1 | 2 | 3 | 4;
 
@@ -690,7 +690,7 @@ export const ohip14ResponseSchema = z.object({
   id: z.string().optional(),
   patientId: z.string().min(1, 'Beteg ID kötelező'),
   episodeId: z.string().optional().nullable(),
-  timepoint: z.enum(['T0', 'T1', 'T2']),
+  timepoint: z.enum(['T0', 'T1', 'T2', 'T3']),
   stageCode: z.string().optional().nullable(),
   completedAt: z.string().optional().nullable(),
   completedByPatient: z.boolean().default(true),
@@ -742,9 +742,10 @@ export interface OHIP14Dimension {
 }
 
 export const ohip14TimepointOptions: Array<{ value: OHIP14Timepoint; label: string; description: string }> = [
-  { value: 'T0', label: 'T0', description: 'Kezelés megkezdése előtt' },
-  { value: 'T1', label: 'T1', description: 'Rehabilitáció megkezdése előtt' },
-  { value: 'T2', label: 'T2', description: 'Rehabilitáció után' },
+  { value: 'T0', label: 'T0', description: 'Protetikai fázis előtt' },
+  { value: 'T1', label: 'T1', description: 'Átadás után ~1 hónap' },
+  { value: 'T2', label: 'T2', description: 'Átadás után ~6 hónap' },
+  { value: 'T3', label: 'T3', description: 'Átadás után ~3 év' },
 ];
 
 export const ohip14ResponseValueOptions: Array<{ value: OHIP14ResponseValue; label: string }> = [

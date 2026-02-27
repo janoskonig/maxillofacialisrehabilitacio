@@ -3,13 +3,12 @@ import { getDbPool } from '@/lib/db';
 import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
 import { OHIP14Response, OHIP14Timepoint } from '@/lib/types';
 import { calculateOHIP14Scores } from '@/lib/ohip14-questions';
-import { getCurrentStageCodeForOhip, getCurrentEpisodeAndStage, isTimepointAllowedForStage } from '@/lib/ohip14-stage';
+import { getCurrentStageCodeForOhip, getCurrentEpisodeAndStage } from '@/lib/ohip14-stage';
+import { getTimepointAvailability } from '@/lib/ohip14-timepoint-stage';
 
-/**
- * Get patient's OHIP-14 response for a specific timepoint
- * GET /api/patient-portal/ohip14/[timepoint]
- */
 export const dynamic = 'force-dynamic';
+
+const VALID_TIMEPOINTS = ['T0', 'T1', 'T2', 'T3'];
 
 export async function GET(
   request: NextRequest,
@@ -26,7 +25,7 @@ export async function GET(
     }
 
     const timepoint = params.timepoint as OHIP14Timepoint;
-    if (!['T0', 'T1', 'T2'].includes(timepoint)) {
+    if (!VALID_TIMEPOINTS.includes(timepoint)) {
       return NextResponse.json(
         { error: 'Érvénytelen timepoint' },
         { status: 400 }
@@ -36,7 +35,6 @@ export async function GET(
     const pool = getDbPool();
     const { episodeId: activeEpisodeId } = await getCurrentEpisodeAndStage(pool, patientId);
 
-    // Get response for this timepoint
     const result = await pool.query(
       `SELECT 
         id,
@@ -111,7 +109,6 @@ export async function GET(
     }
 
     const row = result.rows[0];
-    // Patient portal: never return answers or scores after completion – one fill per stage
     const response = {
       timepoint: row.timepoint,
       completedAt: row.completedAt?.toISOString(),
@@ -128,10 +125,6 @@ export async function GET(
   }
 }
 
-/**
- * Create or update patient's OHIP-14 response for a specific timepoint
- * POST /api/patient-portal/ohip14/[timepoint]
- */
 export async function POST(
   request: NextRequest,
   { params }: { params: { timepoint: string } }
@@ -147,7 +140,7 @@ export async function POST(
     }
 
     const timepoint = params.timepoint as OHIP14Timepoint;
-    if (!['T0', 'T1', 'T2'].includes(timepoint)) {
+    if (!VALID_TIMEPOINTS.includes(timepoint)) {
       return NextResponse.json(
         { error: 'Érvénytelen timepoint' },
         { status: 400 }
@@ -157,24 +150,20 @@ export async function POST(
     const pool = getDbPool();
     const body = await request.json();
 
-    const { episodeId: activeEpisodeId, stageCode: currentStageCode, stage, useNewModel } = await getCurrentEpisodeAndStage(pool, patientId);
+    const { episodeId: activeEpisodeId, stageCode: currentStageCode, deliveryDate } =
+      await getCurrentEpisodeAndStage(pool, patientId);
 
     if (!activeEpisodeId) {
       return NextResponse.json(
-        { error: 'Nincs aktív epizód. Kérjük, állítson be stádiumot.' },
+        { error: 'Nincs aktív epizód. Kérjük, forduljon kezelőorvosához.' },
         { status: 400 }
       );
     }
 
-    const currentStageOrCode = useNewModel ? currentStageCode : stage;
-    if (!isTimepointAllowedForStage(timepoint, currentStageOrCode, useNewModel)) {
-      const requiredLabel = useNewModel
-        ? (timepoint === 'T0' ? 'STAGE_0 (első konzultáció)' : timepoint === 'T1' ? 'STAGE_4 (rehabilitáció előtt)' : 'STAGE_7 (gondozás)')
-        : (timepoint === 'T0' ? 'Új beteg' : timepoint === 'T1' ? 'Onkológiai kezelés kész' : 'Gondozás alatt');
+    const availability = getTimepointAvailability(timepoint, currentStageCode, deliveryDate);
+    if (!availability.allowed) {
       return NextResponse.json(
-        {
-          error: `Ez a timepoint csak a megfelelő stádiumban kitölthető (${requiredLabel}). Jelenlegi stádium: ${currentStageOrCode || 'Nincs'}.`,
-        },
+        { error: availability.reason ?? 'Ez a timepoint jelenleg nem kitölthető.' },
         { status: 403 }
       );
     }
@@ -189,7 +178,6 @@ export async function POST(
       [patientId, timepoint, activeEpisodeId]
     );
 
-    // Patient portal: one fill per stage – no update, no viewing after
     if (existingResult.rows.length > 0) {
       return NextResponse.json(
         { error: 'Egy stádiumban csak egyszer töltheti ki a kérdőívet. A kérdőív már kitöltve.' },
@@ -199,10 +187,8 @@ export async function POST(
 
     const ohipStageCode = await getCurrentStageCodeForOhip(pool, patientId, activeEpisodeId);
 
-    // Calculate scores
     const scores = calculateOHIP14Scores(body);
 
-    // Validate all questions are answered
     const requiredFields = [
       'q1_functional_limitation',
       'q2_functional_limitation',
@@ -236,146 +222,78 @@ export async function POST(
       }
     }
 
-    if (existingResult.rows.length > 0) {
-      // Update existing
-      const updateResult = await pool.query(
-        `UPDATE ohip14_responses SET
-          stage_code = $1,
-          q1_functional_limitation = $2,
-          q2_functional_limitation = $3,
-          q3_physical_pain = $4,
-          q4_physical_pain = $5,
-          q5_psychological_discomfort = $6,
-          q6_psychological_discomfort = $7,
-          q7_physical_disability = $8,
-          q8_physical_disability = $9,
-          q9_psychological_disability = $10,
-          q10_psychological_disability = $11,
-          q11_social_disability = $12,
-          q12_social_disability = $13,
-          q13_handicap = $14,
-          q14_handicap = $15,
-          total_score = $16,
-          functional_limitation_score = $17,
-          physical_pain_score = $18,
-          psychological_discomfort_score = $19,
-          physical_disability_score = $20,
-          psychological_disability_score = $21,
-          social_disability_score = $22,
-          handicap_score = $23,
-          notes = $24,
-          completed_at = CURRENT_TIMESTAMP,
-          updated_by = 'patient_portal'
-        WHERE id = $25
-        RETURNING *`,
-        [
-          ohipStageCode ?? null,
-          body.q1_functional_limitation,
-          body.q2_functional_limitation,
-          body.q3_physical_pain,
-          body.q4_physical_pain,
-          body.q5_psychological_discomfort,
-          body.q6_psychological_discomfort,
-          body.q7_physical_disability,
-          body.q8_physical_disability,
-          body.q9_psychological_disability,
-          body.q10_psychological_disability,
-          body.q11_social_disability,
-          body.q12_social_disability,
-          body.q13_handicap,
-          body.q14_handicap,
-          scores.totalScore,
-          scores.functionalLimitationScore,
-          scores.physicalPainScore,
-          scores.psychologicalDiscomfortScore,
-          scores.physicalDisabilityScore,
-          scores.psychologicalDisabilityScore,
-          scores.socialDisabilityScore,
-          scores.handicapScore,
-          body.notes || null,
-          existingResult.rows[0].id,
-        ]
-      );
+    const insertResult = await pool.query(
+      `INSERT INTO ohip14_responses (
+        patient_id,
+        episode_id,
+        timepoint,
+        stage_code,
+        completed_by_patient,
+        q1_functional_limitation,
+        q2_functional_limitation,
+        q3_physical_pain,
+        q4_physical_pain,
+        q5_psychological_discomfort,
+        q6_psychological_discomfort,
+        q7_physical_disability,
+        q8_physical_disability,
+        q9_psychological_disability,
+        q10_psychological_disability,
+        q11_social_disability,
+        q12_social_disability,
+        q13_handicap,
+        q14_handicap,
+        total_score,
+        functional_limitation_score,
+        physical_pain_score,
+        psychological_discomfort_score,
+        physical_disability_score,
+        psychological_disability_score,
+        social_disability_score,
+        handicap_score,
+        notes,
+        created_by
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, 'patient_portal')
+      RETURNING *`,
+      [
+        patientId,
+        activeEpisodeId,
+        timepoint,
+        ohipStageCode ?? null,
+        true,
+        body.q1_functional_limitation,
+        body.q2_functional_limitation,
+        body.q3_physical_pain,
+        body.q4_physical_pain,
+        body.q5_psychological_discomfort,
+        body.q6_psychological_discomfort,
+        body.q7_physical_disability,
+        body.q8_physical_disability,
+        body.q9_psychological_disability,
+        body.q10_psychological_disability,
+        body.q11_social_disability,
+        body.q12_social_disability,
+        body.q13_handicap,
+        body.q14_handicap,
+        scores.totalScore,
+        scores.functionalLimitationScore,
+        scores.physicalPainScore,
+        scores.psychologicalDiscomfortScore,
+        scores.physicalDisabilityScore,
+        scores.psychologicalDisabilityScore,
+        scores.socialDisabilityScore,
+        scores.handicapScore,
+        body.notes || null,
+      ]
+    );
 
-      return NextResponse.json({
-        response: mapRowToResponse(updateResult.rows[0]),
-        message: 'Válaszok sikeresen frissítve',
-      });
-    } else {
-      // Create new
-      const insertResult = await pool.query(
-        `INSERT INTO ohip14_responses (
-          patient_id,
-          episode_id,
-          timepoint,
-          stage_code,
-          completed_by_patient,
-          q1_functional_limitation,
-          q2_functional_limitation,
-          q3_physical_pain,
-          q4_physical_pain,
-          q5_psychological_discomfort,
-          q6_psychological_discomfort,
-          q7_physical_disability,
-          q8_physical_disability,
-          q9_psychological_disability,
-          q10_psychological_disability,
-          q11_social_disability,
-          q12_social_disability,
-          q13_handicap,
-          q14_handicap,
-          total_score,
-          functional_limitation_score,
-          physical_pain_score,
-          psychological_discomfort_score,
-          physical_disability_score,
-          psychological_disability_score,
-          social_disability_score,
-          handicap_score,
-          notes,
-          created_by
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, 'patient_portal')
-        RETURNING *`,
-        [
-          patientId,
-          activeEpisodeId,
-          timepoint,
-          ohipStageCode ?? null,
-          true,
-          body.q1_functional_limitation,
-          body.q2_functional_limitation,
-          body.q3_physical_pain,
-          body.q4_physical_pain,
-          body.q5_psychological_discomfort,
-          body.q6_psychological_discomfort,
-          body.q7_physical_disability,
-          body.q8_physical_disability,
-          body.q9_psychological_disability,
-          body.q10_psychological_disability,
-          body.q11_social_disability,
-          body.q12_social_disability,
-          body.q13_handicap,
-          body.q14_handicap,
-          scores.totalScore,
-          scores.functionalLimitationScore,
-          scores.physicalPainScore,
-          scores.psychologicalDiscomfortScore,
-          scores.physicalDisabilityScore,
-          scores.psychologicalDisabilityScore,
-          scores.socialDisabilityScore,
-          scores.handicapScore,
-          body.notes || null,
-        ]
-      );
-
-      return NextResponse.json(
-        {
-          response: mapRowToResponse(insertResult.rows[0]),
-          message: 'Válaszok sikeresen mentve',
-        },
-        { status: 201 }
-      );
-    }
+    return NextResponse.json(
+      {
+        response: mapRowToResponse(insertResult.rows[0]),
+        message: 'Válaszok sikeresen mentve',
+      },
+      { status: 201 }
+    );
   } catch (error) {
     console.error('Error saving OHIP-14 response:', error);
     return NextResponse.json(
@@ -385,15 +303,10 @@ export async function POST(
   }
 }
 
-/**
- * Update patient's OHIP-14 response (PUT for updates)
- * PUT /api/patient-portal/ohip14/[timepoint]
- */
 export async function PUT(
   request: NextRequest,
   { params }: { params: { timepoint: string } }
 ) {
-  // Same as POST, but for semantic clarity
   return POST(request, { params });
 }
 

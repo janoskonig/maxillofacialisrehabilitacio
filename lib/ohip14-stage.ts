@@ -25,6 +25,7 @@ export interface CurrentEpisodeAndStage {
   stageCode: string | null;
   stage: string | null;
   useNewModel: boolean;
+  deliveryDate: Date | null;
 }
 
 /**
@@ -51,11 +52,12 @@ export async function getCurrentEpisodeAndStage(
         [patientId, episodeId]
       );
       const stageCode = row.rows[0]?.stage_code ?? null;
+      const deliveryDate = await getDeliveryDate(pool, patientId, episodeId);
       if (stageCode) {
-        return { episodeId, stageCode, stage: null, useNewModel: true };
+        return { episodeId, stageCode, stage: null, useNewModel: true, deliveryDate };
       }
+      return { episodeId, stageCode: null, stage: null, useNewModel: true, deliveryDate };
     }
-    // Új táblák léteznek, de ehhez a beteghez nincs epizód/stage_events → fallback legacy (patient_stages)
   }
 
   const legacy = await pool.query(
@@ -63,28 +65,29 @@ export async function getCurrentEpisodeAndStage(
     [patientId]
   );
   if (legacy.rows.length === 0) {
-    return { episodeId: null, stageCode: null, stage: null, useNewModel: false };
+    return { episodeId: null, stageCode: null, stage: null, useNewModel: false, deliveryDate: null };
   }
   const stage = legacy.rows[0].stage as string;
   const episodeId = legacy.rows[0].episode_id ?? null;
   const stageCode = LEGACY_STAGE_TO_CODE[stage] ?? 'STAGE_0';
-  return { episodeId, stageCode, stage, useNewModel: false };
+  const deliveryDate = stage === 'fogpotlas_kesz' || stage === 'gondozas_alatt'
+    ? await getDeliveryDateLegacy(pool, patientId)
+    : null;
+  return { episodeId, stageCode, stage, useNewModel: false, deliveryDate };
 }
 
 /** Szerver oldali wrapper a tiszta függvényre */
 export function isTimepointAllowedForStage(
   timepoint: OHIP14Timepoint,
   stageCodeOrLegacyStage: string | null,
-  useNewModel: boolean
+  useNewModel: boolean,
+  deliveryDate: Date | null = null,
 ): boolean {
-  return isTimepointAllowedForStagePure(timepoint, stageCodeOrLegacyStage, useNewModel);
+  return isTimepointAllowedForStagePure(timepoint, stageCodeOrLegacyStage, useNewModel, deliveryDate);
 }
 
 /**
  * Visszaadja a beteg aktuális stádium kódját (STAGE_0..STAGE_7).
- * Új modell: stage_events (onkológiai, traumás, veleszületett egyaránt).
- * Régi modell: patient_stages → megfeleltetés STAGE_*-ra.
- * @param episodeId opcionális; ha nincs megadva, az aktív (open) epizódot használja
  */
 export async function getCurrentStageCodeForOhip(
   pool: Pool,
@@ -112,7 +115,6 @@ export async function getCurrentStageCodeForOhip(
     return row.rows[0]?.stage_code ?? null;
   }
 
-  // Legacy: patient_stages / patient_current_stage
   const legacy = await pool.query(
     `SELECT stage FROM patient_current_stage WHERE patient_id = $1`,
     [patientId]
@@ -120,4 +122,46 @@ export async function getCurrentStageCodeForOhip(
   const legacyStage = legacy.rows[0]?.stage as string | undefined;
   if (!legacyStage) return null;
   return LEGACY_STAGE_TO_CODE[legacyStage] ?? 'STAGE_0';
+}
+
+/**
+ * Return the delivery date (STAGE_6 event) for a patient episode.
+ * New model: stage_events with stage_code = 'STAGE_6'.
+ */
+export async function getDeliveryDate(
+  pool: Pool,
+  patientId: string,
+  episodeId: string | null,
+): Promise<Date | null> {
+  if (!episodeId) return null;
+  try {
+    const row = await pool.query(
+      `SELECT at FROM stage_events
+       WHERE patient_id = $1 AND episode_id = $2 AND stage_code = 'STAGE_6'
+       ORDER BY at DESC LIMIT 1`,
+      [patientId, episodeId]
+    );
+    return row.rows[0]?.at ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Legacy fallback: try to approximate delivery date from patient_current_stage
+ * when stage is fogpotlas_kesz or gondozas_alatt.
+ */
+async function getDeliveryDateLegacy(
+  pool: Pool,
+  patientId: string,
+): Promise<Date | null> {
+  try {
+    const row = await pool.query(
+      `SELECT stage_date FROM patient_current_stage WHERE patient_id = $1`,
+      [patientId]
+    );
+    return row.rows[0]?.stage_date ?? null;
+  } catch {
+    return null;
+  }
 }
