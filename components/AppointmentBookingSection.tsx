@@ -19,6 +19,7 @@ interface TimeSlot {
 interface Appointment {
   id: string;
   patientId: string;
+  episodeId?: string | null;
   timeSlotId: string;
   startTime: string;
   dentistEmail: string | null;
@@ -28,6 +29,10 @@ interface Appointment {
   completionNotes?: string | null;
   isLate?: boolean;
   appointmentType?: 'elso_konzultacio' | 'munkafazis' | 'kontroll' | null;
+  stepCode?: string | null;
+  stepLabel?: string | null;
+  pool?: 'consult' | 'work' | 'control' | null;
+  createdVia?: string | null;
   createdAt?: string;
   approvedAt?: string | null;
   createdBy?: string;
@@ -36,6 +41,8 @@ interface Appointment {
 
 interface AppointmentBookingSectionProps {
   patientId: string | null | undefined;
+  episodeId?: string | null;
+  pool?: 'consult' | 'work' | 'control';
   isViewOnly?: boolean;
   onSavePatientBeforeBooking?: () => Promise<Patient>;
   isPatientDirty?: boolean;
@@ -45,6 +52,8 @@ interface AppointmentBookingSectionProps {
 
 export function AppointmentBookingSection({ 
   patientId, 
+  episodeId,
+  pool = 'consult',
   isViewOnly = false,
   onSavePatientBeforeBooking,
   isPatientDirty = false,
@@ -242,9 +251,12 @@ export function AppointmentBookingSection({
         body: JSON.stringify({
           patientId: currentPatientId,
           timeSlotId: selectedSlot,
+          episodeId: episodeId ?? null,
+          pool: pool ?? (episodeId ? 'work' : 'consult'),
           cim: customCim || (availableCims.length === 1 ? DEFAULT_CIM : null),
           teremszam: customTeremszam.trim() || null,
           appointmentType: selectedAppointmentType || null,
+          createdVia: 'patient_form',
         }),
       });
 
@@ -535,6 +547,7 @@ export function AppointmentBookingSection({
           cim: newSlotCim || DEFAULT_CIM,
           teremszam: newSlotTeremszam.trim() || null,
           appointmentType: newSlotAppointmentType || null,
+          createdVia: 'patient_form',
         }),
       });
 
@@ -826,6 +839,25 @@ export function AppointmentBookingSection({
                       {formatDateTime(appointment.startTime)}
                     </div>
                     <div className="text-xs text-gray-500">
+                      {(appointment.stepLabel || appointment.stepCode || appointment.pool) && (
+                        <div className="mb-1 flex flex-wrap items-center gap-1.5">
+                          {(appointment.stepLabel || appointment.stepCode) && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 text-xs font-medium">
+                              {appointment.stepLabel || appointment.stepCode}
+                            </span>
+                          )}
+                          {appointment.pool && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 text-xs">
+                              {appointment.pool === 'consult' ? 'Konzultáció' : appointment.pool === 'work' ? 'Munka' : appointment.pool === 'control' ? 'Kontroll' : appointment.pool}
+                            </span>
+                          )}
+                          {appointment.episodeId && (
+                            <span className="text-gray-400 text-xs" title={appointment.episodeId}>
+                              Epizód #{appointment.episodeId.slice(0, 8)}
+                            </span>
+                          )}
+                        </div>
+                      )}
                       <div>Cím: {displayCim}</div>
                       {appointment.teremszam && (
                         <div>Teremszám: {appointment.teremszam}</div>
@@ -866,11 +898,23 @@ export function AppointmentBookingSection({
                             </span>
                           </div>
                         )}
-                        {appointment.timeSlotSource && (
+                        {(appointment.timeSlotSource || appointment.createdVia) && (
                           <div>
                             <span className="text-xs font-medium text-gray-600">Forrás: </span>
                             <span className="text-xs text-gray-700">
-                              {appointment.timeSlotSource === 'google_calendar' ? 'Google Naptár szinkron' : 'Manuális'}
+                              {appointment.createdVia === 'worklist'
+                                ? 'Munkalista'
+                                : appointment.createdVia === 'patient_form'
+                                  ? 'Beteg űrlap'
+                                  : appointment.createdVia === 'admin_override'
+                                    ? 'Admin felülírás'
+                                    : appointment.createdVia === 'surgeon_override'
+                                      ? 'Orvosi felülírás'
+                                      : appointment.timeSlotSource === 'google_calendar'
+                                        ? 'Google Naptár szinkron'
+                                        : appointment.timeSlotSource === 'manual'
+                                          ? 'Manuális'
+                                          : 'Manuális'}{appointment.timeSlotSource === 'google_calendar' && appointment.createdVia && appointment.createdVia !== 'google_import' ? ' (.ics)' : ''}
                             </span>
                           </div>
                         )}

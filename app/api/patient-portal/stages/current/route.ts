@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     }
 
     const pool = getDbPool();
-    const { episodeId, stageCode, stage, useNewModel } = await getCurrentEpisodeAndStage(pool, patientId);
+    const { episodeId, stageCode, stage, useNewModel, deliveryDate } = await getCurrentEpisodeAndStage(pool, patientId);
 
     if (!episodeId && !stage) {
       return NextResponse.json({
@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
       useNewModel,
       stageDate,
       notes,
+      deliveryDate: deliveryDate?.toISOString() ?? null,
     };
 
     return NextResponse.json({ currentStage });

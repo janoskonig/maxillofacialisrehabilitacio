@@ -21,6 +21,13 @@ function rowToEpisode(row: Record<string, unknown>): PatientEpisode {
     triggerType: (row.triggerType as PatientEpisode['triggerType']) || null,
     createdAt: (row.createdAt as Date)?.toISOString?.() ?? null,
     createdBy: (row.createdBy as string) || null,
+    carePathwayId: (row.carePathwayId as string) || null,
+    assignedProviderId: (row.assignedProviderId as string) || null,
+    carePathwayName: (row.carePathwayName as string) || null,
+    assignedProviderName: (row.assignedProviderName as string) || null,
+    treatmentTypeId: (row.treatmentTypeId as string) || null,
+    treatmentTypeCode: (row.treatmentTypeCode as string) || null,
+    treatmentTypeLabel: (row.treatmentTypeLabel as string) || null,
   };
 }
 
@@ -60,26 +67,71 @@ export async function GET(
 
     const result = await pool.query(
       `SELECT 
-        id,
-        patient_id as "patientId",
-        reason,
-        pathway_code as "pathwayCode",
-        chief_complaint as "chiefComplaint",
-        case_title as "caseTitle",
-        status,
-        opened_at as "openedAt",
-        closed_at as "closedAt",
-        parent_episode_id as "parentEpisodeId",
-        trigger_type as "triggerType",
-        created_at as "createdAt",
-        created_by as "createdBy"
-      FROM patient_episodes
-      WHERE patient_id = $1
-      ORDER BY opened_at DESC`,
+        pe.id,
+        pe.patient_id as "patientId",
+        pe.reason,
+        pe.pathway_code as "pathwayCode",
+        pe.chief_complaint as "chiefComplaint",
+        pe.case_title as "caseTitle",
+        pe.status,
+        pe.opened_at as "openedAt",
+        pe.closed_at as "closedAt",
+        pe.parent_episode_id as "parentEpisodeId",
+        pe.trigger_type as "triggerType",
+        pe.created_at as "createdAt",
+        pe.created_by as "createdBy",
+        pe.care_pathway_id as "carePathwayId",
+        pe.assigned_provider_id as "assignedProviderId",
+        pe.treatment_type_id as "treatmentTypeId",
+        cp.name as "carePathwayName",
+        COALESCE(u.doktor_neve, u.email) as "assignedProviderName",
+        tt.code as "treatmentTypeCode",
+        tt.label_hu as "treatmentTypeLabel"
+      FROM patient_episodes pe
+      LEFT JOIN care_pathways cp ON pe.care_pathway_id = cp.id
+      LEFT JOIN users u ON pe.assigned_provider_id = u.id
+      LEFT JOIN treatment_types tt ON pe.treatment_type_id = tt.id
+      WHERE pe.patient_id = $1
+      ORDER BY pe.opened_at DESC`,
       [patientId]
     );
 
     const episodes: PatientEpisode[] = result.rows.map(rowToEpisode);
+
+    // Enrich with episodePathways (multi-pathway support)
+    try {
+      const episodeIds = episodes.map((e) => e.id);
+      if (episodeIds.length > 0) {
+        const epPathRows = await pool.query(
+          `SELECT ep.id, ep.episode_id, ep.care_pathway_id as "carePathwayId", ep.ordinal,
+                  cp.name as "pathwayName",
+                  (SELECT COUNT(*)::int FROM episode_steps es WHERE es.source_episode_pathway_id = ep.id) as "stepCount"
+           FROM episode_pathways ep
+           JOIN care_pathways cp ON ep.care_pathway_id = cp.id
+           WHERE ep.episode_id = ANY($1)
+           ORDER BY ep.ordinal`,
+          [episodeIds]
+        );
+        const byEpisode = new Map<string, typeof epPathRows.rows>();
+        for (const row of epPathRows.rows) {
+          const arr = byEpisode.get(row.episode_id) ?? [];
+          arr.push(row);
+          byEpisode.set(row.episode_id, arr);
+        }
+        for (const ep of episodes) {
+          ep.episodePathways = (byEpisode.get(ep.id) ?? []).map((r: Record<string, unknown>) => ({
+            id: r.id as string,
+            carePathwayId: r.carePathwayId as string,
+            ordinal: r.ordinal as number,
+            pathwayName: r.pathwayName as string,
+            stepCount: r.stepCount as number,
+          }));
+        }
+      }
+    } catch {
+      // episode_pathways table might not exist yet (pre-migration)
+    }
+
     return NextResponse.json({ episodes });
   } catch (error) {
     console.error('Error fetching episodes:', error);
@@ -141,6 +193,7 @@ export async function POST(
     const caseTitle = (body.caseTitle as string)?.trim?.() || null;
     const parentEpisodeId = (body.parentEpisodeId as string) || null;
     const triggerType = body.triggerType as string || null;
+    const treatmentTypeId = (body.treatmentTypeId as string)?.trim?.() || null;
 
     if (!reason || !REASON_VALUES.includes(reason)) {
       return NextResponse.json(
@@ -155,35 +208,91 @@ export async function POST(
       );
     }
 
-    // MVP: egyszerre 1 open epizód – a régi open epizódokat closed-re állítjuk
-    await pool.query(
-      `UPDATE patient_episodes SET status = 'closed', closed_at = CURRENT_TIMESTAMP WHERE patient_id = $1 AND status = 'open'`,
-      [patientId]
-    );
+    // MVP: egyszerre 1 open epizód — transaction + row lock to prevent concurrent duplicates
+    const client = await pool.connect();
+    let episode: PatientEpisode;
+    try {
+      await client.query('BEGIN');
 
-    const insertResult = await pool.query(
-      `INSERT INTO patient_episodes (
-        patient_id, reason, chief_complaint, case_title, status, opened_at, parent_episode_id, trigger_type, created_by
-      ) VALUES ($1, $2, $3, $4, 'open', CURRENT_TIMESTAMP, $5, $6, $7)
-      RETURNING 
-        id, patient_id as "patientId", reason, pathway_code as "pathwayCode",
-        chief_complaint as "chiefComplaint", case_title as "caseTitle", status,
-        opened_at as "openedAt", closed_at as "closedAt", parent_episode_id as "parentEpisodeId",
-        trigger_type as "triggerType", created_at as "createdAt", created_by as "createdBy"`,
-      [patientId, reason, chiefComplaint, caseTitle, parentEpisodeId, triggerType, auth.email]
-    );
-
-    const episode = rowToEpisode(insertResult.rows[0]);
-
-    // Kezdő stage_event: STAGE_0
-    const stageEventsExists = await pool.query(
-      `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'stage_events'`
-    );
-    if (stageEventsExists.rows.length > 0) {
-      await pool.query(
-        `INSERT INTO stage_events (patient_id, episode_id, stage_code, at, created_by) VALUES ($1, $2, 'STAGE_0', CURRENT_TIMESTAMP, $3)`,
-        [patientId, episode.id, auth.email]
+      // Lock patient row to serialize concurrent episode creation for the same patient
+      await client.query(
+        `SELECT id FROM patients WHERE id = $1 FOR UPDATE`,
+        [patientId]
       );
+
+      const closingResult = await client.query(
+        `SELECT id FROM patient_episodes WHERE patient_id = $1 AND status = 'open'`,
+        [patientId]
+      );
+      const closingIds = closingResult.rows.map((r: { id: string }) => r.id);
+      if (closingIds.length > 0) {
+        try {
+          const { invalidateIntentsForEpisodes } = await import('@/lib/intent-invalidation');
+          await invalidateIntentsForEpisodes(closingIds, 'episode_closed');
+        } catch (e) {
+          console.error('Failed to invalidate intents for closed episodes:', e);
+        }
+      }
+      await client.query(
+        `UPDATE patient_episodes SET status = 'closed', closed_at = CURRENT_TIMESTAMP WHERE patient_id = $1 AND status = 'open'`,
+        [patientId]
+      );
+
+      // Kezelési út nincs automatikusan beállítva — csak a worklist „Kezelési út beállítása” vagy későbbi explicit választás állít be pathway-t. Így a kezelési terv idővonalban csak akkor jelennek meg, ha van beállítva.
+      const insertResult = await client.query(
+        `INSERT INTO patient_episodes (
+          patient_id, reason, chief_complaint, case_title, status, opened_at, parent_episode_id, trigger_type, treatment_type_id, created_by
+        ) VALUES ($1, $2, $3, $4, 'open', CURRENT_TIMESTAMP, $5, $6, $7, $8)
+        RETURNING id`,
+        [patientId, reason, chiefComplaint, caseTitle, parentEpisodeId, triggerType, treatmentTypeId || null, auth.email]
+      );
+
+      const newId = insertResult.rows[0]?.id;
+      if (!newId) {
+        await client.query('ROLLBACK');
+        return NextResponse.json({ error: 'Epizód létrehozása sikertelen' }, { status: 500 });
+      }
+
+      const fetchResult = await client.query(
+        `SELECT pe.id, pe.patient_id as "patientId", pe.reason, pe.pathway_code as "pathwayCode",
+          pe.chief_complaint as "chiefComplaint", pe.case_title as "caseTitle", pe.status,
+          pe.opened_at as "openedAt", pe.closed_at as "closedAt", pe.parent_episode_id as "parentEpisodeId",
+          pe.trigger_type as "triggerType", pe.created_at as "createdAt", pe.created_by as "createdBy",
+          pe.care_pathway_id as "carePathwayId", pe.assigned_provider_id as "assignedProviderId",
+          pe.treatment_type_id as "treatmentTypeId", cp.name as "carePathwayName",
+          COALESCE(u.doktor_neve, u.email) as "assignedProviderName",
+          tt.code as "treatmentTypeCode", tt.label_hu as "treatmentTypeLabel"
+         FROM patient_episodes pe
+         LEFT JOIN care_pathways cp ON pe.care_pathway_id = cp.id
+         LEFT JOIN users u ON pe.assigned_provider_id = u.id
+         LEFT JOIN treatment_types tt ON pe.treatment_type_id = tt.id
+         WHERE pe.id = $1`,
+        [newId]
+      );
+      const row = fetchResult.rows[0];
+      if (!row) {
+        await client.query('ROLLBACK');
+        return NextResponse.json({ error: 'Epizód létrehozása sikertelen' }, { status: 500 });
+      }
+      episode = rowToEpisode(row);
+
+      // Kezdő stage_event: STAGE_0
+      const stageEventsExists = await client.query(
+        `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'stage_events'`
+      );
+      if (stageEventsExists.rows.length > 0) {
+        await client.query(
+          `INSERT INTO stage_events (patient_id, episode_id, stage_code, at, created_by) VALUES ($1, $2, 'STAGE_0', CURRENT_TIMESTAMP, $3)`,
+          [patientId, episode.id, auth.email]
+        );
+      }
+
+      await client.query('COMMIT');
+    } catch (txError) {
+      await client.query('ROLLBACK');
+      throw txError;
+    } finally {
+      client.release();
     }
 
     await logActivity(

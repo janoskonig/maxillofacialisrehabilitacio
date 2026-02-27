@@ -1,0 +1,89 @@
+treatment_type_code,step_order,label_hu,pool,duration_minutes
+teljes_lemezes,1,Anatómiai lenyomat,work,30
+teljes_lemezes,2,Egyéni kanál befunkcionálása,work,30
+teljes_lemezes,3,Funkciós lenyomat,work,30
+teljes_lemezes,4,Harapásregisztráció,work,30
+teljes_lemezes,5,Fogpróba,work,30
+teljes_lemezes,6,Átadás,work,30
+teljes_lemezes,7,Kontroll 1,control,15
+teljes_lemezes,8,Kontroll 2,control,15
+teljes_lemezes,9,Kontroll 3,control,15
+reszleges_femlemezes_kapocselhorgonyzasu,1,Lenyomat gyári kanállal,work,30
+reszleges_femlemezes_kapocselhorgonyzasu,2,Lenyomat egyéni kanállal,work,30
+reszleges_femlemezes_kapocselhorgonyzasu,3,Fémlemezpróba,work,30
+reszleges_femlemezes_kapocselhorgonyzasu,4,Fogpróba,work,30
+reszleges_femlemezes_kapocselhorgonyzasu,5,Átadás,work,30
+reszleges_femlemezes_kapocselhorgonyzasu,6,Kontroll 1,control,15
+reszleges_femlemezes_kapocselhorgonyzasu,7,Kontroll 2,control,15
+reszleges_femlemezes_kapocselhorgonyzasu,8,Kontroll 3,control,15
+reszleges_akrilatlemezes,1,Lenyomat gyári kanállal,work,30
+reszleges_akrilatlemezes,2,Harapásregisztráció,work,30
+reszleges_akrilatlemezes,3,Fogpróba,work,30
+reszleges_akrilatlemezes,4,Átadás,work,30
+reszleges_akrilatlemezes,5,Kontroll 1,control,15
+reszleges_akrilatlemezes,6,Kontroll 2,control,15
+reszleges_akrilatlemezes,7,Kontroll 3,control,15
+rogzitett_fogakon,1,Fogelőkészítés,work,30
+rogzitett_fogakon,2,Precíziós-szituációs lenyomat,work,30
+rogzitett_fogakon,3,Vázpróba,work,30
+rogzitett_fogakon,4,Mattpróba,work,30
+rogzitett_fogakon,5,Átadás,work,30
+rogzitett_fogakon,6,Kontroll 1,control,15
+rogzitett_fogakon,7,Kontroll 2,control,15
+rogzitett_fogakon,8,Kontroll 3,control,15
+csavarozott_rogzitesu,1,Lenyomati fejek sínezése,work,30
+csavarozott_rogzitesu,2,Lenyomatvétel,work,30
+csavarozott_rogzitesu,3,Harapásregisztráció,work,30
+csavarozott_rogzitesu,4,Vázpróba,work,30
+csavarozott_rogzitesu,5,Mattpróba,work,30
+csavarozott_rogzitesu,6,Átadás,work,30
+csavarozott_rogzitesu,7,Kontroll 1,control,15
+csavarozott_rogzitesu,8,Kontroll 2,control,15
+csavarozott_rogzitesu,9,Kontroll 3,control,15
+cementezett_rogzitesu,1,Lenyomati fejek sínezése,work,30
+cementezett_rogzitesu,2,Lenyomatvétel,work,30
+cementezett_rogzitesu,3,Harapásregisztráció,work,30
+cementezett_rogzitesu,4,Vázpróba,work,30
+cementezett_rogzitesu,5,Mattpróba,work,30
+cementezett_rogzitesu,6,Átadás,work,30
+cementezett_rogzitesu,7,Kontroll 1,control,15
+cementezett_rogzitesu,8,Kontroll 2,control,15
+cementezett_rogzitesu,9,Kontroll 3,control,15
+sebeszi_sablon,1,Lenyomat gyári kanállal,work,30
+sebeszi_sablon,2,Harapásregisztráció,work,30
+sebeszi_sablon,3,Fogpróba,work,30
+sebeszi_sablon,4,Átadás,work,30
+kombinalt_kapocselhorgonyzasu,1,Fogelőkészítés,work,30
+kombinalt_kapocselhorgonyzasu,2,Precíziós-szituációs lenyomat,work,30
+kombinalt_kapocselhorgonyzasu,3,Vázpróba,work,30
+kombinalt_kapocselhorgonyzasu,4,Mattpróba és gyűjtőlenyomat,work,30
+kombinalt_kapocselhorgonyzasu,5,Fémlemezpróba,work,30
+kombinalt_kapocselhorgonyzasu,6,Harapásregisztráció,work,30
+kombinalt_kapocselhorgonyzasu,7,Fogpróba,work,30
+kombinalt_kapocselhorgonyzasu,8,Átadás,work,30
+kombinalt_kapocselhorgonyzasu,9,Kontroll 1,control,15
+kombinalt_kapocselhorgonyzasu,10,Kontroll 2,control,15
+kombinalt_kapocselhorgonyzasu,11,Kontroll 3,control,15
+kombinalt_rejtett_elohorgonyzasu,1,Fogelőkészítés,work,30
+kombinalt_rejtett_elohorgonyzasu,2,Precíziós-szituációs lenyomat,work,30
+kombinalt_rejtett_elohorgonyzasu,3,Vázpróba,work,30
+kombinalt_rejtett_elohorgonyzasu,4,Mattpróba és gyűjtőlenyomat,work,30
+kombinalt_rejtett_elohorgonyzasu,5,Fémlemezpróba,work,30
+kombinalt_rejtett_elohorgonyzasu,6,Harapásregisztráció,work,30
+kombinalt_rejtett_elohorgonyzasu,7,Fogpróba,work,30
+kombinalt_rejtett_elohorgonyzasu,8,Átadás,work,30
+kombinalt_rejtett_elohorgonyzasu,9,Kontroll 1,control,15
+kombinalt_rejtett_elohorgonyzasu,10,Kontroll 2,control,15
+kombinalt_rejtett_elohorgonyzasu,11,Kontroll 3,control,15
+fedolemezes,1,Fogelőkészítés,work,30
+fedolemezes,2,Precíziós-szituációs lenyomat,work,30
+fedolemezes,3,Harapásregisztráció,work,30
+fedolemezes,4,Primerpróba és gyűjtőlenyomat,work,30
+fedolemezes,5,Harapásregisztráció,work,30
+fedolemezes,6,Fogpróba,work,30
+fedolemezes,7,Átadás,work,30
+fedolemezes,8,Kontroll 1,control,15
+fedolemezes,9,Kontroll 2,control,15
+fedolemezes,10,Kontroll 3,control,15
+zarolemez,1,Lenyomatvétel,work,30
+zarolemez,2,Átadás,work,30

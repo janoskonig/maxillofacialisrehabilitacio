@@ -1,16 +1,22 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { TodaysAppointmentsWidget } from './widgets/TodaysAppointmentsWidget';
 import { PendingApprovalsWidget } from './widgets/PendingApprovalsWidget';
 import { SendMessageWidget } from './widgets/SendMessageWidget';
 import { WaitingTimeWidget } from './widgets/WaitingTimeWidget';
-import { ChevronDown, ChevronUp, LayoutDashboard, UserPlus, Clock, BarChart3 } from 'lucide-react';
+import { BusynessOMeter } from './widgets/BusynessOMeter';
+import { ChevronDown, ChevronUp, LayoutDashboard, UserPlus, Clock, BarChart3, Activity, ClipboardList, Calendar } from 'lucide-react';
 import { DashboardWidget } from './DashboardWidget';
 import { PatientList } from './PatientList';
 import { Patient } from '@/lib/types';
 import { StagesGanttChart, type GanttEpisode, type GanttInterval } from './StagesGanttChart';
+import { WorklistWidget } from './widgets/WorklistWidget';
+import { WipForecastWidget } from './widgets/WipForecastWidget';
+import { IntakeRecommendationBadge } from './widgets/IntakeRecommendationBadge';
+import { TreatmentPlanGantt } from './TreatmentPlanGantt';
 import type { StageCatalogEntry } from '@/lib/types';
 
 interface DashboardData {
@@ -34,12 +40,22 @@ interface LongInPreparatoryPatient {
   stageSince: string;
 }
 
+const VALID_TABS = ['overview', 'new-registrations', 'gantt', 'workload', 'worklist', 'treatment-plans'] as const;
+
 export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, onViewFoto }: DashboardProps) {
+  const searchParams = useSearchParams();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'new-registrations' | 'gantt'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'new-registrations' | 'gantt' | 'workload' | 'worklist' | 'treatment-plans'>('overview');
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && VALID_TABS.includes(tab as (typeof VALID_TABS)[number])) {
+      setActiveTab(tab as (typeof VALID_TABS)[number]);
+    }
+  }, [searchParams]);
   const [longInPreparatory, setLongInPreparatory] = useState<LongInPreparatoryPatient[]>([]);
   const [ganttEpisodes, setGanttEpisodes] = useState<GanttEpisode[]>([]);
   const [ganttIntervals, setGanttIntervals] = useState<GanttInterval[]>([]);
@@ -204,6 +220,7 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
             <LayoutDashboard className="w-5 h-5 text-medical-primary" />
           </div>
           <h2 className="text-heading-2">Dashboard</h2>
+          {canSeeStages && <IntakeRecommendationBadge />}
         </div>
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
@@ -257,6 +274,32 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
               </button>
               {canSeeStages && (
                 <button
+                  onClick={() => setActiveTab('worklist')}
+                  className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                    activeTab === 'worklist'
+                      ? 'text-medical-primary border-medical-primary'
+                      : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
+                  }`}
+                >
+                  <ClipboardList className="w-4 h-4" />
+                  Munkalista
+                </button>
+              )}
+              {canSeeStages && (
+                <button
+                  onClick={() => setActiveTab('treatment-plans')}
+                  className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                    activeTab === 'treatment-plans'
+                      ? 'text-medical-primary border-medical-primary'
+                      : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
+                  }`}
+                >
+                  <Calendar className="w-4 h-4" />
+                  Kezelési tervek
+                </button>
+              )}
+              {canSeeStages && (
+                <button
                   onClick={() => setActiveTab('gantt')}
                   className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
                     activeTab === 'gantt'
@@ -266,6 +309,19 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
                 >
                   <BarChart3 className="w-4 h-4" />
                   GANTT
+                </button>
+              )}
+              {canSeeStages && (
+                <button
+                  onClick={() => setActiveTab('workload')}
+                  className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                    activeTab === 'workload'
+                      ? 'text-medical-primary border-medical-primary'
+                      : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
+                  }`}
+                >
+                  <Activity className="w-4 h-4" />
+                  Orvos terhelés
                 </button>
               )}
             </nav>
@@ -321,6 +377,27 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
             </div>
           )}
 
+          {activeTab === 'worklist' && canSeeStages && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Aktív kezelések következő lépései – foglalás egy kattintással.
+              </p>
+              <WorklistWidget />
+            </div>
+          )}
+
+          {activeTab === 'workload' && canSeeStages && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Fogpótlástanász és admin kihasználtság a következő 30 napra.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <BusynessOMeter />
+                <WipForecastWidget />
+              </div>
+            </div>
+          )}
+
           {activeTab === 'new-registrations' && (
             <div className="space-y-4">
               {newRegistrationsAsPatients.length === 0 ? (
@@ -345,6 +422,15 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
                   sortDirection="asc"
                 />
               )}
+            </div>
+          )}
+
+          {activeTab === 'treatment-plans' && canSeeStages && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Kezelési tervek idővonala – lépésszintű állapot, demand projection és ETA.
+              </p>
+              <TreatmentPlanGantt />
             </div>
           )}
 

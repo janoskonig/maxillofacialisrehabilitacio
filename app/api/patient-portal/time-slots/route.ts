@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit;
 
     const queryParams: unknown[] = [];
-    const conditions: string[] = ['ats.start_time >= NOW()', "ats.status = 'available'"];
+    const conditions: string[] = ['ats.start_time >= NOW()', "ats.status = 'available'", "ats.slot_purpose IN ('consult', 'flexible')"];
     if (dentistEmail && dentistEmail.trim()) {
       conditions.push('u.email = $1');
       queryParams.push(dentistEmail.trim());

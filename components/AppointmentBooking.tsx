@@ -179,6 +179,7 @@ export function AppointmentBooking() {
         body: JSON.stringify({
           patientId: selectedPatient,
           timeSlotId: selectedSlot,
+          createdVia: 'patient_form',
         }),
       });
 

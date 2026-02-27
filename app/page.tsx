@@ -3,11 +3,12 @@
 import { useState, useEffect, Suspense, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Patient, patientSchema } from '@/lib/types';
 import { getAllPatients, savePatient, searchPatients, getPatientById } from '@/lib/storage';
 import { PatientList } from '@/components/PatientList';
 import { useToast } from '@/contexts/ToastContext';
-import { Plus, Search, Users, LogOut, Shield, Settings, Calendar, CalendarDays, MessageCircle, Filter, Download, Bell, X } from 'lucide-react';
+import { Plus, Search, Users, LogOut, Shield, Settings, Calendar, CalendarDays, MessageCircle, Filter, Download, Bell, X, BookOpen } from 'lucide-react';
 import { getCurrentUser, getUserEmail, getUserRole, logout } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
 import { MobileMenu } from '@/components/MobileMenu';
@@ -458,15 +459,6 @@ export default function Home() {
                   <LogOut className="w-3.5 h-3.5" />
                   Kijelentkezés
                 </button>
-                {(userRole === 'admin' || userRole === 'editor' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos') && (
-                  <button
-                    onClick={handleNewPatient}
-                    className="btn-primary flex items-center gap-1.5 text-sm px-3 py-2"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    Új beteg
-                  </button>
-                )}
               </div>
             </div>
           </div>
@@ -579,20 +571,6 @@ export default function Home() {
                     className="form-input pl-12 py-3 text-base"
                   />
                 </div>
-                
-                {/* View Dropdown */}
-                <div className="flex items-center gap-3">
-                  <Filter className="w-5 h-5 text-gray-400" />
-                  <select
-                    value={selectedView}
-                    onChange={(e) => setSelectedView(e.target.value as 'all' | 'neak_pending' | 'missing_docs')}
-                    className="form-select flex-1 max-w-xs"
-                  >
-                    <option value="all">Minden beteg</option>
-                    <option value="neak_pending">NEAK pending</option>
-                    <option value="missing_docs">Hiányos dokumentáció</option>
-                  </select>
-                </div>
               </div>
 
               {/* Stats */}
@@ -670,6 +648,17 @@ export default function Home() {
                   </p>
                 </div>
               )}
+
+              {/* Footer: Utmutató link */}
+              <div className="mt-8 pt-6 border-t border-gray-200 flex justify-center">
+                <Link
+                  href="/docs/kezelesi-ut-utmutato"
+                  className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-medical-primary transition-colors"
+                >
+                  <BookOpen className="w-4 h-4" />
+                  Kezelési út és ütemezés — Használati útmutató
+                </Link>
+              </div>
             </>
 
       {/* Patient Form Modal */}

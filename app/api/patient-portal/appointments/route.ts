@@ -214,12 +214,13 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
 
     const patient = patientResult.rows[0];
 
-    // Check if time slot exists and is available
+    // Lock time slot row and verify availability
     const timeSlotResult = await pool.query(
       `SELECT ats.*, u.email as dentist_email, u.id as dentist_user_id, u.doktor_neve as dentist_name
        FROM available_time_slots ats
        JOIN users u ON ats.user_id = u.id
-       WHERE ats.id = $1`,
+       WHERE ats.id = $1
+       FOR UPDATE`,
       [timeSlotId]
     );
 
@@ -233,7 +234,22 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
 
     const timeSlot = timeSlotResult.rows[0];
 
-    if (timeSlot.status !== 'available') {
+    // G3: Patient portal — only consult/flexible slots; reject work/control and NULL (admin assigns work/control; NULL may be work-only)
+    const slotPurpose = timeSlot.slot_purpose;
+    if (slotPurpose !== 'consult' && slotPurpose !== 'flexible') {
+      await pool.query('ROLLBACK');
+      return NextResponse.json(
+        {
+          error: 'Ez az időpont típusa nem foglalható közvetlenül a páciens portálon. Kérjük, kérjen időpontot az adminisztrációtól.',
+          code: 'WORK_CONTROL_SLOT_NOT_ALLOWED',
+        },
+        { status: 403 }
+      );
+    }
+
+    // state (slot state machine) is authoritative; fallback to status (legacy) for backward compat
+    const slotState = timeSlot.state ?? (timeSlot.status === 'available' ? 'free' : 'booked');
+    if (slotState !== 'free') {
       await pool.query('ROLLBACK');
       return NextResponse.json(
         { error: 'Ez az időpont már le van foglalva' },
@@ -283,9 +299,21 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
 
     const appointment = appointmentResult.rows[0];
 
-    // Update time slot status to booked
+    if (!appointment) {
+      // UPSERT returned 0 rows: an active (non-cancelled) appointment already exists on this slot
+      await pool.query('ROLLBACK');
+      return NextResponse.json(
+        {
+          error: 'Ez az időpont már le van foglalva egy aktív foglalással. Kérjük, válasszon másik időpontot.',
+          code: 'SLOT_HAS_ACTIVE_APPOINTMENT',
+        },
+        { status: 409 }
+      );
+    }
+
+    // Update time slot: status (legacy) and state (slot state machine) both to booked
     await pool.query(
-      `UPDATE available_time_slots SET status = 'booked' WHERE id = $1`,
+      `UPDATE available_time_slots SET status = 'booked', state = 'booked' WHERE id = $1`,
       [timeSlotId]
     );
 

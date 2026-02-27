@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Menu, CalendarDays, Settings, LogOut, Shield, Home, Users, MessageCircle, ArrowLeft, Plus } from 'lucide-react';
+import { X, Menu, CalendarDays, Settings, LogOut, Shield, Home, Users, MessageCircle, ArrowLeft, Plus, BookOpen } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser, logout, type AuthUser } from '@/lib/auth';
 import { useFeedback } from '@/components/FeedbackContext';
@@ -247,7 +247,14 @@ export function MobileMenu({ currentPath, onMessageClick, onNewPatientClick, sho
               </div>
 
               {/* Footer */}
-              <div className="p-4 border-t border-gray-200 bg-white flex-shrink-0">
+              <div className="p-4 border-t border-gray-200 bg-white flex-shrink-0 space-y-2">
+                <button
+                  onClick={() => handleNavigate('/docs/kezelesi-ut-utmutato')}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  <BookOpen className="w-5 h-5 flex-shrink-0" />
+                  <span className="font-medium">Használati útmutató</span>
+                </button>
                 <button
                   onClick={handleLogout}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left text-red-700 hover:bg-red-50 transition-colors"

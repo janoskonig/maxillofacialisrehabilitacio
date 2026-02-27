@@ -162,9 +162,15 @@ export function PatientStageTimeline({
   };
 
   const currentStage = timeline?.currentStage;
-  const currentStageKey = currentStage && isStageEventEntry(currentStage) ? currentStage.stageCode : currentStage && isLegacyStage(currentStage) ? currentStage.stage : null;
+  const currentStageKey =
+    currentStage && isStageEventEntry(currentStage)
+      ? (currentStage.stageCode ?? '')
+      : currentStage && isLegacyStage(currentStage)
+        ? (currentStage.stage ?? '')
+        : '';
   const currentStageDate = currentStage && (isStageEventEntry(currentStage) ? currentStage.at : isLegacyStage(currentStage) ? currentStage.stageDate : null);
   const currentStageNote = currentStage && (isStageEventEntry(currentStage) ? currentStage.note : isLegacyStage(currentStage) ? currentStage.notes : null);
+  const hasCurrentStageData = !!currentStage;
 
   if (loading) {
     return (
@@ -198,58 +204,64 @@ export function PatientStageTimeline({
         </button>
       </div>
 
-      {/* Current Stage */}
-      {currentStage && currentStageKey && (
-        <div className="mb-6 p-4 bg-medical-primary/10 border border-medical-primary/20 rounded-lg">
-          <div className="flex items-center gap-2 mb-2">
-            <Calendar className="w-5 h-5 text-medical-primary" />
-            <span className="text-sm font-medium text-gray-600">Jelenlegi stádium</span>
-          </div>
-          <div className="flex items-center gap-3 flex-wrap">
+      {/* Current Stage — mindig megjelenik, ha van timeline; üres állapotra fallback */}
+      <div className="mb-6 p-4 bg-medical-primary/10 border border-medical-primary/20 rounded-lg">
+        <div className="flex items-center gap-2 mb-2">
+          <Calendar className="w-5 h-5 text-medical-primary" />
+          <span className="text-sm font-medium text-gray-600">Jelenlegi stádium</span>
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          {hasCurrentStageData && currentStageKey ? (
             <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStageColor(currentStageKey)}`}>
               {getStageLabel(currentStageKey)}
             </span>
-            {currentStageDate && (
-              <>
-                {editingEventId === (currentStage as { id?: string }).id ? (
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="datetime-local"
-                      value={editAtValue}
-                      onChange={(e) => setEditAtValue(e.target.value)}
-                      className="rounded border border-gray-300 px-2 py-1 text-sm"
-                    />
-                    <button type="button" onClick={saveStageStart} disabled={saving} className="p-1 text-green-600 hover:bg-green-50 rounded" title="Mentés">
-                      <Check className="w-4 h-4" />
+          ) : hasCurrentStageData ? (
+            <span className="px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-700">
+              Stádium nincs megadva
+            </span>
+          ) : (
+            <span className="text-sm text-gray-500">Még nincs stádium rögzítve</span>
+          )}
+          {hasCurrentStageData && currentStageDate && (
+            <>
+              {editingEventId === (currentStage as { id?: string }).id ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="datetime-local"
+                    value={editAtValue}
+                    onChange={(e) => setEditAtValue(e.target.value)}
+                    className="rounded border border-gray-300 px-2 py-1 text-sm"
+                  />
+                  <button type="button" onClick={saveStageStart} disabled={saving} className="p-1 text-green-600 hover:bg-green-50 rounded" title="Mentés">
+                    <Check className="w-4 h-4" />
+                  </button>
+                  <button type="button" onClick={cancelEditStageStart} disabled={saving} className="p-1 text-gray-500 hover:bg-gray-100 rounded" title="Mégse">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <span className="text-sm text-gray-600 flex items-center gap-1">
+                  <Clock className="w-4 h-4" />
+                  {format(new Date(currentStageDate), 'yyyy. MMMM d. HH:mm', { locale: hu })}
+                  {canEditStageStart && (currentStage as { id?: string }).id && (
+                    <button
+                      type="button"
+                      onClick={() => startEditStageStart((currentStage as { id: string }).id, currentStageDate)}
+                      className="ml-1 p-1 text-gray-400 hover:text-medical-primary hover:bg-medical-primary/10 rounded"
+                      title="Stádium kezdetének szerkesztése"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
                     </button>
-                    <button type="button" onClick={cancelEditStageStart} disabled={saving} className="p-1 text-gray-500 hover:bg-gray-100 rounded" title="Mégse">
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ) : (
-                  <span className="text-sm text-gray-600 flex items-center gap-1">
-                    <Clock className="w-4 h-4" />
-                    {format(new Date(currentStageDate), 'yyyy. MMMM d. HH:mm', { locale: hu })}
-                    {canEditStageStart && (currentStage as { id?: string }).id && (
-                      <button
-                        type="button"
-                        onClick={() => startEditStageStart((currentStage as { id: string }).id, currentStageDate)}
-                        className="ml-1 p-1 text-gray-400 hover:text-medical-primary hover:bg-medical-primary/10 rounded"
-                        title="Stádium kezdetének szerkesztése"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </span>
-                )}
-              </>
-            )}
-          </div>
-          {currentStageNote && (
-            <p className="text-sm text-gray-700 mt-2">{currentStageNote}</p>
+                  )}
+                </span>
+              )}
+            </>
           )}
         </div>
-      )}
+        {hasCurrentStageData && currentStageNote && (
+          <p className="text-sm text-gray-700 mt-2">{currentStageNote}</p>
+        )}
+      </div>
 
       {/* Episodes */}
       {timeline.episodes && timeline.episodes.length > 0 && (

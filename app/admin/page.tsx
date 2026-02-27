@@ -1,9 +1,15 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser, type AuthUser } from '@/lib/auth';
-import { MessageCircle, ChevronDown, ChevronUp, AlertCircle, Bug, Lightbulb, Mail, Send, ArrowUp, ArrowDown, BarChart3, User, LogIn, Search, UserCircle } from 'lucide-react';
+import { MessageCircle, ChevronDown, ChevronUp, AlertCircle, Bug, Lightbulb, Mail, Send, ArrowUp, ArrowDown, BarChart3, User, LogIn, Search, UserCircle, Settings, ListOrdered } from 'lucide-react';
+import { CarePathwaysEditor } from '@/components/admin/CarePathwaysEditor';
+import { StageCatalogEditor } from '@/components/admin/StageCatalogEditor';
+import { StepCatalogEditor } from '@/components/admin/StepCatalogEditor';
+import { TreatmentTypesEditor } from '@/components/admin/TreatmentTypesEditor';
+import { ToothTreatmentCatalogEditor } from '@/components/admin/ToothTreatmentCatalogEditor';
 import { Logo } from '@/components/Logo';
 
 type UserRole = 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
@@ -82,6 +88,12 @@ export default function AdminPage() {
   // Rendezés a felhasználók táblázathoz
   const [userSortField, setUserSortField] = useState<'email' | 'role' | 'last_activity' | null>(null);
   const [userSortDirection, setUserSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  // Admin tab: felhasznalok | folyamatok. fogpótlástanász only sees folyamatok — derive to avoid race.
+  const [adminTab, setAdminTab] = useState<'felhasznalok' | 'folyamatok'>('felhasznalok');
+  const effectiveTab = currentUser?.role === 'fogpótlástanász' ? 'folyamatok' : adminTab;
+  const [editPathwayId, setEditPathwayId] = useState<string | null>(null);
+  const carePathwaysRef = useRef<HTMLDivElement>(null);
   
   // Rendezett felhasználók
   const sortedUsers = useMemo(() => {
@@ -147,15 +159,20 @@ export default function AdminPage() {
       return;
     }
       setCurrentUser(user);
-      setAuthorized(user.role === 'admin');
+      // Page access: admin or fogpótlástanász (fogpótlástanász only sees folyamatok tab)
+      setAuthorized(user.role === 'admin' || user.role === 'fogpótlástanász');
       setLoading(false);
     };
     checkAuth();
   }, [router]);
 
+  // User management (users, usage, feedback): admin only. fogpótlástanász has folyamatok tab only.
+  // Derived purely from role to avoid conflating page access (authorized) with feature access.
+  const canManageUsers = currentUser?.role === 'admin';
+
   useEffect(() => {
     const loadUsers = async () => {
-      if (!authorized) return;
+      if (!canManageUsers) return;
       setUsersLoading(true);
       try {
         const res = await fetch('/api/users', {
@@ -172,7 +189,7 @@ export default function AdminPage() {
       }
     };
     loadUsers();
-  }, [authorized]);
+  }, [canManageUsers]);
 
   const updateRole = async (userId: string, role: UserRole) => {
     try {
@@ -255,7 +272,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     const loadUsage = async () => {
-      if (!authorized) return;
+      if (!canManageUsers) return;
       setUsageLoading(true);
       try {
         const res = await fetch('/api/activity', {
@@ -270,11 +287,11 @@ export default function AdminPage() {
       }
     };
     loadUsage();
-  }, [authorized]);
+  }, [canManageUsers]);
 
   useEffect(() => {
     const loadFeedback = async () => {
-      if (!authorized) return;
+      if (!canManageUsers) return;
       setFeedbackLoading(true);
       try {
         const url = feedbackStatusFilter 
@@ -295,7 +312,13 @@ export default function AdminPage() {
       }
     };
     loadFeedback();
-  }, [authorized, feedbackStatusFilter]);
+  }, [canManageUsers, feedbackStatusFilter]);
+
+  useEffect(() => {
+    if (editPathwayId && carePathwaysRef.current) {
+      carePathwaysRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [editPathwayId]);
 
   const updateFeedbackStatus = async (feedbackId: string, newStatus: string) => {
     try {
@@ -655,6 +678,27 @@ export default function AdminPage() {
               <h1 className="text-2xl font-bold text-medical-primary">Admin felület</h1>
             </div>
             <div className="flex items-center gap-4">
+              <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+                {currentUser?.role === 'admin' && (
+                  <button
+                    onClick={() => setAdminTab('felhasznalok')}
+                    className={`px-4 py-2 text-sm font-medium transition-colors ${
+                      effectiveTab === 'felhasznalok' ? 'bg-medical-primary text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    Felhasználók
+                  </button>
+                )}
+                <button
+                  onClick={() => setAdminTab('folyamatok')}
+                  className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1 ${
+                    effectiveTab === 'folyamatok' ? 'bg-medical-primary text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <Settings className="w-4 h-4" />
+                  Folyamatok
+                </button>
+              </div>
               <button
                 onClick={() => router.push('/')}
                 className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
@@ -677,6 +721,97 @@ export default function AdminPage() {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {effectiveTab === 'folyamatok' ? (
+          <div className="space-y-8">
+            {/* Útmutató: mikor mit szerkesztesz */}
+            <div className="card border-l-4 border-blue-500 bg-blue-50/40">
+              <div className="flex items-start gap-3">
+                <ListOrdered className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="text-base font-semibold text-blue-900 mb-2">Mikor mit szerkesztesz</h3>
+                  <p className="text-sm text-blue-800 mb-2">
+                    A beteg űrlap <strong>Kezelési terv</strong> szekciójában a három kategória (Felső állcsont, Alsó állcsont, Arcot érintő rehabilitáció) <strong>fix, itt nem szerkeszthető</strong>. Az alábbiak azt szabályozzák, hogy a tervezetekhez milyen típusok választhatók, és hogy a stádiumok/lépések hogyan jelennek meg.
+                  </p>
+                  <ol className="text-sm text-blue-900 space-y-2 list-decimal list-inside">
+                    <li>
+                      <strong>Kezeléstípusok</strong> — A „Tervezett fogpótlás típusa” legördülő opciói a beteg űrlap Kezelési tervén (Felső/Alsó állcsont). Új típus itt; a „Részlépések” gomb a hozzá tartozó kezelési út szerkesztéséhez ugrik.
+                    </li>
+                    <li>
+                      <strong>Kezelési utak</strong> — Lépéssor egy típus vagy indikációhoz (konzultáció → munka → kontroll). Itt állítod a lépések sorrendjét, típusát, időtartamát.
+                    </li>
+                    <li>
+                      <strong>Részlépések (step_code → címke)</strong> — A lépések megjelenítési nevei. Ha egy kód a kezelési útban szerepel, itt adhatsz neki magyar/angol címet.
+                    </li>
+                    <li>
+                      <strong>Stádiumok</strong> — Stádium katalógus indikáció szerint (pl. preop, op, postop). A betegnél a Stádiumok oldalon ezek alapján jelennek meg; itt a neveket és sorrendet szerkeszted.
+                    </li>
+                    <li>
+                      <strong>Fog-szintű kezelési típusok</strong> — A fogazati státusznál az egyes fogakhoz rendelhető kezelések (tömés, gyökérkezelés, húzás stb.). Innen epizód is létrehozható az ütemezéshez.
+                    </li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+
+            <div className="card border-l-4 border-amber-400 bg-amber-50/30">
+              <h3 className="text-sm font-semibold text-amber-900 mb-1">Epizódok és stádiumok szerkesztése (betegnél)</h3>
+              <p className="text-sm text-amber-800 mb-2">
+                A <strong>beteg profiljánál</strong> a „Stádiumok” oldalon állítható: kezelési út, felelős orvos, aktuális stádium, stádium időpontjai. Nyissa meg a beteget, majd a <strong>Stádiumok</strong> fülre.
+              </p>
+              <Link href="/" className="text-sm text-medical-primary hover:underline font-medium">Beteglista megnyitása →</Link>
+            </div>
+
+            {/* 1. Kezeléstípusok — legfelül, mert a pathway hozzá kapcsolódik */}
+            <section className="card" aria-labelledby="section-treatment-types">
+              <div className="mb-4">
+                <h2 id="section-treatment-types" className="text-lg font-semibold text-gray-900">1. Kezeléstípusok</h2>
+                <p className="text-sm text-gray-600 mt-0.5">Mikor: új kezeléstípus hozzáadásakor, vagy a típus megjelenítendő nevének módosításakor. A „Részlépések” gomb a hozzá tartozó kezelési útra ugrik.</p>
+                <p className="text-xs text-gray-500 mt-1">Itt szerkesztett sorok (code + label_hu) = a beteg űrlap <strong>Kezelési terv</strong> szekciójában a „Tervezett fogpótlás típusa” legördülő opciói (pl. Cementezett rögzítésű implantációs korona/híd, Fedőlemezes fogpótlás…). Felső és Alsó állcsont alatt ugyanaz a lista. A kategórianevek (Felső állcsont, Alsó állcsont, Arcot érintő rehabilitáció) fixek.</p>
+              </div>
+              <TreatmentTypesEditor onEditPathway={(id) => setEditPathwayId(id)} />
+            </section>
+
+            {/* 2. Kezelési utak */}
+            <section ref={carePathwaysRef} className="card" aria-labelledby="section-care-pathways">
+              <div className="mb-4">
+                <h2 id="section-care-pathways" className="text-lg font-semibold text-gray-900">2. Kezelési utak</h2>
+                <p className="text-sm text-gray-600 mt-0.5">Mikor: egy kezeléstípus vagy indikáció lépéssorának megadásakor vagy módosításakor (lépések neve, pool, időtartam, sorrend).</p>
+              </div>
+              <CarePathwaysEditor
+                editPathwayId={editPathwayId}
+                onEditPathwayIdClear={() => setEditPathwayId(null)}
+              />
+            </section>
+
+            {/* 3. Részlépések katalógus */}
+            <section className="card" aria-labelledby="section-step-catalog">
+              <div className="mb-4">
+                <h2 id="section-step-catalog" className="text-lg font-semibold text-gray-900">3. Részlépések (step_code → címke)</h2>
+                <p className="text-sm text-gray-600 mt-0.5">Mikor: ha egy kezelési útban használt lépéskódnak magyar/angol megjelenítési nevet adsz, vagy az „unmapped” listában megjelenő kódokat szeretnéd felvenni.</p>
+              </div>
+              <StepCatalogEditor />
+            </section>
+
+            {/* 4. Stádiumok katalógus */}
+            <section className="card" aria-labelledby="section-stage-catalog">
+              <div className="mb-4">
+                <h2 id="section-stage-catalog" className="text-lg font-semibold text-gray-900">4. Stádiumok</h2>
+                <p className="text-sm text-gray-600 mt-0.5">Mikor: a beteg stádiumainak (pl. preop, op, postop) katalógusát szerkeszted indikáció szerint — nevek, sorrend, záró stádium. A betegnél a Stádiumok oldal ezt használja.</p>
+              </div>
+              <StageCatalogEditor />
+            </section>
+
+            {/* 5. Fog-szintű kezelési típusok */}
+            <section className="card" aria-labelledby="section-tooth-treatment-catalog">
+              <div className="mb-4">
+                <h2 id="section-tooth-treatment-catalog" className="text-lg font-semibold text-gray-900">5. Fog-szintű kezelési típusok</h2>
+                <p className="text-sm text-gray-600 mt-0.5">Mikor: a fogazati státusznál az egyes fogakhoz rendelhető kezelési típusokat (pl. tömés, gyökérkezelés, húzás, korona) szerkeszted. Ezek a beteg űrlap fogazati diagramjánál jelennek meg.</p>
+              </div>
+              <ToothTreatmentCatalogEditor />
+            </section>
+          </div>
+        ) : (
+          <>
         {/* Belépés mint másik felhasználó */}
         <div className="card mb-6 border-l-4 border-blue-500">
           <div className="flex items-center gap-2 mb-4">
@@ -1256,6 +1391,8 @@ export default function AdminPage() {
             </div>
           )}
         </div>
+          </>
+        )}
       </main>
     </div>
   );

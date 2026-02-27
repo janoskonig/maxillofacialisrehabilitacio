@@ -29,7 +29,7 @@ export async function GET(
     const patientId = params.id;
     const timepoint = params.timepoint as OHIP14Timepoint;
 
-    if (!['T0', 'T1', 'T2'].includes(timepoint)) {
+    if (!['T0', 'T1', 'T2', 'T3'].includes(timepoint)) {
       return NextResponse.json(
         { error: 'Érvénytelen timepoint' },
         { status: 400 }
@@ -134,7 +134,7 @@ export async function POST(
     const patientId = params.id;
     const timepoint = params.timepoint as OHIP14Timepoint;
 
-    if (!['T0', 'T1', 'T2'].includes(timepoint)) {
+    if (!['T0', 'T1', 'T2', 'T3'].includes(timepoint)) {
       return NextResponse.json(
         { error: 'Érvénytelen timepoint' },
         { status: 400 }
@@ -158,7 +158,7 @@ export async function POST(
     }
 
     const stageCodeOrLegacy = current.useNewModel ? current.stageCode : current.stage;
-    if (stageCodeOrLegacy && !isTimepointAllowedForStage(timepoint, stageCodeOrLegacy, current.useNewModel)) {
+    if (stageCodeOrLegacy && !isTimepointAllowedForStage(timepoint, stageCodeOrLegacy, current.useNewModel, current.deliveryDate)) {
       console.warn(
         `OHIP-14 timepoint ${timepoint} saved for patient ${patientId} in stage ${stageCodeOrLegacy}, which is not the typical stage for this timepoint`
       );

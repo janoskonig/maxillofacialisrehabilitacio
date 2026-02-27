@@ -1,8 +1,9 @@
 'use client';
 
-import { format, isToday, isSameDay } from 'date-fns';
+import { format, isToday, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { CalendarEvent } from './CalendarEvent';
+import { VirtualLane } from './VirtualLane';
 
 interface Appointment {
   id: string;
@@ -21,6 +22,8 @@ interface DayViewProps {
   currentDate: Date;
   appointments: Appointment[];
   appointmentsByDate: Record<string, Appointment[]>;
+  virtualAppointmentsByDate?: Record<string, any[]>;
+  includeVirtual?: boolean;
   onAppointmentClick?: (appointment: Appointment) => void;
 }
 
@@ -28,11 +31,14 @@ export function DayView({
   currentDate,
   appointments,
   appointmentsByDate,
+  virtualAppointmentsByDate = {},
+  includeVirtual = false,
   onAppointmentClick,
 }: DayViewProps) {
   const hours = Array.from({ length: 24 }, (_, i) => i);
   const dateKey = format(currentDate, 'yyyy-MM-dd');
   const dayAppointments = appointmentsByDate[dateKey] || [];
+  const dayVirtualItems = includeVirtual ? (virtualAppointmentsByDate[dateKey] || []) : [];
   const isCurrentDay = isToday(currentDate);
 
   // Group appointments by hour
@@ -56,6 +62,11 @@ export function DayView({
 
   return (
     <div className="bg-white rounded-lg border">
+      {/* Virtual lane - top */}
+      {includeVirtual && dayVirtualItems.length > 0 && (
+        <VirtualLane items={dayVirtualItems} mode="day" dateKey={dateKey} />
+      )}
+
       {/* Day header */}
       <div className={`p-3 sm:p-4 border-b ${isCurrentDay ? 'bg-blue-50' : 'bg-gray-50'}`}>
         <div className="text-base sm:text-lg font-bold text-gray-900">

@@ -149,39 +149,19 @@ export const patientSchema = z.object({
   nemIsmertPoziciokbanImplantatumRészletek: z.string().optional().nullable(),
   
   // KEZELÉSI TERV - FELSŐ ÁLLCSONT (tömb, mert több tervezet lehet)
+  // READ: elfogad tipus (legacy) és treatmentTypeCode (új). UI-ban treatmentTypeCode.
+  // WRITE: backend normalizál → mindig treatmentTypeCode mentésre.
   kezelesiTervFelso: z.array(z.object({
-    tipus: z.enum([
-      'zárólemez',
-      'részleges akrilátlemezes fogpótlás',
-      'teljes lemezes fogpótlás',
-      'fedőlemezes fogpótlás',
-      'kapocselhorgonyzású részleges fémlemezes fogpótlás',
-      'kombinált fogpótlás kapocselhorgonyzással',
-      'kombinált fogpótlás rejtett elhorgonyzási eszközzel',
-      'rögzített fogpótlás fogakon elhorgonyozva',
-      'cementezett rögzítésű implantációs korona/híd',
-      'csavarozott rögzítésű implantációs korona/híd',
-      'sebészi sablon készítése'
-    ]),
+    tipus: z.string().optional().nullable(), // legacy, backward compat
+    treatmentTypeCode: z.string().optional().nullable(), // = treatment_types.code
     tervezettAtadasDatuma: z.string().optional().nullable(),
     elkeszult: z.boolean().default(false)
   })).optional().nullable().default([]),
   
   // KEZELÉSI TERV - ALSÓ ÁLLCSONT (tömb, mert több tervezet lehet)
   kezelesiTervAlso: z.array(z.object({
-    tipus: z.enum([
-      'zárólemez',
-      'részleges akrilátlemezes fogpótlás',
-      'teljes lemezes fogpótlás',
-      'fedőlemezes fogpótlás',
-      'kapocselhorgonyzású részleges fémlemezes fogpótlás',
-      'kombinált fogpótlás kapocselhorgonyzással',
-      'kombinált fogpótlás rejtett elhorgonyzási eszközzel',
-      'rögzített fogpótlás fogakon elhorgonyozva',
-      'cementezett rögzítésű implantációs korona/híd',
-      'csavarozott rögzítésű implantációs korona/híd',
-      'sebészi sablon készítése'
-    ]),
+    tipus: z.string().optional().nullable(), // legacy, backward compat
+    treatmentTypeCode: z.string().optional().nullable(), // = treatment_types.code
     tervezettAtadasDatuma: z.string().optional().nullable(),
     elkeszult: z.boolean().default(false)
   })).optional().nullable().default([]),
@@ -555,6 +535,104 @@ export interface PatientEpisode {
   triggerType?: TriggerType | null;
   createdAt?: string | null;
   createdBy?: string | null;
+  carePathwayId?: string | null;
+  assignedProviderId?: string | null;
+  carePathwayName?: string | null;
+  assignedProviderName?: string | null;
+  treatmentTypeId?: string | null;
+  treatmentTypeCode?: string | null;
+  treatmentTypeLabel?: string | null;
+  stageVersion?: number;
+  snapshotVersion?: number;
+  episodePathways?: Array<{
+    id: string;
+    carePathwayId: string;
+    ordinal: number;
+    pathwayName: string;
+    stepCount: number;
+  }>;
+}
+
+// --- SSOT: Stage transition rulesets ---
+export const RULESET_STATUS_VALUES = ['DRAFT', 'PUBLISHED', 'DEPRECATED'] as const;
+export type RulesetStatus = typeof RULESET_STATUS_VALUES[number];
+
+export interface StageTransitionRule {
+  id: string;
+  from_stage: string;
+  to_stage: string;
+  description: string;
+  conditions: string[];
+}
+
+export interface StageTransitionRuleset {
+  id: string;
+  version: number;
+  status: RulesetStatus;
+  rules: StageTransitionRule[];
+  validFrom?: string | null;
+  createdAt?: string | null;
+  createdBy?: string | null;
+  publishedAt?: string | null;
+}
+
+// --- SSOT: Stage suggestions ---
+export interface StageSuggestion {
+  id: string;
+  episodeId: string;
+  suggestedStage: string;
+  fromStage?: string | null;
+  rulesetVersion: number;
+  snapshotVersion: number;
+  dedupeKey: string;
+  ruleIds: string[];
+  computedAt: string;
+}
+
+// --- SSOT: Intake status FSM ---
+export const INTAKE_STATUS_VALUES = ['JUST_REGISTERED', 'NEEDS_TRIAGE', 'TRIAGED', 'IN_CARE'] as const;
+export type IntakeStatus = typeof INTAKE_STATUS_VALUES[number];
+
+export const INTAKE_ITEM_STATUS_VALUES = ['OPEN', 'RESOLVED', 'CANCELLED'] as const;
+export type IntakeItemStatus = typeof INTAKE_ITEM_STATUS_VALUES[number];
+
+export interface PatientIntakeItem {
+  id: string;
+  patientId: string;
+  kind: string;
+  status: IntakeItemStatus;
+  source?: string | null;
+  createdAt?: string | null;
+  completedAt?: string | null;
+  createdBy?: string | null;
+  notes?: string | null;
+}
+
+// --- SSOT: Episode steps (generated from care_pathway) ---
+export const EPISODE_STEP_STATUS_VALUES = ['pending', 'scheduled', 'completed', 'skipped'] as const;
+export type EpisodeStepStatus = typeof EPISODE_STEP_STATUS_VALUES[number];
+
+export interface EpisodeStep {
+  id: string;
+  episodeId: string;
+  stepCode: string;
+  pathwayOrderIndex: number;
+  pool: string;
+  durationMinutes: number;
+  defaultDaysOffset: number;
+  status: EpisodeStepStatus;
+  appointmentId?: string | null;
+  createdAt?: string | null;
+  completedAt?: string | null;
+  label?: string;
+}
+
+// --- SSOT: Enhanced episode GET response ---
+export interface EpisodeGetResponse extends PatientEpisode {
+  currentRulesetVersion?: number;
+  stageSuggestion?: StageSuggestion | null;
+  currentStageCode?: string | null;
+  currentStageLabel?: string | null;
 }
 
 export interface StageCatalogEntry {
@@ -602,7 +680,7 @@ export interface StageEventTimeline {
 }
 
 // OHIP-14 types
-export type OHIP14Timepoint = 'T0' | 'T1' | 'T2';
+export type OHIP14Timepoint = 'T0' | 'T1' | 'T2' | 'T3';
 
 export type OHIP14ResponseValue = 0 | 1 | 2 | 3 | 4;
 
@@ -612,7 +690,7 @@ export const ohip14ResponseSchema = z.object({
   id: z.string().optional(),
   patientId: z.string().min(1, 'Beteg ID kötelező'),
   episodeId: z.string().optional().nullable(),
-  timepoint: z.enum(['T0', 'T1', 'T2']),
+  timepoint: z.enum(['T0', 'T1', 'T2', 'T3']),
   stageCode: z.string().optional().nullable(),
   completedAt: z.string().optional().nullable(),
   completedByPatient: z.boolean().default(true),
@@ -664,9 +742,10 @@ export interface OHIP14Dimension {
 }
 
 export const ohip14TimepointOptions: Array<{ value: OHIP14Timepoint; label: string; description: string }> = [
-  { value: 'T0', label: 'T0', description: 'Kezelés megkezdése előtt' },
-  { value: 'T1', label: 'T1', description: 'Rehabilitáció megkezdése előtt' },
-  { value: 'T2', label: 'T2', description: 'Rehabilitáció után' },
+  { value: 'T0', label: 'T0', description: 'Protetikai fázis előtt' },
+  { value: 'T1', label: 'T1', description: 'Átadás után ~1 hónap' },
+  { value: 'T2', label: 'T2', description: 'Átadás után ~6 hónap' },
+  { value: 'T3', label: 'T3', description: 'Átadás után ~3 év' },
 ];
 
 export const ohip14ResponseValueOptions: Array<{ value: OHIP14ResponseValue; label: string }> = [
@@ -676,3 +755,30 @@ export const ohip14ResponseValueOptions: Array<{ value: OHIP14ResponseValue; lab
   { value: 3, label: 'Gyakran' },
   { value: 4, label: 'Mindig' },
 ];
+
+// --- Tooth treatment catalog & per-tooth treatment needs ---
+export const TOOTH_TREATMENT_STATUS_VALUES = ['pending', 'episode_linked', 'completed'] as const;
+export type ToothTreatmentStatus = typeof TOOTH_TREATMENT_STATUS_VALUES[number];
+
+export interface ToothTreatmentCatalogItem {
+  code: string;
+  labelHu: string;
+  labelEn: string | null;
+  defaultCarePathwayId: string | null;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface ToothTreatment {
+  id: string;
+  patientId: string;
+  toothNumber: number;
+  treatmentCode: string;
+  status: ToothTreatmentStatus;
+  episodeId: string | null;
+  notes: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  completedAt: string | null;
+  labelHu?: string;
+}

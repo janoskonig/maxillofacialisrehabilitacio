@@ -17,15 +17,20 @@ export async function GET(request: NextRequest) {
     }
 
     const pool = getDbPool();
-    
+    const forSlotPicker = request.nextUrl.searchParams.get('forSlotPicker') === '1';
+
     // Összes aktív felhasználó, akinek van doktor_neve (orvos szerepkörök és admin)
+    // forSlotPicker: csak admin és fogpótlástanász (időpontválasztó modal szűrőjéhez)
+    const roleCondition = forSlotPicker
+      ? `AND role IN ('admin', 'fogpótlástanász')`
+      : `AND (role IN ('sebészorvos', 'fogpótlástanász', 'admin') OR doktor_neve IS NOT NULL)`;
     const result = await pool.query(
       `SELECT DISTINCT id, email, doktor_neve, intezmeny
        FROM users
        WHERE doktor_neve IS NOT NULL 
          AND doktor_neve != ''
          AND active = true
-         AND (role IN ('sebészorvos', 'fogpótlástanász', 'admin') OR doktor_neve IS NOT NULL)
+         ${roleCondition}
        ORDER BY doktor_neve ASC`
     );
 

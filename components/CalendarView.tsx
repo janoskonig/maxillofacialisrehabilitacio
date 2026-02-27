@@ -35,11 +35,14 @@ export function CalendarView({ onAppointmentClick }: CalendarViewProps) {
   const [viewType, setViewType] = useState<ViewType>('week');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [appointmentsByDate, setAppointmentsByDate] = useState<Record<string, Appointment[]>>({});
+  const [virtualAppointments, setVirtualAppointments] = useState<any[]>([]);
+  const [virtualAppointmentsByDate, setVirtualAppointmentsByDate] = useState<Record<string, any[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dentists, setDentists] = useState<Array<{ email: string; name: string | null }>>([]);
   const [selectedDentist, setSelectedDentist] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
+  const [includeVirtual, setIncludeVirtual] = useState(false);
 
   // Calculate date range based on view type
   const dateRange = useMemo(() => {
@@ -90,6 +93,10 @@ export function CalendarView({ onAppointmentClick }: CalendarViewProps) {
           params.append('status', selectedStatus);
         }
 
+        if (includeVirtual) {
+          params.append('includeVirtual', 'true');
+        }
+
         const response = await fetch(`/api/appointments/calendar?${params.toString()}`, {
           credentials: 'include',
         });
@@ -101,6 +108,8 @@ export function CalendarView({ onAppointmentClick }: CalendarViewProps) {
         const data = await response.json();
         setAppointments(data.appointments || []);
         setAppointmentsByDate(data.appointmentsByDate || {});
+        setVirtualAppointments(data.virtualAppointments || []);
+        setVirtualAppointmentsByDate(data.virtualAppointmentsByDate || {});
       } catch (err) {
         console.error('Error fetching appointments:', err);
         setError(err instanceof Error ? err.message : 'Hiba történt');
@@ -110,7 +119,7 @@ export function CalendarView({ onAppointmentClick }: CalendarViewProps) {
     };
 
     fetchAppointments();
-  }, [dateRange.start, dateRange.end, selectedDentist, selectedStatus]);
+  }, [dateRange.start, dateRange.end, selectedDentist, selectedStatus, includeVirtual]);
 
   // Fetch dentists list
   useEffect(() => {
@@ -239,6 +248,17 @@ export function CalendarView({ onAppointmentClick }: CalendarViewProps) {
             </button>
           </div>
 
+          {/* Virtual appointments toggle */}
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={includeVirtual}
+              onChange={(e) => setIncludeVirtual(e.target.checked)}
+              className="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+            />
+            <span className="text-sm text-gray-700">Virtuális időpontok</span>
+          </label>
+
           {/* Filters */}
           <CalendarFilters
             dentists={dentists}
@@ -267,6 +287,9 @@ export function CalendarView({ onAppointmentClick }: CalendarViewProps) {
           currentDate={currentDate}
           appointments={appointments}
           appointmentsByDate={appointmentsByDate}
+          virtualAppointments={includeVirtual ? virtualAppointments : []}
+          virtualAppointmentsByDate={includeVirtual ? virtualAppointmentsByDate : {}}
+          includeVirtual={includeVirtual}
           onAppointmentClick={onAppointmentClick}
         />
       )}
@@ -276,6 +299,8 @@ export function CalendarView({ onAppointmentClick }: CalendarViewProps) {
           currentDate={currentDate}
           appointments={appointments}
           appointmentsByDate={appointmentsByDate}
+          virtualAppointmentsByDate={includeVirtual ? virtualAppointmentsByDate : {}}
+          includeVirtual={includeVirtual}
           onAppointmentClick={onAppointmentClick}
         />
       )}
@@ -285,6 +310,8 @@ export function CalendarView({ onAppointmentClick }: CalendarViewProps) {
           currentDate={currentDate}
           appointments={appointments}
           appointmentsByDate={appointmentsByDate}
+          virtualAppointmentsByDate={includeVirtual ? virtualAppointmentsByDate : {}}
+          includeVirtual={includeVirtual}
           onAppointmentClick={onAppointmentClick}
         />
       )}

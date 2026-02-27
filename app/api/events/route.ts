@@ -109,8 +109,8 @@ export const POST = withCorrelation(async (req: NextRequest, { correlationId }) 
       ]
     );
 
-    // Return 204 No Content (success, no body needed)
-    const response = NextResponse.json(null, { status: 204 });
+    // Return 204 No Content (success, no body). Response.json() with 204 is invalid (204 must have no body).
+    const response = new NextResponse(null, { status: 204 });
     response.headers.set('x-correlation-id', correlationId);
     return response;
   } catch (error: any) {

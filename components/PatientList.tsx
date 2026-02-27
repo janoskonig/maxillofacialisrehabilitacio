@@ -303,9 +303,6 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
       <th className="px-2 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-32">
         Kapcsolat
       </th>
-      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-        Kezelőorvos
-      </th>
       {renderSortableHeader('Következő időpont', 'idopont', 'w-32')}
       {renderSortableHeader('Létrehozva', 'createdAt')}
       <th className="px-3 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
@@ -477,17 +474,6 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                       <span className="truncate">{patient.email}</span>
                     </div>
                   )}
-                </td>
-                <td className="px-3 py-2 whitespace-nowrap">
-                  <div className="flex items-center text-xs text-gray-900">
-                    <svg className="w-3 h-3 mr-1 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 2C12 2 8 4 8 8C8 10 10 12 12 14C14 12 16 10 16 8C16 4 12 2 12 2Z" />
-                      <path d="M12 14V22" />
-                      <path d="M8 16C8 16 6 18 6 20" />
-                      <path d="M16 16C16 16 18 18 18 20" />
-                    </svg>
-                    {patient.kezeleoorvos || 'Kezelőorvosra vár'}
-                  </div>
                 </td>
                 <td className="px-2 py-2 w-32">
                   {loadingAppointments ? (

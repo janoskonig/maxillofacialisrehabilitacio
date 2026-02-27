@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { fetchVirtualAppointments } from '@/lib/virtual-appointments-service';
 
 const REASON_VALUES = ['traumás sérülés', 'veleszületett rendellenesség', 'onkológiai kezelés utáni állapot'];
+
+/** Extract YYYY-MM-DD in Europe/Budapest from ISO string or date (avoids UTC date shift) */
+function toDateOnlyBudapest(s: string | Date | null): string | null {
+  if (!s) return null;
+  const d = typeof s === 'string' ? new Date(s) : s;
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('en-CA', { timeZone: 'Europe/Budapest' }); // YYYY-MM-DD
+}
 
 /**
  * GANTT adatok: epizódok stádium intervallumokkal.
@@ -43,6 +52,7 @@ export async function GET(request: NextRequest) {
     const status = request.nextUrl.searchParams.get('status') || 'all';
     const from = request.nextUrl.searchParams.get('from');
     const to = request.nextUrl.searchParams.get('to');
+    const includeVirtual = request.nextUrl.searchParams.get('includeVirtual') === 'true';
 
     let episodeQuery = `
       SELECT e.id, e.patient_id as "patientId", p.nev as "patientName", e.reason, e.chief_complaint as "chiefComplaint",
@@ -93,48 +103,93 @@ export async function GET(request: NextRequest) {
       closedAt: r.closedAt ? (r.closedAt as Date)?.toISOString?.() ?? r.closedAt : null,
     }));
 
-    if (episodeIds.length === 0) {
-      return NextResponse.json({ episodes: episodesList, intervals: [] });
-    }
+    let intervals: { episodeId: string; stageCode: string; start: string; end: string }[] = [];
+    let virtualWindows: Array<{
+      episodeId: string;
+      virtualKey: string;
+      patientName: string;
+      stepCode: string;
+      stepLabel: string;
+      pool: string;
+      durationMinutes: number;
+      windowStartDate: string;
+      windowEndDate: string;
+      worklistUrl: string;
+      worklistParams: { episodeId: string; stepCode: string; pool: string };
+    }> = [];
 
-    const eventsResult = await pool.query(
-      `SELECT id, episode_id as "episodeId", stage_code as "stageCode", at
-       FROM stage_events
-       WHERE episode_id = ANY($1::uuid[])
-       ORDER BY episode_id, at ASC`,
-      [episodeIds]
-    );
+    if (episodeIds.length > 0) {
+      const eventsResult = await pool.query(
+        `SELECT id, episode_id as "episodeId", stage_code as "stageCode", at
+         FROM stage_events
+         WHERE episode_id = ANY($1::uuid[])
+         ORDER BY episode_id, at ASC`,
+        [episodeIds]
+      );
 
-    const eventsByEpisode = new Map<string, { stageCode: string; at: string }[]>();
-    for (const row of eventsResult.rows) {
-      const epId = row.episodeId as string;
-      if (!eventsByEpisode.has(epId)) eventsByEpisode.set(epId, []);
-      eventsByEpisode.get(epId)!.push({
-        stageCode: row.stageCode as string,
-        at: (row.at as Date)?.toISOString?.() ?? String(row.at),
-      });
-    }
-
-    const now = new Date().toISOString();
-    const intervals: { episodeId: string; stageCode: string; start: string; end: string }[] = [];
-
-    for (const epId of episodeIds) {
-      const evs = eventsByEpisode.get(epId) || [];
-      for (let i = 0; i < evs.length; i++) {
-        const start = evs[i].at;
-        const end = i < evs.length - 1 ? evs[i + 1].at : now;
-        intervals.push({
-          episodeId: epId,
-          stageCode: evs[i].stageCode,
-          start,
-          end,
+      const eventsByEpisode = new Map<string, { stageCode: string; at: string }[]>();
+      for (const row of eventsResult.rows) {
+        const epId = row.episodeId as string;
+        if (!eventsByEpisode.has(epId)) eventsByEpisode.set(epId, []);
+        eventsByEpisode.get(epId)!.push({
+          stageCode: row.stageCode as string,
+          at: (row.at as Date)?.toISOString?.() ?? String(row.at),
         });
+      }
+
+      const now = new Date().toISOString();
+      for (const epId of episodeIds) {
+        const evs = eventsByEpisode.get(epId) || [];
+        for (let i = 0; i < evs.length; i++) {
+          const start = evs[i].at;
+          const end = i < evs.length - 1 ? evs[i + 1].at : now;
+          intervals.push({
+            episodeId: epId,
+            stageCode: evs[i].stageCode,
+            start,
+            end,
+          });
+        }
+      }
+    }
+
+    // Virtual windows: only when includeVirtual=true (consistent structure for 0 or N episodes)
+    if (includeVirtual) {
+      const rangeStart =
+        toDateOnlyBudapest(from) ??
+        toDateOnlyBudapest(episodesList[0]?.openedAt as string) ??
+        toDateOnlyBudapest(new Date());
+      const rangeEnd =
+        toDateOnlyBudapest(to) ??
+        toDateOnlyBudapest(new Date(Date.now() + 90 * 24 * 60 * 60 * 1000));
+      if (rangeStart && rangeEnd && rangeEnd >= rangeStart) {
+        const { items } = await fetchVirtualAppointments({
+          rangeStartDate: rangeStart,
+          rangeEndDate: rangeEnd,
+          readyOnly: true,
+        });
+        virtualWindows = items
+          .filter((v) => episodeIds.includes(v.episodeId))
+          .map((v) => ({
+            episodeId: v.episodeId,
+            virtualKey: v.virtualKey,
+            patientName: v.patientName,
+            stepCode: v.stepCode,
+            stepLabel: v.stepLabel,
+            pool: v.pool,
+            durationMinutes: v.durationMinutes,
+            windowStartDate: v.windowStartDate,
+            windowEndDate: v.windowEndDate,
+            worklistUrl: v.worklistUrl,
+            worklistParams: v.worklistParams,
+          }));
       }
     }
 
     return NextResponse.json({
       episodes: episodesList,
       intervals,
+      ...(includeVirtual && { virtualWindows }),
     });
   } catch (error) {
     console.error('Error fetching GANTT data:', error);

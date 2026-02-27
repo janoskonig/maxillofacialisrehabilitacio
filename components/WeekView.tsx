@@ -1,8 +1,9 @@
 'use client';
 
-import { startOfWeek, endOfWeek, eachDayOfInterval, format, isToday, addDays } from 'date-fns';
+import { startOfWeek, endOfWeek, eachDayOfInterval, format, isToday } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { CalendarEvent } from './CalendarEvent';
+import { VirtualLane } from './VirtualLane';
 
 interface Appointment {
   id: string;
@@ -21,6 +22,8 @@ interface WeekViewProps {
   currentDate: Date;
   appointments: Appointment[];
   appointmentsByDate: Record<string, Appointment[]>;
+  virtualAppointmentsByDate?: Record<string, any[]>;
+  includeVirtual?: boolean;
   onAppointmentClick?: (appointment: Appointment) => void;
 }
 
@@ -28,11 +31,28 @@ export function WeekView({
   currentDate,
   appointments,
   appointmentsByDate,
+  virtualAppointmentsByDate = {},
+  includeVirtual = false,
   onAppointmentClick,
 }: WeekViewProps) {
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday
   const weekEnd = endOfWeek(currentDate, { weekStartsOn: 1 });
   const days = eachDayOfInterval({ start: weekStart, end: weekEnd });
+
+  // Collect all virtual items for the week
+  const weekVirtualItems: any[] = [];
+  if (includeVirtual) {
+    const seen = new Set<string>();
+    days.forEach((day) => {
+      const dateKey = format(day, 'yyyy-MM-dd');
+      (virtualAppointmentsByDate[dateKey] || []).forEach((v: any) => {
+        if (!seen.has(v.virtualKey)) {
+          seen.add(v.virtualKey);
+          weekVirtualItems.push(v);
+        }
+      });
+    });
+  }
 
   // Show hours 07:00-17:00 (08:00-16:00 with buffer)
   const hours = Array.from({ length: 11 }, (_, i) => i + 7); // 7, 8, 9, ..., 17
@@ -53,6 +73,11 @@ export function WeekView({
   return (
     <div className="bg-white rounded-lg border overflow-x-auto">
       <div className="min-w-full sm:min-w-[800px]">
+        {/* Virtual lane - top */}
+        {includeVirtual && weekVirtualItems.length > 0 && (
+          <VirtualLane items={weekVirtualItems} mode="week" weekDates={days} />
+        )}
+
         {/* Day headers */}
         <div className="grid grid-cols-8 border-b sticky top-0 bg-white z-10">
           <div className="p-2 border-r"></div>

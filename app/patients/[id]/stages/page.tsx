@@ -9,6 +9,9 @@ import Link from 'next/link';
 import { ArrowLeft, BarChart3, Calendar } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { MobileMenu } from '@/components/MobileMenu';
+import { EpisodePathwayEditor } from '@/components/EpisodePathwayEditor';
+import { EpisodeStepsManager } from '@/components/EpisodeStepsManager';
+import { EpisodeStepProjections } from '@/components/EpisodeStepProjections';
 import { PatientStageSelector } from '@/components/PatientStageSelector';
 import { PatientStageTimeline } from '@/components/PatientStageTimeline';
 import { PatientEpisodeForm } from '@/components/PatientEpisodeForm';
@@ -178,7 +181,7 @@ export default function PatientStagesPage() {
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Ellátási epizódok</h3>
               <ul className="space-y-1 text-sm text-gray-700">
                 {episodes.slice(0, 10).map((ep) => (
-                  <li key={ep.id} className="flex items-center gap-2">
+                  <li key={ep.id} className="flex items-center gap-2 flex-wrap">
                     <span className={ep.status === 'open' ? 'text-green-600 font-medium' : 'text-gray-500'}>
                       {ep.status === 'open' ? '● Aktív' : '○ Zárt'}
                     </span>
@@ -186,6 +189,11 @@ export default function PatientStagesPage() {
                     <span className="text-gray-400">
                       {new Date(ep.openedAt).toLocaleDateString('hu-HU')}
                     </span>
+                    {(ep.carePathwayName || ep.assignedProviderName) && (
+                      <span className="text-gray-500 text-xs">
+                        {[ep.carePathwayName, ep.assignedProviderName].filter(Boolean).join(' · ')}
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -199,6 +207,47 @@ export default function PatientStagesPage() {
               patientReason={patientReason}
               onEpisodeCreated={() => refreshStagesAndEpisodes()}
             />
+          )}
+
+          {/* Admin: kezelési utak és felelős orvos (epizód szerkesztése) — csak admin látja */}
+          {userRole === 'admin' && activeEpisode && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50/50">
+              <p className="text-xs font-medium text-amber-800 px-4 pt-3 pb-1">
+                Aktív epizód beállításai — Kezelési utak és felelős orvos itt választható ehhez az epizódhoz
+              </p>
+              <EpisodePathwayEditor
+                episodeId={activeEpisode.id}
+                patientId={patientId}
+                carePathwayId={activeEpisode.carePathwayId}
+                assignedProviderId={activeEpisode.assignedProviderId}
+                carePathwayName={activeEpisode.carePathwayName}
+                assignedProviderName={activeEpisode.assignedProviderName}
+                treatmentTypeId={activeEpisode.treatmentTypeId}
+                onSaved={refreshStagesAndEpisodes}
+              />
+            </div>
+          )}
+
+          {/* Kezelési lépések kezelése — aktív epizód + kezelési út szükséges */}
+          {activeEpisode && (activeEpisode.carePathwayId || (activeEpisode.episodePathways && activeEpisode.episodePathways.length > 0)) && (
+            <>
+              <EpisodeStepsManager
+                episodeId={activeEpisode.id}
+                carePathwayId={activeEpisode.carePathwayId}
+                carePathwayName={activeEpisode.carePathwayName}
+                episodePathways={activeEpisode.episodePathways?.map((ep) => ({
+                  id: ep.id,
+                  carePathwayId: ep.carePathwayId,
+                  pathwayName: ep.pathwayName,
+                }))}
+                onStepChanged={refreshStagesAndEpisodes}
+              />
+
+              <EpisodeStepProjections
+                episodeId={activeEpisode.id}
+                refreshTrigger={refreshKey}
+              />
+            </>
           )}
 
           {/* Stage Selector */}

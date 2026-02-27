@@ -6,7 +6,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { ArrowLeft, BarChart3, User, Users } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { MobileMenu } from '@/components/MobileMenu';
-import { StagesGanttChart, type GanttEpisode, type GanttInterval } from '@/components/StagesGanttChart';
+import { StagesGanttChart, type GanttEpisode, type GanttInterval, type GanttVirtualWindow } from '@/components/StagesGanttChart';
 import type { StageCatalogEntry } from '@/lib/types';
 import { useToast } from '@/contexts/ToastContext';
 
@@ -37,6 +37,8 @@ export default function StagesGanttPage() {
   const [episodes, setEpisodes] = useState<GanttEpisode[]>([]);
   const [intervals, setIntervals] = useState<GanttInterval[]>([]);
   const [catalog, setCatalog] = useState<StageCatalogEntry[]>([]);
+  const [ganttVirtualWindows, setGanttVirtualWindows] = useState<GanttVirtualWindow[]>([]);
+  const [includeVirtual, setIncludeVirtual] = useState(false);
   const [dataLoading, setDataLoading] = useState(false);
 
   useEffect(() => {
@@ -66,6 +68,7 @@ export default function StagesGanttPage() {
     if (viewMode === 'patient' && !patientId) {
       setEpisodes([]);
       setIntervals([]);
+      setGanttVirtualWindows([]);
       return;
     }
     if (viewMode === 'cohort' && !reason) return;
@@ -76,6 +79,7 @@ export default function StagesGanttPage() {
       if (viewMode === 'patient') params.set('patientId', patientId);
       else params.set('reason', reason);
       if (status !== 'all') params.set('status', status);
+      if (includeVirtual) params.set('includeVirtual', 'true');
 
       const res = await fetch(`/api/patients/stages/gantt?${params.toString()}`, {
         credentials: 'include',
@@ -85,19 +89,22 @@ export default function StagesGanttPage() {
         showToast(err.error || 'Hiba a GANTT adatok betöltésekor', 'error');
         setEpisodes([]);
         setIntervals([]);
+        setGanttVirtualWindows([]);
         return;
       }
       const data = await res.json();
       setEpisodes(data.episodes ?? []);
       setIntervals(data.intervals ?? []);
+      setGanttVirtualWindows(data.virtualWindows ?? []);
     } catch {
       showToast('Hiba a GANTT adatok betöltésekor', 'error');
       setEpisodes([]);
       setIntervals([]);
+      setGanttVirtualWindows([]);
     } finally {
       setDataLoading(false);
     }
-  }, [viewMode, patientId, reason, status, showToast]);
+  }, [viewMode, patientId, reason, status, includeVirtual, showToast]);
 
   const fetchCatalog = useCallback(async (reasonFilter: string | null) => {
     try {
@@ -229,6 +236,16 @@ export default function StagesGanttPage() {
             </div>
           </div>
 
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={includeVirtual}
+              onChange={(e) => setIncludeVirtual(e.target.checked)}
+              className="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+            />
+            <span className="text-sm text-gray-700">Virtuális időpontok (foglalásra vár)</span>
+          </label>
+
           {viewMode === 'cohort' && (
             <div className="flex flex-wrap items-center gap-4">
               <label className="flex items-center gap-2">
@@ -323,6 +340,7 @@ export default function StagesGanttPage() {
             episodes={episodes}
             intervals={intervals}
             catalog={catalogForChart.map((c) => ({ code: c.code, labelHu: c.labelHu, orderIndex: c.orderIndex }))}
+            virtualWindows={includeVirtual ? ganttVirtualWindows : []}
           />
         )}
       </main>

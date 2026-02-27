@@ -2,8 +2,74 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import type { StageCatalogEntry, ReasonType } from '@/lib/types';
+import { stageCatalogCreateSchema } from '@/lib/admin-process-schemas';
 
 const REASON_VALUES: ReasonType[] = ['traumás sérülés', 'veleszületett rendellenesség', 'onkológiai kezelés utáni állapot'];
+
+/**
+ * POST /api/stage-catalog — create stage (admin / fogpótlástanász)
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const auth = await verifyAuth(request);
+    if (!auth) {
+      return NextResponse.json({ error: 'Bejelentkezés szükséges' }, { status: 401 });
+    }
+    if (auth.role !== 'admin' && auth.role !== 'fogpótlástanász') {
+      return NextResponse.json({ error: 'Nincs jogosultság' }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const auditReason =
+      body.auditReason ?? request.nextUrl.searchParams.get('auditReason');
+    const parsed = stageCatalogCreateSchema.safeParse({ ...body, auditReason });
+    if (!parsed.success) {
+      const msg = parsed.error.errors.map((e: { message: string }) => e.message).join('; ');
+      return NextResponse.json({ error: msg }, { status: 400 });
+    }
+    const data = parsed.data;
+
+    const pool = getDbPool();
+    try {
+      const r = await pool.query(
+        `INSERT INTO stage_catalog (code, reason, label_hu, order_index, is_terminal, default_duration_days)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING code, reason, label_hu as "labelHu", order_index as "orderIndex", is_terminal as "isTerminal", default_duration_days as "defaultDurationDays"`,
+        [
+          data.code,
+          data.reason,
+          data.labelHu,
+          data.orderIndex,
+          data.isTerminal ?? false,
+          data.defaultDurationDays ?? null,
+        ]
+      );
+      const row = r.rows[0];
+      console.info('[admin] stage_catalog created', {
+        code: row.code,
+        reason: row.reason,
+        by: auth.email ?? auth.userId,
+        auditReason: data.auditReason,
+      });
+      return NextResponse.json({ stage: row });
+    } catch (err: unknown) {
+      const msg = String(err ?? '');
+      if (msg.includes('idx_stage_catalog_reason_order') || msg.includes('unique') || msg.includes('duplicate')) {
+        return NextResponse.json(
+          { error: 'orderIndex ütközik ezen reason-nál. Válasszon másik orderIndex-et.', code: 'ORDER_INDEX_CONFLICT' },
+          { status: 409 }
+        );
+      }
+      throw err;
+    }
+  } catch (error) {
+    console.error('Error creating stage catalog:', error);
+    return NextResponse.json(
+      { error: 'Hiba történt a stádium létrehozásakor' },
+      { status: 500 }
+    );
+  }
+}
 
 /**
  * Get stage catalog, optionally filtered by reason
@@ -40,7 +106,7 @@ export async function GET(request: NextRequest) {
       query += ` WHERE reason = $1`;
       params.push(reason);
     }
-    query += ` ORDER BY order_index ASC`;
+    query += ` ORDER BY reason ASC, order_index ASC, code ASC`;
 
     const result = await pool.query(query, params);
     const catalog: StageCatalogEntry[] = result.rows.map((row) => ({
