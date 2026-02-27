@@ -189,6 +189,14 @@ export async function PATCH(
         await emitSchedulingEvent('episode', episodeId, 'step_skipped');
       } catch { /* non-blocking */ }
 
+      let customLabelCol = '';
+      try {
+        const colCheck = await pool.query(
+          `SELECT 1 FROM information_schema.columns WHERE table_name = 'episode_steps' AND column_name = 'custom_label' LIMIT 1`
+        );
+        if (colCheck.rows.length > 0) customLabelCol = `, custom_label as "customLabel"`;
+      } catch { /* column may not exist */ }
+
       const updated = await pool.query(
         `SELECT id, episode_id as "episodeId", step_code as "stepCode",
                 pathway_order_index as "pathwayOrderIndex", pool,
@@ -196,8 +204,7 @@ export async function PATCH(
                 default_days_offset as "defaultDaysOffset",
                 status, appointment_id as "appointmentId",
                 created_at as "createdAt", completed_at as "completedAt",
-                source_episode_pathway_id as "sourceEpisodePathwayId", seq,
-                custom_label as "customLabel"
+                source_episode_pathway_id as "sourceEpisodePathwayId", seq${customLabelCol}
          FROM episode_steps WHERE id = $1`,
         [stepId]
       );
