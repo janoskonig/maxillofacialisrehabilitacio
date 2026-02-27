@@ -37,9 +37,13 @@ interface TimelineEpisode {
   etaHeuristic: string | null;
 }
 
+/** Protetikai fázis: csak itt jelennek meg betervezett időpontok (ablakok/dátumok). */
+const PROTETIKAI_STAGE_CODES = ['STAGE_5', 'STAGE_6', 'STAGE_7'] as const;
+
 /**
  * GET /api/treatment-plan-timeline
  * Query params: status (open|closed|all), providerId, limit, offset
+ * Betervezett időpontok (ablak/dátum) csak protetikai fázisban (STAGE_5/6/7) jelennek meg.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -61,8 +65,15 @@ export async function GET(request: NextRequest) {
     const pool = getDbPool();
     const now = new Date();
 
-    // 1. Fetch episodes with pathway
-    const whereParts: string[] = ['pe.care_pathway_id IS NOT NULL'];
+    // 1. Fetch episodes with pathway and with at least one kezelési terv filled on patient profile (Felső/Alsó/Arcot érintő)
+    const whereParts: string[] = [
+      'pe.care_pathway_id IS NOT NULL',
+      `(
+        (p.kezelesi_terv_felso IS NOT NULL AND jsonb_array_length(p.kezelesi_terv_felso) > 0)
+        OR (p.kezelesi_terv_also IS NOT NULL AND jsonb_array_length(p.kezelesi_terv_also) > 0)
+        OR (p.kezelesi_terv_arcot_erinto IS NOT NULL AND jsonb_array_length(p.kezelesi_terv_arcot_erinto) > 0)
+      )`,
+    ];
     const params: unknown[] = [];
     let pi = 1;
 
@@ -104,8 +115,8 @@ export async function GET(request: NextRequest) {
 
     const episodeIds = episodesResult.rows.map((r: { episode_id: string }) => r.episode_id);
 
-    // 2. Batch fetch appointments and intents for all episodes
-    const [apptsResult, intentsResult] = await Promise.all([
+    // 2. Batch fetch appointments, intents, and current stage per episode
+    const [apptsResult, intentsResult, stagesResult] = await Promise.all([
       pool.query(
         `SELECT id, episode_id, step_code, step_seq, start_time, appointment_status
          FROM appointments
@@ -124,7 +135,19 @@ export async function GET(request: NextRequest) {
          ORDER BY step_seq ASC`,
         [episodeIds]
       ),
+      pool.query(
+        `SELECT DISTINCT ON (episode_id) episode_id, stage_code
+         FROM stage_events
+         WHERE episode_id = ANY($1)
+         ORDER BY episode_id, at DESC`,
+        [episodeIds]
+      ),
     ]);
+
+    const stageByEpisode = new Map<string, string>();
+    for (const row of stagesResult.rows as { episode_id: string; stage_code: string }[]) {
+      stageByEpisode.set(row.episode_id, row.stage_code);
+    }
 
     // Index by episode_id
     const apptsByEpisode = new Map<string, typeof apptsResult.rows>();
@@ -151,6 +174,8 @@ export async function GET(request: NextRequest) {
 
       const appts = apptsByEpisode.get(ep.episode_id) ?? [];
       const intents = intentsByEpisode.get(ep.episode_id) ?? [];
+      const currentStage = stageByEpisode.get(ep.episode_id) ?? null;
+      const isProtetikai = currentStage != null && (PROTETIKAI_STAGE_CODES as readonly string[]).includes(currentStage);
 
       // Index appointments and intents by step_seq
       const apptBySeq = new Map<number, (typeof appts)[0]>();
@@ -188,7 +213,8 @@ export async function GET(request: NextRequest) {
               etaHeuristic = appt.start_time;
             }
           }
-        } else if (intent && intent.state === 'open') {
+        } else if (intent && intent.state === 'open' && isProtetikai) {
+          // Betervezett időpontok (ablak/dátum) csak protetikai fázisban
           const wEnd = intent.window_end ? new Date(intent.window_end) : null;
           if (wEnd && wEnd < now) {
             status = 'overdue';
@@ -200,6 +226,12 @@ export async function GET(request: NextRequest) {
           if (intent.window_end) {
             etaHeuristic = intent.window_end;
           }
+        } else if (intent && intent.state === 'open' && !isProtetikai) {
+          // Nem protetikai: ne mutassunk ablakot/dátumot, csak „tervezett” státusz
+          const wEnd = intent.window_end ? new Date(intent.window_end) : null;
+          status = wEnd && wEnd < now ? 'overdue' : 'projected';
+          windowStart = null;
+          windowEnd = null;
         } else {
           status = 'projected';
         }

@@ -203,6 +203,7 @@ export async function POST(
         [patientId]
       );
 
+      // Kezelési út nincs automatikusan beállítva — csak a worklist „Kezelési út beállítása” vagy későbbi explicit választás állít be pathway-t. Így a kezelési terv idővonalban csak akkor jelennek meg, ha van beállítva.
       const insertResult = await client.query(
         `INSERT INTO patient_episodes (
           patient_id, reason, chief_complaint, case_title, status, opened_at, parent_episode_id, trigger_type, treatment_type_id, created_by

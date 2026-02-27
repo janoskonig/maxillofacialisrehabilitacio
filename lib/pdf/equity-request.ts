@@ -126,10 +126,8 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
     ? `${kezelesiTervParts.join('; ')} (lásd melléklet)`
     : '(lásd melléklet)';
 
-  // Nyilatkozat generálása
-  const nyilatkozat = patient.kezeleoorvos
-    ? `${EQUITY_REQUEST_CONFIG.megbizottNeve} megbízásából alulírott, ${patient.kezeleoorvos} a kezelési tervben foglaltak elvégzését vállalom.`
-    : `${EQUITY_REQUEST_CONFIG.megbizottNeve} megbízásából alulírott, a kezelési tervben foglaltak elvégzését vállalom.`;
+  // Nyilatkozat generálása (a felelős orvos epizódonként a Stádiumok oldalon állítható)
+  const nyilatkozat = `${EQUITY_REQUEST_CONFIG.megbizottNeve} megbízásából alulírott, a kezelési tervben foglaltak elvégzését vállalom.`;
 
   // Kórtörténeti összefoglaló összeállítása
   const kortortenetiParts: string[] = [];

@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
       SELECT 
         a.id,
         a.patient_id as "patientId",
+        a.episode_id as "episodeId",
         a.time_slot_id as "timeSlotId",
         a.created_by as "createdBy",
         a.dentist_email as "dentistEmail",
@@ -72,6 +73,9 @@ export async function GET(request: NextRequest) {
         a.completion_notes as "completionNotes",
         a.is_late as "isLate",
         a.appointment_type as "appointmentType",
+        a.step_code as "stepCode",
+        a.pool,
+        a.created_via as "createdVia",
         ats.start_time as "startTime",
         ats.status,
         ats.cim,
@@ -79,11 +83,13 @@ export async function GET(request: NextRequest) {
         ats.source as "timeSlotSource",
         p.nev as "patientName",
         p.taj as "patientTaj",
-        p.email as "patientEmail"
+        p.email as "patientEmail",
+        sc.label_hu as "stepLabel"
       FROM appointments a
       JOIN available_time_slots ats ON a.time_slot_id = ats.id
       JOIN patients p ON a.patient_id = p.id
       LEFT JOIN users u ON a.dentist_email = u.email
+      LEFT JOIN step_catalog sc ON a.step_code = sc.step_code AND sc.is_active = true
       ${whereClause}
       ORDER BY ats.start_time ASC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}

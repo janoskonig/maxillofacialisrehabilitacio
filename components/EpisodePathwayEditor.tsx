@@ -25,12 +25,6 @@ interface PathwayOption {
   reason?: string | null;
 }
 
-interface TreatmentTypeOption {
-  id: string;
-  code: string;
-  labelHu: string;
-}
-
 interface DoctorOption {
   id: string;
   name: string;
@@ -47,7 +41,6 @@ export function EpisodePathwayEditor({
 }: EpisodePathwayEditorProps) {
   const { showToast } = useToast();
   const [pathways, setPathways] = useState<PathwayOption[]>([]);
-  const [treatmentTypes, setTreatmentTypes] = useState<TreatmentTypeOption[]>([]);
   const [doctors, setDoctors] = useState<DoctorOption[]>([]);
   const [suggestedTreatmentTypeCodes, setSuggestedTreatmentTypeCodes] = useState<string[]>([]);
   const [loadingLists, setLoadingLists] = useState(true);
@@ -72,28 +65,25 @@ export function EpisodePathwayEditor({
     setLoadingLists(true);
     setError(null);
     try {
-      const [pathwaysRes, doctorsRes, patientRes, treatmentTypesRes] = await Promise.all([
+      const [pathwaysRes, doctorsRes, patientRes] = await Promise.all([
         fetch('/api/care-pathways', { credentials: 'include' }),
         fetch('/api/users/fogpotlastanasz', { credentials: 'include' }),
         patientId ? fetch(`/api/patients/${patientId}`, { credentials: 'include' }) : Promise.resolve(null),
-        fetch('/api/treatment-types', { credentials: 'include' }),
       ]);
       if (!pathwaysRes.ok || !doctorsRes.ok) {
         throw new Error('Nem sikerült betölteni az adatokat');
       }
       const pathwaysData = await pathwaysRes.json();
       const doctorsData = await doctorsRes.json();
-      const treatmentTypesData = treatmentTypesRes.ok ? await treatmentTypesRes.json() : { treatmentTypes: [] };
-      setPathways(
-        (pathwaysData.pathways ?? []).map((p: { id: string; name: string; treatmentTypeCode?: string | null; treatmentTypeId?: string | null; reason?: string | null }) => ({
-          id: p.id,
-          name: p.name,
-          treatmentTypeCode: p.treatmentTypeCode ?? null,
-          treatmentTypeId: p.treatmentTypeId ?? null,
-          reason: p.reason ?? null,
-        }))
-      );
-      setTreatmentTypes((treatmentTypesData.treatmentTypes ?? []).map((t: { id: string; code: string; labelHu: string }) => ({ id: t.id, code: t.code, labelHu: t.labelHu })));
+      // Csak kezeléstípus-alapú utak (treatment_type_id); kizárjuk a reason-alapúakat (traumás sérülés, onkológiai, veleszületett)
+      const allPathways = (pathwaysData.pathways ?? []).map((p: { id: string; name: string; treatmentTypeCode?: string | null; treatmentTypeId?: string | null; reason?: string | null }) => ({
+        id: p.id,
+        name: p.name,
+        treatmentTypeCode: p.treatmentTypeCode ?? null,
+        treatmentTypeId: p.treatmentTypeId ?? null,
+        reason: p.reason ?? null,
+      }));
+      setPathways(allPathways.filter((p) => p.treatmentTypeId != null));
       if (patientRes?.ok) {
         const patientData = await patientRes.json();
         const patient = patientData.patient;
@@ -210,16 +200,22 @@ export function EpisodePathwayEditor({
   return (
     <div
       className={`bg-white rounded-lg border border-gray-200 ${compact ? 'p-3' : 'p-4'}`}
+      role="region"
+      aria-labelledby="episode-pathway-heading"
     >
-      <h3 className={`font-semibold text-gray-900 ${compact ? 'text-sm mb-2' : 'text-base mb-3'}`}>
+      <h3 id="episode-pathway-heading" className={`font-semibold text-gray-900 ${compact ? 'text-sm mb-2' : 'text-base mb-3'}`}>
         Kezelési út és felelős orvos
       </h3>
+      <p className="text-sm text-gray-600 mb-3">
+        Ehhez az epizódhoz tartozó beállítások: válaszd ki a <strong>kezelési utat</strong> (lépéssor: konzultáció → munka → kontroll) és a <strong>felelős orvost</strong>. A kezelési út legördülőben a beteg Kezelési tervén megadott típusokhoz kapcsolódó utak jelennek meg; egyet kell kiválasztani, hogy az epizódhoz időpont foglalható legyen.
+      </p>
       <div className={`space-y-3 ${compact ? 'space-y-2' : ''}`}>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Kezelési út
+          <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="episode-pathway-select">
+            Kezelési út (válassz egyet)
           </label>
           <select
+            id="episode-pathway-select"
             value={selectedPathwayId}
             onChange={(e) => setSelectedPathwayId(e.target.value)}
             className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm disabled:opacity-50"
@@ -237,28 +233,11 @@ export function EpisodePathwayEditor({
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Kezeléstípus (opcionális, STAGE_5-hez fontos)
+          <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="episode-provider-select">
+            Felelős orvos (válassz egyet)
           </label>
           <select
-            value={selectedTreatmentTypeId}
-            onChange={(e) => setSelectedTreatmentTypeId(e.target.value)}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm disabled:opacity-50"
-            disabled={saving}
-          >
-            <option value="">— Nincs beállítva</option>
-            {treatmentTypes.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.labelHu}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Felelős orvos
-          </label>
-          <select
+            id="episode-provider-select"
             value={selectedProviderId}
             onChange={(e) => setSelectedProviderId(e.target.value)}
             className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm disabled:opacity-50"

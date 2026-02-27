@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { ClipboardList } from 'lucide-react';
+import { ClipboardList, CalendarCheck } from 'lucide-react';
 import {
   getWorklistItemKey,
   deriveWorklistRowState,
@@ -11,7 +11,6 @@ import {
 import { formatShortDateRange } from '@/lib/datetime';
 import { SlotPickerModal } from './SlotPickerModal';
 import { OverrideModal } from './OverrideModal';
-import { EpisodePathwayModal } from './EpisodePathwayModal';
 
 export interface PatientWorklistWidgetProps {
   patientId: string;
@@ -31,13 +30,13 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
   const [status, setStatus] = useState<number | null>(null);
   const [local, setLocal] = useState<WorklistLocalState>({});
   const [slotPickerItem, setSlotPickerItem] = useState<WorklistItemBackend | null>(null);
-  const [pathwayModalItem, setPathwayModalItem] = useState<WorklistItemBackend | null>(null);
+  const [pathwayAssigningEpisodeId, setPathwayAssigningEpisodeId] = useState<string | null>(null);
   const [override429, setOverride429] = useState<{
     error: string;
     overrideHint?: string;
     expectedHardNext?: { stepCode: string; earliestStart: string; latestStart: string; durationMinutes: number };
     existingAppointment?: { id: string; startTime: string; providerName?: string };
-    retryData: { patientId: string; episodeId?: string; slotId: string; pool: string; durationMinutes: number; nextStep: string };
+    retryData: { patientId: string; episodeId?: string; slotId: string; pool: string; durationMinutes: number; nextStep: string; stepCode?: string; requiresPrecommit?: boolean };
   } | null>(null);
 
   const fetchWorklist = useCallback(async () => {
@@ -92,6 +91,34 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
     setSlotPickerItem(item);
   };
 
+  const handleAssignDefaultPathway = async (item: WorklistItemBackend) => {
+    const episodeId = item.episodeId;
+    if (!episodeId) return;
+    setPathwayAssigningEpisodeId(episodeId);
+    try {
+      const pathwaysRes = await fetch('/api/care-pathways', { credentials: 'include' });
+      const pathwaysData = await pathwaysRes.json();
+      const pathways = pathwaysData.pathways ?? [];
+      const defaultId = pathways[0]?.id;
+      if (!defaultId) {
+        throw new Error('Nincs kezelési út az adatbázisban');
+      }
+      const patchRes = await fetch(`/api/episodes/${episodeId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ carePathwayId: defaultId }),
+      });
+      if (!patchRes.ok) {
+        const data = await patchRes.json();
+        throw new Error(data.error ?? 'Hiba történt');
+      }
+      await fetchWorklist();
+    } finally {
+      setPathwayAssigningEpisodeId(null);
+    }
+  };
+
   const handleSelectSlot = async (slotId: string) => {
     if (!slotPickerItem) return;
     const { patientId: pid, episodeId, pool, durationMinutes, nextStep } = slotPickerItem;
@@ -114,8 +141,8 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
           episodeId: episodeId ?? null,
           timeSlotId: slotId,
           pool: pool || 'work',
-          requiresPrecommit: false,
-          stepCode: nextStep,
+          requiresPrecommit: slotPickerItem.requiresPrecommit ?? false,
+          stepCode: slotPickerItem.stepCode ?? nextStep,
           createdVia: 'worklist',
         }),
       });
@@ -153,6 +180,8 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
             pool: slotPickerItem.pool || 'work',
             durationMinutes: slotPickerItem.durationMinutes || 30,
             nextStep: slotPickerItem.nextStep,
+            stepCode: slotPickerItem.stepCode,
+            requiresPrecommit: slotPickerItem.requiresPrecommit,
           },
         });
         return;
@@ -195,8 +224,8 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
           timeSlotId: retryData.slotId,
           pool: retryData.pool,
           overrideReason,
-          requiresPrecommit: false,
-          stepCode: retryData.nextStep,
+          requiresPrecommit: retryData.requiresPrecommit ?? false,
+          stepCode: retryData.stepCode ?? retryData.nextStep,
           createdVia: 'worklist',
         }),
       });
@@ -314,24 +343,40 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                     <div className="flex flex-col gap-0.5">
                       <span
                         className={`text-xs px-2 py-0.5 rounded w-fit ${
-                          state === 'READY'
-                            ? 'bg-green-100 text-green-800'
-                            : state === 'BLOCKED'
-                              ? 'bg-gray-200 text-gray-700'
-                              : state === 'NEEDS_REVIEW'
-                                ? 'bg-amber-100 text-amber-800'
-                                : state === 'BOOKING_IN_PROGRESS'
-                                  ? 'bg-blue-100 text-blue-800'
-                                  : 'bg-orange-100 text-orange-800'
+                          state === 'BOOKED'
+                            ? 'bg-blue-100 text-blue-800'
+                            : state === 'READY'
+                              ? 'bg-green-100 text-green-800'
+                              : state === 'BLOCKED'
+                                ? 'bg-gray-200 text-gray-700'
+                                : state === 'NEEDS_REVIEW'
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : state === 'BOOKING_IN_PROGRESS'
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : 'bg-orange-100 text-orange-800'
                         }`}
                       >
-                        {state}
+                        {state === 'BOOKED' ? 'LEFOGLALVA' : state}
                         {state === 'BLOCKED' && item.blockedReason && (
                           <span className="ml-1 truncate max-w-[100px] inline-block" title={item.blockedReason}>
                             {item.blockedReason.slice(0, 15)}…
                           </span>
                         )}
                       </span>
+                      {state === 'BOOKED' && item.bookedAppointmentStartTime && (
+                        <span className="text-xs text-blue-700 flex items-center gap-1">
+                          <CalendarCheck className="w-3 h-3" />
+                          {new Date(item.bookedAppointmentStartTime).toLocaleString('hu-HU', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                          {item.bookedAppointmentProviderEmail && (
+                            <span className="text-gray-500 ml-1">· {item.bookedAppointmentProviderEmail}</span>
+                          )}
+                        </span>
+                      )}
                       {state === 'BLOCKED' && item.blockedCode === 'NO_CARE_PATHWAY' && item.suggestedTreatmentTypeLabel && (
                         <span className="text-xs text-gray-600">
                           Javasolt kezeléstípus: {item.suggestedTreatmentTypeLabel}
@@ -351,12 +396,16 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                         Foglalás
                       </button>
                     )}
+                    {state === 'BOOKED' && (
+                      <span className="text-xs text-blue-600 font-medium">✓ Foglalva</span>
+                    )}
                     {state === 'BLOCKED' && item.blockedCode === 'NO_CARE_PATHWAY' && (
                       <button
-                        onClick={() => setPathwayModalItem(item)}
-                        className="text-sm text-medical-primary hover:underline font-medium"
+                        onClick={() => handleAssignDefaultPathway(item)}
+                        disabled={pathwayAssigningEpisodeId === item.episodeId}
+                        className="text-sm text-medical-primary hover:underline font-medium disabled:opacity-50"
                       >
-                        Kezelési út hozzárendelése
+                        {pathwayAssigningEpisodeId === item.episodeId ? 'Beállítás…' : 'Kezelési út beállítása'}
                       </button>
                     )}
                     {state === 'BOOKING_IN_PROGRESS' && (
@@ -369,19 +418,6 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
           </tbody>
         </table>
       </div>
-
-      {pathwayModalItem && (
-        <EpisodePathwayModal
-          open={!!pathwayModalItem}
-          onClose={() => setPathwayModalItem(null)}
-          episodeId={pathwayModalItem.episodeId}
-          patientId={pathwayModalItem.patientId}
-          patientName={pathwayModalItem.patientName ?? patientName ?? null}
-          onSaved={async () => {
-            await fetchWorklist();
-          }}
-        />
-      )}
 
       {override429 && (
         <OverrideModal

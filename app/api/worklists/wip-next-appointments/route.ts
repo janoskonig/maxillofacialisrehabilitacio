@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
-import { nextRequiredStep, isBlocked } from '@/lib/next-step-engine';
+import { allPendingSteps, isBlockedAll } from '@/lib/next-step-engine';
 import { extractSuggestedTreatmentTypeCodes } from '@/lib/treatment-type-normalize';
 import { getEffectiveTreatmentType } from '@/lib/effective-treatment-type';
 import { WIP_STAGE_CODES } from '@/lib/wip-stage';
@@ -73,9 +73,9 @@ export async function GET(request: NextRequest) {
     const items: WorklistItemBackend[] = [];
 
     for (const row of episodesResult.rows) {
-      const result = await nextRequiredStep(row.episodeId);
+      const result = await allPendingSteps(row.episodeId);
 
-      if (isBlocked(result)) {
+      if (isBlockedAll(result)) {
         const stageRow = await pool.query(
           `SELECT stage_code FROM stage_events WHERE episode_id = $1 ORDER BY at DESC LIMIT 1`,
           [row.episodeId]
@@ -125,11 +125,14 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
-      const now = new Date();
-      const windowEnd = new Date(result.latest_date);
-      const overdueByDays = windowEnd < now ? Math.ceil((now.getTime() - windowEnd.getTime()) / (24 * 60 * 60 * 1000)) : 0;
+      if (result.length === 0) continue;
 
-      const priorityScore = Math.min(100, 50 + overdueByDays * 5);
+      // Per-episode data (compute once, reuse for all steps)
+      const stageResult = await pool.query(
+        `SELECT stage_code FROM stage_events WHERE episode_id = $1 ORDER BY at DESC LIMIT 1`,
+        [row.episodeId]
+      );
+      const currentStage = stageResult.rows[0]?.stage_code ?? 'STAGE_0';
 
       const patientNoShowResult = await pool.query(
         `SELECT COUNT(*)::int as cnt FROM appointments a
@@ -140,29 +143,10 @@ export async function GET(request: NextRequest) {
       const noShowCount = patientNoShowResult.rows[0]?.cnt ?? 0;
       const noShowRisk = Math.min(0.95, 0.05 + noShowCount * 0.15);
 
-      const stageResult = await pool.query(
-        `SELECT stage_code FROM stage_events WHERE episode_id = $1 ORDER BY at DESC LIMIT 1`,
-        [row.episodeId]
-      );
-      const currentStage = stageResult.rows[0]?.stage_code ?? 'STAGE_0';
-
-      const baseItem: WorklistItemBackend = {
-        episodeId: row.episodeId,
-        patientId: row.patientId,
-        patientName: row.patientName ?? null,
-        currentStage,
-        nextStep: result.label ?? result.step_code,
-        stepLabel: result.label,
-        stepCode: result.step_code,
-        overdueByDays,
-        windowStart: result.earliest_date.toISOString(),
-        windowEnd: result.latest_date.toISOString(),
-        durationMinutes: result.duration_minutes,
-        pool: result.pool,
-        priorityScore,
-        noShowRisk,
-      };
-
+      // STAGE_5 treatment type (shared across steps of same episode)
+      let treatmentTypeCode: string | undefined;
+      let treatmentTypeLabel: string | undefined;
+      let treatmentTypeSource: 'episode' | 'pathway' | 'patient' | undefined;
       if (currentStage === 'STAGE_5') {
         const epRow = await pool.query(
           `SELECT pe.treatment_type_id as "episodeTreatmentTypeId", cp.treatment_type_id as "pathwayTreatmentTypeId"
@@ -184,14 +168,95 @@ export async function GET(request: NextRequest) {
           kezelesiTervFelso: p?.kezelesiTervFelso,
           kezelesiTervAlso: p?.kezelesiTervAlso,
         });
-        if (effective.code || effective.label || effective.source) {
-          baseItem.treatmentTypeCode = effective.code ?? undefined;
-          baseItem.treatmentTypeLabel = effective.label ?? undefined;
-          baseItem.treatmentTypeSource = effective.source ?? undefined;
-        }
+        treatmentTypeCode = effective.code ?? undefined;
+        treatmentTypeLabel = effective.label ?? undefined;
+        treatmentTypeSource = effective.source ?? undefined;
       }
 
-      items.push(baseItem);
+      for (const step of result) {
+        const now = new Date();
+        const windowEnd = new Date(step.latest_date);
+        const overdueByDays = windowEnd < now ? Math.ceil((now.getTime() - windowEnd.getTime()) / (24 * 60 * 60 * 1000)) : 0;
+        const priorityScore = Math.min(100, 50 + overdueByDays * 5);
+
+        const item: WorklistItemBackend = {
+          episodeId: row.episodeId,
+          patientId: row.patientId,
+          patientName: row.patientName ?? null,
+          currentStage,
+          nextStep: step.label ?? step.step_code,
+          stepLabel: step.label,
+          stepCode: step.step_code,
+          overdueByDays,
+          windowStart: step.earliest_date.toISOString(),
+          windowEnd: step.latest_date.toISOString(),
+          durationMinutes: step.duration_minutes,
+          pool: step.pool,
+          priorityScore,
+          noShowRisk,
+          stepSeq: step.stepSeq,
+          requiresPrecommit: !step.isFirstPending,
+        };
+
+        if (treatmentTypeCode || treatmentTypeLabel || treatmentTypeSource) {
+          item.treatmentTypeCode = treatmentTypeCode;
+          item.treatmentTypeLabel = treatmentTypeLabel;
+          item.treatmentTypeSource = treatmentTypeSource;
+        }
+
+        items.push(item);
+      }
+    }
+
+    // Batch check: any future (non-cancelled) appointment already booked for each episode?
+    // Handles: a.start_time NULL (legacy rows → fallback to ats.start_time), a.step_code NULL (booked without step info)
+    const readyItems = items.filter((i) => i.status !== 'blocked');
+    if (readyItems.length > 0) {
+      const episodeIds = Array.from(new Set(readyItems.map((i) => i.episodeId)));
+      const bookedResult = await pool.query(
+        `SELECT a.id, a.episode_id, a.step_code,
+                COALESCE(a.start_time, ats.start_time) as effective_start,
+                a.dentist_email
+         FROM appointments a
+         JOIN available_time_slots ats ON a.time_slot_id = ats.id
+         WHERE a.episode_id = ANY($1)
+           AND COALESCE(a.start_time, ats.start_time) > CURRENT_TIMESTAMP
+           AND (a.appointment_status IS NULL OR a.appointment_status NOT IN ('cancelled_by_doctor', 'cancelled_by_patient', 'no_show'))`,
+        [episodeIds]
+      );
+      // Two-level map: exact (episode+step) and fallback (episode-only)
+      type BookedEntry = { id: string; startTime: string; providerEmail: string | null };
+      const exactMap = new Map<string, BookedEntry>();
+      const episodeMap = new Map<string, BookedEntry>();
+      for (const row of bookedResult.rows) {
+        const start = new Date(row.effective_start).toISOString();
+        const entry: BookedEntry = { id: row.id, startTime: start, providerEmail: row.dentist_email };
+        // Exact match: episode + step_code (when appointment has step_code)
+        if (row.step_code) {
+          const exactKey = `${row.episode_id}:${row.step_code}`;
+          const existing = exactMap.get(exactKey);
+          if (!existing || start < existing.startTime) {
+            exactMap.set(exactKey, entry);
+          }
+        }
+        // Episode-level fallback: earliest future appointment for this episode
+        const epExisting = episodeMap.get(row.episode_id);
+        if (!epExisting || start < epExisting.startTime) {
+          episodeMap.set(row.episode_id, entry);
+        }
+      }
+      for (const item of readyItems) {
+        const exactKey = item.stepCode ? `${item.episodeId}:${item.stepCode}` : null;
+        // Exact match by episode+step; episode-only fallback only for first pending step (stepSeq 0)
+        const booked = (exactKey && exactMap.get(exactKey))
+          || ((item.stepSeq === 0 || item.stepSeq === undefined) && episodeMap.get(item.episodeId))
+          || null;
+        if (booked) {
+          item.bookedAppointmentId = booked.id;
+          item.bookedAppointmentStartTime = booked.startTime;
+          item.bookedAppointmentProviderEmail = booked.providerEmail;
+        }
+      }
     }
 
     // Batch attach forecast: fetch cache, validate hashes, recompute differing, attach

@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState, useMemo, useRef } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser, type AuthUser } from '@/lib/auth';
-import { MessageCircle, ChevronDown, ChevronUp, AlertCircle, Bug, Lightbulb, Mail, Send, ArrowUp, ArrowDown, BarChart3, User, LogIn, Search, UserCircle, Settings } from 'lucide-react';
+import { MessageCircle, ChevronDown, ChevronUp, AlertCircle, Bug, Lightbulb, Mail, Send, ArrowUp, ArrowDown, BarChart3, User, LogIn, Search, UserCircle, Settings, ListOrdered } from 'lucide-react';
 import { CarePathwaysEditor } from '@/components/admin/CarePathwaysEditor';
 import { StageCatalogEditor } from '@/components/admin/StageCatalogEditor';
 import { StepCatalogEditor } from '@/components/admin/StepCatalogEditor';
@@ -721,21 +722,80 @@ export default function AdminPage() {
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {effectiveTab === 'folyamatok' ? (
           <div className="space-y-8">
-            <div ref={carePathwaysRef} className="card">
+            {/* Útmutató: mikor mit szerkesztesz */}
+            <div className="card border-l-4 border-blue-500 bg-blue-50/40">
+              <div className="flex items-start gap-3">
+                <ListOrdered className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="text-base font-semibold text-blue-900 mb-2">Mikor mit szerkesztesz</h3>
+                  <p className="text-sm text-blue-800 mb-2">
+                    A beteg űrlap <strong>Kezelési terv</strong> szekciójában a három kategória (Felső állcsont, Alsó állcsont, Arcot érintő rehabilitáció) <strong>fix, itt nem szerkeszthető</strong>. Az alábbiak azt szabályozzák, hogy a tervezetekhez milyen típusok választhatók, és hogy a stádiumok/lépések hogyan jelennek meg.
+                  </p>
+                  <ol className="text-sm text-blue-900 space-y-2 list-decimal list-inside">
+                    <li>
+                      <strong>Kezeléstípusok</strong> — A „Tervezett fogpótlás típusa” legördülő opciói a beteg űrlap Kezelési tervén (Felső/Alsó állcsont). Új típus itt; a „Részlépések” gomb a hozzá tartozó kezelési út szerkesztéséhez ugrik.
+                    </li>
+                    <li>
+                      <strong>Kezelési utak</strong> — Lépéssor egy típus vagy indikációhoz (konzultáció → munka → kontroll). Itt állítod a lépések sorrendjét, típusát, időtartamát.
+                    </li>
+                    <li>
+                      <strong>Részlépések (step_code → címke)</strong> — A lépések megjelenítési nevei. Ha egy kód a kezelési útban szerepel, itt adhatsz neki magyar/angol címet.
+                    </li>
+                    <li>
+                      <strong>Stádiumok</strong> — Stádium katalógus indikáció szerint (pl. preop, op, postop). A betegnél a Stádiumok oldalon ezek alapján jelennek meg; itt a neveket és sorrendet szerkeszted.
+                    </li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+
+            <div className="card border-l-4 border-amber-400 bg-amber-50/30">
+              <h3 className="text-sm font-semibold text-amber-900 mb-1">Epizódok és stádiumok szerkesztése (betegnél)</h3>
+              <p className="text-sm text-amber-800 mb-2">
+                A <strong>beteg profiljánál</strong> a „Stádiumok” oldalon állítható: kezelési út, felelős orvos, aktuális stádium, stádium időpontjai. Nyissa meg a beteget, majd a <strong>Stádiumok</strong> fülre.
+              </p>
+              <Link href="/" className="text-sm text-medical-primary hover:underline font-medium">Beteglista megnyitása →</Link>
+            </div>
+
+            {/* 1. Kezeléstípusok — legfelül, mert a pathway hozzá kapcsolódik */}
+            <section className="card" aria-labelledby="section-treatment-types">
+              <div className="mb-4">
+                <h2 id="section-treatment-types" className="text-lg font-semibold text-gray-900">1. Kezeléstípusok</h2>
+                <p className="text-sm text-gray-600 mt-0.5">Mikor: új kezeléstípus hozzáadásakor, vagy a típus megjelenítendő nevének módosításakor. A „Részlépések” gomb a hozzá tartozó kezelési útra ugrik.</p>
+                <p className="text-xs text-gray-500 mt-1">Itt szerkesztett sorok (code + label_hu) = a beteg űrlap <strong>Kezelési terv</strong> szekciójában a „Tervezett fogpótlás típusa” legördülő opciói (pl. Cementezett rögzítésű implantációs korona/híd, Fedőlemezes fogpótlás…). Felső és Alsó állcsont alatt ugyanaz a lista. A kategórianevek (Felső állcsont, Alsó állcsont, Arcot érintő rehabilitáció) fixek.</p>
+              </div>
+              <TreatmentTypesEditor onEditPathway={(id) => setEditPathwayId(id)} />
+            </section>
+
+            {/* 2. Kezelési utak */}
+            <section ref={carePathwaysRef} className="card" aria-labelledby="section-care-pathways">
+              <div className="mb-4">
+                <h2 id="section-care-pathways" className="text-lg font-semibold text-gray-900">2. Kezelési utak</h2>
+                <p className="text-sm text-gray-600 mt-0.5">Mikor: egy kezeléstípus vagy indikáció lépéssorának megadásakor vagy módosításakor (lépések neve, pool, időtartam, sorrend).</p>
+              </div>
               <CarePathwaysEditor
                 editPathwayId={editPathwayId}
                 onEditPathwayIdClear={() => setEditPathwayId(null)}
               />
-            </div>
-            <div className="card">
-              <StageCatalogEditor />
-            </div>
-            <div className="card">
+            </section>
+
+            {/* 3. Részlépések katalógus */}
+            <section className="card" aria-labelledby="section-step-catalog">
+              <div className="mb-4">
+                <h2 id="section-step-catalog" className="text-lg font-semibold text-gray-900">3. Részlépések (step_code → címke)</h2>
+                <p className="text-sm text-gray-600 mt-0.5">Mikor: ha egy kezelési útban használt lépéskódnak magyar/angol megjelenítési nevet adsz, vagy az „unmapped” listában megjelenő kódokat szeretnéd felvenni.</p>
+              </div>
               <StepCatalogEditor />
-            </div>
-            <div className="card">
-              <TreatmentTypesEditor onEditPathway={(id) => setEditPathwayId(id)} />
-            </div>
+            </section>
+
+            {/* 4. Stádiumok katalógus */}
+            <section className="card" aria-labelledby="section-stage-catalog">
+              <div className="mb-4">
+                <h2 id="section-stage-catalog" className="text-lg font-semibold text-gray-900">4. Stádiumok</h2>
+                <p className="text-sm text-gray-600 mt-0.5">Mikor: a beteg stádiumainak (pl. preop, op, postop) katalógusát szerkeszted indikáció szerint — nevek, sorrend, záró stádium. A betegnél a Stádiumok oldal ezt használja.</p>
+              </div>
+              <StageCatalogEditor />
+            </section>
           </div>
         ) : (
           <>

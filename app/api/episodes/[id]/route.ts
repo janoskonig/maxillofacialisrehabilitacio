@@ -75,6 +75,23 @@ export async function GET(
       // Table might not exist yet
     }
 
+    let episodePathways: Array<{ id: string; carePathwayId: string; ordinal: number; pathwayName: string; stepCount: number }> = [];
+    try {
+      const epPaths = await pool.query(
+        `SELECT ep.id, ep.care_pathway_id as "carePathwayId", ep.ordinal,
+                cp.name as "pathwayName",
+                (SELECT COUNT(*)::int FROM episode_steps es WHERE es.source_episode_pathway_id = ep.id) as "stepCount"
+         FROM episode_pathways ep
+         JOIN care_pathways cp ON ep.care_pathway_id = cp.id
+         WHERE ep.episode_id = $1
+         ORDER BY ep.ordinal`,
+        [episodeId]
+      );
+      episodePathways = epPaths.rows;
+    } catch {
+      // episode_pathways table might not exist yet (pre-migration)
+    }
+
     const episode = {
       id: row.id,
       patientId: row.patientId,
@@ -102,6 +119,7 @@ export async function GET(
       currentStageCode: stageRow.rows[0]?.stage_code ?? null,
       currentStageLabel: stageRow.rows[0]?.label_hu ?? null,
       stageSuggestion,
+      episodePathways,
     };
 
     return NextResponse.json({ episode });
@@ -115,8 +133,12 @@ export async function GET(
 }
 
 /**
- * PATCH /api/episodes/:id — update episode (care_pathway_id, care_pathway_version, assigned_provider_id)
- * When care_pathway_id or care_pathway_version changes, invalidates open slot_intents.
+ * PATCH /api/episodes/:id — update episode fields, or add/remove pathways.
+ *
+ * Standard fields: carePathwayId, carePathwayVersion, assignedProviderId, treatmentTypeId
+ * Multi-pathway actions:
+ *   { action: 'addPathway', carePathwayId: string }
+ *   { action: 'removePathway', carePathwayId: string }
  */
 export async function PATCH(
   request: NextRequest,
@@ -133,7 +155,17 @@ export async function PATCH(
 
     const episodeId = params.id;
     const body = await request.json();
+    const pool = getDbPool();
 
+    // ── Multi-pathway actions ──────────────────────────────────────────
+    if (body.action === 'addPathway') {
+      return await handleAddPathway(pool, episodeId, body.carePathwayId);
+    }
+    if (body.action === 'removePathway') {
+      return await handleRemovePathway(pool, episodeId, body.carePathwayId);
+    }
+
+    // ── Legacy / standard field update ─────────────────────────────────
     const { carePathwayId, carePathwayVersion, assignedProviderId, treatmentTypeId } = body;
     const updates: string[] = [];
     const values: unknown[] = [];
@@ -163,8 +195,6 @@ export async function PATCH(
     if (updates.length === 0) {
       return NextResponse.json({ error: 'Nincs módosítandó mező' }, { status: 400 });
     }
-
-    const pool = getDbPool();
 
     const before = await pool.query(
       `SELECT care_pathway_id, care_pathway_version, assigned_provider_id, treatment_type_id FROM patient_episodes WHERE id = $1`,
@@ -229,5 +259,240 @@ export async function PATCH(
       { error: 'Hiba történt az epizód módosításakor' },
       { status: 500 }
     );
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Multi-pathway helpers
+// ────────────────────────────────────────────────────────────────────────────
+
+async function handleAddPathway(
+  pool: Awaited<ReturnType<typeof getDbPool>>,
+  episodeId: string,
+  carePathwayId: unknown
+) {
+  if (!carePathwayId || typeof carePathwayId !== 'string') {
+    return NextResponse.json({ error: 'carePathwayId kötelező (string UUID)' }, { status: 400 });
+  }
+
+  const ep = await pool.query(
+    `SELECT id, status FROM patient_episodes WHERE id = $1`,
+    [episodeId]
+  );
+  if (ep.rows.length === 0) {
+    return NextResponse.json({ error: 'Epizód nem található' }, { status: 404 });
+  }
+  if (ep.rows[0].status !== 'open') {
+    return NextResponse.json({ error: 'Csak aktív epizódhoz adható pathway' }, { status: 400 });
+  }
+
+  const pw = await pool.query(
+    `SELECT id, name, steps_json FROM care_pathways WHERE id = $1`,
+    [carePathwayId]
+  );
+  if (pw.rows.length === 0) {
+    return NextResponse.json({ error: 'Kezelési út nem található' }, { status: 404 });
+  }
+
+  const stepsJson = pw.rows[0].steps_json as Array<{
+    step_code: string;
+    pool?: string;
+    duration_minutes?: number;
+    default_days_offset?: number;
+  }>;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Determine next ordinal
+    const ordRow = await client.query(
+      `SELECT COALESCE(MAX(ordinal), -1) + 1 as next_ord FROM episode_pathways WHERE episode_id = $1`,
+      [episodeId]
+    );
+    const ordinal = ordRow.rows[0].next_ord;
+
+    // Insert junction row (will fail on UNIQUE if already added)
+    let epPathwayId: string;
+    try {
+      const ins = await client.query(
+        `INSERT INTO episode_pathways (episode_id, care_pathway_id, ordinal)
+         VALUES ($1, $2, $3) RETURNING id`,
+        [episodeId, carePathwayId, ordinal]
+      );
+      epPathwayId = ins.rows[0].id;
+    } catch (e: unknown) {
+      await client.query('ROLLBACK');
+      if (typeof e === 'object' && e !== null && 'code' in e && (e as { code: string }).code === '23505') {
+        return NextResponse.json({ error: 'Ez a kezelési út már hozzá van rendelve ehhez az epizódhoz' }, { status: 409 });
+      }
+      throw e;
+    }
+
+    // Keep legacy care_pathway_id in sync (first added pathway)
+    if (ordinal === 0) {
+      await client.query(
+        `UPDATE patient_episodes SET care_pathway_id = $1 WHERE id = $2 AND care_pathway_id IS NULL`,
+        [carePathwayId, episodeId]
+      );
+    }
+
+    // Generate episode_steps for this pathway, appending after existing steps
+    if (Array.isArray(stepsJson) && stepsJson.length > 0) {
+      const maxSeqRow = await client.query(
+        `SELECT COALESCE(MAX(seq), -1) as max_seq FROM episode_steps WHERE episode_id = $1`,
+        [episodeId]
+      );
+      let nextSeq: number = (maxSeqRow.rows[0].max_seq ?? -1) + 1;
+
+      const insertValues: unknown[] = [];
+      const insertPlaceholders: string[] = [];
+      let pIdx = 1;
+
+      for (let i = 0; i < stepsJson.length; i++) {
+        const step = stepsJson[i];
+        insertPlaceholders.push(
+          `($${pIdx}, $${pIdx + 1}, $${pIdx + 2}, $${pIdx + 3}, $${pIdx + 4}, $${pIdx + 5}, $${pIdx + 6}, $${pIdx + 7})`
+        );
+        insertValues.push(
+          episodeId,
+          step.step_code,
+          i, // pathway_order_index
+          step.pool ?? 'work',
+          step.duration_minutes ?? 30,
+          step.default_days_offset ?? 7,
+          epPathwayId, // source_episode_pathway_id
+          nextSeq + i  // seq
+        );
+        pIdx += 8;
+      }
+
+      await client.query(
+        `INSERT INTO episode_steps (episode_id, step_code, pathway_order_index, pool, duration_minutes, default_days_offset, source_episode_pathway_id, seq)
+         VALUES ${insertPlaceholders.join(', ')}`,
+        insertValues
+      );
+    }
+
+    await client.query('COMMIT');
+
+    // Invalidate intents so projector picks up new steps
+    try {
+      await invalidateIntentsForEpisode(episodeId, 'pathway_changed');
+    } catch { /* non-blocking */ }
+
+    // Return updated episode_pathways list
+    const epPathways = await pool.query(
+      `SELECT ep.id, ep.care_pathway_id as "carePathwayId", ep.ordinal,
+              cp.name as "pathwayName",
+              (SELECT COUNT(*)::int FROM episode_steps es WHERE es.source_episode_pathway_id = ep.id) as "stepCount"
+       FROM episode_pathways ep
+       JOIN care_pathways cp ON ep.care_pathway_id = cp.id
+       WHERE ep.episode_id = $1
+       ORDER BY ep.ordinal`,
+      [episodeId]
+    );
+
+    return NextResponse.json({ episodePathways: epPathways.rows, added: true }, { status: 201 });
+  } catch (txError) {
+    await client.query('ROLLBACK');
+    throw txError;
+  } finally {
+    client.release();
+  }
+}
+
+async function handleRemovePathway(
+  pool: Awaited<ReturnType<typeof getDbPool>>,
+  episodeId: string,
+  carePathwayId: unknown
+) {
+  if (!carePathwayId || typeof carePathwayId !== 'string') {
+    return NextResponse.json({ error: 'carePathwayId kötelező (string UUID)' }, { status: 400 });
+  }
+
+  const epPathway = await pool.query(
+    `SELECT ep.id FROM episode_pathways ep WHERE ep.episode_id = $1 AND ep.care_pathway_id = $2`,
+    [episodeId, carePathwayId]
+  );
+  if (epPathway.rows.length === 0) {
+    return NextResponse.json({ error: 'Ez a pathway nincs hozzárendelve az epizódhoz' }, { status: 404 });
+  }
+  const epPathwayId = epPathway.rows[0].id;
+
+  // Guard: cannot remove if any step from this pathway is scheduled or completed
+  const activeSteps = await pool.query(
+    `SELECT COUNT(*)::int as cnt FROM episode_steps
+     WHERE source_episode_pathway_id = $1 AND status IN ('scheduled', 'completed')`,
+    [epPathwayId]
+  );
+  if (activeSteps.rows[0].cnt > 0) {
+    return NextResponse.json(
+      { error: 'Nem távolítható el: van már időpontja vagy teljesített lépése ennek a kezelési útnak' },
+      { status: 409 }
+    );
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Delete steps belonging to this pathway
+    await client.query(
+      `DELETE FROM episode_steps WHERE source_episode_pathway_id = $1`,
+      [epPathwayId]
+    );
+
+    // Delete junction row
+    await client.query(
+      `DELETE FROM episode_pathways WHERE id = $1`,
+      [epPathwayId]
+    );
+
+    // Re-sequence remaining steps
+    await client.query(
+      `WITH numbered AS (
+        SELECT id, ROW_NUMBER() OVER (ORDER BY seq, pathway_order_index) - 1 as new_seq
+        FROM episode_steps WHERE episode_id = $1
+      )
+      UPDATE episode_steps SET seq = numbered.new_seq
+      FROM numbered WHERE episode_steps.id = numbered.id`,
+      [episodeId]
+    );
+
+    // If legacy care_pathway_id pointed to the removed pathway, update to first remaining or NULL
+    const remaining = await client.query(
+      `SELECT care_pathway_id FROM episode_pathways WHERE episode_id = $1 ORDER BY ordinal LIMIT 1`,
+      [episodeId]
+    );
+    const newLegacyId = remaining.rows[0]?.care_pathway_id ?? null;
+    await client.query(
+      `UPDATE patient_episodes SET care_pathway_id = $1 WHERE id = $2`,
+      [newLegacyId, episodeId]
+    );
+
+    await client.query('COMMIT');
+
+    try {
+      await invalidateIntentsForEpisode(episodeId, 'pathway_changed');
+    } catch { /* non-blocking */ }
+
+    const epPathways = await pool.query(
+      `SELECT ep.id, ep.care_pathway_id as "carePathwayId", ep.ordinal,
+              cp.name as "pathwayName",
+              (SELECT COUNT(*)::int FROM episode_steps es WHERE es.source_episode_pathway_id = ep.id) as "stepCount"
+       FROM episode_pathways ep
+       JOIN care_pathways cp ON ep.care_pathway_id = cp.id
+       WHERE ep.episode_id = $1
+       ORDER BY ep.ordinal`,
+      [episodeId]
+    );
+
+    return NextResponse.json({ episodePathways: epPathways.rows, removed: true });
+  } catch (txError) {
+    await client.query('ROLLBACK');
+    throw txError;
+  } finally {
+    client.release();
   }
 }

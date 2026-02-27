@@ -9,10 +9,11 @@ import Link from 'next/link';
 import { ArrowLeft, BarChart3, Calendar } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { MobileMenu } from '@/components/MobileMenu';
+import { EpisodePathwayEditor } from '@/components/EpisodePathwayEditor';
+import { EpisodeStepsManager } from '@/components/EpisodeStepsManager';
 import { PatientStageSelector } from '@/components/PatientStageSelector';
 import { PatientStageTimeline } from '@/components/PatientStageTimeline';
 import { PatientEpisodeForm } from '@/components/PatientEpisodeForm';
-import { EpisodePathwayEditor } from '@/components/EpisodePathwayEditor';
 import { useToast } from '@/contexts/ToastContext';
 
 export default function PatientStagesPage() {
@@ -207,9 +208,13 @@ export default function PatientStagesPage() {
             />
           )}
 
-          {/* Kezelési út és felelős orvos (aktív epizód) */}
-          {activeEpisode && (userRole === 'admin' || userRole === 'sebészorvos' || userRole === 'fogpótlástanász') && (
-            <EpisodePathwayEditor
+          {/* Admin: kezelési út és felelős orvos (epizód szerkesztése) — csak admin látja */}
+          {userRole === 'admin' && activeEpisode && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50/50">
+              <p className="text-xs font-medium text-amber-800 px-4 pt-3 pb-1">
+                Aktív epizód beállításai — Kezelési út és felelős orvos itt választható ehhez az epizódhoz
+              </p>
+              <EpisodePathwayEditor
               episodeId={activeEpisode.id}
               patientId={patientId}
               carePathwayId={activeEpisode.carePathwayId}
@@ -218,6 +223,17 @@ export default function PatientStagesPage() {
               assignedProviderName={activeEpisode.assignedProviderName}
               treatmentTypeId={activeEpisode.treatmentTypeId}
               onSaved={refreshStagesAndEpisodes}
+              />
+            </div>
+          )}
+
+          {/* Kezelési lépések kezelése (átugrás) — aktív epizód + kezelési út szükséges */}
+          {activeEpisode && activeEpisode.carePathwayId && (
+            <EpisodeStepsManager
+              episodeId={activeEpisode.id}
+              carePathwayId={activeEpisode.carePathwayId}
+              carePathwayName={activeEpisode.carePathwayName}
+              onStepChanged={refreshStagesAndEpisodes}
             />
           )}
 

@@ -5,10 +5,9 @@
 
 import { toBudapestStartOfDayISO } from './datetime';
 
-// Táblában: BOOKED state NINCS – single success → remove (sor eltűnik)
-// Batch queue item státusz: BOOKED (queue-on belül)
 export type WorklistRowState =
   | 'READY'
+  | 'BOOKED'
   | 'BLOCKED'
   | 'NEEDS_REVIEW'
   | 'BOOKING_IN_PROGRESS'
@@ -73,6 +72,14 @@ export interface WorklistItemBackend {
   forecastCompletionEndP80ISO?: string | null;
   forecastRemainingP50?: number | null;
   forecastRemainingP80?: number | null;
+  /** Existing future appointment for this episode+step (populated by worklist API) */
+  bookedAppointmentId?: string | null;
+  bookedAppointmentStartTime?: string | null;
+  bookedAppointmentProviderEmail?: string | null;
+  /** 0-based sequence among pending steps for this episode (0 = immediate next) */
+  stepSeq?: number;
+  /** True for steps beyond the first pending — booking needs requiresPrecommit to bypass one-hard-next */
+  requiresPrecommit?: boolean;
 }
 
 export interface WorklistLocalState {
@@ -127,6 +134,10 @@ export function deriveWorklistRowState(
   }
   if (isOverrideRequired) {
     return { state: 'OVERRIDE_REQUIRED' };
+  }
+
+  if (item.bookedAppointmentId) {
+    return { state: 'BOOKED' };
   }
 
   // NEEDS_REVIEW – validation
