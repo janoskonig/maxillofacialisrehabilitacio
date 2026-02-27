@@ -134,11 +134,33 @@ async function getEpisodeAnchorFallback(
   return openedAt ? new Date(openedAt) : new Date();
 }
 
-/** Get pathway steps for episode */
+/** Get pathway steps for episode. Multi-pathway aware: merges steps from all episode_pathways.
+ *  Falls back to legacy care_pathway_id when episode_pathways table is empty / absent. */
 async function getPathwaySteps(
   pool: Awaited<ReturnType<typeof getDbPool>>,
   episodeId: string
 ): Promise<PathwayStep[] | null> {
+  // Try multi-pathway first
+  try {
+    const multiRow = await pool.query(
+      `SELECT cp.steps_json FROM episode_pathways ep
+       JOIN care_pathways cp ON ep.care_pathway_id = cp.id
+       WHERE ep.episode_id = $1 ORDER BY ep.ordinal`,
+      [episodeId]
+    );
+    if (multiRow.rows.length > 0) {
+      const merged: PathwayStep[] = [];
+      for (const row of multiRow.rows) {
+        const arr = row.steps_json;
+        if (Array.isArray(arr)) merged.push(...(arr as PathwayStep[]));
+      }
+      return merged.length > 0 ? merged : null;
+    }
+  } catch {
+    // episode_pathways table might not exist yet
+  }
+
+  // Legacy fallback
   const r = await pool.query(
     `SELECT cp.steps_json FROM patient_episodes pe
      JOIN care_pathways cp ON pe.care_pathway_id = cp.id
