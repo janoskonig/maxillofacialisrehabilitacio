@@ -542,6 +542,90 @@ export interface PatientEpisode {
   treatmentTypeId?: string | null;
   treatmentTypeCode?: string | null;
   treatmentTypeLabel?: string | null;
+  stageVersion?: number;
+  snapshotVersion?: number;
+}
+
+// --- SSOT: Stage transition rulesets ---
+export const RULESET_STATUS_VALUES = ['DRAFT', 'PUBLISHED', 'DEPRECATED'] as const;
+export type RulesetStatus = typeof RULESET_STATUS_VALUES[number];
+
+export interface StageTransitionRule {
+  id: string;
+  from_stage: string;
+  to_stage: string;
+  description: string;
+  conditions: string[];
+}
+
+export interface StageTransitionRuleset {
+  id: string;
+  version: number;
+  status: RulesetStatus;
+  rules: StageTransitionRule[];
+  validFrom?: string | null;
+  createdAt?: string | null;
+  createdBy?: string | null;
+  publishedAt?: string | null;
+}
+
+// --- SSOT: Stage suggestions ---
+export interface StageSuggestion {
+  id: string;
+  episodeId: string;
+  suggestedStage: string;
+  fromStage?: string | null;
+  rulesetVersion: number;
+  snapshotVersion: number;
+  dedupeKey: string;
+  ruleIds: string[];
+  computedAt: string;
+}
+
+// --- SSOT: Intake status FSM ---
+export const INTAKE_STATUS_VALUES = ['JUST_REGISTERED', 'NEEDS_TRIAGE', 'TRIAGED', 'IN_CARE'] as const;
+export type IntakeStatus = typeof INTAKE_STATUS_VALUES[number];
+
+export const INTAKE_ITEM_STATUS_VALUES = ['OPEN', 'RESOLVED', 'CANCELLED'] as const;
+export type IntakeItemStatus = typeof INTAKE_ITEM_STATUS_VALUES[number];
+
+export interface PatientIntakeItem {
+  id: string;
+  patientId: string;
+  kind: string;
+  status: IntakeItemStatus;
+  source?: string | null;
+  createdAt?: string | null;
+  completedAt?: string | null;
+  createdBy?: string | null;
+  notes?: string | null;
+}
+
+// --- SSOT: Episode steps (generated from care_pathway) ---
+export const EPISODE_STEP_STATUS_VALUES = ['pending', 'scheduled', 'completed', 'skipped'] as const;
+export type EpisodeStepStatus = typeof EPISODE_STEP_STATUS_VALUES[number];
+
+export interface EpisodeStep {
+  id: string;
+  episodeId: string;
+  stepCode: string;
+  pathwayOrderIndex: number;
+  pool: string;
+  durationMinutes: number;
+  defaultDaysOffset: number;
+  status: EpisodeStepStatus;
+  appointmentId?: string | null;
+  createdAt?: string | null;
+  completedAt?: string | null;
+  label?: string;
+}
+
+// --- SSOT: Enhanced episode GET response ---
+export interface EpisodeGetResponse extends PatientEpisode {
+  currentRulesetVersion?: number;
+  stageSuggestion?: StageSuggestion | null;
+  currentStageCode?: string | null;
+  currentStageLabel?: string | null;
 }
 
 export interface StageCatalogEntry {

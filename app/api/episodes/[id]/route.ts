@@ -3,8 +3,116 @@ import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { invalidateIntentsForEpisode } from '@/lib/intent-invalidation';
 import { createInitialSlotIntentsForEpisode } from '@/lib/episode-activation';
+import { getCurrentSuggestion } from '@/lib/stage-suggestion-service';
 
 export const dynamic = 'force-dynamic';
+
+/**
+ * GET /api/episodes/:id — enhanced episode response with stageVersion, snapshotVersion, 
+ * currentRulesetVersion, and stageSuggestion per the SSOT contract.
+ */
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const auth = await verifyAuth(request);
+    if (!auth) {
+      return NextResponse.json({ error: 'Bejelentkezés szükséges' }, { status: 401 });
+    }
+
+    const pool = getDbPool();
+    const episodeId = params.id;
+
+    const epRow = await pool.query(
+      `SELECT pe.id, pe.patient_id as "patientId", pe.reason, pe.pathway_code as "pathwayCode",
+        pe.chief_complaint as "chiefComplaint", pe.case_title as "caseTitle", pe.status,
+        pe.opened_at as "openedAt", pe.closed_at as "closedAt",
+        pe.parent_episode_id as "parentEpisodeId", pe.trigger_type as "triggerType",
+        pe.created_at as "createdAt", pe.created_by as "createdBy",
+        pe.care_pathway_id as "carePathwayId", pe.assigned_provider_id as "assignedProviderId",
+        pe.treatment_type_id as "treatmentTypeId",
+        pe.stage_version as "stageVersion", pe.snapshot_version as "snapshotVersion",
+        cp.name as "carePathwayName",
+        COALESCE(u.doktor_neve, u.email) as "assignedProviderName",
+        tt.code as "treatmentTypeCode", tt.label_hu as "treatmentTypeLabel"
+       FROM patient_episodes pe
+       LEFT JOIN care_pathways cp ON pe.care_pathway_id = cp.id
+       LEFT JOIN users u ON pe.assigned_provider_id = u.id
+       LEFT JOIN treatment_types tt ON pe.treatment_type_id = tt.id
+       WHERE pe.id = $1`,
+      [episodeId]
+    );
+
+    if (epRow.rows.length === 0) {
+      return NextResponse.json({ error: 'Epizód nem található' }, { status: 404 });
+    }
+
+    const row = epRow.rows[0];
+
+    const stageRow = await pool.query(
+      `SELECT se.stage_code, sc.label_hu
+       FROM stage_events se
+       LEFT JOIN stage_catalog sc ON se.stage_code = sc.code AND sc.reason = $2
+       WHERE se.episode_id = $1 ORDER BY se.at DESC LIMIT 1`,
+      [episodeId, row.reason]
+    );
+
+    let currentRulesetVersion: number | null = null;
+    try {
+      const rulesetRow = await pool.query(
+        `SELECT version FROM stage_transition_rulesets WHERE status = 'PUBLISHED' LIMIT 1`
+      );
+      currentRulesetVersion = rulesetRow.rows[0]?.version ?? null;
+    } catch {
+      // Table might not exist yet
+    }
+
+    let stageSuggestion = null;
+    try {
+      stageSuggestion = await getCurrentSuggestion(episodeId);
+    } catch {
+      // Table might not exist yet
+    }
+
+    const episode = {
+      id: row.id,
+      patientId: row.patientId,
+      reason: row.reason,
+      pathwayCode: row.pathwayCode,
+      chiefComplaint: row.chiefComplaint,
+      caseTitle: row.caseTitle,
+      status: row.status,
+      openedAt: (row.openedAt as Date)?.toISOString?.() ?? String(row.openedAt),
+      closedAt: row.closedAt ? (row.closedAt as Date)?.toISOString?.() ?? null : null,
+      parentEpisodeId: row.parentEpisodeId,
+      triggerType: row.triggerType,
+      createdAt: (row.createdAt as Date)?.toISOString?.() ?? null,
+      createdBy: row.createdBy,
+      carePathwayId: row.carePathwayId,
+      assignedProviderId: row.assignedProviderId,
+      carePathwayName: row.carePathwayName,
+      assignedProviderName: row.assignedProviderName,
+      treatmentTypeId: row.treatmentTypeId,
+      treatmentTypeCode: row.treatmentTypeCode,
+      treatmentTypeLabel: row.treatmentTypeLabel,
+      stageVersion: row.stageVersion ?? 0,
+      snapshotVersion: row.snapshotVersion ?? 0,
+      currentRulesetVersion,
+      currentStageCode: stageRow.rows[0]?.stage_code ?? null,
+      currentStageLabel: stageRow.rows[0]?.label_hu ?? null,
+      stageSuggestion,
+    };
+
+    return NextResponse.json({ episode });
+  } catch (error) {
+    console.error('Error in GET /episodes/:id:', error);
+    return NextResponse.json(
+      { error: 'Hiba az epizód lekérdezésekor' },
+      { status: 500 }
+    );
+  }
+}
 
 /**
  * PATCH /api/episodes/:id — update episode (care_pathway_id, care_pathway_version, assigned_provider_id)
