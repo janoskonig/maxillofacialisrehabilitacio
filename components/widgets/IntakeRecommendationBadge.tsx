@@ -39,6 +39,21 @@ const BADGE_CONFIG = {
   },
 } as const;
 
+function humanizeReason(code: string): string {
+  if (code === 'OK') return 'Normál terhelés, van szabad kapacitás';
+  if (code === 'NEAR_CRITICAL_IF_NEW_STARTS')
+    return 'Új beteg felvétele kritikus szintre emelné a terhelést';
+
+  const busynessMatch = code.match(/^BUSYNESS_(\d+)$/);
+  if (busynessMatch) return `Magas leterheltség (${busynessMatch[1]}%)`;
+
+  const wipP80Match = code.match(/^WIP_P80_END_\+(\d+)D$/);
+  if (wipP80Match)
+    return `Aktív kezelések becsült befejezése ~${wipP80Match[1]} nap múlva`;
+
+  return code;
+}
+
 export function IntakeRecommendationBadge() {
   const [data, setData] = useState<IntakeData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -79,15 +94,15 @@ export function IntakeRecommendationBadge() {
             onClick={() => setShowTooltip(false)}
           />
           <div className="absolute right-0 top-full mt-1 z-20 w-64 p-3 bg-white border border-gray-200 rounded-lg shadow-lg text-left">
-            <p className="text-xs font-medium text-gray-700 mb-2">Indokok:</p>
+            <p className="text-xs font-medium text-gray-700 mb-2">Miért ez a javaslat?</p>
             <ul className="text-xs text-gray-600 space-y-1">
               {topReasons.map((r) => (
-                <li key={r}>{r}</li>
+                <li key={r}>• {humanizeReason(r)}</li>
               ))}
             </ul>
             {data.explain.wipP80DaysFromNow != null && (
               <p className="text-xs text-gray-500 mt-2">
-                Aktív kezelések P80 kifutás: +{data.explain.wipP80DaysFromNow} nap
+                A folyamatban lévő kezelések 80%-a várhatóan {data.explain.wipP80DaysFromNow} napon belül befejeződik.
               </p>
             )}
             <a

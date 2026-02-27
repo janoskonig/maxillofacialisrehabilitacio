@@ -37,6 +37,7 @@ import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { PatientStageSection } from './PatientStageSection';
 import { OHIP14Section } from './OHIP14Section';
 import { ToothTreatmentProvider, ToothTreatmentInline } from './ToothTreatmentPanel';
+import { OPInlinePreview } from './OPInlinePreview';
 
 
 // Fog állapot típus
@@ -2832,6 +2833,11 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
             )}
           </h4>
           <div className="space-y-4">
+            {/* OP inline preview above dental status */}
+            {patientId && (
+              <OPInlinePreview patientId={patientId} patientName={currentPatient?.nev || undefined} />
+            )}
+
             {/* Fogazati státusz */}
             <div className="border-t pt-4 mt-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">

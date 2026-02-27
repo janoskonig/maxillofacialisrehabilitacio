@@ -34,11 +34,17 @@ export async function GET(request: NextRequest) {
     const horizonEnd = new Date();
     horizonEnd.setDate(horizonEnd.getDate() + horizonDays);
 
+    const EXCLUDED_NAME_PATTERNS = ['Déri', 'Hermann', 'Kádár', 'Kivovics', 'Pótlár'];
+    const excludeClause = EXCLUDED_NAME_PATTERNS.map((_, i) => `doktor_neve NOT ILIKE $${i + 1}`).join(' AND ');
+    const excludeParams = EXCLUDED_NAME_PATTERNS.map((n) => `%${n}%`);
+
     const doctorsResult = await pool.query(
       `SELECT id, email, doktor_neve FROM users
        WHERE active = true AND role IN ('fogpótlástanász', 'admin')
        AND doktor_neve IS NOT NULL AND doktor_neve != ''
-       ORDER BY doktor_neve ASC`
+       AND ${excludeClause}
+       ORDER BY doktor_neve ASC`,
+      excludeParams
     );
 
     const doctors: Array<{
