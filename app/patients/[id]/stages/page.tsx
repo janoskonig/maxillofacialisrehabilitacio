@@ -233,8 +233,8 @@ export default function PatientStagesPage() {
             <>
               <EpisodeStepsManager
                 episodeId={activeEpisode.id}
-                carePathwayId={activeEpisode.carePathwayId}
-                carePathwayName={activeEpisode.carePathwayName}
+                carePathwayId={activeEpisode.carePathwayId ?? null}
+                carePathwayName={activeEpisode.carePathwayName ?? null}
                 episodePathways={activeEpisode.episodePathways?.map((ep) => ({
                   id: ep.id,
                   carePathwayId: ep.carePathwayId,
