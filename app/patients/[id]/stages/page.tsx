@@ -11,6 +11,7 @@ import { Logo } from '@/components/Logo';
 import { MobileMenu } from '@/components/MobileMenu';
 import { EpisodePathwayEditor } from '@/components/EpisodePathwayEditor';
 import { EpisodeStepsManager } from '@/components/EpisodeStepsManager';
+import { EpisodeStepProjections } from '@/components/EpisodeStepProjections';
 import { PatientStageSelector } from '@/components/PatientStageSelector';
 import { PatientStageTimeline } from '@/components/PatientStageTimeline';
 import { PatientEpisodeForm } from '@/components/PatientEpisodeForm';
@@ -229,17 +230,24 @@ export default function PatientStagesPage() {
 
           {/* Kezelési lépések kezelése — aktív epizód + kezelési út szükséges */}
           {activeEpisode && (activeEpisode.carePathwayId || (activeEpisode.episodePathways && activeEpisode.episodePathways.length > 0)) && (
-            <EpisodeStepsManager
-              episodeId={activeEpisode.id}
-              carePathwayId={activeEpisode.carePathwayId}
-              carePathwayName={activeEpisode.carePathwayName}
-              episodePathways={activeEpisode.episodePathways?.map((ep) => ({
-                id: ep.id,
-                carePathwayId: ep.carePathwayId,
-                pathwayName: ep.pathwayName,
-              }))}
-              onStepChanged={refreshStagesAndEpisodes}
-            />
+            <>
+              <EpisodeStepsManager
+                episodeId={activeEpisode.id}
+                carePathwayId={activeEpisode.carePathwayId}
+                carePathwayName={activeEpisode.carePathwayName}
+                episodePathways={activeEpisode.episodePathways?.map((ep) => ({
+                  id: ep.id,
+                  carePathwayId: ep.carePathwayId,
+                  pathwayName: ep.pathwayName,
+                }))}
+                onStepChanged={refreshStagesAndEpisodes}
+              />
+
+              <EpisodeStepProjections
+                episodeId={activeEpisode.id}
+                refreshTrigger={refreshKey}
+              />
+            </>
           )}
 
           {/* Stage Selector */}
