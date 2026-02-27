@@ -65,14 +65,9 @@ export async function GET(request: NextRequest) {
     const pool = getDbPool();
     const now = new Date();
 
-    // 1. Fetch episodes with pathway and with at least one kezelési terv filled on patient profile (Felső/Alsó/Arcot érintő)
+    // 1. Fetch episodes that have at least one care pathway (legacy care_pathway_id OR episode_pathways)
     const whereParts: string[] = [
-      'pe.care_pathway_id IS NOT NULL',
-      `(
-        (p.kezelesi_terv_felso IS NOT NULL AND jsonb_array_length(p.kezelesi_terv_felso) > 0)
-        OR (p.kezelesi_terv_also IS NOT NULL AND jsonb_array_length(p.kezelesi_terv_also) > 0)
-        OR (p.kezelesi_terv_arcot_erinto IS NOT NULL AND jsonb_array_length(p.kezelesi_terv_arcot_erinto) > 0)
-      )`,
+      `(pe.care_pathway_id IS NOT NULL OR EXISTS (SELECT 1 FROM episode_pathways ep2 WHERE ep2.episode_id = pe.id))`,
     ];
     const params: unknown[] = [];
     let pi = 1;
@@ -97,7 +92,7 @@ export async function GET(request: NextRequest) {
               tt.label_hu as treatment_type_label
        FROM patient_episodes pe
        JOIN patients p ON pe.patient_id = p.id
-       JOIN care_pathways cp ON pe.care_pathway_id = cp.id
+       LEFT JOIN care_pathways cp ON pe.care_pathway_id = cp.id
        LEFT JOIN users u ON pe.assigned_provider_id = u.id
        LEFT JOIN treatment_types tt ON pe.treatment_type_id = tt.id
        WHERE ${whereParts.join(' AND ')}
@@ -115,7 +110,36 @@ export async function GET(request: NextRequest) {
 
     const episodeIds = episodesResult.rows.map((r: { episode_id: string }) => r.episode_id);
 
-    // 2. Batch fetch appointments, intents, and current stage per episode
+    // 2. For multi-pathway episodes (where cp.steps_json is null), fetch merged steps from episode_pathways
+    const multiPathwayStepsMap = new Map<string, Array<{ step_code: string; label?: string; pool: string; duration_minutes?: number }>>();
+    const multiPathwayNamesMap = new Map<string, string>();
+    const needsMultiPathway = episodesResult.rows.filter((r: { steps_json: unknown }) => !r.steps_json || !Array.isArray(r.steps_json));
+    if (needsMultiPathway.length > 0) {
+      const needsIds = needsMultiPathway.map((r: { episode_id: string }) => r.episode_id);
+      const mpResult = await pool.query(
+        `SELECT ep.episode_id, cp.name, cp.steps_json
+         FROM episode_pathways ep
+         JOIN care_pathways cp ON ep.care_pathway_id = cp.id
+         WHERE ep.episode_id = ANY($1)
+         ORDER BY ep.episode_id, ep.ordinal`,
+        [needsIds]
+      );
+      for (const row of mpResult.rows) {
+        const epId = row.episode_id as string;
+        const stepsArr = row.steps_json as Array<{ step_code: string; label?: string; pool: string; duration_minutes?: number }>;
+        if (!Array.isArray(stepsArr)) continue;
+        const existing = multiPathwayStepsMap.get(epId) ?? [];
+        existing.push(...stepsArr);
+        multiPathwayStepsMap.set(epId, existing);
+        if (!multiPathwayNamesMap.has(epId)) {
+          multiPathwayNamesMap.set(epId, row.name);
+        } else {
+          multiPathwayNamesMap.set(epId, multiPathwayNamesMap.get(epId) + ' + ' + row.name);
+        }
+      }
+    }
+
+    // 3. Batch fetch appointments, intents, and current stage per episode
     const [apptsResult, intentsResult, stagesResult] = await Promise.all([
       pool.query(
         `SELECT id, episode_id, step_code, step_seq, start_time, appointment_status
@@ -149,7 +173,6 @@ export async function GET(request: NextRequest) {
       stageByEpisode.set(row.episode_id, row.stage_code);
     }
 
-    // Index by episode_id
     const apptsByEpisode = new Map<string, typeof apptsResult.rows>();
     for (const a of apptsResult.rows) {
       const arr = apptsByEpisode.get(a.episode_id) ?? [];
@@ -163,14 +186,15 @@ export async function GET(request: NextRequest) {
       intentsByEpisode.set(i.episode_id, arr);
     }
 
-    // 3. Build timeline per episode
+    // 4. Build timeline per episode
     const episodes: TimelineEpisode[] = [];
     for (const ep of episodesResult.rows) {
       const steps: TimelineStep[] = [];
-      const pathwaySteps = ep.steps_json as Array<{
+      const pathwaySteps = (ep.steps_json as Array<{
         step_code: string; label?: string; pool: string; duration_minutes?: number;
-      }>;
-      if (!pathwaySteps || !Array.isArray(pathwaySteps)) continue;
+      }>) ?? multiPathwayStepsMap.get(ep.episode_id);
+      if (!pathwaySteps || !Array.isArray(pathwaySteps) || pathwaySteps.length === 0) continue;
+      const resolvedPathwayName = ep.care_pathway_name ?? multiPathwayNamesMap.get(ep.episode_id) ?? null;
 
       const appts = apptsByEpisode.get(ep.episode_id) ?? [];
       const intents = intentsByEpisode.get(ep.episode_id) ?? [];
@@ -260,7 +284,7 @@ export async function GET(request: NextRequest) {
         reason: ep.reason,
         status: ep.status,
         openedAt: ep.opened_at,
-        carePathwayName: ep.care_pathway_name,
+        carePathwayName: resolvedPathwayName,
         assignedProviderName: ep.assigned_provider_name,
         treatmentTypeLabel: ep.treatment_type_label,
         steps,

@@ -20,7 +20,7 @@ export interface PatientWorklistWidgetProps {
 }
 
 /**
- * Beteg profilra szűrt munkalista – a beteg WIP epizódjainak következő lépései.
+ * Beteg profilra szűrt munkalista – a beteg aktív kezeléseinek következő lépései.
  * Csak admin, sebészorvos, fogpótlástanász látja.
  */
 export function PatientWorklistWidget({ patientId, patientName, visible = true }: PatientWorklistWidgetProps) {
@@ -285,8 +285,8 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
           <h3 className="text-base font-medium text-gray-900 mb-1">Nincs foglalni való következő lépés</h3>
           <p className="text-sm text-gray-500">
             {patientName
-              ? `${patientName} jelenleg nincs WIP epizódban, vagy minden epizódhoz már van jövőbeli időpont.`
-              : 'A beteg jelenleg nincs WIP epizódban, vagy minden epizódhoz már van jövőbeli időpont.'}
+              ? `${patientName} jelenleg nincs aktív kezelésben, vagy minden kezeléshez már van jövőbeli időpont.`
+              : 'A beteg jelenleg nincs aktív kezelésben, vagy minden kezeléshez már van jövőbeli időpont.'}
           </p>
         </div>
       </div>

@@ -52,10 +52,10 @@ export async function DELETE(
         return NextResponse.json({ error: 'Csak aktív epizód lépései törölhetők' }, { status: 400 });
       }
 
-      if (step.status !== 'pending') {
+      if (step.status !== 'pending' && step.status !== 'skipped') {
         await pool.query('ROLLBACK');
         return NextResponse.json(
-          { error: `Csak várakozó (pending) lépés törölhető. Jelenlegi státusz: ${step.status}` },
+          { error: `Csak várakozó (pending) vagy átugrott (skipped) lépés hagyható el. Jelenlegi státusz: ${step.status}` },
           { status: 400 }
         );
       }

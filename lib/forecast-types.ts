@@ -27,12 +27,24 @@ export interface EpisodeForecastBatchResponse {
   };
 }
 
+export interface DoctorWipForecast {
+  providerId: string | null;
+  providerName: string | null;
+  providerEmail: string | null;
+  wipCount: number;
+  wipCompletionP50Max: string | null;
+  wipCompletionP80Max: string | null;
+  wipVisitsRemainingP50Sum: number;
+  wipVisitsRemainingP80Sum: number;
+}
+
 export interface ForecastAggregateResponse {
   wipCount: number;
   wipCompletionP50Max: string | null;
   wipCompletionP80Max: string | null;
   wipVisitsRemainingP50Sum: number;
   wipVisitsRemainingP80Sum: number;
+  byDoctor: DoctorWipForecast[];
   meta: {
     serverNow: string;
     fetchedAt: string;

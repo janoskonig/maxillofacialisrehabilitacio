@@ -9,13 +9,18 @@ import {
 } from 'lucide-react';
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors,
-  type DragEndEvent,
+  type DragEndEvent, type Modifier,
 } from '@dnd-kit/core';
 import {
   SortableContext, verticalListSortingStrategy, useSortable,
   sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+
+const restrictToVerticalAxis: Modifier = (args) => ({
+  ...args.transform,
+  x: 0,
+});
 
 interface EpisodeStep {
   id: string;
@@ -99,21 +104,23 @@ function SortableStepRow({
   reordering: boolean;
 }) {
   const {
-    attributes, listeners, setNodeRef, transform, transition, isDragging,
+    attributes, listeners, setNodeRef, setActivatorNodeRef,
+    transform, transition, isDragging,
   } = useSortable({ id: step.id });
 
-  const style = {
+  const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
-    transition,
+    transition: transition ?? undefined,
     opacity: isDragging ? 0.5 : 1,
     zIndex: isDragging ? 50 : undefined,
+    position: 'relative' as const,
   };
 
   const config = statusConfig[step.status] ?? statusConfig.pending;
   const StatusIcon = config.icon;
   const canSkip = step.status === 'pending' || step.status === 'scheduled';
   const canUnskip = step.status === 'skipped';
-  const canDelete = step.status === 'pending';
+  const canDelete = step.status === 'pending' || step.status === 'skipped';
   const isAdHoc = !step.sourceEpisodePathwayId;
 
   return (
@@ -125,6 +132,7 @@ function SortableStepRow({
       >
         {/* Drag handle */}
         <button
+          ref={setActivatorNodeRef}
           className="touch-none p-1 rounded hover:bg-gray-200 cursor-grab active:cursor-grabbing shrink-0"
           {...attributes}
           {...listeners}
@@ -196,10 +204,11 @@ function SortableStepRow({
           {canDelete && (
             <button
               onClick={onDelete}
-              className="p-1 rounded text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-              title="Lépés törlése"
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 bg-red-50 rounded hover:bg-red-100 transition-colors"
+              title="Lépés elhagyása a tervből"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-3 h-3" />
+              Elhagyom
             </button>
           )}
           {canSkip && (
@@ -228,6 +237,88 @@ function SortableStepRow({
   );
 }
 
+// ─── Step row + inline confirm (combined) ────────────────────────────────────
+
+function StepRowWithConfirm({
+  step, idx, isNext, stepLabel, pathwayLabel, pathwayColor,
+  confirmStepId, confirmAction, skipReason, saving, reordering,
+  canMoveUp, canMoveDown,
+  onSkipConfirm, onUnskipConfirm, onDelete, onMoveUp, onMoveDown,
+  onSkip, onUnskip, onDeleteConfirm, onCancel, onSkipReasonChange,
+}: {
+  step: EpisodeStep; idx: number; isNext: boolean; stepLabel: string;
+  pathwayLabel: string | null; pathwayColor: string;
+  confirmStepId: string | null; confirmAction: 'skip' | 'unskip' | 'delete' | null;
+  skipReason: string; saving: boolean; reordering: boolean;
+  canMoveUp: boolean; canMoveDown: boolean;
+  onSkipConfirm: () => void; onUnskipConfirm: () => void; onDelete: () => void;
+  onMoveUp: () => void; onMoveDown: () => void;
+  onSkip: () => void; onUnskip: () => void; onDeleteConfirm: () => void;
+  onCancel: () => void; onSkipReasonChange: (v: string) => void;
+}) {
+  const isConfirming = confirmStepId === step.id;
+  return (
+    <div>
+      <SortableStepRow
+        step={step} idx={idx} isNext={isNext}
+        stepLabel={stepLabel} pathwayLabel={pathwayLabel} pathwayColor={pathwayColor}
+        onSkipConfirm={onSkipConfirm} onUnskipConfirm={onUnskipConfirm} onDelete={onDelete}
+        onMoveUp={onMoveUp} onMoveDown={onMoveDown}
+        canMoveUp={canMoveUp} canMoveDown={canMoveDown} reordering={reordering}
+      />
+      {isConfirming && (
+        <div className="mt-1 ml-12 p-3 rounded-lg border border-gray-200 bg-white">
+          {confirmAction === 'skip' && (
+            <>
+              <p className="text-sm text-gray-700 mb-2">
+                Biztosan átugorja a(z) <strong>{stepLabel}</strong> lépést?
+              </p>
+              <input
+                type="text" value={skipReason} onChange={(e) => onSkipReasonChange(e.target.value)}
+                placeholder="Ok (opcionális, pl. már megtörtént)"
+                className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 mb-2"
+              />
+              <div className="flex items-center gap-2">
+                <button onClick={onSkip} disabled={saving}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-amber-500 text-white rounded text-xs font-medium hover:bg-amber-600 disabled:opacity-50">
+                  {saving && <Loader2 className="w-3 h-3 animate-spin" />} Átugrás
+                </button>
+                <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-800">Mégse</button>
+              </div>
+            </>
+          )}
+          {confirmAction === 'unskip' && (
+            <>
+              <p className="text-sm text-gray-700 mb-2">Visszaállítja a(z) <strong>{stepLabel}</strong> lépést várakozóra?</p>
+              <div className="flex items-center gap-2">
+                <button onClick={onUnskip} disabled={saving}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-600 text-white rounded text-xs font-medium hover:bg-gray-700 disabled:opacity-50">
+                  {saving && <Loader2 className="w-3 h-3 animate-spin" />} Visszaállítás
+                </button>
+                <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-800">Mégse</button>
+              </div>
+            </>
+          )}
+          {confirmAction === 'delete' && (
+            <>
+              <p className="text-sm text-gray-700 mb-2">
+                Biztosan elhagyja a(z) <strong>{stepLabel}</strong> lépést a tervből? Ez a művelet nem vonható vissza.
+              </p>
+              <div className="flex items-center gap-2">
+                <button onClick={onDeleteConfirm} disabled={saving}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-500 text-white rounded text-xs font-medium hover:bg-red-600 disabled:opacity-50">
+                  {saving && <Loader2 className="w-3 h-3 animate-spin" />} Elhagyás
+                </button>
+                <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-800">Mégse</button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export function EpisodeStepsManager({
@@ -250,6 +341,9 @@ export function EpisodeStepsManager({
   const [expanded, setExpanded] = useState(true);
   const [reordering, setReordering] = useState(false);
   const [episodePathways, setEpisodePathways] = useState<EpisodePathwayInfo[]>(initialEpisodePathways ?? []);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   // Step adder panel
   const [adderOpen, setAdderOpen] = useState(false);
@@ -719,102 +813,48 @@ export function EpisodeStepsManager({
               ) : (
                 <div className="space-y-1">
                   <p className="text-xs text-gray-500 mb-2">
-                    Húzd a lépéseket a kívánt sorrendbe, vagy használd a nyilakat. A kukával törölheted a várakozó lépéseket.
+                    Húzd a lépéseket a kívánt sorrendbe, vagy használd a nyilakat. A kukával elhagyhatod a felesleges lépéseket.
                   </p>
-                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                  {mounted ? (
+                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd} modifiers={[restrictToVerticalAxis]}>
                     <SortableContext items={stepIds} strategy={verticalListSortingStrategy}>
-                      {steps.map((step, idx) => {
-                        const isConfirming = confirmStepId === step.id;
-                        return (
-                          <div key={step.id}>
-                            <SortableStepRow
-                              step={step}
-                              idx={idx}
-                              isNext={idx === nextPendingIndex}
-                              stepLabel={getStepLabel(step)}
-                              pathwayLabel={getPathwayLabel(step.sourceEpisodePathwayId)}
-                              pathwayColor={getPathwayColor(step.sourceEpisodePathwayId)}
-                              onSkipConfirm={() => { setConfirmStepId(step.id); setConfirmAction('skip'); setSkipReason(''); }}
-                              onUnskipConfirm={() => { setConfirmStepId(step.id); setConfirmAction('unskip'); }}
-                              onDelete={() => { setConfirmStepId(step.id); setConfirmAction('delete'); }}
-                              onMoveUp={() => handleMoveStep(step.id, 'up')}
-                              onMoveDown={() => handleMoveStep(step.id, 'down')}
-                              canMoveUp={idx > 0}
-                              canMoveDown={idx < steps.length - 1}
-                              reordering={reordering}
-                            />
-
-                            {/* Inline confirm dialog */}
-                            {isConfirming && (
-                              <div className="mt-1 ml-12 p-3 rounded-lg border border-gray-200 bg-white">
-                                {confirmAction === 'skip' && (
-                                  <>
-                                    <p className="text-sm text-gray-700 mb-2">
-                                      Biztosan átugorja a(z) <strong>{getStepLabel(step)}</strong> lépést?
-                                    </p>
-                                    <input
-                                      type="text"
-                                      value={skipReason}
-                                      onChange={(e) => setSkipReason(e.target.value)}
-                                      placeholder="Ok (opcionális, pl. már megtörtént)"
-                                      className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 mb-2"
-                                    />
-                                    <div className="flex items-center gap-2">
-                                      <button
-                                        onClick={() => handleSkip(step.id)}
-                                        disabled={saving}
-                                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-amber-500 text-white rounded text-xs font-medium hover:bg-amber-600 disabled:opacity-50"
-                                      >
-                                        {saving && <Loader2 className="w-3 h-3 animate-spin" />}
-                                        Átugrás
-                                      </button>
-                                      <button onClick={() => { setConfirmStepId(null); setConfirmAction(null); }} className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-800">Mégse</button>
-                                    </div>
-                                  </>
-                                )}
-                                {confirmAction === 'unskip' && (
-                                  <>
-                                    <p className="text-sm text-gray-700 mb-2">
-                                      Visszaállítja a(z) <strong>{getStepLabel(step)}</strong> lépést várakozóra?
-                                    </p>
-                                    <div className="flex items-center gap-2">
-                                      <button
-                                        onClick={() => handleUnskip(step.id)}
-                                        disabled={saving}
-                                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-600 text-white rounded text-xs font-medium hover:bg-gray-700 disabled:opacity-50"
-                                      >
-                                        {saving && <Loader2 className="w-3 h-3 animate-spin" />}
-                                        Visszaállítás
-                                      </button>
-                                      <button onClick={() => { setConfirmStepId(null); setConfirmAction(null); }} className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-800">Mégse</button>
-                                    </div>
-                                  </>
-                                )}
-                                {confirmAction === 'delete' && (
-                                  <>
-                                    <p className="text-sm text-gray-700 mb-2">
-                                      Biztosan törli a(z) <strong>{getStepLabel(step)}</strong> lépést? Ez a művelet nem vonható vissza.
-                                    </p>
-                                    <div className="flex items-center gap-2">
-                                      <button
-                                        onClick={() => handleDelete(step.id)}
-                                        disabled={saving}
-                                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-500 text-white rounded text-xs font-medium hover:bg-red-600 disabled:opacity-50"
-                                      >
-                                        {saving && <Loader2 className="w-3 h-3 animate-spin" />}
-                                        Törlés
-                                      </button>
-                                      <button onClick={() => { setConfirmStepId(null); setConfirmAction(null); }} className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-800">Mégse</button>
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                      {steps.map((step, idx) => (
+                        <StepRowWithConfirm
+                          key={step.id}
+                          step={step}
+                          idx={idx}
+                          isNext={idx === nextPendingIndex}
+                          stepLabel={getStepLabel(step)}
+                          pathwayLabel={getPathwayLabel(step.sourceEpisodePathwayId)}
+                          pathwayColor={getPathwayColor(step.sourceEpisodePathwayId)}
+                          confirmStepId={confirmStepId}
+                          confirmAction={confirmAction}
+                          skipReason={skipReason}
+                          saving={saving}
+                          reordering={reordering}
+                          canMoveUp={idx > 0}
+                          canMoveDown={idx < steps.length - 1}
+                          onSkipConfirm={() => { setConfirmStepId(step.id); setConfirmAction('skip'); setSkipReason(''); }}
+                          onUnskipConfirm={() => { setConfirmStepId(step.id); setConfirmAction('unskip'); }}
+                          onDelete={() => { setConfirmStepId(step.id); setConfirmAction('delete'); }}
+                          onMoveUp={() => handleMoveStep(step.id, 'up')}
+                          onMoveDown={() => handleMoveStep(step.id, 'down')}
+                          onSkip={() => handleSkip(step.id)}
+                          onUnskip={() => handleUnskip(step.id)}
+                          onDeleteConfirm={() => handleDelete(step.id)}
+                          onCancel={() => { setConfirmStepId(null); setConfirmAction(null); }}
+                          onSkipReasonChange={setSkipReason}
+                        />
+                      ))}
                     </SortableContext>
                   </DndContext>
+                  ) : (
+                    <div className="animate-pulse space-y-2">
+                      {steps.map((_, i) => (
+                        <div key={i} className="h-12 bg-gray-100 rounded-lg" />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </>

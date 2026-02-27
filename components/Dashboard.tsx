@@ -380,7 +380,7 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
           {activeTab === 'worklist' && canSeeStages && (
             <div className="space-y-4">
               <p className="text-sm text-gray-600">
-                WIP epizódok következő lépései – foglalás egy kattintással.
+                Aktív kezelések következő lépései – foglalás egy kattintással.
               </p>
               <WorklistWidget />
             </div>

@@ -87,7 +87,7 @@ export function IntakeRecommendationBadge() {
             </ul>
             {data.explain.wipP80DaysFromNow != null && (
               <p className="text-xs text-gray-500 mt-2">
-                WIP P80 kifutás: +{data.explain.wipP80DaysFromNow} nap
+                Aktív kezelések P80 kifutás: +{data.explain.wipP80DaysFromNow} nap
               </p>
             )}
             <a

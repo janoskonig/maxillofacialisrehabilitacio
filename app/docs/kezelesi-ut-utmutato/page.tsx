@@ -61,7 +61,7 @@ export default function KezelesiUtUtmutatoPage() {
 
               <h3 className="text-lg font-medium text-gray-800 mt-4 mb-2">1.4 A beteg még ott van — következő időpontot szeretné egyeztetni</h3>
               <p>
-                A beteg a rendelőben van, és szeretné a következő időpontot is (pl. próbabehelyezésre). <strong>Egy WIP betegnek egyszerre legfeljebb egy jövőbeli munkafázisú időpontja lehet.</strong> Tehát most nem foglalhatsz neki rögtön a próbabehelyezésre is — előbb le kell zajlania a lenyomatvételnek.
+                A beteg a rendelőben van, és szeretné a következő időpontot is (pl. próbabehelyezésre). <strong>Egy aktív kezelésben lévő betegnek egyszerre legfeljebb egy jövőbeli munkafázisú időpontja lehet.</strong> Tehát most nem foglalhatsz neki rögtön a próbabehelyezésre is — előbb le kell zajlania a lenyomatvételnek.
               </p>
               <p className="mt-2">
                 <strong>Mit csinálj:</strong> A lenyomatvétel napján, amikor megcsináltátok, a rendszer frissül — a következő lépés (próbabehelyezés) lesz a worklisten. Akkor foglalhatod a következő időpontot. Ha azonban klinikai indok miatt már most kell mindkettőt lefoglalni, admin vagy sebészorvos <strong>override</strong>-tal megteheti (min. 10 karakteres indoklás, audit alatt).

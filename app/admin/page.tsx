@@ -9,6 +9,7 @@ import { CarePathwaysEditor } from '@/components/admin/CarePathwaysEditor';
 import { StageCatalogEditor } from '@/components/admin/StageCatalogEditor';
 import { StepCatalogEditor } from '@/components/admin/StepCatalogEditor';
 import { TreatmentTypesEditor } from '@/components/admin/TreatmentTypesEditor';
+import { ToothTreatmentCatalogEditor } from '@/components/admin/ToothTreatmentCatalogEditor';
 import { Logo } from '@/components/Logo';
 
 type UserRole = 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
@@ -744,6 +745,9 @@ export default function AdminPage() {
                     <li>
                       <strong>Stádiumok</strong> — Stádium katalógus indikáció szerint (pl. preop, op, postop). A betegnél a Stádiumok oldalon ezek alapján jelennek meg; itt a neveket és sorrendet szerkeszted.
                     </li>
+                    <li>
+                      <strong>Fog-szintű kezelési típusok</strong> — A fogazati státusznál az egyes fogakhoz rendelhető kezelések (tömés, gyökérkezelés, húzás stb.). Innen epizód is létrehozható az ütemezéshez.
+                    </li>
                   </ol>
                 </div>
               </div>
@@ -795,6 +799,15 @@ export default function AdminPage() {
                 <p className="text-sm text-gray-600 mt-0.5">Mikor: a beteg stádiumainak (pl. preop, op, postop) katalógusát szerkeszted indikáció szerint — nevek, sorrend, záró stádium. A betegnél a Stádiumok oldal ezt használja.</p>
               </div>
               <StageCatalogEditor />
+            </section>
+
+            {/* 5. Fog-szintű kezelési típusok */}
+            <section className="card" aria-labelledby="section-tooth-treatment-catalog">
+              <div className="mb-4">
+                <h2 id="section-tooth-treatment-catalog" className="text-lg font-semibold text-gray-900">5. Fog-szintű kezelési típusok</h2>
+                <p className="text-sm text-gray-600 mt-0.5">Mikor: a fogazati státusznál az egyes fogakhoz rendelhető kezelési típusokat (pl. tömés, gyökérkezelés, húzás, korona) szerkeszted. Ezek a beteg űrlap fogazati diagramjánál jelennek meg.</p>
+              </div>
+              <ToothTreatmentCatalogEditor />
             </section>
           </div>
         ) : (

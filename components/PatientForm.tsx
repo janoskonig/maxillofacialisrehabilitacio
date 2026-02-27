@@ -36,6 +36,7 @@ import { PatientFormSectionNavigation, Section } from './mobile/PatientFormSecti
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { PatientStageSection } from './PatientStageSection';
 import { OHIP14Section } from './OHIP14Section';
+import { ToothTreatmentProvider, ToothTreatmentInline } from './ToothTreatmentPanel';
 
 
 // Fog állapot típus
@@ -387,7 +388,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
     loadInstitutionOptions();
   }, []);
 
-  // Load active (open) episode for WIP context banner + appointment booking
+  // Load active (open) episode for context banner + appointment booking
   useEffect(() => {
     if (!patientId) {
       setActiveEpisodeId(null);
@@ -3029,12 +3030,14 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
                 const presentTeeth = Object.keys(fogak).filter(toothNumber => {
                   const value = fogak[toothNumber];
                   const state = getToothState(value);
-                  return state === 'present'; // Csak a jelen lévő fogak
+                  return state === 'present';
                 });
                 
-                return presentTeeth.length > 0 ? (
+                if (presentTeeth.length === 0) return null;
+
+                const content = (
                 <div className="space-y-3 sm:space-y-4 mt-4">
-                    <h6 className="font-medium text-gray-700 text-sm sm:text-base">Fogak állapota (szabadszavas leírás)</h6>
+                    <h6 className="font-medium text-gray-700 text-sm sm:text-base">Fogak állapota</h6>
                     {presentTeeth.sort().map(toothNumber => {
                       const value = fogak[toothNumber];
                       const normalized = normalizeToothData(value);
@@ -3047,7 +3050,6 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
                             <label className="form-label font-medium text-sm sm:text-base">
                               {toothNumber}. fog – állapot
                             </label>
-                            {/* D/F gombok amikor a fog jelen van */}
                             {!isViewOnly && (
                               <div className="flex items-center gap-2">
                                 <button
@@ -3085,11 +3087,19 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
                             placeholder="Pl. korona, hídtag, gyökércsapos felépítmény, egyéb részletek"
                             readOnly={isViewOnly}
                           />
+                          {/* Per-tooth treatment needs */}
+                          <ToothTreatmentInline toothNumber={toothNumber} isViewOnly={isViewOnly} />
                     </div>
                       );
                     })}
                 </div>
-                ) : null;
+                );
+
+                return patientId ? (
+                  <ToothTreatmentProvider patientId={patientId}>
+                    {content}
+                  </ToothTreatmentProvider>
+                ) : content;
               })()}
 
               {/* Export PDF button */}
@@ -3914,8 +3924,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
             <div className="mb-4">
               <ContextBanner
                 variant="info"
-                title="WIP eset"
-                message="WIP esetben a munkalistát használd."
+                title="Aktív kezelés"
+                message="Aktív kezelés esetén a munkalistát használd."
                 primaryLink={{ label: 'Megnyitás', href: '/?tab=worklist' }}
                 dismissKey="wip-worklist-banner-dismissed"
               />

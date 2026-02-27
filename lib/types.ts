@@ -754,3 +754,30 @@ export const ohip14ResponseValueOptions: Array<{ value: OHIP14ResponseValue; lab
   { value: 3, label: 'Gyakran' },
   { value: 4, label: 'Mindig' },
 ];
+
+// --- Tooth treatment catalog & per-tooth treatment needs ---
+export const TOOTH_TREATMENT_STATUS_VALUES = ['pending', 'episode_linked', 'completed'] as const;
+export type ToothTreatmentStatus = typeof TOOTH_TREATMENT_STATUS_VALUES[number];
+
+export interface ToothTreatmentCatalogItem {
+  code: string;
+  labelHu: string;
+  labelEn: string | null;
+  defaultCarePathwayId: string | null;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface ToothTreatment {
+  id: string;
+  patientId: string;
+  toothNumber: number;
+  treatmentCode: string;
+  status: ToothTreatmentStatus;
+  episodeId: string | null;
+  notes: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  completedAt: string | null;
+  labelHu?: string;
+}
