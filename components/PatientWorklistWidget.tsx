@@ -143,6 +143,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
           pool: pool || 'work',
           requiresPrecommit: slotPickerItem.requiresPrecommit ?? false,
           stepCode: slotPickerItem.stepCode ?? nextStep,
+          stepSeq: slotPickerItem.stepSeq,
           createdVia: 'worklist',
         }),
       });

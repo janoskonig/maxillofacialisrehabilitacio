@@ -142,13 +142,16 @@ export async function GET(request: NextRequest) {
     // 3. Batch fetch appointments, intents, and current stage per episode
     const [apptsResult, intentsResult, stagesResult] = await Promise.all([
       pool.query(
-        `SELECT id, episode_id, step_code, step_seq, start_time, appointment_status
-         FROM appointments
-         WHERE episode_id = ANY($1)
-           AND step_code IS NOT NULL
-           AND appointment_status IS DISTINCT FROM 'cancelled_by_doctor'
-           AND appointment_status IS DISTINCT FROM 'cancelled_by_patient'
-         ORDER BY step_seq ASC`,
+        `SELECT a.id, a.episode_id, a.step_code,
+                COALESCE(a.step_seq, si.step_seq) as step_seq,
+                a.start_time, a.appointment_status
+         FROM appointments a
+         LEFT JOIN slot_intents si ON a.slot_intent_id = si.id
+         WHERE a.episode_id = ANY($1)
+           AND a.step_code IS NOT NULL
+           AND a.appointment_status IS DISTINCT FROM 'cancelled_by_doctor'
+           AND a.appointment_status IS DISTINCT FROM 'cancelled_by_patient'
+         ORDER BY COALESCE(a.step_seq, si.step_seq) ASC NULLS LAST`,
         [episodeIds]
       ),
       pool.query(
@@ -201,10 +204,15 @@ export async function GET(request: NextRequest) {
       const currentStage = stageByEpisode.get(ep.episode_id) ?? null;
       const isProtetikai = currentStage != null && (PROTETIKAI_STAGE_CODES as readonly string[]).includes(currentStage);
 
-      // Index appointments and intents by step_seq
+      // Index appointments by step_seq (primary) and step_code (fallback)
       const apptBySeq = new Map<number, (typeof appts)[0]>();
+      const apptByCodeOnly = new Map<string, (typeof appts)[0]>();
       for (const a of appts) {
-        if (a.step_seq != null) apptBySeq.set(a.step_seq, a);
+        if (a.step_seq != null) {
+          apptBySeq.set(a.step_seq, a);
+        } else if (a.step_code) {
+          if (!apptByCodeOnly.has(a.step_code)) apptByCodeOnly.set(a.step_code, a);
+        }
       }
       const intentBySeq = new Map<number, (typeof intents)[0]>();
       for (const i of intents) {
@@ -215,7 +223,11 @@ export async function GET(request: NextRequest) {
 
       for (let seq = 0; seq < pathwaySteps.length; seq++) {
         const ps = pathwaySteps[seq];
-        const appt = apptBySeq.get(seq);
+        let appt = apptBySeq.get(seq) ?? null;
+        if (!appt && apptByCodeOnly.has(ps.step_code)) {
+          appt = apptByCodeOnly.get(ps.step_code)!;
+          apptByCodeOnly.delete(ps.step_code);
+        }
         const intent = intentBySeq.get(seq);
 
         let status: TimelineStepStatus;

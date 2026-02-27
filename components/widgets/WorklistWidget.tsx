@@ -150,6 +150,7 @@ export function WorklistWidget() {
         pool: item.pool || 'work',
         requiresPrecommit: item.requiresPrecommit ?? false,
         stepCode: item.stepCode ?? item.nextStep,
+        stepSeq: item.stepSeq,
         overrideReason: overrideReason || undefined,
         createdVia: 'worklist',
       }),
@@ -217,6 +218,7 @@ export function WorklistWidget() {
           pool: pool || 'work',
           requiresPrecommit: slotPickerItem.requiresPrecommit ?? false,
           stepCode: itemStepCode ?? nextStep,
+          stepSeq: slotPickerItem.stepSeq,
           createdVia: 'worklist',
         }),
       });
