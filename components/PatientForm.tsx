@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Patient, patientSchema, nyakiBlokkdisszekcioOptions, fabianFejerdyProtetikaiOsztalyOptions, kezelesiTervOptions, kezelesiTervArcotErintoTipusOptions, kezelesiTervArcotErintoElhorgonyzasOptions } from '@/lib/types';
 import { normalizeToTreatmentTypeCode } from '@/lib/treatment-type-normalize';
 import { formatDateForInput } from '@/lib/dateUtils';
+import { getEarliestReadyDate, formatEarliestReadyDisplay } from '@/lib/kezelesi-terv-estimate';
 import { X, Calendar, User, Phone, Mail, MapPin, FileText, AlertTriangle, Plus, Trash2, Download, Send, History } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { AppointmentBookingSection } from './AppointmentBookingSection';
@@ -3635,6 +3636,11 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
                               placeholder="Válasszon dátumot"
                               disabled={isViewOnly}
                             />
+                            {(terv.treatmentTypeCode ?? normalizeToTreatmentTypeCode(terv.tipus)) && (
+                              <p className="mt-1.5 text-sm text-gray-600">
+                                Becsült legkorábbi elkészülési dátum: {formatEarliestReadyDisplay(getEarliestReadyDate(terv.treatmentTypeCode ?? normalizeToTreatmentTypeCode(terv.tipus) ?? null) ?? '')} (a kiválasztott típus alapján)
+                              </p>
+                            )}
                           </div>
                           <div className="flex items-center">
                             <input
@@ -3715,6 +3721,11 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
                               placeholder="Válasszon dátumot"
                               disabled={isViewOnly}
                             />
+                            {(terv.treatmentTypeCode ?? normalizeToTreatmentTypeCode(terv.tipus)) && (
+                              <p className="mt-1.5 text-sm text-gray-600">
+                                Becsült legkorábbi elkészülési dátum: {formatEarliestReadyDisplay(getEarliestReadyDate(terv.treatmentTypeCode ?? normalizeToTreatmentTypeCode(terv.tipus) ?? null) ?? '')} (a kiválasztott típus alapján)
+                              </p>
+                            )}
                           </div>
                           <div className="flex items-center">
                             <input
@@ -3809,6 +3820,11 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
                               placeholder="Válasszon dátumot"
                               disabled={isViewOnly}
                             />
+                            {terv.tipus && (
+                              <p className="mt-1.5 text-sm text-gray-600">
+                                Becsült legkorábbi elkészülési dátum: {formatEarliestReadyDisplay(getEarliestReadyDate(null) ?? '')} (becslés)
+                              </p>
+                            )}
                           </div>
                           <div className="flex items-center">
                             <input
