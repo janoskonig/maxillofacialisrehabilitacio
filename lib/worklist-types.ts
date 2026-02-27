@@ -80,6 +80,8 @@ export interface WorklistItemBackend {
   stepSeq?: number;
   /** True for steps beyond the first pending — booking needs requiresPrecommit to bypass one-hard-next */
   requiresPrecommit?: boolean;
+  /** 0-based position of the episode in the patient's treatment plan (opened_at order) */
+  episodeOrder?: number;
 }
 
 export interface WorklistLocalState {

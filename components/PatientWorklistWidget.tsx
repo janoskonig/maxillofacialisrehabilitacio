@@ -68,23 +68,12 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
   }, [fetchWorklist]);
 
   const sortedItems = [...items].sort((a, b) => {
-    const keyA = getWorklistItemKey(a);
-    const keyB = getWorklistItemKey(b);
-    const { state: stateA } = deriveWorklistRowState(a, local, keyA);
-    const { state: stateB } = deriveWorklistRowState(b, local, keyB);
-
-    const priority = (state: string, overdue: number) => {
-      if (state === 'READY' && overdue > 0) return 3;
-      if (state === 'READY') return 2;
-      if (state === 'BLOCKED') return 1;
-      return 0;
-    };
-    const pA = priority(stateA, a.overdueByDays ?? 0);
-    const pB = priority(stateB, b.overdueByDays ?? 0);
-    if (pB !== pA) return pB - pA;
-    const winEndA = a.windowEnd ?? '';
-    const winEndB = b.windowEnd ?? '';
-    return winEndA.localeCompare(winEndB);
+    const epA = a.episodeOrder ?? 0;
+    const epB = b.episodeOrder ?? 0;
+    if (epA !== epB) return epA - epB;
+    const seqA = a.stepSeq ?? 0;
+    const seqB = b.stepSeq ?? 0;
+    return seqA - seqB;
   });
 
   const handleBookNext = (item: WorklistItemBackend) => {

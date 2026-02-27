@@ -72,7 +72,8 @@ export async function GET(request: NextRequest) {
 
     const items: WorklistItemBackend[] = [];
 
-    for (const row of episodesResult.rows) {
+    for (let epIdx = 0; epIdx < episodesResult.rows.length; epIdx++) {
+      const row = episodesResult.rows[epIdx];
       const result = await allPendingSteps(row.episodeId);
 
       if (isBlockedAll(result)) {
@@ -118,6 +119,7 @@ export async function GET(request: NextRequest) {
           noShowRisk: 0,
           status: 'blocked',
           blockedReason: result.reason,
+          episodeOrder: epIdx,
           ...(result.code && { blockedCode: result.code }),
           ...(suggestedTreatmentTypeCode && { suggestedTreatmentTypeCode }),
           ...(suggestedTreatmentTypeLabel && { suggestedTreatmentTypeLabel }),
@@ -196,6 +198,7 @@ export async function GET(request: NextRequest) {
           noShowRisk,
           stepSeq: step.stepSeq,
           requiresPrecommit: !step.isFirstPending,
+          episodeOrder: epIdx,
         };
 
         if (treatmentTypeCode || treatmentTypeLabel || treatmentTypeSource) {
@@ -338,7 +341,14 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    items.sort((a, b) => b.priorityScore - a.priorityScore);
+    items.sort((a, b) => {
+      const epA = a.episodeOrder ?? 0;
+      const epB = b.episodeOrder ?? 0;
+      if (epA !== epB) return epA - epB;
+      const seqA = a.stepSeq ?? 0;
+      const seqB = b.stepSeq ?? 0;
+      return seqA - seqB;
+    });
 
     return NextResponse.json({
       items,
