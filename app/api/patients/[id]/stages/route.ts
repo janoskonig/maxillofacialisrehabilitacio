@@ -4,6 +4,7 @@ import { verifyAuth } from '@/lib/auth-server';
 import { patientStageSchema, PatientStageEntry, PatientStageTimeline } from '@/lib/types';
 import type { StageEventEntry, StageEventTimeline, PatientEpisode } from '@/lib/types';
 import { logActivity } from '@/lib/activity';
+import { logger } from '@/lib/logger';
 
 /**
  * Get patient stages timeline
@@ -173,7 +174,7 @@ export async function GET(
 
     return NextResponse.json({ timeline });
   } catch (error) {
-    console.error('Error fetching patient stages:', error);
+    logger.error('Error fetching patient stages:', error);
     return NextResponse.json(
       { error: 'Hiba történt a stádiumok lekérdezésekor' },
       { status: 500 }
@@ -301,7 +302,7 @@ export async function POST(
           const { ensureRecallTasksForEpisode } = await import('@/lib/recall-tasks');
           await ensureRecallTasksForEpisode(episodeId);
         } catch (e) {
-          console.error('Failed to create recall tasks:', e);
+          logger.error('Failed to create recall tasks:', e);
         }
       }
 
@@ -403,7 +404,7 @@ export async function POST(
 
     return NextResponse.json({ stage: newStage }, { status: 201 });
   } catch (error) {
-    console.error('Error creating patient stage:', error);
+    logger.error('Error creating patient stage:', error);
     return NextResponse.json(
       { error: 'Hiba történt a stádium létrehozásakor' },
       { status: 500 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 const PREPARATORY_STAGES = ['STAGE_0', 'STAGE_1', 'STAGE_2', 'STAGE_3', 'STAGE_4'];
 
@@ -125,7 +126,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ columns });
   } catch (error) {
-    console.error('Error fetching patient pipeline:', error);
+    logger.error('Error fetching patient pipeline:', error);
     return NextResponse.json(
       { error: 'Hiba a pipeline adatok lekérdezésekor' },
       { status: 500 }

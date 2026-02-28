@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { handleApiError } from '@/lib/api-error-handler';
 import { sendConditionalAppointmentRequestToPatient } from '@/lib/email';
+import { logger } from '@/lib/logger';
 
 /**
  * Reject a pending appointment (via email link)
@@ -254,7 +255,7 @@ export async function GET(request: NextRequest) {
             false // Don't show remaining alternatives to patient
           );
         } catch (emailError) {
-          console.error('Failed to send alternative appointment email:', emailError);
+          logger.error('Failed to send alternative appointment email:', emailError);
         }
         
         // Return success page with next alternative info

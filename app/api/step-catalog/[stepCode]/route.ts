@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { stepCatalogPatchSchema } from '@/lib/admin-process-schemas';
 import { invalidateStepLabelCache } from '@/lib/step-labels';
+import { logger } from '@/lib/logger';
 
 const STEP_CODE_REGEX = /^[a-z0-9_]+$/;
 
@@ -96,7 +97,7 @@ export async function PATCH(
 
     return NextResponse.json({ item: afterResult.rows[0] });
   } catch (error) {
-    console.error('Error updating step catalog:', error);
+    logger.error('Error updating step catalog:', error);
     return NextResponse.json(
       { error: 'Hiba történt a lépés módosításakor' },
       { status: 500 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { handleApiError } from '@/lib/api-error-handler';
+import { logger } from '@/lib/logger';
 
 // Helper to get correlation ID from request
 function getCorrelationIdFromRequest(request: NextRequest): string {
@@ -118,7 +119,7 @@ export async function GET(
     response.headers.set('x-correlation-id', correlationId);
     return response;
   } catch (error: any) {
-    console.error('Hiba a snapshot lekérdezésekor:', error);
+    logger.error('Hiba a snapshot lekérdezésekor:', error);
     return handleApiError(error, 'Hiba történt a snapshot lekérdezésekor', correlationId);
   }
 }

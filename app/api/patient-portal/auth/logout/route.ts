@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { clearPatientPortalSession } from '@/lib/patient-portal-server';
+import { logger } from '@/lib/logger';
 
 /**
  * Logout from patient portal
@@ -16,7 +17,7 @@ export async function POST(request: NextRequest) {
       message: 'Sikeresen kijelentkezett',
     });
   } catch (error) {
-    console.error('Error logging out:', error);
+    logger.error('Error logging out:', error);
     return NextResponse.json(
       { error: 'Hiba történt a kijelentkezéskor' },
       { status: 500 }

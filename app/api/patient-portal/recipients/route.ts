@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/patient-portal/recipients - Kezelőorvos és admin adatainak lekérése
@@ -78,7 +79,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ recipients });
   } catch (error) {
-    console.error('Error fetching recipients for patient:', error);
+    logger.error('Error fetching recipients for patient:', error);
     return NextResponse.json(
       { error: 'Hiba történt az adatok lekérdezésekor' },
       { status: 500 }

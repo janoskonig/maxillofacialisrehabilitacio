@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth-server';
 import { getDbPool } from '@/lib/db';
 import { DoctorMessage } from '@/lib/doctor-communication';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/doctor-messages/by-patient/[patientId] - Betegre hivatkozó orvos-orvos üzenetek lekérése
@@ -153,7 +154,7 @@ export async function GET(
       messages,
     });
   } catch (error: any) {
-    console.error('Hiba a betegre hivatkozó üzenetek lekérésekor:', error);
+    logger.error('Hiba a betegre hivatkozó üzenetek lekérésekor:', error);
     return NextResponse.json(
       { error: 'Hiba történt az üzenetek lekérésekor' },
       { status: 500 }

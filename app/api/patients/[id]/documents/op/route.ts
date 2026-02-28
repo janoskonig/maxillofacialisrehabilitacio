@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 // Get OP-tagged documents for quick access
 export const dynamic = 'force-dynamic';
@@ -107,7 +108,7 @@ export async function GET(
 
     return NextResponse.json({ documents: result.rows }, { status: 200 });
   } catch (error) {
-    console.error('Hiba az OP dokumentumok lekérdezésekor:', error);
+    logger.error('Hiba az OP dokumentumok lekérdezésekor:', error);
     return NextResponse.json(
       { error: 'Hiba történt az OP dokumentumok lekérdezésekor' },
       { status: 500 }

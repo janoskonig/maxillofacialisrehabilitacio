@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { SignJWT } from 'jose';
 import { logActivity } from '@/lib/activity';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'change-this-to-a-random-secret-in-production'
@@ -99,7 +100,7 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (error) {
-    console.error('Impersonate error:', error);
+    logger.error('Impersonate error:', error);
     return NextResponse.json(
       { error: 'Hiba történt a bejelentkezéskor' },
       { status: 500 }

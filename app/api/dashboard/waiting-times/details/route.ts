@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth-server';
 import { getDbPool } from '@/lib/db';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/dashboard/waiting-times/details - Részletes várakozási idők betegekkel
@@ -92,7 +93,7 @@ export async function GET(request: NextRequest) {
       );
     }
   } catch (error) {
-    console.error('Error fetching waiting times details:', error);
+    logger.error('Error fetching waiting times details:', error);
     return NextResponse.json(
       { error: 'Hiba történt az adatok lekérdezésekor' },
       { status: 500 }

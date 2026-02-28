@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth-server';
 import { calibratePathwayAnalytics } from '@/lib/calibrate-pathway-analytics';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,7 +38,7 @@ async function handleCalibrate(request: NextRequest) {
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
-    console.error('[calibrate-pathways] Error:', msg);
+    logger.error('[calibrate-pathways] Error:', msg);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

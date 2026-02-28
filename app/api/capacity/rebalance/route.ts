@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
+import { logger } from '@/lib/logger';
 import { runRebalance } from '@/lib/rebalance-capacity-pools';
 
 export const runtime = 'nodejs';
@@ -35,7 +36,7 @@ async function handleRebalance(request: NextRequest) {
       ...result,
     });
   } catch (error) {
-    console.error('Rebalance error:', error);
+    logger.error('Rebalance error:', error);
     return NextResponse.json(
       { error: 'Hiba történt a kapacitás újraegyensúlyozásakor', details: String(error) },
       { status: 500 }

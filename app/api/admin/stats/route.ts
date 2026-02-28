@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 // Admin statisztikák API végpont
 export const dynamic = 'force-dynamic';
@@ -265,7 +266,7 @@ export async function GET(request: NextRequest) {
       }
     });
   } catch (error) {
-    console.error('Hiba a statisztikák lekérdezésekor:', error);
+    logger.error('Hiba a statisztikák lekérdezésekor:', error);
     return NextResponse.json(
       { error: 'Hiba történt az adatok lekérdezésekor' },
       { status: 500 }

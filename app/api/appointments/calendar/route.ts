@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { fetchVirtualAppointments } from '@/lib/virtual-appointments-service';
+import { logger } from '@/lib/logger';
 
 // Get appointments for calendar view with date range filtering
 export const dynamic = 'force-dynamic';
@@ -229,7 +230,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error('Error fetching calendar appointments:', error);
+    logger.error('Error fetching calendar appointments:', error);
     return NextResponse.json(
       { error: 'Hiba történt a naptár adatok lekérdezésekor' },
       { status: 500 }

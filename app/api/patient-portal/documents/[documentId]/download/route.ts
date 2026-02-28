@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
 import { downloadFile } from '@/lib/ftp-client';
+import { logger } from '@/lib/logger';
 
 /**
  * Download document for patient portal
@@ -68,7 +69,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('Hiba a dokumentum letöltésekor:', error);
+    logger.error('Hiba a dokumentum letöltésekor:', error);
     return NextResponse.json(
       { error: 'Hiba történt a dokumentum letöltésekor' },
       { status: 500 }

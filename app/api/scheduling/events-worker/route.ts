@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { refreshEpisodeNextStepCache, resolveEpisodeIdFromEvent } from '@/lib/refresh-episode-next-step-cache';
 import { refreshEpisodeForecastCache } from '@/lib/refresh-episode-forecast-cache';
+import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest) {
           await refreshEpisodeForecastCache(episodeId);
         }
       } catch (err) {
-        console.error(`[events-worker] Error processing event ${ev.id}:`, err);
+        logger.error(`[events-worker] Error processing event ${ev.id}:`, err);
       }
       processed++;
     }
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
-    console.error('[events-worker] Error:', msg);
+    logger.error('[events-worker] Error:', msg);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

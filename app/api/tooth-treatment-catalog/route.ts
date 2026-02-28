@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ items: result.rows });
   } catch (error) {
-    console.error('Error fetching tooth treatment catalog:', error);
+    logger.error('Error fetching tooth treatment catalog:', error);
     return NextResponse.json(
       { error: 'Hiba történt a fog-kezelési katalógus lekérdezésekor' },
       { status: 500 }
@@ -95,7 +96,7 @@ export async function POST(request: NextRequest) {
       throw err;
     }
   } catch (error) {
-    console.error('Error creating tooth treatment catalog item:', error);
+    logger.error('Error creating tooth treatment catalog item:', error);
     return NextResponse.json(
       { error: 'Hiba történt a fog-kezelési típus létrehozásakor' },
       { status: 500 }
@@ -169,7 +170,7 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ item: result.rows[0] });
   } catch (error) {
-    console.error('Error updating tooth treatment catalog item:', error);
+    logger.error('Error updating tooth treatment catalog item:', error);
     return NextResponse.json(
       { error: 'Hiba történt a fog-kezelési típus frissítésekor' },
       { status: 500 }
@@ -208,7 +209,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ deleted: code });
   } catch (error) {
-    console.error('Error deleting tooth treatment catalog item:', error);
+    logger.error('Error deleting tooth treatment catalog item:', error);
     return NextResponse.json(
       { error: 'Hiba történt a fog-kezelési típus törlésekor' },
       { status: 500 }

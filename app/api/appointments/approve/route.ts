@@ -5,6 +5,7 @@ import { generateIcsFile } from '@/lib/calendar';
 import { createGoogleCalendarEvent } from '@/lib/google-calendar';
 import { handleApiError } from '@/lib/api-error-handler';
 import { sendPushNotification } from '@/lib/push-notifications';
+import { logger } from '@/lib/logger';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 
@@ -181,7 +182,7 @@ export async function GET(request: NextRequest) {
                 [appointment.dentist_user_id]
               );
               if (userCalendarResult.rows[0]?.google_calendar_enabled !== true) {
-                console.log('[Appointment Approval] Slot owner has Google Calendar disabled, skipping sync');
+                logger.info('[Appointment Approval] Slot owner has Google Calendar disabled, skipping sync');
                 return;
               }
               const targetCalendarId = userCalendarResult.rows[0]?.google_calendar_target_calendar_id || 'primary';
@@ -205,7 +206,7 @@ export async function GET(request: NextRequest) {
                 );
               }
             } catch (error) {
-              console.error('[Appointment Approval] Failed to create Google Calendar event:', error);
+              logger.error('[Appointment Approval] Failed to create Google Calendar event:', error);
             }
           })(),
         ]);
@@ -251,7 +252,7 @@ export async function GET(request: NextRequest) {
             }
           }
         } catch (pushError) {
-          console.error('Failed to send push notification to patient:', pushError);
+          logger.error('Failed to send push notification to patient:', pushError);
         }
 
         // Email to admins
@@ -269,7 +270,7 @@ export async function GET(request: NextRequest) {
           );
         }
       } catch (emailError) {
-        console.error('Failed to send appointment approval notifications:', emailError);
+        logger.error('Failed to send appointment approval notifications:', emailError);
         // Don't fail the request if email fails
       }
 

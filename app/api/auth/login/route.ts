@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { SignJWT } from 'jose';
 import { logActivity } from '@/lib/activity';
+import { logger } from '@/lib/logger';
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'change-this-to-a-random-secret-in-production'
@@ -101,7 +102,7 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (error) {
-    console.error('Login error:', error);
+    logger.error('Login error:', error);
     return NextResponse.json(
       { error: 'Bejelentkezési hiba történt' },
       { status: 500 }

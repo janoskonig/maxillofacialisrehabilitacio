@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth, AuthPayload } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 // Orvos neve alapján intézmény lekérdezése
 export const dynamic = 'force-dynamic';
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest) {
       doktor_neve: result.rows[0].doktor_neve
     });
   } catch (error) {
-    console.error('Error fetching institution by doctor name:', error);
+    logger.error('Error fetching institution by doctor name:', error);
     return NextResponse.json(
       { error: 'Hiba történt az intézmény lekérdezésekor' },
       { status: 500 }

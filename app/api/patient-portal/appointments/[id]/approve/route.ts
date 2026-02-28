@@ -5,6 +5,7 @@ import { sendAppointmentBookingNotification, sendAppointmentBookingNotificationT
 import { generateIcsFile } from '@/lib/calendar';
 import { createGoogleCalendarEvent } from '@/lib/google-calendar';
 import { handleApiError } from '@/lib/api-error-handler';
+import { logger } from '@/lib/logger';
 
 /**
  * Approve a pending appointment (via patient portal)
@@ -141,7 +142,7 @@ export async function POST(
                 [appointment.dentist_user_id]
               );
               if (userCalendarResult.rows[0]?.google_calendar_enabled !== true) {
-                console.log('[Appointment Approval] Slot owner has Google Calendar disabled, skipping sync');
+                logger.info('[Appointment Approval] Slot owner has Google Calendar disabled, skipping sync');
                 return;
               }
               const targetCalendarId = userCalendarResult.rows[0]?.google_calendar_target_calendar_id || 'primary';
@@ -165,7 +166,7 @@ export async function POST(
                 );
               }
             } catch (error) {
-              console.error('[Appointment Approval] Failed to create Google Calendar event:', error);
+              logger.error('[Appointment Approval] Failed to create Google Calendar event:', error);
             }
           })(),
         ]);
@@ -201,7 +202,7 @@ export async function POST(
           );
         }
       } catch (emailError) {
-        console.error('Failed to send appointment approval notifications:', emailError);
+        logger.error('Failed to send appointment approval notifications:', emailError);
         // Don't fail the request if email fails
       }
 

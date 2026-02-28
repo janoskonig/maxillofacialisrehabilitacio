@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth-server';
 import { getDbPool } from '@/lib/db';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/messages/all - Összes üzenet lekérése az orvos számára (minden betegtől)
@@ -99,7 +100,7 @@ export async function GET(request: NextRequest) {
       messages,
     });
   } catch (error: any) {
-    console.error('Hiba az üzenetek lekérésekor:', error);
+    logger.error('Hiba az üzenetek lekérésekor:', error);
     return NextResponse.json(
       { error: 'Hiba történt az üzenetek lekérésekor' },
       { status: 500 }

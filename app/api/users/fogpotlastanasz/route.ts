@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth, AuthPayload } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 // Fogpótlástanász szerepű felhasználók lekérdezése
 // Ez az endpoint a kezelőorvos választáshoz használatos
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ users });
   } catch (error) {
-    console.error('Error fetching fogpótlástanász users:', error);
+    logger.error('Error fetching fogpótlástanász users:', error);
     return NextResponse.json(
       { error: 'Hiba történt a felhasználók lekérdezésekor' },
       { status: 500 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 import { fetchVirtualAppointments } from '@/lib/virtual-appointments-service';
 
 const REASON_VALUES = ['traumás sérülés', 'veleszületett rendellenesség', 'onkológiai kezelés utáni állapot'];
@@ -192,7 +193,7 @@ export async function GET(request: NextRequest) {
       ...(includeVirtual && { virtualWindows }),
     });
   } catch (error) {
-    console.error('Error fetching GANTT data:', error);
+    logger.error('Error fetching GANTT data:', error);
     return NextResponse.json(
       { error: 'Hiba a GANTT adatok lekérdezésekor' },
       { status: 500 }

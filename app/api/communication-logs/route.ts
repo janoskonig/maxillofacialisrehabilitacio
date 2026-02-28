@@ -4,6 +4,7 @@ import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
 import { getPatientCommunicationLogs, logCommunication, CommunicationType, CommunicationDirection } from '@/lib/communication-logs';
 import { logActivityWithAuth } from '@/lib/activity';
 import { getDbPool } from '@/lib/db';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/communication-logs?patientId=xxx - Érintkezési napló lekérése
@@ -90,7 +91,7 @@ export async function GET(request: NextRequest) {
       logs,
     });
   } catch (error: any) {
-    console.error('[API] Hiba az érintkezési napló lekérésekor:', {
+    logger.error('[API] Hiba az érintkezési napló lekérésekor:', {
       error: error.message,
       stack: error.stack,
       patientId: request.nextUrl.searchParams.get('patientId')
@@ -187,7 +188,7 @@ export async function POST(request: NextRequest) {
       log,
     });
   } catch (error: any) {
-    console.error('Hiba az érintkezési bejegyzés létrehozásakor:', error);
+    logger.error('Hiba az érintkezési bejegyzés létrehozásakor:', error);
     return NextResponse.json(
       { error: 'Hiba történt az érintkezési bejegyzés létrehozásakor' },
       { status: 500 }

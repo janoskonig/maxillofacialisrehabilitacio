@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 import { getDbPool } from '@/lib/db';
+import { logger } from '@/lib/logger';
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'change-this-to-a-random-secret-in-production'
@@ -51,7 +52,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Auth verification error:', error);
+    logger.error('Auth verification error:', error);
     return NextResponse.json(
       { error: 'Hitelesítési hiba' },
       { status: 401 }

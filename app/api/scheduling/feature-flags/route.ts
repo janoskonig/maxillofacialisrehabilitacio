@@ -6,6 +6,7 @@ import {
   invalidateSchedulingFeatureFlagsCache,
   type SchedulingFeatureFlagKey,
 } from '@/lib/scheduling-feature-flags';
+import { logger } from '@/lib/logger';
 
 const VALID_KEYS: SchedulingFeatureFlagKey[] = [
   'overbooking',
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
     const flags = await getAllSchedulingFeatureFlags();
     return NextResponse.json({ flags });
   } catch (error) {
-    console.error('Error fetching feature flags:', error);
+    logger.error('Error fetching feature flags:', error);
     return NextResponse.json(
       { error: 'Hiba történt a feature flag lekérdezésekor' },
       { status: 500 }
@@ -64,7 +65,7 @@ export async function PATCH(request: NextRequest) {
     const flags = await getAllSchedulingFeatureFlags();
     return NextResponse.json({ flags });
   } catch (error) {
-    console.error('Error updating feature flags:', error);
+    logger.error('Error updating feature flags:', error);
     return NextResponse.json(
       { error: 'Hiba történt a feature flag módosításakor' },
       { status: 500 }

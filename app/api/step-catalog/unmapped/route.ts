@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth-server';
 import { getUnmappedStepCodes } from '@/lib/step-catalog-cache';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ items });
   } catch (error) {
-    console.error('Error fetching unmapped step codes:', error);
+    logger.error('Error fetching unmapped step codes:', error);
     return NextResponse.json(
       { error: 'Hiba történt az unmapped lépések lekérdezésekor' },
       { status: 500 }

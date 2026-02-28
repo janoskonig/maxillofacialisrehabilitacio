@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 /**
  * Batch lekérdezés a stádiumokhoz beteg ID-k alapján.
@@ -89,7 +90,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ stages: stagesMap }, { status: 200 });
   } catch (error) {
-    console.error('Error fetching batch stages:', error);
+    logger.error('Error fetching batch stages:', error);
     return NextResponse.json(
       { error: 'Hiba történt a stádiumok lekérdezésekor' },
       { status: 500 }

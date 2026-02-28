@@ -4,6 +4,7 @@ import { verifyAuth } from '@/lib/auth-server';
 import { carePathwayCreateSchema } from '@/lib/admin-process-schemas';
 import { invalidateStepLabelCache } from '@/lib/step-labels';
 import { invalidateUnmappedCache } from '@/lib/step-catalog-cache';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,7 +80,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ pathway });
   } catch (error) {
-    console.error('Error creating care pathway:', error);
+    logger.error('Error creating care pathway:', error);
     return NextResponse.json(
       { error: 'Hiba történt a kezelési út létrehozásakor' },
       { status: 500 }
@@ -158,7 +159,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ pathways: items });
   } catch (error) {
-    console.error('Error fetching care pathways:', error);
+    logger.error('Error fetching care pathways:', error);
     return NextResponse.json(
       { error: 'Hiba történt a kezelési utak lekérdezésekor' },
       { status: 500 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { logActivity } from '@/lib/activity';
+import { logger } from '@/lib/logger';
 
 // Jelszó validáció (ugyanaz, mint a change-password endpoint-ban)
 function isValidPassword(password: string): { valid: boolean; error?: string } {
@@ -114,7 +115,7 @@ export async function POST(request: NextRequest) {
       message: 'Jelszó sikeresen visszaállítva. Most már be tud jelentkezni az új jelszavával.',
     });
   } catch (error) {
-    console.error('Reset password error:', error);
+    logger.error('Reset password error:', error);
     return NextResponse.json(
       { error: 'Hiba történt a jelszó-visszaállítás során' },
       { status: 500 }

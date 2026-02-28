@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runHoldExpiry } from '@/lib/hold-expiry';
+import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -33,7 +34,7 @@ async function handleHoldExpiry(request: NextRequest) {
       ...result,
     });
   } catch (error) {
-    console.error('Hold expiry error:', error);
+    logger.error('Hold expiry error:', error);
     return NextResponse.json(
       { error: 'Hiba történt a hold lejárat kezelésekor', details: String(error) },
       { status: 500 }

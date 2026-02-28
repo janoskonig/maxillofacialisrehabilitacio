@@ -3,6 +3,7 @@ import { verifyPortalToken, createMagicLinkToken } from '@/lib/patient-portal-au
 import { getDbPool } from '@/lib/db';
 import { SignJWT } from 'jose';
 import { cookies } from 'next/headers';
+import { logger } from '@/lib/logger';
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'change-this-to-a-random-secret-in-production'
@@ -44,55 +45,55 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const token = searchParams.get('token');
 
-    console.log('[verify-email] Starting verification, baseUrl:', baseUrl, 'token length:', token?.length);
+    logger.info('[verify-email] Starting verification, baseUrl:', baseUrl, 'token length:', token?.length);
 
     if (!token) {
-      console.log('[verify-email] No token provided');
+      logger.info('[verify-email] No token provided');
       return NextResponse.redirect(
         new URL('/patient-portal?error=missing_token', baseUrl)
       );
     }
 
     // Verify email verification token
-    console.log('[verify-email] Verifying token...');
+    logger.info('[verify-email] Verifying token...');
     const verification = await verifyPortalToken(token, 'email_verification');
-    console.log('[verify-email] Verification result:', verification ? 'success' : 'failed', verification);
+    logger.info('[verify-email] Verification result:', verification ? 'success' : 'failed', verification);
 
     if (!verification) {
-      console.log('[verify-email] Token verification failed - token not found, expired, or invalid');
+      logger.info('[verify-email] Token verification failed - token not found, expired, or invalid');
       return NextResponse.redirect(
         new URL('/patient-portal?error=invalid_token', baseUrl)
       );
     }
 
     if (verification.isUsed) {
-      console.log('[verify-email] Token already used');
+      logger.info('[verify-email] Token already used');
       return NextResponse.redirect(
         new URL('/patient-portal?error=token_used', baseUrl)
       );
     }
 
-    console.log('[verify-email] Token verified successfully, patientId:', verification.patientId);
+    logger.info('[verify-email] Token verified successfully, patientId:', verification.patientId);
 
     // Mark patient as email verified (we can add a field for this later)
     // For now, we'll just create a magic link token and log them in
     const pool = getDbPool();
     
     // Check if patient exists
-    console.log('[verify-email] Checking if patient exists:', verification.patientId);
+    logger.info('[verify-email] Checking if patient exists:', verification.patientId);
     const patientResult = await pool.query(
       'SELECT id FROM patients WHERE id = $1',
       [verification.patientId]
     );
 
     if (patientResult.rows.length === 0) {
-      console.log('[verify-email] Patient not found:', verification.patientId);
+      logger.info('[verify-email] Patient not found:', verification.patientId);
       return NextResponse.redirect(
         new URL('/patient-portal?error=patient_not_found', baseUrl)
       );
     }
 
-    console.log('[verify-email] Patient found, creating session...');
+    logger.info('[verify-email] Patient found, creating session...');
 
     // Create magic link token for immediate login
     const ipHeader = request.headers.get('x-forwarded-for') || '';
@@ -120,15 +121,15 @@ export async function GET(request: NextRequest) {
       maxAge: 7 * 24 * 60 * 60, // 7 days in seconds
       path: '/',
     });
-    console.log('[verify-email] Cookie set with secure:', isSecure, 'baseUrl:', baseUrl);
+    logger.info('[verify-email] Cookie set with secure:', isSecure, 'baseUrl:', baseUrl);
 
     // Redirect to portal dashboard with success message
     return NextResponse.redirect(
       new URL('/patient-portal/dashboard?verified=true', baseUrl)
     );
   } catch (error: any) {
-    console.error('[verify-email] Error verifying email:', error);
-    console.error('[verify-email] Error details:', {
+    logger.error('[verify-email] Error verifying email:', error);
+    logger.error('[verify-email] Error details:', {
       message: error?.message,
       stack: error?.stack,
       code: error?.code,
@@ -137,7 +138,7 @@ export async function GET(request: NextRequest) {
     
     // Check if it's a database table missing error
     if (error?.message?.includes('table does not exist') || error?.code === '42P01') {
-      console.error('[verify-email] Database table missing');
+      logger.error('[verify-email] Database table missing');
       return NextResponse.redirect(
         new URL('/patient-portal?error=database_error', baseUrl)
       );

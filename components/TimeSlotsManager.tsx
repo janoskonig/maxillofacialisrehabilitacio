@@ -1,323 +1,65 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState } from 'react';
 import { Calendar, Plus, Trash2, Edit2, Clock, X, ChevronDown, ChevronUp, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from 'lucide-react';
-import { getCurrentUser } from '@/lib/auth';
+import { formatDateTime, digitsOnly } from '@/lib/dateUtils';
 import { DateTimePicker } from './DateTimePicker';
 import { MobileTable } from './mobile/MobileTable';
 import { MobileKeyValueGrid } from './mobile/MobileKeyValueGrid';
-import { MobileBottomSheet } from './mobile/MobileBottomSheet';
-
-interface TimeSlot {
-  id: string;
-  startTime: string;
-  status: 'available' | 'booked';
-  cim?: string | null;
-  teremszam?: string | null;
-  createdAt: string;
-  updatedAt: string;
-  userEmail?: string;
-  dentistName?: string | null;
-}
-
-interface AppointmentInfo {
-  id: string; // Appointment ID
-  patientName: string | null;
-  patientTaj: string | null;
-  bookedBy: string; // Email of surgeon/admin who booked
-  appointmentType?: 'elso_konzultacio' | 'munkafazis' | 'kontroll' | null;
-}
-
-interface User {
-  id: string;
-  email: string;
-  role: string;
-}
+import { useTimeSlots } from '@/hooks/useTimeSlots';
+import type { TimeSlot, SortField, AppointmentType } from '@/hooks/useTimeSlots';
 
 export function TimeSlotsManager() {
-  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
-  const [appointments, setAppointments] = useState<Record<string, AppointmentInfo>>({});
-  const [loading, setLoading] = useState(true);
+  // ── Hook: all data, filtering, sorting, pagination, CRUD ─────────
+  const ts = useTimeSlots();
+
+  // ── UI-only state ─────────────────────────────────────────────────
   const [showForm, setShowForm] = useState(false);
   const [editingSlot, setEditingSlot] = useState<TimeSlot | null>(null);
   const [newStartTime, setNewStartTime] = useState<Date | null>(null);
-  const [newTeremszam, setNewTeremszam] = useState<string>('');
-  const [modifyingAppointment, setModifyingAppointment] = useState<{ appointmentId: string; timeSlotId: string; startTime: string } | null>(null);
-  const [newTimeSlotId, setNewTimeSlotId] = useState<string>('');
-  const [editingAppointmentType, setEditingAppointmentType] = useState<{ appointmentId: string; currentType: 'elso_konzultacio' | 'munkafazis' | 'kontroll' | null } | null>(null);
-  const [newAppointmentType, setNewAppointmentType] = useState<'elso_konzultacio' | 'munkafazis' | 'kontroll' | null>(null);
-  const [selectedAppointmentIds, setSelectedAppointmentIds] = useState<Set<string>>(new Set());
+  const [newTeremszam, setNewTeremszam] = useState('');
+  const [selectedUserId, setSelectedUserId] = useState('');
+
+  const [modifyingAppointment, setModifyingAppointment] = useState<{
+    appointmentId: string;
+    timeSlotId: string;
+    startTime: string;
+  } | null>(null);
+  const [newTimeSlotId, setNewTimeSlotId] = useState('');
+
+  const [editingAppointmentType, setEditingAppointmentType] = useState<{
+    appointmentId: string;
+    currentType: AppointmentType | null;
+  } | null>(null);
+  const [newAppointmentType, setNewAppointmentType] = useState<AppointmentType | null>(null);
+
   const [showBulkEditModal, setShowBulkEditModal] = useState(false);
-  const [bulkAppointmentType, setBulkAppointmentType] = useState<'elso_konzultacio' | 'munkafazis' | 'kontroll' | null>(null);
-  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
-  const [userRole, setUserRole] = useState<string>('');
-  const [users, setUsers] = useState<User[]>([]);
-  const [selectedUserId, setSelectedUserId] = useState<string>('');
-  const [showPastSlots, setShowPastSlots] = useState(false);
-  const [sortField, setSortField] = useState<'startTime' | 'cim' | 'teremszam' | 'dentistName' | 'status' | null>(null);
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-  const [filterCim, setFilterCim] = useState<string>('');
-  const [filterTeremszam, setFilterTeremszam] = useState<string>('');
-  const [filterDentistName, setFilterDentistName] = useState<string>('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'available' | 'booked'>('all');
-  const [filterAppointmentType, setFilterAppointmentType] = useState<'all' | 'elso_konzultacio' | 'munkafazis' | 'kontroll' | null>('all');
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const itemsPerPage = 50;
+  const [bulkAppointmentType, setBulkAppointmentType] = useState<AppointmentType | null>(null);
 
-  useEffect(() => {
-    loadTimeSlots();
-    loadUserRole();
-  }, []);
-
-  const loadUserRole = async () => {
-    try {
-      const user = await getCurrentUser();
-      if (user) {
-        setUserRole(user.role);
-        // If admin, load users list
-        if (user.role === 'admin') {
-          loadUsers();
-        }
-      }
-    } catch (error) {
-      console.error('Error loading user role:', error);
-    }
-  };
-
-  const loadUsers = async () => {
-    try {
-      const response = await fetch('/api/users', {
-        credentials: 'include',
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setUsers(data.users || []);
-      }
-    } catch (error) {
-      console.error('Error loading users:', error);
-    }
-  };
-
-  const loadTimeSlots = async () => {
-    try {
-      setLoading(true);
-      
-      // Load all time slots paginated - no maximum limit, but with safety check
-      let page = 1;
-      let hasMore = true;
-      const allTimeSlots: TimeSlot[] = [];
-      const maxPages = 1000; // Biztonsági limit, hogy ne legyen végtelen ciklus
-      const limit = 100; // Nagyobb limit, hogy kevesebb kérés legyen
-      
-      while (hasMore && page <= maxPages) {
-        const timeSlotsResponse = await fetch(`/api/time-slots?page=${page}&limit=${limit}`, {
-          credentials: 'include',
-        });
-
-        if (timeSlotsResponse.ok) {
-          const timeSlotsData = await timeSlotsResponse.json();
-          const pageTimeSlots = timeSlotsData.timeSlots || [];
-          allTimeSlots.push(...pageTimeSlots);
-          
-          // Check if there are more pages
-          const pagination = timeSlotsData.pagination;
-          if (pagination) {
-            if (page < pagination.totalPages && pageTimeSlots.length === limit) {
-              page++;
-            } else {
-              hasMore = false;
-            }
-          } else if (pageTimeSlots.length < limit) {
-            // Ha nincs pagináció info, de kevesebb elemet kaptunk, akkor vége
-            hasMore = false;
-          } else {
-            // Ha nincs pagináció info, de limit elemet kaptunk, folytatjuk
-            page++;
-          }
-        } else {
-          console.error('Failed to load time slots');
-          hasMore = false;
-        }
-      }
-      
-      // Get ALL time slots (both available and booked) for the current user
-      setTimeSlots(allTimeSlots);
-
-      // Load all appointments paginated - no maximum limit, but with safety check
-      let appointmentsPage = 1;
-      let hasMoreAppointments = true;
-      const allAppointments: any[] = [];
-      const maxAppointmentPages = 1000; // Biztonsági limit
-      const appointmentLimit = 100; // Nagyobb limit
-      
-      while (hasMoreAppointments && appointmentsPage <= maxAppointmentPages) {
-        const appointmentsResponse = await fetch(`/api/appointments?page=${appointmentsPage}&limit=${appointmentLimit}`, {
-          credentials: 'include',
-        });
-        
-        if (appointmentsResponse.ok) {
-          const appointmentsData = await appointmentsResponse.json();
-          const pageAppointments = appointmentsData.appointments || [];
-          allAppointments.push(...pageAppointments);
-          
-          // Check if there are more pages
-          const appointmentsPagination = appointmentsData.pagination;
-          if (appointmentsPagination) {
-            if (appointmentsPage < appointmentsPagination.totalPages && pageAppointments.length === appointmentLimit) {
-              appointmentsPage++;
-            } else {
-              hasMoreAppointments = false;
-            }
-          } else if (pageAppointments.length < appointmentLimit) {
-            // Ha nincs pagináció info, de kevesebb elemet kaptunk, akkor vége
-            hasMoreAppointments = false;
-          } else {
-            // Ha nincs pagináció info, de limit elemet kaptunk, folytatjuk
-            appointmentsPage++;
-          }
-        } else {
-          hasMoreAppointments = false;
-        }
-      }
-      
-      // Create a map of timeSlotId -> appointment info
-      const appointmentsMap: Record<string, AppointmentInfo> = {};
-      allAppointments.forEach((apt: any) => {
-        appointmentsMap[apt.timeSlotId] = {
-          id: apt.id,
-          patientName: apt.patientName,
-          patientTaj: apt.patientTaj,
-          bookedBy: apt.createdBy,
-          appointmentType: apt.appointmentType || null,
-        };
-      });
-      setAppointments(appointmentsMap);
-    } catch (error) {
-      console.error('Error loading data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // ── Thin wrappers around hook CRUD (manage modal state) ───────────
 
   const handleCreateTimeSlot = async () => {
     if (!newStartTime) {
       alert('Kérjük, válasszon dátumot és időt!');
       return;
     }
-
-    // For admin, require user selection
-    if (userRole === 'admin' && !selectedUserId) {
+    if (ts.userRole === 'admin' && !selectedUserId) {
       alert('Kérjük, válasszon felhasználót!');
       return;
     }
 
-    // Convert Date to ISO format with timezone offset
-    // This ensures the server interprets the time correctly regardless of server timezone
-    const offset = -newStartTime.getTimezoneOffset();
-    const offsetHours = Math.floor(Math.abs(offset) / 60);
-    const offsetMinutes = Math.abs(offset) % 60;
-    const offsetSign = offset >= 0 ? '+' : '-';
-    const offsetString = `${offsetSign}${String(offsetHours).padStart(2, '0')}:${String(offsetMinutes).padStart(2, '0')}`;
-    
-    const year = newStartTime.getFullYear();
-    const month = String(newStartTime.getMonth() + 1).padStart(2, '0');
-    const day = String(newStartTime.getDate()).padStart(2, '0');
-    const hours = String(newStartTime.getHours()).padStart(2, '0');
-    const minutes = String(newStartTime.getMinutes()).padStart(2, '0');
-    const seconds = String(newStartTime.getSeconds()).padStart(2, '0');
-    const isoDateTime = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetString}`;
+    const success = await ts.createTimeSlot({
+      startTime: newStartTime,
+      teremszam: newTeremszam,
+      userId: ts.userRole === 'admin' ? selectedUserId : undefined,
+    });
 
-    try {
-      // Alapértelmezett cím: "1088 Budapest, Szentkirályi utca 47"
-      const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
-      const requestBody: any = { 
-        startTime: isoDateTime,
-        cim: DEFAULT_CIM,
-        teremszam: newTeremszam || null
-      };
-      
-      // If admin and user selected, include userId
-      if (userRole === 'admin' && selectedUserId) {
-        requestBody.userId = selectedUserId;
-      }
-
-      const response = await fetch('/api/time-slots', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify(requestBody),
-      });
-
-      if (response.ok) {
-        await loadTimeSlots();
-        setNewStartTime(null);
-        setNewTeremszam('');
-        setSelectedUserId('');
-        setShowForm(false);
-        alert('Időpont sikeresen létrehozva!');
-      } else {
-        const data = await response.json();
-        alert(data.error || 'Hiba történt az időpont létrehozásakor');
-      }
-    } catch (error) {
-      console.error('Error creating time slot:', error);
-      alert('Hiba történt az időpont létrehozásakor');
+    if (success) {
+      setNewStartTime(null);
+      setNewTeremszam('');
+      setSelectedUserId('');
+      setShowForm(false);
     }
-  };
-
-  const handleDeleteTimeSlot = async (id: string) => {
-    if (!confirm('Biztosan törölni szeretné ezt az időpontot?')) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/time-slots/${id}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        await loadTimeSlots();
-        alert('Időpont sikeresen törölve!');
-      } else {
-        const data = await response.json();
-        alert(data.error || 'Hiba történt az időpont törlésekor');
-      }
-    } catch (error) {
-      console.error('Error deleting time slot:', error);
-      alert('Hiba történt az időpont törlésekor');
-    }
-  };
-
-  const handleCancelAppointment = async (appointmentId: string) => {
-    if (!confirm('Biztosan le szeretné mondani ezt az időpontot? A fogpótlástanász és a beteg értesítést kap.')) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/appointments/${appointmentId}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        await loadTimeSlots();
-        alert('Időpont sikeresen lemondva! A fogpótlástanász és a beteg (ha van email-címe) értesítést kapott.');
-      } else {
-        const data = await response.json();
-        alert(data.error || 'Hiba történt az időpont lemondásakor');
-      }
-    } catch (error) {
-      console.error('Error cancelling appointment:', error);
-      alert('Hiba történt az időpont lemondásakor');
-    }
-  };
-
-  const handleModifyAppointment = (appointmentId: string, timeSlotId: string, startTime: string) => {
-    setModifyingAppointment({ appointmentId, timeSlotId, startTime });
-    setNewTimeSlotId('');
   };
 
   const handleSaveModification = async () => {
@@ -326,385 +68,55 @@ export function TimeSlotsManager() {
       return;
     }
 
-    if (!confirm('Biztosan módosítani szeretné ezt az időpontot? A fogpótlástanász és a beteg értesítést kap.')) {
-      return;
+    const success = await ts.modifyAppointment(modifyingAppointment.appointmentId, newTimeSlotId);
+    if (success) {
+      setModifyingAppointment(null);
+      setNewTimeSlotId('');
     }
-
-    try {
-      const response = await fetch(`/api/appointments/${modifyingAppointment.appointmentId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          timeSlotId: newTimeSlotId,
-        }),
-      });
-
-      if (response.ok) {
-        await loadTimeSlots();
-        setModifyingAppointment(null);
-        setNewTimeSlotId('');
-        alert('Időpont sikeresen módosítva! A fogpótlástanász és a beteg (ha van email-címe) értesítést kapott.');
-      } else {
-        const data = await response.json();
-        alert(data.error || 'Hiba történt az időpont módosításakor');
-      }
-    } catch (error) {
-      console.error('Error modifying appointment:', error);
-      alert('Hiba történt az időpont módosításakor');
-    }
-  };
-
-  const handleEditAppointmentType = (appointmentId: string, currentType: 'elso_konzultacio' | 'munkafazis' | 'kontroll' | null) => {
-    setEditingAppointmentType({ appointmentId, currentType });
-    setNewAppointmentType(currentType);
   };
 
   const handleSaveAppointmentType = async () => {
-    if (!editingAppointmentType) {
-      return;
-    }
+    if (!editingAppointmentType) return;
 
-    try {
-      const response = await fetch(`/api/appointments/${editingAppointmentType.appointmentId}/status`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          appointmentType: newAppointmentType,
-        }),
-      });
-
-      if (response.ok) {
-        await loadTimeSlots();
-        setEditingAppointmentType(null);
-        setNewAppointmentType(null);
-        alert('Időpont típusa sikeresen módosítva!');
-      } else {
-        const data = await response.json();
-        alert(data.error || 'Hiba történt az időpont típusának módosításakor');
-      }
-    } catch (error) {
-      console.error('Error updating appointment type:', error);
-      alert('Hiba történt az időpont típusának módosításakor');
-    }
-  };
-
-  const handleToggleAppointmentSelection = (appointmentId: string) => {
-    const newSelection = new Set(selectedAppointmentIds);
-    if (newSelection.has(appointmentId)) {
-      newSelection.delete(appointmentId);
-    } else {
-      newSelection.add(appointmentId);
-    }
-    setSelectedAppointmentIds(newSelection);
-  };
-
-  const handleSelectAllAppointments = (slots: TimeSlot[]) => {
-    const allBookedAppointmentIds = new Set<string>();
-    slots.forEach(slot => {
-      if (slot.status === 'booked' && appointments[slot.id]) {
-        allBookedAppointmentIds.add(appointments[slot.id].id);
-      }
-    });
-    
-    // Check if all visible appointments are selected
-    const allSelected = allBookedAppointmentIds.size > 0 && 
-                        Array.from(allBookedAppointmentIds).every(id => selectedAppointmentIds.has(id));
-    
-    if (allSelected) {
-      // Deselect all visible
-      const newSelection = new Set(selectedAppointmentIds);
-      allBookedAppointmentIds.forEach(id => newSelection.delete(id));
-      setSelectedAppointmentIds(newSelection);
-    } else {
-      // Select all visible
-      const newSelection = new Set(selectedAppointmentIds);
-      allBookedAppointmentIds.forEach(id => newSelection.add(id));
-      setSelectedAppointmentIds(newSelection);
+    const success = await ts.updateAppointmentType(editingAppointmentType.appointmentId, newAppointmentType);
+    if (success) {
+      setEditingAppointmentType(null);
+      setNewAppointmentType(null);
     }
   };
 
   const handleBulkUpdateAppointmentType = async () => {
-    if (selectedAppointmentIds.size === 0) {
-      alert('Kérjük, válasszon ki legalább egy időpontot!');
-      return;
-    }
+    const { successCount, errorCount } = await ts.bulkUpdateAppointmentType(
+      Array.from(ts.selectedAppointmentIds),
+      bulkAppointmentType,
+    );
 
-    if (!confirm(`Biztosan módosítani szeretné ${selectedAppointmentIds.size} időpont típusát?`)) {
-      return;
-    }
-
-    setIsBulkUpdating(true);
-    const appointmentIdsArray = Array.from(selectedAppointmentIds);
-    let successCount = 0;
-    let errorCount = 0;
-
-    try {
-      // Update all selected appointments in parallel
-      const updatePromises = appointmentIdsArray.map(async (appointmentId) => {
-        try {
-          const response = await fetch(`/api/appointments/${appointmentId}/status`, {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            credentials: 'include',
-            body: JSON.stringify({
-              appointmentType: bulkAppointmentType,
-            }),
-          });
-
-          if (response.ok) {
-            successCount++;
-            return { success: true };
-          } else {
-            errorCount++;
-            const data = await response.json();
-            console.error(`Error updating appointment ${appointmentId}:`, data.error);
-            return { success: false, error: data.error };
-          }
-        } catch (error) {
-          errorCount++;
-          console.error(`Error updating appointment ${appointmentId}:`, error);
-          return { success: false, error: error };
-        }
-      });
-
-      await Promise.all(updatePromises);
-
-      // Reload data
-      await loadTimeSlots();
-
-      // Clear selection and close modal
-      setSelectedAppointmentIds(new Set());
+    if (successCount > 0 || errorCount > 0) {
       setShowBulkEditModal(false);
       setBulkAppointmentType(null);
-
-      if (errorCount === 0) {
-        alert(`${successCount} időpont típusa sikeresen módosítva!`);
-      } else {
-        alert(`${successCount} időpont sikeresen módosítva, ${errorCount} hiba történt.`);
-      }
-    } catch (error) {
-      console.error('Error in bulk update:', error);
-      alert('Hiba történt a tömeges módosítás során');
-    } finally {
-      setIsBulkUpdating(false);
     }
   };
 
-  // Validálja a teremszám mezőt: csak számokat fogad el
-  const validateTeremszam = (value: string): string => {
-    // Csak számokat enged be, eltávolítja az összes nem szám karaktert
-    const numbersOnly = value.replace(/[^0-9]/g, '');
-    return numbersOnly;
-  };
+  // ── Derived: available slots for the modification dropdown ────────
 
-  const formatDateTime = (dateTime: string) => {
-    const date = new Date(dateTime);
-    return date.toLocaleString('hu-HU', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  const getMinDateTime = () => {
-    const now = new Date();
-    now.setMinutes(now.getMinutes() + 1); // At least 1 minute in the future
-    return now.toISOString().slice(0, 16);
-  };
-
-  // Szűrés és rendezés - HOOKS SZABÁLY: minden hook a komponens tetején, early return előtt
-  const filteredAndSortedSlots = useMemo(() => {
-    let filtered = [...timeSlots];
-    
-    // Szűrés legördülő menükkel
-    if (filterCim) {
-      filtered = filtered.filter(slot => {
-        const slotCim = (slot.cim || '1088 Budapest, Szentkirályi utca 47').toLowerCase();
-        return slotCim === filterCim.toLowerCase();
-      });
-    }
-    
-    if (filterTeremszam) {
-      filtered = filtered.filter(slot => {
-        const slotTerem = (slot.teremszam || '').toLowerCase();
-        return slotTerem === filterTeremszam.toLowerCase();
-      });
-    }
-    
-    if (filterDentistName) {
-      filtered = filtered.filter(slot => {
-        const slotDentist = (slot.dentistName || slot.userEmail || '').toLowerCase();
-        return slotDentist === filterDentistName.toLowerCase();
-      });
-    }
-    
-    if (filterStatus !== 'all') {
-      filtered = filtered.filter(slot => slot.status === filterStatus);
-    }
-    
-    // Szűrés időpont típusra (csak booked slotoknál)
-    if (filterAppointmentType !== 'all') {
-      filtered = filtered.filter(slot => {
-        // Ha szabad slot, akkor csak akkor mutatjuk, ha "Nincs típus" van kiválasztva
-        if (slot.status !== 'booked') {
-          return filterAppointmentType === null;
-        }
-        
-        // Ha booked slot, akkor az appointment type alapján szűrünk
-        const appointment = appointments[slot.id];
-        if (!appointment) {
-          // Ha nincs appointment adat, akkor "Nincs típus"-nak számít
-          return filterAppointmentType === null;
-        }
-        
-        // Ha "Nincs típus" van kiválasztva, akkor csak azokat mutatjuk, ahol nincs appointment type
-        if (filterAppointmentType === null) {
-          return !appointment.appointmentType;
-        }
-        
-        // Egyébként csak azokat, ahol az appointment type megegyezik
-        return appointment.appointmentType === filterAppointmentType;
-      });
-    }
-    
-    // Rendezés
-    if (sortField) {
-      filtered.sort((a, b) => {
-        let comparison = 0;
-        
-        switch (sortField) {
-          case 'startTime':
-            comparison = new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
-            break;
-          case 'cim':
-            const cimA = (a.cim || '1088 Budapest, Szentkirályi utca 47').toLowerCase();
-            const cimB = (b.cim || '1088 Budapest, Szentkirályi utca 47').toLowerCase();
-            comparison = cimA.localeCompare(cimB, 'hu');
-            break;
-          case 'teremszam':
-            const teremA = (a.teremszam || '').toLowerCase();
-            const teremB = (b.teremszam || '').toLowerCase();
-            comparison = teremA.localeCompare(teremB, 'hu');
-            break;
-          case 'dentistName':
-            const dentistA = (a.dentistName || a.userEmail || '').toLowerCase();
-            const dentistB = (b.dentistName || b.userEmail || '').toLowerCase();
-            comparison = dentistA.localeCompare(dentistB, 'hu');
-            break;
-          case 'status':
-            const statusA = a.status === 'available' ? 0 : 1;
-            const statusB = b.status === 'available' ? 0 : 1;
-            comparison = statusA - statusB;
-            break;
-        }
-        
-        return sortDirection === 'asc' ? comparison : -comparison;
-      });
-    }
-    
-    return filtered;
-  }, [timeSlots, filterCim, filterTeremszam, filterDentistName, filterStatus, filterAppointmentType, appointments, sortField, sortDirection]);
-  
-  // Pagináció - most már nem használjuk közvetlenül, mert külön pagináljuk a jövőbeli és elmúlt időpontokat
-  
-  // Egyedi értékek a szűrőkhöz
-  const uniqueCims = useMemo(() => {
-    const cims = new Set<string>();
-    timeSlots.forEach(slot => {
-      const cim = slot.cim || '1088 Budapest, Szentkirályi utca 47';
-      cims.add(cim);
-    });
-    return Array.from(cims).sort();
-  }, [timeSlots]);
-  
-  const uniqueTeremszamok = useMemo(() => {
-    const teremszamok = new Set<string>();
-    timeSlots.forEach(slot => {
-      if (slot.teremszam) {
-        teremszamok.add(slot.teremszam);
-      }
-    });
-    return Array.from(teremszamok).sort();
-  }, [timeSlots]);
-  
-  const uniqueDentists = useMemo(() => {
-    const dentists = new Set<string>();
-    timeSlots.forEach(slot => {
-      const dentist = slot.dentistName || slot.userEmail || '';
-      if (dentist) {
-        dentists.add(dentist);
-      }
-    });
-    return Array.from(dentists).sort();
-  }, [timeSlots]);
-  
-  // Szétválasztjuk a jövőbeli és elmúlt időpontokat (SZŰRÉS UTÁN, de PAGINÁCIÓ ELŐTT)
-  // 4 órás késleltetés: ne vedd elmúlt időpontnak 4 óráig
-  const now = new Date();
-  const fourHoursBeforeNow = new Date(now.getTime() - 4 * 60 * 60 * 1000);
-  const allFutureSlots = filteredAndSortedSlots.filter(slot => new Date(slot.startTime) >= fourHoursBeforeNow);
-  const allPastSlots = filteredAndSortedSlots.filter(slot => new Date(slot.startTime) < fourHoursBeforeNow);
-  
-  // Automatikusan mutassuk az elmúlt időpontokat, ha nincs jövőbeli
-  useEffect(() => {
-    if (allFutureSlots.length === 0 && allPastSlots.length > 0) {
-      setShowPastSlots(true);
-    }
-  }, [allFutureSlots.length, allPastSlots.length]);
-  
-  // Pagináció külön a jövőbeli és elmúlt időpontokra
-  const futureTotalPages = Math.ceil(allFutureSlots.length / itemsPerPage);
-  const futureStartIndex = (currentPage - 1) * itemsPerPage;
-  const futureEndIndex = futureStartIndex + itemsPerPage;
-  const futureSlots = allFutureSlots.slice(futureStartIndex, futureEndIndex);
-  
-  const pastTotalPages = Math.ceil(allPastSlots.length / itemsPerPage);
-  const pastStartIndex = (currentPage - 1) * itemsPerPage;
-  const pastEndIndex = pastStartIndex + itemsPerPage;
-  const pastSlots = allPastSlots.slice(pastStartIndex, pastEndIndex);
-
-  const availableSlotsForModification = filteredAndSortedSlots.filter(
-    slot => {
-      const slotDate = new Date(slot.startTime);
-      return slot.status === 'available' 
-        && slotDate >= fourHoursBeforeNow
-        && (!modifyingAppointment || slot.id !== modifyingAppointment.timeSlotId);
-    }
+  const availableSlotsForModification = ts.availableFutureSlots.filter(
+    s => !modifyingAppointment || s.id !== modifyingAppointment.timeSlotId
   );
 
-  const handleSort = (field: 'startTime' | 'cim' | 'teremszam' | 'dentistName' | 'status') => {
-    if (sortField === field) {
-      // Ha ugyanaz a mező, fordítjuk a rendezési irányt
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      // Ha új mező, alapértelmezetten növekvő
-      setSortField(field);
-      setSortDirection('asc');
-    }
-  };
+  // ── Sort header renderer ──────────────────────────────────────────
 
-  const renderSortableHeader = (label: string, field: 'startTime' | 'cim' | 'teremszam' | 'dentistName' | 'status', className?: string) => {
-    const isActive = sortField === field;
-    const SortIcon = isActive 
-      ? (sortDirection === 'asc' ? ArrowUp : ArrowDown)
+  const renderSortableHeader = (label: string, field: SortField, className?: string) => {
+    const isActive = ts.sortField === field;
+    const SortIcon = isActive
+      ? (ts.sortDirection === 'asc' ? ArrowUp : ArrowDown)
       : null;
-    
+
     return (
-      <th 
+      <th
         className={`px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none ${
           isActive ? 'bg-gray-100' : ''
         } ${className || ''}`}
-        onClick={() => handleSort(field)}
+        onClick={() => ts.handleSort(field)}
       >
         <div className="flex items-center gap-1">
           <span>{label}</span>
@@ -716,7 +128,9 @@ export function TimeSlotsManager() {
     );
   };
 
-  if (loading) {
+  // ── Loading state ─────────────────────────────────────────────────
+
+  if (ts.loading) {
     return (
       <div className="card text-center py-8">
         <p className="text-gray-500">Betöltés...</p>
@@ -724,16 +138,17 @@ export function TimeSlotsManager() {
     );
   }
 
+  // ── Table renderer ────────────────────────────────────────────────
+
   const renderTimeSlotTable = (slots: TimeSlot[], isPast: boolean = false) => {
     if (slots.length === 0) {
       return null;
     }
 
-    const bookedSlotsInTable = slots.filter(s => s.status === 'booked' && appointments[s.id]);
-    const allSelected = bookedSlotsInTable.length > 0 && 
-                        bookedSlotsInTable.every(s => selectedAppointmentIds.has(appointments[s.id].id));
+    const bookedSlotsInTable = slots.filter(s => s.status === 'booked' && ts.appointments[s.id]);
+    const allSelected = bookedSlotsInTable.length > 0 &&
+                        bookedSlotsInTable.every(s => ts.selectedAppointmentIds.has(ts.appointments[s.id].id));
 
-    // Desktop table header
     const renderTableHeader = () => (
       <>
         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-12">
@@ -741,7 +156,7 @@ export function TimeSlotsManager() {
             <input
               type="checkbox"
               checked={allSelected}
-              onChange={() => handleSelectAllAppointments(slots)}
+              onChange={() => ts.selectAllAppointments(slots)}
               className="form-checkbox"
               title="Összes kijelölése"
             />
@@ -761,17 +176,16 @@ export function TimeSlotsManager() {
       </>
     );
 
-    // Desktop table row
     const renderTableRow = (slot: TimeSlot) => {
-      const appointment = appointments[slot.id];
+      const appointment = ts.appointments[slot.id];
       return (
         <>
           <td className="px-4 py-4 whitespace-nowrap">
             {slot.status === 'booked' && appointment ? (
               <input
                 type="checkbox"
-                checked={selectedAppointmentIds.has(appointment.id)}
-                onChange={() => handleToggleAppointmentSelection(appointment.id)}
+                checked={ts.selectedAppointmentIds.has(appointment.id)}
+                onChange={() => ts.toggleAppointmentSelection(appointment.id)}
                 className="form-checkbox"
                 onClick={(e) => e.stopPropagation()}
               />
@@ -806,7 +220,7 @@ export function TimeSlotsManager() {
             <span
               className={`px-2 py-1 text-xs font-medium rounded-full ${
                 slot.status === 'available'
-                  ? isPast 
+                  ? isPast
                     ? 'bg-gray-200 text-gray-600'
                     : 'bg-green-100 text-green-800'
                   : isPast
@@ -858,7 +272,7 @@ export function TimeSlotsManager() {
             <div className="flex items-center justify-end gap-2">
               {slot.status === 'available' && (
                 <button
-                  onClick={() => handleDeleteTimeSlot(slot.id)}
+                  onClick={() => ts.deleteTimeSlot(slot.id)}
                   className={`${isPast ? 'text-gray-500 hover:text-gray-700' : 'text-red-600 hover:text-red-900'} mobile-touch-target`}
                   title="Törlés"
                 >
@@ -868,7 +282,10 @@ export function TimeSlotsManager() {
               {slot.status === 'booked' && appointment && (
                 <>
                   <button
-                    onClick={() => handleEditAppointmentType(appointment.id, appointment.appointmentType || null)}
+                    onClick={() => {
+                      setEditingAppointmentType({ appointmentId: appointment.id, currentType: appointment.appointmentType || null });
+                      setNewAppointmentType(appointment.appointmentType || null);
+                    }}
                     className={`${isPast ? 'text-gray-500 hover:text-gray-700' : 'text-blue-600 hover:text-blue-900'} flex items-center gap-1 text-xs mobile-touch-target`}
                     title="Időpont típusa módosítása"
                   >
@@ -876,7 +293,10 @@ export function TimeSlotsManager() {
                     <span className="hidden sm:inline">Típus</span>
                   </button>
                   <button
-                    onClick={() => handleModifyAppointment(appointment.id, slot.id, slot.startTime)}
+                    onClick={() => {
+                      setModifyingAppointment({ appointmentId: appointment.id, timeSlotId: slot.id, startTime: slot.startTime });
+                      setNewTimeSlotId('');
+                    }}
                     className={`${isPast ? 'text-gray-500 hover:text-gray-700' : 'text-amber-600 hover:text-amber-900'} flex items-center gap-1 mobile-touch-target`}
                     title="Időpont módosítása"
                   >
@@ -884,7 +304,7 @@ export function TimeSlotsManager() {
                     <span className="hidden sm:inline">Módosítás</span>
                   </button>
                   <button
-                    onClick={() => handleCancelAppointment(appointment.id)}
+                    onClick={() => ts.cancelAppointment(appointment.id)}
                     className={`${isPast ? 'text-gray-500 hover:text-gray-700' : 'text-red-600 hover:text-red-900'} flex items-center gap-1 mobile-touch-target`}
                     title="Időpont lemondása"
                   >
@@ -899,14 +319,13 @@ export function TimeSlotsManager() {
       );
     };
 
-    // Mobile card
     const renderMobileCard = (slot: TimeSlot) => {
-      const appointment = appointments[slot.id];
+      const appointment = ts.appointments[slot.id];
       const statusBadge = (
         <span
           className={`px-2 py-1 text-xs font-medium rounded-full ${
             slot.status === 'available'
-              ? isPast 
+              ? isPast
                 ? 'bg-gray-200 text-gray-600'
                 : 'bg-green-100 text-green-800'
               : isPast
@@ -920,7 +339,6 @@ export function TimeSlotsManager() {
 
       return (
         <div className={`mobile-card ${isPast ? 'opacity-60' : ''} ${slot.status === 'booked' ? 'bg-red-50' : ''}`}>
-          {/* Top row: Időpont + Státusz */}
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2 flex-1 min-w-0">
               <Clock className={`w-4 h-4 flex-shrink-0 ${isPast ? 'text-gray-400' : 'text-gray-400'}`} />
@@ -933,7 +351,6 @@ export function TimeSlotsManager() {
             </div>
           </div>
 
-          {/* Middle: Key-value sorok */}
           <MobileKeyValueGrid
             items={[
               { key: 'Cím', value: slot.cim || '1088 Budapest, Szentkirályi utca 47' },
@@ -943,7 +360,6 @@ export function TimeSlotsManager() {
             className="mb-3"
           />
 
-          {/* Appointment info */}
           {appointment && (
             <div className={`mb-3 p-3 bg-gray-50 rounded-lg ${isPast ? 'text-gray-500' : ''}`}>
               <div className="text-sm space-y-2">
@@ -978,11 +394,10 @@ export function TimeSlotsManager() {
             </div>
           )}
 
-          {/* Bottom: Actions */}
           <div className="pt-3 border-t border-gray-200 flex flex-col gap-2">
             {slot.status === 'available' && (
               <button
-                onClick={() => handleDeleteTimeSlot(slot.id)}
+                onClick={() => ts.deleteTimeSlot(slot.id)}
                 className={`w-full btn-secondary flex items-center justify-center gap-2 mobile-touch-target ${
                   isPast ? 'text-gray-500' : 'text-red-600'
                 }`}
@@ -994,7 +409,10 @@ export function TimeSlotsManager() {
             {slot.status === 'booked' && appointment && (
               <>
                 <button
-                  onClick={() => handleEditAppointmentType(appointment.id, appointment.appointmentType || null)}
+                  onClick={() => {
+                    setEditingAppointmentType({ appointmentId: appointment.id, currentType: appointment.appointmentType || null });
+                    setNewAppointmentType(appointment.appointmentType || null);
+                  }}
                   className={`w-full btn-secondary flex items-center justify-center gap-2 mobile-touch-target ${
                     isPast ? 'text-gray-500' : 'text-blue-600'
                   }`}
@@ -1003,7 +421,10 @@ export function TimeSlotsManager() {
                   Típus módosítása
                 </button>
                 <button
-                  onClick={() => handleModifyAppointment(appointment.id, slot.id, slot.startTime)}
+                  onClick={() => {
+                    setModifyingAppointment({ appointmentId: appointment.id, timeSlotId: slot.id, startTime: slot.startTime });
+                    setNewTimeSlotId('');
+                  }}
                   className={`w-full btn-secondary flex items-center justify-center gap-2 mobile-touch-target ${
                     isPast ? 'text-gray-500' : 'text-amber-600'
                   }`}
@@ -1012,7 +433,7 @@ export function TimeSlotsManager() {
                   Időpont módosítása
                 </button>
                 <button
-                  onClick={() => handleCancelAppointment(appointment.id)}
+                  onClick={() => ts.cancelAppointment(appointment.id)}
                   className={`w-full btn-secondary flex items-center justify-center gap-2 mobile-touch-target ${
                     isPast ? 'text-gray-500' : 'text-red-600'
                   }`}
@@ -1027,7 +448,6 @@ export function TimeSlotsManager() {
       );
     };
 
-    // Row className
     const getRowClassName = (slot: TimeSlot) => {
       return `${isPast ? 'opacity-60' : ''} ${slot.status === 'booked' ? 'bg-red-50' : ''}`;
     };
@@ -1043,6 +463,8 @@ export function TimeSlotsManager() {
       />
     );
   };
+
+  // ── Main render ───────────────────────────────────────────────────
 
   return (
     <div className="space-y-4">
@@ -1065,7 +487,7 @@ export function TimeSlotsManager() {
             <div className="space-y-4">
               <div>
                 <p className="text-sm text-gray-600 mb-4">
-                  <strong>{selectedAppointmentIds.size} időpont</strong> kijelölve
+                  <strong>{ts.selectedAppointmentIds.size} időpont</strong> kijelölve
                 </p>
               </div>
               <div>
@@ -1074,7 +496,7 @@ export function TimeSlotsManager() {
                 </label>
                 <select
                   value={bulkAppointmentType || ''}
-                  onChange={(e) => setBulkAppointmentType(e.target.value as any || null)}
+                  onChange={(e) => setBulkAppointmentType(e.target.value as AppointmentType || null)}
                   className="form-input w-full"
                 >
                   <option value="">Nincs megadva</option>
@@ -1090,16 +512,16 @@ export function TimeSlotsManager() {
                     setBulkAppointmentType(null);
                   }}
                   className="btn-secondary"
-                  disabled={isBulkUpdating}
+                  disabled={ts.isBulkUpdating}
                 >
                   Mégse
                 </button>
                 <button
                   onClick={handleBulkUpdateAppointmentType}
-                  disabled={isBulkUpdating}
+                  disabled={ts.isBulkUpdating}
                   className="btn-primary"
                 >
-                  {isBulkUpdating ? 'Módosítás...' : `Módosítás (${selectedAppointmentIds.size})`}
+                  {ts.isBulkUpdating ? 'Módosítás...' : `Módosítás (${ts.selectedAppointmentIds.size})`}
                 </button>
               </div>
             </div>
@@ -1129,7 +551,7 @@ export function TimeSlotsManager() {
                 </label>
                 <select
                   value={newAppointmentType || ''}
-                  onChange={(e) => setNewAppointmentType(e.target.value as any || null)}
+                  onChange={(e) => setNewAppointmentType(e.target.value as AppointmentType || null)}
                   className="form-input w-full"
                 >
                   <option value="">Nincs megadva</option>
@@ -1240,7 +662,7 @@ export function TimeSlotsManager() {
           Új időpont
         </button>
       </div>
-      
+
       {/* Szűrők */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div>
@@ -1248,15 +670,12 @@ export function TimeSlotsManager() {
             Cím
           </label>
           <select
-            value={filterCim}
-            onChange={(e) => {
-              setFilterCim(e.target.value);
-              setCurrentPage(1); // Reset to first page when filter changes
-            }}
+            value={ts.filterCim}
+            onChange={(e) => ts.setFilterCim(e.target.value)}
             className="form-input w-full"
           >
             <option value="">Összes cím</option>
-            {uniqueCims.map(cim => (
+            {ts.uniqueCims.map(cim => (
               <option key={cim} value={cim}>{cim}</option>
             ))}
           </select>
@@ -1266,15 +685,12 @@ export function TimeSlotsManager() {
             Teremszám
           </label>
           <select
-            value={filterTeremszam}
-            onChange={(e) => {
-              setFilterTeremszam(e.target.value);
-              setCurrentPage(1);
-            }}
+            value={ts.filterTeremszam}
+            onChange={(e) => ts.setFilterTeremszam(e.target.value)}
             className="form-input w-full"
           >
             <option value="">Összes terem</option>
-            {uniqueTeremszamok.map(terem => (
+            {ts.uniqueTeremszamok.map(terem => (
               <option key={terem} value={terem}>{terem}</option>
             ))}
           </select>
@@ -1284,15 +700,12 @@ export function TimeSlotsManager() {
             Fogpótlástanász
           </label>
           <select
-            value={filterDentistName}
-            onChange={(e) => {
-              setFilterDentistName(e.target.value);
-              setCurrentPage(1);
-            }}
+            value={ts.filterDentistName}
+            onChange={(e) => ts.setFilterDentistName(e.target.value)}
             className="form-input w-full"
           >
             <option value="">Összes fogpótlástanász</option>
-            {uniqueDentists.map(dentist => (
+            {ts.uniqueDentists.map(dentist => (
               <option key={dentist} value={dentist}>{dentist}</option>
             ))}
           </select>
@@ -1302,11 +715,8 @@ export function TimeSlotsManager() {
             Státusz
           </label>
           <select
-            value={filterStatus}
-            onChange={(e) => {
-              setFilterStatus(e.target.value as 'all' | 'available' | 'booked');
-              setCurrentPage(1);
-            }}
+            value={ts.filterStatus}
+            onChange={(e) => ts.setFilterStatus(e.target.value as 'all' | 'available' | 'booked')}
             className="form-input w-full"
           >
             <option value="all">Összes</option>
@@ -1319,15 +729,14 @@ export function TimeSlotsManager() {
             Időpont típusa
           </label>
           <select
-            value={filterAppointmentType === null ? 'null' : filterAppointmentType}
+            value={ts.filterAppointmentType === null ? 'null' : ts.filterAppointmentType}
             onChange={(e) => {
               const value = e.target.value;
-              setFilterAppointmentType(
-                value === 'all' ? 'all' : 
-                value === 'null' ? null : 
-                value as 'elso_konzultacio' | 'munkafazis' | 'kontroll'
+              ts.setFilterAppointmentType(
+                value === 'all' ? 'all' :
+                value === 'null' ? null :
+                value as AppointmentType
               );
-              setCurrentPage(1);
             }}
             className="form-input w-full"
           >
@@ -1339,25 +748,18 @@ export function TimeSlotsManager() {
           </select>
         </div>
       </div>
-      
+
       {/* Eredmények száma és törlés gomb */}
       <div className="flex justify-between items-center">
         <div className="text-sm text-gray-600">
-          Összesen: {filteredAndSortedSlots.length} időpont
-          {filteredAndSortedSlots.length !== timeSlots.length && (
-            <span> (szűrve: {timeSlots.length} összesből)</span>
+          Összesen: {ts.filteredAndSortedSlots.length} időpont
+          {ts.filteredAndSortedSlots.length !== ts.timeSlots.length && (
+            <span> (szűrve: {ts.timeSlots.length} összesből)</span>
           )}
         </div>
-        {(filterCim || filterTeremszam || filterDentistName || filterStatus !== 'all' || filterAppointmentType !== 'all') && (
+        {ts.hasActiveFilters && (
           <button
-            onClick={() => {
-              setFilterCim('');
-              setFilterTeremszam('');
-              setFilterDentistName('');
-              setFilterStatus('all');
-              setFilterAppointmentType('all');
-              setCurrentPage(1);
-            }}
+            onClick={ts.clearFilters}
             className="text-sm text-blue-600 hover:text-blue-800"
           >
             Szűrők törlése
@@ -1371,7 +773,7 @@ export function TimeSlotsManager() {
             {editingSlot ? 'Időpont szerkesztése' : 'Új időpont létrehozása'}
           </h4>
           <div className="space-y-4">
-            {userRole === 'admin' && (
+            {ts.userRole === 'admin' && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Felhasználó
@@ -1382,7 +784,7 @@ export function TimeSlotsManager() {
                   className="form-input w-full"
                 >
                   <option value="">Válasszon felhasználót...</option>
-                  {users.map((user) => (
+                  {ts.users.map((user) => (
                     <option key={user.id} value={user.id}>
                       {user.email} ({user.role})
                     </option>
@@ -1409,7 +811,7 @@ export function TimeSlotsManager() {
                 <input
                   type="text"
                   value={newTeremszam}
-                  onChange={(e) => setNewTeremszam(validateTeremszam(e.target.value))}
+                  onChange={(e) => setNewTeremszam(digitsOnly(e.target.value))}
                   placeholder="Pl. 101"
                   className="form-input w-full"
                 />
@@ -1440,14 +842,14 @@ export function TimeSlotsManager() {
       )}
 
       {/* Jövőbeli időpontok */}
-      {(allFutureSlots.length > 0 || allPastSlots.length === 0) && (
+      {(ts.allFutureSlots.length > 0 || ts.allPastSlots.length === 0) && (
         <div className="card">
           <div className="flex justify-between items-center mb-4">
             <h4 className="text-lg font-semibold">Jövőbeli időpontok</h4>
-            {selectedAppointmentIds.size > 0 && (
+            {ts.selectedAppointmentIds.size > 0 && (
               <div className="flex items-center gap-3">
                 <span className="text-sm text-gray-600">
-                  {selectedAppointmentIds.size} időpont kijelölve
+                  {ts.selectedAppointmentIds.size} időpont kijelölve
                 </span>
                 <button
                   onClick={() => {
@@ -1460,7 +862,7 @@ export function TimeSlotsManager() {
                   Kijelöltek módosítása
                 </button>
                 <button
-                  onClick={() => setSelectedAppointmentIds(new Set())}
+                  onClick={ts.clearSelection}
                   className="btn-secondary text-sm"
                 >
                   Kijelölés törlése
@@ -1468,55 +870,55 @@ export function TimeSlotsManager() {
               </div>
             )}
           </div>
-          {futureSlots.length === 0 ? (
+          {ts.futureSlots.length === 0 ? (
             <div className="text-center py-8">
               <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-500">Nincs jövőbeli időpont.</p>
             </div>
           ) : (
-            renderTimeSlotTable(futureSlots, false)
+            renderTimeSlotTable(ts.futureSlots, false)
           )}
         </div>
       )}
 
       {/* Elmúlt időpontok */}
-      {allPastSlots.length > 0 && (
+      {ts.allPastSlots.length > 0 && (
         <div className="card">
           <button
-            onClick={() => setShowPastSlots(!showPastSlots)}
+            onClick={() => ts.setShowPastSlots(!ts.showPastSlots)}
             className="flex items-center justify-between w-full mb-4 text-left"
           >
             <h4 className="text-lg font-semibold text-gray-600">
-              Elmúlt időpontok ({allPastSlots.length})
+              Elmúlt időpontok ({ts.allPastSlots.length})
             </h4>
-            {showPastSlots ? (
+            {ts.showPastSlots ? (
               <ChevronUp className="w-5 h-5 text-gray-400" />
             ) : (
               <ChevronDown className="w-5 h-5 text-gray-400" />
             )}
           </button>
-          {showPastSlots && (
+          {ts.showPastSlots && (
             <>
-              {pastSlots.length === 0 ? (
+              {ts.pastSlots.length === 0 ? (
                 <div className="text-center py-8">
                   <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                   <p className="text-gray-500">Nincs elmúlt időpont ezen az oldalon.</p>
                 </div>
               ) : (
-                renderTimeSlotTable(pastSlots, true)
+                renderTimeSlotTable(ts.pastSlots, true)
               )}
               {/* Pagináció elmúlt időpontokhoz */}
-              {pastTotalPages > 1 && (
+              {ts.pastTotalPages > 1 && (
                 <div className="mt-6 flex items-center justify-between">
                   <div className="text-sm text-gray-600">
-                    Oldal {currentPage} / {pastTotalPages} (összesen {allPastSlots.length} elmúlt időpont)
+                    Oldal {ts.currentPage} / {ts.pastTotalPages} (összesen {ts.allPastSlots.length} elmúlt időpont)
                   </div>
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                      disabled={currentPage === 1}
+                      onClick={() => ts.setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={ts.currentPage === 1}
                       className={`px-3 py-2 rounded-md text-sm font-medium ${
-                        currentPage === 1
+                        ts.currentPage === 1
                           ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                           : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
                       }`}
@@ -1524,23 +926,23 @@ export function TimeSlotsManager() {
                       <ChevronLeft className="w-4 h-4" />
                     </button>
                     <div className="flex items-center gap-1">
-                      {Array.from({ length: Math.min(5, pastTotalPages) }, (_, i) => {
+                      {Array.from({ length: Math.min(5, ts.pastTotalPages) }, (_, i) => {
                         let pageNum: number;
-                        if (pastTotalPages <= 5) {
+                        if (ts.pastTotalPages <= 5) {
                           pageNum = i + 1;
-                        } else if (currentPage <= 3) {
+                        } else if (ts.currentPage <= 3) {
                           pageNum = i + 1;
-                        } else if (currentPage >= pastTotalPages - 2) {
-                          pageNum = pastTotalPages - 4 + i;
+                        } else if (ts.currentPage >= ts.pastTotalPages - 2) {
+                          pageNum = ts.pastTotalPages - 4 + i;
                         } else {
-                          pageNum = currentPage - 2 + i;
+                          pageNum = ts.currentPage - 2 + i;
                         }
                         return (
                           <button
                             key={pageNum}
-                            onClick={() => setCurrentPage(pageNum)}
+                            onClick={() => ts.setCurrentPage(pageNum)}
                             className={`px-3 py-2 rounded-md text-sm font-medium ${
-                              currentPage === pageNum
+                              ts.currentPage === pageNum
                                 ? 'bg-blue-600 text-white'
                                 : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
                             }`}
@@ -1551,10 +953,10 @@ export function TimeSlotsManager() {
                       })}
                     </div>
                     <button
-                      onClick={() => setCurrentPage(prev => Math.min(pastTotalPages, prev + 1))}
-                      disabled={currentPage === pastTotalPages}
+                      onClick={() => ts.setCurrentPage(prev => Math.min(ts.pastTotalPages, prev + 1))}
+                      disabled={ts.currentPage === ts.pastTotalPages}
                       className={`px-3 py-2 rounded-md text-sm font-medium ${
-                        currentPage === pastTotalPages
+                        ts.currentPage === ts.pastTotalPages
                           ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                           : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
                       }`}
@@ -1570,17 +972,17 @@ export function TimeSlotsManager() {
       )}
 
       {/* Pagináció - csak jövőbeli időpontokra */}
-      {futureTotalPages > 1 && (
+      {ts.futureTotalPages > 1 && (
         <div className="mt-6 flex items-center justify-between">
           <div className="text-sm text-gray-600">
-            Oldal {currentPage} / {futureTotalPages} (összesen {allFutureSlots.length} jövőbeli időpont)
+            Oldal {ts.currentPage} / {ts.futureTotalPages} (összesen {ts.allFutureSlots.length} jövőbeli időpont)
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
+              onClick={() => ts.setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={ts.currentPage === 1}
               className={`px-3 py-2 rounded-md text-sm font-medium ${
-                currentPage === 1
+                ts.currentPage === 1
                   ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                   : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
               }`}
@@ -1588,23 +990,23 @@ export function TimeSlotsManager() {
               <ChevronLeft className="w-4 h-4" />
             </button>
             <div className="flex items-center gap-1">
-              {Array.from({ length: Math.min(5, futureTotalPages) }, (_, i) => {
+              {Array.from({ length: Math.min(5, ts.futureTotalPages) }, (_, i) => {
                 let pageNum: number;
-                if (futureTotalPages <= 5) {
+                if (ts.futureTotalPages <= 5) {
                   pageNum = i + 1;
-                } else if (currentPage <= 3) {
+                } else if (ts.currentPage <= 3) {
                   pageNum = i + 1;
-                } else if (currentPage >= futureTotalPages - 2) {
-                  pageNum = futureTotalPages - 4 + i;
+                } else if (ts.currentPage >= ts.futureTotalPages - 2) {
+                  pageNum = ts.futureTotalPages - 4 + i;
                 } else {
-                  pageNum = currentPage - 2 + i;
+                  pageNum = ts.currentPage - 2 + i;
                 }
                 return (
                   <button
                     key={pageNum}
-                    onClick={() => setCurrentPage(pageNum)}
+                    onClick={() => ts.setCurrentPage(pageNum)}
                     className={`px-3 py-2 rounded-md text-sm font-medium ${
-                      currentPage === pageNum
+                      ts.currentPage === pageNum
                         ? 'bg-blue-600 text-white'
                         : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
                     }`}
@@ -1615,10 +1017,10 @@ export function TimeSlotsManager() {
               })}
             </div>
             <button
-              onClick={() => setCurrentPage(prev => Math.min(futureTotalPages, prev + 1))}
-              disabled={currentPage === futureTotalPages}
+              onClick={() => ts.setCurrentPage(prev => Math.min(ts.futureTotalPages, prev + 1))}
+              disabled={ts.currentPage === ts.futureTotalPages}
               className={`px-3 py-2 rounded-md text-sm font-medium ${
-                currentPage === futureTotalPages
+                ts.currentPage === ts.futureTotalPages
                   ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                   : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
               }`}
@@ -1629,7 +1031,7 @@ export function TimeSlotsManager() {
         </div>
       )}
 
-      {timeSlots.length === 0 && (
+      {ts.timeSlots.length === 0 && (
         <div className="card">
           <div className="text-center py-8">
             <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
@@ -1640,4 +1042,3 @@ export function TimeSlotsManager() {
     </div>
   );
 }
-

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -121,7 +122,7 @@ export async function GET(request: NextRequest) {
       ok: violations.length === 0 && heldPastExpiryCount === 0,
     });
   } catch (error) {
-    console.error('Error fetching tripwires:', error);
+    logger.error('Error fetching tripwires:', error);
     return NextResponse.json(
       { error: 'Hiba történt a tripwire lekérdezésekor' },
       { status: 500 }

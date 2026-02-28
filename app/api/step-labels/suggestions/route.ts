@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ labels });
   } catch (error) {
-    console.error('Error fetching step label suggestions:', error);
+    logger.error('Error fetching step label suggestions:', error);
     return NextResponse.json(
       { error: 'Hiba történt a lépés javaslatok lekérdezésekor' },
       { status: 500 }

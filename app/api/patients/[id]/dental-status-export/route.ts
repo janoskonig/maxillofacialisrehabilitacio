@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { generateDentalStatusPDF } from '@/lib/pdf/generateDentalStatusPDF';
+import { logger } from '@/lib/logger';
 
 /**
  * Export patient dental status as PDF
@@ -86,7 +87,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('Hiba a PDF generálásakor:', error);
+    logger.error('Hiba a PDF generálásakor:', error);
     const errorMessage = error instanceof Error ? error.message : 'Ismeretlen hiba';
     return NextResponse.json(
       { error: `Hiba történt a PDF generálásakor: ${errorMessage}` },

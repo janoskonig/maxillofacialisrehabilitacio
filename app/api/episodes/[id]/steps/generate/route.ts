@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -185,7 +186,7 @@ export async function POST(
       client.release();
     }
   } catch (error) {
-    console.error('Error in POST /episodes/:id/steps/generate:', error);
+    logger.error('Error in POST /episodes/:id/steps/generate:', error);
     return NextResponse.json(
       { error: 'Hiba történt a lépések generálásakor' },
       { status: 500 }

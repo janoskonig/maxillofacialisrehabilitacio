@@ -4,6 +4,7 @@ import { verifyAuth } from '@/lib/auth-server';
 import { getCurrentEpisodeAndStage } from '@/lib/ohip14-stage';
 import { OHIP14Timepoint } from '@/lib/types';
 import { logActivity } from '@/lib/activity';
+import { logger } from '@/lib/logger';
 
 /**
  * Lock patient's OHIP-14 response (prevent patient from modifying)
@@ -97,7 +98,7 @@ export async function POST(
       lockedAt: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('Error locking OHIP-14 response:', error);
+    logger.error('Error locking OHIP-14 response:', error);
     return NextResponse.json(
       { error: 'Hiba történt a lezárás során' },
       { status: 500 }

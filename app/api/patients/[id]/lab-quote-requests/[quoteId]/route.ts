@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { labQuoteRequestSchema } from '@/lib/types';
+import { logger } from '@/lib/logger';
 
 /**
  * Árajánlatkérő frissítése
@@ -73,7 +74,7 @@ export async function PUT(
 
     return NextResponse.json({ quoteRequest: result.rows[0] }, { status: 200 });
   } catch (error) {
-    console.error('Hiba az árajánlatkérő frissítésekor:', error);
+    logger.error('Hiba az árajánlatkérő frissítésekor:', error);
     if (error instanceof Error && error.name === 'ZodError') {
       return NextResponse.json(
         { error: 'Érvénytelen adatok', details: error },
@@ -129,7 +130,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error) {
-    console.error('Hiba az árajánlatkérő törlésekor:', error);
+    logger.error('Hiba az árajánlatkérő törlésekor:', error);
     return NextResponse.json(
       { error: 'Hiba történt az árajánlatkérő törlésekor' },
       { status: 500 }

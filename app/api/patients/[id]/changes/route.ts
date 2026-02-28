@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 /**
  * Get patient change history
@@ -162,7 +163,7 @@ export async function GET(
       offset,
     });
   } catch (error: any) {
-    console.error('Error fetching patient changes:', error);
+    logger.error('Error fetching patient changes:', error);
     return NextResponse.json(
       { error: 'Hiba történt a változások lekérdezésekor' },
       { status: 500 }

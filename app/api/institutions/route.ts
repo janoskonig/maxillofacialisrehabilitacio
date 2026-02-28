@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
+import { logger } from '@/lib/logger';
 
 // Intézmények listázása a users táblából
 export const dynamic = 'force-dynamic';
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ institutions });
   } catch (error) {
-    console.error('Error fetching institutions:', error);
+    logger.error('Error fetching institutions:', error);
     return NextResponse.json(
       { error: 'Hiba történt az intézmények lekérdezésekor' },
       { status: 500 }

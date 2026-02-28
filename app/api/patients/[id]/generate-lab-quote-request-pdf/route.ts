@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { generateLabQuoteRequestPDF } from '@/lib/pdf/lab-quote-request';
 import { Patient, patientSchema, LabQuoteRequest } from '@/lib/types';
+import { logger } from '@/lib/logger';
 
 /**
  * Árajánlatkérő PDF generálása beteg adataiból
@@ -128,7 +129,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('Hiba a PDF generálása során:', error);
+    logger.error('Hiba a PDF generálása során:', error);
     return NextResponse.json(
       { 
         error: 'Hiba történt a PDF generálása során',

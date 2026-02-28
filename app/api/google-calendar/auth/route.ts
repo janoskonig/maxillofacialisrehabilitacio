@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth-server';
 import { SignJWT } from 'jose';
 import { getDbPool } from '@/lib/db';
+import { logger } from '@/lib/logger';
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'change-this-to-a-random-secret-in-production'
@@ -87,7 +88,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ authUrl: authUrl.toString() });
   } catch (error) {
-    console.error('Error generating OAuth2 URL:', error);
+    logger.error('Error generating OAuth2 URL:', error);
     return NextResponse.json(
       { error: 'Hiba történt az OAuth2 URL generálásakor' },
       { status: 500 }

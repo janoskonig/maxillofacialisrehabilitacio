@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Calendar, Clock, Download, User, Phone, Trash2, Edit2, X, ChevronLeft, ChevronRight, CheckCircle2, XCircle, AlertCircle, Clock as ClockIcon } from 'lucide-react';
 import { Patient } from '@/lib/types';
+import { formatDateTime } from '@/lib/dateUtils';
 
 interface TimeSlot {
   id: string;
@@ -359,16 +360,6 @@ export function AppointmentBooking() {
     }
   }, []);
 
-  const formatDateTime = useCallback((dateTime: string) => {
-    const date = new Date(dateTime);
-    return date.toLocaleString('hu-HU', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  }, []);
 
   if (loading) {
     return (

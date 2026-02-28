@@ -6,6 +6,7 @@ import { getDoctorForNotification } from '@/lib/doctor-communication';
 import { logActivityWithAuth } from '@/lib/activity';
 import { getDbPool } from '@/lib/db';
 import { sendPushNotification } from '@/lib/push-notifications';
+import { logger } from '@/lib/logger';
 
 /**
  * POST /api/doctor-messages - Új üzenet küldése orvosnak vagy csoportos beszélgetésbe
@@ -115,15 +116,15 @@ export async function POST(request: NextRequest) {
                   },
                 });
               } catch (pushError) {
-                console.error(`Failed to send push notification to participant ${participant.userId}:`, pushError);
+                logger.error(`Failed to send push notification to participant ${participant.userId}:`, pushError);
               }
             } catch (emailError) {
-              console.error(`Hiba az email értesítés küldésekor ${participant.userEmail}-nak:`, emailError);
+              logger.error(`Hiba az email értesítés küldésekor ${participant.userEmail}-nak:`, emailError);
             }
           }
         }
       } catch (emailError) {
-        console.error('Hiba az email értesítések küldésekor:', emailError);
+        logger.error('Hiba az email értesítések küldésekor:', emailError);
       }
 
       // Activity log
@@ -223,10 +224,10 @@ export async function POST(request: NextRequest) {
           },
         });
       } catch (pushError) {
-        console.error('Failed to send push notification to recipient:', pushError);
+        logger.error('Failed to send push notification to recipient:', pushError);
       }
     } catch (emailError) {
-      console.error('Hiba az email értesítés küldésekor:', emailError);
+      logger.error('Hiba az email értesítés küldésekor:', emailError);
       // Ne akadályozza meg az üzenet küldését, ha az email nem sikerül
     }
 
@@ -235,7 +236,7 @@ export async function POST(request: NextRequest) {
       message: newMessage,
     });
   } catch (error: any) {
-    console.error('Hiba az üzenet küldésekor:', error);
+    logger.error('Hiba az üzenet küldésekor:', error);
     return NextResponse.json(
       { error: error.message || 'Hiba történt az üzenet küldésekor' },
       { status: 500 }
@@ -312,7 +313,7 @@ export async function GET(request: NextRequest) {
       messages,
     });
   } catch (error: any) {
-    console.error('Hiba az üzenetek lekérésekor:', error);
+    logger.error('Hiba az üzenetek lekérésekor:', error);
     return NextResponse.json(
       { error: error.message || 'Hiba történt az üzenetek lekérésekor' },
       { status: 500 }

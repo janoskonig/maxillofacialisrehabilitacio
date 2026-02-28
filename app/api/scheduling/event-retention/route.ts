@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
+import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -42,7 +43,7 @@ async function handleRetention(request: NextRequest) {
       })),
     });
   } catch (error) {
-    console.error('Event retention error:', error);
+    logger.error('Event retention error:', error);
     return NextResponse.json(
       {
         error: 'Hiba történt az eseménynapló megőrzési szabály alkalmazásakor',

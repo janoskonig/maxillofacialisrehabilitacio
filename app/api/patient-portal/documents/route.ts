@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
 import { isFtpConfigured, uploadFile, getMaxFileSize } from '@/lib/ftp-client';
+import { logger } from '@/lib/logger';
 
 /**
  * Get patient's documents
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
       documents: result.rows,
     });
   } catch (error) {
-    console.error('Error fetching documents:', error);
+    logger.error('Error fetching documents:', error);
     return NextResponse.json(
       { error: 'Hiba történt a dokumentumok lekérdezésekor' },
       { status: 500 }
@@ -196,7 +197,7 @@ export async function POST(request: NextRequest) {
       message: 'Dokumentum sikeresen feltöltve',
     });
   } catch (error) {
-    console.error('Error uploading document:', error);
+    logger.error('Error uploading document:', error);
     return NextResponse.json(
       { error: 'Hiba történt a dokumentum feltöltésekor' },
       { status: 500 }

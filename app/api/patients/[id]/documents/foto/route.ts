@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 // Get foto-tagged documents for quick access
 export const dynamic = 'force-dynamic';
@@ -106,7 +107,7 @@ export async function GET(
 
     return NextResponse.json({ documents: result.rows }, { status: 200 });
   } catch (error) {
-    console.error('Hiba a foto dokumentumok lekérdezésekor:', error);
+    logger.error('Hiba a foto dokumentumok lekérdezésekor:', error);
     return NextResponse.json(
       { error: 'Hiba történt a foto dokumentumok lekérdezésekor' },
       { status: 500 }

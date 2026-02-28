@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 import { getDbPool } from '@/lib/db';
 import { encryptToken } from '@/lib/google-calendar';
+import { logger } from '@/lib/logger';
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'change-this-to-a-random-secret-in-production'
@@ -124,7 +125,7 @@ export async function GET(request: NextRequest) {
 
   // Korai hibák: itt is baseUrl-t használj
   if (error) {
-    console.error("[Google Calendar Callback] OAuth error param", {
+    logger.error("[Google Calendar Callback] OAuth error param", {
       error,
       requestId: request.headers.get("x-request-id") ?? undefined,
     });
@@ -134,7 +135,7 @@ export async function GET(request: NextRequest) {
   }
 
   if (!code || !state) {
-    console.error("[Google Calendar Callback] Missing params", { hasCode: !!code, hasState: !!state });
+    logger.error("[Google Calendar Callback] Missing params", { hasCode: !!code, hasState: !!state });
     return NextResponse.redirect(
       new URL('/settings?google_calendar_error=missing_params', baseUrl)
     );
@@ -154,7 +155,7 @@ export async function GET(request: NextRequest) {
       statePayload = payload as { userId: string; email: string; timestamp: number; random: string };
     } catch (error) {
       const n = normalizeError(error);
-      console.error("[Google Calendar Callback] Invalid state token", {
+      logger.error("[Google Calendar Callback] Invalid state token", {
         step,
         errorName: n.name,
         errorMessage: n.message,
@@ -184,7 +185,7 @@ export async function GET(request: NextRequest) {
 
     if (!tokenResponse.ok) {
       const errorData = await tokenResponse.json().catch(() => ({}));
-      console.error("[Google Calendar Callback] Token exchange error", {
+      logger.error("[Google Calendar Callback] Token exchange error", {
         step,
         userId: statePayload?.userId ?? "unknown",
         httpStatus: tokenResponse.status,
@@ -198,7 +199,7 @@ export async function GET(request: NextRequest) {
     const tokenData = await tokenResponse.json();
 
     if (!tokenData.access_token || !tokenData.refresh_token) {
-      console.error("[Google Calendar Callback] Missing tokens in response", {
+      logger.error("[Google Calendar Callback] Missing tokens in response", {
         step,
         userId: statePayload?.userId ?? "unknown",
         hasAccessToken: !!tokenData.access_token,
@@ -232,7 +233,7 @@ export async function GET(request: NextRequest) {
       encryptedAccessToken = encryptToken(tokenData.access_token);
     } catch (encryptErr) {
       const n = normalizeError(encryptErr);
-      console.error("[Google Calendar Callback] Encryption error", {
+      logger.error("[Google Calendar Callback] Encryption error", {
         step,
         userId: statePayload?.userId ?? "unknown",
         errorName: n.name,
@@ -273,7 +274,7 @@ export async function GET(request: NextRequest) {
       );
     } catch (dbErr) {
       const n = normalizeError(dbErr);
-      console.error("[Google Calendar Callback] Database error", {
+      logger.error("[Google Calendar Callback] Database error", {
         step,
         userId: statePayload?.userId ?? "unknown",
         pgCode: n.code,
@@ -293,7 +294,7 @@ export async function GET(request: NextRequest) {
     const { errorType, errorStep } = detectErrorType(n, step);
 
     // Strukturált log – ne logolj code/state tartalmat, csak bool/metadata
-    console.error("[Google Calendar Callback] Error processing OAuth callback", {
+    logger.error("[Google Calendar Callback] Error processing OAuth callback", {
       errorType,
       errorStep,
       errorName: n.name,

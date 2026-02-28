@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { SignJWT } from 'jose';
 import { sendRegistrationNotificationToAdmins } from '@/lib/email';
 import { logActivity } from '@/lib/activity';
+import { logger } from '@/lib/logger';
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'change-this-to-a-random-secret-in-production'
@@ -167,7 +168,7 @@ export async function POST(request: NextRequest) {
         );
       }
     } catch (emailError) {
-      console.error('Failed to send registration notification email to admins:', emailError);
+      logger.error('Failed to send registration notification email to admins:', emailError);
       // Nem dobunk hibát, mert a regisztráció sikeres volt
     }
 
@@ -178,7 +179,7 @@ export async function POST(request: NextRequest) {
       pendingApproval: true,
     });
   } catch (error) {
-    console.error('Registration error:', error);
+    logger.error('Registration error:', error);
     return NextResponse.json(
       { error: 'Regisztrációs hiba történt' },
       { status: 500 }

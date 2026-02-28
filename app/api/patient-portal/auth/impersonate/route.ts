@@ -4,6 +4,7 @@ import { SignJWT } from 'jose';
 import { cookies } from 'next/headers';
 import { getDbPool } from '@/lib/db';
 import { logActivity } from '@/lib/activity';
+import { logger } from '@/lib/logger';
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'change-this-to-a-random-secret-in-production'
@@ -118,7 +119,7 @@ export async function POST(request: NextRequest) {
       redirectUrl: redirectUrl.toString(),
     });
   } catch (error) {
-    console.error('Patient impersonate error:', error);
+    logger.error('Patient impersonate error:', error);
     return NextResponse.json(
       { error: 'Hiba történt a bejelentkezéskor' },
       { status: 500 }

@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { withCorrelation } from '@/lib/api/withCorrelation';
 import { handleApiError } from '@/lib/api-error-handler';
+import { logger } from '@/lib/logger';
 
 // Whitelist of allowed event types (must match lib/event-logger.ts)
 const ALLOWED_EVENT_TYPES = [
@@ -114,7 +115,7 @@ export const POST = withCorrelation(async (req: NextRequest, { correlationId }) 
     response.headers.set('x-correlation-id', correlationId);
     return response;
   } catch (error: any) {
-    console.error('Error logging event:', error);
+    logger.error('Error logging event:', error);
     return handleApiError(error, 'Hiba az event logolása során', correlationId);
   }
 });

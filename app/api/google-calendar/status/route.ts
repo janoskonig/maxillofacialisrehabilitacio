@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth-server';
 import { getDbPool } from '@/lib/db';
+import { logger } from '@/lib/logger';
 
 /**
  * Google Calendar kapcsolat státusz lekérdezése
@@ -46,7 +47,7 @@ export async function GET(request: NextRequest) {
       lastErrorAt: row.google_calendar_last_error_at || null,
     });
   } catch (error) {
-    console.error('Error fetching Google Calendar status:', error);
+    logger.error('Error fetching Google Calendar status:', error);
     return NextResponse.json(
       { error: 'Hiba történt a státusz lekérdezésekor' },
       { status: 500 }
@@ -81,7 +82,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error disconnecting Google Calendar:', error);
+    logger.error('Error disconnecting Google Calendar:', error);
     return NextResponse.json(
       { error: 'Hiba történt a kapcsolat megszüntetésekor' },
       { status: 500 }

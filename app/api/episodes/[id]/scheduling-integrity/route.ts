@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -105,7 +106,7 @@ export async function GET(
       ok: violations.length === 0,
     });
   } catch (error) {
-    console.error('Error fetching scheduling integrity:', error);
+    logger.error('Error fetching scheduling integrity:', error);
     return NextResponse.json(
       { error: 'Hiba történt az integritás lekérdezésekor' },
       { status: 500 }

@@ -4,6 +4,7 @@ import { verifyAuth } from '@/lib/auth-server';
 import { invalidateIntentsForEpisode } from '@/lib/intent-invalidation';
 import { createInitialSlotIntentsForEpisode } from '@/lib/episode-activation';
 import { getCurrentSuggestion } from '@/lib/stage-suggestion-service';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -124,7 +125,7 @@ export async function GET(
 
     return NextResponse.json({ episode });
   } catch (error) {
-    console.error('Error in GET /episodes/:id:', error);
+    logger.error('Error in GET /episodes/:id:', error);
     return NextResponse.json(
       { error: 'Hiba az epizód lekérdezésekor' },
       { status: 500 }
@@ -221,14 +222,14 @@ export async function PATCH(
       try {
         await invalidateIntentsForEpisode(episodeId, 'pathway_changed');
       } catch (e) {
-        console.error('Failed to invalidate intents on pathway change:', e);
+        logger.error('Failed to invalidate intents on pathway change:', e);
       }
     }
     if (providerChanged) {
       try {
         await invalidateIntentsForEpisode(episodeId, 'provider_changed');
       } catch (e) {
-        console.error('Failed to invalidate intents on provider change:', e);
+        logger.error('Failed to invalidate intents on provider change:', e);
       }
     }
 
@@ -248,13 +249,13 @@ export async function PATCH(
       try {
         await createInitialSlotIntentsForEpisode(episodeId);
       } catch (e) {
-        console.error('Failed to create initial slot intents on episode activation:', e);
+        logger.error('Failed to create initial slot intents on episode activation:', e);
       }
     }
 
     return NextResponse.json({ episode });
   } catch (error) {
-    console.error('Error updating episode:', error);
+    logger.error('Error updating episode:', error);
     return NextResponse.json(
       { error: 'Hiba történt az epizód módosításakor' },
       { status: 500 }

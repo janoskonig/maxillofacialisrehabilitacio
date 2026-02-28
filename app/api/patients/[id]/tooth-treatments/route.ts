@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,7 +43,7 @@ export async function GET(
 
     return NextResponse.json({ items: result.rows });
   } catch (error) {
-    console.error('Error fetching tooth treatments:', error);
+    logger.error('Error fetching tooth treatments:', error);
     return NextResponse.json(
       { error: 'Hiba történt a fog-kezelési igények lekérdezésekor' },
       { status: 500 }
@@ -116,7 +117,7 @@ export async function POST(
       throw err;
     }
   } catch (error) {
-    console.error('Error creating tooth treatment:', error);
+    logger.error('Error creating tooth treatment:', error);
     return NextResponse.json(
       { error: 'Hiba történt a fog-kezelési igény létrehozásakor' },
       { status: 500 }

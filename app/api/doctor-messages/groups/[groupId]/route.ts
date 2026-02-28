@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth-server';
 import { renameDoctorMessageGroup, deleteDoctorMessageGroup } from '@/lib/doctor-communication';
 import { logActivityWithAuth } from '@/lib/activity';
+import { logger } from '@/lib/logger';
 
 /**
  * PATCH /api/doctor-messages/groups/[groupId] - Csoportos beszélgetés átnevezése
@@ -39,7 +40,7 @@ export async function PATCH(
       success: true,
     });
   } catch (error: any) {
-    console.error('Hiba a csoportos beszélgetés átnevezésekor:', error);
+    logger.error('Hiba a csoportos beszélgetés átnevezésekor:', error);
     return NextResponse.json(
       { error: error.message || 'Hiba történt a csoportos beszélgetés átnevezésekor' },
       { status: 500 }
@@ -79,7 +80,7 @@ export async function DELETE(
       success: true,
     });
   } catch (error: any) {
-    console.error('Hiba a csoportos beszélgetés törlésekor:', error);
+    logger.error('Hiba a csoportos beszélgetés törlésekor:', error);
     return NextResponse.json(
       { error: error.message || 'Hiba történt a csoportos beszélgetés törlésekor' },
       { status: 500 }

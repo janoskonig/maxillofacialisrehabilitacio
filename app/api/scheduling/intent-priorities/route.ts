@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { computeIntentPriority, STARVATION_DAYS } from '@/lib/intent-priority';
+import { logger } from '@/lib/logger';
 
 /**
  * POST /api/scheduling/intent-priorities
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest) {
         : undefined,
     });
   } catch (error) {
-    console.error('Error updating intent priorities:', error);
+    logger.error('Error updating intent priorities:', error);
     return NextResponse.json(
       { error: 'Hiba történt a prioritások frissítésekor' },
       { status: 500 }

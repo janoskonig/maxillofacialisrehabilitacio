@@ -5,6 +5,7 @@ import { OHIP14Response, OHIP14Timepoint } from '@/lib/types';
 import { calculateOHIP14Scores } from '@/lib/ohip14-questions';
 import { getCurrentStageCodeForOhip, getCurrentEpisodeAndStage, isTimepointAllowedForStage } from '@/lib/ohip14-stage';
 import { logActivity } from '@/lib/activity';
+import { logger } from '@/lib/logger';
 
 /**
  * Get patient's OHIP-14 response for a specific timepoint
@@ -105,7 +106,7 @@ export async function GET(
     const response: OHIP14Response = mapRowToResponse(result.rows[0]);
     return NextResponse.json({ response });
   } catch (error) {
-    console.error('Error fetching OHIP-14 response:', error);
+    logger.error('Error fetching OHIP-14 response:', error);
     return NextResponse.json(
       { error: 'Hiba történt a válasz lekérdezésekor' },
       { status: 500 }
@@ -380,7 +381,7 @@ export async function POST(
       );
     }
   } catch (error) {
-    console.error('Error saving OHIP-14 response:', error);
+    logger.error('Error saving OHIP-14 response:', error);
     return NextResponse.json(
       { error: 'Hiba történt a válaszok mentésekor' },
       { status: 500 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { createGoogleCalendarEvent, deleteGoogleCalendarEvent } from '@/lib/google-calendar';
+import { logger } from '@/lib/logger';
 
 /**
  * Manually sync the current user's appointments to their Google Calendar.
@@ -135,7 +136,7 @@ export async function POST(request: NextRequest) {
           appointmentId: appointment.appointment_id,
           error: errorMessage,
         });
-        console.error(`[Sync Appointments] Error syncing appointment ${appointment.appointment_id}:`, error);
+        logger.error(`[Sync Appointments] Error syncing appointment ${appointment.appointment_id}:`, error);
       }
     }
 
@@ -148,7 +149,7 @@ export async function POST(request: NextRequest) {
       results,
     });
   } catch (error) {
-    console.error('Error syncing appointments to Google Calendar:', error);
+    logger.error('Error syncing appointments to Google Calendar:', error);
     return NextResponse.json(
       {
         error: 'Hiba történt a szinkronizáció során',

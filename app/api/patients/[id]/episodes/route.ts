@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import type { PatientEpisode } from '@/lib/types';
 import { logActivity } from '@/lib/activity';
+import { logger } from '@/lib/logger';
 
 const REASON_VALUES = ['traumás sérülés', 'veleszületett rendellenesség', 'onkológiai kezelés utáni állapot'];
 
@@ -134,7 +135,7 @@ export async function GET(
 
     return NextResponse.json({ episodes });
   } catch (error) {
-    console.error('Error fetching episodes:', error);
+    logger.error('Error fetching episodes:', error);
     return NextResponse.json(
       { error: 'Hiba történt az epizódok lekérdezésekor' },
       { status: 500 }
@@ -230,7 +231,7 @@ export async function POST(
           const { invalidateIntentsForEpisodes } = await import('@/lib/intent-invalidation');
           await invalidateIntentsForEpisodes(closingIds, 'episode_closed');
         } catch (e) {
-          console.error('Failed to invalidate intents for closed episodes:', e);
+          logger.error('Failed to invalidate intents for closed episodes:', e);
         }
       }
       await client.query(
@@ -304,7 +305,7 @@ export async function POST(
 
     return NextResponse.json({ episode }, { status: 201 });
   } catch (error) {
-    console.error('Error creating episode:', error);
+    logger.error('Error creating episode:', error);
     return NextResponse.json(
       { error: 'Hiba történt az epizód létrehozásakor' },
       { status: 500 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runIntentExpiry } from '@/lib/intent-expiry';
+import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -33,7 +34,7 @@ async function handleIntentExpiry(request: NextRequest) {
       ...result,
     });
   } catch (error) {
-    console.error('Intent expiry error:', error);
+    logger.error('Intent expiry error:', error);
     return NextResponse.json(
       { error: 'Hiba történt az intent lejárat kezelésekor', details: String(error) },
       { status: 500 }

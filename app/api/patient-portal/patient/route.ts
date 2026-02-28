@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
+import { logger } from '@/lib/logger';
 
 /**
  * Get patient's own data (limited subset)
@@ -54,7 +55,7 @@ export async function GET(request: NextRequest) {
       patient: result.rows[0],
     });
   } catch (error) {
-    console.error('Error fetching patient data:', error);
+    logger.error('Error fetching patient data:', error);
     return NextResponse.json(
       { error: 'Hiba történt az adatok lekérdezésekor' },
       { status: 500 }
@@ -206,7 +207,7 @@ export async function PUT(request: NextRequest) {
       message: 'Adatok sikeresen frissítve',
     });
   } catch (error) {
-    console.error('Error updating patient data:', error);
+    logger.error('Error updating patient data:', error);
     return NextResponse.json(
       { error: 'Hiba történt az adatok frissítésekor' },
       { status: 500 }

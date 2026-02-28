@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -71,7 +72,7 @@ export async function PATCH(
 
     return NextResponse.json({ item: result.rows[0] });
   } catch (error) {
-    console.error('Error updating tooth treatment:', error);
+    logger.error('Error updating tooth treatment:', error);
     return NextResponse.json(
       { error: 'Hiba történt a fog-kezelési igény frissítésekor' },
       { status: 500 }
@@ -114,7 +115,7 @@ export async function DELETE(
 
     return NextResponse.json({ deleted: treatmentId });
   } catch (error) {
-    console.error('Error deleting tooth treatment:', error);
+    logger.error('Error deleting tooth treatment:', error);
     return NextResponse.json(
       { error: 'Hiba történt a fog-kezelési igény törlésekor' },
       { status: 500 }

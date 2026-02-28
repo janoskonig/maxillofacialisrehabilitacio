@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 import { markDoctorMessageAsRead } from '@/lib/doctor-communication';
 import { getDbPool } from '@/lib/db';
 import { emitDoctorMessageRead } from '@/lib/socket-server';
@@ -60,7 +61,7 @@ export async function PUT(
       message: 'Üzenet olvasottnak jelölve',
     });
   } catch (error: any) {
-    console.error('Hiba az üzenet olvasottnak jelölésekor:', error);
+    logger.error('Hiba az üzenet olvasottnak jelölésekor:', error);
     return NextResponse.json(
       { error: 'Hiba történt az üzenet olvasottnak jelölésekor' },
       { status: 500 }

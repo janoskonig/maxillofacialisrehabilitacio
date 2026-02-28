@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runGoogleReconciliation } from '@/lib/google-reconciliation';
+import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
-    console.error('[Google Reconcile] Error:', msg);
+    logger.error('[Google Reconcile] Error:', msg);
     return NextResponse.json(
       { error: 'Reconciliation failed', details: msg },
       { status: 500 }

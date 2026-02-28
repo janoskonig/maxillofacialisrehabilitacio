@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { sendNewAppointmentRequestToAdmin, sendConditionalAppointmentRequestToPatient } from '@/lib/email';
 import { handleApiError } from '@/lib/api-error-handler';
+import { logger } from '@/lib/logger';
 
 /**
  * Request a new appointment (via email link)
@@ -403,7 +404,7 @@ export async function GET_OLD(request: NextRequest) {
             false // Don't show remaining alternatives
           );
         } catch (emailError) {
-          console.error('Failed to send alternative appointment email:', emailError);
+          logger.error('Failed to send alternative appointment email:', emailError);
         }
         
         return new NextResponse(`
@@ -678,7 +679,7 @@ export async function GET_OLD(request: NextRequest) {
           );
         }
       } catch (emailError) {
-        console.error('Failed to send new appointment request notification:', emailError);
+        logger.error('Failed to send new appointment request notification:', emailError);
         // Don't fail the request if email fails
       }
 

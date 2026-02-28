@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 // Update feedback status
 export const dynamic = 'force-dynamic';
@@ -52,7 +53,7 @@ export async function PUT(
       feedback: result.rows[0]
     });
   } catch (error: any) {
-    console.error('Error updating feedback:', error);
+    logger.error('Error updating feedback:', error);
     return NextResponse.json(
       { error: 'Hiba történt a feedback frissítésekor' },
       { status: 500 }

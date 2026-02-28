@@ -4,6 +4,7 @@ import { verifyAuth } from '@/lib/auth-server';
 import { uploadFile, isFtpConfigured, getMaxFileSize } from '@/lib/ftp-client';
 import { documentSchema } from '@/lib/types';
 import { logActivity, logActivityWithAuth } from '@/lib/activity';
+import { logger } from '@/lib/logger';
 
 // List all documents for a patient
 export const dynamic = 'force-dynamic';
@@ -125,7 +126,7 @@ export async function GET(
 
     return NextResponse.json({ documents: result.rows }, { status: 200 });
   } catch (error) {
-    console.error('Hiba a dokumentumok lekérdezésekor:', error);
+    logger.error('Hiba a dokumentumok lekérdezésekor:', error);
     return NextResponse.json(
       { error: 'Hiba történt a dokumentumok lekérdezésekor' },
       { status: 500 }
@@ -188,7 +189,7 @@ export async function POST(
     const description = formData.get('description') as string | null;
     const tagsStr = formData.get('tags') as string | null;
     
-    console.log('Received tagsStr:', tagsStr);
+    logger.info('Received tagsStr:', tagsStr);
 
     if (!file) {
       return NextResponse.json(
@@ -239,7 +240,7 @@ export async function POST(
       tags = [];
     }
     
-    console.log('Parsed tags:', tags);
+    logger.info('Parsed tags:', tags);
 
     // Validate: OP tag can only be used with image files
     const hasOPTag = tags.some(tag => 
@@ -293,7 +294,7 @@ export async function POST(
     // Save metadata to database
     // Convert tags array to JSONB format for PostgreSQL
     const tagsJsonb = JSON.stringify(tags);
-    console.log('Saving tags to database:', tagsJsonb);
+    logger.info('Saving tags to database:', tagsJsonb);
     
     const result = await pool.query(
       `INSERT INTO patient_documents (
@@ -337,7 +338,7 @@ export async function POST(
 
     return NextResponse.json({ document }, { status: 201 });
   } catch (error) {
-    console.error('Hiba a dokumentum feltöltésekor:', error);
+    logger.error('Hiba a dokumentum feltöltésekor:', error);
     const errorMessage = error instanceof Error ? error.message : 'Ismeretlen hiba';
     return NextResponse.json(
       { error: `Hiba történt a dokumentum feltöltésekor: ${errorMessage}` },

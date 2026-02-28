@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Clock, User, ArrowRight, FileText, Eye, X } from 'lucide-react';
+import { formatDateTime } from '@/lib/dateUtils';
 
 interface PatientChange {
   id: string;
@@ -123,20 +124,6 @@ export function PatientHistory({ patientId }: PatientHistoryProps) {
     }
   };
 
-  const formatDateTime = (dateString: string): string => {
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleString('hu-HU', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    } catch {
-      return dateString;
-    }
-  };
 
   const formatValue = (value: string | null): string => {
     if (!value || value === '') return '(üres)';

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { syncTimeSlotsFromGoogleCalendar } from '@/lib/google-calendar';
+import { logger } from '@/lib/logger';
 
 /**
  * Szinkronizációs státusz lekérdezése
@@ -42,7 +43,7 @@ export async function GET(request: NextRequest) {
       userId: user.id,
     });
   } catch (error) {
-    console.error('Error fetching sync status:', error);
+    logger.error('Error fetching sync status:', error);
     return NextResponse.json(
       { error: 'Hiba történt a szinkronizációs státusz lekérdezésekor' },
       { status: 500 }
@@ -98,7 +99,7 @@ export async function POST(request: NextRequest) {
       message: `Szinkronizáció befejezve: ${syncResult.created} létrehozva, ${syncResult.updated} frissítve, ${syncResult.deleted} törölve`,
     });
   } catch (error) {
-    console.error('Error syncing Google Calendar:', error);
+    logger.error('Error syncing Google Calendar:', error);
     return NextResponse.json(
       { 
         error: 'Hiba történt a szinkronizáció során',

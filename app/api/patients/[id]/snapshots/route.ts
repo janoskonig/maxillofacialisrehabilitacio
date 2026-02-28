@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { withCorrelation } from '@/lib/api/withCorrelation';
 import { handleApiError } from '@/lib/api-error-handler';
+import { logger } from '@/lib/logger';
 
 // GET /api/patients/[id]/snapshots - List snapshots for a patient
 export const GET = withCorrelation(async (req: NextRequest, { correlationId }) => {
@@ -105,7 +106,7 @@ export const GET = withCorrelation(async (req: NextRequest, { correlationId }) =
     response.headers.set('x-correlation-id', correlationId);
     return response;
   } catch (error: any) {
-    console.error('Hiba a snapshotok lekérdezésekor:', error);
+    logger.error('Hiba a snapshotok lekérdezésekor:', error);
     return handleApiError(error, 'Hiba történt a snapshotok lekérdezésekor', correlationId);
   }
 });

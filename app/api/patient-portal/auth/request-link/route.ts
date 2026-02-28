@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { createMagicLinkToken, checkRegistrationRateLimit } from '@/lib/patient-portal-auth';
 import { sendPatientMagicLink, getPatientEmailInfo } from '@/lib/patient-portal-email';
+import { logger } from '@/lib/logger';
 
 /**
  * Request magic link - handles both existing and new patients
@@ -252,7 +253,7 @@ export async function POST(request: NextRequest) {
       message: 'Bejelentkezési link elküldve az email címére',
     });
   } catch (error) {
-    console.error('Error requesting magic link:', error);
+    logger.error('Error requesting magic link:', error);
     return NextResponse.json(
       { error: 'Hiba történt a bejelentkezési link kérésekor' },
       { status: 500 }

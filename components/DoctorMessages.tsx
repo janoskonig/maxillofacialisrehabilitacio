@@ -1,53 +1,51 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { MessageCircle, Send, Check, CheckCheck, Loader2, Users, Search, UserPlus, Plus, Edit2, X, Trash2 } from 'lucide-react';
+import { MessageCircle, Send, Check, CheckCheck, Loader2, Users, UserPlus, Edit2, X, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
-import { DoctorMessage, DoctorConversation } from '@/lib/types';
 import { PatientMention } from './PatientMention';
 import { MessageTextRenderer } from './MessageTextRenderer';
-import { getCurrentUser, AuthUser } from '@/lib/auth';
 import { CreateGroupChatModal } from './CreateGroupChatModal';
 import { RecipientSelector } from './RecipientSelector';
 import { getMonogram, getLastName } from '@/lib/utils';
 import { useSocket } from '@/contexts/SocketContext';
 import { MessagesShell } from './mobile/MessagesShell';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { useDoctorMessages } from '@/hooks/useDoctorMessages';
 
 export function DoctorMessages() {
   const { showToast } = useToast();
   const { socket, isConnected } = useSocket();
-  const [conversations, setConversations] = useState<DoctorConversation[]>([]);
-  const [selectedDoctorId, setSelectedDoctorId] = useState<string | null>(null);
-  const [selectedDoctorName, setSelectedDoctorName] = useState<string | null>(null);
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
-  const [selectedGroupName, setSelectedGroupName] = useState<string | null>(null);
-  const [groupParticipants, setGroupParticipants] = useState<Array<{ userId: string; userName: string; userEmail: string }>>([]);
-  const [messages, setMessages] = useState<DoctorMessage[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
+
+  const {
+    conversations, messages, doctors, groupParticipants, unreadCount,
+    currentUserId, isGroupCreator,
+    selectedDoctorId, selectedDoctorName, selectedGroupId, selectedGroupName,
+    loading, sending, deletingGroup,
+    selectDoctor, selectGroup, clearSelection, sendMessage,
+    createGroupConversation, renameGroup, deleteGroup,
+    refreshConversations, refreshGroupParticipants, setSelectedGroupName,
+  } = useDoctorMessages({ socket, isConnected });
+
+  // ── UI-only state ───────────────────────────────────────────────────
   const [newMessage, setNewMessage] = useState('');
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [pendingMessageId, setPendingMessageId] = useState<string | null>(null);
   const [cursorPosition, setCursorPosition] = useState(0);
-  const [doctors, setDoctors] = useState<Array<{ id: string; name: string; email: string; intezmeny: string | null }>>([]);
   const [showDoctorSelector, setShowDoctorSelector] = useState(false);
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   const [doctorSearchQuery, setDoctorSearchQuery] = useState('');
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [newChatRecipients, setNewChatRecipients] = useState<Array<{ id: string; name: string; email: string; intezmeny: string | null }>>([]);
   const [showNewChat, setShowNewChat] = useState(false);
   const [editingGroupName, setEditingGroupName] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
-  const [isGroupCreator, setIsGroupCreator] = useState(false);
-  const [deletingGroup, setDeletingGroup] = useState(false);
   const [showAllParticipants, setShowAllParticipants] = useState(false);
+
+  // ── Refs ────────────────────────────────────────────────────────────
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  
+
   // Scroll state and refs
   const [isNearBottom, setIsNearBottom] = useState(false);
   const shouldAutoScrollRef = useRef(false);
@@ -55,258 +53,27 @@ export function DoctorMessages() {
   const prevMessageCountRef = useRef<number>(0);
   const hasInitializedScrollRef = useRef(false);
   const thresholdPx = 100;
-  
-  // Hooks must be called unconditionally at the top level
+  const isNearBottomRef = useRef(false);
+
+  // ── Responsive ──────────────────────────────────────────────────────
   const breakpoint = useBreakpoint();
   const isMobile = breakpoint === 'mobile';
-  
-  // ConversationKey - stable calculation before hooks
+
   const conversationKey = useMemo(() => {
     if (selectedGroupId) return `group:${selectedGroupId}`;
     if (selectedDoctorId) return `doc:${selectedDoctorId}`;
     return null;
   }, [selectedGroupId, selectedDoctorId]);
-  
-  // Scroll to bottom helper
+
   const scrollToBottom = (behavior: ScrollBehavior = "auto") => {
     const el = messagesContainerRef.current;
     if (!el) return;
     el.scrollTo({ top: el.scrollHeight, behavior });
   };
 
-  // Fetch conversations and unread count
-  useEffect(() => {
-    const loadData = async () => {
-      // Csak akkor töltjük be az adatokat, ha van bejelentkezett felhasználó
-      const user = await getCurrentUser();
-      if (!user || !user.id) {
-        setLoading(false);
-        return;
-      }
-      
-      await fetchConversations();
-      await fetchUnreadCount();
-      setLoading(false);
-    };
-    loadData();
-    
-    // Frissítés 5 másodpercenként
-    const interval = setInterval(async () => {
-      const user = await getCurrentUser();
-      if (!user || !user.id) {
-        return;
-      }
-      
-      fetchConversations();
-      fetchUnreadCount();
-      if (selectedDoctorId) {
-        fetchMessages();
-      } else if (selectedGroupId) {
-        fetchGroupMessages();
-      }
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [selectedDoctorId, selectedGroupId]);
-
-  // Fetch messages when doctor or group is selected
-  useEffect(() => {
-    if (selectedDoctorId) {
-      setSelectedGroupId(null);
-      setSelectedGroupName(null);
-      setGroupParticipants([]);
-      fetchMessages();
-    } else if (selectedGroupId) {
-      setSelectedDoctorId(null);
-      setSelectedDoctorName(null);
-      fetchGroupMessages();
-      fetchGroupParticipants();
-    } else {
-      setMessages([]);
-    }
-  }, [selectedDoctorId, selectedGroupId]);
-
-  // Fetch doctors list and current user
-  useEffect(() => {
-    fetchDoctors();
-    const loadCurrentUser = async () => {
-      const user = await getCurrentUser();
-      if (user && user.id) {
-        setCurrentUserId(user.id);
-      }
-    };
-    loadCurrentUser();
-  }, []);
-
-  // Auto-mark as read when conversation opens and messages are loaded
-  // Egyszerűbb és megbízhatóbb megoldás: amikor a beszélgetés megnyílik, jelöljük olvasottnak az összes olvasatlant
-  useEffect(() => {
-    // Csak akkor fut le, ha van kiválasztott beszélgetés, az üzenetek betöltődtek, és van currentUserId
-    if (!currentUserId || loading || messages.length === 0) {
-      return;
-    }
-    if (!selectedDoctorId && !selectedGroupId) {
-      return;
-    }
-
-    // Várunk egy kicsit, hogy biztosan renderelődtek az üzenetek
-    const timeoutId = setTimeout(() => {
-      // Csak a valódi üzeneteket jelöljük olvasottnak (nem pending-eket)
-      const unreadMessages = messages.filter(m => {
-        if (m.pending || m.id.startsWith('pending-')) return false;
-        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(m.id)) return false;
-        
-        // Egyéni beszélgetés: csak a fogadott üzeneteket
-        if (selectedDoctorId && !selectedGroupId) {
-          return m.recipientId === currentUserId && !m.readAt;
-        }
-        
-        // Group chat: csak azok az üzenetek, amiket nem én küldtem és még nem olvastam
-        if (selectedGroupId) {
-          return m.senderId !== currentUserId && 
-                 (!m.readBy || m.readBy.length === 0 || !m.readBy.some(r => r.userId === currentUserId));
-        }
-        
-        return false;
-      });
-      
-      
-      if (unreadMessages.length > 0) {
-        // Optimistic update: azonnal frissítjük a UI-t
-        setMessages(prevMessages => 
-          prevMessages.map(m => {
-            const isUnread = unreadMessages.some(um => um.id === m.id);
-            if (!isUnread) return m;
-            
-            if (selectedGroupId) {
-              // Group chat: hozzáadjuk az olvasót
-              const alreadyRead = m.readBy?.some(r => r.userId === currentUserId);
-              if (alreadyRead) return m;
-              
-              return {
-                ...m,
-                readBy: [
-                  ...(m.readBy || []),
-                  {
-                    userId: currentUserId,
-                    userName: null, // Később frissül
-                    readAt: new Date(),
-                  }
-                ]
-              };
-            } else {
-              // Egyéni beszélgetés: csak readAt-et frissítjük
-              return { ...m, readAt: new Date() };
-            }
-          })
-        );
-        
-        // API hívások párhuzamosan
-        Promise.all(
-          unreadMessages.map(msg => {
-            return fetch(`/api/doctor-messages/${msg.id}/read`, {
-              method: 'PUT',
-              credentials: 'include',
-            })
-            .then(async (response) => {
-              if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error || `HTTP ${response.status}`);
-              }
-              
-              // Group chat esetén frissítjük az olvasók listáját
-              if (selectedGroupId) {
-                const response = await fetch(`/api/doctor-messages?groupId=${selectedGroupId}`, {
-                  credentials: 'include',
-                });
-                if (response.ok) {
-                  const data = await response.json();
-                  const updatedMessage = data.messages?.find((m: DoctorMessage) => m.id === msg.id);
-                  if (updatedMessage) {
-                    setMessages(prevMessages => 
-                      prevMessages.map(m => 
-                        m.id === msg.id ? updatedMessage : m
-                      )
-                    );
-                  }
-                }
-              }
-            })
-            .catch(err => {
-              console.error(`[DoctorMessages] Hiba az üzenet ${msg.id} olvasottnak jelölésekor:`, err);
-              // Visszaállítás hiba esetén
-              setMessages(prevMessages => 
-                prevMessages.map(m => {
-                  if (m.id !== msg.id) return m;
-                  
-                  if (selectedGroupId) {
-                    return {
-                      ...m,
-                      readBy: m.readBy?.filter(r => r.userId !== currentUserId) || []
-                    };
-                  } else {
-                    return { ...m, readAt: null };
-                  }
-                })
-              );
-            });
-          })
-        );
-      }
-    }, 500); // 500ms delay, hogy biztosan renderelődtek az üzenetek
-
-    return () => clearTimeout(timeoutId);
-  }, [selectedDoctorId, selectedGroupId, loading, currentUserId, messages.length]);
-
-  // Intersection Observer eltávolítva - az auto-mark elég, amikor a beszélgetés megnyílik
-
-  // WebSocket: Listen for doctor message read events (group chats)
-  useEffect(() => {
-    if (!socket || !isConnected || !selectedGroupId) return;
-
-    const handleDoctorMessageRead = (data: { messageId: string; groupId: string; userId: string; userName: string | null }) => {
-      if (data.groupId !== selectedGroupId) return;
-
-      // Frissítjük az üzenetet az olvasók listájával
-      setMessages(prevMessages => 
-        prevMessages.map(m => {
-          if (m.id === data.messageId) {
-            const existingReadBy = m.readBy || [];
-            // Ha már benne van, ne adjuk hozzá újra
-            if (existingReadBy.some(r => r.userId === data.userId)) {
-              return m;
-            }
-            return {
-              ...m,
-              readBy: [
-                ...existingReadBy,
-                {
-                  userId: data.userId,
-                  userName: data.userName,
-                  readAt: new Date(),
-                }
-              ]
-            };
-          }
-          return m;
-        })
-      );
-    };
-
-    // Join group room
-    socket.emit('join-room', { groupId: `doctor-group:${selectedGroupId}` });
-
-    socket.on('doctor-message-read', handleDoctorMessageRead);
-
-    return () => {
-      socket.off('doctor-message-read', handleDoctorMessageRead);
-      socket.emit('leave-room', { groupId: `doctor-group:${selectedGroupId}` });
-    };
-  }, [socket, isConnected, selectedGroupId]);
+  // ── Scroll effects ──────────────────────────────────────────────────
 
   // Scroll listener: tracks if user is near bottom
-  // Use ref to track scroll position for immediate access
-  const isNearBottomRef = useRef(false);
-  
   useEffect(() => {
     const el = messagesContainerRef.current;
     if (!el) return;
@@ -320,7 +87,6 @@ export function DoctorMessages() {
       hasInitializedScrollRef.current = true;
     };
 
-    // init
     handleScroll();
     hasInitializedScrollRef.current = true;
 
@@ -328,25 +94,23 @@ export function DoctorMessages() {
     return () => el.removeEventListener("scroll", handleScroll);
   }, [conversationKey]);
 
-  // New conversation selected: always scroll to bottom (hygienic reset)
+  // New conversation selected: always scroll to bottom
   useEffect(() => {
     if (!conversationKey || loading) return;
 
     if (prevConversationKeyRef.current !== conversationKey) {
       prevConversationKeyRef.current = conversationKey;
-      
-      // Hygienic reset - don't carry over old state
+
       shouldAutoScrollRef.current = true;
-      prevMessageCountRef.current = 0; // Important if messages start empty then load
-      hasInitializedScrollRef.current = false; // Reset so first messages-effect can't auto-follow
+      prevMessageCountRef.current = 0;
+      hasInitializedScrollRef.current = false;
       setIsNearBottom(true);
-      
-      // queueMicrotask + rAF combo for stable scroll (handles markdown/image render)
+
       queueMicrotask(() => requestAnimationFrame(() => scrollToBottom("auto")));
     }
   }, [conversationKey, loading]);
 
-  // Messages list changed: only scroll if justified (scroll init check + flag consume)
+  // Messages list changed: only scroll if justified
   useEffect(() => {
     if (loading) return;
     if (!messagesContainerRef.current) return;
@@ -356,273 +120,25 @@ export function DoctorMessages() {
     const messageAppended = currentCount > prevCount;
     prevMessageCountRef.current = currentCount;
 
-    // Only scroll if a message was actually appended (not just content changed)
-    if (!messageAppended) {
-      return; // Don't scroll on read status updates, etc.
-    }
+    if (!messageAppended) return;
 
-    // Check current scroll position immediately (use ref for latest value)
     const el = messagesContainerRef.current;
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     const currentlyNearBottom = distanceFromBottom < thresholdPx;
 
-    // Near-bottom case: natural auto-follow (only if scroll init happened!)
-    // Use ref value for immediate check, not state (which might be stale)
     if (currentlyNearBottom && hasInitializedScrollRef.current) {
-      shouldAutoScrollRef.current = false; // Consume the flag
+      shouldAutoScrollRef.current = false;
       requestAnimationFrame(() => scrollToBottom("auto"));
       return;
     }
 
-    // Not near-bottom: only with explicit permission (e.g. user sent message)
     if (shouldAutoScrollRef.current) {
       shouldAutoScrollRef.current = false;
       requestAnimationFrame(() => scrollToBottom("smooth"));
     }
   }, [messages, loading]);
 
-  const fetchConversations = async () => {
-    try {
-      const response = await fetch('/api/doctor-messages?conversations=true', {
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Hiba a konverzációk betöltésekor');
-      }
-
-      const data = await response.json();
-      setConversations(data.conversations || []);
-    } catch (error) {
-      console.error('Hiba a konverzációk betöltésekor:', error);
-      showToast('Hiba történt a konverzációk betöltésekor', 'error');
-    }
-  };
-
-  const fetchUnreadCount = async () => {
-    try {
-      const response = await fetch('/api/doctor-messages/unread-count', {
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        throw new Error('Hiba az olvasatlan üzenetek számának lekérdezésekor');
-      }
-
-      const data = await response.json();
-      setUnreadCount(data.count || 0);
-    } catch (error) {
-      console.error('Hiba az olvasatlan üzenetek számának lekérdezésekor:', error);
-    }
-  };
-
-  const fetchMessages = async () => {
-    if (!selectedDoctorId) return;
-
-    try {
-      const response = await fetch(`/api/doctor-messages?recipientId=${selectedDoctorId}`, {
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        throw new Error('Hiba az üzenetek betöltésekor');
-      }
-
-      const data = await response.json();
-      const messages = (data.messages || []) as DoctorMessage[];
-      setMessages(messages.filter((m: DoctorMessage) => !m.pending));
-      
-      // Automatikusan jelöljük olvasottnak az olvasatlan üzeneteket
-      if (currentUserId) {
-        setTimeout(() => {
-          const unreadMessages = messages.filter(m => {
-            if (m.pending || m.id.startsWith('pending-')) return false;
-            if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(m.id)) return false;
-            return m.recipientId === currentUserId && !m.readAt;
-          });
-          
-          if (unreadMessages.length > 0) {
-            unreadMessages.forEach(msg => {
-              fetch(`/api/doctor-messages/${msg.id}/read`, {
-                method: 'PUT',
-                credentials: 'include',
-              }).catch(err => console.error(`Hiba az üzenet ${msg.id} olvasottnak jelölésekor:`, err));
-            });
-            
-            // Optimistic update
-            setMessages(prevMessages => 
-              prevMessages.map(m => 
-                unreadMessages.some(um => um.id === m.id) 
-                  ? { ...m, readAt: new Date() } 
-                  : m
-              )
-            );
-          }
-        }, 300);
-      }
-    } catch (error) {
-      console.error('Hiba az üzenetek betöltésekor:', error);
-      showToast('Hiba történt az üzenetek betöltésekor', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchGroupMessages = async () => {
-    if (!selectedGroupId) return;
-
-    try {
-      const response = await fetch(`/api/doctor-messages?groupId=${selectedGroupId}`, {
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        throw new Error('Hiba a csoportos beszélgetés üzeneteinek betöltésekor');
-      }
-
-      const data = await response.json();
-      const messages = (data.messages || []) as DoctorMessage[];
-      const filteredMessages = messages.filter((m: DoctorMessage) => !m.pending);
-      setMessages(filteredMessages);
-      
-      // Automatikusan jelöljük olvasottnak az olvasatlan üzeneteket
-      if (currentUserId) {
-        setTimeout(() => {
-          // Csak azok az üzenetek, amiket nem én küldtem és még nem olvastam
-          // Fontos: a readBy mező lehet undefined vagy üres tömb, ha még senki sem olvasta
-          const unreadMessages = filteredMessages.filter(m => {
-            if (m.pending || m.id.startsWith('pending-')) return false;
-            if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(m.id)) return false;
-            // Csak azok az üzenetek, amiket nem én küldtem és még nem olvastam
-            const isUnread = m.senderId !== currentUserId &&
-                   (!m.readBy || m.readBy.length === 0 || !m.readBy.some(r => r.userId === currentUserId));
-            return isUnread;
-          });
-          
-          if (unreadMessages.length > 0) {
-            // Optimistic update: azonnal frissítjük a UI-t
-            setMessages(prevMessages => 
-              prevMessages.map(m => {
-                const isUnread = unreadMessages.some(um => um.id === m.id);
-                if (!isUnread) return m;
-                
-                const alreadyRead = m.readBy?.some(r => r.userId === currentUserId);
-                if (alreadyRead) return m;
-                
-                return {
-                  ...m,
-                  readBy: [
-                    ...(m.readBy || []),
-                    {
-                      userId: currentUserId,
-                      userName: null, // Később frissül
-                      readAt: new Date(),
-                    }
-                  ]
-                };
-              })
-            );
-            
-            Promise.all(
-              unreadMessages.map(msg => {
-                return fetch(`/api/doctor-messages/${msg.id}/read`, {
-                  method: 'PUT',
-                  credentials: 'include',
-                })
-                .then(async (response) => {
-                  if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    throw new Error(errorData.error || `HTTP ${response.status}`);
-                  }
-                  
-                  // Frissítjük az üzenetet az olvasók listájával
-                  const refreshResponse = await fetch(`/api/doctor-messages?groupId=${selectedGroupId}`, {
-                    credentials: 'include',
-                  });
-                  if (refreshResponse.ok) {
-                    const refreshData = await refreshResponse.json();
-                    const updatedMessage = refreshData.messages?.find((m: DoctorMessage) => m.id === msg.id);
-                    if (updatedMessage) {
-                      setMessages(prevMessages => 
-                        prevMessages.map(m => 
-                          m.id === msg.id ? updatedMessage : m
-                        )
-                      );
-                    }
-                  }
-                })
-                .catch(err => {
-                  console.error(`[DoctorMessages] Hiba az üzenet ${msg.id} olvasottnak jelölésekor:`, err);
-                  // Visszaállítás hiba esetén
-                  setMessages(prevMessages => 
-                    prevMessages.map(m => {
-                      if (m.id !== msg.id) return m;
-                      return {
-                        ...m,
-                        readBy: m.readBy?.filter(r => r.userId !== currentUserId) || []
-                      };
-                    })
-                  );
-                });
-              })
-            );
-          }
-        }, 300);
-      }
-    } catch (error) {
-      console.error('Hiba a csoportos beszélgetés üzeneteinek betöltésekor:', error);
-      showToast('Hiba történt az üzenetek betöltésekor', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchGroupParticipants = async () => {
-    if (!selectedGroupId) return;
-
-    try {
-      const response = await fetch(`/api/doctor-messages/groups/${selectedGroupId}/participants`, {
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        throw new Error('Hiba a résztvevők betöltésekor');
-      }
-
-      const data = await response.json();
-      setGroupParticipants(data.participants || []);
-      
-      // Check if current user is the creator
-      if (data.createdBy && currentUserId) {
-        setIsGroupCreator(data.createdBy === currentUserId);
-      } else {
-        setIsGroupCreator(false);
-      }
-    } catch (error) {
-      console.error('Hiba a résztvevők betöltésekor:', error);
-      setIsGroupCreator(false);
-    }
-  };
-
-  const fetchDoctors = async () => {
-    try {
-      const response = await fetch('/api/users/doctors', {
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Hiba az orvosok betöltésekor');
-      }
-
-      const data = await response.json();
-      setDoctors(data.doctors || []);
-    } catch (error) {
-      console.error('Hiba az orvosok betöltésekor:', error);
-      showToast('Hiba történt az orvosok betöltésekor', 'error');
-    }
-  };
+  // ── Event handlers (thin wrappers) ──────────────────────────────────
 
   const handleSendMessage = async (messageText?: string) => {
     const textToSend = messageText || newMessage.trim();
@@ -633,96 +149,21 @@ export function DoctorMessages() {
       return;
     }
 
-    try {
-      setSending(true);
-      
-      // Set flag to allow auto-scroll when sending message
-      shouldAutoScrollRef.current = true;
-      
-      // Pending message
-      const tempId = `pending-${Date.now()}`;
-      const pendingMessage: DoctorMessage = {
-        id: tempId,
-        senderId: currentUserId || '',
-        recipientId: selectedDoctorId || '',
-        senderEmail: '',
-        senderName: null,
-        subject: null,
-        message: textToSend,
-        readAt: null,
-        createdAt: new Date(),
-        pending: true,
-      };
-      
-      setMessages([...messages, pendingMessage]);
-      setPendingMessageId(tempId);
-      
-      const response = await fetch('/api/doctor-messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          recipientId: selectedDoctorId || undefined,
-          groupId: selectedGroupId || undefined,
-          subject: null,
-          message: textToSend,
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        setMessages(messages.filter(m => m.id !== tempId));
-        setPendingMessageId(null);
-        throw new Error(error.error || 'Hiba az üzenet küldésekor');
-      }
-
-      const data = await response.json();
-      
-      setMessages(messages.map(m => 
-        m.id === tempId ? { ...data.message, pending: false } : m
-      ));
-      setPendingMessageId(null);
-      
-      if (!messageText) {
-        setNewMessage('');
-      }
-      showToast('Üzenet sikeresen elküldve', 'success');
-      
-      setTimeout(() => {
-        if (selectedDoctorId) {
-          fetchMessages();
-        } else if (selectedGroupId) {
-          fetchGroupMessages();
-        }
-        fetchConversations();
-      }, 500);
-    } catch (error: any) {
-      console.error('Hiba az üzenet küldésekor:', error);
-      showToast(error.message || 'Hiba történt az üzenet küldésekor', 'error');
-    } finally {
-      setSending(false);
+    shouldAutoScrollRef.current = true;
+    const success = await sendMessage(textToSend);
+    if (success && !messageText) {
+      setNewMessage('');
     }
   };
 
   const handleSelectDoctor = (doctorId: string, doctorName: string) => {
-    setSelectedDoctorId(doctorId);
-    setSelectedDoctorName(doctorName);
-    setSelectedGroupId(null);
-    setSelectedGroupName(null);
-    setGroupParticipants([]);
-    setLoading(true);
+    selectDoctor(doctorId, doctorName);
     setShowDoctorSelector(false);
     setDoctorSearchQuery('');
   };
 
   const handleSelectGroup = (groupId: string, groupName: string | null) => {
-    setSelectedGroupId(groupId);
-    setSelectedGroupName(groupName);
-    setSelectedDoctorId(null);
-    setSelectedDoctorName(null);
-    setLoading(true);
+    selectGroup(groupId, groupName);
     setShowDoctorSelector(false);
     setDoctorSearchQuery('');
     setShowNewChat(false);
@@ -731,12 +172,8 @@ export function DoctorMessages() {
 
   const handleStartNewChat = () => {
     setShowNewChat(true);
-    setSelectedDoctorId(null);
-    setSelectedDoctorName(null);
-    setSelectedGroupId(null);
-    setSelectedGroupName(null);
+    clearSelection();
     setNewChatRecipients([]);
-    setMessages([]);
   };
 
   const handleNewChatRecipientsChange = (recipients: Array<{ id: string; name: string; email: string; intezmeny: string | null }>) => {
@@ -749,109 +186,33 @@ export function DoctorMessages() {
       return;
     }
 
-
-    try {
-      if (newChatRecipients.length === 1) {
-        // Egy-egy beszélgetés
-        handleSelectDoctor(newChatRecipients[0].id, newChatRecipients[0].name);
+    if (newChatRecipients.length === 1) {
+      handleSelectDoctor(newChatRecipients[0].id, newChatRecipients[0].name);
+      setShowNewChat(false);
+      setNewChatRecipients([]);
+    } else {
+      const result = await createGroupConversation(newChatRecipients.map(r => r.id));
+      if (result) {
+        handleSelectGroup(result.groupId, null);
         setShowNewChat(false);
         setNewChatRecipients([]);
-      } else {
-        // Csoportos beszélgetés létrehozása
-        setLoading(true);
-        const response = await fetch('/api/doctor-messages/groups', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-          body: JSON.stringify({
-            participantIds: newChatRecipients.map(r => r.id),
-            name: null, // Névtelen csoport, később át lehet nevezni
-          }),
-        });
-
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Hiba a csoportos beszélgetés létrehozásakor');
-        }
-
-        const data = await response.json();
-        handleSelectGroup(data.groupId, null);
-        setShowNewChat(false);
-        setNewChatRecipients([]);
-        showToast('Csoportos beszélgetés létrehozva', 'success');
       }
-    } catch (error: any) {
-      console.error('Hiba a beszélgetés indításakor:', error);
-      showToast(error.message || 'Hiba történt a beszélgetés indításakor', 'error');
-      setLoading(false);
     }
   };
 
   const handleRenameGroup = async () => {
-    if (!selectedGroupId) return;
-
-    try {
-      const response = await fetch(`/api/doctor-messages/groups/${selectedGroupId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          name: newGroupName.trim() || null,
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Hiba a csoportos beszélgetés átnevezésekor');
-      }
-
-      setSelectedGroupName(newGroupName.trim() || null);
+    const success = await renameGroup(newGroupName);
+    if (success) {
       setEditingGroupName(false);
       setNewGroupName('');
-      showToast('Csoportos beszélgetés átnevezve', 'success');
-      fetchConversations();
-    } catch (error: any) {
-      console.error('Hiba a csoportos beszélgetés átnevezésekor:', error);
-      showToast(error.message || 'Hiba történt a csoportos beszélgetés átnevezésekor', 'error');
     }
   };
 
   const handleDeleteGroup = async () => {
-    if (!selectedGroupId) return;
-
     if (!confirm('Biztosan törölni szeretné ezt a csoportos beszélgetést? Ez a művelet nem visszavonható, és az összes üzenet törlődik.')) {
       return;
     }
-
-    try {
-      setDeletingGroup(true);
-      const response = await fetch(`/api/doctor-messages/groups/${selectedGroupId}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Hiba a csoportos beszélgetés törlésekor');
-      }
-
-      showToast('Csoportos beszélgetés törölve', 'success');
-      setSelectedGroupId(null);
-      setSelectedGroupName(null);
-      setGroupParticipants([]);
-      setMessages([]);
-      fetchConversations();
-    } catch (error: any) {
-      console.error('Hiba a csoportos beszélgetés törlésekor:', error);
-      showToast(error.message || 'Hiba történt a csoportos beszélgetés törlésekor', 'error');
-    } finally {
-      setDeletingGroup(false);
-    }
+    await deleteGroup();
   };
 
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -867,6 +228,8 @@ export function DoctorMessages() {
     setCursorPosition((e.target as HTMLTextAreaElement).selectionStart);
   };
 
+  // ── Derived state ───────────────────────────────────────────────────
+
   const filteredDoctors = doctors.filter(doctor => {
     if (!doctorSearchQuery) return true;
     const query = doctorSearchQuery.toLowerCase();
@@ -876,6 +239,8 @@ export function DoctorMessages() {
       (doctor.intezmeny && doctor.intezmeny.toLowerCase().includes(query))
     );
   });
+
+  // ── Render ──────────────────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -1014,7 +379,6 @@ export function DoctorMessages() {
         {selectedGroupId && <Users className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0" />}
         <span className="truncate">{selectedDoctorId ? selectedDoctorName : (selectedGroupName || 'Csoportos beszélgetés')}</span>
       </h3>
-      {/* Renderben, közvetlenül a használat előtt (derivált állapot, ne effectben!) */}
       {(() => {
         const hasGroupName = Boolean(selectedGroupName?.trim());
         return selectedGroupId && groupParticipants.length > 0 && (!isMobile || !hasGroupName) ? (
@@ -1058,7 +422,6 @@ export function DoctorMessages() {
           </div>
         ) : (
           messages.map((message) => {
-            // Check if message is from current user
             const isFromMe = currentUserId ? message.senderId === currentUserId : false;
             const isPending = message.pending === true;
             const isRead = message.readAt !== null;
@@ -1072,7 +435,6 @@ export function DoctorMessages() {
                 data-message-id={message.id}
                 className={`flex flex-col ${isFromMe ? 'items-end' : 'items-start'}`}
               >
-                {/* Sender name and monogram */}
                 {!isFromMe && (
                   <div className="flex items-center gap-1.5 mb-1 px-1">
                     <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-xs font-semibold text-blue-700">
@@ -1117,17 +479,14 @@ export function DoctorMessages() {
                       </span>
                     )}
                   </div>
-                  {/* Group chat: ki olvasta és ki nem olvasta az üzenetet */}
                   {isFromMe && selectedGroupId && groupParticipants.length > 0 && (
                     <div className="text-xs text-blue-100 mt-2 px-1 space-y-1">
-                      {/* Olvasottak */}
                       {message.readBy && message.readBy.length > 0 && (
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-medium">Olvasták:</span>
                           <div className="flex items-center gap-1 flex-wrap">
                             {message.readBy.map((reader) => {
                               const participant = groupParticipants.find(p => p.userId === reader.userId);
-                              const monogram = participant ? getMonogram(participant.userName || participant.userEmail) : '?';
                               return (
                                 <div
                                   key={reader.userId}
@@ -1143,7 +502,6 @@ export function DoctorMessages() {
                         </div>
                       )}
                       
-                      {/* Nem olvasottak */}
                       {(() => {
                         const readUserIds = new Set(message.readBy?.map(r => r.userId) || []);
                         const unreadParticipants = groupParticipants.filter(
@@ -1156,7 +514,6 @@ export function DoctorMessages() {
                               <span className="font-medium">Nem olvasták:</span>
                               <div className="flex items-center gap-1 flex-wrap">
                                 {unreadParticipants.map((participant) => {
-                                  const monogram = getMonogram(participant.userName || participant.userEmail);
                                   return (
                                     <div
                                       key={participant.userId}
@@ -1236,7 +593,6 @@ export function DoctorMessages() {
   // New chat content
   const newChatContent = (
     <>
-      {/* New Chat Header */}
       <div className="p-3 sm:p-4 border-b border-gray-200 bg-gray-50">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base sm:text-lg font-semibold text-gray-900">Új beszélgetés</h3>
@@ -1313,11 +669,7 @@ export function DoctorMessages() {
         listHeaderContent={listHeaderContent}
         showDetail={!!(selectedDoctorId || selectedGroupId)}
         onBack={() => {
-          setSelectedDoctorId(null);
-          setSelectedDoctorName(null);
-          setSelectedGroupId(null);
-          setSelectedGroupName(null);
-          setGroupParticipants([]);
+          clearSelection();
         }}
         detailHeader={detailHeaderContent}
         detailContent={detailContent}
@@ -1326,14 +678,13 @@ export function DoctorMessages() {
         newChatContent={newChatContent}
       />
 
-      {/* Create Group Chat Modal */}
       <CreateGroupChatModal
         isOpen={showCreateGroupModal}
         onClose={() => setShowCreateGroupModal(false)}
         onGroupCreated={() => {
-          fetchConversations();
+          refreshConversations();
           if (selectedGroupId) {
-            fetchGroupParticipants();
+            refreshGroupParticipants();
           }
           setShowCreateGroupModal(false);
         }}
@@ -1342,4 +693,3 @@ export function DoctorMessages() {
     </>
   );
 }
-

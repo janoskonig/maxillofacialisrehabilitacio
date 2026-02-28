@@ -9,6 +9,7 @@ import { getDbPool } from '@/lib/db';
 import { emitNewMessage } from '@/lib/socket-server';
 import { validateUUID, validateMessageText, validateSubject, validateLimit, validateOffset } from '@/lib/validation';
 import { sendPushNotification } from '@/lib/push-notifications';
+import { logger } from '@/lib/logger';
 
 /**
  * POST /api/messages - Új üzenet küldése
@@ -263,7 +264,7 @@ export async function POST(request: NextRequest) {
               });
             }
           } catch (pushError) {
-            console.error('Failed to send push notification to patient:', pushError);
+            logger.error('Failed to send push notification to patient:', pushError);
           }
         }
       } else {
@@ -290,7 +291,7 @@ export async function POST(request: NextRequest) {
 
         if (doctor) {
           const patient = await getPatientForNotification(finalPatientId);
-          console.log(`[Messages] Email értesítés küldése orvosnak: ${doctor.email}`);
+          logger.info(`[Messages] Email értesítés küldése orvosnak: ${doctor.email}`);
           await sendNewMessageNotification(
             doctor.email,
             doctor.name,
@@ -301,7 +302,7 @@ export async function POST(request: NextRequest) {
             finalMessage,
             baseUrl
           );
-          console.log(`[Messages] Email értesítés sikeresen elküldve orvosnak: ${doctor.email}`);
+          logger.info(`[Messages] Email értesítés sikeresen elküldve orvosnak: ${doctor.email}`);
           
           // Push notification to doctor
           try {
@@ -319,7 +320,7 @@ export async function POST(request: NextRequest) {
               });
             }
           } catch (pushError) {
-            console.error('Failed to send push notification to doctor:', pushError);
+            logger.error('Failed to send push notification to doctor:', pushError);
           }
         } else {
           // Ha nincs kezelőorvos, adminoknak küldünk értesítést
@@ -331,7 +332,7 @@ export async function POST(request: NextRequest) {
             const patient = await getPatientForNotification(finalPatientId);
             // Első adminnak küldjük
             const admin = adminResult.rows[0];
-            console.log(`[Messages] Beteg üzenet - kezelőorvos nem található, adminnak küldve: ${admin.email}`);
+            logger.info(`[Messages] Beteg üzenet - kezelőorvos nem található, adminnak küldve: ${admin.email}`);
             await sendNewMessageNotification(
               admin.email,
               admin.doktor_neve || admin.email,
@@ -342,14 +343,14 @@ export async function POST(request: NextRequest) {
               finalMessage,
               baseUrl
             );
-            console.log(`[Messages] Email értesítés sikeresen elküldve adminnak: ${admin.email}`);
+            logger.info(`[Messages] Email értesítés sikeresen elküldve adminnak: ${admin.email}`);
           } else {
             console.warn(`[Messages] Beteg üzenet - kezelőorvos és admin sem található beteghez: ${finalPatientId}`);
           }
         }
       }
     } catch (emailError) {
-      console.error('Hiba az email értesítés küldésekor:', emailError);
+      logger.error('Hiba az email értesítés küldésekor:', emailError);
       // Ne akadályozza meg az üzenet küldését, ha az email nem sikerül
     }
 
@@ -357,7 +358,7 @@ export async function POST(request: NextRequest) {
     try {
       emitNewMessage(finalPatientId, newMessage);
     } catch (socketError) {
-      console.error('Hiba a Socket.io event küldésekor:', socketError);
+      logger.error('Hiba a Socket.io event küldésekor:', socketError);
       // Ne akadályozza meg az üzenet küldését, ha a Socket.io nem működik
     }
 
@@ -366,7 +367,7 @@ export async function POST(request: NextRequest) {
       message: newMessage,
     });
   } catch (error: any) {
-    console.error('Hiba az üzenet küldésekor:', error);
+    logger.error('Hiba az üzenet küldésekor:', error);
     return NextResponse.json(
       { error: 'Hiba történt az üzenet küldésekor' },
       { status: 500 }
@@ -471,7 +472,7 @@ export async function GET(request: NextRequest) {
       messages,
     });
   } catch (error: any) {
-    console.error('Hiba az üzenetek lekérésekor:', error);
+    logger.error('Hiba az üzenetek lekérésekor:', error);
     return NextResponse.json(
       { error: 'Hiba történt az üzenetek lekérésekor' },
       { status: 500 }

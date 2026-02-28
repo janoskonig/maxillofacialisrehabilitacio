@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
 import { getCurrentEpisodeAndStage } from '@/lib/ohip14-stage';
+import { logger } from '@/lib/logger';
 
 /**
  * Get patient's OHIP-14 responses
@@ -77,7 +78,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ responses });
   } catch (error) {
-    console.error('Error fetching OHIP-14 responses:', error);
+    logger.error('Error fetching OHIP-14 responses:', error);
     return NextResponse.json(
       { error: 'Hiba történt a válaszok lekérdezésekor' },
       { status: 500 }

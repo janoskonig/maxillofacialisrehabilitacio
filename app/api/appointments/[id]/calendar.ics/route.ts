@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { generateIcsFile } from '@/lib/calendar';
+import { logger } from '@/lib/logger';
 
 // Download .ics file for an appointment
 export const dynamic = 'force-dynamic';
@@ -73,7 +74,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('Error generating calendar file:', error);
+    logger.error('Error generating calendar file:', error);
     return NextResponse.json(
       { error: 'Hiba történt a naptár fájl generálásakor' },
       { status: 500 }

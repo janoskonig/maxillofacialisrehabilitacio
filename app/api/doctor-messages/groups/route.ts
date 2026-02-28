@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 import { createDoctorMessageGroup, getDoctorMessageGroups, getGroupMessages, renameDoctorMessageGroup } from '@/lib/doctor-communication';
 import { logActivityWithAuth } from '@/lib/activity';
 
@@ -51,7 +52,7 @@ export async function POST(request: NextRequest) {
       groupId,
     });
   } catch (error: any) {
-    console.error('Hiba a csoportos beszélgetés létrehozásakor:', error);
+    logger.error('Hiba a csoportos beszélgetés létrehozásakor:', error);
     return NextResponse.json(
       { error: error.message || 'Hiba történt a csoportos beszélgetés létrehozásakor' },
       { status: 500 }
@@ -79,7 +80,7 @@ export async function GET(request: NextRequest) {
       groups,
     });
   } catch (error: any) {
-    console.error('Hiba a csoportos beszélgetések lekérésekor:', error);
+    logger.error('Hiba a csoportos beszélgetések lekérésekor:', error);
     return NextResponse.json(
       { error: 'Hiba történt a csoportos beszélgetések lekérésekor' },
       { status: 500 }
@@ -121,7 +122,7 @@ export async function PATCH(
       success: true,
     });
   } catch (error: any) {
-    console.error('Hiba a csoportos beszélgetés átnevezésekor:', error);
+    logger.error('Hiba a csoportos beszélgetés átnevezésekor:', error);
     return NextResponse.json(
       { error: error.message || 'Hiba történt a csoportos beszélgetés átnevezésekor' },
       { status: 500 }

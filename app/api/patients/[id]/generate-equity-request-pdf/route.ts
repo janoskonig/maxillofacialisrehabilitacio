@@ -6,6 +6,7 @@ import { Patient, patientSchema } from '@/lib/types';
 import { patientSelectSql, normalizePatientRow } from '@/lib/patient-select';
 import { uploadFile, isFtpConfigured, generateDocumentFilename } from '@/lib/ftp-client';
 import { logActivity } from '@/lib/activity';
+import { logger } from '@/lib/logger';
 
 /**
  * Méltányossági kérelem PDF generálása beteg adataiból
@@ -106,7 +107,7 @@ export async function GET(
         );
       } catch (uploadError) {
         // Ha a feltöltés sikertelen, csak logoljuk, de ne akadályozzuk meg a PDF letöltését
-        console.error('Hiba a PDF feltöltésekor:', uploadError);
+        logger.error('Hiba a PDF feltöltésekor:', uploadError);
         // Folytatjuk a PDF visszaadásával
       }
     }
@@ -126,9 +127,9 @@ export async function GET(
     const errorStack = err.stack;
     const details = (err as Error & { details?: unknown }).details;
 
-    console.error('Hiba a PDF generálása során:', errorMessage);
-    if (details) console.error('PDF hiba részletek (log):', JSON.stringify(details));
-    if (process.env.NODE_ENV === 'development' && errorStack) console.error('Stack:', errorStack);
+    logger.error('Hiba a PDF generálása során:', errorMessage);
+    if (details) logger.error('PDF hiba részletek (log):', JSON.stringify(details));
+    if (process.env.NODE_ENV === 'development' && errorStack) logger.error('Stack:', errorStack);
 
     return NextResponse.json(
       {

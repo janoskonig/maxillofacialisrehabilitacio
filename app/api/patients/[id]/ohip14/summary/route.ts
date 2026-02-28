@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 import { getCurrentEpisodeAndStage } from '@/lib/ohip14-stage';
 import { OHIP14Response } from '@/lib/types';
 
@@ -122,7 +123,7 @@ export async function GET(
       changes,
     });
   } catch (error) {
-    console.error('Error fetching OHIP-14 summary:', error);
+    logger.error('Error fetching OHIP-14 summary:', error);
     return NextResponse.json(
       { error: 'Hiba történt az összefoglaló lekérdezésekor' },
       { status: 500 }

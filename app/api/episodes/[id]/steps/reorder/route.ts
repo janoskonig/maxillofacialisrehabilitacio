@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -115,7 +116,7 @@ export async function PATCH(
 
     return NextResponse.json({ steps: allSteps.rows });
   } catch (error) {
-    console.error('Error in PATCH /episodes/:id/steps/reorder:', error);
+    logger.error('Error in PATCH /episodes/:id/steps/reorder:', error);
     return NextResponse.json(
       { error: 'Hiba történt a lépések átrendezésekor' },
       { status: 500 }

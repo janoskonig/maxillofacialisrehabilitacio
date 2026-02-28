@@ -7,6 +7,7 @@ import {
   canonicalizeStepCode,
 } from '@/lib/admin-process-schemas';
 import { invalidateStepLabelCache } from '@/lib/step-labels';
+import { logger } from '@/lib/logger';
 
 const STEP_CODE_REGEX = /^[a-z0-9_]+$/;
 
@@ -198,7 +199,7 @@ export async function POST(request: NextRequest) {
       details: validationErrors.length > 0 ? validationErrors : undefined,
     });
   } catch (error) {
-    console.error('Error batch upserting step catalog:', error);
+    logger.error('Error batch upserting step catalog:', error);
     return NextResponse.json(
       { error: 'Hiba történt a részlépések feltöltésekor' },
       { status: 500 }

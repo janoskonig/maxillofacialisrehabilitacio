@@ -4,6 +4,7 @@ import { verifyAuth } from '@/lib/auth-server';
 import { carePathwayPatchSchema } from '@/lib/admin-process-schemas';
 import { invalidateStepLabelCache } from '@/lib/step-labels';
 import { invalidateUnmappedCache } from '@/lib/step-catalog-cache';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -80,7 +81,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('Error fetching care pathway:', error);
+    logger.error('Error fetching care pathway:', error);
     return NextResponse.json(
       { error: 'Hiba történt a kezelési út lekérdezésekor' },
       { status: 500 }
@@ -140,7 +141,7 @@ export async function DELETE(
 
     return NextResponse.json({ deleted: true });
   } catch (error) {
-    console.error('Error deleting care pathway:', error);
+    logger.error('Error deleting care pathway:', error);
     return NextResponse.json(
       { error: 'Hiba történt a kezelési út törlésekor' },
       { status: 500 }
@@ -317,7 +318,7 @@ export async function PATCH(
 
     return NextResponse.json({ pathway: afterResult.rows[0] });
   } catch (error) {
-    console.error('Error updating care pathway:', error);
+    logger.error('Error updating care pathway:', error);
     return NextResponse.json(
       { error: 'Hiba történt a kezelési út módosításakor' },
       { status: 500 }

@@ -16,6 +16,7 @@ import { markdownToPDF, generatePatientSummaryMarkdown, generateMedicalHistoryMa
 import { createPlaceholderPdf } from '@/lib/pdf/placeholder-pdf';
 import { generateEquityRequestPDF } from '@/lib/pdf/equity-request';
 import { generatePatientDataEquityPDF } from '@/lib/pdf/equity-request-patient';
+import { logger } from '@/lib/logger';
 
 // Force Node.js runtime (required for archiver, pdf-lib, Buffer operations)
 export const runtime = 'nodejs';
@@ -499,7 +500,7 @@ export async function GET(
       patientSummaryBuffer = await markdownToPDF(patientSummaryMarkdown, 'Beteg Összefoglaló');
       limiter.addFile(patientSummaryBuffer.length);
     } catch (error) {
-      console.error('[NEAK Export] Error generating patient summary PDF:', error);
+      logger.error('[NEAK Export] Error generating patient summary PDF:', error);
       // Fallback: empty PDF vagy hibaüzenet
       throw new Error(
         `Beteg összefoglaló PDF generálás sikertelen: ${error instanceof Error ? error.message : 'Ismeretlen hiba'}`
@@ -512,7 +513,7 @@ export async function GET(
       medicalHistoryBuffer = await markdownToPDF(medicalHistoryMarkdown, 'Kórtörténet');
       limiter.addFile(medicalHistoryBuffer.length);
     } catch (error) {
-      console.error('[NEAK Export] Error generating medical history PDF:', error);
+      logger.error('[NEAK Export] Error generating medical history PDF:', error);
       // Fallback: empty PDF vagy hibaüzenet
       throw new Error(
         `Kórtörténet PDF generálás sikertelen: ${error instanceof Error ? error.message : 'Ismeretlen hiba'}`
@@ -526,7 +527,7 @@ export async function GET(
       dentalStatusBuffer = await generateDentalStatusPDF(patient);
       limiter.addFile(dentalStatusBuffer.length);
     } catch (error) {
-      console.error('[NEAK Export] Dental status PDF generation failed (DENTAL_PDF_GEN_FAILED):', error);
+      logger.error('[NEAK Export] Dental status PDF generation failed (DENTAL_PDF_GEN_FAILED):', error);
       dentalPdfFailed = true;
       if (process.env.ENABLE_SENTRY === 'true') {
         try {
@@ -546,7 +547,7 @@ export async function GET(
       equityDentalBuffer = await generateEquityRequestPDF(patient);
       limiter.addFile(equityDentalBuffer.length);
     } catch (error) {
-      console.error('[NEAK Export] Equity request dental PDF failed:', error);
+      logger.error('[NEAK Export] Equity request dental PDF failed:', error);
       throw new Error(
         `Méltányossági kérelem (152) PDF generálás sikertelen: ${error instanceof Error ? error.message : 'Ismeretlen hiba'}`
       );
@@ -561,7 +562,7 @@ export async function GET(
       equityPatientMissingFields = result.missingFields;
       limiter.addFile(equityPatientBuffer.length);
     } catch (error) {
-      console.error('[NEAK Export] Equity request patient data PDF failed:', error);
+      logger.error('[NEAK Export] Equity request patient data PDF failed:', error);
       throw new Error(
         `Méltányossági páciens adat (150) PDF generálás sikertelen: ${error instanceof Error ? error.message : 'Ismeretlen hiba'}`
       );
@@ -600,7 +601,7 @@ export async function GET(
     // Handle archive errors (critical for proper cleanup)
     archive.on('error', (err: unknown) => {
       const error: Error = err instanceof Error ? err : new Error(String(err));
-      console.error('[NEAK Export] Archive error:', error);
+      logger.error('[NEAK Export] Archive error:', error);
       archiveError = error;
       archive.abort(); // Abort archive on error
     });
@@ -609,7 +610,7 @@ export async function GET(
     archive.on('end', () => {
       archiveFinished = true;
       if (process.env.NODE_ENV === 'development') {
-        console.log('[NEAK Export] Archive finalized successfully');
+        logger.info('[NEAK Export] Archive finalized successfully');
       }
     });
 
@@ -692,10 +693,10 @@ export async function GET(
 
         // Log progress (for debugging)
         if (process.env.NODE_ENV === 'development') {
-          console.log(`[NEAK Export] Added document: ${filePath} (${actualSize} bytes, total: ${limiter.totalBytes} bytes)`);
+          logger.info(`[NEAK Export] Added document: ${filePath} (${actualSize} bytes, total: ${limiter.totalBytes} bytes)`);
         }
       } catch (error) {
-        console.error(`[NEAK Export] Error adding document ${doc.id} to archive:`, error);
+        logger.error(`[NEAK Export] Error adding document ${doc.id} to archive:`, error);
         
         // Check if it's a limit error and format it properly
         if (error instanceof Error && (

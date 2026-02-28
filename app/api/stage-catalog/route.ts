@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import type { StageCatalogEntry, ReasonType } from '@/lib/types';
 import { stageCatalogCreateSchema } from '@/lib/admin-process-schemas';
+import { logger } from '@/lib/logger';
 
 const REASON_VALUES: ReasonType[] = ['traumás sérülés', 'veleszületett rendellenesség', 'onkológiai kezelés utáni állapot'];
 
@@ -63,7 +64,7 @@ export async function POST(request: NextRequest) {
       throw err;
     }
   } catch (error) {
-    console.error('Error creating stage catalog:', error);
+    logger.error('Error creating stage catalog:', error);
     return NextResponse.json(
       { error: 'Hiba történt a stádium létrehozásakor' },
       { status: 500 }
@@ -120,7 +121,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ catalog });
   } catch (error) {
-    console.error('Error fetching stage catalog:', error);
+    logger.error('Error fetching stage catalog:', error);
     return NextResponse.json(
       { error: 'Hiba történt a katalógus lekérdezésekor' },
       { status: 500 }

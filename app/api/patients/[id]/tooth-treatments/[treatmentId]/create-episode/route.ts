@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { logActivity } from '@/lib/activity';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -78,7 +79,7 @@ export async function POST(
           const { invalidateIntentsForEpisodes } = await import('@/lib/intent-invalidation');
           await invalidateIntentsForEpisodes(closingIds, 'episode_closed');
         } catch (e) {
-          console.error('Failed to invalidate intents for closed episodes:', e);
+          logger.error('Failed to invalidate intents for closed episodes:', e);
         }
       }
       await client.query(
@@ -206,7 +207,7 @@ export async function POST(
       client.release();
     }
   } catch (error) {
-    console.error('Error creating episode from tooth treatment:', error);
+    logger.error('Error creating episode from tooth treatment:', error);
     return NextResponse.json(
       { error: 'Hiba történt az epizód létrehozásakor' },
       { status: 500 }

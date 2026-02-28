@@ -14,20 +14,11 @@ import { ConditionalAppointmentBooking } from './ConditionalAppointmentBooking';
 import { ContextBanner } from './ContextBanner';
 import { getCurrentUser } from '@/lib/auth';
 import { DatePicker } from './DatePicker';
-import { savePatient, ApiError, TimeoutError } from '@/lib/storage';
-import { logEvent } from '@/lib/event-logger';
+import { savePatient, ApiError } from '@/lib/storage';
 import { getMissingRequiredFields, REQUIRED_FIELDS } from '@/lib/clinical-rules';
 import { ClinicalChecklist } from './ClinicalChecklist';
-
-// Sentry import (conditional, only if enabled)
-let Sentry: typeof import('@sentry/nextjs') | null = null;
-if (typeof window !== 'undefined' && process.env.ENABLE_SENTRY === 'true') {
-  try {
-    Sentry = require('@sentry/nextjs');
-  } catch {
-    // Sentry not available, ignore
-  }
-}
+import { usePatientAutoSave, normalizeToothData, buildSavePayload, type ToothStatus } from '@/hooks/usePatientAutoSave';
+import { usePatientConflictResolution } from '@/hooks/usePatientConflictResolution';
 import { BNOAutocomplete } from './BNOAutocomplete';
 import { PatientDocuments } from './PatientDocuments';
 import { useToast } from '@/contexts/ToastContext';
@@ -40,73 +31,12 @@ import { ToothTreatmentProvider, ToothTreatmentInline } from './ToothTreatmentPa
 import { OPInlinePreview } from './OPInlinePreview';
 
 
-// Fog állapot típus
-type ToothStatus = { status?: 'D' | 'F' | 'M'; description?: string } | string;
-
-// Helper függvény: string-et objektummá konvertál (visszafelé kompatibilitás)
-function normalizeToothData(value: ToothStatus | undefined): { status?: 'D' | 'F' | 'M'; description?: string } | null {
-  if (!value) return null;
-  if (typeof value === 'string') {
-    // Üres string esetén null-t adunk vissza
-    if (value.trim() === '') return null;
-    return { description: value };
-  }
-  // Ha objektum, akkor ellenőrizzük
-  if (typeof value === 'object' && value !== null) {
-    const hasStatus = value.status !== undefined && value.status !== null;
-    const hasDescription = value.description !== undefined; // Van description kulcs (akár üres is)
-    const hasNonEmptyDescription = value.description && value.description.trim() !== '';
-    
-    // Ha van status (D, F, vagy M), akkor érvényes objektum, még akkor is, ha nincs description
-    if (hasStatus) {
-      return value;
-    }
-    
-    // Ha van description kulcs (akár üres is), akkor érvényes objektum
-    // Ez az implantátumok esetében fontos: { description: '' } azt jelenti, hogy be van jelölve
-    if (hasDescription) {
-      return value;
-    }
-    
-    // Üres objektum ({}) - ez érvényes állapot a fog státuszban (jelen van, de még nincs kiválasztva D/F)
-    // Csak akkor null, ha valóban nincs semmi
-    // Az üres objektumot visszaadjuk, mert ez azt jelenti, hogy a fog "present" állapotban van
-    if (Object.keys(value).length === 0) {
-      return value; // Üres objektum = jelen van, de még nincs kiválasztva D/F
-    }
-    
-    // Ha az objektum nem üres, de nincs benne semmi hasznos, akkor null
-    return null;
-  }
-  return value;
-}
-
 // Helper függvény: fog állapot lekérdezése
 function getToothState(value: ToothStatus | undefined): 'empty' | 'present' | 'missing' {
   const normalized = normalizeToothData(value);
   if (!normalized) return 'empty';
   if (normalized.status === 'M') return 'missing';
   return 'present';
-}
-
-// Stabil stringify - sorted keys, konzisztens típuskezelés, undefined -> null normalizálás
-function stableStringify(obj: any): string {
-  if (obj === null || obj === undefined) return "null";
-  const t = typeof obj;
-  if (t !== "object") return JSON.stringify(obj);
-
-  if (Array.isArray(obj)) {
-    return `[${obj.map(stableStringify).join(",")}]`;
-  }
-
-  const keys = Object.keys(obj).sort();
-  const parts: string[] = [];
-  for (const k of keys) {
-    const v = (obj as any)[k];
-    // undefined -> null normalizálás change detection-hez
-    parts.push(`${JSON.stringify(k)}:${stableStringify(v === undefined ? null : v)}`);
-  }
-  return `{${parts.join(",")}}`;
 }
 
 // Normalizálási segédfüggvények az összehasonlításhoz
@@ -296,18 +226,11 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
   const [currentPatient, setCurrentPatient] = useState<Patient | null | undefined>(patient);
   const patientId = currentPatient?.id || null;
   
-  // Conflict handling state
-  const [conflictError, setConflictError] = useState<ApiError | null>(null); // Manual save 409 → modal
-  const [showConflictModal, setShowConflictModal] = useState(false);
-
   // Ref for immediate access to current patient (for hasUnsavedChanges)
   const currentPatientRef = useRef<Patient | null | undefined>(patient);
   
   // Previous patient ID ref for change detection
   const previousPatientIdRef = useRef<string | null>(patient?.id || null);
-  
-  // Saving source state (for UX: auto-save indicator vs manual save button disabled)
-  const [savingSource, setSavingSource] = useState<'auto' | 'manual' | null>(null);
   
   // Wrapper function to update both state and ref
   const updateCurrentPatient = useCallback((newPatient: Patient | null | undefined) => {
@@ -506,85 +429,6 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
     },
   });
 
-  // Update currentPatient when patient prop changes (but not from auto-save)
-  // Reset form to mark as not dirty after initial load for existing patients
-  // Also reset when patient data changes (e.g., after save or refresh)
-  // BUT: Don't reset if the change came from auto-save to prevent flickering
-  useEffect(() => {
-    
-    if (!patient || isViewOnly) {
-      if (!patient && !isViewOnly) {
-        // Reset to default values for new patient
-        reset({
-          radioterapia: false,
-          chemoterapia: false,
-          nemIsmertPoziciokbanImplantatum: false,
-          felsoFogpotlasVan: false,
-          felsoFogpotlasElegedett: true,
-          alsoFogpotlasVan: false,
-          alsoFogpotlasElegedett: true,
-          kezelesiTervFelso: [],
-          kezelesiTervAlso: [],
-          kezelesiTervArcotErinto: [],
-        }, { keepDirty: false, keepDefaultValues: false });
-      }
-      updateCurrentPatient(patient || null);
-      return;
-    }
-
-    // Ha az id változott, biztosan külső betöltés
-    if (previousPatientIdRef.current !== patient.id) {
-      previousPatientIdRef.current = patient.id || null;
-      // Note: If backend doesn't return kezelesreErkezesIndoka, preserve it from currentPatientRef
-      const patientWithPreservedKezelesreErkezesIndoka = {
-        ...patient,
-        kezelesreErkezesIndoka: patient.kezelesreErkezesIndoka ?? currentPatientRef.current?.kezelesreErkezesIndoka ?? null,
-      };
-      updateCurrentPatient(patientWithPreservedKezelesreErkezesIndoka);
-      // Reset form with current values to clear dirty state
-      reset({
-        ...patient,
-        szuletesiDatum: formatDateForInput(patient.szuletesiDatum),
-        mutetIdeje: formatDateForInput(patient.mutetIdeje),
-        felvetelDatuma: formatDateForInput(patient.felvetelDatuma),
-        kezelesiTervFelso: patient.kezelesiTervFelso?.map(item => ({
-          ...item,
-          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-        })) || [],
-        kezelesiTervAlso: patient.kezelesiTervAlso?.map(item => ({
-          ...item,
-          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-        })) || [],
-        kezelesiTervArcotErinto: patient.kezelesiTervArcotErinto?.map(item => ({
-          ...item,
-          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-        })) || [],
-      }, { keepDirty: false, keepDefaultValues: false });
-      return;
-    }
-
-    // Ha az id megegyezik, de savingSource aktív (auto-save vagy manual save), ne fusson reset
-    // (A performSave már frissítette a state-et)
-    if (savingSource && previousPatientIdRef.current === patient.id) {
-      // Csak frissítsük a currentPatient-et, ha szükséges
-      const patientWithPreservedKezelesreErkezesIndoka = {
-        ...patient,
-        kezelesreErkezesIndoka: patient.kezelesreErkezesIndoka ?? currentPatientRef.current?.kezelesreErkezesIndoka ?? null,
-      };
-      updateCurrentPatient(patientWithPreservedKezelesreErkezesIndoka);
-      return;
-    }
-
-    // Egyébként ne fusson reset (valószínűleg első betöltés vagy külső változás)
-    // Csak frissítsük a currentPatient-et
-    // Note: If backend doesn't return kezelesreErkezesIndoka, preserve it from currentPatientRef
-    const patientWithPreservedKezelesreErkezesIndoka = {
-      ...patient,
-      kezelesreErkezesIndoka: patient.kezelesreErkezesIndoka ?? currentPatientRef.current?.kezelesreErkezesIndoka ?? null,
-    };
-    updateCurrentPatient(patientWithPreservedKezelesreErkezesIndoka);
-  }, [patient?.id, patient?.updatedAt, isViewOnly, reset, savingSource]);
-
   // Set kezeleoorvos value when options are loaded and patient has a value
   useEffect(() => {
     if (patient?.kezeleoorvos && kezeloorvosOptions.length > 0) {
@@ -612,50 +456,6 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
     return initial as Record<string, ToothStatus>;
   });
 
-  // Update implantatumok and fogak when patient data changes (but not from auto-save)
-  // Only update if it's an external change (different patient ID or significant time difference)
-  useEffect(() => {
-    if (!patient) {
-      setImplantatumok({});
-      setFogak({});
-      return;
-    }
-
-    // Ha az id változott, biztosan külső betöltés
-    if (previousPatientIdRef.current !== patient.id) {
-      if (patient.meglevoImplantatumok) {
-        setImplantatumok(patient.meglevoImplantatumok);
-      } else {
-        setImplantatumok({});
-      }
-      if (patient.meglevoFogak) {
-        setFogak(patient.meglevoFogak as Record<string, ToothStatus>);
-      } else {
-        setFogak({});
-      }
-      return;
-    }
-
-    // Ha savingSource aktív (auto-save vagy manual save), ne frissítsük
-    // (A performSave már frissítette a state-et)
-    if (savingSource && previousPatientIdRef.current === patient.id) {
-      return;
-    }
-
-    // Első betöltés esetén frissítsük
-    if (!previousPatientIdRef.current && patient.id) {
-      if (patient.meglevoImplantatumok) {
-        setImplantatumok(patient.meglevoImplantatumok);
-      } else {
-        setImplantatumok({});
-      }
-      if (patient.meglevoFogak) {
-        setFogak(patient.meglevoFogak as Record<string, ToothStatus>);
-      } else {
-        setFogak({});
-      }
-    }
-  }, [patient?.id, patient?.updatedAt, patient?.meglevoImplantatumok, patient?.meglevoFogak, savingSource]);
   const kezelesiTervFelso = watch('kezelesiTervFelso') || [];
   const kezelesiTervAlso = watch('kezelesiTervAlso') || [];
   const kezelesiTervArcotErinto = watch('kezelesiTervArcotErinto') || [];
@@ -672,45 +472,133 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
   // Watch all form values - useWatch for memoized snapshot
   const formValues = useWatch({ control });
 
-  // Best practice: request sequencing + source-aware abort
-  const saveSequenceRef = useRef(0);
-  const lastSavedHashRef = useRef<string | null>(null);
-  const autoSaveAbortRef = useRef<AbortController | null>(null);
-  const manualSaveAbortRef = useRef<AbortController | null>(null);
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // ----- Conflict resolution hook -----
+  const conflict = usePatientConflictResolution({
+    patientId,
+    updateCurrentPatient,
+    reset,
+    showToast,
+  });
 
-  // Telemetria / Debug jelzők
-  const lastSaveSourceRef = useRef<'auto' | 'manual' | null>(null);
-  const lastSaveAttemptAtRef = useRef<number | null>(null);
-  const lastSaveErrorRef = useRef<Error | null>(null);
-  
-  // State for conflict banner visibility (auto-save 409)
-  const [showConflictBanner, setShowConflictBanner] = useState(false);
+  // ----- Auto-save hook -----
+  const {
+    savingSource,
+    performSave,
+    fogakRef,
+    implantatumokRef,
+    vanBeutaloRef,
+  } = usePatientAutoSave({
+    patientId: patient?.id,
+    currentPatientRef,
+    isViewOnly,
+    getValues,
+    reset,
+    trigger,
+    formValues,
+    isDirty,
+    dirtyFields,
+    fogak,
+    implantatumok,
+    vanBeutalo,
+    setFogak,
+    setImplantatumok,
+    setVanBeutalo,
+    updateCurrentPatient,
+    onSave,
+    showToast,
+    lastSaveErrorRef: conflict.lastSaveErrorRef,
+    onAutoSaveConflict: conflict.handleAutoSaveConflict,
+    onManualSaveConflict: conflict.handleManualSaveConflict,
+  });
 
-  // State refs - hogy a performSave ne függjön closure-öktől
-  const fogakRef = useRef(fogak);
-  const implantatumokRef = useRef(implantatumok);
-  const vanBeutaloRef = useRef(vanBeutalo);
-  const currentPatientIdRef = useRef(currentPatient?.id);
-
-  // Sync refs with state
+  // Sync patient prop -> form + currentPatient (skip during auto-save)
   useEffect(() => {
-    fogakRef.current = fogak;
-    implantatumokRef.current = implantatumok;
-    vanBeutaloRef.current = vanBeutalo;
-    currentPatientIdRef.current = currentPatient?.id;
-  }, [fogak, implantatumok, vanBeutalo, currentPatient?.id]);
+    if (!patient || isViewOnly) {
+      if (!patient && !isViewOnly) {
+        reset({
+          radioterapia: false,
+          chemoterapia: false,
+          nemIsmertPoziciokbanImplantatum: false,
+          felsoFogpotlasVan: false,
+          felsoFogpotlasElegedett: true,
+          alsoFogpotlasVan: false,
+          alsoFogpotlasElegedett: true,
+          kezelesiTervFelso: [],
+          kezelesiTervAlso: [],
+          kezelesiTervArcotErinto: [],
+        }, { keepDirty: false, keepDefaultValues: false });
+      }
+      updateCurrentPatient(patient || null);
+      return;
+    }
 
-  // Reset hash és sequence új beteg betöltésekor
+    if (previousPatientIdRef.current !== patient.id) {
+      previousPatientIdRef.current = patient.id || null;
+      const patientWithPreservedKezelesreErkezesIndoka = {
+        ...patient,
+        kezelesreErkezesIndoka: patient.kezelesreErkezesIndoka ?? currentPatientRef.current?.kezelesreErkezesIndoka ?? null,
+      };
+      updateCurrentPatient(patientWithPreservedKezelesreErkezesIndoka);
+      reset({
+        ...patient,
+        szuletesiDatum: formatDateForInput(patient.szuletesiDatum),
+        mutetIdeje: formatDateForInput(patient.mutetIdeje),
+        felvetelDatuma: formatDateForInput(patient.felvetelDatuma),
+        kezelesiTervFelso: patient.kezelesiTervFelso?.map(item => ({
+          ...item,
+          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+        })) || [],
+        kezelesiTervAlso: patient.kezelesiTervAlso?.map(item => ({
+          ...item,
+          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+        })) || [],
+        kezelesiTervArcotErinto: patient.kezelesiTervArcotErinto?.map(item => ({
+          ...item,
+          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+        })) || [],
+      }, { keepDirty: false, keepDefaultValues: false });
+      return;
+    }
+
+    if (savingSource && previousPatientIdRef.current === patient.id) {
+      const patientWithPreservedKezelesreErkezesIndoka = {
+        ...patient,
+        kezelesreErkezesIndoka: patient.kezelesreErkezesIndoka ?? currentPatientRef.current?.kezelesreErkezesIndoka ?? null,
+      };
+      updateCurrentPatient(patientWithPreservedKezelesreErkezesIndoka);
+      return;
+    }
+
+    const patientWithPreservedKezelesreErkezesIndoka = {
+      ...patient,
+      kezelesreErkezesIndoka: patient.kezelesreErkezesIndoka ?? currentPatientRef.current?.kezelesreErkezesIndoka ?? null,
+    };
+    updateCurrentPatient(patientWithPreservedKezelesreErkezesIndoka);
+  }, [patient?.id, patient?.updatedAt, isViewOnly, reset, savingSource]);
+
+  // Sync implantatumok/fogak from patient prop (skip during auto-save)
   useEffect(() => {
-    lastSavedHashRef.current = null;
-    saveSequenceRef.current = 0;
-    lastSaveSourceRef.current = null;
-    lastSaveErrorRef.current = null;
-    setShowConflictBanner(false);
-    setShowConflictModal(false);
-    setConflictError(null);
-  }, [patient?.id]);
+    if (!patient) {
+      setImplantatumok({});
+      setFogak({});
+      return;
+    }
+
+    if (previousPatientIdRef.current !== patient.id) {
+      setImplantatumok(patient.meglevoImplantatumok || {});
+      setFogak((patient.meglevoFogak || {}) as Record<string, ToothStatus>);
+      return;
+    }
+
+    if (savingSource && previousPatientIdRef.current === patient.id) {
+      return;
+    }
+
+    if (!previousPatientIdRef.current && patient.id) {
+      setImplantatumok(patient.meglevoImplantatumok || {});
+      setFogak((patient.meglevoFogak || {}) as Record<string, ToothStatus>);
+    }
+  }, [patient?.id, patient?.updatedAt, patient?.meglevoImplantatumok, patient?.meglevoFogak, savingSource]);
 
   // Watch individual fields to ensure we catch all changes
   const nevValue = watch('nev');
@@ -1640,372 +1528,6 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
     };
   };
 
-  // Stabil payload builder - memoizált, hogy ne épüljön újra feleslegesen
-  const buildSavePayload = useCallback((
-    formData: Patient,
-    fogakData: Record<string, ToothStatus>,
-    implantData: Record<string, string>,
-    vanBeutaloVal: boolean,
-    patientId?: string | null
-  ): Patient => {
-    const normalizedFogak: Record<string, { status?: "D" | "F" | "M"; description?: string }> = {};
-    for (const [toothNumber, value] of Object.entries(fogakData)) {
-      const normalized = normalizeToothData(value);
-      if (normalized) normalizedFogak[toothNumber] = normalized;
-    }
-
-    return {
-      ...formData,
-      id: patientId ?? undefined,
-      meglevoImplantatumok: implantData,
-      meglevoFogak: normalizedFogak,
-      beutaloOrvos: vanBeutaloVal ? formData.beutaloOrvos : null,
-      beutaloIntezmeny: vanBeutaloVal ? formData.beutaloIntezmeny : null,
-      beutaloIndokolas: vanBeutaloVal ? formData.beutaloIndokolas : null,
-
-      radioterapia: formData.radioterapia ?? false,
-      chemoterapia: formData.chemoterapia ?? false,
-      felsoFogpotlasVan: formData.felsoFogpotlasVan ?? false,
-      felsoFogpotlasElegedett: formData.felsoFogpotlasElegedett ?? true,
-      alsoFogpotlasVan: formData.alsoFogpotlasVan ?? false,
-      alsoFogpotlasElegedett: formData.alsoFogpotlasElegedett ?? true,
-      nemIsmertPoziciokbanImplantatum: formData.nemIsmertPoziciokbanImplantatum ?? false,
-      maxilladefektusVan: formData.maxilladefektusVan ?? false,
-      kezelesiTervFelso: formData.kezelesiTervFelso || [],
-      kezelesiTervAlso: formData.kezelesiTervAlso || [],
-      kezelesiTervArcotErinto: formData.kezelesiTervArcotErinto || [],
-    };
-  }, []);
-
-  // Robusztus hiba típus detektálás - ApiError alapú (regex fallback eltávolítva)
-  const isRetryableError = useCallback((err: any): boolean => {
-    if (!err) return false;
-
-    // AbortError: user abort, ne retry
-    if (err.name === "AbortError") return false;
-
-    // TimeoutError: retry
-    if (err instanceof TimeoutError || err.name === "TimeoutError") return true;
-
-    // Network: fetch often throws TypeError
-    if (err instanceof TypeError) return true;
-
-    // Strukturált API hiba - ApiError instance vagy name check
-    if (err instanceof ApiError || err.name === "ApiError") {
-      const status = (err as ApiError).status;
-      // 409 (konfliktus): no retry
-      if (status === 409) return false;
-      // 429 (rate limit) vagy 5xx (server error): retry
-      return status === 429 || status >= 500;
-    }
-
-    // Ha ApiError, de nincs status mező (nem várható, de safety check)
-    if (err.name === "ApiError" && typeof (err as any).status === "number") {
-      const status = (err as any).status;
-      if (status === 409) return false;
-      return status === 429 || status >= 500;
-    }
-
-    // Egyéb esetek: no retry (biztonságos default)
-    return false;
-  }, []);
-
-  // Unified save function - best practice implementáció
-  const performSave = useCallback(async (
-    source: "auto" | "manual",
-    formData: Patient,
-    retryCount = 0
-  ): Promise<Patient | null> => {
-    // Source-aware abort: Manual abortálhatja az auto-save-t
-    if (source === "manual" && autoSaveAbortRef.current) {
-      autoSaveAbortRef.current.abort();
-      autoSaveAbortRef.current = null;
-    }
-
-    const abortRef = source === "auto" ? autoSaveAbortRef : manualSaveAbortRef;
-
-    // Cancel previous same-source request
-    if (abortRef.current) abortRef.current.abort();
-
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    const seq = ++saveSequenceRef.current;
-
-    // Event logging: attempt
-    const startTime = Date.now();
-    const eventType = source === 'auto' ? 'autosave_attempt' : 'manualsave_attempt';
-    logEvent(eventType, {
-      source,
-      patientId: currentPatientIdRef.current || undefined,
-    });
-
-    try {
-      setSavingSource(source);
-      lastSaveAttemptAtRef.current = startTime;
-      lastSaveErrorRef.current = null;
-
-      const payload = buildSavePayload(
-        formData,
-        fogakRef.current,
-        implantatumokRef.current,
-        vanBeutaloRef.current,
-        currentPatientIdRef.current
-      );
-
-      const parsed = patientSchema.safeParse(payload);
-      if (!parsed.success) {
-        await trigger();
-        if (source === "auto") return null;
-        const msg = parsed.error.errors.map(e => `${e.path.join(".")}: ${e.message}`).join("; ");
-        throw new Error(`Validációs hibák: ${msg}`);
-      }
-
-      const validatedPayload = parsed.data;
-
-      // Change detection csak auto-save-nél
-      if (source === "auto") {
-        const hash = stableStringify(validatedPayload);
-        if (lastSavedHashRef.current === hash) return null;
-      }
-
-      // Ensure updatedAt is included for conflict detection (use currentPatient's updatedAt)
-      const payloadWithUpdatedAt = {
-        ...validatedPayload,
-        updatedAt: currentPatientRef.current?.updatedAt || validatedPayload.updatedAt,
-      };
-
-      const saved = await savePatient(payloadWithUpdatedAt, { 
-        signal: controller.signal,
-        source 
-      });
-
-      // Sequencing: csak a legutolsó válasz érvényes
-      if (seq !== saveSequenceRef.current) {
-        console.log(`Save (${source}): outdated response, ignoring`);
-        return null;
-      }
-
-      // Update state
-      updateCurrentPatient(saved);
-      setVanBeutalo(!!(saved.beutaloOrvos || saved.beutaloIntezmeny));
-      if (saved.meglevoImplantatumok) setImplantatumok(saved.meglevoImplantatumok);
-      if (saved.meglevoFogak) setFogak(saved.meglevoFogak as Record<string, ToothStatus>);
-
-      // Update hash
-      lastSavedHashRef.current = stableStringify(validatedPayload);
-      lastSaveSourceRef.current = source;
-
-      // Event logging: success
-      const durationMs = Date.now() - startTime;
-      const successEventType = source === 'auto' ? 'autosave_success' : 'manualsave_success';
-      logEvent(successEventType, {
-        source,
-        durationMs,
-        patientId: currentPatientIdRef.current || undefined,
-      });
-
-      // Tiszta callback API
-      onSave(saved, { source });
-
-      // Manual save: reset form
-      if (source === "manual") {
-        const resetData = {
-          ...saved,
-          szuletesiDatum: formatDateForInput(saved.szuletesiDatum),
-          mutetIdeje: formatDateForInput(saved.mutetIdeje),
-          felvetelDatuma: formatDateForInput(saved.felvetelDatuma),
-          kezelesiTervFelso: saved.kezelesiTervFelso?.map(item => ({
-            ...item,
-            tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-          })) || [],
-          kezelesiTervAlso: saved.kezelesiTervAlso?.map(item => ({
-            ...item,
-            tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-          })) || [],
-          kezelesiTervArcotErinto: saved.kezelesiTervArcotErinto?.map(item => ({
-            ...item,
-            tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-          })) || [],
-        };
-        reset(resetData, { keepDirty: false, keepDefaultValues: false });
-      }
-
-      return saved;
-    } catch (err: any) {
-      if (err?.name === "AbortError" || controller.signal.aborted) return null;
-
-      // 409 Conflict (STALE_WRITE) külön kezelése
-      if (err instanceof ApiError && err.status === 409 && err.code === 'STALE_WRITE') {
-        // Event logging: fail (409 conflict)
-        const durationMs = Date.now() - startTime;
-        const failEventType = source === 'auto' ? 'autosave_fail' : 'manualsave_fail';
-        logEvent(failEventType, {
-          source,
-          durationMs,
-          status: err.status,
-          errorName: err.name,
-          code: err.code,
-          patientId: currentPatientIdRef.current || undefined,
-        }, err.correlationId);
-
-        if (source === "auto") {
-          // Auto-save: ne retry, csak log és return null
-          console.warn(`Auto-save conflict detected (409 STALE_WRITE):`, {
-            correlationId: err.correlationId,
-            details: err.details,
-          });
-          lastSaveErrorRef.current = err;
-          setShowConflictBanner(true);
-          return null;
-        } else {
-          // Manual save: modal megjelenítése (toast helyett)
-          setConflictError(err);
-          setShowConflictModal(true);
-          throw err; // Ne dobjuk tovább, a modal kezeli
-        }
-      }
-
-      if (retryCount < 2 && isRetryableError(err)) {
-        const delay = 1000 * (retryCount + 1);
-        console.warn(`Save (${source}) failed, retrying (${retryCount + 1}/2) after ${delay}ms...`, err);
-        await new Promise(r => setTimeout(r, delay));
-
-        if (source === "auto") {
-          // Auto retry: friss form állapot
-          return performSave("auto", getValues(), retryCount + 1);
-        }
-        // Manual retry: eredeti data
-        return performSave("manual", formData, retryCount + 1);
-      }
-
-      // Event logging: fail (other errors)
-      const durationMs = Date.now() - startTime;
-      const failEventType = source === 'auto' ? 'autosave_fail' : 'manualsave_fail';
-      const errorMetadata: {
-        source: 'auto' | 'manual';
-        durationMs: number;
-        status?: number;
-        errorName?: string;
-        code?: string;
-        patientId?: string;
-      } = {
-        source,
-        durationMs,
-        patientId: currentPatientIdRef.current || undefined,
-      };
-
-      if (err instanceof ApiError) {
-        errorMetadata.status = err.status;
-        errorMetadata.errorName = err.name;
-        errorMetadata.code = err.code;
-        logEvent(failEventType, errorMetadata, err.correlationId);
-      } else if (err instanceof TimeoutError) {
-        errorMetadata.errorName = 'TimeoutError';
-        logEvent(failEventType, errorMetadata);
-      } else {
-        errorMetadata.errorName = err?.name || 'UnknownError';
-        logEvent(failEventType, errorMetadata);
-      }
-
-      // Sentry: Capture unexpected errors (not ApiError 4xx, those are filtered in beforeSend)
-      if (Sentry && !(err instanceof ApiError && err.status >= 400 && err.status < 500)) {
-        // Only capture 5xx errors, TimeoutError, or unexpected exceptions
-        if (err instanceof TimeoutError || err instanceof ApiError || !(err instanceof Error)) {
-          if (err instanceof ApiError && err.correlationId) {
-            Sentry.setTag('correlation_id', err.correlationId);
-          }
-          Sentry.captureException(err);
-        }
-      }
-
-      // Error handling
-      if (source === "manual") {
-        showToast(`Hiba a mentés során: ${err?.message || "Ismeretlen hiba"}`, "error");
-        throw err;
-      }
-
-      // Auto-save: return null, ne dobjunk
-      console.error("Auto-save failed:", err);
-      lastSaveErrorRef.current = err;
-      return null;
-    } finally {
-      setSavingSource(null);
-      if (abortRef.current === controller) abortRef.current = null;
-    }
-  }, [
-    buildSavePayload,
-    getValues,
-    onSave,
-    reset,
-    setFogak,
-    setImplantatumok,
-    setVanBeutalo,
-    showToast,
-    trigger,
-    updateCurrentPatient,
-    isRetryableError,
-  ]);
-
-  // Auto-save effect - useWatch + dirtyFields alapú (teljesítmény-optimalizált)
-  // Nested dirtyFields → top-level kulcsok biztos kivonata
-  const dirtyTopKeys = useMemo(() => {
-    if (!isDirty) return [];
-    // RHF dirtyFields lehet nested; top-level kulcs akkor érdekes, ha truthy (true/obj/array)
-    return Object.keys(dirtyFields).filter(
-      (k) => !!(dirtyFields as any)[k]
-    );
-  }, [isDirty, dirtyFields]);
-
-  const dirtyHash = useMemo(() => {
-    if (!isDirty) return null;
-    const snap: any = {};
-    for (const k of dirtyTopKeys) snap[k] = (formValues as any)[k];
-    return stableStringify(snap);
-  }, [isDirty, dirtyTopKeys, formValues]);
-
-  useEffect(() => {
-    if (isViewOnly) return;
-    if (!isDirty) return;
-    if (!dirtyHash) return;
-
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-
-    saveTimeoutRef.current = setTimeout(() => {
-      performSave("auto", getValues()).catch(() => {
-        // Errors handled in performSave
-      });
-    }, 1000);
-
-    return () => {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    };
-  }, [
-    dirtyHash,
-    fogak,
-    implantatumok,
-    vanBeutalo,
-    isViewOnly,
-    isDirty,
-    performSave,
-    getValues,
-  ]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (autoSaveAbortRef.current) {
-        autoSaveAbortRef.current.abort();
-      }
-      if (manualSaveAbortRef.current) {
-        manualSaveAbortRef.current.abort();
-      }
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
-  }, []);
-
   // Watch kezelésre érkezés indoka for conditional logic
   const selectedIndok = watch('kezelesreErkezesIndoka');
 
@@ -2196,10 +1718,10 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
       )}
 
       {/* Auto-save conflict banner */}
-      {showConflictBanner && 
-       lastSaveErrorRef.current instanceof ApiError && 
-       lastSaveErrorRef.current.status === 409 && 
-       lastSaveErrorRef.current.code === 'STALE_WRITE' && (
+      {conflict.showConflictBanner && 
+       conflict.lastSaveErrorRef.current instanceof ApiError && 
+       conflict.lastSaveErrorRef.current.status === 409 && 
+       conflict.lastSaveErrorRef.current.code === 'STALE_WRITE' && (
         <div className="mb-4 bg-amber-50 border-l-4 border-amber-400 p-4 rounded-md">
           <div className="flex items-start justify-between">
             <div className="flex items-start">
@@ -2213,25 +1735,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
                 </p>
                 <button
                   type="button"
-                  onClick={async () => {
-                    if (!patientId) return;
-                    try {
-                      const response = await fetch(`/api/patients/${patientId}`, {
-                        credentials: 'include',
-                      });
-                      if (response.ok) {
-                        const data = await response.json();
-                        updateCurrentPatient(data.patient);
-                        reset(data.patient);
-                        lastSaveErrorRef.current = null;
-                        setShowConflictBanner(false);
-                        showToast('Adatok frissítve', 'success');
-                      }
-                    } catch (error) {
-                      console.error('Error refreshing patient:', error);
-                      showToast('Hiba az adatok frissítésekor', 'error');
-                    }
-                  }}
+                  onClick={() => conflict.refreshPatient()}
                   className="text-sm bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-md transition-colors"
                 >
                   Adatok frissítése
@@ -2240,10 +1744,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
             </div>
             <button
               type="button"
-              onClick={() => {
-                lastSaveErrorRef.current = null;
-                setShowConflictBanner(false);
-              }}
+              onClick={() => conflict.dismissBanner()}
               className="text-amber-600 hover:text-amber-800 ml-4"
               aria-label="Banner bezárása"
             >
@@ -3998,9 +3499,10 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
       </form>
 
       {/* Manual save conflict modal */}
-      {showConflictModal && conflictError && (() => {
-        const details = conflictError.details && typeof conflictError.details === 'object' && 'serverUpdatedAt' in conflictError.details
-          ? conflictError.details as { serverUpdatedAt?: string; clientUpdatedAt?: string }
+      {conflict.showConflictModal && conflict.conflictError && (() => {
+        const conflictErr = conflict.conflictError;
+        const details = conflictErr.details && typeof conflictErr.details === 'object' && 'serverUpdatedAt' in conflictErr.details
+          ? conflictErr.details as { serverUpdatedAt?: string; clientUpdatedAt?: string }
           : null;
         
         return (
@@ -4024,9 +3526,9 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
                           Részletek
                         </summary>
                         <div className="pl-4 space-y-1">
-                          {conflictError.correlationId && (
+                          {conflictErr.correlationId && (
                             <div>
-                              <strong>Correlation ID:</strong> {String(conflictError.correlationId)}
+                              <strong>Correlation ID:</strong> {String(conflictErr.correlationId)}
                             </div>
                           )}
                           {details.serverUpdatedAt && (
@@ -4047,10 +3549,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowConflictModal(false);
-                    setConflictError(null);
-                  }}
+                  onClick={() => conflict.dismissModal()}
                   className="text-gray-400 hover:text-gray-600"
                   aria-label="Modal bezárása"
                 >
@@ -4061,27 +3560,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
                 <div className="flex flex-col sm:flex-row gap-3">
                 <button
                   type="button"
-                  onClick={async () => {
-                    if (!patientId) return;
-                    try {
-                      const response = await fetch(`/api/patients/${patientId}`, {
-                        credentials: 'include',
-                      });
-                      if (response.ok) {
-                        const data = await response.json();
-                        updateCurrentPatient(data.patient);
-                        reset(data.patient);
-                        setShowConflictModal(false);
-                        setConflictError(null);
-                        showToast('Adatok frissítve', 'success');
-                      } else {
-                        showToast('Hiba az adatok frissítésekor', 'error');
-                      }
-                    } catch (error) {
-                      console.error('Error refreshing patient:', error);
-                      showToast('Hiba az adatok frissítésekor', 'error');
-                    }
-                  }}
+                  onClick={() => conflict.refreshPatient()}
                   className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors text-sm font-medium"
                 >
                   Frissítés
@@ -4100,8 +3579,6 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
 
                       if (!patientId) return;
                       try {
-                        // Felülírás: először frissítjük az adatokat (hogy megkapjuk a legfrissebb updatedAt-t),
-                        // majd mentjük a jelenlegi form állapotot (ami felülírja)
                         const refreshResponse = await fetch(`/api/patients/${patientId}`, {
                           credentials: 'include',
                         });
@@ -4109,9 +3586,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
                           showToast('Hiba az adatok frissítésekor', 'error');
                           return;
                         }
-                        const refreshData = await refreshResponse.json();
+                        await refreshResponse.json();
                         
-                        // Most mentjük a jelenlegi form állapotot (felülírás)
                         const currentFormData = getValues();
                         const payload = buildSavePayload(
                           currentFormData,
@@ -4121,14 +3597,10 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
                           patientId
                         );
                         
-                        // Felülírás: a legfrissebb updatedAt-tel küldjük (de a backend még mindig konfliktust dob)
-                        // Ezért explicit felülírás flag kellene, de MVP-ben: if-match nélkül (backward compat)
-                        // Jelenleg a backend engedi if-match nélkül, de ez nem teljesen "felülírás"
                         // TODO: Később explicit felülírás API endpoint vagy flag
                         const saved = await savePatient(payload, { source: 'manual' });
                         updateCurrentPatient(saved);
-                        setShowConflictModal(false);
-                        setConflictError(null);
+                        conflict.dismissModal();
                         showToast('Adatok felülírva', 'success');
                       } catch (error) {
                         console.error('Error overwriting patient:', error);

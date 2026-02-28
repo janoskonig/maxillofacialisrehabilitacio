@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { sendPasswordResetEmail } from '@/lib/email';
 import { logActivity } from '@/lib/activity';
+import { logger } from '@/lib/logger';
 import crypto from 'crypto';
 
 /**
@@ -98,7 +99,7 @@ export async function POST(request: NextRequest) {
         nextUrl: request.nextUrl,
       });
     } catch (emailError) {
-      console.error('Error sending password reset email:', emailError);
+      logger.error('Error sending password reset email:', emailError);
       // Ha az email küldés sikertelen, töröljük a tokent
       await pool.query(
         'UPDATE users SET password_reset_token = NULL, password_reset_expires = NULL WHERE id = $1',
@@ -119,7 +120,7 @@ export async function POST(request: NextRequest) {
       message: 'Ha ez az email cím regisztrálva van, akkor elküldtük a jelszó-visszaállítási linket.',
     });
   } catch (error) {
-    console.error('Forgot password error:', error);
+    logger.error('Forgot password error:', error);
     return NextResponse.json(
       { error: 'Hiba történt a jelszó-visszaállítási kérés feldolgozása során' },
       { status: 500 }

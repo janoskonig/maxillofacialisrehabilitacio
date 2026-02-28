@@ -7,6 +7,8 @@ import { sendPatientCreationNotification } from '@/lib/email';
 import { logActivity, logActivityWithAuth } from '@/lib/activity';
 import { withCorrelation } from '@/lib/api/withCorrelation';
 import { handleApiError } from '@/lib/api-error-handler';
+import { logger } from '@/lib/logger';
+import { PATIENT_SELECT_FIELDS } from '@/lib/queries/patient-fields';
 import { REQUIRED_DOC_TAGS } from '@/lib/clinical-rules';
 
 // View presets - server-side filtering logic
@@ -91,83 +93,6 @@ const VIEWS: Record<ViewPreset, ViewBuilder> = {
   },
 };
 
-// Patient SELECT lista - közös használatra
-const PATIENT_SELECT_FIELDS = `
-  id,
-  nev,
-  taj,
-  telefonszam,
-  szuletesi_datum as "szuletesiDatum",
-  nem,
-  email,
-  cim,
-  varos,
-  iranyitoszam,
-  beutalo_orvos as "beutaloOrvos",
-  beutalo_intezmeny as "beutaloIntezmeny",
-  beutalo_indokolas as "beutaloIndokolas",
-  primer_mutet_leirasa as "primerMutetLeirasa",
-  mutet_ideje as "mutetIdeje",
-  szovettani_diagnozis as "szovettaniDiagnozis",
-  nyaki_blokkdisszekcio as "nyakiBlokkdisszekcio",
-  alkoholfogyasztas,
-  dohanyzas_szam as "dohanyzasSzam",
-  kezelesre_erkezes_indoka as "kezelesreErkezesIndoka",
-  maxilladefektus_van as "maxilladefektusVan",
-  brown_fuggoleges_osztaly as "brownFuggolegesOsztaly",
-  brown_vizszintes_komponens as "brownVizszintesKomponens",
-  mandibuladefektus_van as "mandibuladefektusVan",
-  kovacs_dobak_osztaly as "kovacsDobakOsztaly",
-  nyelvmozgasok_akadalyozottak as "nyelvmozgásokAkadályozottak",
-  gombocos_beszed as "gombocosBeszed",
-  nyalmirigy_allapot as "nyalmirigyAllapot",
-  fabian_fejerdy_protetikai_osztaly_felso as "fabianFejerdyProtetikaiOsztalyFelso",
-  fabian_fejerdy_protetikai_osztaly_also as "fabianFejerdyProtetikaiOsztalyAlso",
-  radioterapia,
-  radioterapia_dozis as "radioterapiaDozis",
-  radioterapia_datum_intervallum as "radioterapiaDatumIntervallum",
-  chemoterapia,
-  chemoterapia_leiras as "chemoterapiaLeiras",
-  fabian_fejerdy_protetikai_osztaly as "fabianFejerdyProtetikaiOsztaly",
-  kezeleoorvos,
-  kezeleoorvos_intezete as "kezeleoorvosIntezete",
-  felvetel_datuma as "felvetelDatuma",
-  felso_fogpotlas_van as "felsoFogpotlasVan",
-  felso_fogpotlas_mikor as "felsoFogpotlasMikor",
-  felso_fogpotlas_keszito as "felsoFogpotlasKeszito",
-  felso_fogpotlas_elegedett as "felsoFogpotlasElegedett",
-  felso_fogpotlas_problema as "felsoFogpotlasProblema",
-  also_fogpotlas_van as "alsoFogpotlasVan",
-  also_fogpotlas_mikor as "alsoFogpotlasMikor",
-  also_fogpotlas_keszito as "alsoFogpotlasKeszito",
-  also_fogpotlas_elegedett as "alsoFogpotlasElegedett",
-  also_fogpotlas_problema as "alsoFogpotlasProblema",
-  meglevo_fogak as "meglevoFogak",
-  felso_fogpotlas_tipus as "felsoFogpotlasTipus",
-  also_fogpotlas_tipus as "alsoFogpotlasTipus",
-  meglevo_implantatumok as "meglevoImplantatumok",
-  nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
-  nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
-  tnm_staging as "tnmStaging",
-  bno,
-  diagnozis,
-  baleset_idopont as "balesetIdopont",
-  baleset_etiologiaja as "balesetEtiologiaja",
-  baleset_egyeb as "balesetEgyeb",
-  veleszuletett_rendellenessegek as "veleszuletettRendellenessegek",
-  veleszuletett_mutetek_leirasa as "veleszuletettMutetekLeirasa",
-  kezelesi_terv_felso as "kezelesiTervFelso",
-  kezelesi_terv_also as "kezelesiTervAlso",
-  kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
-  kortorteneti_osszefoglalo as "kortortenetiOsszefoglalo",
-  kezelesi_terv_melleklet as "kezelesiTervMelleklet",
-  szakorvosi_velemeny as "szakorvosiVelemény",
-  halal_datum as "halalDatum",
-  created_at as "createdAt",
-  updated_at as "updatedAt",
-  created_by as "createdBy",
-  updated_by as "updatedBy"
-`;
 
 // Összes beteg lekérdezése
 export const GET = withCorrelation(async (request: NextRequest, { correlationId }) => {
@@ -419,7 +344,7 @@ export const GET = withCorrelation(async (request: NextRequest, { correlationId 
     response.headers.set('x-correlation-id', correlationId);
     return response;
   } catch (error) {
-    console.error('Hiba a betegek lekérdezésekor:', error);
+    logger.error('Hiba a betegek lekérdezésekor:', error);
     return handleApiError(error, 'Hiba történt a betegek lekérdezésekor', correlationId);
   }
 });
@@ -439,11 +364,11 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    console.log('POST /api/patients - Fogadott adatok:', JSON.stringify(body, null, 2));
+    logger.info('POST /api/patients - Fogadott adatok:', JSON.stringify(body, null, 2));
     
     // Validálás Zod schemával
     let validatedPatient = patientSchema.parse(body);
-    console.log('Validált adatok:', JSON.stringify(validatedPatient, null, 2));
+    logger.info('Validált adatok:', JSON.stringify(validatedPatient, null, 2));
 
     const pool = getDbPool();
 
@@ -718,7 +643,7 @@ export async function POST(request: NextRequest) {
       values
     );
 
-    console.log('Beteg sikeresen mentve, ID:', result.rows[0].id);
+    logger.info('Beteg sikeresen mentve, ID:', result.rows[0].id);
     
     // Activity logging: patient created
     await logActivity(
@@ -746,24 +671,24 @@ export async function POST(request: NextRequest) {
           );
         }
       } catch (emailError) {
-        console.error('Failed to send patient creation notification email:', emailError);
+        logger.error('Failed to send patient creation notification email:', emailError);
         // Don't fail the request if email fails
       }
     }
     
     return NextResponse.json({ patient: result.rows[0] }, { status: 201 });
   } catch (error) {
-    console.error('Hiba a beteg mentésekor:', error);
+    logger.error('Hiba a beteg mentésekor:', error);
     const errorDetails = error instanceof Error ? {
       message: error.message,
       name: error.name,
       stack: error.stack,
     } : { error };
-    console.error('Hiba részletei:', errorDetails);
+    logger.error('Hiba részletei:', errorDetails);
     
     // PostgreSQL hiba kódok ellenőrzése
     if (error && typeof error === 'object' && 'code' in error) {
-      console.error('PostgreSQL hiba:', {
+      logger.error('PostgreSQL hiba:', {
         code: (error as { code?: string }).code,
         detail: (error as { detail?: string }).detail,
         constraint: (error as { constraint?: string }).constraint,

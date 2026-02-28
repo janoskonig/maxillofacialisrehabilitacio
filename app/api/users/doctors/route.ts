@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth, AuthPayload } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 // Összes orvos nevének lekérdezése (beutaló orvos ajánlásokhoz)
 export const dynamic = 'force-dynamic';
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ doctors });
   } catch (error) {
-    console.error('Error fetching doctors:', error);
+    logger.error('Error fetching doctors:', error);
     return NextResponse.json(
       { error: 'Hiba történt az orvosok lekérdezésekor' },
       { status: 500 }

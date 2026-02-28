@@ -4,6 +4,7 @@ import { createEmailVerificationToken, checkRegistrationRateLimit } from '@/lib/
 import { sendPatientVerificationEmail } from '@/lib/patient-portal-email';
 import { sendPatientRegistrationNotificationToAdmins } from '@/lib/email';
 import { Patient, patientSchema } from '@/lib/types';
+import { logger } from '@/lib/logger';
 
 /**
  * Register new patient for portal access
@@ -162,7 +163,7 @@ export async function POST(request: NextRequest) {
       }
     } catch (error) {
       // Don't fail registration if waiting time query fails
-      console.error('Error fetching waiting time stats:', error);
+      logger.error('Error fetching waiting time stats:', error);
     }
 
     // Create email verification token
@@ -197,7 +198,7 @@ export async function POST(request: NextRequest) {
         );
       }
     } catch (emailError) {
-      console.error('Failed to send patient registration notification email to admins:', emailError);
+      logger.error('Failed to send patient registration notification email to admins:', emailError);
       // Don't fail the registration if email fails
     }
 
@@ -207,7 +208,7 @@ export async function POST(request: NextRequest) {
       patientId: newPatient.id,
     });
   } catch (error) {
-    console.error('Error registering patient:', error);
+    logger.error('Error registering patient:', error);
     return NextResponse.json(
       { error: 'Hiba történt a regisztráció során' },
       { status: 500 }

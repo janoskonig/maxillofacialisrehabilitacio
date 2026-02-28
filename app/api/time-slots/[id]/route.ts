@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 // Update a time slot
 export const dynamic = 'force-dynamic';
@@ -134,7 +135,7 @@ export async function PUT(
     
     return NextResponse.json({ timeSlot });
   } catch (error) {
-    console.error('Error updating time slot:', error);
+    logger.error('Error updating time slot:', error);
     return NextResponse.json(
       { error: 'Hiba történt az időpont frissítésekor' },
       { status: 500 }
@@ -203,7 +204,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error deleting time slot:', error);
+    logger.error('Error deleting time slot:', error);
     return NextResponse.json(
       { error: 'Hiba történt az időpont törlésekor' },
       { status: 500 }

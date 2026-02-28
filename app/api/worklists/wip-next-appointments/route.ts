@@ -11,6 +11,7 @@ import {
   refreshEpisodeForecastCache,
 } from '@/lib/episode-forecast';
 import type { WorklistItemBackend } from '@/lib/worklist-types';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -355,7 +356,7 @@ export async function GET(request: NextRequest) {
       serverNowISO,
     });
   } catch (error) {
-    console.error('Error fetching WIP worklist:', error);
+    logger.error('Error fetching WIP worklist:', error);
     return NextResponse.json(
       { error: 'Hiba történt a munkalista lekérdezésekor' },
       { status: 500 }

@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { getStepLabelMap } from '@/lib/step-labels';
 import { getEffectiveTreatmentType } from '@/lib/effective-treatment-type';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -115,7 +116,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('Error fetching care-plan-steps:', error);
+    logger.error('Error fetching care-plan-steps:', error);
     return NextResponse.json(
       { error: 'Hiba történt a kezelési terv lépéseinek lekérdezésekor' },
       { status: 500 }

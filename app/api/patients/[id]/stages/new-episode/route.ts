@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { PatientStageEntry } from '@/lib/types';
 import { logActivity } from '@/lib/activity';
+import { logger } from '@/lib/logger';
 
 /**
  * Start new episode for patient
@@ -130,7 +131,7 @@ export async function POST(
       message: 'Új epizód sikeresen elindítva'
     }, { status: 201 });
   } catch (error) {
-    console.error('Error starting new episode:', error);
+    logger.error('Error starting new episode:', error);
     return NextResponse.json(
       { error: 'Hiba történt az új epizód indításakor' },
       { status: 500 }

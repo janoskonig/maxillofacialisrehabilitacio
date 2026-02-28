@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import type { StageEventEntry } from '@/lib/types';
+import { logger } from '@/lib/logger';
 
 /**
  * Adminként stádium esemény kezdeti időpontjának módosítása.
@@ -83,7 +84,7 @@ export async function PATCH(
 
     return NextResponse.json({ stage: updated });
   } catch (error) {
-    console.error('Error updating stage event:', error);
+    logger.error('Error updating stage event:', error);
     return NextResponse.json(
       { error: 'Hiba történt a stádium kezdet módosításakor' },
       { status: 500 }

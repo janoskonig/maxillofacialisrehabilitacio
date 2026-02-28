@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Calendar, Clock, User, Mail, AlertCircle, Plus, X } from 'lucide-react';
 import { Patient } from '@/lib/types';
+import { formatDateTime, toLocalISOString, digitsOnly } from '@/lib/dateUtils';
 import { DateTimePicker } from './DateTimePicker';
 import { MobileTable } from './mobile/MobileTable';
 import { MobileKeyValueGrid } from './mobile/MobileKeyValueGrid';
@@ -268,20 +269,7 @@ export function ConditionalAppointmentBooking({ patientId, patientEmail }: Condi
       return;
     }
 
-    // Convert Date to ISO format with timezone offset
-    const offset = -newSlotDateTime.getTimezoneOffset();
-    const offsetHours = Math.floor(Math.abs(offset) / 60);
-    const offsetMinutes = Math.abs(offset) % 60;
-    const offsetSign = offset >= 0 ? '+' : '-';
-    const offsetString = `${offsetSign}${String(offsetHours).padStart(2, '0')}:${String(offsetMinutes).padStart(2, '0')}`;
-    
-    const year = newSlotDateTime.getFullYear();
-    const month = String(newSlotDateTime.getMonth() + 1).padStart(2, '0');
-    const day = String(newSlotDateTime.getDate()).padStart(2, '0');
-    const hours = String(newSlotDateTime.getHours()).padStart(2, '0');
-    const minutes = String(newSlotDateTime.getMinutes()).padStart(2, '0');
-    const seconds = String(newSlotDateTime.getSeconds()).padStart(2, '0');
-    const isoDateTime = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetString}`;
+    const isoDateTime = toLocalISOString(newSlotDateTime);
 
     const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
 
@@ -329,22 +317,7 @@ export function ConditionalAppointmentBooking({ patientId, patientEmail }: Condi
   }, [newSlotDateTime, newSlotTeremszam, loadAvailableSlots]);
 
   // Validálja a teremszám mezőt: csak számokat fogad el
-  const validateTeremszam = useCallback((value: string): string => {
-    // Csak számokat enged be, eltávolítja az összes nem szám karaktert
-    const numbersOnly = value.replace(/[^0-9]/g, '');
-    return numbersOnly;
-  }, []);
 
-  const formatDateTime = useCallback((dateTime: string) => {
-    const date = new Date(dateTime);
-    return date.toLocaleString('hu-HU', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  }, []);
 
   const availableSlotsOnly = useMemo(
     () => availableSlots.filter(slot => slot.status === 'available'),
@@ -443,7 +416,7 @@ export function ConditionalAppointmentBooking({ patientId, patientEmail }: Condi
                   <input
                     type="text"
                     value={newSlotTeremszam}
-                    onChange={(e) => setNewSlotTeremszam(validateTeremszam(e.target.value))}
+                    onChange={(e) => setNewSlotTeremszam(digitsOnly(e.target.value))}
                     placeholder="Pl. 101"
                     className="form-input w-full"
                     disabled={creatingNewSlot}

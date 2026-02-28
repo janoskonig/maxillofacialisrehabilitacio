@@ -4,6 +4,7 @@ import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
 import { sendAppointmentModificationNotification, sendAppointmentModificationNotificationToPatient, sendAppointmentCancellationNotification, sendEmail } from '@/lib/email';
 import { generateIcsFile } from '@/lib/calendar';
 import { deleteGoogleCalendarEvent, createGoogleCalendarEvent } from '@/lib/google-calendar';
+import { logger } from '@/lib/logger';
 
 /**
  * Modify patient's appointment (change time slot)
@@ -311,7 +312,7 @@ export async function PUT(
                 [newTimeSlot.dentist_user_id]
               );
               if (userCalendarResult.rows[0]?.google_calendar_enabled !== true) {
-                console.log('[Appointment Reschedule] Slot owner has Google Calendar disabled, skipping sync');
+                logger.info('[Appointment Reschedule] Slot owner has Google Calendar disabled, skipping sync');
                 return;
               }
               const targetCalendarId = userCalendarResult.rows[0]?.google_calendar_target_calendar_id || 'primary';
@@ -323,7 +324,7 @@ export async function PUT(
                   appointment.google_calendar_event_id,
                   targetCalendarId
                 ).catch((error) => {
-                  console.error('Failed to delete old Google Calendar event:', error);
+                  logger.error('Failed to delete old Google Calendar event:', error);
                   // Nem blokkoljuk, ha a törlés sikertelen
                 });
               }
@@ -349,13 +350,13 @@ export async function PUT(
                 );
               }
             } catch (error) {
-              console.error('Failed to update Google Calendar event:', error);
+              logger.error('Failed to update Google Calendar event:', error);
               // Nem blokkolja az időpont módosítását
             }
           })(),
         ]);
       } catch (emailError) {
-        console.error('Failed to send modification email to dentist:', emailError);
+        logger.error('Failed to send modification email to dentist:', emailError);
         // Don't fail the request if email fails
       }
 
@@ -379,7 +380,7 @@ export async function PUT(
             icsFile
           );
         } catch (emailError) {
-          console.error('Failed to send modification email to patient:', emailError);
+          logger.error('Failed to send modification email to patient:', emailError);
           // Don't fail the request if email fails
         }
       }
@@ -393,7 +394,7 @@ export async function PUT(
       throw error;
     }
   } catch (error) {
-    console.error('Error modifying appointment:', error);
+    logger.error('Error modifying appointment:', error);
     return NextResponse.json(
       { error: 'Hiba történt az időpont módosításakor' },
       { status: 500 }
@@ -539,7 +540,7 @@ export async function DELETE(
                   appointment.google_calendar_event_id,
                   targetCalendarId
                 );
-                console.log('[Patient Portal Cancellation] Deleted patient event from target calendar');
+                logger.info('[Patient Portal Cancellation] Deleted patient event from target calendar');
                 
                 // If time slot came from Google Calendar, recreate "szabad" event in source calendar
                 const isFromGoogleCalendar = appointment.time_slot_source === 'google_calendar' && appointment.time_slot_google_calendar_event_id;
@@ -562,7 +563,7 @@ export async function DELETE(
                   );
                   
                   if (szabadEventId) {
-                    console.log('[Patient Portal Cancellation] Recreated "szabad" event in source calendar');
+                    logger.info('[Patient Portal Cancellation] Recreated "szabad" event in source calendar');
                     // Update time slot google_calendar_event_id with new event ID
                     await pool.query(
                       `UPDATE available_time_slots 
@@ -573,14 +574,14 @@ export async function DELETE(
                   }
                 }
               } catch (error) {
-                console.error('Failed to handle Google Calendar event:', error);
+                logger.error('Failed to handle Google Calendar event:', error);
                 // Don't block cancellation if Google Calendar fails
               }
             }
           })(),
         ]);
       } catch (emailError) {
-        console.error('Failed to send cancellation email:', emailError);
+        logger.error('Failed to send cancellation email:', emailError);
         // Don't fail the request if email fails
       }
 
@@ -618,7 +619,7 @@ export async function DELETE(
           });
         }
       } catch (adminEmailError) {
-        console.error('Failed to send cancellation email to admins:', adminEmailError);
+        logger.error('Failed to send cancellation email to admins:', adminEmailError);
         // Don't fail the request if email fails
       }
 
@@ -631,7 +632,7 @@ export async function DELETE(
       throw error;
     }
   } catch (error) {
-    console.error('Error cancelling appointment:', error);
+    logger.error('Error cancelling appointment:', error);
     return NextResponse.json(
       { error: 'Hiba történt az időpont lemondásakor' },
       { status: 500 }

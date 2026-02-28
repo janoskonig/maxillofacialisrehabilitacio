@@ -5,6 +5,7 @@ import { sendAppointmentReminderEmail } from '@/lib/email';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { handleApiError } from '@/lib/api-error-handler';
+import { logger } from '@/lib/logger';
 
 const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
 
@@ -98,7 +99,7 @@ export async function GET(request: NextRequest) {
               });
             }
           } catch (pushError) {
-            console.error(`Failed to send push reminder to patient ${appointment.patient_email}:`, pushError);
+            logger.error(`Failed to send push reminder to patient ${appointment.patient_email}:`, pushError);
           }
           
           // Email fallback (always send email if patient has email)
@@ -113,7 +114,7 @@ export async function GET(request: NextRequest) {
               appointment.teremszam
             );
           } catch (emailError) {
-            console.error(`Failed to send email reminder to patient ${appointment.patient_email}:`, emailError);
+            logger.error(`Failed to send email reminder to patient ${appointment.patient_email}:`, emailError);
           }
         }
         
@@ -132,13 +133,13 @@ export async function GET(request: NextRequest) {
               },
             });
           } catch (pushError) {
-            console.error(`Failed to send push reminder to dentist ${appointment.dentist_user_id}:`, pushError);
+            logger.error(`Failed to send push reminder to dentist ${appointment.dentist_user_id}:`, pushError);
           }
         }
         
         successCount++;
       } catch (error) {
-        console.error(`Error processing reminder for appointment ${appointment.id}:`, error);
+        logger.error(`Error processing reminder for appointment ${appointment.id}:`, error);
         errorCount++;
       }
     }

@@ -4,6 +4,7 @@ import { verifyAuth } from '@/lib/auth-server';
 import { sendEmail } from '@/lib/email';
 import { generateLabQuoteRequestPDF } from '@/lib/pdf/lab-quote-request';
 import { Patient, patientSchema } from '@/lib/types';
+import { logger } from '@/lib/logger';
 
 // Labor email címe (tesztelés miatt)
 const LAB_EMAIL = 'jancheeta876@gmail.com';
@@ -181,7 +182,7 @@ Fogpótlástani Klinika
       { status: 200 }
     );
   } catch (error) {
-    console.error('Hiba az email küldésekor:', error);
+    logger.error('Hiba az email küldésekor:', error);
     return NextResponse.json(
       { error: 'Hiba történt az email küldésekor' },
       { status: 500 }

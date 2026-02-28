@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { WIP_STAGE_CODES } from '@/lib/wip-stage';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -147,7 +148,7 @@ export async function GET(request: NextRequest) {
       doctors: includeDetails ? doctors : doctors.map((d) => ({ userId: d.userId, name: d.name, busynessScore: d.busynessScore, level: d.level })),
     });
   } catch (error) {
-    console.error('Error fetching doctors workload:', error);
+    logger.error('Error fetching doctors workload:', error);
     return NextResponse.json(
       { error: 'Hiba történt a terhelés lekérdezésekor' },
       { status: 500 }

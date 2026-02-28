@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,7 +47,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ rulesets });
   } catch (error) {
-    console.error('Error in GET /rulesets:', error);
+    logger.error('Error in GET /rulesets:', error);
     return NextResponse.json({ error: 'Hiba a rulesets lekérdezésekor' }, { status: 500 });
   }
 }
@@ -93,7 +94,7 @@ export async function POST(request: NextRequest) {
       },
     }, { status: 201 });
   } catch (error) {
-    console.error('Error in POST /rulesets:', error);
+    logger.error('Error in POST /rulesets:', error);
     return NextResponse.json({ error: 'Hiba a ruleset létrehozásakor' }, { status: 500 });
   }
 }

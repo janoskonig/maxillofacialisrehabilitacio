@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { canConsumeSlot } from '@/lib/scheduling-service';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/worklists/slots-for-booking
@@ -106,7 +107,7 @@ export async function GET(request: NextRequest) {
       queryEcho,
     });
   } catch (error) {
-    console.error('Error fetching slots for booking:', error);
+    logger.error('Error fetching slots for booking:', error);
     return NextResponse.json(
       { error: 'Hiba történt az időpontok lekérdezésekor' },
       { status: 500 }

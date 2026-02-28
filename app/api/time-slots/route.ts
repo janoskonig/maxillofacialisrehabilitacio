@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 // Get all available time slots
 export const dynamic = 'force-dynamic';
@@ -80,7 +81,7 @@ export async function GET(request: NextRequest) {
       }
     });
   } catch (error) {
-    console.error('Error fetching time slots:', error);
+    logger.error('Error fetching time slots:', error);
     return NextResponse.json(
       { error: 'Hiba történt az időpontok lekérdezésekor' },
       { status: 500 }
@@ -219,7 +220,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ timeSlot: result.rows[0] }, { status: 201 });
   } catch (error) {
-    console.error('Error creating time slot:', error);
+    logger.error('Error creating time slot:', error);
     return NextResponse.json(
       { error: 'Hiba történt az időpont létrehozásakor' },
       { status: 500 }

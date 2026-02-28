@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
 import { handleApiError } from '@/lib/api-error-handler';
 import { sendConditionalAppointmentRequestToPatient } from '@/lib/email';
+import { logger } from '@/lib/logger';
 
 /**
  * Reject a pending appointment (via patient portal)
@@ -182,7 +183,7 @@ export async function POST(
             false // Don't show remaining alternatives to patient
           );
         } catch (emailError) {
-          console.error('Failed to send alternative appointment email:', emailError);
+          logger.error('Failed to send alternative appointment email:', emailError);
         }
         
         return NextResponse.json({

@@ -7,6 +7,7 @@ import {
   toEpisodeForecastItem,
 } from '@/lib/episode-forecast';
 import type { EpisodeForecastBatchResponse, EpisodeForecastItem } from '@/lib/forecast-types';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -171,7 +172,7 @@ export async function GET(request: NextRequest) {
     const response = await handleBatch(episodeIds, serverNow, fetchedAt);
     return NextResponse.json(response);
   } catch (error) {
-    console.error('Error fetching batch forecast:', error);
+    logger.error('Error fetching batch forecast:', error);
     return NextResponse.json(
       { error: 'Hiba történt a prognózis lekérdezésekor' },
       { status: 500 }
@@ -199,7 +200,7 @@ export async function POST(request: NextRequest) {
     const response = await handleBatch(episodeIds, serverNow, fetchedAt);
     return NextResponse.json(response);
   } catch (error) {
-    console.error('Error fetching batch forecast:', error);
+    logger.error('Error fetching batch forecast:', error);
     return NextResponse.json(
       { error: 'Hiba történt a prognózis lekérdezésekor' },
       { status: 500 }

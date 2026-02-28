@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { WIP_STAGE_CODES } from '@/lib/wip-stage';
 import type { ForecastAggregateResponse, DoctorWipForecast } from '@/lib/forecast-types';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -146,7 +147,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error('Error fetching aggregate forecast:', error);
+    logger.error('Error fetching aggregate forecast:', error);
     return NextResponse.json(
       { error: 'Hiba történt a prognózis lekérdezésekor' },
       { status: 500 }

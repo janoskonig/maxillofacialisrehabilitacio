@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import type { IntakeStatus } from '@/lib/types';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,7 +63,7 @@ export async function GET(
       intakeStatus: statusResult.rows[0]?.intakeStatus ?? 'JUST_REGISTERED',
     });
   } catch (error) {
-    console.error('Error in GET /patients/:id/intake-items:', error);
+    logger.error('Error in GET /patients/:id/intake-items:', error);
     return NextResponse.json({ error: 'Hiba a intake items lekérdezésekor' }, { status: 500 });
   }
 }
@@ -124,7 +125,7 @@ export async function POST(
       },
     }, { status: 201 });
   } catch (error) {
-    console.error('Error in POST /patients/:id/intake-items:', error);
+    logger.error('Error in POST /patients/:id/intake-items:', error);
     return NextResponse.json({ error: 'Hiba az intake item létrehozásakor' }, { status: 500 });
   }
 }
@@ -204,7 +205,7 @@ export async function PATCH(
       isOverride: isAdminOverride,
     });
   } catch (error) {
-    console.error('Error in PATCH /patients/:id/intake-items:', error);
+    logger.error('Error in PATCH /patients/:id/intake-items:', error);
     return NextResponse.json({ error: 'Hiba az intake status módosításakor' }, { status: 500 });
   }
 }

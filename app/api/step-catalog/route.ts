@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ items });
   } catch (error) {
-    console.error('Error fetching step catalog:', error);
+    logger.error('Error fetching step catalog:', error);
     return NextResponse.json(
       { error: 'Hiba történt a lépés katalógus lekérdezésekor' },
       { status: 500 }

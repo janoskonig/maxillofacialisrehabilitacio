@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { treatmentTypePatchSchema } from '@/lib/admin-process-schemas';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,7 +52,7 @@ export async function PATCH(
 
     return NextResponse.json({ treatmentType: r.rows[0] });
   } catch (error) {
-    console.error('Error updating treatment type:', error);
+    logger.error('Error updating treatment type:', error);
     return NextResponse.json(
       { error: 'Hiba történt a kezeléstípus módosításakor' },
       { status: 500 }
@@ -111,7 +112,7 @@ export async function DELETE(
 
     return NextResponse.json({ deleted: true });
   } catch (error) {
-    console.error('Error deleting treatment type:', error);
+    logger.error('Error deleting treatment type:', error);
     return NextResponse.json(
       { error: 'Hiba történt a kezeléstípus törlésekor' },
       { status: 500 }

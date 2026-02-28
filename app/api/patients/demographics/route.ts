@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 // Korfa, etiológia és DMF-T index statisztikák
 export const dynamic = 'force-dynamic';
@@ -222,7 +223,7 @@ export async function GET(request: NextRequest) {
       }
     });
   } catch (error) {
-    console.error('Hiba a demográfiai statisztikák lekérdezésekor:', error);
+    logger.error('Hiba a demográfiai statisztikák lekérdezésekor:', error);
     return NextResponse.json(
       { error: 'Hiba történt az adatok lekérdezésekor' },
       { status: 500 }

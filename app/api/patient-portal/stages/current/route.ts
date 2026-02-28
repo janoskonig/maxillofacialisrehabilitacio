@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
 import { getCurrentEpisodeAndStage } from '@/lib/ohip14-stage';
+import { logger } from '@/lib/logger';
 
 /**
  * Get patient's current stage (patient portal).
@@ -66,7 +67,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ currentStage });
   } catch (error) {
-    console.error('Error fetching current stage:', error);
+    logger.error('Error fetching current stage:', error);
     return NextResponse.json(
       { error: 'Hiba történt a jelenlegi stádium lekérdezésekor' },
       { status: 500 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error: any) {
-    console.error('Error submitting feedback:', error);
+    logger.error('Error submitting feedback:', error);
     return NextResponse.json(
       { error: 'Hiba történt a visszajelzés küldésekor' },
       { status: 500 }
@@ -107,7 +108,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ feedback: result.rows });
   } catch (error: any) {
-    console.error('Error fetching feedback:', error);
+    logger.error('Error fetching feedback:', error);
     return NextResponse.json(
       { error: 'Hiba történt a visszajelzések lekérdezésekor' },
       { status: 500 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 // Get all unique tags from patient documents
 export const dynamic = 'force-dynamic';
@@ -33,7 +34,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ tags }, { status: 200 });
   } catch (error) {
-    console.error('Hiba a címkék lekérdezésekor:', error);
+    logger.error('Hiba a címkék lekérdezésekor:', error);
     return NextResponse.json(
       { error: 'Hiba történt a címkék lekérdezésekor' },
       { status: 500 }

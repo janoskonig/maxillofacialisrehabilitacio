@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { downloadFile, deleteFile } from '@/lib/ftp-client';
 import { logActivity, logActivityWithAuth } from '@/lib/activity';
+import { logger } from '@/lib/logger';
 
 // Download a document
 export const dynamic = 'force-dynamic';
@@ -134,7 +135,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('Hiba a dokumentum letöltésekor:', error);
+    logger.error('Hiba a dokumentum letöltésekor:', error);
     const errorMessage = error instanceof Error ? error.message : 'Ismeretlen hiba';
     return NextResponse.json(
       { error: `Hiba történt a dokumentum letöltésekor: ${errorMessage}` },
@@ -197,7 +198,7 @@ export async function DELETE(
       // Pass patientId to deleteFile so it can navigate to the correct directory
       await deleteFile(document.file_path, patientId);
     } catch (error) {
-      console.error('Failed to delete file from FTP:', error);
+      logger.error('Failed to delete file from FTP:', error);
       // Continue with database deletion even if FTP deletion fails
     }
 
@@ -220,7 +221,7 @@ export async function DELETE(
       { status: 200 }
     );
   } catch (error) {
-    console.error('Hiba a dokumentum törlésekor:', error);
+    logger.error('Hiba a dokumentum törlésekor:', error);
     const errorMessage = error instanceof Error ? error.message : 'Ismeretlen hiba';
     return NextResponse.json(
       { error: `Hiba történt a dokumentum törlésekor: ${errorMessage}` },

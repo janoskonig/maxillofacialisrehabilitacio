@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import type { PatientMilestoneEntry } from '@/lib/types';
+import { logger } from '@/lib/logger';
 
 function rowToMilestone(row: Record<string, unknown>): PatientMilestoneEntry {
   return {
@@ -68,7 +69,7 @@ export async function GET(
     const milestones: PatientMilestoneEntry[] = result.rows.map(rowToMilestone);
     return NextResponse.json({ milestones });
   } catch (error) {
-    console.error('Error fetching milestones:', error);
+    logger.error('Error fetching milestones:', error);
     return NextResponse.json(
       { error: 'Hiba történt a milestone-ok lekérdezésekor' },
       { status: 500 }
@@ -159,7 +160,7 @@ export async function POST(
     const milestone = rowToMilestone(insertResult.rows[0]);
     return NextResponse.json({ milestone }, { status: 201 });
   } catch (error) {
-    console.error('Error creating milestone:', error);
+    logger.error('Error creating milestone:', error);
     return NextResponse.json(
       { error: 'Hiba történt a milestone rögzítésekor' },
       { status: 500 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { sendEmail } from '@/lib/email';
+import { logger } from '@/lib/logger';
 
 // E-mail küldése felhasználóknak szerepkör szerint
 export const dynamic = 'force-dynamic';
@@ -129,14 +130,14 @@ export async function POST(request: NextRequest) {
         adminCount: adminCount > 0 && !roles.includes('admin') ? adminCount : 0,
       });
     } catch (emailError) {
-      console.error('Error sending email:', emailError);
+      logger.error('Error sending email:', emailError);
       return NextResponse.json(
         { error: 'Hiba történt az e-mail küldésekor' },
         { status: 500 }
       );
     }
   } catch (error) {
-    console.error('Error in send-email route:', error);
+    logger.error('Error in send-email route:', error);
     return NextResponse.json(
       { error: 'Hiba történt az e-mail küldésekor' },
       { status: 500 }
@@ -218,7 +219,7 @@ export async function GET(request: NextRequest) {
       adminCount: adminUsers.length,
     });
   } catch (error) {
-    console.error('Error fetching users by role:', error);
+    logger.error('Error fetching users by role:', error);
     return NextResponse.json(
       { error: 'Hiba történt a felhasználók lekérdezésekor' },
       { status: 500 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 // Ellenőrzi, hogy van-e időpontja egy betegnek
 // Optimalizálás: egyetlen lekérdezés helyett a paginated végigjárás helyett
@@ -38,7 +39,7 @@ export async function GET(
       count
     }, { status: 200 });
   } catch (error) {
-    console.error('Error checking patient appointments:', error);
+    logger.error('Error checking patient appointments:', error);
     return NextResponse.json(
       { error: 'Hiba történt az időpontok ellenőrzésekor' },
       { status: 500 }

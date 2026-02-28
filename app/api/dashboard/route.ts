@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 // Get dashboard data for current user - all appointments today and pending appointments
 export const dynamic = 'force-dynamic';
@@ -106,7 +107,7 @@ export async function GET(request: NextRequest) {
       newRegistrations: newRegistrationsResult.rows,
     });
   } catch (error) {
-    console.error('Error fetching dashboard data:', error);
+    logger.error('Error fetching dashboard data:', error);
     return NextResponse.json(
       { error: 'Hiba történt a dashboard adatok lekérdezésekor' },
       { status: 500 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
+import { logger } from '@/lib/logger';
 
 /**
  * Get available time slots for patient portal
@@ -94,7 +95,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Hiba az elérhető időpontok lekérdezésekor:', error);
+    logger.error('Hiba az elérhető időpontok lekérdezésekor:', error);
     return NextResponse.json(
       { error: 'Hiba történt az elérhető időpontok lekérdezésekor' },
       { status: 500 }

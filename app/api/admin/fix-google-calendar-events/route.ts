@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { createGoogleCalendarEvent, deleteGoogleCalendarEvent } from '@/lib/google-calendar';
+import { logger } from '@/lib/logger';
 
 /**
  * Fix Google Calendar events for existing appointments that are missing calendar events
@@ -80,7 +81,7 @@ export async function POST(request: NextRequest) {
       errors: [] as Array<{ appointmentId: string; error: string }>,
     };
 
-    console.log(`[Fix Google Calendar Events] Found ${appointments.length} appointments to fix`);
+    logger.info(`[Fix Google Calendar Events] Found ${appointments.length} appointments to fix`);
 
     // Process each appointment
     for (const appointment of appointments) {
@@ -116,7 +117,7 @@ export async function POST(request: NextRequest) {
         const targetCalendarId = userCalendarResult.rows[0]?.google_calendar_target_calendar_id || 'primary';
 
         // Delete the "szabad" event from source calendar
-        console.log(`[Fix Google Calendar Events] Deleting "szabad" event ${timeSlotGoogleCalendarEventId} from source calendar for appointment ${appointmentId}`);
+        logger.info(`[Fix Google Calendar Events] Deleting "szabad" event ${timeSlotGoogleCalendarEventId} from source calendar for appointment ${appointmentId}`);
         const deleteResult = await deleteGoogleCalendarEvent(
           dentistUserId,
           timeSlotGoogleCalendarEventId,
@@ -129,7 +130,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Create a new event with patient name in target calendar
-        console.log(`[Fix Google Calendar Events] Creating new event with patient name in target calendar for appointment ${appointmentId}`);
+        logger.info(`[Fix Google Calendar Events] Creating new event with patient name in target calendar for appointment ${appointmentId}`);
         const newEventId = await createGoogleCalendarEvent(
           dentistUserId,
           {
@@ -147,7 +148,7 @@ export async function POST(request: NextRequest) {
             appointmentId,
             error: 'Failed to create Google Calendar event',
           });
-          console.error(`[Fix Google Calendar Events] Failed to create new event for appointment ${appointmentId}`);
+          logger.error(`[Fix Google Calendar Events] Failed to create new event for appointment ${appointmentId}`);
           continue;
         }
 
@@ -158,14 +159,14 @@ export async function POST(request: NextRequest) {
         );
 
         results.fixed++;
-        console.log(`[Fix Google Calendar Events] Successfully fixed appointment ${appointmentId} with event ID ${newEventId}`);
+        logger.info(`[Fix Google Calendar Events] Successfully fixed appointment ${appointmentId} with event ID ${newEventId}`);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         results.errors.push({
           appointmentId: appointment.appointment_id,
           error: errorMessage,
         });
-        console.error(`[Fix Google Calendar Events] Error fixing appointment ${appointment.appointment_id}:`, error);
+        logger.error(`[Fix Google Calendar Events] Error fixing appointment ${appointment.appointment_id}:`, error);
       }
     }
 
@@ -175,7 +176,7 @@ export async function POST(request: NextRequest) {
       results,
     });
   } catch (error) {
-    console.error('Error fixing Google Calendar events:', error);
+    logger.error('Error fixing Google Calendar events:', error);
     return NextResponse.json(
       { error: 'Hiba történt a Google Calendar események javításakor' },
       { status: 500 }

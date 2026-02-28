@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { nextRequiredStep, isBlocked } from '@/lib/next-step-engine';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -106,7 +107,7 @@ export async function GET(
       assumptions,
     });
   } catch (error) {
-    console.error('Error fetching episode forecast:', error);
+    logger.error('Error fetching episode forecast:', error);
     return NextResponse.json(
       { error: 'Hiba történt a prognózis lekérdezésekor' },
       { status: 500 }

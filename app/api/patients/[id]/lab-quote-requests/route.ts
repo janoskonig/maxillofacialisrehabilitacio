@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { labQuoteRequestSchema, LabQuoteRequest } from '@/lib/types';
+import { logger } from '@/lib/logger';
 
 /**
  * Árajánlatkérő lekérdezése beteghez
@@ -56,7 +57,7 @@ export async function GET(
 
     return NextResponse.json({ quoteRequests: result.rows }, { status: 200 });
   } catch (error) {
-    console.error('Hiba az árajánlatkérők lekérdezésekor:', error);
+    logger.error('Hiba az árajánlatkérők lekérdezésekor:', error);
     return NextResponse.json(
       { error: 'Hiba történt az árajánlatkérők lekérdezésekor' },
       { status: 500 }
@@ -136,7 +137,7 @@ export async function POST(
 
     return NextResponse.json({ quoteRequest: result.rows[0] }, { status: 201 });
   } catch (error) {
-    console.error('Hiba az árajánlatkérő létrehozásakor:', error);
+    logger.error('Hiba az árajánlatkérő létrehozásakor:', error);
     if (error instanceof Error && error.name === 'ZodError') {
       return NextResponse.json(
         { error: 'Érvénytelen adatok', details: error },

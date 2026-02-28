@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth-server';
 import { getDbPool } from '@/lib/db';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/dashboard/waiting-times - Várakozási idők lekérése első konzultációra és munkafázisra
@@ -89,7 +90,7 @@ export async function GET(request: NextRequest) {
         : null,
     });
   } catch (error) {
-    console.error('Error fetching waiting times:', error);
+    logger.error('Error fetching waiting times:', error);
     return NextResponse.json(
       { error: 'Hiba történt az adatok lekérdezésekor' },
       { status: 500 }

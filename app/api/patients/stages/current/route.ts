@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 /**
  * Get current stages for all patients (for filtering)
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ currentStages });
   } catch (error) {
-    console.error('Error fetching current stages:', error);
+    logger.error('Error fetching current stages:', error);
     return NextResponse.json(
       { error: 'Hiba történt a jelenlegi stádiumok lekérdezésekor' },
       { status: 500 }

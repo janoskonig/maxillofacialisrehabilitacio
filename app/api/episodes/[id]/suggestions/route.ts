@@ -6,6 +6,7 @@ import {
   getCurrentSuggestion,
   dismissSuggestion,
 } from '@/lib/stage-suggestion-service';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +29,7 @@ export async function GET(
     const suggestion = await getCurrentSuggestion(episodeId);
     return NextResponse.json({ suggestion });
   } catch (error) {
-    console.error('Error in GET /episodes/:id/suggestions:', error);
+    logger.error('Error in GET /episodes/:id/suggestions:', error);
     return NextResponse.json(
       { error: 'Hiba történt a javaslat lekérdezésekor' },
       { status: 500 }
@@ -60,7 +61,7 @@ export async function POST(
     const suggestion = await computeAndPersistSuggestion(episodeId);
     return NextResponse.json({ suggestion });
   } catch (error) {
-    console.error('Error in POST /episodes/:id/suggestions:', error);
+    logger.error('Error in POST /episodes/:id/suggestions:', error);
     return NextResponse.json(
       { error: 'Hiba történt a javaslat számításakor' },
       { status: 500 }
@@ -90,7 +91,7 @@ export async function DELETE(
     await dismissSuggestion(episodeId, dedupeKey, auth.email, ttlDays);
     return NextResponse.json({ dismissed: true });
   } catch (error) {
-    console.error('Error in DELETE /episodes/:id/suggestions:', error);
+    logger.error('Error in DELETE /episodes/:id/suggestions:', error);
     return NextResponse.json(
       { error: 'Hiba történt a javaslat elutasításakor' },
       { status: 500 }

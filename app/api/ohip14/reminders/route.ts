@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth-server';
 import { sendOhipReminders } from '@/lib/ohip14-reminders';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,7 +39,7 @@ async function handle(request: NextRequest) {
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
-    console.error('[ohip14-reminders] Error:', msg);
+    logger.error('[ohip14-reminders] Error:', msg);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

@@ -4,6 +4,7 @@ import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
 import { markMessageAsRead } from '@/lib/communication';
 import { getDbPool } from '@/lib/db';
 import { validateUUID } from '@/lib/validation';
+import { logger } from '@/lib/logger';
 
 /**
  * PUT /api/messages/[id]/read - Üzenet olvasottnak jelölése
@@ -32,7 +33,7 @@ export async function PUT(
     const auth = await verifyAuth(request);
     const patientSessionId = await verifyPatientPortalSession(request);
 
-    console.log(`[markMessageAsRead API] Request:`, {
+    logger.info(`[markMessageAsRead API] Request:`, {
       messageId: validatedMessageId,
       hasAuth: !!auth,
       authUserId: auth?.userId,
@@ -65,7 +66,7 @@ export async function PUT(
 
     const message = messageResult.rows[0];
 
-    console.log(`[markMessageAsRead API] Message:`, {
+    logger.info(`[markMessageAsRead API] Message:`, {
       messageId: validatedMessageId,
       patientId: message.patient_id,
       senderType: message.sender_type,
@@ -76,7 +77,7 @@ export async function PUT(
     // Ha beteg jelöli olvasottnak (és NEM orvos), csak az orvostól érkező üzeneteket jelölheti
     // Fontos: először ellenőrizzük, hogy orvos-e, mert az orvos is lehet beteg portálon
     if (patientSessionId && !auth) {
-      console.log(`[markMessageAsRead API] Beteg portál - checking access`);
+      logger.info(`[markMessageAsRead API] Beteg portál - checking access`);
       // Csak akkor vagyunk beteg portálon, ha nincs auth (orvos session)
       if (message.patient_id !== patientSessionId) {
         console.warn(`[markMessageAsRead API] Beteg portál - patient ID mismatch`);
@@ -94,7 +95,7 @@ export async function PUT(
         );
       }
       // Beteg jelöli olvasottnak - nincs további ellenőrzés szükséges
-      console.log(`[markMessageAsRead API] Beteg portál - marking as read`);
+      logger.info(`[markMessageAsRead API] Beteg portál - marking as read`);
       await markMessageAsRead(validatedMessageId);
       return NextResponse.json({
         success: true,
@@ -104,13 +105,13 @@ export async function PUT(
 
     // Ha orvos jelöli olvasottnak, ellenőrizzük a hozzáférést
     if (auth) {
-      console.log(`[markMessageAsRead API] Orvos - checking access, role: ${auth.role}`);
+      logger.info(`[markMessageAsRead API] Orvos - checking access, role: ${auth.role}`);
       // Admin minden üzenetet jelölhet olvasottnak
       if (auth.role === 'admin') {
-        console.log(`[markMessageAsRead API] Admin - allowing access`);
+        logger.info(`[markMessageAsRead API] Admin - allowing access`);
         // Admin hozzáfér minden üzenethez, nincs további ellenőrzés
       } else {
-        console.log(`[markMessageAsRead API] Non-admin doctor - checking access`);
+        logger.info(`[markMessageAsRead API] Non-admin doctor - checking access`);
         // Nem admin: ellenőrizzük a hozzáférést
         const patientResult = await pool.query(
           `SELECT id, kezeleoorvos FROM patients WHERE id = $1`,
@@ -142,18 +143,18 @@ export async function PUT(
             // Kezelőorvos: hozzáfér az összes betegtől érkező üzenethez
             // (recipient_doctor_id IS NULL = kezelőorvosnak küldve, vagy explicit neki küldve)
             hasAccess = !message.recipient_doctor_id || message.recipient_doctor_id === auth.userId;
-            console.log(`[markMessageAsRead API] Treating doctor - hasAccess: ${hasAccess}, recipientDoctorId: ${message.recipient_doctor_id}, doctorId: ${auth.userId}`);
+            logger.info(`[markMessageAsRead API] Treating doctor - hasAccess: ${hasAccess}, recipientDoctorId: ${message.recipient_doctor_id}, doctorId: ${auth.userId}`);
           } else {
             // Nem kezelőorvos: csak az explicit neki küldött üzenetekhez fér hozzá
             // (recipient_doctor_id nem lehet NULL, mert akkor a kezelőorvosnak küldték)
             hasAccess = message.recipient_doctor_id === auth.userId;
-            console.log(`[markMessageAsRead API] Non-treating doctor - hasAccess: ${hasAccess}, recipientDoctorId: ${message.recipient_doctor_id}, doctorId: ${auth.userId}`);
+            logger.info(`[markMessageAsRead API] Non-treating doctor - hasAccess: ${hasAccess}, recipientDoctorId: ${message.recipient_doctor_id}, doctorId: ${auth.userId}`);
           }
         } else if (message.sender_type === 'doctor') {
           // Orvos küldte az üzenetet - csak akkor fér hozzá, ha ő küldte
           // (az orvos mindig jelölheti olvasottnak a saját üzeneteit)
           hasAccess = message.sender_id === auth.userId;
-          console.log(`[markMessageAsRead API] Doctor message - hasAccess: ${hasAccess}, senderId: ${message.sender_id}, doctorId: ${auth.userId}`);
+          logger.info(`[markMessageAsRead API] Doctor message - hasAccess: ${hasAccess}, senderId: ${message.sender_id}, doctorId: ${auth.userId}`);
         }
         
         if (!hasAccess) {
@@ -186,7 +187,7 @@ export async function PUT(
       message: 'Üzenet olvasottnak jelölve',
     });
   } catch (error: any) {
-    console.error('Hiba az üzenet olvasottnak jelölésekor:', error);
+    logger.error('Hiba az üzenet olvasottnak jelölésekor:', error);
     return NextResponse.json(
       { error: 'Hiba történt az üzenet olvasottnak jelölésekor' },
       { status: 500 }

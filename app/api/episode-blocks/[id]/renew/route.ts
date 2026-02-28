@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { RENEWAL_ESCALATION_THRESHOLD } from '@/lib/episode-block-taxonomy';
+import { logger } from '@/lib/logger';
 
 /**
  * POST /api/episode-blocks/:id/renew
@@ -105,7 +106,7 @@ export async function POST(
         : undefined,
     });
   } catch (error) {
-    console.error('Error renewing episode block:', error);
+    logger.error('Error renewing episode block:', error);
     return NextResponse.json(
       { error: 'Hiba történt a blokk megújításakor' },
       { status: 500 }

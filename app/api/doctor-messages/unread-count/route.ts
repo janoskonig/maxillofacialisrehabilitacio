@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth-server';
 import { getUnreadDoctorMessageCount } from '@/lib/doctor-communication';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/doctor-messages/unread-count - Olvasatlan üzenetek száma
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
       count,
     });
   } catch (error: any) {
-    console.error('Hiba az olvasatlan üzenetek számának lekérdezésekor:', error);
+    logger.error('Hiba az olvasatlan üzenetek számának lekérdezésekor:', error);
     return NextResponse.json(
       { error: 'Hiba történt az olvasatlan üzenetek számának lekérdezésekor' },
       { status: 500 }

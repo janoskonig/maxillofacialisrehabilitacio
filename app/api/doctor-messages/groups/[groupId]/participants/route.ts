@@ -3,6 +3,7 @@ import { verifyAuth } from '@/lib/auth-server';
 import { addParticipantsToGroup, getGroupParticipants } from '@/lib/doctor-communication';
 import { getDbPool } from '@/lib/db';
 import { logActivityWithAuth } from '@/lib/activity';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/doctor-messages/groups/[groupId]/participants - Csoport résztvevőinek lekérése
@@ -54,7 +55,7 @@ export async function GET(
       createdBy,
     });
   } catch (error: any) {
-    console.error('Hiba a résztvevők lekérésekor:', error);
+    logger.error('Hiba a résztvevők lekérésekor:', error);
     return NextResponse.json(
       { error: 'Hiba történt a résztvevők lekérésekor' },
       { status: 500 }
@@ -119,7 +120,7 @@ export async function POST(
       success: true,
     });
   } catch (error: any) {
-    console.error('Hiba a résztvevők hozzáadásakor:', error);
+    logger.error('Hiba a résztvevők hozzáadásakor:', error);
     return NextResponse.json(
       { error: error.message || 'Hiba történt a résztvevők hozzáadásakor' },
       { status: 500 }

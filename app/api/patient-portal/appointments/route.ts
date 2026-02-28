@@ -4,6 +4,7 @@ import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
 import { sendEmail, sendAppointmentBookingNotification, sendAppointmentBookingNotificationToPatient, sendAppointmentBookingNotificationToAdmins } from '@/lib/email';
 import { generateIcsFile } from '@/lib/calendar';
 import { createGoogleCalendarEvent, deleteGoogleCalendarEvent } from '@/lib/google-calendar';
+import { logger } from '@/lib/logger';
 
 /**
  * Get patient's appointments
@@ -51,7 +52,7 @@ export async function GET(request: NextRequest) {
       appointments: result.rows,
     });
   } catch (error) {
-    console.error('Error fetching appointments:', error);
+    logger.error('Error fetching appointments:', error);
     return NextResponse.json(
       { error: 'Hiba történt az időpontok lekérdezésekor' },
       { status: 500 }
@@ -170,7 +171,7 @@ export async function POST(request: NextRequest) {
         });
       }
     } catch (emailError) {
-      console.error('Hiba az értesítő email küldésekor:', emailError);
+      logger.error('Hiba az értesítő email küldésekor:', emailError);
       // Don't fail the request if email fails
     }
 
@@ -179,7 +180,7 @@ export async function POST(request: NextRequest) {
       message: 'Időpont kérés sikeresen elküldve. Az adminisztráció hamarosan felveszi Önnel a kapcsolatot.',
     });
   } catch (error) {
-    console.error('Error requesting appointment:', error);
+    logger.error('Error requesting appointment:', error);
     return NextResponse.json(
       { error: 'Hiba történt az időpont kérésekor' },
       { status: 500 }
@@ -395,7 +396,7 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
             const googleCalendarEventId = timeSlot.google_calendar_event_id;
             const source = timeSlot.source;
             
-            console.log('[Patient Portal Booking] Time slot info:', {
+            logger.info('[Patient Portal Booking] Time slot info:', {
               id: timeSlot.id,
               google_calendar_event_id: googleCalendarEventId,
               source: source,
@@ -415,24 +416,24 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
               [timeSlot.dentist_user_id]
             );
             if (userCalendarResult.rows[0]?.google_calendar_enabled !== true) {
-              console.log('[Patient Portal Booking] Slot owner has Google Calendar disabled, skipping sync');
+              logger.info('[Patient Portal Booking] Slot owner has Google Calendar disabled, skipping sync');
               return;
             }
             const sourceCalendarId = userCalendarResult.rows[0]?.google_calendar_source_calendar_id || 'primary';
             const targetCalendarId = userCalendarResult.rows[0]?.google_calendar_target_calendar_id || 'primary';
             
             if (isFromGoogleCalendar) {
-              console.log('[Patient Portal Booking] Deleting "szabad" event from source calendar:', googleCalendarEventId);
+              logger.info('[Patient Portal Booking] Deleting "szabad" event from source calendar:', googleCalendarEventId);
               // If from Google Calendar, delete the "szabad" event from source calendar
               const deleteResult = await deleteGoogleCalendarEvent(
                 timeSlot.dentist_user_id,
                 googleCalendarEventId,
                 sourceCalendarId
               );
-              console.log('[Patient Portal Booking] Delete result:', deleteResult);
+              logger.info('[Patient Portal Booking] Delete result:', deleteResult);
               
               // Create a new event with patient name in target calendar
-              console.log('[Patient Portal Booking] Creating new event with patient name in target calendar');
+              logger.info('[Patient Portal Booking] Creating new event with patient name in target calendar');
               const newEventId = await createGoogleCalendarEvent(
                 timeSlot.dentist_user_id,
                 {
@@ -447,12 +448,12 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
               finalEventId = newEventId;
               
               if (!newEventId) {
-                console.error('[Patient Portal Booking] Failed to create new Google Calendar event in target calendar');
+                logger.error('[Patient Portal Booking] Failed to create new Google Calendar event in target calendar');
               } else {
-                console.log('[Patient Portal Booking] Successfully created new event with patient name in target calendar');
+                logger.info('[Patient Portal Booking] Successfully created new event with patient name in target calendar');
               }
             } else {
-              console.log('[Patient Portal Booking] Time slot is not from Google Calendar, creating new event');
+              logger.info('[Patient Portal Booking] Time slot is not from Google Calendar, creating new event');
               // If not from Google Calendar, create a new event
               const newEventId = await createGoogleCalendarEvent(
                 timeSlot.dentist_user_id,
@@ -468,7 +469,7 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
               finalEventId = newEventId;
             }
 
-            console.log('[Patient Portal Booking] Final event ID:', finalEventId);
+            logger.info('[Patient Portal Booking] Final event ID:', finalEventId);
 
             if (finalEventId) {
               // Save event ID to appointments table
@@ -479,12 +480,12 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
             }
           } catch (error) {
             // Google Calendar error should not block the booking
-            console.error('[Patient Portal Booking] Failed to handle Google Calendar event:', error);
+            logger.error('[Patient Portal Booking] Failed to handle Google Calendar event:', error);
           }
         })(),
       ]);
     } catch (emailError) {
-      console.error('Hiba az értesítő email küldésekor:', emailError);
+      logger.error('Hiba az értesítő email küldésekor:', emailError);
       // Don't fail the request if email fails
     }
 
@@ -495,7 +496,7 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
     });
   } catch (error) {
     await pool.query('ROLLBACK');
-    console.error('Error booking appointment:', error);
+    logger.error('Error booking appointment:', error);
     return NextResponse.json(
       { error: 'Hiba történt az időpont foglalásakor' },
       { status: 500 }

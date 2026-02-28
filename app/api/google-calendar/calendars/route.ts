@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth-server';
 import { listGoogleCalendars } from '@/lib/google-calendar';
 import { getDbPool } from '@/lib/db';
+import { logger } from '@/lib/logger';
 
 /**
  * Google Calendar naptárak listázása
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest) {
 
     // Lekérjük a Google Calendar naptárakat
     const calendars = await listGoogleCalendars(user.id);
-    console.log(`[Calendars API] Found ${calendars.length} calendars for user ${user.id}`);
+    logger.info(`[Calendars API] Found ${calendars.length} calendars for user ${user.id}`);
     
     // Ha nincs naptár, akkor is adjunk vissza egy üres tömböt, hogy a UI megjelenjen
     return NextResponse.json({
@@ -57,7 +58,7 @@ export async function GET(request: NextRequest) {
       targetCalendarId: user.google_calendar_target_calendar_id || 'primary',
     });
   } catch (error) {
-    console.error('Error fetching Google Calendar calendars:', error);
+    logger.error('Error fetching Google Calendar calendars:', error);
     return NextResponse.json(
       { error: 'Hiba történt a naptárak lekérdezésekor' },
       { status: 500 }
@@ -130,7 +131,7 @@ export async function PUT(request: NextRequest) {
       targetCalendarId,
     });
   } catch (error) {
-    console.error('Error saving Google Calendar calendar settings:', error);
+    logger.error('Error saving Google Calendar calendar settings:', error);
     return NextResponse.json(
       { error: 'Hiba történt a beállítások mentésekor' },
       { status: 500 }

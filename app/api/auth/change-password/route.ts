@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import bcrypt from 'bcryptjs';
 import { logActivity } from '@/lib/activity';
+import { logger } from '@/lib/logger';
 
 // Jelszó validáció
 function isValidPassword(password: string): { valid: boolean; error?: string } {
@@ -103,7 +104,7 @@ export async function POST(request: NextRequest) {
       message: 'Jelszó sikeresen megváltoztatva',
     });
   } catch (error) {
-    console.error('Password change error:', error);
+    logger.error('Password change error:', error);
     return NextResponse.json(
       { error: 'Jelszó változtatási hiba történt' },
       { status: 500 }

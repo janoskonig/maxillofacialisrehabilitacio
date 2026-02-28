@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { treatmentTypeCreateSchema } from '@/lib/admin-process-schemas';
+import { logger } from '@/lib/logger';
 
 /**
  * POST /api/treatment-types — create treatment type (admin / fogpótlástanász)
@@ -63,7 +64,7 @@ export async function POST(request: NextRequest) {
       throw err;
     }
   } catch (error) {
-    console.error('Error creating treatment type:', error);
+    logger.error('Error creating treatment type:', error);
     return NextResponse.json(
       { error: 'Hiba történt a kezeléstípus létrehozásakor' },
       { status: 500 }
@@ -98,7 +99,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ treatmentTypes: r.rows });
   } catch (error) {
-    console.error('Error fetching treatment types:', error);
+    logger.error('Error fetching treatment types:', error);
     return NextResponse.json(
       { error: 'Hiba történt a kezelési típusok lekérdezésekor' },
       { status: 500 }

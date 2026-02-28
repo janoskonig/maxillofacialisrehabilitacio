@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
+import { logger } from '@/lib/logger';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 
@@ -17,7 +18,7 @@ export async function GET() {
     
     // Ellenőrizzük, hogy létezik-e a fájl
     if (!existsSync(filePath)) {
-      console.error(`BNO Excel file not found at: ${filePath}`);
+      logger.error(`BNO Excel file not found at: ${filePath}`);
       return NextResponse.json(
         { error: 'BNO Excel file not found' },
         { status: 404 }
@@ -74,11 +75,11 @@ export async function GET() {
         index === self.findIndex((c) => c.kod === code.kod)
       );
     
-    console.log(`Loaded ${bnoCodes.length} BNO codes from Excel file`);
+    logger.info(`Loaded ${bnoCodes.length} BNO codes from Excel file`);
     
     return NextResponse.json(bnoCodes);
   } catch (error) {
-    console.error('Error reading BNO codes from Excel:', error);
+    logger.error('Error reading BNO codes from Excel:', error);
     return NextResponse.json(
       { error: 'Failed to read BNO codes from Excel file', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }

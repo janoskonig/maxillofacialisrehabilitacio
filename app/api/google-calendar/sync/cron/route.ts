@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { syncTimeSlotsFromGoogleCalendar } from '@/lib/google-calendar';
+import { logger } from '@/lib/logger';
 
 // Export runtime config to prevent timeout issues
 export const runtime = 'nodejs';
@@ -14,7 +15,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
-  console.log(`[${new Date().toISOString()}] Cron sync started`);
+  logger.info(`[${new Date().toISOString()}] Cron sync started`);
   
   try {
     // API kulcs ellenőrzése
@@ -29,15 +30,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.log(`[${new Date().toISOString()}] Fetching users with Google Calendar enabled...`);
+    logger.info(`[${new Date().toISOString()}] Fetching users with Google Calendar enabled...`);
     const pool = getDbPool();
     
     // Test database connection first
     try {
       await pool.query('SELECT 1');
-      console.log(`[${new Date().toISOString()}] Database connection verified`);
+      logger.info(`[${new Date().toISOString()}] Database connection verified`);
     } catch (dbError) {
-      console.error(`[${new Date().toISOString()}] Database connection error:`, dbError);
+      logger.error(`[${new Date().toISOString()}] Database connection error:`, dbError);
       throw new Error(`Database connection failed: ${dbError instanceof Error ? dbError.message : 'Unknown error'}`);
     }
     
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest) {
        WHERE google_calendar_enabled = true`
     );
 
-    console.log(`[${new Date().toISOString()}] Found ${usersResult.rows.length} users to sync`);
+    logger.info(`[${new Date().toISOString()}] Found ${usersResult.rows.length} users to sync`);
 
     const results = [];
     let hasErrors = false;
@@ -58,10 +59,10 @@ export async function GET(request: NextRequest) {
       const userStartTime = Date.now();
       
       try {
-        console.log(`[${new Date().toISOString()}] Syncing user ${i + 1}/${usersResult.rows.length}: ${user.email} (${user.id})`);
+        logger.info(`[${new Date().toISOString()}] Syncing user ${i + 1}/${usersResult.rows.length}: ${user.email} (${user.id})`);
         const syncResult = await syncTimeSlotsFromGoogleCalendar(user.id);
         const userDuration = Date.now() - userStartTime;
-        console.log(`[${new Date().toISOString()}] User ${user.email} synced in ${userDuration}ms: ${syncResult.created} created, ${syncResult.updated} updated, ${syncResult.deleted} deleted`);
+        logger.info(`[${new Date().toISOString()}] User ${user.email} synced in ${userDuration}ms: ${syncResult.created} created, ${syncResult.updated} updated, ${syncResult.deleted} deleted`);
         
         results.push({
           userId: user.id,
@@ -72,9 +73,9 @@ export async function GET(request: NextRequest) {
         hasErrors = true;
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         const errorStack = error instanceof Error ? error.stack : undefined;
-        console.error(`[${new Date().toISOString()}] Error syncing user ${user.id} (${user.email}):`, errorMessage);
+        logger.error(`[${new Date().toISOString()}] Error syncing user ${user.id} (${user.email}):`, errorMessage);
         if (errorStack) {
-          console.error(`[${new Date().toISOString()}] Error stack:`, errorStack);
+          logger.error(`[${new Date().toISOString()}] Error stack:`, errorStack);
         }
         results.push({
           userId: user.id,
@@ -92,7 +93,7 @@ export async function GET(request: NextRequest) {
     const totalDeleted = results.reduce((sum, r) => sum + ('deleted' in r ? (r.deleted || 0) : 0), 0);
 
     const totalDuration = Date.now() - startTime;
-    console.log(`[${new Date().toISOString()}] Cron sync completed in ${totalDuration}ms: ${totalCreated} created, ${totalUpdated} updated, ${totalDeleted} deleted`);
+    logger.info(`[${new Date().toISOString()}] Cron sync completed in ${totalDuration}ms: ${totalCreated} created, ${totalUpdated} updated, ${totalDeleted} deleted`);
 
     // Ne dobjunk 500-as hibát, ha csak részleges sikertelenség van
     // Visszaadjuk a részleges eredményeket is
@@ -122,9 +123,9 @@ export async function GET(request: NextRequest) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     const errorStack = error instanceof Error ? error.stack : undefined;
     
-    console.error(`[${new Date().toISOString()}] Error in cron sync after ${totalDuration}ms:`, errorMessage);
+    logger.error(`[${new Date().toISOString()}] Error in cron sync after ${totalDuration}ms:`, errorMessage);
     if (errorStack) {
-      console.error(`[${new Date().toISOString()}] Error stack:`, errorStack);
+      logger.error(`[${new Date().toISOString()}] Error stack:`, errorStack);
     }
     
     // Check if it's a connection error
@@ -132,7 +133,7 @@ export async function GET(request: NextRequest) {
         errorMessage.includes('ECONNRESET') || 
         errorMessage.includes('ETIMEDOUT') ||
         errorMessage.includes('timeout')) {
-      console.error(`[${new Date().toISOString()}] Connection error detected - this may be a timeout or network issue`);
+      logger.error(`[${new Date().toISOString()}] Connection error detected - this may be a timeout or network issue`);
     }
     
     return NextResponse.json(

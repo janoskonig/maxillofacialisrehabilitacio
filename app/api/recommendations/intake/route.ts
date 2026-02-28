@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { WIP_STAGE_CODES } from '@/lib/wip-stage';
 import type { IntakeRecommendationResponse } from '@/lib/forecast-types';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -168,7 +169,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error('Error fetching intake recommendation:', error);
+    logger.error('Error fetching intake recommendation:', error);
     return NextResponse.json(
       { error: 'Hiba történt a javaslat lekérdezésekor' },
       { status: 500 }

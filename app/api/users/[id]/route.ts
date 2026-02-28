@@ -1,30 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
-import { jwtVerify } from 'jose';
 import bcrypt from 'bcryptjs';
 import { sendApprovalEmail } from '@/lib/email';
+import { requireAuth, requireRole, HttpError } from '@/lib/auth-server';
+import { handleApiError } from '@/lib/api-error-handler';
+import { logger } from '@/lib/logger';
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'change-this-to-a-random-secret-in-production'
-);
-
-async function verifyAuth(request: NextRequest): Promise<{ userId: string; email: string; role: string } | null> {
-  const token = request.cookies.get('auth-token')?.value;
-  if (!token) return null;
-
-  try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
-    return {
-      userId: payload.userId as string,
-      email: payload.email as string,
-      role: payload.role as string,
-    };
-  } catch {
-    return null;
-  }
-}
-
-// Felhasználó frissítése (csak admin, vagy saját profil)
 export const dynamic = 'force-dynamic';
 
 export async function PUT(
@@ -32,13 +13,7 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const auth = await verifyAuth(request);
-    if (!auth) {
-      return NextResponse.json(
-        { error: 'Bejelentkezés szükséges' },
-        { status: 401 }
-      );
-    }
+    const auth = await requireAuth(request);
 
     const body = await request.json();
     const { email, password, role, active, restricted_view, doktor_neve } = body;
@@ -169,46 +144,30 @@ export async function PUT(
       try {
         await sendApprovalEmail(updatedUser.email);
       } catch (emailError) {
-        console.error('Failed to send approval email:', emailError);
+        logger.error('Failed to send approval email:', emailError);
         // Don't fail the request if email fails
       }
     }
 
     return NextResponse.json({ user: updatedUser });
   } catch (error) {
-    console.error('Error updating user:', error);
-    return NextResponse.json(
-      { error: 'Hiba történt a felhasználó frissítésekor' },
-      { status: 500 }
-    );
+    return handleApiError(error, 'Hiba történt a felhasználó frissítésekor');
   }
 }
 
-// Felhasználó törlése (csak admin)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const auth = await verifyAuth(request);
-    if (!auth || auth.role !== 'admin') {
-      return NextResponse.json(
-        { error: 'Nincs jogosultsága a felhasználó törléséhez' },
-        { status: 403 }
-      );
-    }
+    await requireRole(request, ['admin']);
 
-    // Ne töröljük, csak deaktiváljuk
     const pool = getDbPool();
     await pool.query('UPDATE users SET active = false WHERE id = $1', [params.id]);
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error deleting user:', error);
-    return NextResponse.json(
-      { error: 'Hiba történt a felhasználó törlésekor' },
-      { status: 500 }
-    );
+    return handleApiError(error, 'Hiba történt a felhasználó törlésekor');
   }
 }
 

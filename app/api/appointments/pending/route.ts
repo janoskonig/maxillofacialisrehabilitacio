@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { sendConditionalAppointmentRequestToPatient, sendConditionalAppointmentNotificationToAdmin } from '@/lib/email';
 import { handleApiError } from '@/lib/api-error-handler';
+import { logger } from '@/lib/logger';
 import { randomBytes } from 'crypto';
 
 /**
@@ -240,7 +241,7 @@ export async function POST(request: NextRequest) {
           ) : Promise.resolve(),
         ]);
       } catch (emailError) {
-        console.error('Failed to send conditional appointment request emails:', emailError);
+        logger.error('Failed to send conditional appointment request emails:', emailError);
         // Don't fail the request if email fails, but log it
       }
 

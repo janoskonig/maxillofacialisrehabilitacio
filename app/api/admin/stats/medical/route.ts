@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import type { MedicalStats } from '@/lib/types';
+import { logger } from '@/lib/logger';
 
 // Szakmai statisztikák API végpont
 export const dynamic = 'force-dynamic';
@@ -343,7 +344,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error('Hiba a szakmai statisztikák lekérdezésekor:', error);
+    logger.error('Hiba a szakmai statisztikák lekérdezésekor:', error);
     return NextResponse.json(
       { error: 'Hiba történt az adatok lekérdezésekor' },
       { status: 500 }

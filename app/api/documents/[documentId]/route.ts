@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
+import { logger } from '@/lib/logger';
 
 /**
  * Get document by ID
@@ -155,7 +156,7 @@ export async function GET(
       document: document,
     });
   } catch (error) {
-    console.error('Error fetching document:', error);
+    logger.error('Error fetching document:', error);
     return NextResponse.json(
       { error: 'Hiba történt a dokumentum lekérdezésekor' },
       { status: 500 }

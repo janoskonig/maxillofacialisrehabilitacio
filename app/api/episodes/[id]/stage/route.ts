@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { logActivity } from '@/lib/activity';
 import { clearSuggestion } from '@/lib/stage-suggestion-service';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -111,7 +112,7 @@ export async function POST(
       try {
         await clearSuggestion(episodeId);
       } catch (e) {
-        console.error('Failed to clear suggestion after stage change:', e);
+        logger.error('Failed to clear suggestion after stage change:', e);
       }
 
       if (stageCode === 'STAGE_6') {
@@ -119,7 +120,7 @@ export async function POST(
           const { ensureRecallTasksForEpisode } = await import('@/lib/recall-tasks');
           await ensureRecallTasksForEpisode(episodeId);
         } catch (e) {
-          console.error('Failed to create recall tasks:', e);
+          logger.error('Failed to create recall tasks:', e);
         }
       }
 
@@ -152,7 +153,7 @@ export async function POST(
       client.release();
     }
   } catch (error) {
-    console.error('Error in POST /episodes/:id/stage:', error);
+    logger.error('Error in POST /episodes/:id/stage:', error);
     return NextResponse.json(
       { error: 'Hiba történt a stádium módosításakor' },
       { status: 500 }

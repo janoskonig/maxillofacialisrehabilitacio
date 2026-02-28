@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 // Batch lekérdezés a dokumentumok számához beteg ID-k alapján
 // Optimalizálás: egyetlen lekérdezésben visszaadja az összes beteg dokumentumszámát
@@ -81,7 +82,7 @@ export async function POST(request: NextRequest) {
       fotoDocuments
     }, { status: 200 });
   } catch (error) {
-    console.error('Error fetching batch documents:', error);
+    logger.error('Error fetching batch documents:', error);
     return NextResponse.json(
       { error: 'Hiba történt a dokumentumok lekérdezésekor' },
       { status: 500 }

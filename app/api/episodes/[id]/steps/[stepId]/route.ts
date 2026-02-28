@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -91,7 +92,7 @@ export async function DELETE(
       throw txError;
     }
   } catch (error) {
-    console.error('Error in DELETE /episodes/:id/steps/:stepId:', error);
+    logger.error('Error in DELETE /episodes/:id/steps/:stepId:', error);
     return NextResponse.json(
       { error: 'Hiba történt a lépés törlésekor' },
       { status: 500 }
@@ -215,7 +216,7 @@ export async function PATCH(
       throw txError;
     }
   } catch (error) {
-    console.error('Error in PATCH /episodes/:id/steps/:stepId:', error);
+    logger.error('Error in PATCH /episodes/:id/steps/:stepId:', error);
     return NextResponse.json(
       { error: 'Hiba történt a lépés frissítésekor' },
       { status: 500 }

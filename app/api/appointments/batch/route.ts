@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 // Batch lekérdezés az időpontokhoz beteg ID-k alapján
 // Optimalizálás: egyetlen lekérdezésben visszaadja az összes beteg időpontjait
@@ -92,7 +93,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ appointments: appointmentsMap }, { status: 200 });
   } catch (error) {
-    console.error('Error fetching batch appointments:', error);
+    logger.error('Error fetching batch appointments:', error);
     return NextResponse.json(
       { error: 'Hiba történt az időpontok lekérdezésekor' },
       { status: 500 }

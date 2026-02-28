@@ -11,6 +11,7 @@ import {
   DEFAULT_HORIZON_DAYS,
   TIMEZONE,
 } from '@/lib/virtual-appointments-service';
+import { logger } from '@/lib/logger';
 
 const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -115,7 +116,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Error fetching virtual appointments:', error);
+    logger.error('Error fetching virtual appointments:', error);
     return NextResponse.json(
       { error: 'Hiba történt a virtuális időpontok lekérdezésekor' },
       { status: 500 }

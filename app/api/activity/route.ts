@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 type ActivityBody = {
   action: string;
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error('Failed to write activity log:', err);
+    logger.error('Failed to write activity log:', err);
     return NextResponse.json({ error: 'Failed to write activity log' }, { status: 500 });
   }
 }
@@ -58,7 +59,7 @@ export async function GET() {
 
     return NextResponse.json({ summary: result.rows });
   } catch (err) {
-    console.error('Failed to read activity summary:', err);
+    logger.error('Failed to read activity summary:', err);
     return NextResponse.json({ error: 'Failed to read activity summary' }, { status: 500 });
   }
 }

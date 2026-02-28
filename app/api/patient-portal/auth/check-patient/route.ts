@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
+import { logger } from '@/lib/logger';
 
 /**
  * Check if patient exists
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
       exists: patientResult.rows.length > 0,
     });
   } catch (error) {
-    console.error('Error checking patient:', error);
+    logger.error('Error checking patient:', error);
     return NextResponse.json(
       { error: 'Hiba történt a beteg ellenőrzésekor' },
       { status: 500 }

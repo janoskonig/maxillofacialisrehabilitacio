@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth-server';
 import { getDbPool } from '@/lib/db';
 import { Message } from '@/lib/communication';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/messages/conversations - Beteg beszélgetések listája az orvos számára
@@ -187,7 +188,7 @@ export async function GET(request: NextRequest) {
       conversations,
     });
   } catch (error: any) {
-    console.error('Hiba a beszélgetések lekérésekor:', error);
+    logger.error('Hiba a beszélgetések lekérésekor:', error);
     return NextResponse.json(
       { error: 'Hiba történt a beszélgetések lekérésekor' },
       { status: 500 }

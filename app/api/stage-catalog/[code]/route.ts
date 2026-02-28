@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { stageCatalogPatchSchema } from '@/lib/admin-process-schemas';
+import { logger } from '@/lib/logger';
 
 const REASON_VALUES = ['traumás sérülés', 'veleszületett rendellenesség', 'onkológiai kezelés utáni állapot'];
 
@@ -115,7 +116,7 @@ export async function PATCH(
 
     return NextResponse.json({ stage: afterResult.rows[0] });
   } catch (error) {
-    console.error('Error updating stage catalog:', error);
+    logger.error('Error updating stage catalog:', error);
     return NextResponse.json(
       { error: 'Hiba történt a stádium módosításakor' },
       { status: 500 }
@@ -168,7 +169,7 @@ export async function DELETE(
 
     return NextResponse.json({ deleted: true });
   } catch (error) {
-    console.error('Error deleting stage catalog:', error);
+    logger.error('Error deleting stage catalog:', error);
     return NextResponse.json(
       { error: 'Hiba történt a stádium törlésekor' },
       { status: 500 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 /**
  * Get all episodes for a patient
@@ -83,7 +84,7 @@ export async function GET(
 
     return NextResponse.json({ episodes });
   } catch (error) {
-    console.error('Error fetching episodes:', error);
+    logger.error('Error fetching episodes:', error);
     return NextResponse.json(
       { error: 'Hiba történt az epizódok lekérdezésekor' },
       { status: 500 }

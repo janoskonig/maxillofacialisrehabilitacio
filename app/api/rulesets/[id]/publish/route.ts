@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -85,7 +86,7 @@ export async function PATCH(
       client.release();
     }
   } catch (error) {
-    console.error('Error in PATCH /rulesets/:id/publish:', error);
+    logger.error('Error in PATCH /rulesets/:id/publish:', error);
     return NextResponse.json(
       { error: 'Hiba történt a ruleset publikálásakor' },
       { status: 500 }

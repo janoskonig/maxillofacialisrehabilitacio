@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/users/doctors/by-institution?institution=xxx - Orvosok lekérése intézmény szerint
@@ -51,7 +52,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ doctors });
   } catch (error) {
-    console.error('Error fetching doctors by institution:', error);
+    logger.error('Error fetching doctors by institution:', error);
     return NextResponse.json(
       { error: 'Hiba történt az orvosok lekérdezésekor' },
       { status: 500 }

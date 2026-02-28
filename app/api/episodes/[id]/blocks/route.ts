@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { getDefaultTtlDays, isValidBlockKey } from '@/lib/episode-block-taxonomy';
 
@@ -33,7 +34,7 @@ export async function GET(
 
     return NextResponse.json({ blocks: result.rows });
   } catch (error) {
-    console.error('Error fetching episode blocks:', error);
+    logger.error('Error fetching episode blocks:', error);
     return NextResponse.json(
       { error: 'Hiba történt a blokkok lekérdezésekor' },
       { status: 500 }
@@ -122,7 +123,7 @@ export async function POST(
 
     return NextResponse.json({ block }, { status: 201 });
   } catch (error) {
-    console.error('Error creating episode block:', error);
+    logger.error('Error creating episode block:', error);
     return NextResponse.json(
       { error: 'Hiba történt a blokk létrehozásakor' },
       { status: 500 }

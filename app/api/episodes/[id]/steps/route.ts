@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -131,7 +132,7 @@ export async function POST(
 
     return NextResponse.json({ step: result.rows[0] }, { status: 201 });
   } catch (error) {
-    console.error('Error in POST /episodes/:id/steps:', error);
+    logger.error('Error in POST /episodes/:id/steps:', error);
     return NextResponse.json(
       { error: 'Hiba történt a lépés hozzáadásakor' },
       { status: 500 }
