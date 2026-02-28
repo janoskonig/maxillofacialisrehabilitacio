@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
-import { verifyAuth } from '@/lib/auth-server';
+import { authedHandler } from '@/lib/api/route-handler';
 import {
   computeEpisodeForecast,
   computeInputsHash,
@@ -13,11 +13,6 @@ export const dynamic = 'force-dynamic';
 
 const LIMIT = 100;
 
-/**
- * GET /api/episodes/forecast/batch?episodeIds=id1,id2,...
- * POST /api/episodes/forecast/batch body: { episodeIds: string[] }
- * Returns forecasts for up to 100 episodes. Cache validity via inputs_hash.
- */
 async function handleBatch(
   episodeIds: string[],
   serverNow: Date,
@@ -153,57 +148,31 @@ async function handleBatch(
   };
 }
 
-export async function GET(request: NextRequest) {
-  try {
-    const auth = await verifyAuth(request);
-    if (!auth) {
-      return NextResponse.json({ error: 'Bejelentkezés szükséges' }, { status: 401 });
-    }
+export const GET = authedHandler(async (req, { auth }) => {
+  const { searchParams } = new URL(req.url);
+  const episodeIdsParam = searchParams.get('episodeIds');
+  const episodeIds = episodeIdsParam ? episodeIdsParam.split(',').map((s) => s.trim()).filter(Boolean) : [];
 
-    const { searchParams } = new URL(request.url);
-    const episodeIdsParam = searchParams.get('episodeIds');
-    const episodeIds = episodeIdsParam ? episodeIdsParam.split(',').map((s) => s.trim()).filter(Boolean) : [];
+  const pool = getDbPool();
+  const serverNowResult = await pool.query('SELECT now() as now');
+  const serverNow = new Date(serverNowResult.rows[0].now);
+  const fetchedAt = new Date();
 
-    const pool = getDbPool();
-    const serverNowResult = await pool.query('SELECT now() as now');
-    const serverNow = new Date(serverNowResult.rows[0].now);
-    const fetchedAt = new Date();
+  const response = await handleBatch(episodeIds, serverNow, fetchedAt);
+  return NextResponse.json(response);
+});
 
-    const response = await handleBatch(episodeIds, serverNow, fetchedAt);
-    return NextResponse.json(response);
-  } catch (error) {
-    logger.error('Error fetching batch forecast:', error);
-    return NextResponse.json(
-      { error: 'Hiba történt a prognózis lekérdezésekor' },
-      { status: 500 }
-    );
-  }
-}
+export const POST = authedHandler(async (req, { auth }) => {
+  const body = await req.json().catch(() => ({}));
+  const episodeIds = Array.isArray(body.episodeIds)
+    ? body.episodeIds.filter((id: unknown) => typeof id === 'string')
+    : [];
 
-export async function POST(request: NextRequest) {
-  try {
-    const auth = await verifyAuth(request);
-    if (!auth) {
-      return NextResponse.json({ error: 'Bejelentkezés szükséges' }, { status: 401 });
-    }
+  const pool = getDbPool();
+  const serverNowResult = await pool.query('SELECT now() as now');
+  const serverNow = new Date(serverNowResult.rows[0].now);
+  const fetchedAt = new Date();
 
-    const body = await request.json().catch(() => ({}));
-    const episodeIds = Array.isArray(body.episodeIds)
-      ? body.episodeIds.filter((id: unknown) => typeof id === 'string')
-      : [];
-
-    const pool = getDbPool();
-    const serverNowResult = await pool.query('SELECT now() as now');
-    const serverNow = new Date(serverNowResult.rows[0].now);
-    const fetchedAt = new Date();
-
-    const response = await handleBatch(episodeIds, serverNow, fetchedAt);
-    return NextResponse.json(response);
-  } catch (error) {
-    logger.error('Error fetching batch forecast:', error);
-    return NextResponse.json(
-      { error: 'Hiba történt a prognózis lekérdezésekor' },
-      { status: 500 }
-    );
-  }
-}
+  const response = await handleBatch(episodeIds, serverNow, fetchedAt);
+  return NextResponse.json(response);
+});

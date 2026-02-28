@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { sendAppointmentBookingNotification, sendAppointmentBookingNotificationToPatient, sendAppointmentBookingNotificationToAdmins } from '@/lib/email';
 import { generateIcsFile } from '@/lib/calendar';
 import { createGoogleCalendarEvent } from '@/lib/google-calendar';
-import { handleApiError } from '@/lib/api-error-handler';
+import { apiHandler } from '@/lib/api/route-handler';
 import { sendPushNotification } from '@/lib/push-notifications';
 import { logger } from '@/lib/logger';
 import { format } from 'date-fns';
@@ -15,9 +15,8 @@ import { hu } from 'date-fns/locale';
  */
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: NextRequest) {
-  try {
-    const searchParams = request.nextUrl.searchParams;
+export const GET = apiHandler(async (req, { params }) => {
+    const searchParams = req.nextUrl.searchParams;
     const token = searchParams.get('token');
 
     if (!token) {
@@ -323,8 +322,5 @@ export async function GET(request: NextRequest) {
       await pool.query('ROLLBACK');
       throw error;
     }
-  } catch (error) {
-    return handleApiError(error, 'Hiba történt az időpont elfogadásakor');
-  }
-}
+});
 

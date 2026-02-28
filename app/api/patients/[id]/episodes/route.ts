@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
-import { verifyAuth } from '@/lib/auth-server';
+import { authedHandler, roleHandler } from '@/lib/api/route-handler';
 import type { PatientEpisode } from '@/lib/types';
 import { logActivity } from '@/lib/activity';
 import { logger } from '@/lib/logger';
@@ -38,135 +38,100 @@ function rowToEpisode(row: Record<string, unknown>): PatientEpisode {
  */
 export const dynamic = 'force-dynamic';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const auth = await verifyAuth(request);
-    if (!auth) {
-      return NextResponse.json(
-        { error: 'Bejelentkezés szükséges' },
-        { status: 401 }
-      );
-    }
+export const GET = authedHandler(async (req, { auth, params }) => {
+  const pool = getDbPool();
+  const patientId = params.id;
 
-    const pool = getDbPool();
-    const patientId = params.id;
-
-    const patientCheck = await pool.query('SELECT id FROM patients WHERE id = $1', [patientId]);
-    if (patientCheck.rows.length === 0) {
-      return NextResponse.json({ error: 'Beteg nem található' }, { status: 404 });
-    }
-
-    const tableExists = await pool.query(
-      `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'patient_episodes'`
-    );
-    if (tableExists.rows.length === 0) {
-      return NextResponse.json({ episodes: [] });
-    }
-
-    const result = await pool.query(
-      `SELECT 
-        pe.id,
-        pe.patient_id as "patientId",
-        pe.reason,
-        pe.pathway_code as "pathwayCode",
-        pe.chief_complaint as "chiefComplaint",
-        pe.case_title as "caseTitle",
-        pe.status,
-        pe.opened_at as "openedAt",
-        pe.closed_at as "closedAt",
-        pe.parent_episode_id as "parentEpisodeId",
-        pe.trigger_type as "triggerType",
-        pe.created_at as "createdAt",
-        pe.created_by as "createdBy",
-        pe.care_pathway_id as "carePathwayId",
-        pe.assigned_provider_id as "assignedProviderId",
-        pe.treatment_type_id as "treatmentTypeId",
-        cp.name as "carePathwayName",
-        COALESCE(u.doktor_neve, u.email) as "assignedProviderName",
-        tt.code as "treatmentTypeCode",
-        tt.label_hu as "treatmentTypeLabel"
-      FROM patient_episodes pe
-      LEFT JOIN care_pathways cp ON pe.care_pathway_id = cp.id
-      LEFT JOIN users u ON pe.assigned_provider_id = u.id
-      LEFT JOIN treatment_types tt ON pe.treatment_type_id = tt.id
-      WHERE pe.patient_id = $1
-      ORDER BY pe.opened_at DESC`,
-      [patientId]
-    );
-
-    const episodes: PatientEpisode[] = result.rows.map(rowToEpisode);
-
-    // Enrich with episodePathways (multi-pathway support)
-    try {
-      const episodeIds = episodes.map((e) => e.id);
-      if (episodeIds.length > 0) {
-        const epPathRows = await pool.query(
-          `SELECT ep.id, ep.episode_id, ep.care_pathway_id as "carePathwayId", ep.ordinal,
-                  cp.name as "pathwayName",
-                  (SELECT COUNT(*)::int FROM episode_steps es WHERE es.source_episode_pathway_id = ep.id) as "stepCount"
-           FROM episode_pathways ep
-           JOIN care_pathways cp ON ep.care_pathway_id = cp.id
-           WHERE ep.episode_id = ANY($1)
-           ORDER BY ep.ordinal`,
-          [episodeIds]
-        );
-        const byEpisode = new Map<string, typeof epPathRows.rows>();
-        for (const row of epPathRows.rows) {
-          const arr = byEpisode.get(row.episode_id) ?? [];
-          arr.push(row);
-          byEpisode.set(row.episode_id, arr);
-        }
-        for (const ep of episodes) {
-          ep.episodePathways = (byEpisode.get(ep.id) ?? []).map((r: Record<string, unknown>) => ({
-            id: r.id as string,
-            carePathwayId: r.carePathwayId as string,
-            ordinal: r.ordinal as number,
-            pathwayName: r.pathwayName as string,
-            stepCount: r.stepCount as number,
-          }));
-        }
-      }
-    } catch {
-      // episode_pathways table might not exist yet (pre-migration)
-    }
-
-    return NextResponse.json({ episodes });
-  } catch (error) {
-    logger.error('Error fetching episodes:', error);
-    return NextResponse.json(
-      { error: 'Hiba történt az epizódok lekérdezésekor' },
-      { status: 500 }
-    );
+  const patientCheck = await pool.query('SELECT id FROM patients WHERE id = $1', [patientId]);
+  if (patientCheck.rows.length === 0) {
+    return NextResponse.json({ error: 'Beteg nem található' }, { status: 404 });
   }
-}
+
+  const tableExists = await pool.query(
+    `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'patient_episodes'`
+  );
+  if (tableExists.rows.length === 0) {
+    return NextResponse.json({ episodes: [] });
+  }
+
+  const result = await pool.query(
+    `SELECT 
+      pe.id,
+      pe.patient_id as "patientId",
+      pe.reason,
+      pe.pathway_code as "pathwayCode",
+      pe.chief_complaint as "chiefComplaint",
+      pe.case_title as "caseTitle",
+      pe.status,
+      pe.opened_at as "openedAt",
+      pe.closed_at as "closedAt",
+      pe.parent_episode_id as "parentEpisodeId",
+      pe.trigger_type as "triggerType",
+      pe.created_at as "createdAt",
+      pe.created_by as "createdBy",
+      pe.care_pathway_id as "carePathwayId",
+      pe.assigned_provider_id as "assignedProviderId",
+      pe.treatment_type_id as "treatmentTypeId",
+      cp.name as "carePathwayName",
+      COALESCE(u.doktor_neve, u.email) as "assignedProviderName",
+      tt.code as "treatmentTypeCode",
+      tt.label_hu as "treatmentTypeLabel"
+    FROM patient_episodes pe
+    LEFT JOIN care_pathways cp ON pe.care_pathway_id = cp.id
+    LEFT JOIN users u ON pe.assigned_provider_id = u.id
+    LEFT JOIN treatment_types tt ON pe.treatment_type_id = tt.id
+    WHERE pe.patient_id = $1
+    ORDER BY pe.opened_at DESC`,
+    [patientId]
+  );
+
+  const episodes: PatientEpisode[] = result.rows.map(rowToEpisode);
+
+  // Enrich with episodePathways (multi-pathway support)
+  try {
+    const episodeIds = episodes.map((e) => e.id);
+    if (episodeIds.length > 0) {
+      const epPathRows = await pool.query(
+        `SELECT ep.id, ep.episode_id, ep.care_pathway_id as "carePathwayId", ep.ordinal,
+                cp.name as "pathwayName",
+                (SELECT COUNT(*)::int FROM episode_steps es WHERE es.source_episode_pathway_id = ep.id) as "stepCount"
+         FROM episode_pathways ep
+         JOIN care_pathways cp ON ep.care_pathway_id = cp.id
+         WHERE ep.episode_id = ANY($1)
+         ORDER BY ep.ordinal`,
+        [episodeIds]
+      );
+      const byEpisode = new Map<string, typeof epPathRows.rows>();
+      for (const row of epPathRows.rows) {
+        const arr = byEpisode.get(row.episode_id) ?? [];
+        arr.push(row);
+        byEpisode.set(row.episode_id, arr);
+      }
+      for (const ep of episodes) {
+        ep.episodePathways = (byEpisode.get(ep.id) ?? []).map((r: Record<string, unknown>) => ({
+          id: r.id as string,
+          carePathwayId: r.carePathwayId as string,
+          ordinal: r.ordinal as number,
+          pathwayName: r.pathwayName as string,
+          stepCount: r.stepCount as number,
+        }));
+      }
+    }
+  } catch {
+    // episode_pathways table might not exist yet (pre-migration)
+  }
+
+  return NextResponse.json({ episodes });
+});
 
 /**
  * Create new episode (Új ellátási epizód indítása)
  * POST /api/patients/[id]/episodes
  * Body: { reason, chiefComplaint, caseTitle?, parentEpisodeId?, triggerType? }
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const auth = await verifyAuth(request);
-    if (!auth) {
-      return NextResponse.json(
-        { error: 'Bejelentkezés szükséges' },
-        { status: 401 }
-      );
-    }
-    if (auth.role !== 'admin' && auth.role !== 'sebészorvos' && auth.role !== 'fogpótlástanász') {
-      return NextResponse.json(
-        { error: 'Nincs jogosultsága az epizód létrehozásához' },
-        { status: 403 }
-      );
-    }
-
+export const POST = roleHandler(
+  ['admin', 'sebészorvos', 'fogpótlástanász'],
+  async (req, { auth, params }) => {
     const pool = getDbPool();
     const patientId = params.id;
 
@@ -188,7 +153,7 @@ export async function POST(
       );
     }
 
-    const body = await request.json();
+    const body = await req.json();
     const reason = body.reason as string;
     const chiefComplaint = (body.chiefComplaint as string)?.trim?.();
     const caseTitle = (body.caseTitle as string)?.trim?.() || null;
@@ -297,18 +262,12 @@ export async function POST(
     }
 
     await logActivity(
-      request,
+      req,
       auth.email,
       'patient_episode_created',
       JSON.stringify({ patientId, episodeId: episode.id, reason })
     );
 
     return NextResponse.json({ episode }, { status: 201 });
-  } catch (error) {
-    logger.error('Error creating episode:', error);
-    return NextResponse.json(
-      { error: 'Hiba történt az epizód létrehozásakor' },
-      { status: 500 }
-    );
   }
-}
+);

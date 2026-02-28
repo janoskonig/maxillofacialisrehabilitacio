@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { patientSchema } from '@/lib/types';
-import { verifyAuth } from '@/lib/auth-server';
+import { optionalAuthHandler, authedHandler, roleHandler } from '@/lib/api/route-handler';
 import { normalizeToTreatmentTypeCode } from '@/lib/treatment-type-normalize';
 import { sendAppointmentTimeSlotFreedNotification } from '@/lib/email';
 import { deleteGoogleCalendarEvent, createGoogleCalendarEvent } from '@/lib/google-calendar';
 import { logActivity, logActivityWithAuth } from '@/lib/activity';
-import { withCorrelation } from '@/lib/api/withCorrelation';
-import { handleApiError } from '@/lib/api-error-handler';
 import { PATIENT_SELECT_FIELDS } from '@/lib/queries/patient-fields';
 import { logger } from '@/lib/logger';
 import type { Pool } from 'pg';
@@ -285,16 +283,6 @@ RETURNING
   created_by as "createdBy", updated_by as "updatedBy"`;
 
 // ─── Private utility functions ──────────────────────────────────────────────
-
-function getCorrelationId(request: NextRequest): string {
-  return request.headers.get('x-correlation-id')?.toLowerCase() || 
-    (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 
-     'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-       const r = (Math.random() * 16) | 0;
-       const v = c === 'x' ? r : (r & 0x3) | 0x8;
-       return v.toString(16);
-     }));
-}
 
 function normalizeDate(val: unknown): string {
   if (!val) return '';
@@ -780,24 +768,15 @@ async function trackPatientChanges(
 
 // ─── GET handler ────────────────────────────────────────────────────────────
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const correlationId = getCorrelationId(request);
-  
-  try {
+export const GET = optionalAuthHandler(async (req, { auth, params, correlationId }) => {
     const pool = getDbPool();
-    
-    // Ellenőrizzük a felhasználó szerepkörét és jogosultságait
-    const auth = await verifyAuth(request);
     const role = auth?.role || null;
     const userEmail = auth?.email || null;
-    
-    // Először lekérdezzük a beteget
+    const patientId = params.id;
+
     const result = await pool.query(
       `SELECT ${PATIENT_SELECT_FIELDS} FROM patients WHERE id = $1`,
-      [params.id]
+      [patientId]
     );
 
     if (result.rows.length === 0) {
@@ -833,53 +812,26 @@ export async function GET(
     }
     // fogpótlástanász, admin, editor, viewer: mindent látnak (nincs szűrés)
 
-    // Activity logging: patient viewed (csak ha be van jelentkezve)
-    const authForLogging = await verifyAuth(request);
-    if (authForLogging) {
+    if (auth) {
       await logActivityWithAuth(
-        request,
-        authForLogging,
+        req,
+        auth,
         'patient_viewed',
-        `Patient ID: ${params.id}, Name: ${result.rows[0].nev || 'N/A'}`
+        `Patient ID: ${patientId}, Name: ${result.rows[0].nev || 'N/A'}`
       );
     }
 
     const response = NextResponse.json({ patient: result.rows[0] }, { status: 200 });
     response.headers.set('x-correlation-id', correlationId);
     return response;
-  } catch (error) {
-    logger.error('Hiba a beteg lekérdezésekor:', error);
-    return handleApiError(error, 'Hiba történt a beteg lekérdezésekor', correlationId);
-  }
-}
+});
 
 // ─── PUT handler ────────────────────────────────────────────────────────────
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const correlationId = getCorrelationId(request);
-  
-  try {
-    const auth = await verifyAuth(request);
-    if (!auth) {
-      const response = NextResponse.json(
-        {
-          error: {
-            name: 'UnauthorizedError',
-            status: 401,
-            message: 'Bejelentkezés szükséges a módosításhoz',
-            correlationId,
-          },
-        },
-        { status: 401 }
-      );
-      response.headers.set('x-correlation-id', correlationId);
-      return response;
-    }
+export const PUT = authedHandler(async (req, { auth, params, correlationId }) => {
+    const patientId = params.id;
 
-    const body = await request.json();
+    const body = await req.json();
     const parsed = patientSchema.parse(body);
 
     const pool = getDbPool();
@@ -889,8 +841,8 @@ export async function PUT(
     if (!treatmentResult.ok) return treatmentResult.response;
     const validatedPatient = treatmentResult.patient;
 
-    const ifMatch = request.headers.get('if-match');
-    const saveSource = request.headers.get('x-save-source');
+    const ifMatch = req.headers.get('if-match');
+    const saveSource = req.headers.get('x-save-source');
     const userEmail = auth.email;
     const userId = auth.userId;
     const role = auth.role;
@@ -898,7 +850,7 @@ export async function PUT(
     // 2. Fetch old patient for comparison & conflict detection
     const oldPatientResult = await pool.query(
       `SELECT *, updated_at FROM patients WHERE id = $1`,
-      [params.id]
+      [patientId]
     );
 
     if (oldPatientResult.rows.length === 0) {
@@ -920,7 +872,7 @@ export async function PUT(
     const oldPatient = oldPatientResult.rows[0];
 
     // 3. Conflict detection (If-Match / stale write)
-    const conflictResponse = checkStaleWrite(ifMatch, oldPatient, params.id, correlationId, userEmail);
+    const conflictResponse = checkStaleWrite(ifMatch, oldPatient, patientId, correlationId, userEmail);
     if (conflictResponse) return conflictResponse;
 
     // 4. Role-based edit permission
@@ -928,11 +880,11 @@ export async function PUT(
     if (permResponse) return permResponse;
 
     // 5. TAJ uniqueness
-    const tajResponse = await checkTajUniqueness(pool, validatedPatient.taj, oldPatient.taj, params.id, correlationId);
+    const tajResponse = await checkTajUniqueness(pool, validatedPatient.taj, oldPatient.taj, patientId, correlationId);
     if (tajResponse) return tajResponse;
 
     // 6. Execute the update
-    const updateParams = buildUpdateParams(params.id, validatedPatient, userEmail);
+    const updateParams = buildUpdateParams(patientId, validatedPatient, userEmail);
     const result = await pool.query(PATIENT_UPDATE_SQL, updateParams);
 
     if (result.rows.length === 0) {
@@ -944,7 +896,7 @@ export async function PUT(
 
     // 7. Change tracking & audit logging
     try {
-      await trackPatientChanges(pool, request, params.id, oldPatient, validatedPatient, result.rows[0], userEmail);
+      await trackPatientChanges(pool, req, patientId, oldPatient, validatedPatient, result.rows[0], userEmail);
     } catch (logError) {
       logger.error('Failed to log activity:', logError);
     }
@@ -956,7 +908,7 @@ export async function PUT(
           `INSERT INTO patient_snapshots (patient_id, snapshot_data, created_by_user_id, source, created_at)
            VALUES ($1, $2::jsonb, $3, $4, CURRENT_TIMESTAMP)`,
           [
-            params.id,
+            patientId,
             JSON.stringify(result.rows[0]),
             userId,
             'manual',
@@ -970,43 +922,19 @@ export async function PUT(
     const response = NextResponse.json({ patient: result.rows[0] }, { status: 200 });
     response.headers.set('x-correlation-id', correlationId);
     return response;
-  } catch (error: any) {
-    logger.error('Hiba a beteg frissítésekor:', error);
-    return handleApiError(error, 'Hiba történt a beteg frissítésekor', correlationId);
-  }
-}
+});
 
 // ─── DELETE handler ─────────────────────────────────────────────────────────
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    // Authorization: require authenticated user
-    const auth = await verifyAuth(request);
-    if (!auth) {
-      return NextResponse.json(
-        { error: 'Bejelentkezés szükséges a törléshez' },
-        { status: 401 }
-      );
-    }
-
-    // Only admin can delete patients
-    if (auth.role !== 'admin') {
-      return NextResponse.json(
-        { error: 'Csak admin törölhet betegeket' },
-        { status: 403 }
-      );
-    }
-
+export const DELETE = roleHandler(['admin'], async (req, { auth, params }) => {
+    const patientId = params.id;
     const pool = getDbPool();
     const userEmail = auth.email;
     
     // Get patient details
     const patientResult = await pool.query(
       'SELECT id, nev, taj, email FROM patients WHERE id = $1',
-      [params.id]
+      [patientId]
     );
 
     if (patientResult.rows.length === 0) {
@@ -1018,7 +946,6 @@ export async function DELETE(
     
     const patient = patientResult.rows[0];
     
-    // Check if patient has appointments
     const appointmentResult = await pool.query(
       `SELECT 
         a.id,
@@ -1034,7 +961,7 @@ export async function DELETE(
       JOIN available_time_slots ats ON a.time_slot_id = ats.id
       JOIN users u ON ats.user_id = u.id
       WHERE a.patient_id = $1`,
-      [params.id]
+      [patientId]
     );
 
     const appointments = appointmentResult.rows;
@@ -1056,7 +983,7 @@ export async function DELETE(
       }
 
       // Delete the patient (this will cascade delete appointments due to ON DELETE CASCADE, but we already handled it)
-      await pool.query('DELETE FROM patients WHERE id = $1', [params.id]);
+      await pool.query('DELETE FROM patients WHERE id = $1', [patientId]);
 
       await pool.query('COMMIT');
 
@@ -1181,10 +1108,10 @@ export async function DELETE(
         ? `, ${appointments.length} időpont törölve és felszabadítva`
         : '';
       await logActivity(
-        request,
+        req,
         userEmail,
         'patient_deleted',
-        `Patient ID: ${params.id}, Name: ${patient.nev || 'N/A'}${appointmentInfo}`
+        `Patient ID: ${patientId}, Name: ${patient.nev || 'N/A'}${appointmentInfo}`
       );
 
       return NextResponse.json(
@@ -1198,11 +1125,4 @@ export async function DELETE(
       await pool.query('ROLLBACK');
       throw error;
     }
-  } catch (error) {
-    logger.error('Hiba a beteg törlésekor:', error);
-    return NextResponse.json(
-      { error: 'Hiba történt a beteg törlésekor' },
-      { status: 500 }
-    );
-  }
-}
+});

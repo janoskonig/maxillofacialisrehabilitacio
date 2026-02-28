@@ -1,10 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
-import { verifyAuth } from '@/lib/auth-server';
+import { authedHandler } from '@/lib/api/route-handler';
 import { sendEmail } from '@/lib/email';
 import { generateLabQuoteRequestPDF } from '@/lib/pdf/lab-quote-request';
 import { Patient, patientSchema } from '@/lib/types';
-import { logger } from '@/lib/logger';
 
 // Labor email címe (tesztelés miatt)
 const LAB_EMAIL = 'jancheeta876@gmail.com';
@@ -15,51 +14,39 @@ const REPLY_TO_EMAIL = 'konig.janos@semmelweis.hu';
  */
 export const dynamic = 'force-dynamic';
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string; quoteId: string } }
-) {
-  try {
-    const auth = await verifyAuth(request);
-    if (!auth) {
-      return NextResponse.json(
-        { error: 'Bejelentkezés szükséges' },
-        { status: 401 }
-      );
-    }
+export const POST = authedHandler(async (req, { auth, params }) => {
+  // Jogosultság ellenőrzése - csak admin, editor és sebészorvos
+  if (auth.role !== 'admin' && auth.role !== 'editor' && auth.role !== 'sebészorvos') {
+    return NextResponse.json(
+      { error: 'Nincs jogosultsága email küldéséhez' },
+      { status: 403 }
+    );
+  }
 
-    // Jogosultság ellenőrzése - csak admin, editor és sebészorvos
-    if (auth.role !== 'admin' && auth.role !== 'editor' && auth.role !== 'sebészorvos') {
-      return NextResponse.json(
-        { error: 'Nincs jogosultsága email küldéséhez' },
-        { status: 403 }
-      );
-    }
+  const pool = getDbPool();
+  const patientId = params.id;
+  const quoteId = params.quoteId;
 
-    const pool = getDbPool();
-    const patientId = params.id;
-    const quoteId = params.quoteId;
-
-    // Beteg adatainak lekérdezése
-    const patientResult = await pool.query(
-      `SELECT 
+  // Beteg adatainak lekérdezése
+  const patientResult = await pool.query(
+    `SELECT 
         id, nev, taj, telefonszam, szuletesi_datum as "szuletesiDatum", nem,
         email, cim, varos, iranyitoszam, kezeleoorvos
       FROM patients
       WHERE id = $1`,
-      [patientId]
+    [patientId]
+  );
+
+  if (patientResult.rows.length === 0) {
+    return NextResponse.json(
+      { error: 'Beteg nem található' },
+      { status: 404 }
     );
+  }
 
-    if (patientResult.rows.length === 0) {
-      return NextResponse.json(
-        { error: 'Beteg nem található' },
-        { status: 404 }
-      );
-    }
-
-    // Árajánlatkérő lekérdezése
-    const quoteResult = await pool.query(
-      `SELECT 
+  // Árajánlatkérő lekérdezése
+  const quoteResult = await pool.query(
+    `SELECT 
         id,
         patient_id as "patientId",
         szoveg,
@@ -70,60 +57,60 @@ export async function POST(
         updated_by as "updatedBy"
       FROM lab_quote_requests
       WHERE id = $1 AND patient_id = $2`,
-      [quoteId, patientId]
+    [quoteId, patientId]
+  );
+
+  if (quoteResult.rows.length === 0) {
+    return NextResponse.json(
+      { error: 'Árajánlatkérő nem található' },
+      { status: 404 }
     );
+  }
 
-    if (quoteResult.rows.length === 0) {
-      return NextResponse.json(
-        { error: 'Árajánlatkérő nem található' },
-        { status: 404 }
-      );
-    }
+  const patientData = patientResult.rows[0];
+  const quoteData = quoteResult.rows[0];
 
-    const patientData = patientResult.rows[0];
-    const quoteData = quoteResult.rows[0];
-    
-    // Konvertáljuk a dátum mezőket string formátumba
-    const normalizedPatientData = {
-      ...patientData,
-      szuletesiDatum: patientData.szuletesiDatum 
-        ? (patientData.szuletesiDatum instanceof Date 
-            ? patientData.szuletesiDatum.toISOString().split('T')[0]
-            : String(patientData.szuletesiDatum))
-        : null,
-    };
-    
-    const normalizedQuoteData = {
-      ...quoteData,
-      datuma: quoteData.datuma 
-        ? (quoteData.datuma instanceof Date 
-            ? quoteData.datuma.toISOString().split('T')[0]
-            : String(quoteData.datuma))
-        : null,
-    };
-    
-    // Validáljuk az adatokat
-    const patient = patientSchema.parse(normalizedPatientData) as Patient;
-    const quoteRequest = normalizedQuoteData as any;
+  // Konvertáljuk a dátum mezőket string formátumba
+  const normalizedPatientData = {
+    ...patientData,
+    szuletesiDatum: patientData.szuletesiDatum
+      ? (patientData.szuletesiDatum instanceof Date
+          ? patientData.szuletesiDatum.toISOString().split('T')[0]
+          : String(patientData.szuletesiDatum))
+      : null,
+  };
 
-    // PDF generálása
-    const pdfBuffer = await generateLabQuoteRequestPDF(patient, quoteRequest);
+  const normalizedQuoteData = {
+    ...quoteData,
+    datuma: quoteData.datuma
+      ? (quoteData.datuma instanceof Date
+          ? quoteData.datuma.toISOString().split('T')[0]
+          : String(quoteData.datuma))
+      : null,
+  };
 
-    // Email küldése
-    const patientName = patient.nev || 'Beteg';
-    const formattedDate = quoteRequest.datuma 
-      ? new Date(quoteRequest.datuma).toLocaleDateString('hu-HU', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric'
-        })
-      : '';
+  // Validáljuk az adatokat
+  const patient = patientSchema.parse(normalizedPatientData) as Patient;
+  const quoteRequest = normalizedQuoteData as any;
 
-    // Tárgy előkészítése (kevesebb ékezetes karakter a spam-szűrők miatt)
-    const safeSubject = `Arajanlatkero - ${patientName}`;
-    
-    // HTML tartalom előkészítése (tisztább struktúra)
-    const htmlContent = `
+  // PDF generálása
+  const pdfBuffer = await generateLabQuoteRequestPDF(patient, quoteRequest);
+
+  // Email küldése
+  const patientName = patient.nev || 'Beteg';
+  const formattedDate = quoteRequest.datuma
+    ? new Date(quoteRequest.datuma).toLocaleDateString('hu-HU', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      })
+    : '';
+
+  // Tárgy előkészítése (kevesebb ékezetes karakter a spam-szűrők miatt)
+  const safeSubject = `Arajanlatkero - ${patientName}`;
+
+  // HTML tartalom előkészítése (tisztább struktúra)
+  const htmlContent = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #2563eb;">Árajánlatkérő</h2>
           <p>Tisztelt Laboratórium!</p>
@@ -141,12 +128,12 @@ export async function POST(
         </div>
       `;
 
-    await sendEmail({
-      to: LAB_EMAIL,
-      replyTo: REPLY_TO_EMAIL,
-      subject: safeSubject,
-      html: htmlContent,
-      text: `
+  await sendEmail({
+    to: LAB_EMAIL,
+    replyTo: REPLY_TO_EMAIL,
+    subject: safeSubject,
+    html: htmlContent,
+    text: `
 Árajánlatkérő
 
 Tisztelt Laboratórium!
@@ -168,25 +155,17 @@ Semmelweis Egyetem
 Fogorvostudományi Kar
 Fogpótlástani Klinika
       `,
-      attachments: [
-        {
-          filename: `Arajanlatkero_${patientName.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.pdf`,
-          content: pdfBuffer,
-          contentType: 'application/pdf',
-        },
-      ],
-    });
+    attachments: [
+      {
+        filename: `Arajanlatkero_${patientName.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.pdf`,
+        content: pdfBuffer,
+        contentType: 'application/pdf',
+      },
+    ],
+  });
 
-    return NextResponse.json(
-      { success: true, message: 'Email sikeresen elküldve a laboratóriumnak' },
-      { status: 200 }
-    );
-  } catch (error) {
-    logger.error('Hiba az email küldésekor:', error);
-    return NextResponse.json(
-      { error: 'Hiba történt az email küldésekor' },
-      { status: 500 }
-    );
-  }
-}
-
+  return NextResponse.json(
+    { success: true, message: 'Email sikeresen elküldve a laboratóriumnak' },
+    { status: 200 }
+  );
+});

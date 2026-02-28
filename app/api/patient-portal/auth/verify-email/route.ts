@@ -3,6 +3,7 @@ import { verifyPortalToken, createMagicLinkToken } from '@/lib/patient-portal-au
 import { getDbPool } from '@/lib/db';
 import { SignJWT } from 'jose';
 import { cookies } from 'next/headers';
+import { apiHandler } from '@/lib/api/route-handler';
 import { logger } from '@/lib/logger';
 
 const JWT_SECRET = new TextEncoder().encode(
@@ -11,38 +12,27 @@ const JWT_SECRET = new TextEncoder().encode(
 
 const PORTAL_SESSION_EXPIRES_IN = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-/**
- * Get base URL for redirects
- * Priority: 1. NEXT_PUBLIC_BASE_URL env var, 2. Request origin (dev), 3. Production URL
- */
 function getBaseUrl(request: NextRequest): string {
   const envBaseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-  
-  // If environment variable is set, use it (works for both local and production)
+
   if (envBaseUrl) {
     return envBaseUrl;
   }
-  
-  // In development, use request origin to support local testing
+
   if (process.env.NODE_ENV === 'development') {
     const origin = request.headers.get('origin') || request.nextUrl.origin;
     return origin;
   }
-  
-  // Production fallback
+
   return 'https://rehabilitacios-protetika.hu';
 }
 
-/**
- * Verify email verification token and activate patient account
- * GET /api/patient-portal/auth/verify-email?token=xxx
- */
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: NextRequest) {
+export const GET = apiHandler(async (req, { correlationId }) => {
   try {
-    const baseUrl = getBaseUrl(request);
-    const searchParams = request.nextUrl.searchParams;
+    const baseUrl = getBaseUrl(req);
+    const searchParams = req.nextUrl.searchParams;
     const token = searchParams.get('token');
 
     logger.info('[verify-email] Starting verification, baseUrl:', baseUrl, 'token length:', token?.length);
@@ -54,7 +44,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Verify email verification token
     logger.info('[verify-email] Verifying token...');
     const verification = await verifyPortalToken(token, 'email_verification');
     logger.info('[verify-email] Verification result:', verification ? 'success' : 'failed', verification);
@@ -75,11 +64,8 @@ export async function GET(request: NextRequest) {
 
     logger.info('[verify-email] Token verified successfully, patientId:', verification.patientId);
 
-    // Mark patient as email verified (we can add a field for this later)
-    // For now, we'll just create a magic link token and log them in
     const pool = getDbPool();
-    
-    // Check if patient exists
+
     logger.info('[verify-email] Checking if patient exists:', verification.patientId);
     const patientResult = await pool.query(
       'SELECT id FROM patients WHERE id = $1',
@@ -95,12 +81,10 @@ export async function GET(request: NextRequest) {
 
     logger.info('[verify-email] Patient found, creating session...');
 
-    // Create magic link token for immediate login
-    const ipHeader = request.headers.get('x-forwarded-for') || '';
+    const ipHeader = req.headers.get('x-forwarded-for') || '';
     const ipAddress = ipHeader.split(',')[0]?.trim() || null;
     const magicLinkToken = await createMagicLinkToken(verification.patientId, ipAddress);
 
-    // Create portal session JWT
     const sessionToken = await new SignJWT({
       patientId: verification.patientId,
       type: 'patient_portal',
@@ -110,20 +94,17 @@ export async function GET(request: NextRequest) {
       .setExpirationTime(Date.now() + PORTAL_SESSION_EXPIRES_IN)
       .sign(JWT_SECRET);
 
-    // Set HTTP-only cookie
     const cookieStore = await cookies();
-    // Always use secure cookies in production (HTTPS), check if baseUrl is HTTPS
     const isSecure = baseUrl.startsWith('https://');
     cookieStore.set('patient_portal_session', sessionToken, {
       httpOnly: true,
       secure: isSecure,
       sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60, // 7 days in seconds
+      maxAge: 7 * 24 * 60 * 60,
       path: '/',
     });
     logger.info('[verify-email] Cookie set with secure:', isSecure, 'baseUrl:', baseUrl);
 
-    // Redirect to portal dashboard with success message
     return NextResponse.redirect(
       new URL('/patient-portal/dashboard?verified=true', baseUrl)
     );
@@ -134,18 +115,17 @@ export async function GET(request: NextRequest) {
       stack: error?.stack,
       code: error?.code,
     });
-    const baseUrl = getBaseUrl(request);
-    
-    // Check if it's a database table missing error
+    const baseUrl = getBaseUrl(req);
+
     if (error?.message?.includes('table does not exist') || error?.code === '42P01') {
       logger.error('[verify-email] Database table missing');
       return NextResponse.redirect(
         new URL('/patient-portal?error=database_error', baseUrl)
       );
     }
-    
+
     return NextResponse.redirect(
       new URL('/patient-portal?error=verification_failed', baseUrl)
     );
   }
-}
+});

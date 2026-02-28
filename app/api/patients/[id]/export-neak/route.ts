@@ -1,7 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
-import { verifyAuth } from '@/lib/auth-server';
-import { handleApiError } from '@/lib/api-error-handler';
+import { authedHandler } from '@/lib/api/route-handler';
 import { REQUIRED_DOC_TAGS, REQUIRED_DOC_RULES, getMissingRequiredDocRules, getMissingRequiredDocTags, getChecklistStatus, getMissingRequiredFields } from '@/lib/clinical-rules';
 import { Patient, LabQuoteRequest } from '@/lib/types';
 import { patientSelectSql, normalizePatientRow } from '@/lib/patient-select';
@@ -36,13 +35,6 @@ const EXPORT_LIMITS: ExportLimits = {
 
 // Feature flag: ENABLE_NEAK_EXPORT
 const ENABLE_NEAK_EXPORT = process.env.ENABLE_NEAK_EXPORT === 'true';
-
-/**
- * Helper to get correlation ID from request
- */
-function getCorrelationId(req: NextRequest): string {
-  return req.headers.get('x-correlation-id')?.toLowerCase() || 'unknown';
-}
 
 // Régi PDF helper függvények eltávolítva - már nem kellenek, mert markdown → HTML → PDF workflow-t használunk
 
@@ -188,48 +180,25 @@ function generateReadme(
  */
 export const dynamic = 'force-dynamic';
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const correlationId = getCorrelationId(req);
-  
-  try {
-    // Feature flag check
-    if (!ENABLE_NEAK_EXPORT) {
-      const response = NextResponse.json(
-        {
-          error: 'NEAK export feature is not enabled',
-          code: 'FEATURE_DISABLED',
-          correlationId,
-        },
-        { status: 404 }
-      );
-      response.headers.set('x-correlation-id', correlationId);
-      return response;
-    }
+export const GET = authedHandler(async (req, { auth, params, correlationId }) => {
+  // Feature flag check
+  if (!ENABLE_NEAK_EXPORT) {
+    return NextResponse.json(
+      {
+        error: 'NEAK export feature is not enabled',
+        code: 'FEATURE_DISABLED',
+        correlationId,
+      },
+      { status: 404 }
+    );
+  }
 
-    // Authentication
-    const auth = await verifyAuth(req);
-    if (!auth) {
-      const response = NextResponse.json(
-        {
-          error: 'Bejelentkezés szükséges',
-          code: 'UNAUTHORIZED',
-          correlationId,
-        },
-        { status: 401 }
-      );
-      response.headers.set('x-correlation-id', correlationId);
-      return response;
-    }
+  // Extract patient ID from params and check dryRun query param
+  const patientId = params.id;
+  const url = new URL(req.url);
+  const isDryRun = url.searchParams.get('dryRun') === '1';
 
-    // Extract patient ID from params and check dryRun query param
-    const patientId = params.id;
-    const url = new URL(req.url);
-    const isDryRun = url.searchParams.get('dryRun') === '1';
-
-    if (!patientId) {
+  if (!patientId) {
       return NextResponse.json(
         {
           error: 'Beteg ID hiányzik',
@@ -759,7 +728,4 @@ export async function GET(
     // (This is handled in PatientDocuments.tsx - success log only after blob download)
 
     return response;
-  } catch (error: any) {
-    return handleApiError(error, correlationId);
-  }
-}
+});

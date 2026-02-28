@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 import { getDbPool } from '@/lib/db';
 import { encryptToken } from '@/lib/google-calendar';
+import { apiHandler } from '@/lib/api/route-handler';
 import { logger } from '@/lib/logger';
 
 const JWT_SECRET = new TextEncoder().encode(
@@ -27,7 +28,6 @@ function normalizeError(err: unknown) {
     name: isError ? err.name : (typeof e?.name === "string" ? e.name : "UnknownError"),
     message: isError ? err.message : String(err),
     stack: isError ? err.stack : undefined,
-    // Postgres / node / http kliens kódok (ha vannak)
     code: typeof e?.code === "string" ? e.code : undefined,
     status: typeof e?.response?.status === "number" ? e.response.status : undefined,
   };
@@ -37,17 +37,10 @@ function detectErrorType(n: ReturnType<typeof normalizeError>, step: CallbackSte
   errorType: "database_error" | "encryption_error" | "internal_error";
   errorStep: CallbackStep;
 } {
-  // Postgres tipikus error codes:
-  // 42703 = undefined_column
-  // 42P01 = undefined_table
-  // 28xxx = invalid authorization specification (auth)
-  // 57P01 = admin shutdown
-  // 08006 = connection failure
   const pgCodesDb = new Set(["42703", "42P01", "42601", "08006", "57P01"]);
 
   const msg = (n.message || "").toLowerCase();
 
-  // Encryption
   const looksLikeEncryption =
     msg.includes("encryption_key") ||
     msg.includes("encrypt") ||
@@ -55,7 +48,6 @@ function detectErrorType(n: ReturnType<typeof normalizeError>, step: CallbackSte
     msg.includes("cipher") ||
     msg.includes("invalid key length");
 
-  // Database
   const looksLikeDb =
     pgCodesDb.has(n.code ?? "") ||
     (msg.includes("column") && msg.includes("does not exist")) ||
@@ -74,20 +66,12 @@ function detectErrorType(n: ReturnType<typeof normalizeError>, step: CallbackSte
   return { errorType: "internal_error", errorStep: step };
 }
 
-/**
- * Get base URL for redirects (production-proof, proxy-aware)
- * Priority: 1) NEXT_PUBLIC_BASE_URL env var, 2) x-forwarded-host/proto, 3) host header, 4) request.url
- */
 function getBaseUrl(request: NextRequest): string {
-  // 1) Prefer public canonical URL (recommended)
   const envUrl = process.env.NEXT_PUBLIC_BASE_URL?.trim();
   if (envUrl) {
-    // normalize: remove trailing slash
     return envUrl.endsWith('/') ? envUrl.slice(0, -1) : envUrl;
   }
 
-  // 2) Proxy-aware fallback
-  // Next/Edge: headers may include forwarded values
   const xfProto = request.headers.get('x-forwarded-proto');
   const xfHost = request.headers.get('x-forwarded-host');
   if (xfHost) {
@@ -95,39 +79,32 @@ function getBaseUrl(request: NextRequest): string {
     return `${proto}://${xfHost}`;
   }
 
-  // 3) Direct host fallback
   const host = request.headers.get('host');
   if (host) {
     const proto = xfProto ?? (host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : 'https');
     return `${proto}://${host}`;
   }
 
-  // 4) Last resort: derive from request.url (may be internal)
   const u = new URL(request.url);
   return `${u.protocol}//${u.host}`;
 }
 
-/**
- * OAuth2 callback feldolgozása
- */
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: NextRequest) {
-  // Base URL meghatározása a handler elején (minden redirect előtt)
-  const baseUrl = getBaseUrl(request);
+export const GET = apiHandler(async (req, { correlationId }) => {
+  const baseUrl = getBaseUrl(req);
   let step: CallbackStep = "parse_params";
   let statePayload: { userId: string; email: string; timestamp: number; random: string } | null = null;
 
-  const searchParams = request.nextUrl.searchParams;
+  const searchParams = req.nextUrl.searchParams;
   const code = searchParams.get('code');
   const state = searchParams.get('state');
   const error = searchParams.get('error');
 
-  // Korai hibák: itt is baseUrl-t használj
   if (error) {
     logger.error("[Google Calendar Callback] OAuth error param", {
       error,
-      requestId: request.headers.get("x-request-id") ?? undefined,
+      requestId: req.headers.get("x-request-id") ?? undefined,
     });
     return NextResponse.redirect(
       new URL('/settings?google_calendar_error=' + encodeURIComponent(error), baseUrl)
@@ -148,7 +125,6 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // 1) State validáció (CSRF védelem)
     step = "validate_state";
     try {
       const { payload } = await jwtVerify(state, JWT_SECRET);
@@ -165,7 +141,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // 2) Token exchange
     step = "token_exchange";
     const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${baseUrl}/api/google-calendar/callback`;
 
@@ -210,20 +185,18 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Google user info lekérése (email címhez)
     const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
       headers: {
         Authorization: `Bearer ${tokenData.access_token}`,
       },
     });
 
-    let googleEmail = statePayload.email; // Fallback
+    let googleEmail = statePayload.email;
     if (userInfoResponse.ok) {
       const userInfo = await userInfoResponse.json();
       googleEmail = userInfo.email || statePayload.email;
     }
 
-    // 3) Encryption
     step = "token_encryption";
     let encryptedRefreshToken: string;
     let encryptedAccessToken: string;
@@ -243,16 +216,13 @@ export async function GET(request: NextRequest) {
       throw encryptErr;
     }
 
-    // 4) Database update
     step = "database_update";
     const pool = getDbPool();
     const expiresAt = tokenData.expires_in
       ? new Date(Date.now() + tokenData.expires_in * 1000)
-      : new Date(Date.now() + 3600 * 1000); // Default 1 óra
+      : new Date(Date.now() + 3600 * 1000);
 
     try {
-      // KRITIKUS: Refresh token mindig mentése, de csak akkor frissítjük, ha új érkezik
-      // (Token rotation esetén az új refresh token felülírja a régit)
       await pool.query(
         `UPDATE users 
          SET google_calendar_refresh_token = $1,
@@ -284,7 +254,6 @@ export async function GET(request: NextRequest) {
       throw dbErr;
     }
 
-    // 5) Success redirect
     step = "success_redirect";
     return NextResponse.redirect(
       new URL('/settings?google_calendar_success=true', baseUrl)
@@ -293,31 +262,26 @@ export async function GET(request: NextRequest) {
     const n = normalizeError(err);
     const { errorType, errorStep } = detectErrorType(n, step);
 
-    // Strukturált log – ne logolj code/state tartalmat, csak bool/metadata
     logger.error("[Google Calendar Callback] Error processing OAuth callback", {
       errorType,
       errorStep,
       errorName: n.name,
       errorMessage: n.message,
       errorStack: n.stack,
-      // PG / HTTP meta, ha van
       errorCode: n.code,
       httpStatus: n.status,
-      // user context, ha már van
       userId: statePayload?.userId ?? "unknown",
       userEmail: statePayload?.email ?? "unknown",
-      // request context (safe)
-      requestUrl: request.url,
+      requestUrl: req.url,
       hasCode: true,
       hasState: true,
-      userAgent: request.headers.get("user-agent") ?? undefined,
-      forwardedHost: request.headers.get("x-forwarded-host") ?? undefined,
-      forwardedProto: request.headers.get("x-forwarded-proto") ?? undefined,
+      userAgent: req.headers.get("user-agent") ?? undefined,
+      forwardedHost: req.headers.get("x-forwarded-host") ?? undefined,
+      forwardedProto: req.headers.get("x-forwarded-proto") ?? undefined,
     });
 
     return NextResponse.redirect(
       new URL(`/settings?google_calendar_error=${encodeURIComponent(errorType)}`, baseUrl)
     );
   }
-}
-
+});

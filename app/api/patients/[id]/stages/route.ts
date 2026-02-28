@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
-import { verifyAuth } from '@/lib/auth-server';
-import { patientStageSchema, PatientStageEntry, PatientStageTimeline } from '@/lib/types';
+import { authedHandler, roleHandler } from '@/lib/api/route-handler';
+import { PatientStageEntry, PatientStageTimeline } from '@/lib/types';
 import type { StageEventEntry, StageEventTimeline, PatientEpisode } from '@/lib/types';
 import { logActivity } from '@/lib/activity';
 import { logger } from '@/lib/logger';
@@ -13,21 +13,9 @@ import { logger } from '@/lib/logger';
  */
 export const dynamic = 'force-dynamic';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const auth = await verifyAuth(request);
-    if (!auth) {
-      return NextResponse.json(
-        { error: 'Bejelentkezés szükséges' },
-        { status: 401 }
-      );
-    }
-
-    const pool = getDbPool();
-    const patientId = params.id;
+export const GET = authedHandler(async (req, { auth, params }) => {
+  const pool = getDbPool();
+  const patientId = params.id;
 
     const patientCheck = await pool.query(
       'SELECT id FROM patients WHERE id = $1',
@@ -172,15 +160,8 @@ export async function GET(
       episodes,
     };
 
-    return NextResponse.json({ timeline });
-  } catch (error) {
-    logger.error('Error fetching patient stages:', error);
-    return NextResponse.json(
-      { error: 'Hiba történt a stádiumok lekérdezésekor' },
-      { status: 500 }
-    );
-  }
-}
+  return NextResponse.json({ timeline });
+});
 
 /**
  * Create new patient stage
@@ -188,28 +169,9 @@ export async function GET(
  * New model: body { episodeId, stageCode, at?, note? }
  * Legacy: body { stage, notes?, stageDate?, startNewEpisode? }
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const auth = await verifyAuth(request);
-    if (!auth) {
-      return NextResponse.json(
-        { error: 'Bejelentkezés szükséges' },
-        { status: 401 }
-      );
-    }
-
-    if (auth.role !== 'admin' && auth.role !== 'sebészorvos' && auth.role !== 'fogpótlástanász') {
-      return NextResponse.json(
-        { error: 'Nincs jogosultsága a stádium beállításához' },
-        { status: 403 }
-      );
-    }
-
-    const pool = getDbPool();
-    const patientId = params.id;
+export const POST = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'], async (req, { auth, params }) => {
+  const pool = getDbPool();
+  const patientId = params.id;
 
     const patientCheck = await pool.query(
       'SELECT id FROM patients WHERE id = $1',
@@ -227,7 +189,7 @@ export async function POST(
       `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'stage_events'`
     );
 
-    const body = await request.json();
+    const body = await req.json();
 
     if (hasStageEvents.rows.length > 0 && (body.episodeId != null || body.stageCode != null)) {
       const episodeId = body.episodeId as string;
@@ -291,7 +253,7 @@ export async function POST(
       };
 
       await logActivity(
-        request,
+        req,
         auth.email,
         'patient_stage_created',
         JSON.stringify({ patientId, stageCode, episodeId })
@@ -396,18 +358,11 @@ export async function POST(
     };
 
     await logActivity(
-      request,
+      req,
       auth.email,
       'patient_stage_created',
       JSON.stringify({ patientId, stage, episodeId })
     );
 
     return NextResponse.json({ stage: newStage }, { status: 201 });
-  } catch (error) {
-    logger.error('Error creating patient stage:', error);
-    return NextResponse.json(
-      { error: 'Hiba történt a stádium létrehozásakor' },
-      { status: 500 }
-    );
-  }
-}
+});

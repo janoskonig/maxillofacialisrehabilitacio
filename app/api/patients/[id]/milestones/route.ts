@@ -1,8 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
-import { verifyAuth } from '@/lib/auth-server';
+import { authedHandler, roleHandler } from '@/lib/api/route-handler';
 import type { PatientMilestoneEntry } from '@/lib/types';
-import { logger } from '@/lib/logger';
 
 function rowToMilestone(row: Record<string, unknown>): PatientMilestoneEntry {
   return {
@@ -24,83 +23,48 @@ function rowToMilestone(row: Record<string, unknown>): PatientMilestoneEntry {
  */
 export const dynamic = 'force-dynamic';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const auth = await verifyAuth(request);
-    if (!auth) {
-      return NextResponse.json(
-        { error: 'Bejelentkezés szükséges' },
-        { status: 401 }
-      );
-    }
+export const GET = authedHandler(async (req, { params }) => {
+  const pool = getDbPool();
+  const patientId = params.id;
+  const episodeId = req.nextUrl.searchParams.get('episodeId');
 
-    const pool = getDbPool();
-    const patientId = params.id;
-    const episodeId = request.nextUrl.searchParams.get('episodeId');
-
-    const patientCheck = await pool.query('SELECT id FROM patients WHERE id = $1', [patientId]);
-    if (patientCheck.rows.length === 0) {
-      return NextResponse.json({ error: 'Beteg nem található' }, { status: 404 });
-    }
-
-    const tableExists = await pool.query(
-      `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'patient_milestones'`
-    );
-    if (tableExists.rows.length === 0) {
-      return NextResponse.json({ milestones: [] });
-    }
-
-    let query = `
-      SELECT id, patient_id as "patientId", episode_id as "episodeId", code, at, params, note, created_by as "createdBy", created_at as "createdAt"
-      FROM patient_milestones
-      WHERE patient_id = $1
-    `;
-    const queryParams: string[] = [patientId];
-    if (episodeId) {
-      query += ` AND episode_id = $2`;
-      queryParams.push(episodeId);
-    }
-    query += ` ORDER BY at DESC`;
-
-    const result = await pool.query(query, queryParams);
-    const milestones: PatientMilestoneEntry[] = result.rows.map(rowToMilestone);
-    return NextResponse.json({ milestones });
-  } catch (error) {
-    logger.error('Error fetching milestones:', error);
-    return NextResponse.json(
-      { error: 'Hiba történt a milestone-ok lekérdezésekor' },
-      { status: 500 }
-    );
+  const patientCheck = await pool.query('SELECT id FROM patients WHERE id = $1', [patientId]);
+  if (patientCheck.rows.length === 0) {
+    return NextResponse.json({ error: 'Beteg nem található' }, { status: 404 });
   }
-}
+
+  const tableExists = await pool.query(
+    `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'patient_milestones'`
+  );
+  if (tableExists.rows.length === 0) {
+    return NextResponse.json({ milestones: [] });
+  }
+
+  let query = `
+    SELECT id, patient_id as "patientId", episode_id as "episodeId", code, at, params, note, created_by as "createdBy", created_at as "createdAt"
+    FROM patient_milestones
+    WHERE patient_id = $1
+  `;
+  const queryParams: string[] = [patientId];
+  if (episodeId) {
+    query += ` AND episode_id = $2`;
+    queryParams.push(episodeId);
+  }
+  query += ` ORDER BY at DESC`;
+
+  const result = await pool.query(query, queryParams);
+  const milestones: PatientMilestoneEntry[] = result.rows.map(rowToMilestone);
+  return NextResponse.json({ milestones });
+});
 
 /**
  * Create new milestone
  * POST /api/patients/[id]/milestones
  * Body: { episodeId, code, at?, params?, note? }
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const auth = await verifyAuth(request);
-    if (!auth) {
-      return NextResponse.json(
-        { error: 'Bejelentkezés szükséges' },
-        { status: 401 }
-      );
-    }
-    if (auth.role !== 'admin' && auth.role !== 'sebészorvos' && auth.role !== 'fogpótlástanász') {
-      return NextResponse.json(
-        { error: 'Nincs jogosultsága a milestone rögzítéséhez' },
-        { status: 403 }
-      );
-    }
-
+export const POST = roleHandler(
+  ['admin', 'sebészorvos', 'fogpótlástanász'],
+  async (req, { auth, params }) => {
     const pool = getDbPool();
     const patientId = params.id;
 
@@ -119,7 +83,7 @@ export async function POST(
       );
     }
 
-    const body = await request.json();
+    const body = await req.json();
     const episodeId = body.episodeId as string;
     const code = (body.code as string)?.trim?.();
     const at = body.at ? new Date(body.at) : new Date();
@@ -154,16 +118,10 @@ export async function POST(
       `INSERT INTO patient_milestones (patient_id, episode_id, code, at, params, note, created_by)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id, patient_id as "patientId", episode_id as "episodeId", code, at, params, note, created_by as "createdBy", created_at as "createdAt"`,
-[patientId, episodeId, code, at, milestoneParams ? JSON.stringify(milestoneParams) : null, note, auth.email]
+      [patientId, episodeId, code, at, milestoneParams ? JSON.stringify(milestoneParams) : null, note, auth.email]
     );
 
     const milestone = rowToMilestone(insertResult.rows[0]);
     return NextResponse.json({ milestone }, { status: 201 });
-  } catch (error) {
-    logger.error('Error creating milestone:', error);
-    return NextResponse.json(
-      { error: 'Hiba történt a milestone rögzítésekor' },
-      { status: 500 }
-    );
   }
-}
+);

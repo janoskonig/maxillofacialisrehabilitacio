@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
 import { sendEmail, sendAppointmentBookingNotification, sendAppointmentBookingNotificationToPatient, sendAppointmentBookingNotificationToAdmins } from '@/lib/email';
 import { generateIcsFile } from '@/lib/calendar';
 import { createGoogleCalendarEvent, deleteGoogleCalendarEvent } from '@/lib/google-calendar';
+import { apiHandler } from '@/lib/api/route-handler';
 import { logger } from '@/lib/logger';
 
 /**
@@ -12,181 +13,158 @@ import { logger } from '@/lib/logger';
  */
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: NextRequest) {
-  try {
-    const patientId = await verifyPatientPortalSession(request);
+export const GET = apiHandler(async (req, { correlationId }) => {
+  const patientId = await verifyPatientPortalSession(req);
 
-    if (!patientId) {
-      return NextResponse.json(
-        { error: 'Bejelentkezés szükséges' },
-        { status: 401 }
-      );
-    }
-
-    const pool = getDbPool();
-
-    const result = await pool.query(
-      `SELECT 
-        a.id,
-        a.patient_id as "patientId",
-        a.time_slot_id as "timeSlotId",
-        a.created_by as "createdBy",
-        a.dentist_email as "dentistEmail",
-        a.created_at as "createdAt",
-        a.approval_token as "approvalToken",
-        a.appointment_status as "appointmentStatus",
-        a.approval_status as "approvalStatus",
-        ats.start_time as "startTime",
-        ats.cim,
-        ats.teremszam,
-        u.doktor_neve as "dentistName"
-      FROM appointments a
-      JOIN available_time_slots ats ON a.time_slot_id = ats.id
-      LEFT JOIN users u ON a.dentist_email = u.email
-      WHERE a.patient_id = $1
-      ORDER BY ats.start_time DESC`,
-      [patientId]
-    );
-
-    return NextResponse.json({
-      appointments: result.rows,
-    });
-  } catch (error) {
-    logger.error('Error fetching appointments:', error);
+  if (!patientId) {
     return NextResponse.json(
-      { error: 'Hiba történt az időpontok lekérdezésekor' },
-      { status: 500 }
+      { error: 'Bejelentkezés szükséges' },
+      { status: 401 }
     );
   }
-}
+
+  const pool = getDbPool();
+
+  const result = await pool.query(
+    `SELECT 
+      a.id,
+      a.patient_id as "patientId",
+      a.time_slot_id as "timeSlotId",
+      a.created_by as "createdBy",
+      a.dentist_email as "dentistEmail",
+      a.created_at as "createdAt",
+      a.approval_token as "approvalToken",
+      a.appointment_status as "appointmentStatus",
+      a.approval_status as "approvalStatus",
+      ats.start_time as "startTime",
+      ats.cim,
+      ats.teremszam,
+      u.doktor_neve as "dentistName"
+    FROM appointments a
+    JOIN available_time_slots ats ON a.time_slot_id = ats.id
+    LEFT JOIN users u ON a.dentist_email = u.email
+    WHERE a.patient_id = $1
+    ORDER BY ats.start_time DESC`,
+    [patientId]
+  );
+
+  return NextResponse.json({
+    appointments: result.rows,
+  });
+});
 
 /**
  * Request new appointment (without time slot selection) OR book appointment directly (with timeSlotId)
  * POST /api/patient-portal/appointments
  */
-export async function POST(request: NextRequest) {
-  try {
-    const patientId = await verifyPatientPortalSession(request);
+export const POST = apiHandler(async (req, { correlationId }) => {
+  const patientId = await verifyPatientPortalSession(req);
 
-    if (!patientId) {
-      return NextResponse.json(
-        { error: 'Bejelentkezés szükséges' },
-        { status: 401 }
-      );
-    }
-
-    const body = await request.json();
-    const { beutaloOrvos, beutaloIndokolas, timeSlotId } = body;
-
-    // If timeSlotId is provided, this is a direct booking
-    if (timeSlotId) {
-      return await handleDirectBooking(patientId, timeSlotId);
-    }
-
-    // Otherwise, this is a request for appointment (existing functionality)
-
-    const pool = getDbPool();
-
-    // Get patient info
-    const patientResult = await pool.query(
-      'SELECT id, email, nev, taj FROM patients WHERE id = $1',
-      [patientId]
-    );
-
-    if (patientResult.rows.length === 0) {
-      return NextResponse.json(
-        { error: 'Beteg nem található' },
-        { status: 404 }
-      );
-    }
-
-    const patient = patientResult.rows[0];
-
-    if (!patient.email || patient.email.trim() === '') {
-      return NextResponse.json(
-        { error: 'Email cím szükséges az időpont kéréséhez' },
-        { status: 400 }
-      );
-    }
-
-    // Update patient's referring doctor information if provided
-    if (beutaloOrvos || beutaloIndokolas) {
-      const updateFields: string[] = [];
-      const updateValues: (string | null)[] = [];
-      let paramIndex = 1;
-
-      if (beutaloOrvos !== undefined) {
-        updateFields.push(`beutalo_orvos = $${paramIndex}`);
-        updateValues.push(beutaloOrvos?.trim() || null);
-        paramIndex++;
-      }
-
-      if (beutaloIndokolas !== undefined) {
-        updateFields.push(`beutalo_indokolas = $${paramIndex}`);
-        updateValues.push(beutaloIndokolas?.trim() || null);
-        paramIndex++;
-      }
-
-      if (updateFields.length > 0) {
-        updateValues.push(patientId);
-        await pool.query(
-          `UPDATE patients 
-           SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP
-           WHERE id = $${paramIndex}`,
-          updateValues
-        );
-      }
-    }
-
-    // Send notification email to admins
-    try {
-      const adminResult = await pool.query(
-        'SELECT email FROM users WHERE role = $1 AND active = true',
-        ['admin']
-      );
-      const adminEmails = adminResult.rows.map((row: { email: string }) => row.email);
-
-      if (adminEmails.length > 0) {
-        const html = `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #2563eb;">Új időpont kérés a páciens portálról</h2>
-            <p>Kedves adminisztrátor,</p>
-            <p>Egy páciens új időpontot kért a páciens portálon keresztül:</p>
-            <ul>
-              <li><strong>Beteg neve:</strong> ${patient.nev || 'Név nélküli'}</li>
-              <li><strong>TAJ szám:</strong> ${patient.taj || 'Nincs megadva'}</li>
-              <li><strong>Email cím:</strong> ${patient.email}</li>
-              ${beutaloOrvos ? `<li><strong>Beutaló orvos:</strong> ${beutaloOrvos}</li>` : ''}
-              ${beutaloIndokolas ? `<li><strong>Beutalás indoka:</strong> ${beutaloIndokolas}</li>` : ''}
-            </ul>
-            <p>Kérjük, jelentkezzen be a rendszerbe és válasszon időpontot a páciens számára.</p>
-            <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
-          </div>
-        `;
-
-        await sendEmail({
-          to: adminEmails,
-          subject: 'Új időpont kérés a páciens portálról - Maxillofaciális Rehabilitáció',
-          html,
-        });
-      }
-    } catch (emailError) {
-      logger.error('Hiba az értesítő email küldésekor:', emailError);
-      // Don't fail the request if email fails
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: 'Időpont kérés sikeresen elküldve. Az adminisztráció hamarosan felveszi Önnel a kapcsolatot.',
-    });
-  } catch (error) {
-    logger.error('Error requesting appointment:', error);
+  if (!patientId) {
     return NextResponse.json(
-      { error: 'Hiba történt az időpont kérésekor' },
-      { status: 500 }
+      { error: 'Bejelentkezés szükséges' },
+      { status: 401 }
     );
   }
-}
+
+  const body = await req.json();
+  const { beutaloOrvos, beutaloIndokolas, timeSlotId } = body;
+
+  if (timeSlotId) {
+    return await handleDirectBooking(patientId, timeSlotId);
+  }
+
+  const pool = getDbPool();
+
+  const patientResult = await pool.query(
+    'SELECT id, email, nev, taj FROM patients WHERE id = $1',
+    [patientId]
+  );
+
+  if (patientResult.rows.length === 0) {
+    return NextResponse.json(
+      { error: 'Beteg nem található' },
+      { status: 404 }
+    );
+  }
+
+  const patient = patientResult.rows[0];
+
+  if (!patient.email || patient.email.trim() === '') {
+    return NextResponse.json(
+      { error: 'Email cím szükséges az időpont kéréséhez' },
+      { status: 400 }
+    );
+  }
+
+  if (beutaloOrvos || beutaloIndokolas) {
+    const updateFields: string[] = [];
+    const updateValues: (string | null)[] = [];
+    let paramIndex = 1;
+
+    if (beutaloOrvos !== undefined) {
+      updateFields.push(`beutalo_orvos = $${paramIndex}`);
+      updateValues.push(beutaloOrvos?.trim() || null);
+      paramIndex++;
+    }
+
+    if (beutaloIndokolas !== undefined) {
+      updateFields.push(`beutalo_indokolas = $${paramIndex}`);
+      updateValues.push(beutaloIndokolas?.trim() || null);
+      paramIndex++;
+    }
+
+    if (updateFields.length > 0) {
+      updateValues.push(patientId);
+      await pool.query(
+        `UPDATE patients 
+         SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $${paramIndex}`,
+        updateValues
+      );
+    }
+  }
+
+  try {
+    const adminResult = await pool.query(
+      'SELECT email FROM users WHERE role = $1 AND active = true',
+      ['admin']
+    );
+    const adminEmails = adminResult.rows.map((row: { email: string }) => row.email);
+
+    if (adminEmails.length > 0) {
+      const html = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #2563eb;">Új időpont kérés a páciens portálról</h2>
+          <p>Kedves adminisztrátor,</p>
+          <p>Egy páciens új időpontot kért a páciens portálon keresztül:</p>
+          <ul>
+            <li><strong>Beteg neve:</strong> ${patient.nev || 'Név nélküli'}</li>
+            <li><strong>TAJ szám:</strong> ${patient.taj || 'Nincs megadva'}</li>
+            <li><strong>Email cím:</strong> ${patient.email}</li>
+            ${beutaloOrvos ? `<li><strong>Beutaló orvos:</strong> ${beutaloOrvos}</li>` : ''}
+            ${beutaloIndokolas ? `<li><strong>Beutalás indoka:</strong> ${beutaloIndokolas}</li>` : ''}
+          </ul>
+          <p>Kérjük, jelentkezzen be a rendszerbe és válasszon időpontot a páciens számára.</p>
+          <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
+        </div>
+      `;
+
+      await sendEmail({
+        to: adminEmails,
+        subject: 'Új időpont kérés a páciens portálról - Maxillofaciális Rehabilitáció',
+        html,
+      });
+    }
+  } catch (emailError) {
+    logger.error('Hiba az értesítő email küldésekor:', emailError);
+  }
+
+  return NextResponse.json({
+    success: true,
+    message: 'Időpont kérés sikeresen elküldve. Az adminisztráció hamarosan felveszi Önnel a kapcsolatot.',
+  });
+});
 
 /**
  * Handle direct booking of an appointment
@@ -195,11 +173,9 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
   const pool = getDbPool();
   const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
 
-  // Start transaction
   await pool.query('BEGIN');
 
   try {
-    // Get patient info
     const patientResult = await pool.query(
       'SELECT id, email, nev, taj, nem FROM patients WHERE id = $1',
       [patientId]
@@ -215,7 +191,6 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
 
     const patient = patientResult.rows[0];
 
-    // Lock time slot row and verify availability
     const timeSlotResult = await pool.query(
       `SELECT ats.*, u.email as dentist_email, u.id as dentist_user_id, u.doktor_neve as dentist_name
        FROM available_time_slots ats
@@ -235,7 +210,7 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
 
     const timeSlot = timeSlotResult.rows[0];
 
-    // G3: Patient portal — only consult/flexible slots; reject work/control and NULL (admin assigns work/control; NULL may be work-only)
+    // G3: Patient portal — only consult/flexible slots
     const slotPurpose = timeSlot.slot_purpose;
     if (slotPurpose !== 'consult' && slotPurpose !== 'flexible') {
       await pool.query('ROLLBACK');
@@ -248,7 +223,6 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
       );
     }
 
-    // state (slot state machine) is authoritative; fallback to status (legacy) for backward compat
     const slotState = timeSlot.state ?? (timeSlot.status === 'available' ? 'free' : 'booked');
     if (slotState !== 'free') {
       await pool.query('ROLLBACK');
@@ -258,7 +232,6 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
       );
     }
 
-    // Check if time slot is in the future
     const startTime = new Date(timeSlot.start_time);
     if (startTime <= new Date()) {
       await pool.query('ROLLBACK');
@@ -268,8 +241,6 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
       );
     }
 
-    // Create or update appointment (UPSERT)
-    // If there's a cancelled appointment for this time slot, update it instead of creating new
     const appointmentResult = await pool.query(
       `INSERT INTO appointments (patient_id, time_slot_id, created_by, dentist_email)
        VALUES ($1, $2, $3, $4)
@@ -301,7 +272,6 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
     const appointment = appointmentResult.rows[0];
 
     if (!appointment) {
-      // UPSERT returned 0 rows: an active (non-cancelled) appointment already exists on this slot
       await pool.query('ROLLBACK');
       return NextResponse.json(
         {
@@ -312,7 +282,6 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
       );
     }
 
-    // Update time slot: status (legacy) and state (slot state machine) both to booked
     await pool.query(
       `UPDATE available_time_slots SET status = 'booked', state = 'booked' WHERE id = $1`,
       [timeSlotId]
@@ -320,16 +289,13 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
 
     await pool.query('COMMIT');
 
-    // Get appointment details for email
     const appointmentCim = timeSlot.cim || DEFAULT_CIM;
     const appointmentTeremszam = timeSlot.teremszam || null;
     const dentistFullName = timeSlot.dentist_name || timeSlot.dentist_email;
 
-    // Calculate end time (30 minutes duration)
     const endTime = new Date(startTime);
     endTime.setMinutes(endTime.getMinutes() + 30);
 
-    // Generate ICS file
     const icsFileData = {
       patientName: patient.nev,
       patientTaj: patient.taj,
@@ -339,7 +305,6 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
     };
     const icsFile = await generateIcsFile(icsFileData);
 
-    // Send email notifications and create Google Calendar event (parallel)
     try {
       const [adminResult] = await Promise.all([
         pool.query('SELECT email FROM users WHERE role = $1 AND active = true', ['admin']),
@@ -349,7 +314,6 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
       const adminEmail = adminEmails.length > 0 ? adminEmails[0] : '';
 
       await Promise.all([
-        // Email to dentist
         sendAppointmentBookingNotification(
           timeSlot.dentist_email,
           patient.nev,
@@ -360,7 +324,6 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
           appointmentCim,
           appointmentTeremszam
         ),
-        // Email to patient if email is available
         patient.email && patient.email.trim() !== ''
           ? sendAppointmentBookingNotificationToPatient(
               patient.email,
@@ -375,7 +338,6 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
               adminEmail
             )
           : Promise.resolve(),
-        // Email to admins
         adminEmails.length > 0
           ? sendAppointmentBookingNotificationToAdmins(
               adminEmails,
@@ -389,13 +351,11 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
               appointmentTeremszam
             )
           : Promise.resolve(),
-        // Google Calendar event handling
         (async () => {
           try {
-            // Check if time slot came from Google Calendar
             const googleCalendarEventId = timeSlot.google_calendar_event_id;
             const source = timeSlot.source;
-            
+
             logger.info('[Patient Portal Booking] Time slot info:', {
               id: timeSlot.id,
               google_calendar_event_id: googleCalendarEventId,
@@ -408,7 +368,6 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
 
             let finalEventId: string | null = null;
 
-            // Get calendar IDs from user settings
             const userCalendarResult = await pool.query(
               `SELECT google_calendar_enabled, google_calendar_source_calendar_id, google_calendar_target_calendar_id 
                FROM users 
@@ -421,18 +380,16 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
             }
             const sourceCalendarId = userCalendarResult.rows[0]?.google_calendar_source_calendar_id || 'primary';
             const targetCalendarId = userCalendarResult.rows[0]?.google_calendar_target_calendar_id || 'primary';
-            
+
             if (isFromGoogleCalendar) {
               logger.info('[Patient Portal Booking] Deleting "szabad" event from source calendar:', googleCalendarEventId);
-              // If from Google Calendar, delete the "szabad" event from source calendar
               const deleteResult = await deleteGoogleCalendarEvent(
                 timeSlot.dentist_user_id,
                 googleCalendarEventId,
                 sourceCalendarId
               );
               logger.info('[Patient Portal Booking] Delete result:', deleteResult);
-              
-              // Create a new event with patient name in target calendar
+
               logger.info('[Patient Portal Booking] Creating new event with patient name in target calendar');
               const newEventId = await createGoogleCalendarEvent(
                 timeSlot.dentist_user_id,
@@ -446,7 +403,7 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
                 }
               );
               finalEventId = newEventId;
-              
+
               if (!newEventId) {
                 logger.error('[Patient Portal Booking] Failed to create new Google Calendar event in target calendar');
               } else {
@@ -454,7 +411,6 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
               }
             } else {
               logger.info('[Patient Portal Booking] Time slot is not from Google Calendar, creating new event');
-              // If not from Google Calendar, create a new event
               const newEventId = await createGoogleCalendarEvent(
                 timeSlot.dentist_user_id,
                 {
@@ -472,21 +428,18 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
             logger.info('[Patient Portal Booking] Final event ID:', finalEventId);
 
             if (finalEventId) {
-              // Save event ID to appointments table
               await pool.query(
                 'UPDATE appointments SET google_calendar_event_id = $1 WHERE id = $2',
                 [finalEventId, appointment.id]
               );
             }
           } catch (error) {
-            // Google Calendar error should not block the booking
             logger.error('[Patient Portal Booking] Failed to handle Google Calendar event:', error);
           }
         })(),
       ]);
     } catch (emailError) {
       logger.error('Hiba az értesítő email küldésekor:', emailError);
-      // Don't fail the request if email fails
     }
 
     return NextResponse.json({
@@ -496,10 +449,6 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
     });
   } catch (error) {
     await pool.query('ROLLBACK');
-    logger.error('Error booking appointment:', error);
-    return NextResponse.json(
-      { error: 'Hiba történt az időpont foglalásakor' },
-      { status: 500 }
-    );
+    throw error;
   }
 }

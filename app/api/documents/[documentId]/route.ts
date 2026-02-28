@@ -1,165 +1,148 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth-server';
 import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
-import { logger } from '@/lib/logger';
+import { apiHandler } from '@/lib/api/route-handler';
+
+export const dynamic = 'force-dynamic';
 
 /**
  * Get document by ID
  * GET /api/documents/[documentId]
  */
-export const dynamic = 'force-dynamic';
+export const GET = apiHandler(async (req, { params }) => {
+  const documentId = params.documentId;
+  const pool = getDbPool();
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { documentId: string } }
-) {
+  let patientId: string | null = null;
+  let isAuthorized = false;
+
   try {
-    const documentId = params.documentId;
-    const pool = getDbPool();
+    const patientIdFromSession = await verifyPatientPortalSession(req);
+    if (patientIdFromSession) {
+      patientId = patientIdFromSession;
+      isAuthorized = true;
+    }
+  } catch {
+    // Not a patient portal session, try doctor auth
+  }
 
-    // Try to authenticate as either doctor or patient
-    let patientId: string | null = null;
-    let isAuthorized = false;
-
-    // Try patient portal authentication first
+  if (!isAuthorized) {
     try {
-      const patientIdFromSession = await verifyPatientPortalSession(request);
-      if (patientIdFromSession) {
-        patientId = patientIdFromSession;
+      const auth = await verifyAuth(req);
+      if (auth) {
         isAuthorized = true;
       }
     } catch {
-      // Not a patient portal session, try doctor auth
+      // Not authenticated
     }
+  }
 
-    // Try doctor authentication
-    if (!isAuthorized) {
-      try {
-        const auth = await verifyAuth(request);
-        if (auth) {
-          isAuthorized = true;
-        }
-      } catch {
-        // Not authenticated
-      }
-    }
+  if (!isAuthorized) {
+    return NextResponse.json(
+      { error: 'Bejelentkezés szükséges' },
+      { status: 401 }
+    );
+  }
 
-    if (!isAuthorized) {
+  const result = await pool.query(
+    `SELECT 
+      pd.id,
+      pd.patient_id as "patientId",
+      pd.filename,
+      pd.file_path as "filePath",
+      pd.file_size as "fileSize",
+      pd.mime_type as "mimeType",
+      pd.description,
+      pd.tags,
+      pd.uploaded_by as "uploadedBy",
+      COALESCE(
+        u.doktor_neve,
+        p.nev,
+        u_by_id.doktor_neve,
+        p_by_id.nev,
+        pd.uploaded_by
+      ) as "uploadedByName",
+      pd.uploaded_at as "uploadedAt",
+      pd.created_at as "createdAt"
+    FROM patient_documents pd
+    LEFT JOIN users u ON u.email = pd.uploaded_by
+    LEFT JOIN patients p ON p.email = pd.uploaded_by
+    LEFT JOIN users u_by_id ON pd.uploaded_by ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' AND u_by_id.id::text = pd.uploaded_by
+    LEFT JOIN patients p_by_id ON pd.uploaded_by ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' AND p_by_id.id::text = pd.uploaded_by
+    WHERE pd.id = $1`,
+    [documentId]
+  );
+
+  if (result.rows.length === 0) {
+    return NextResponse.json(
+      { error: 'Dokumentum nem található' },
+      { status: 404 }
+    );
+  }
+
+  const document = result.rows[0];
+
+  if (patientId && document.patientId !== patientId) {
+    return NextResponse.json(
+      { error: 'Nincs jogosultsága ehhez a dokumentumhoz' },
+      { status: 403 }
+    );
+  }
+
+  if (!patientId) {
+    const auth = await verifyAuth(req);
+    if (!auth) {
       return NextResponse.json(
         { error: 'Bejelentkezés szükséges' },
         { status: 401 }
       );
     }
 
-    // Get document with uploaded_by name resolution
-    const result = await pool.query(
-      `SELECT 
-        pd.id,
-        pd.patient_id as "patientId",
-        pd.filename,
-        pd.file_path as "filePath",
-        pd.file_size as "fileSize",
-        pd.mime_type as "mimeType",
-        pd.description,
-        pd.tags,
-        pd.uploaded_by as "uploadedBy",
-        COALESCE(
-          u.doktor_neve,
-          p.nev,
-          u_by_id.doktor_neve,
-          p_by_id.nev,
-          pd.uploaded_by
-        ) as "uploadedByName",
-        pd.uploaded_at as "uploadedAt",
-        pd.created_at as "createdAt"
-      FROM patient_documents pd
-      LEFT JOIN users u ON u.email = pd.uploaded_by
-      LEFT JOIN patients p ON p.email = pd.uploaded_by
-      LEFT JOIN users u_by_id ON pd.uploaded_by ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' AND u_by_id.id::text = pd.uploaded_by
-      LEFT JOIN patients p_by_id ON pd.uploaded_by ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' AND p_by_id.id::text = pd.uploaded_by
-      WHERE pd.id = $1`,
-      [documentId]
-    );
+    const role = auth.role;
+    const userEmail = auth.email;
 
-    if (result.rows.length === 0) {
-      return NextResponse.json(
-        { error: 'Dokumentum nem található' },
-        { status: 404 }
+    if (role === 'technikus') {
+      const patientResult = await pool.query(
+        `SELECT kezelesi_terv_arcot_erinto FROM patients WHERE id = $1`,
+        [document.patientId]
       );
-    }
-
-    const document = result.rows[0];
-
-    // If patient portal, verify the document belongs to the patient
-    if (patientId && document.patientId !== patientId) {
-      return NextResponse.json(
-        { error: 'Nincs jogosultsága ehhez a dokumentumhoz' },
-        { status: 403 }
-      );
-    }
-
-    // If doctor, check role-based access (same as document list)
-    if (!patientId) {
-      const auth = await verifyAuth(request);
-      if (!auth) {
+      const hasEpitesis = patientResult.rows[0]?.kezelesi_terv_arcot_erinto && 
+                          Array.isArray(patientResult.rows[0].kezelesi_terv_arcot_erinto) && 
+                          patientResult.rows[0].kezelesi_terv_arcot_erinto.length > 0;
+      if (!hasEpitesis) {
         return NextResponse.json(
-          { error: 'Bejelentkezés szükséges' },
-          { status: 401 }
+          { error: 'Nincs jogosultsága ehhez a dokumentumhoz' },
+          { status: 403 }
         );
       }
-
-      const role = auth.role;
-      const userEmail = auth.email;
-
-      if (role === 'technikus') {
+    } else if (role === 'sebészorvos' && userEmail) {
+      const userResult = await pool.query(
+        `SELECT intezmeny FROM users WHERE email = $1`,
+        [userEmail]
+      );
+      if (userResult.rows.length > 0 && userResult.rows[0].intezmeny) {
+        const userInstitution = userResult.rows[0].intezmeny;
         const patientResult = await pool.query(
-          `SELECT kezelesi_terv_arcot_erinto FROM patients WHERE id = $1`,
+          `SELECT beutalo_intezmeny FROM patients WHERE id = $1`,
           [document.patientId]
         );
-        const hasEpitesis = patientResult.rows[0]?.kezelesi_terv_arcot_erinto && 
-                            Array.isArray(patientResult.rows[0].kezelesi_terv_arcot_erinto) && 
-                            patientResult.rows[0].kezelesi_terv_arcot_erinto.length > 0;
-        if (!hasEpitesis) {
+        if (patientResult.rows[0]?.beutalo_intezmeny !== userInstitution) {
           return NextResponse.json(
             { error: 'Nincs jogosultsága ehhez a dokumentumhoz' },
             { status: 403 }
           );
         }
-      } else if (role === 'sebészorvos' && userEmail) {
-        const userResult = await pool.query(
-          `SELECT intezmeny FROM users WHERE email = $1`,
-          [userEmail]
+      } else {
+        return NextResponse.json(
+          { error: 'Nincs jogosultsága ehhez a dokumentumhoz' },
+          { status: 403 }
         );
-        if (userResult.rows.length > 0 && userResult.rows[0].intezmeny) {
-          const userInstitution = userResult.rows[0].intezmeny;
-          const patientResult = await pool.query(
-            `SELECT beutalo_intezmeny FROM patients WHERE id = $1`,
-            [document.patientId]
-          );
-          if (patientResult.rows[0]?.beutalo_intezmeny !== userInstitution) {
-            return NextResponse.json(
-              { error: 'Nincs jogosultsága ehhez a dokumentumhoz' },
-              { status: 403 }
-            );
-          }
-        } else {
-          return NextResponse.json(
-            { error: 'Nincs jogosultsága ehhez a dokumentumhoz' },
-            { status: 403 }
-          );
-        }
       }
     }
-
-    return NextResponse.json({
-      document: document,
-    });
-  } catch (error) {
-    logger.error('Error fetching document:', error);
-    return NextResponse.json(
-      { error: 'Hiba történt a dokumentum lekérdezésekor' },
-      { status: 500 }
-    );
   }
-}
+
+  return NextResponse.json({
+    document: document,
+  });
+});
