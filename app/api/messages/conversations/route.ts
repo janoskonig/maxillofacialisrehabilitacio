@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
-import { Message } from '@/lib/communication';
 import { authedHandler } from '@/lib/api/route-handler';
 
 export const dynamic = 'force-dynamic';
@@ -8,154 +7,119 @@ export const dynamic = 'force-dynamic';
 export const GET = authedHandler(async (req, { auth }) => {
   const pool = getDbPool();
 
-  let query = `
-    SELECT DISTINCT m.patient_id
-    FROM messages m
-    INNER JOIN patients p ON p.id = m.patient_id
-    WHERE 1=1
-  `;
+  const isAdmin = auth.role === 'admin';
 
-  const params: any[] = [];
-  let paramIndex = 1;
-
-  if (auth.role !== 'admin') {
-    query += ` AND (
-      p.kezeleoorvos = $${paramIndex} OR 
-      p.kezeleoorvos = (SELECT doktor_neve FROM users WHERE id = $${paramIndex + 1})
-    )`;
-    params.push(auth.email, auth.userId);
-    paramIndex += 2;
-  }
-
-  const result = await pool.query(query, params);
-  const conversations = [];
-
-  for (const row of result.rows) {
-    const patientId = row.patient_id;
-
-    const patientResult = await pool.query(
-      `SELECT id, nev, taj FROM patients WHERE id = $1`,
-      [patientId]
+  let doctorName: string | null = null;
+  if (!isAdmin) {
+    const userRow = await pool.query(
+      `SELECT doktor_neve FROM users WHERE id = $1`,
+      [auth.userId]
     );
-
-    if (patientResult.rows.length === 0) continue;
-
-    const patient = patientResult.rows[0];
-
-    let lastMessageQuery = `
-      SELECT m.id, m.patient_id, m.sender_type, m.sender_id, m.sender_email, m.subject, m.message, m.read_at, m.created_at, m.recipient_doctor_id
-      FROM messages m
-      INNER JOIN patients p ON p.id = m.patient_id
-      WHERE m.patient_id = $1
-    `;
-    const lastMessageParams: any[] = [patientId];
-    
-    if (auth.role !== 'admin') {
-      const patientData = await pool.query(
-        `SELECT kezeleoorvos FROM patients WHERE id = $1`,
-        [patientId]
-      );
-      const kezeleoorvos = patientData.rows.length > 0 ? patientData.rows[0].kezeleoorvos : null;
-      
-      let isTreatingDoctor = false;
-      if (kezeleoorvos) {
-        const doctorCheck = await pool.query(
-          `SELECT id FROM users WHERE id = $1 AND (email = $2 OR doktor_neve = $2)`,
-          [auth.userId, kezeleoorvos]
-        );
-        isTreatingDoctor = doctorCheck.rows.length > 0;
-      }
-      
-      if (isTreatingDoctor) {
-        lastMessageQuery += ` AND (
-          (m.sender_type = 'patient' AND (m.recipient_doctor_id = $2 OR m.recipient_doctor_id IS NULL))
-          OR (m.sender_type = 'doctor' AND m.sender_id = $2)
-        )`;
-      } else {
-        lastMessageQuery += ` AND (
-          (m.sender_type = 'patient' AND m.recipient_doctor_id = $2)
-          OR (m.sender_type = 'doctor' AND m.sender_id = $2)
-        )`;
-      }
-      lastMessageParams.push(auth.userId);
-    }
-    
-    lastMessageQuery += ` ORDER BY m.created_at DESC LIMIT 1`;
-    
-    const lastMessageResult = await pool.query(lastMessageQuery, lastMessageParams);
-
-    let lastMessage: Message | null = null;
-    if (lastMessageResult.rows.length > 0) {
-      const msgRow = lastMessageResult.rows[0];
-      lastMessage = {
-        id: msgRow.id,
-        patientId: msgRow.patient_id,
-        senderType: msgRow.sender_type,
-        senderId: msgRow.sender_id,
-        senderEmail: msgRow.sender_email,
-        subject: msgRow.subject,
-        message: msgRow.message,
-        readAt: msgRow.read_at ? new Date(msgRow.read_at) : null,
-        createdAt: new Date(msgRow.created_at),
-      };
-    }
-
-    let unreadQuery = `
-      SELECT COUNT(*) as count
-      FROM messages m
-      WHERE m.patient_id = $1 AND m.sender_type = 'patient' AND m.read_at IS NULL
-    `;
-    const unreadParams: any[] = [patientId];
-    
-    if (auth.role !== 'admin') {
-      const patientData = await pool.query(
-        `SELECT kezeleoorvos FROM patients WHERE id = $1`,
-        [patientId]
-      );
-      const kezeleoorvos = patientData.rows.length > 0 ? patientData.rows[0].kezeleoorvos : null;
-      
-      let isTreatingDoctor = false;
-      if (kezeleoorvos) {
-        const doctorCheck = await pool.query(
-          `SELECT id FROM users WHERE id = $1 AND (email = $2 OR doktor_neve = $2)`,
-          [auth.userId, kezeleoorvos]
-        );
-        isTreatingDoctor = doctorCheck.rows.length > 0;
-      }
-      
-      if (isTreatingDoctor) {
-        unreadQuery += ` AND (m.recipient_doctor_id = $2 OR m.recipient_doctor_id IS NULL)`;
-      } else {
-        unreadQuery += ` AND m.recipient_doctor_id = $2`;
-      }
-      unreadParams.push(auth.userId);
-    }
-    
-    const unreadResult = await pool.query(unreadQuery, unreadParams);
-
-    conversations.push({
-      patientId: patient.id,
-      patientName: patient.nev || 'Név nélküli beteg',
-      patientTaj: patient.taj,
-      lastMessage,
-      unreadCount: parseInt(unreadResult.rows[0].count, 10),
-    });
+    doctorName = userRow.rows[0]?.doktor_neve ?? null;
   }
 
-  conversations.sort((a, b) => {
-    if (a.unreadCount !== b.unreadCount) {
-      return b.unreadCount - a.unreadCount;
-    }
+  // Single query: get all patient_ids that have messages visible to this user
+  let patientIdsQuery: string;
+  const patientIdsParams: any[] = [];
+
+  if (isAdmin) {
+    patientIdsQuery = `SELECT DISTINCT m.patient_id FROM messages m`;
+  } else {
+    patientIdsQuery = `
+      SELECT DISTINCT m.patient_id
+      FROM messages m
+      JOIN patients p ON p.id = m.patient_id
+      WHERE (
+        p.kezeleoorvos = $1 OR p.kezeleoorvos = $2
+      )`;
+    patientIdsParams.push(auth.email, doctorName);
+  }
+
+  const patientIdsResult = await pool.query(patientIdsQuery, patientIdsParams);
+  const patientIds = patientIdsResult.rows.map((r: any) => r.patient_id);
+
+  if (patientIds.length === 0) {
+    return NextResponse.json({ success: true, conversations: [] });
+  }
+
+  // Batch: get patient info, last messages, and unread counts in 3 parallel queries
+  const [patientsResult, lastMessagesResult, unreadResult] = await Promise.all([
+    pool.query(
+      `SELECT id, nev, taj FROM patients WHERE id = ANY($1)`,
+      [patientIds]
+    ),
+    pool.query(
+      `SELECT DISTINCT ON (m.patient_id)
+         m.patient_id, m.id, m.sender_type, m.sender_id, m.sender_email,
+         m.subject, m.message, m.read_at, m.created_at
+       FROM messages m
+       WHERE m.patient_id = ANY($1)
+       ${!isAdmin ? `AND (
+         (m.sender_type = 'patient' AND (m.recipient_doctor_id = $2 OR m.recipient_doctor_id IS NULL))
+         OR (m.sender_type = 'doctor' AND m.sender_id = $2)
+       )` : ''}
+       ORDER BY m.patient_id, m.created_at DESC`,
+      isAdmin ? [patientIds] : [patientIds, auth.userId]
+    ),
+    pool.query(
+      `SELECT m.patient_id, COUNT(*)::int as count
+       FROM messages m
+       WHERE m.patient_id = ANY($1) AND m.sender_type = 'patient' AND m.read_at IS NULL
+       ${!isAdmin ? `AND (m.recipient_doctor_id = $2 OR m.recipient_doctor_id IS NULL)` : ''}
+       GROUP BY m.patient_id`,
+      isAdmin ? [patientIds] : [patientIds, auth.userId]
+    ),
+  ]);
+
+  const patientMap = new Map(
+    patientsResult.rows.map((r: any) => [r.id, r])
+  );
+  const lastMessageMap = new Map(
+    lastMessagesResult.rows.map((r: any) => [r.patient_id, r])
+  );
+  const unreadMap = new Map(
+    unreadResult.rows.map((r: any) => [r.patient_id, r.count as number])
+  );
+
+  const conversations = patientIds
+    .map((pid: string) => {
+      const patient = patientMap.get(pid);
+      if (!patient) return null;
+
+      const msgRow = lastMessageMap.get(pid);
+      const lastMessage = msgRow
+        ? {
+            id: msgRow.id,
+            patientId: msgRow.patient_id,
+            senderType: msgRow.sender_type,
+            senderId: msgRow.sender_id,
+            senderEmail: msgRow.sender_email,
+            subject: msgRow.subject,
+            message: msgRow.message,
+            readAt: msgRow.read_at ? new Date(msgRow.read_at).toISOString() : null,
+            createdAt: new Date(msgRow.created_at).toISOString(),
+          }
+        : null;
+
+      return {
+        patientId: patient.id,
+        patientName: patient.nev || 'Név nélküli beteg',
+        patientTaj: patient.taj,
+        lastMessage,
+        unreadCount: unreadMap.get(pid) ?? 0,
+      };
+    })
+    .filter(Boolean);
+
+  conversations.sort((a: any, b: any) => {
+    if (a.unreadCount !== b.unreadCount) return b.unreadCount - a.unreadCount;
     if (a.lastMessage && b.lastMessage) {
-      return b.lastMessage.createdAt.getTime() - a.lastMessage.createdAt.getTime();
+      return new Date(b.lastMessage.createdAt).getTime() - new Date(a.lastMessage.createdAt).getTime();
     }
     if (a.lastMessage) return -1;
     if (b.lastMessage) return 1;
     return 0;
   });
 
-  return NextResponse.json({
-    success: true,
-    conversations,
-  });
+  return NextResponse.json({ success: true, conversations });
 });

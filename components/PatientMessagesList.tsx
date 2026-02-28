@@ -83,69 +83,36 @@ export function PatientMessagesList() {
     fetchUser();
   }, []);
 
-  // Fetch conversations (patients with messages)
+  // Fetch conversations via single batch API call
   const fetchConversations = useCallback(async () => {
     try {
-      // Get all patients with email
-      const patientsResponse = await fetch('/api/patients?limit=1000', {
+      const response = await fetch('/api/messages/conversations', {
         credentials: 'include',
       });
 
-      if (!patientsResponse.ok) {
-        throw new Error('Hiba a betegek betöltésekor');
+      if (!response.ok) {
+        throw new Error('Hiba a konverzációk betöltésekor');
       }
 
-      const patientsData = await patientsResponse.json();
-      const patientsWithEmail = (patientsData.patients || []).filter(
-        (p: Patient) => p.email && p.email.trim() !== ''
-      );
-
-      // Get messages for each patient and build conversations
-      const conversationsList: Conversation[] = [];
-      
-      for (const patient of patientsWithEmail) {
-        try {
-          const messagesResponse = await fetch(`/api/messages?patientId=${patient.id}`, {
-            credentials: 'include',
-          });
-
-          if (messagesResponse.ok) {
-            const messagesData = await messagesResponse.json();
-            const patientMessages = (messagesData.messages || []) as Message[];
-            
-            if (patientMessages.length > 0) {
-              // API DESC sorrendben adja vissza (legfrissebb először), így az első elem a legfrissebb
-              const lastMessage = patientMessages[0];
-              const unread = patientMessages.filter(
-                (m: Message) => m.senderType === 'patient' && !m.readAt
-              ).length;
-
-              conversationsList.push({
-                patientId: patient.id,
-                patientName: patient.nev,
-                lastMessage,
-                unreadCount: unread,
-              });
+      const data = await response.json();
+      const conversationsList: Conversation[] = (data.conversations || []).map((c: any) => ({
+        patientId: c.patientId,
+        patientName: c.patientName,
+        lastMessage: c.lastMessage
+          ? {
+              id: c.lastMessage.id,
+              patientId: c.lastMessage.patientId,
+              senderType: c.lastMessage.senderType,
+              senderId: c.lastMessage.senderId,
+              senderEmail: c.lastMessage.senderEmail,
+              subject: c.lastMessage.subject,
+              message: c.lastMessage.message,
+              readAt: c.lastMessage.readAt ? new Date(c.lastMessage.readAt) : null,
+              createdAt: new Date(c.lastMessage.createdAt),
             }
-          }
-        } catch (error) {
-          // Skip patients with errors
-          console.error(`Hiba az üzenetek betöltésekor beteghez ${patient.id}:`, error);
-        }
-      }
-
-      // Sort by unread count, then by last message date
-      conversationsList.sort((a, b) => {
-        if (a.unreadCount !== b.unreadCount) {
-          return b.unreadCount - a.unreadCount;
-        }
-        if (a.lastMessage && b.lastMessage) {
-          return new Date(b.lastMessage.createdAt).getTime() - new Date(a.lastMessage.createdAt).getTime();
-        }
-        if (a.lastMessage) return -1;
-        if (b.lastMessage) return 1;
-        return 0;
-      });
+          : null,
+        unreadCount: c.unreadCount ?? 0,
+      }));
 
       setConversations(conversationsList);
     } catch (error) {
