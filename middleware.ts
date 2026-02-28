@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'change-this-to-a-random-secret-in-production'
@@ -28,10 +29,23 @@ const PUBLIC_API_PREFIXES = [
   '/api/institutions',
   '/api/events',
   '/api/feedback',
+  '/api/health',
 ];
 
 function isPublicRoute(pathname: string): boolean {
   return PUBLIC_API_PREFIXES.some(prefix => pathname.startsWith(prefix));
+}
+
+const AUTH_PREFIXES = ['/api/auth/login', '/api/auth/register', '/api/auth/forgot-password', '/api/auth/reset-password'];
+const AUTH_RATE_LIMIT = 10;
+const AUTH_RATE_WINDOW = 60_000;
+const API_RATE_LIMIT = 100;
+const API_RATE_WINDOW = 60_000;
+
+function getClientIp(req: NextRequest): string {
+  return req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+    ?? req.headers.get('x-real-ip')
+    ?? 'unknown';
 }
 
 export async function middleware(request: NextRequest) {
@@ -39,6 +53,28 @@ export async function middleware(request: NextRequest) {
 
   if (!pathname.startsWith('/api/')) {
     return NextResponse.next();
+  }
+
+  // Rate limiting
+  const ip = getClientIp(request);
+  const isAuthRoute = AUTH_PREFIXES.some(p => pathname.startsWith(p));
+  const rlKey = isAuthRoute ? `auth:${ip}` : `api:${ip}`;
+  const rlMax = isAuthRoute ? AUTH_RATE_LIMIT : API_RATE_LIMIT;
+  const rlWindow = isAuthRoute ? AUTH_RATE_WINDOW : API_RATE_WINDOW;
+  const rl = checkRateLimit(rlKey, rlMax, rlWindow);
+
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests' },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': String(Math.ceil((rl.resetAt - Date.now()) / 1000)),
+          'X-RateLimit-Limit': String(rlMax),
+          'X-RateLimit-Remaining': '0',
+        },
+      }
+    );
   }
 
   if (isPublicRoute(pathname)) {

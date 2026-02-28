@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { roleHandler, authedHandler } from '@/lib/api/route-handler';
 import { treatmentTypeCreateSchema } from '@/lib/admin-process-schemas';
 import { logger } from '@/lib/logger';
+import { getCached, setCache, invalidateCache, CATALOG_TTL } from '@/lib/catalog-cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,6 +41,7 @@ export const POST = roleHandler(['admin', 'fogpótlástanász'], async (req, { a
       auditReason: data.auditReason,
     });
 
+    invalidateCache('treatment-types');
     return NextResponse.json({ treatmentType: row });
   } catch (err: unknown) {
     await pool.query('ROLLBACK').catch(() => {});
@@ -54,7 +56,12 @@ export const POST = roleHandler(['admin', 'fogpótlástanász'], async (req, { a
   }
 });
 
+const TT_CACHE_KEY = 'treatment-types';
+
 export const GET = authedHandler(async (req, { auth }) => {
+  const cached = getCached<any[]>(TT_CACHE_KEY);
+  if (cached) return NextResponse.json({ treatmentTypes: cached });
+
   const pool = getDbPool();
 
   const tableExists = await pool.query(
@@ -68,5 +75,6 @@ export const GET = authedHandler(async (req, { auth }) => {
     `SELECT id, code, label_hu as "labelHu" FROM treatment_types ORDER BY label_hu ASC`
   );
 
+  setCache(TT_CACHE_KEY, r.rows, CATALOG_TTL);
   return NextResponse.json({ treatmentTypes: r.rows });
 });

@@ -3,7 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
 import {
   computeEpisodeForecast,
-  computeInputsHash,
+  computeInputsHashBatch,
   toEpisodeForecastItem,
 } from '@/lib/episode-forecast';
 import type { EpisodeForecastBatchResponse, EpisodeForecastItem } from '@/lib/forecast-types';
@@ -63,8 +63,7 @@ async function handleBatch(
     (cacheRows.rows as CacheRow[]).map((r) => [r.episode_id, r])
   );
 
-  const hashes = await Promise.all(ids.map((id) => computeInputsHash(id)));
-  const hashByEpisode = new Map(ids.map((id, i) => [id, hashes[i]]));
+  const hashByEpisode = await computeInputsHashBatch(ids);
 
   const toRecompute: string[] = [];
   for (const id of ids) {
@@ -91,46 +90,44 @@ async function handleBatch(
     }
   }
 
-  for (const id of toRecompute) {
-    const result = await computeEpisodeForecast(id);
-    forecasts[id] = toEpisodeForecastItem(result);
+  // Compute forecasts in parallel, then bulk upsert cache
+  const recomputeResults = await Promise.all(
+    toRecompute.map(async (id) => {
+      const result = await computeEpisodeForecast(id);
+      forecasts[id] = toEpisodeForecastItem(result);
+      return { id, result, inputsHash: hashByEpisode.get(id)! };
+    })
+  );
 
-    const inputsHash = hashByEpisode.get(id)!;
-    if (result.status === 'blocked') {
-      await pool.query(
-        `INSERT INTO episode_forecast_cache (episode_id, completion_end_p50, completion_end_p80, remaining_visits_p50, remaining_visits_p80, next_step, status, inputs_hash)
-         VALUES ($1, NULL, NULL, NULL, NULL, NULL, 'blocked', $2)
-         ON CONFLICT (episode_id) DO UPDATE SET
-           completion_end_p50 = NULL, completion_end_p80 = NULL,
-           remaining_visits_p50 = NULL, remaining_visits_p80 = NULL,
-           next_step = NULL, status = 'blocked',
-           inputs_hash = EXCLUDED.inputs_hash, computed_at = CURRENT_TIMESTAMP`,
-        [id, inputsHash]
-      );
-    } else {
-      await pool.query(
-        `INSERT INTO episode_forecast_cache (episode_id, completion_end_p50, completion_end_p80, remaining_visits_p50, remaining_visits_p80, next_step, status, inputs_hash)
-         VALUES ($1, $2, $3, $4, $5, $6, 'ready', $7)
-         ON CONFLICT (episode_id) DO UPDATE SET
-           completion_end_p50 = EXCLUDED.completion_end_p50,
-           completion_end_p80 = EXCLUDED.completion_end_p80,
-           remaining_visits_p50 = EXCLUDED.remaining_visits_p50,
-           remaining_visits_p80 = EXCLUDED.remaining_visits_p80,
-           next_step = EXCLUDED.next_step,
-           status = 'ready',
-           inputs_hash = EXCLUDED.inputs_hash,
-           computed_at = CURRENT_TIMESTAMP`,
-        [
-          id,
-          result.completionWindowStart,
-          result.completionWindowEnd,
-          result.remainingVisitsP50,
-          result.remainingVisitsP80,
-          result.stepCode,
-          inputsHash,
-        ]
-      );
+  if (recomputeResults.length > 0) {
+    const values: any[] = [];
+    const placeholders: string[] = [];
+    let idx = 1;
+    for (const { id, result, inputsHash } of recomputeResults) {
+      if (result.status === 'blocked') {
+        placeholders.push(`($${idx}, NULL, NULL, NULL, NULL, NULL, 'blocked', $${idx + 1})`);
+        values.push(id, inputsHash);
+        idx += 2;
+      } else {
+        placeholders.push(`($${idx}, $${idx + 1}, $${idx + 2}, $${idx + 3}, $${idx + 4}, $${idx + 5}, 'ready', $${idx + 6})`);
+        values.push(id, result.completionWindowStart, result.completionWindowEnd, result.remainingVisitsP50, result.remainingVisitsP80, result.stepCode, inputsHash);
+        idx += 7;
+      }
     }
+    await pool.query(
+      `INSERT INTO episode_forecast_cache (episode_id, completion_end_p50, completion_end_p80, remaining_visits_p50, remaining_visits_p80, next_step, status, inputs_hash)
+       VALUES ${placeholders.join(', ')}
+       ON CONFLICT (episode_id) DO UPDATE SET
+         completion_end_p50 = EXCLUDED.completion_end_p50,
+         completion_end_p80 = EXCLUDED.completion_end_p80,
+         remaining_visits_p50 = EXCLUDED.remaining_visits_p50,
+         remaining_visits_p80 = EXCLUDED.remaining_visits_p80,
+         next_step = EXCLUDED.next_step,
+         status = EXCLUDED.status,
+         inputs_hash = EXCLUDED.inputs_hash,
+         computed_at = CURRENT_TIMESTAMP`,
+      values
+    );
   }
 
   return {

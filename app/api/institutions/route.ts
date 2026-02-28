@@ -1,12 +1,17 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { apiHandler } from '@/lib/api/route-handler';
+import { getCached, setCache, INSTITUTION_TTL } from '@/lib/catalog-cache';
 
 export const dynamic = 'force-dynamic';
 
-export const GET = apiHandler(async (_req, { correlationId }) => {
-  const pool = getDbPool();
+const CACHE_KEY = 'institutions';
 
+export const GET = apiHandler(async (_req, { correlationId }) => {
+  const cached = getCached<string[]>(CACHE_KEY);
+  if (cached) return NextResponse.json({ institutions: cached });
+
+  const pool = getDbPool();
   const result = await pool.query(
     `SELECT DISTINCT intezmeny 
      FROM users 
@@ -15,6 +20,7 @@ export const GET = apiHandler(async (_req, { correlationId }) => {
   );
 
   const institutions = result.rows.map(row => row.intezmeny);
+  setCache(CACHE_KEY, institutions, INSTITUTION_TTL);
 
   return NextResponse.json({ institutions });
 });

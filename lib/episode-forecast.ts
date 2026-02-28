@@ -19,11 +19,107 @@ export interface EpisodeForecastResult {
   nextStepWindow?: { start: string; end: string };
 }
 
-/** Batch compute inputs_hash for multiple episodes. Returns Map<episodeId, hash>. */
+/** Batch compute inputs_hash for multiple episodes (5 queries total, not N×5). */
 export async function computeInputsHashBatch(episodeIds: string[]): Promise<Map<string, string>> {
   if (episodeIds.length === 0) return new Map();
-  const hashes = await Promise.all(episodeIds.map((id) => computeInputsHash(id)));
-  return new Map(episodeIds.map((id, i) => [id, hashes[i]]));
+  const pool = getDbPool();
+
+  const [episodeRows, pathwayRows, stageRows, statsRows, analyticsRows] = await Promise.all([
+    pool.query(
+      `SELECT pe.id, pe.care_pathway_id as "carePathwayId", pe.treatment_type_id as "treatmentTypeId"
+       FROM patient_episodes pe WHERE pe.id = ANY($1)`,
+      [episodeIds]
+    ),
+    pool.query(
+      `SELECT pe.id as episode_id, cp.steps_json
+       FROM patient_episodes pe
+       LEFT JOIN care_pathways cp ON pe.care_pathway_id = cp.id
+       WHERE pe.id = ANY($1)`,
+      [episodeIds]
+    ),
+    pool.query(
+      `SELECT DISTINCT ON (episode_id) episode_id, stage_code, at as "changedAt", id as "eventId"
+       FROM stage_events WHERE episode_id = ANY($1)
+       ORDER BY episode_id, at DESC`,
+      [episodeIds]
+    ),
+    pool.query(
+      `SELECT episode_id,
+         COUNT(*) FILTER (WHERE appointment_status = 'completed')::int as "completedCount",
+         COUNT(*) FILTER (WHERE start_time > CURRENT_TIMESTAMP
+           AND (appointment_status IS NULL OR appointment_status != 'cancelled'))::int as "futureActiveCount",
+         MAX(CASE WHEN appointment_status = 'completed' THEN COALESCE(start_time, created_at) END) as "lastCompletedAt",
+         MIN(CASE WHEN start_time > CURRENT_TIMESTAMP
+           AND (appointment_status IS NULL OR appointment_status != 'cancelled') THEN start_time END) as "nextBookedAt"
+       FROM appointments WHERE episode_id = ANY($1)
+       GROUP BY episode_id`,
+      [episodeIds]
+    ),
+    pool.query(
+      `SELECT pe.id as episode_id, cpa.median_visits, cpa.p80_visits, cpa.median_cadence_days,
+              cpa.recorded_at as "updatedAt"
+       FROM patient_episodes pe
+       LEFT JOIN care_pathway_analytics cpa ON pe.care_pathway_id = cpa.care_pathway_id
+       WHERE pe.id = ANY($1)`,
+      [episodeIds]
+    ),
+  ]);
+
+  const episodeMap = new Map(episodeRows.rows.map((r: any) => [r.id, r]));
+  const pathwayMap = new Map(pathwayRows.rows.map((r: any) => [r.episode_id, r]));
+  const stageMap = new Map(stageRows.rows.map((r: any) => [r.episode_id, r]));
+  const statsMap = new Map(statsRows.rows.map((r: any) => [r.episode_id, r]));
+  const analyticsMap = new Map(analyticsRows.rows.map((r: any) => [r.episode_id, r]));
+
+  const result = new Map<string, string>();
+  for (const id of episodeIds) {
+    const episode = episodeMap.get(id);
+    const pathway = pathwayMap.get(id);
+    const stage = stageMap.get(id);
+    const stats = statsMap.get(id);
+    const analytics = analyticsMap.get(id);
+
+    const stepsJson = pathway?.steps_json;
+    const pathwayStepsHash = stepsJson != null
+      ? createHash('sha256').update(JSON.stringify(stepsJson)).digest('hex')
+      : '';
+
+    const stageSignature = stage
+      ? { stage_code: stage.stage_code, event_id: stage.eventId, changed_at: stage.changedAt?.toISOString?.() ?? null }
+      : null;
+
+    const appointmentsSignature = stats
+      ? {
+          completedCount: stats.completedCount ?? 0,
+          futureActiveCount: stats.futureActiveCount ?? 0,
+          lastCompletedAt: stats.lastCompletedAt?.toISOString?.() ?? null,
+          nextBookedAt: stats.nextBookedAt?.toISOString?.() ?? null,
+        }
+      : null;
+
+    const analyticsSignature = analytics?.median_visits != null
+      ? {
+          median_visits: analytics.median_visits,
+          p80_visits: analytics.p80_visits,
+          median_cadence_days: analytics.median_cadence_days,
+          updated_at: analytics.updatedAt?.toISOString?.() ?? null,
+        }
+      : null;
+
+    const payload = {
+      episodeId: id,
+      carePathwayId: episode?.carePathwayId ?? null,
+      treatmentTypeId: episode?.treatmentTypeId ?? null,
+      pathwayStepsHash,
+      stageSignature,
+      appointmentsSignature,
+      analyticsSignature,
+    };
+
+    result.set(id, createHash('sha256').update(JSON.stringify(payload)).digest('hex'));
+  }
+
+  return result;
 }
 
 /** Deterministic hash of forecast inputs. Do NOT include computed_at or time-dependent values. */

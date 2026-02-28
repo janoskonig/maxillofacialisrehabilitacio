@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { roleHandler, authedHandler } from '@/lib/api/route-handler';
 import type { StageCatalogEntry, ReasonType } from '@/lib/types';
 import { stageCatalogCreateSchema } from '@/lib/admin-process-schemas';
+import { getCached, setCache, invalidateCachePrefix, CATALOG_TTL } from '@/lib/catalog-cache';
 
 const REASON_VALUES: ReasonType[] = ['traumás sérülés', 'veleszületett rendellenesség', 'onkológiai kezelés utáni állapot'];
 
@@ -41,6 +42,7 @@ export const POST = roleHandler(['admin', 'fogpótlástanász'], async (req, { a
       by: auth.email ?? auth.userId,
       auditReason: data.auditReason,
     });
+    invalidateCachePrefix('stage-catalog');
     return NextResponse.json({ stage: row });
   } catch (err: unknown) {
     const msg = String(err ?? '');
@@ -57,6 +59,9 @@ export const POST = roleHandler(['admin', 'fogpótlástanász'], async (req, { a
 export const GET = authedHandler(async (req, { auth }) => {
   const pool = getDbPool();
   const reason = req.nextUrl.searchParams.get('reason') as ReasonType | null;
+  const cacheKey = `stage-catalog:${reason ?? 'all'}`;
+  const cached = getCached<StageCatalogEntry[]>(cacheKey);
+  if (cached) return NextResponse.json({ catalog: cached });
 
   const tableExists = await pool.query(
     `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'stage_catalog'`
@@ -86,5 +91,6 @@ export const GET = authedHandler(async (req, { auth }) => {
     defaultDurationDays: row.defaultDurationDays ?? null,
   }));
 
+  setCache(cacheKey, catalog, CATALOG_TTL);
   return NextResponse.json({ catalog });
 });

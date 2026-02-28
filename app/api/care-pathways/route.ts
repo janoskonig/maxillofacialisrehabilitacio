@@ -5,6 +5,7 @@ import { carePathwayCreateSchema } from '@/lib/admin-process-schemas';
 import { invalidateStepLabelCache } from '@/lib/step-labels';
 import { invalidateUnmappedCache } from '@/lib/step-catalog-cache';
 import { logger } from '@/lib/logger';
+import { invalidateCachePrefix } from '@/lib/catalog-cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,6 +63,7 @@ export const POST = roleHandler(['admin', 'fogpótlástanász'], async (req, { a
 
   invalidateStepLabelCache();
   invalidateUnmappedCache();
+  invalidateCachePrefix('care-pathways');
 
   console.info('[admin] care_pathway created', {
     pathwayId: pathway.id,

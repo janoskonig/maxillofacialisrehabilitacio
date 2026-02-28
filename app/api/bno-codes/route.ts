@@ -4,6 +4,7 @@ import { apiHandler } from '@/lib/api/route-handler';
 import { logger } from '@/lib/logger';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
+import { getCached, setCache, BNO_TTL } from '@/lib/catalog-cache';
 
 interface BNOCode {
   kod: string;
@@ -12,7 +13,11 @@ interface BNOCode {
 
 export const dynamic = 'force-dynamic';
 
+const CACHE_KEY = 'bno-codes';
+
 export const GET = apiHandler(async () => {
+  const cached = getCached<BNOCode[]>(CACHE_KEY);
+  if (cached) return NextResponse.json(cached);
   const filePath = join(process.cwd(), 'BNOTORZS_201807.xlsx');
   
   if (!existsSync(filePath)) {
@@ -66,6 +71,7 @@ export const GET = apiHandler(async () => {
     );
   
   logger.info(`Loaded ${bnoCodes.length} BNO codes from Excel file`);
+  setCache(CACHE_KEY, bnoCodes, BNO_TTL);
   
   return NextResponse.json(bnoCodes);
 });

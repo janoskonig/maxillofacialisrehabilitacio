@@ -1,8 +1,8 @@
 import { Pool } from 'pg';
 
-// Adatbázis kapcsolat pool létrehozása
-// A pool újrahasznosítja a kapcsolatokat, ami hatékonyabb
 let pool: Pool | null = null;
+
+const SLOW_QUERY_THRESHOLD = parseInt(process.env.SLOW_QUERY_MS || '1000', 10);
 
 export function getDbPool(): Pool {
   if (!pool) {
@@ -12,63 +12,62 @@ export function getDbPool(): Pool {
       throw new Error('DATABASE_URL környezeti változó nincs beállítva! Kérjük, adja meg a .env fájlban.');
     }
 
-    // SSL beállítások detection - Render és más cloud provider-ek esetében
     const requiresSSL = 
       connectionString.includes('sslmode=require') ||
       connectionString.includes('render.com') ||
       connectionString.includes('amazonaws.com') ||
       process.env.NODE_ENV === 'production';
 
-    // Pool beállítások környezeti változókból vagy alapértelmezett értékekből
-    // Reduced max connections to prevent "too many clients" error
-    // PostgreSQL free tier typically allows ~20-25 connections
     const maxConnections = parseInt(process.env.DB_POOL_MAX || '10', 10);
-    const connectionTimeout = parseInt(process.env.DB_POOL_CONNECTION_TIMEOUT || '10000', 10); // 10s
-    const idleTimeout = parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000', 10); // Reduced to 30s to close idle connections faster
+    const connectionTimeout = parseInt(process.env.DB_POOL_CONNECTION_TIMEOUT || '10000', 10);
+    const idleTimeout = parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000', 10);
     const minConnections = parseInt(process.env.DB_POOL_MIN || '1', 10);
-    const queryTimeout = parseInt(process.env.DB_QUERY_TIMEOUT || '300000', 10); // 5 minutes for long queries
+    const queryTimeout = parseInt(process.env.DB_QUERY_TIMEOUT || '30000', 10);
 
-    pool = new Pool({
+    const rawPool = new Pool({
       connectionString,
-      // Kapcsolat timeout (ms)
       connectionTimeoutMillis: connectionTimeout,
-      // Minimális kapcsolatok száma a pool-ban
       min: minConnections,
-      // Maximális kapcsolatok száma a pool-ban
       max: maxConnections,
-      // Idle timeout (ms) - mennyi ideig lehet egy kapcsolat tétlen
       idleTimeoutMillis: idleTimeout,
-      // Statement timeout (ms) - hosszú futásidejű lekérdezésekhez
       statement_timeout: queryTimeout,
-      // SSL beállítások (cloud adatbázisok esetében szükséges)
       ssl: requiresSSL 
         ? { rejectUnauthorized: false } 
         : false,
-      // Keep connections alive
       keepAlive: true,
-      keepAliveInitialDelayMillis: 10000, // 10 seconds
-      // Allow exit on idle - close pool when no connections are in use
+      keepAliveInitialDelayMillis: 10000,
       allowExitOnIdle: true,
     });
 
-    // Hibakezelés
-    pool.on('error', (err: any) => {
+    rawPool.on('error', (err: any) => {
       console.error('Adatbázis kapcsolat hiba:', err);
-      // Ha "too many clients" hiba, próbáljuk meg újra kapcsolatot létrehozni
       if (err?.code === '53300') {
         console.error('Túl sok adatbázis kapcsolat! Várakozás...');
       }
     });
 
-    // Log pool stats periodically in development
-    // Disabled - uncomment to enable pool stats logging
-    // if (process.env.NODE_ENV === 'development' && pool) {
-    //   setInterval(() => {
-    //     if (pool) {
-    //       console.log(`DB Pool stats: total=${pool.totalCount}, idle=${pool.idleCount}, waiting=${pool.waitingCount}`);
-    //     }
-    //   }, 30000); // Every 30 seconds
-    // }
+    // Wrap pool.query with slow-query logging
+    const origQuery: (...a: any[]) => any = rawPool.query.bind(rawPool);
+    (rawPool as any).query = function wrappedQuery(textOrConfig: any, values?: any, callback?: any): any {
+      const start = performance.now();
+      const queryText = typeof textOrConfig === 'string' ? textOrConfig : textOrConfig?.text ?? '(unknown)';
+
+      const result = origQuery(textOrConfig, values, callback);
+
+      if (result && typeof result.then === 'function') {
+        return result.then((res: any) => {
+          const elapsed = performance.now() - start;
+          if (elapsed > SLOW_QUERY_THRESHOLD) {
+            const truncated = queryText.replace(/\s+/g, ' ').slice(0, 200);
+            console.warn(`[SLOW_QUERY] ${elapsed.toFixed(0)}ms | rows=${res?.rowCount ?? '?'} | ${truncated}`);
+          }
+          return res;
+        });
+      }
+      return result;
+    };
+
+    pool = rawPool;
   }
 
   return pool;

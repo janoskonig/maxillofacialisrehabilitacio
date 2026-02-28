@@ -1,3 +1,8 @@
+// Bundle analyzer (ANALYZE=true npm run build)
+const withBundleAnalyzer = require('@next/bundle-analyzer')({
+  enabled: process.env.ANALYZE === 'true',
+});
+
 // Sentry integration (if enabled)
 const { withSentryConfig } = require('@sentry/nextjs');
 
@@ -78,21 +83,19 @@ const nextConfig = {
 }
 
 // Wrap with Sentry config only if enabled
+const analyzedConfig = withBundleAnalyzer(nextConfig);
+
 if (process.env.ENABLE_SENTRY === 'true') {
   module.exports = withSentryConfig(
-    nextConfig,
+    analyzedConfig,
     {
-      // Sentry options
-      silent: true, // Suppress source map upload logs
+      silent: true,
       org: process.env.SENTRY_ORG,
       project: process.env.SENTRY_PROJECT,
-      // Disable source maps upload for now (can be enabled later)
       widenClientFileUpload: true,
       hideSourceMaps: true,
-      // Note: disableLogger is deprecated (removed)
-      // Use silent: true instead, and tree-shaking will remove Sentry logger in production builds
     }
   );
 } else {
-  module.exports = nextConfig;
+  module.exports = analyzedConfig;
 }
