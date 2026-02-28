@@ -59,24 +59,25 @@ export const GET = authedHandler(async (req, { auth }) => {
     ),
     pool.query(
       `SELECT 
-        id,
-        nev,
-        taj,
-        email,
-        telefonszam,
-        szuletesi_datum,
-        nem,
-        cim,
-        varos,
-        iranyitoszam,
-        beutalo_orvos,
-        beutalo_indokolas,
-        created_at,
-        created_by
-      FROM patients
-      WHERE (kezeleoorvos IS NULL OR kezeleoorvos = '')
-      AND created_by IS NULL
-      ORDER BY created_at ASC`
+        p.id,
+        p.nev,
+        p.taj,
+        p.email,
+        p.telefonszam,
+        p.szuletesi_datum,
+        p.nem,
+        p.cim,
+        p.varos,
+        p.iranyitoszam,
+        r.beutalo_orvos,
+        r.beutalo_indokolas,
+        p.created_at,
+        p.created_by
+      FROM patients p
+      LEFT JOIN patient_referral r ON r.patient_id = p.id
+      WHERE (p.kezeleoorvos IS NULL OR p.kezeleoorvos = '')
+      AND p.created_by IS NULL
+      ORDER BY p.created_at ASC`
     ),
   ]);
 

@@ -28,7 +28,7 @@ export const GET = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'], 
     );
     const intezmeny = userRow.rows[0]?.intezmeny;
     if (intezmeny) {
-      institutionFilter = ' AND p.beutalo_intezmeny = $2';
+      institutionFilter = ' AND r.beutalo_intezmeny = $2';
       params.push(intezmeny);
     }
   }
@@ -43,6 +43,7 @@ export const GET = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'], 
       FROM patient_episodes e
       JOIN stage_events s ON s.episode_id = e.id
       JOIN patients p ON p.id = e.patient_id
+      LEFT JOIN patient_referral r ON r.patient_id = p.id
       WHERE e.status = 'open'
       ${institutionFilter}
       ORDER BY e.patient_id, e.id, s.at DESC

@@ -41,40 +41,25 @@ export const GET = authedHandler(async (req, { auth }) => {
 
   const etiologyDistribution = await pool.query(`
     SELECT 
-      COALESCE(kezelesre_erkezes_indoka, 'Nincs adat') as etiologia,
+      COALESCE(a.kezelesre_erkezes_indoka, 'Nincs adat') as etiologia,
       COUNT(*) as darab,
       ROUND(COUNT(*) * 100.0 / NULLIF((SELECT COUNT(*) FROM patients), 0), 2) as szazalek
-    FROM patients
-    GROUP BY kezelesre_erkezes_indoka
+    FROM patients p
+    LEFT JOIN patient_anamnesis a ON a.patient_id = p.id
+    GROUP BY a.kezelesre_erkezes_indoka
     ORDER BY darab DESC
   `);
 
   const dmftStats = await pool.query(`
     WITH dmft_calculations AS (
       SELECT 
-        id,
+        patient_id,
         meglevo_fogak,
-        (
-          SELECT COUNT(*)
-          FROM jsonb_each(meglevo_fogak) AS fog
-          WHERE (fog.value->>'status' = 'D' OR fog.value->>'status' = 'F' OR fog.value->>'status' = 'M')
-        ) as dmft_total,
-        (
-          SELECT COUNT(*)
-          FROM jsonb_each(meglevo_fogak) AS fog
-          WHERE fog.value->>'status' = 'D'
-        ) as d_count,
-        (
-          SELECT COUNT(*)
-          FROM jsonb_each(meglevo_fogak) AS fog
-          WHERE fog.value->>'status' = 'F'
-        ) as f_count,
-        (
-          SELECT COUNT(*)
-          FROM jsonb_each(meglevo_fogak) AS fog
-          WHERE fog.value->>'status' = 'M'
-        ) as m_count
-      FROM patients
+        (SELECT COUNT(*) FROM jsonb_each(meglevo_fogak) AS fog WHERE (fog.value->>'status' = 'D' OR fog.value->>'status' = 'F' OR fog.value->>'status' = 'M')) as dmft_total,
+        (SELECT COUNT(*) FROM jsonb_each(meglevo_fogak) AS fog WHERE fog.value->>'status' = 'D') as d_count,
+        (SELECT COUNT(*) FROM jsonb_each(meglevo_fogak) AS fog WHERE fog.value->>'status' = 'F') as f_count,
+        (SELECT COUNT(*) FROM jsonb_each(meglevo_fogak) AS fog WHERE fog.value->>'status' = 'M') as m_count
+      FROM patient_dental_status
       WHERE meglevo_fogak IS NOT NULL 
         AND meglevo_fogak != '{}'::jsonb
     )
@@ -94,26 +79,27 @@ export const GET = authedHandler(async (req, { auth }) => {
   const dmftByAge = await pool.query(`
     WITH patient_ages AS (
       SELECT 
-        id,
+        p.id,
         CASE 
-          WHEN szuletesi_datum IS NULL THEN 'Nincs adat'
-          WHEN EXTRACT(YEAR FROM AGE(szuletesi_datum)) < 30 THEN '0-29 év'
-          WHEN EXTRACT(YEAR FROM AGE(szuletesi_datum)) < 40 THEN '30-39 év'
-          WHEN EXTRACT(YEAR FROM AGE(szuletesi_datum)) < 50 THEN '40-49 év'
-          WHEN EXTRACT(YEAR FROM AGE(szuletesi_datum)) < 60 THEN '50-59 év'
-          WHEN EXTRACT(YEAR FROM AGE(szuletesi_datum)) < 70 THEN '60-69 év'
-          WHEN EXTRACT(YEAR FROM AGE(szuletesi_datum)) < 80 THEN '70-79 év'
+          WHEN p.szuletesi_datum IS NULL THEN 'Nincs adat'
+          WHEN EXTRACT(YEAR FROM AGE(p.szuletesi_datum)) < 30 THEN '0-29 év'
+          WHEN EXTRACT(YEAR FROM AGE(p.szuletesi_datum)) < 40 THEN '30-39 év'
+          WHEN EXTRACT(YEAR FROM AGE(p.szuletesi_datum)) < 50 THEN '40-49 év'
+          WHEN EXTRACT(YEAR FROM AGE(p.szuletesi_datum)) < 60 THEN '50-59 év'
+          WHEN EXTRACT(YEAR FROM AGE(p.szuletesi_datum)) < 70 THEN '60-69 év'
+          WHEN EXTRACT(YEAR FROM AGE(p.szuletesi_datum)) < 80 THEN '70-79 év'
           ELSE '80+ év'
         END as korcsoport,
         (
           SELECT COUNT(*)
-          FROM jsonb_each(meglevo_fogak) AS fog
+          FROM jsonb_each(d.meglevo_fogak) AS fog
           WHERE (fog.value->>'status' = 'D' OR fog.value->>'status' = 'F' OR fog.value->>'status' = 'M')
         ) as dmft_total
-      FROM patients
-      WHERE meglevo_fogak IS NOT NULL 
-        AND meglevo_fogak != '{}'::jsonb
-        AND szuletesi_datum IS NOT NULL
+      FROM patients p
+      JOIN patient_dental_status d ON d.patient_id = p.id
+      WHERE d.meglevo_fogak IS NOT NULL 
+        AND d.meglevo_fogak != '{}'::jsonb
+        AND p.szuletesi_datum IS NOT NULL
     )
     SELECT 
       korcsoport,
@@ -139,16 +125,17 @@ export const GET = authedHandler(async (req, { auth }) => {
   const dmftByEtiology = await pool.query(`
     WITH patient_dmft AS (
       SELECT 
-        id,
-        COALESCE(kezelesre_erkezes_indoka, 'Nincs adat') as etiologia,
+        d.patient_id,
+        COALESCE(a.kezelesre_erkezes_indoka, 'Nincs adat') as etiologia,
         (
           SELECT COUNT(*)
-          FROM jsonb_each(meglevo_fogak) AS fog
+          FROM jsonb_each(d.meglevo_fogak) AS fog
           WHERE (fog.value->>'status' = 'D' OR fog.value->>'status' = 'F' OR fog.value->>'status' = 'M')
         ) as dmft_total
-      FROM patients
-      WHERE meglevo_fogak IS NOT NULL 
-        AND meglevo_fogak != '{}'::jsonb
+      FROM patient_dental_status d
+      LEFT JOIN patient_anamnesis a ON a.patient_id = d.patient_id
+      WHERE d.meglevo_fogak IS NOT NULL 
+        AND d.meglevo_fogak != '{}'::jsonb
     )
     SELECT 
       etiologia,

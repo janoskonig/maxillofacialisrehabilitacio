@@ -21,39 +21,39 @@ export const GET = roleHandler(['admin'], async (req, { auth }) => {
     doctorWorkloadResult,
     waitingPatientsResult,
   ] = await Promise.all([
-    // 1. BNO statisztikák
+    // 1. BNO statisztikák (from patient_anamnesis)
     pool.query(`
       SELECT 
         TRIM(unnest(string_to_array(bno, ','))) as bno_kod,
         COUNT(*) as elofordulas
-      FROM patients
+      FROM patient_anamnesis
       WHERE bno IS NOT NULL AND bno != ''
       GROUP BY bno_kod
       ORDER BY elofordulas DESC
     `),
 
-    // 2. Beutaló orvosok eloszlása
+    // 2. Beutaló orvosok eloszlása (from patient_referral)
     pool.query(`
       SELECT 
         beutalo_orvos as orvos,
         COUNT(*) as darab
-      FROM patients
+      FROM patient_referral
       WHERE beutalo_orvos IS NOT NULL AND beutalo_orvos != ''
       GROUP BY beutalo_orvos
       ORDER BY darab DESC
     `),
 
-    // 3. DMF stats (merged into single CTE query)
+    // 3. DMF stats (from patient_dental_status)
     pool.query(`
       WITH dmft_calculations AS (
         SELECT 
-          id,
+          patient_id,
           (
             SELECT COUNT(*)
             FROM jsonb_each(meglevo_fogak) AS fog
             WHERE (fog.value->>'status' = 'D' OR fog.value->>'status' = 'F' OR fog.value->>'status' = 'M')
           ) as dmft_total
-        FROM patients
+        FROM patient_dental_status
         WHERE meglevo_fogak IS NOT NULL AND meglevo_fogak != '{}'::jsonb
       )
       SELECT 
@@ -67,17 +67,17 @@ export const GET = roleHandler(['admin'], async (req, { auth }) => {
       WHERE dmft_total >= 0
     `),
 
-    // 4. DMFT distribution
+    // 4. DMFT distribution (from patient_dental_status)
     pool.query(`
       WITH dmft_calculations AS (
         SELECT 
-          id,
+          patient_id,
           (
             SELECT COUNT(*)
             FROM jsonb_each(meglevo_fogak) AS fog
             WHERE (fog.value->>'status' = 'D' OR fog.value->>'status' = 'F' OR fog.value->>'status' = 'M')
           ) as dmft_total
-        FROM patients
+        FROM patient_dental_status
         WHERE meglevo_fogak IS NOT NULL AND meglevo_fogak != '{}'::jsonb
       )
       SELECT 
@@ -89,13 +89,13 @@ export const GET = roleHandler(['admin'], async (req, { auth }) => {
       ORDER BY dmft_total
     `),
 
-    // 5. Fogak pozíciói (Zsigmondy)
+    // 5. Fogak pozíciói (from patient_dental_status)
     pool.query(`
       WITH tooth_positions AS (
         SELECT 
           key::int as fog_szam,
           value->>'status' as status
-        FROM patients,
+        FROM patient_dental_status,
         LATERAL jsonb_each(meglevo_fogak)
         WHERE meglevo_fogak IS NOT NULL AND meglevo_fogak != '{}'::jsonb
       )
@@ -112,11 +112,11 @@ export const GET = roleHandler(['admin'], async (req, { auth }) => {
       ORDER BY fog_szam
     `),
 
-    // 6. Implantátumok pozíciói — try with implants table, fallback to JSONB only
+    // 6. Implantátumok pozíciói (from patient_dental_status)
     pool.query(`
       WITH implant_positions AS (
         SELECT key::int as fog_szam
-        FROM patients,
+        FROM patient_dental_status,
         LATERAL jsonb_each(meglevo_implantatumok)
         WHERE meglevo_implantatumok IS NOT NULL AND meglevo_implantatumok != '{}'::jsonb
         
@@ -138,7 +138,7 @@ export const GET = roleHandler(['admin'], async (req, { auth }) => {
         SELECT 
           key::int as "fogSzam",
           COUNT(*) as "implantatumSzama"
-        FROM patients,
+        FROM patient_dental_status,
         LATERAL jsonb_each(meglevo_implantatumok)
         WHERE meglevo_implantatumok IS NOT NULL AND meglevo_implantatumok != '{}'::jsonb
           AND key::int BETWEEN 11 AND 48

@@ -164,6 +164,69 @@ export const patientSchema = z.object({
 
 export type Patient = z.infer<typeof patientSchema>;
 
+/** Narrow type for patient list views (core table only, ~18 cols). */
+export interface PatientListItem {
+  id: string;
+  nev: string | null;
+  taj: string | null;
+  telefonszam: string | null;
+  szuletesiDatum: string | null;
+  nem: string | null;
+  email: string | null;
+  cim: string | null;
+  varos: string | null;
+  iranyitoszam: string | null;
+  kezeleoorvos: string | null;
+  kezeleoorvosIntezete: string | null;
+  felvetelDatuma: string | null;
+  halalDatum: string | null;
+  intakeStatus: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  createdBy: string | null;
+  updatedBy: string | null;
+}
+
+/** Narrow type for dental status queries (patient_dental_status table). */
+export interface PatientDentalStatus {
+  patientId: string;
+  meglevoFogak: Record<string, unknown> | null;
+  meglevoImplantatumok: Record<string, string> | null;
+  nemIsmertPoziciokbanImplantatum: boolean;
+  nemIsmertPoziciokbanImplantatumRészletek: string | null;
+  felsoFogpotlasVan: boolean;
+  felsoFogpotlasMikor: string | null;
+  felsoFogpotlasKeszito: string | null;
+  felsoFogpotlasElegedett: boolean;
+  felsoFogpotlasProblema: string | null;
+  felsoFogpotlasTipus: string | null;
+  alsoFogpotlasVan: boolean;
+  alsoFogpotlasMikor: string | null;
+  alsoFogpotlasKeszito: string | null;
+  alsoFogpotlasElegedett: boolean;
+  alsoFogpotlasProblema: string | null;
+  alsoFogpotlasTipus: string | null;
+}
+
+/** Narrow type for anamnesis queries (patient_anamnesis table). */
+export interface PatientAnamnesis {
+  patientId: string;
+  kezelesreErkezesIndoka: string | null;
+  alkoholfogyasztas: string | null;
+  dohanyzasSzam: string | null;
+  maxilladefektusVan: boolean;
+  brownFuggolegesOsztaly: string | null;
+  brownVizszintesKomponens: string | null;
+  mandibuladefektusVan: boolean;
+  kovacsDobakOsztaly: string | null;
+  nyelvmozgásokAkadályozottak: boolean;
+  gombocosBeszed: boolean;
+  nyalmirigyAllapot: string | null;
+  bno: string | null;
+  diagnozis: string | null;
+  tnmStaging: string | null;
+}
+
 export const beutaloIntezmenyOptions = [
   'OOI Fej-Nyaki Daganatok Multidiszciplináris Központ',
   'Észak-Pesti Centrumkórház',

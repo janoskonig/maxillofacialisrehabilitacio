@@ -95,12 +95,10 @@ export const POST = apiHandler(async (req, { correlationId }) => {
       cim,
       varos,
       iranyitoszam,
-      beutalo_orvos,
-      beutalo_indokolas,
       created_at, 
       updated_at
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     RETURNING id, email, nev, taj`,
     [
       email.trim(),
@@ -112,12 +110,22 @@ export const POST = apiHandler(async (req, { correlationId }) => {
       cim?.trim() || null,
       varos?.trim() || null,
       iranyitoszam?.trim() || null,
-      beutaloOrvos?.trim() || null,
-      beutaloIndokolas?.trim() || null,
     ]
   );
 
   const newPatient = insertResult.rows[0];
+
+  // Insert referral data into patient_referral if provided
+  if (beutaloOrvos?.trim() || beutaloIndokolas?.trim()) {
+    await pool.query(
+      `INSERT INTO patient_referral (patient_id, beutalo_orvos, beutalo_indokolas)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (patient_id) DO UPDATE SET
+         beutalo_orvos = COALESCE(EXCLUDED.beutalo_orvos, patient_referral.beutalo_orvos),
+         beutalo_indokolas = COALESCE(EXCLUDED.beutalo_indokolas, patient_referral.beutalo_indokolas)`,
+      [newPatient.id, beutaloOrvos?.trim() || null, beutaloIndokolas?.trim() || null]
+    );
+  }
 
   let waitingTimeStats = null;
   try {

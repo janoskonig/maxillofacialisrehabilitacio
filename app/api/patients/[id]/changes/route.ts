@@ -17,12 +17,14 @@ export const GET = authedHandler(async (req, { auth, params }) => {
   // Verify patient exists and user has access (same logic as GET /api/patients/[id])
   const patientResult = await pool.query(
       `SELECT 
-        id,
-        nev,
-        beutalo_intezmeny as "beutaloIntezmeny",
-        kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto"
-      FROM patients
-      WHERE id = $1`,
+        p.id,
+        p.nev,
+        r.beutalo_intezmeny as "beutaloIntezmeny",
+        t.kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto"
+      FROM patients p
+      LEFT JOIN patient_referral r ON r.patient_id = p.id
+      LEFT JOIN patient_treatment_plans t ON t.patient_id = p.id
+      WHERE p.id = $1`,
       [patientId]
   );
 

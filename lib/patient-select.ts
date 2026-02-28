@@ -79,9 +79,9 @@ export const patientSelectColumns = (): readonly string[] =>
     'created_at as "createdAt"',
   ] as const;
 
-/** Build full SELECT sql: SELECT ... FROM patients WHERE id = $1 */
+/** Build full SELECT sql: SELECT ... FROM patients_full WHERE id = $1 */
 export function patientSelectSql(): string {
-  return `SELECT ${patientSelectColumns().join(', ')} FROM patients WHERE id = $1`;
+  return `SELECT ${patientSelectColumns().join(', ')} FROM patients_full WHERE id = $1`;
 }
 
 const DATE_KEYS = [

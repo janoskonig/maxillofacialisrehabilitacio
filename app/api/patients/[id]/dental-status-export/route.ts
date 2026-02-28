@@ -21,29 +21,31 @@ export const GET = authedHandler(async (req, { auth, params }) => {
   try {
     const result = await client.query(
       `SELECT 
-          id,
-          nev,
-          taj,
-          meglevo_fogak as "meglevoFogak",
-          felso_fogpotlas_van as "felsoFogpotlasVan",
-          felso_fogpotlas_mikor as "felsoFogpotlasMikor",
-          felso_fogpotlas_keszito as "felsoFogpotlasKeszito",
-          felso_fogpotlas_elegedett as "felsoFogpotlasElegedett",
-          felso_fogpotlas_problema as "felsoFogpotlasProblema",
-          felso_fogpotlas_tipus as "felsoFogpotlasTipus",
-          fabian_fejerdy_protetikai_osztaly_felso as "fabianFejerdyProtetikaiOsztalyFelso",
-          also_fogpotlas_van as "alsoFogpotlasVan",
-          also_fogpotlas_mikor as "alsoFogpotlasMikor",
-          also_fogpotlas_keszito as "alsoFogpotlasKeszito",
-          also_fogpotlas_elegedett as "alsoFogpotlasElegedett",
-          also_fogpotlas_problema as "alsoFogpotlasProblema",
-          also_fogpotlas_tipus as "alsoFogpotlasTipus",
-          fabian_fejerdy_protetikai_osztaly_also as "fabianFejerdyProtetikaiOsztalyAlso",
-          meglevo_implantatumok as "meglevoImplantatumok",
-          nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
-          nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek"
-        FROM patients
-        WHERE id = $1`,
+          p.id,
+          p.nev,
+          p.taj,
+          d.meglevo_fogak as "meglevoFogak",
+          d.felso_fogpotlas_van as "felsoFogpotlasVan",
+          d.felso_fogpotlas_mikor as "felsoFogpotlasMikor",
+          d.felso_fogpotlas_keszito as "felsoFogpotlasKeszito",
+          d.felso_fogpotlas_elegedett as "felsoFogpotlasElegedett",
+          d.felso_fogpotlas_problema as "felsoFogpotlasProblema",
+          d.felso_fogpotlas_tipus as "felsoFogpotlasTipus",
+          a.fabian_fejerdy_protetikai_osztaly_felso as "fabianFejerdyProtetikaiOsztalyFelso",
+          d.also_fogpotlas_van as "alsoFogpotlasVan",
+          d.also_fogpotlas_mikor as "alsoFogpotlasMikor",
+          d.also_fogpotlas_keszito as "alsoFogpotlasKeszito",
+          d.also_fogpotlas_elegedett as "alsoFogpotlasElegedett",
+          d.also_fogpotlas_problema as "alsoFogpotlasProblema",
+          d.also_fogpotlas_tipus as "alsoFogpotlasTipus",
+          a.fabian_fejerdy_protetikai_osztaly_also as "fabianFejerdyProtetikaiOsztalyAlso",
+          d.meglevo_implantatumok as "meglevoImplantatumok",
+          d.nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
+          d.nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek"
+        FROM patients p
+        LEFT JOIN patient_dental_status d ON d.patient_id = p.id
+        LEFT JOIN patient_anamnesis a ON a.patient_id = p.id
+        WHERE p.id = $1`,
       [patientId]
     );
 

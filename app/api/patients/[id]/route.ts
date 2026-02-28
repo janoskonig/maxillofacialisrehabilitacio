@@ -154,133 +154,52 @@ const DB_TO_CAMEL: Record<string, string> = {
   meglevo_implantatumok: 'meglevoImplantatumok',
 };
 
-const PATIENT_UPDATE_SQL = `UPDATE patients SET
-  nev = $2,
-  taj = $3,
-  telefonszam = $4,
-  szuletesi_datum = $5,
-  nem = $6,
-  email = $7,
-  cim = $8,
-  varos = $9,
-  iranyitoszam = $10,
-  beutalo_orvos = $11,
-  beutalo_intezmeny = $12,
-  beutalo_indokolas = $13,
-  mutet_ideje = $14,
-  szovettani_diagnozis = $15,
-  nyaki_blokkdisszekcio = $16,
-  alkoholfogyasztas = $17,
-  dohanyzas_szam = $18,
-  kezelesre_erkezes_indoka = $19,
-  maxilladefektus_van = $20,
-  brown_fuggoleges_osztaly = $21,
-  brown_vizszintes_komponens = $22,
-  mandibuladefektus_van = $23,
-  kovacs_dobak_osztaly = $24,
-  nyelvmozgasok_akadalyozottak = $25,
-  gombocos_beszed = $26,
-  nyalmirigy_allapot = $27,
-  fabian_fejerdy_protetikai_osztaly_felso = $28,
-  fabian_fejerdy_protetikai_osztaly_also = $29,
-  radioterapia = $30,
-  radioterapia_dozis = $31,
-  radioterapia_datum_intervallum = $32,
-  chemoterapia = $33,
-  chemoterapia_leiras = $34,
-  fabian_fejerdy_protetikai_osztaly = $35,
-  kezeleoorvos = $36,
-  kezeleoorvos_intezete = $37,
-  felvetel_datuma = $38,
-  felso_fogpotlas_van = $39,
-  felso_fogpotlas_mikor = $40,
-  felso_fogpotlas_keszito = $41,
-  felso_fogpotlas_elegedett = $42,
-  felso_fogpotlas_problema = $43,
-  also_fogpotlas_van = $44,
-  also_fogpotlas_mikor = $45,
-  also_fogpotlas_keszito = $46,
-  also_fogpotlas_elegedett = $47,
-  also_fogpotlas_problema = $48,
-  meglevo_fogak = $49,
-  felso_fogpotlas_tipus = $50,
-  also_fogpotlas_tipus = $51,
-  meglevo_implantatumok = $52,
-  nem_ismert_poziciokban_implantatum = $53,
-  nem_ismert_poziciokban_implantatum_reszletek = $54,
-  tnm_staging = $55,
-  bno = $56,
-  diagnozis = $57,
-  primer_mutet_leirasa = $58,
-  baleset_idopont = $59,
-  baleset_etiologiaja = $60,
-  baleset_egyeb = $61,
-  veleszuletett_rendellenessegek = $62::jsonb,
-  veleszuletett_mutetek_leirasa = $63,
-  kezelesi_terv_felso = $64::jsonb,
-  kezelesi_terv_also = $65::jsonb,
-  kezelesi_terv_arcot_erinto = $66::jsonb,
-  kortorteneti_osszefoglalo = $67,
-  kezelesi_terv_melleklet = $68,
-  szakorvosi_velemeny = $69,
-  halal_datum = $70,
-  updated_at = CURRENT_TIMESTAMP,
-  updated_by = $71
-WHERE id = $1
-RETURNING 
-  id, nev, taj, telefonszam, szuletesi_datum as "szuletesiDatum", nem,
-  email, cim, varos, iranyitoszam, beutalo_orvos as "beutaloOrvos",
-  beutalo_intezmeny as "beutaloIntezmeny", beutalo_indokolas as "beutaloIndokolas",
-  primer_mutet_leirasa as "primerMutetLeirasa",
-  mutet_ideje as "mutetIdeje", szovettani_diagnozis as "szovettaniDiagnozis",
-  nyaki_blokkdisszekcio as "nyakiBlokkdisszekcio", alkoholfogyasztas,
-  dohanyzas_szam as "dohanyzasSzam", kezelesre_erkezes_indoka as "kezelesreErkezesIndoka", maxilladefektus_van as "maxilladefektusVan",
-  brown_fuggoleges_osztaly as "brownFuggolegesOsztaly",
-  brown_vizszintes_komponens as "brownVizszintesKomponens",
-  mandibuladefektus_van as "mandibuladefektusVan",
-  kovacs_dobak_osztaly as "kovacsDobakOsztaly",
-  nyelvmozgasok_akadalyozottak as "nyelvmozgásokAkadályozottak",
-  gombocos_beszed as "gombocosBeszed", nyalmirigy_allapot as "nyalmirigyAllapot",
-  fabian_fejerdy_protetikai_osztaly_felso as "fabianFejerdyProtetikaiOsztalyFelso",
-  fabian_fejerdy_protetikai_osztaly_also as "fabianFejerdyProtetikaiOsztalyAlso",
-  radioterapia, radioterapia_dozis as "radioterapiaDozis",
-  radioterapia_datum_intervallum as "radioterapiaDatumIntervallum",
-  chemoterapia, chemoterapia_leiras as "chemoterapiaLeiras",
-  fabian_fejerdy_protetikai_osztaly as "fabianFejerdyProtetikaiOsztaly",
-  kezeleoorvos, kezeleoorvos_intezete as "kezeleoorvosIntezete",
-  felvetel_datuma as "felvetelDatuma",
-  felso_fogpotlas_van as "felsoFogpotlasVan",
-  felso_fogpotlas_mikor as "felsoFogpotlasMikor",
-  felso_fogpotlas_keszito as "felsoFogpotlasKeszito",
-  felso_fogpotlas_elegedett as "felsoFogpotlasElegedett",
-  felso_fogpotlas_problema as "felsoFogpotlasProblema",
-  also_fogpotlas_van as "alsoFogpotlasVan",
-  also_fogpotlas_mikor as "alsoFogpotlasMikor",
-  also_fogpotlas_keszito as "alsoFogpotlasKeszito",
-  also_fogpotlas_elegedett as "alsoFogpotlasElegedett",
-  also_fogpotlas_problema as "alsoFogpotlasProblema",
-  meglevo_fogak as "meglevoFogak",
-  felso_fogpotlas_tipus as "felsoFogpotlasTipus",
-  also_fogpotlas_tipus as "alsoFogpotlasTipus",
-  meglevo_implantatumok as "meglevoImplantatumok",
-  nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
-  nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
-  tnm_staging as "tnmStaging",
-  bno, diagnozis, primer_mutet_leirasa as "primerMutetLeirasa",
-  baleset_idopont as "balesetIdopont",
-  baleset_etiologiaja as "balesetEtiologiaja",
-  baleset_egyeb as "balesetEgyeb",
-  veleszuletett_rendellenessegek as "veleszuletettRendellenessegek",
-  veleszuletett_mutetek_leirasa as "veleszuletettMutetekLeirasa",
-  kezelesi_terv_felso as "kezelesiTervFelso",
-  kezelesi_terv_also as "kezelesiTervAlso",
-  kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
-  kortorteneti_osszefoglalo as "kortortenetiOsszefoglalo",
-  kezelesi_terv_melleklet as "kezelesiTervMelleklet",
-  szakorvosi_velemeny as "szakorvosiVelemény",
-  halal_datum as "halalDatum",
-  created_at as "createdAt", updated_at as "updatedAt",
-  created_by as "createdBy", updated_by as "updatedBy"`;
+/** Per-table UPDATE queries for normalized patients schema. */
+async function executePatientUpdate(
+  pool: Pool,
+  patientId: string,
+  patient: ValidatedPatient,
+  userEmail: string
+): Promise<Record<string, unknown>> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await Promise.all([
+      client.query(
+        `UPDATE patients SET nev=$2, taj=$3, telefonszam=$4, szuletesi_datum=$5, nem=$6, email=$7, cim=$8, varos=$9, iranyitoszam=$10, kezeleoorvos=$11, kezeleoorvos_intezete=$12, felvetel_datuma=$13, halal_datum=$14, updated_at=CURRENT_TIMESTAMP, updated_by=$15 WHERE id=$1`,
+        [patientId, patient.nev, patient.taj||null, patient.telefonszam||null, patient.szuletesiDatum||null, patient.nem||null, patient.email||null, patient.cim||null, patient.varos||null, patient.iranyitoszam||null, patient.kezeleoorvos||null, patient.kezeleoorvosIntezete||null, patient.felvetelDatuma||null, patient.halalDatum||null, userEmail]
+      ),
+      client.query(
+        `UPDATE patient_referral SET beutalo_orvos=$2, beutalo_intezmeny=$3, beutalo_indokolas=$4, primer_mutet_leirasa=$5, mutet_ideje=$6, szovettani_diagnozis=$7, nyaki_blokkdisszekcio=$8 WHERE patient_id=$1`,
+        [patientId, patient.beutaloOrvos||null, patient.beutaloIntezmeny||null, patient.beutaloIndokolas||null, patient.primerMutetLeirasa||null, patient.mutetIdeje||null, patient.szovettaniDiagnozis||null, patient.nyakiBlokkdisszekcio||null]
+      ),
+      client.query(
+        `UPDATE patient_anamnesis SET kezelesre_erkezes_indoka=$2, alkoholfogyasztas=$3, dohanyzas_szam=$4, maxilladefektus_van=$5, brown_fuggoleges_osztaly=$6, brown_vizszintes_komponens=$7, mandibuladefektus_van=$8, kovacs_dobak_osztaly=$9, nyelvmozgasok_akadalyozottak=$10, gombocos_beszed=$11, nyalmirigy_allapot=$12, fabian_fejerdy_protetikai_osztaly=$13, fabian_fejerdy_protetikai_osztaly_felso=$14, fabian_fejerdy_protetikai_osztaly_also=$15, radioterapia=$16, radioterapia_dozis=$17, radioterapia_datum_intervallum=$18, chemoterapia=$19, chemoterapia_leiras=$20, tnm_staging=$21, bno=$22, diagnozis=$23, baleset_idopont=$24, baleset_etiologiaja=$25, baleset_egyeb=$26, veleszuletett_rendellenessegek=$27::jsonb, veleszuletett_mutetek_leirasa=$28 WHERE patient_id=$1`,
+        [patientId, patient.kezelesreErkezesIndoka||null, patient.alkoholfogyasztas||null, patient.dohanyzasSzam||null, patient.maxilladefektusVan||false, patient.brownFuggolegesOsztaly||null, patient.brownVizszintesKomponens||null, patient.mandibuladefektusVan||false, patient.kovacsDobakOsztaly||null, patient.nyelvmozgásokAkadályozottak||false, patient.gombocosBeszed||false, patient.nyalmirigyAllapot||null, patient.fabianFejerdyProtetikaiOsztaly||null, patient.fabianFejerdyProtetikaiOsztalyFelso||null, patient.fabianFejerdyProtetikaiOsztalyAlso||null, patient.radioterapia||false, patient.radioterapiaDozis||null, patient.radioterapiaDatumIntervallum||null, patient.chemoterapia||false, patient.chemoterapiaLeiras||null, patient.tnmStaging||null, patient.bno||null, patient.diagnozis||null, patient.balesetIdopont||null, patient.balesetEtiologiaja||null, patient.balesetEgyeb||null, Array.isArray(patient.veleszuletettRendellenessegek) ? JSON.stringify(patient.veleszuletettRendellenessegek) : '[]', patient.veleszuletettMutetekLeirasa||null]
+      ),
+      client.query(
+        `UPDATE patient_dental_status SET meglevo_fogak=$2, meglevo_implantatumok=$3, nem_ismert_poziciokban_implantatum=$4, nem_ismert_poziciokban_implantatum_reszletek=$5, felso_fogpotlas_van=$6, felso_fogpotlas_mikor=$7, felso_fogpotlas_keszito=$8, felso_fogpotlas_elegedett=$9, felso_fogpotlas_problema=$10, felso_fogpotlas_tipus=$11, also_fogpotlas_van=$12, also_fogpotlas_mikor=$13, also_fogpotlas_keszito=$14, also_fogpotlas_elegedett=$15, also_fogpotlas_problema=$16, also_fogpotlas_tipus=$17 WHERE patient_id=$1`,
+        [patientId, patient.meglevoFogak ? JSON.parse(JSON.stringify(patient.meglevoFogak)) : {}, patient.meglevoImplantatumok ? JSON.parse(JSON.stringify(patient.meglevoImplantatumok)) : {}, patient.nemIsmertPoziciokbanImplantatum||false, patient.nemIsmertPoziciokbanImplantatumRészletek||null, patient.felsoFogpotlasVan||false, patient.felsoFogpotlasMikor||null, patient.felsoFogpotlasKeszito||null, patient.felsoFogpotlasElegedett??true, patient.felsoFogpotlasProblema||null, patient.felsoFogpotlasTipus||null, patient.alsoFogpotlasVan||false, patient.alsoFogpotlasMikor||null, patient.alsoFogpotlasKeszito||null, patient.alsoFogpotlasElegedett??true, patient.alsoFogpotlasProblema||null, patient.alsoFogpotlasTipus||null]
+      ),
+      client.query(
+        `UPDATE patient_treatment_plans SET kezelesi_terv_felso=$2::jsonb, kezelesi_terv_also=$3::jsonb, kezelesi_terv_arcot_erinto=$4::jsonb, kortorteneti_osszefoglalo=$5, kezelesi_terv_melleklet=$6, szakorvosi_velemeny=$7 WHERE patient_id=$1`,
+        [patientId, Array.isArray(patient.kezelesiTervFelso) ? JSON.stringify(patient.kezelesiTervFelso) : '[]', Array.isArray(patient.kezelesiTervAlso) ? JSON.stringify(patient.kezelesiTervAlso) : '[]', Array.isArray(patient.kezelesiTervArcotErinto) ? JSON.stringify(patient.kezelesiTervArcotErinto) : '[]', patient.kortortenetiOsszefoglalo||null, patient.kezelesiTervMelleklet||null, patient.szakorvosiVelemény||null]
+      ),
+    ]);
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  const full = await pool.query(
+    `SELECT ${PATIENT_SELECT_FIELDS} FROM patients_full WHERE id = $1`,
+    [patientId]
+  );
+  return full.rows[0];
+}
 
 // ─── Private utility functions ──────────────────────────────────────────────
 
@@ -775,7 +694,7 @@ export const GET = optionalAuthHandler(async (req, { auth, params, correlationId
     const patientId = params.id;
 
     const result = await pool.query(
-      `SELECT ${PATIENT_SELECT_FIELDS} FROM patients WHERE id = $1`,
+      `SELECT ${PATIENT_SELECT_FIELDS} FROM patients_full WHERE id = $1`,
       [patientId]
     );
 
@@ -849,7 +768,7 @@ export const PUT = authedHandler(async (req, { auth, params, correlationId }) =>
 
     // 2. Fetch old patient for comparison & conflict detection
     const oldPatientResult = await pool.query(
-      `SELECT *, updated_at FROM patients WHERE id = $1`,
+      `SELECT * FROM patients_full WHERE id = $1`,
       [patientId]
     );
 
@@ -883,11 +802,10 @@ export const PUT = authedHandler(async (req, { auth, params, correlationId }) =>
     const tajResponse = await checkTajUniqueness(pool, validatedPatient.taj, oldPatient.taj, patientId, correlationId);
     if (tajResponse) return tajResponse;
 
-    // 6. Execute the update
-    const updateParams = buildUpdateParams(patientId, validatedPatient, userEmail);
-    const result = await pool.query(PATIENT_UPDATE_SQL, updateParams);
+    // 6. Execute per-table updates in a transaction
+    const newPatient = await executePatientUpdate(pool, patientId, validatedPatient, userEmail);
 
-    if (result.rows.length === 0) {
+    if (!newPatient) {
       return NextResponse.json(
         { error: 'Beteg nem található' },
         { status: 404 }
@@ -896,7 +814,7 @@ export const PUT = authedHandler(async (req, { auth, params, correlationId }) =>
 
     // 7. Change tracking & audit logging
     try {
-      await trackPatientChanges(pool, req, patientId, oldPatient, validatedPatient, result.rows[0], userEmail);
+      await trackPatientChanges(pool, req, patientId, oldPatient, validatedPatient, newPatient, userEmail);
     } catch (logError) {
       logger.error('Failed to log activity:', logError);
     }
@@ -909,7 +827,7 @@ export const PUT = authedHandler(async (req, { auth, params, correlationId }) =>
            VALUES ($1, $2::jsonb, $3, $4, CURRENT_TIMESTAMP)`,
           [
             patientId,
-            JSON.stringify(result.rows[0]),
+            JSON.stringify(newPatient),
             userId,
             'manual',
           ]
@@ -919,7 +837,7 @@ export const PUT = authedHandler(async (req, { auth, params, correlationId }) =>
       }
     }
 
-    const response = NextResponse.json({ patient: result.rows[0] }, { status: 200 });
+    const response = NextResponse.json({ patient: newPatient }, { status: 200 });
     response.headers.set('x-correlation-id', correlationId);
     return response;
 });

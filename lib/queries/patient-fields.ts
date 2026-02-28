@@ -1,10 +1,14 @@
 /**
- * Canonical SELECT field list for the patients table.
- * Re-use this constant whenever you need the full patient row.
+ * Canonical SELECT field lists for the patients table and patients_full view.
+ *
+ * PATIENT_SELECT_FIELDS — full patient row from the patients_full VIEW (all 82 columns).
+ * PATIENT_LIST_FIELDS  — narrow projection from core patients table (~12 cols) for list views.
  *
  * All column aliases match the camelCase property names used by the front-end
  * (i.e. the Patient type in lib/types.ts).
  */
+
+/** Full patient row — queries patients_full VIEW (all child tables joined). */
 export const PATIENT_SELECT_FIELDS = `
   id,
   nev,
@@ -76,6 +80,35 @@ export const PATIENT_SELECT_FIELDS = `
   kezelesi_terv_melleklet as "kezelesiTervMelleklet",
   szakorvosi_velemeny as "szakorvosiVelemény",
   halal_datum as "halalDatum",
+  created_at as "createdAt",
+  updated_at as "updatedAt",
+  created_by as "createdBy",
+  updated_by as "updatedBy"
+`;
+
+/** The source table/view for full-row patient queries. */
+export const PATIENTS_FULL_TABLE = 'patients_full';
+
+/**
+ * Narrow projection from the core patients table only (~12 cols).
+ * Used for patient list endpoints where enrichment provides the rest.
+ */
+export const PATIENT_LIST_FIELDS = `
+  id,
+  nev,
+  taj,
+  telefonszam,
+  szuletesi_datum as "szuletesiDatum",
+  nem,
+  email,
+  cim,
+  varos,
+  iranyitoszam,
+  kezeleoorvos,
+  kezeleoorvos_intezete as "kezeleoorvosIntezete",
+  felvetel_datuma as "felvetelDatuma",
+  halal_datum as "halalDatum",
+  intake_status as "intakeStatus",
   created_at as "createdAt",
   updated_at as "updatedAt",
   created_by as "createdBy",

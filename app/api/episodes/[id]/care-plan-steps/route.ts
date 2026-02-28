@@ -49,8 +49,10 @@ export const GET = authedHandler(async (req, { auth, params }) => {
   let kezelesiTervAlso: Array<{ tipus?: string; treatmentTypeCode?: string }> | null = null;
   if (patientId) {
     const patientResult = await pool.query(
-      `SELECT kezelesi_terv_felso as "kezelesiTervFelso", kezelesi_terv_also as "kezelesiTervAlso"
-       FROM patients WHERE id = $1`,
+      `SELECT t.kezelesi_terv_felso as "kezelesiTervFelso", t.kezelesi_terv_also as "kezelesiTervAlso"
+       FROM patients p
+       LEFT JOIN patient_treatment_plans t ON t.patient_id = p.id
+       WHERE p.id = $1`,
       [patientId]
     );
     const p = patientResult.rows[0];

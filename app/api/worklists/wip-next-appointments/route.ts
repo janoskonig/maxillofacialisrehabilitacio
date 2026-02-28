@@ -138,8 +138,10 @@ export const GET = authedHandler(async (req, { auth }) => {
       [allEpisodeIds]
     ),
     pool.query(
-      `SELECT id, kezelesi_terv_felso as "kezelesiTervFelso", kezelesi_terv_also as "kezelesiTervAlso"
-       FROM patients WHERE id = ANY($1)`,
+      `SELECT p.id, t.kezelesi_terv_felso as "kezelesiTervFelso", t.kezelesi_terv_also as "kezelesiTervAlso"
+       FROM patients p
+       LEFT JOIN patient_treatment_plans t ON t.patient_id = p.id
+       WHERE p.id = ANY($1)`,
       [allPatientIds]
     ),
     pool.query(`SELECT id, code, label_hu FROM treatment_types`),
