@@ -1,110 +1,782 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { patientSchema } from '@/lib/types';
-import { verifyAuth } from '@/lib/auth-server';
+import { optionalAuthHandler, authedHandler, roleHandler } from '@/lib/api/route-handler';
 import { normalizeToTreatmentTypeCode } from '@/lib/treatment-type-normalize';
 import { sendAppointmentTimeSlotFreedNotification } from '@/lib/email';
 import { deleteGoogleCalendarEvent, createGoogleCalendarEvent } from '@/lib/google-calendar';
 import { logActivity, logActivityWithAuth } from '@/lib/activity';
-import { withCorrelation } from '@/lib/api/withCorrelation';
-import { handleApiError } from '@/lib/api-error-handler';
+import { PATIENT_SELECT_FIELDS } from '@/lib/queries/patient-fields';
+import { logger } from '@/lib/logger';
+import type { Pool } from 'pg';
+import type { z } from 'zod';
 
-// Egy beteg lekérdezése ID alapján
 export const dynamic = 'force-dynamic';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const correlationId = getCorrelationId(request);
-  
+// ─── Constants for change tracking ──────────────────────────────────────────
+
+const DATE_FIELDS = new Set([
+  'szuletesi_datum', 'mutet_ideje', 'felvetel_datuma', 'felso_fogpotlas_mikor',
+  'also_fogpotlas_mikor', 'baleset_idopont', 'arajanlatkero_datuma', 'halal_datum',
+]);
+
+const JSON_ARRAY_FIELDS = new Set([
+  'kezelesi_terv_felso', 'kezelesi_terv_also', 'kezelesi_terv_arcot_erinto',
+  'veleszuletett_rendellenessegek',
+]);
+
+const FIELD_DISPLAY_NAMES: Record<string, string> = {
+  nev: 'Név',
+  taj: 'TAJ szám',
+  telefonszam: 'Telefonszám',
+  szuletesi_datum: 'Születési dátum',
+  nem: 'Nem',
+  email: 'Email',
+  cim: 'Cím',
+  varos: 'Város',
+  iranyitoszam: 'Irányítószám',
+  beutalo_orvos: 'Beutaló orvos',
+  beutalo_intezmeny: 'Beutaló intézmény',
+  beutalo_indokolas: 'Beutaló indokolás',
+  primer_mutet_leirasa: 'Primer műtét leírása',
+  mutet_ideje: 'Műtét ideje',
+  szovettani_diagnozis: 'Szövettani diagnózis',
+  nyaki_blokkdisszekcio: 'Nyaki blokkdisszekció',
+  alkoholfogyasztas: 'Alkoholfogyasztás',
+  dohanyzas_szam: 'Dohányzás',
+  kezelesre_erkezes_indoka: 'Kezelésre érkezés indoka',
+  maxilladefektus_van: 'Maxilladefektus',
+  brown_fuggoleges_osztaly: 'Brown függőleges osztály',
+  brown_vizszintes_komponens: 'Brown vízszintes komponens',
+  mandibuladefektus_van: 'Mandibuladefektus',
+  kovacs_dobak_osztaly: 'Kovács-Dobák osztály',
+  nyelvmozgasok_akadalyozottak: 'Nyelvmozgások akadályozottak',
+  gombocos_beszed: 'Gombócos beszéd',
+  nyalmirigy_allapot: 'Nyálmirigy állapot',
+  fabian_fejerdy_protetikai_osztaly_felso: 'Fábián-Fejérdy osztály (felső)',
+  fabian_fejerdy_protetikai_osztaly_also: 'Fábián-Fejérdy osztály (alsó)',
+  radioterapia: 'Radioterápia',
+  radioterapia_dozis: 'Radioterápia dózis',
+  radioterapia_datum_intervallum: 'Radioterápia dátumintervallum',
+  chemoterapia: 'Kemoterápia',
+  chemoterapia_leiras: 'Kemoterápia leírás',
+  fabian_fejerdy_protetikai_osztaly: 'Fábián-Fejérdy protetikai osztály',
+  kezeleoorvos: 'Kezelőorvos',
+  kezeleoorvos_intezete: 'Kezelőorvos intézete',
+  felvetel_datuma: 'Felvétel dátuma',
+  felso_fogpotlas_van: 'Felső fogpótlás van',
+  felso_fogpotlas_mikor: 'Felső fogpótlás mikor',
+  felso_fogpotlas_keszito: 'Felső fogpótlás készítő',
+  felso_fogpotlas_elegedett: 'Felső fogpótlás elégedett',
+  felso_fogpotlas_problema: 'Felső fogpótlás probléma',
+  also_fogpotlas_van: 'Alsó fogpótlás van',
+  also_fogpotlas_mikor: 'Alsó fogpótlás mikor',
+  also_fogpotlas_keszito: 'Alsó fogpótlás készítő',
+  also_fogpotlas_elegedett: 'Alsó fogpótlás elégedett',
+  also_fogpotlas_problema: 'Alsó fogpótlás probléma',
+  felso_fogpotlas_tipus: 'Felső fogpótlás típus',
+  also_fogpotlas_tipus: 'Alsó fogpótlás típus',
+  tnm_staging: 'TNM staging',
+  bno: 'BNO',
+  diagnozis: 'Diagnózis',
+  kezelesi_terv_felso: 'Kezelési terv (felső)',
+  kortorteneti_osszefoglalo: 'Kórtörténeti összefoglaló',
+  kezelesi_terv_melleklet: 'Kezelési terv melléklet',
+  szakorvosi_velemeny: 'Szakorvosi vélemény',
+  halal_datum: 'Halál dátuma',
+  arajanlatkero_szoveg: 'Árajánlatkérő szöveg',
+  arajanlatkero_datuma: 'Árajánlatkérő dátuma',
+  kezelesi_terv_also: 'Kezelési terv (alsó)',
+  kezelesi_terv_arcot_erinto: 'Kezelési terv (arcot érintő rehabilitáció)',
+};
+
+/**
+ * Maps DB column names (snake_case) to the camelCase property names used
+ * by the validated patient object. Only entries that differ from the naive
+ * snake_to_camel conversion are listed; the rest fall back to a generic
+ * converter.
+ */
+const DB_TO_CAMEL: Record<string, string> = {
+  szuletesi_datum: 'szuletesiDatum',
+  beutalo_orvos: 'beutaloOrvos',
+  beutalo_intezmeny: 'beutaloIntezmeny',
+  beutalo_indokolas: 'beutaloIndokolas',
+  primer_mutet_leirasa: 'primerMutetLeirasa',
+  mutet_ideje: 'mutetIdeje',
+  szovettani_diagnozis: 'szovettaniDiagnozis',
+  nyaki_blokkdisszekcio: 'nyakiBlokkdisszekcio',
+  dohanyzas_szam: 'dohanyzasSzam',
+  kezelesre_erkezes_indoka: 'kezelesreErkezesIndoka',
+  maxilladefektus_van: 'maxilladefektusVan',
+  brown_fuggoleges_osztaly: 'brownFuggolegesOsztaly',
+  brown_vizszintes_komponens: 'brownVizszintesKomponens',
+  mandibuladefektus_van: 'mandibuladefektusVan',
+  kovacs_dobak_osztaly: 'kovacsDobakOsztaly',
+  nyelvmozgasok_akadalyozottak: 'nyelvmozgásokAkadályozottak',
+  gombocos_beszed: 'gombocosBeszed',
+  nyalmirigy_allapot: 'nyalmirigyAllapot',
+  fabian_fejerdy_protetikai_osztaly_felso: 'fabianFejerdyProtetikaiOsztalyFelso',
+  fabian_fejerdy_protetikai_osztaly_also: 'fabianFejerdyProtetikaiOsztalyAlso',
+  radioterapia_dozis: 'radioterapiaDozis',
+  radioterapia_datum_intervallum: 'radioterapiaDatumIntervallum',
+  chemoterapia_leiras: 'chemoterapiaLeiras',
+  fabian_fejerdy_protetikai_osztaly: 'fabianFejerdyProtetikaiOsztaly',
+  kezeleoorvos_intezete: 'kezeleoorvosIntezete',
+  felvetel_datuma: 'felvetelDatuma',
+  felso_fogpotlas_van: 'felsoFogpotlasVan',
+  felso_fogpotlas_mikor: 'felsoFogpotlasMikor',
+  felso_fogpotlas_keszito: 'felsoFogpotlasKeszito',
+  felso_fogpotlas_elegedett: 'felsoFogpotlasElegedett',
+  felso_fogpotlas_problema: 'felsoFogpotlasProblema',
+  also_fogpotlas_van: 'alsoFogpotlasVan',
+  also_fogpotlas_mikor: 'alsoFogpotlasMikor',
+  also_fogpotlas_keszito: 'alsoFogpotlasKeszito',
+  also_fogpotlas_elegedett: 'alsoFogpotlasElegedett',
+  also_fogpotlas_problema: 'alsoFogpotlasProblema',
+  felso_fogpotlas_tipus: 'felsoFogpotlasTipus',
+  also_fogpotlas_tipus: 'alsoFogpotlasTipus',
+  tnm_staging: 'tnmStaging',
+  kezelesi_terv_felso: 'kezelesiTervFelso',
+  kezelesi_terv_also: 'kezelesiTervAlso',
+  kezelesi_terv_arcot_erinto: 'kezelesiTervArcotErinto',
+  kortorteneti_osszefoglalo: 'kortortenetiOsszefoglalo',
+  kezelesi_terv_melleklet: 'kezelesiTervMelleklet',
+  szakorvosi_velemeny: 'szakorvosiVelemény',
+  halal_datum: 'halalDatum',
+  baleset_idopont: 'balesetIdopont',
+  baleset_etiologiaja: 'balesetEtiologiaja',
+  baleset_egyeb: 'balesetEgyeb',
+  veleszuletett_rendellenessegek: 'veleszuletettRendellenessegek',
+  veleszuletett_mutetek_leirasa: 'veleszuletettMutetekLeirasa',
+  nem_ismert_poziciokban_implantatum: 'nemIsmertPoziciokbanImplantatum',
+  nem_ismert_poziciokban_implantatum_reszletek: 'nemIsmertPoziciokbanImplantatumRészletek',
+  meglevo_fogak: 'meglevoFogak',
+  meglevo_implantatumok: 'meglevoImplantatumok',
+};
+
+const PATIENT_UPDATE_SQL = `UPDATE patients SET
+  nev = $2,
+  taj = $3,
+  telefonszam = $4,
+  szuletesi_datum = $5,
+  nem = $6,
+  email = $7,
+  cim = $8,
+  varos = $9,
+  iranyitoszam = $10,
+  beutalo_orvos = $11,
+  beutalo_intezmeny = $12,
+  beutalo_indokolas = $13,
+  mutet_ideje = $14,
+  szovettani_diagnozis = $15,
+  nyaki_blokkdisszekcio = $16,
+  alkoholfogyasztas = $17,
+  dohanyzas_szam = $18,
+  kezelesre_erkezes_indoka = $19,
+  maxilladefektus_van = $20,
+  brown_fuggoleges_osztaly = $21,
+  brown_vizszintes_komponens = $22,
+  mandibuladefektus_van = $23,
+  kovacs_dobak_osztaly = $24,
+  nyelvmozgasok_akadalyozottak = $25,
+  gombocos_beszed = $26,
+  nyalmirigy_allapot = $27,
+  fabian_fejerdy_protetikai_osztaly_felso = $28,
+  fabian_fejerdy_protetikai_osztaly_also = $29,
+  radioterapia = $30,
+  radioterapia_dozis = $31,
+  radioterapia_datum_intervallum = $32,
+  chemoterapia = $33,
+  chemoterapia_leiras = $34,
+  fabian_fejerdy_protetikai_osztaly = $35,
+  kezeleoorvos = $36,
+  kezeleoorvos_intezete = $37,
+  felvetel_datuma = $38,
+  felso_fogpotlas_van = $39,
+  felso_fogpotlas_mikor = $40,
+  felso_fogpotlas_keszito = $41,
+  felso_fogpotlas_elegedett = $42,
+  felso_fogpotlas_problema = $43,
+  also_fogpotlas_van = $44,
+  also_fogpotlas_mikor = $45,
+  also_fogpotlas_keszito = $46,
+  also_fogpotlas_elegedett = $47,
+  also_fogpotlas_problema = $48,
+  meglevo_fogak = $49,
+  felso_fogpotlas_tipus = $50,
+  also_fogpotlas_tipus = $51,
+  meglevo_implantatumok = $52,
+  nem_ismert_poziciokban_implantatum = $53,
+  nem_ismert_poziciokban_implantatum_reszletek = $54,
+  tnm_staging = $55,
+  bno = $56,
+  diagnozis = $57,
+  primer_mutet_leirasa = $58,
+  baleset_idopont = $59,
+  baleset_etiologiaja = $60,
+  baleset_egyeb = $61,
+  veleszuletett_rendellenessegek = $62::jsonb,
+  veleszuletett_mutetek_leirasa = $63,
+  kezelesi_terv_felso = $64::jsonb,
+  kezelesi_terv_also = $65::jsonb,
+  kezelesi_terv_arcot_erinto = $66::jsonb,
+  kortorteneti_osszefoglalo = $67,
+  kezelesi_terv_melleklet = $68,
+  szakorvosi_velemeny = $69,
+  halal_datum = $70,
+  updated_at = CURRENT_TIMESTAMP,
+  updated_by = $71
+WHERE id = $1
+RETURNING 
+  id, nev, taj, telefonszam, szuletesi_datum as "szuletesiDatum", nem,
+  email, cim, varos, iranyitoszam, beutalo_orvos as "beutaloOrvos",
+  beutalo_intezmeny as "beutaloIntezmeny", beutalo_indokolas as "beutaloIndokolas",
+  primer_mutet_leirasa as "primerMutetLeirasa",
+  mutet_ideje as "mutetIdeje", szovettani_diagnozis as "szovettaniDiagnozis",
+  nyaki_blokkdisszekcio as "nyakiBlokkdisszekcio", alkoholfogyasztas,
+  dohanyzas_szam as "dohanyzasSzam", kezelesre_erkezes_indoka as "kezelesreErkezesIndoka", maxilladefektus_van as "maxilladefektusVan",
+  brown_fuggoleges_osztaly as "brownFuggolegesOsztaly",
+  brown_vizszintes_komponens as "brownVizszintesKomponens",
+  mandibuladefektus_van as "mandibuladefektusVan",
+  kovacs_dobak_osztaly as "kovacsDobakOsztaly",
+  nyelvmozgasok_akadalyozottak as "nyelvmozgásokAkadályozottak",
+  gombocos_beszed as "gombocosBeszed", nyalmirigy_allapot as "nyalmirigyAllapot",
+  fabian_fejerdy_protetikai_osztaly_felso as "fabianFejerdyProtetikaiOsztalyFelso",
+  fabian_fejerdy_protetikai_osztaly_also as "fabianFejerdyProtetikaiOsztalyAlso",
+  radioterapia, radioterapia_dozis as "radioterapiaDozis",
+  radioterapia_datum_intervallum as "radioterapiaDatumIntervallum",
+  chemoterapia, chemoterapia_leiras as "chemoterapiaLeiras",
+  fabian_fejerdy_protetikai_osztaly as "fabianFejerdyProtetikaiOsztaly",
+  kezeleoorvos, kezeleoorvos_intezete as "kezeleoorvosIntezete",
+  felvetel_datuma as "felvetelDatuma",
+  felso_fogpotlas_van as "felsoFogpotlasVan",
+  felso_fogpotlas_mikor as "felsoFogpotlasMikor",
+  felso_fogpotlas_keszito as "felsoFogpotlasKeszito",
+  felso_fogpotlas_elegedett as "felsoFogpotlasElegedett",
+  felso_fogpotlas_problema as "felsoFogpotlasProblema",
+  also_fogpotlas_van as "alsoFogpotlasVan",
+  also_fogpotlas_mikor as "alsoFogpotlasMikor",
+  also_fogpotlas_keszito as "alsoFogpotlasKeszito",
+  also_fogpotlas_elegedett as "alsoFogpotlasElegedett",
+  also_fogpotlas_problema as "alsoFogpotlasProblema",
+  meglevo_fogak as "meglevoFogak",
+  felso_fogpotlas_tipus as "felsoFogpotlasTipus",
+  also_fogpotlas_tipus as "alsoFogpotlasTipus",
+  meglevo_implantatumok as "meglevoImplantatumok",
+  nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
+  nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
+  tnm_staging as "tnmStaging",
+  bno, diagnozis, primer_mutet_leirasa as "primerMutetLeirasa",
+  baleset_idopont as "balesetIdopont",
+  baleset_etiologiaja as "balesetEtiologiaja",
+  baleset_egyeb as "balesetEgyeb",
+  veleszuletett_rendellenessegek as "veleszuletettRendellenessegek",
+  veleszuletett_mutetek_leirasa as "veleszuletettMutetekLeirasa",
+  kezelesi_terv_felso as "kezelesiTervFelso",
+  kezelesi_terv_also as "kezelesiTervAlso",
+  kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
+  kortorteneti_osszefoglalo as "kortortenetiOsszefoglalo",
+  kezelesi_terv_melleklet as "kezelesiTervMelleklet",
+  szakorvosi_velemeny as "szakorvosiVelemény",
+  halal_datum as "halalDatum",
+  created_at as "createdAt", updated_at as "updatedAt",
+  created_by as "createdBy", updated_by as "updatedBy"`;
+
+// ─── Private utility functions ──────────────────────────────────────────────
+
+function normalizeDate(val: unknown): string {
+  if (!val) return '';
   try {
+    const date = new Date(val as string);
+    if (isNaN(date.getTime())) return String(val).trim();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  } catch {
+    return String(val).trim();
+  }
+}
+
+function normalizeJSON(val: unknown): string {
+  if (!val) return '{}';
+  try {
+    if (typeof val === 'string') {
+      return normalizeJSON(JSON.parse(val));
+    }
+    if (Array.isArray(val)) {
+      const sorted = val.map(item => {
+        if (typeof item === 'object' && item !== null) {
+          return Object.keys(item).sort().reduce((acc: Record<string, unknown>, key) => {
+            acc[key] = (item as Record<string, unknown>)[key];
+            return acc;
+          }, {});
+        }
+        return item;
+      });
+      return JSON.stringify(sorted);
+    }
+    if (typeof val === 'object' && val !== null) {
+      const sorted = Object.keys(val).sort().reduce((acc: Record<string, unknown>, key) => {
+        acc[key] = (val as Record<string, unknown>)[key];
+        return acc;
+      }, {});
+      return JSON.stringify(sorted);
+    }
+    return JSON.stringify(val);
+  } catch {
+    return JSON.stringify(val);
+  }
+}
+
+function normalizeFieldValue(val: unknown, fieldName?: string): string {
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'boolean') return val ? 'true' : 'false';
+  if (fieldName && DATE_FIELDS.has(fieldName)) return normalizeDate(val);
+  if (fieldName && JSON_ARRAY_FIELDS.has(fieldName)) return normalizeJSON(val);
+  if (typeof val === 'object') return normalizeJSON(val);
+  return String(val).trim();
+}
+
+// ─── Extracted PUT-handler helpers ──────────────────────────────────────────
+
+type ValidatedPatient = z.infer<typeof patientSchema>;
+
+/**
+ * Normalize treatment plan items and validate that every treatmentTypeCode
+ * exists in the `treatment_types` table.
+ *
+ * Returns the updated patient object on success, or a 400 error response.
+ */
+async function validateAndNormalizeTreatmentPlan(
+  pool: Pool,
+  validatedPatient: ValidatedPatient,
+  correlationId: string
+): Promise<{ ok: true; patient: ValidatedPatient } | { ok: false; response: NextResponse }> {
+  const validCodesResult = await pool.query(`SELECT code FROM treatment_types`);
+  const validCodes = new Set(
+    (validCodesResult.rows ?? []).map((r: { code: string }) => r.code)
+  );
+
+  const fieldErrors: Array<{ path: string; code: string; value: string }> = [];
+
+  const normalizeItems = (
+    arr: Array<{ tipus?: string | null; treatmentTypeCode?: string | null; tervezettAtadasDatuma?: string | null; elkeszult?: boolean }> | null | undefined,
+    fieldPrefix: string
+  ): Array<{ treatmentTypeCode: string; tervezettAtadasDatuma: string | null; elkeszult: boolean }> => {
+    if (!arr || !Array.isArray(arr)) return [];
+    const out: Array<{ treatmentTypeCode: string; tervezettAtadasDatuma: string | null; elkeszult: boolean }> = [];
+    arr.forEach((item, idx) => {
+      const code =
+        normalizeToTreatmentTypeCode(item.treatmentTypeCode) ??
+        normalizeToTreatmentTypeCode(item.tipus);
+      if (!code || code.trim() === '') return;
+      if (!validCodes.has(code)) {
+        fieldErrors.push({
+          path: `${fieldPrefix}.${idx}.treatmentTypeCode`,
+          code: 'UNKNOWN_TREATMENT_TYPE_CODE',
+          value: item.treatmentTypeCode ?? item.tipus ?? '',
+        });
+        return;
+      }
+      out.push({
+        treatmentTypeCode: code,
+        tervezettAtadasDatuma: item.tervezettAtadasDatuma ?? null,
+        elkeszult: item.elkeszult ?? false,
+      });
+    });
+    return out;
+  };
+
+  const normalizedFelso = normalizeItems(validatedPatient.kezelesiTervFelso, 'kezelesi_terv_felso');
+  const normalizedAlso = normalizeItems(validatedPatient.kezelesiTervAlso, 'kezelesi_terv_also');
+
+  if (fieldErrors.length > 0) {
+    const response = NextResponse.json(
+      { error: 'VALIDATION_ERROR', message: 'Invalid treatmentTypeCode', fieldErrors },
+      { status: 400 }
+    );
+    response.headers.set('x-correlation-id', correlationId);
+    return { ok: false, response };
+  }
+
+  return {
+    ok: true,
+    patient: {
+      ...validatedPatient,
+      kezelesiTervFelso: normalizedFelso,
+      kezelesiTervAlso: normalizedAlso,
+    },
+  };
+}
+
+/**
+ * If-Match / stale-write conflict detection.
+ * Returns an error response when a conflict is detected, otherwise null.
+ */
+function checkStaleWrite(
+  ifMatch: string | null,
+  oldPatient: Record<string, unknown>,
+  patientId: string,
+  correlationId: string,
+  userEmail: string
+): NextResponse | null {
+  if (ifMatch) {
+    try {
+      const clientUpdatedAt = new Date(ifMatch.trim());
+      const serverUpdatedAt = oldPatient.updated_at
+        ? new Date(oldPatient.updated_at as string)
+        : null;
+
+      if (serverUpdatedAt && clientUpdatedAt.getTime() !== serverUpdatedAt.getTime()) {
+        const response = NextResponse.json(
+          {
+            error: {
+              name: 'ConflictError',
+              status: 409,
+              code: 'STALE_WRITE',
+              message: 'Másik felhasználó módosította a beteg adatait közben. Kérjük, frissítse az oldalt és próbálja újra.',
+              details: {
+                serverUpdatedAt: serverUpdatedAt.toISOString(),
+                clientUpdatedAt: clientUpdatedAt.toISOString(),
+              },
+              correlationId,
+            },
+          },
+          { status: 409 }
+        );
+        response.headers.set('x-correlation-id', correlationId);
+        return response;
+      }
+    } catch (dateParseError) {
+      logger.warn(`[PUT /api/patients/${patientId}] Invalid If-Match date format: ${ifMatch}`, {
+        correlationId,
+        userEmail,
+        error: dateParseError,
+      });
+    }
+  } else {
+    logger.warn(`[PUT /api/patients/${patientId}] If-Match header missing - allowing update (backward compat)`, {
+      correlationId,
+      userEmail,
+    });
+  }
+  return null;
+}
+
+/**
+ * Role-based authorization for editing a patient.
+ * Returns an error response when the user is not allowed, otherwise null.
+ */
+async function checkEditPermission(
+  pool: Pool,
+  role: string | null,
+  userEmail: string | null,
+  oldPatient: Record<string, unknown>,
+  correlationId: string
+): Promise<NextResponse | null> {
+  if (role === 'sebészorvos' && userEmail) {
+    const userResult = await pool.query(
+      `SELECT doktor_neve FROM users WHERE email = $1`,
+      [userEmail]
+    );
+
+    if (userResult.rows.length > 0 && userResult.rows[0].doktor_neve) {
+      if (oldPatient.beutalo_orvos !== userResult.rows[0].doktor_neve) {
+        const response = NextResponse.json(
+          {
+            error: {
+              name: 'ForbiddenError',
+              status: 403,
+              message: 'Nincs jogosultsága ehhez a beteg szerkesztéséhez. Csak a saját beutalt betegeit szerkesztheti.',
+              correlationId,
+            },
+          },
+          { status: 403 }
+        );
+        response.headers.set('x-correlation-id', correlationId);
+        return response;
+      }
+    } else {
+      const response = NextResponse.json(
+        {
+          error: {
+            name: 'ForbiddenError',
+            status: 403,
+            message: 'Nincs jogosultsága ehhez a beteg szerkesztéséhez. Nincs beállítva doktor_neve.',
+            correlationId,
+          },
+        },
+        { status: 403 }
+      );
+      response.headers.set('x-correlation-id', correlationId);
+      return response;
+    }
+  } else if (role === 'technikus') {
+    const arcotErinto = oldPatient.kezelesi_terv_arcot_erinto;
+    const hasEpitesis = arcotErinto && Array.isArray(arcotErinto) && arcotErinto.length > 0;
+    if (!hasEpitesis) {
+      const response = NextResponse.json(
+        {
+          error: {
+            name: 'ForbiddenError',
+            status: 403,
+            message: 'Nincs jogosultsága ehhez a beteg szerkesztéséhez',
+            correlationId,
+          },
+        },
+        { status: 403 }
+      );
+      response.headers.set('x-correlation-id', correlationId);
+      return response;
+    }
+  }
+  return null;
+}
+
+/**
+ * Checks that the TAJ number is unique across patients (excluding the current one).
+ * Returns an error response on duplicate, otherwise null.
+ */
+async function checkTajUniqueness(
+  pool: Pool,
+  newTaj: string | null | undefined,
+  oldTaj: string | null | undefined,
+  patientId: string,
+  correlationId: string
+): Promise<NextResponse | null> {
+  if (!newTaj || newTaj.trim() === '') return null;
+
+  const normalizedTAJ = newTaj.replace(/-/g, '');
+  const oldNormalizedTAJ = oldTaj ? oldTaj.replace(/-/g, '') : '';
+  if (normalizedTAJ === oldNormalizedTAJ) return null;
+
+  const existingPatient = await pool.query(
+    `SELECT id, nev, taj FROM patients 
+     WHERE REPLACE(taj, '-', '') = $1 AND id != $2`,
+    [normalizedTAJ, patientId]
+  );
+
+  if (existingPatient.rows.length > 0) {
+    const existing = existingPatient.rows[0];
+    const response = NextResponse.json(
+      {
+        error: {
+          name: 'ConflictError',
+          status: 409,
+          code: 'DUPLICATE_TAJ',
+          message: 'Már létezik beteg ezzel a TAJ-számmal',
+          details: `A TAJ-szám (${newTaj}) már használatban van. Beteg: ${existing.nev || 'Név nélküli'} (ID: ${existing.id})`,
+          correlationId,
+        },
+      },
+      { status: 409 }
+    );
+    response.headers.set('x-correlation-id', correlationId);
+    return response;
+  }
+  return null;
+}
+
+/**
+ * Builds the positional parameter array for the PATIENT_UPDATE_SQL query.
+ */
+function buildUpdateParams(
+  patientId: string,
+  patient: ValidatedPatient,
+  userEmail: string
+): unknown[] {
+  return [
+    patientId,
+    patient.nev,
+    patient.taj || null,
+    patient.telefonszam || null,
+    patient.szuletesiDatum || null,
+    patient.nem || null,
+    patient.email || null,
+    patient.cim || null,
+    patient.varos || null,
+    patient.iranyitoszam || null,
+    patient.beutaloOrvos || null,
+    patient.beutaloIntezmeny || null,
+    patient.beutaloIndokolas || null,
+    patient.mutetIdeje || null,
+    patient.szovettaniDiagnozis || null,
+    patient.nyakiBlokkdisszekcio || null,
+    patient.alkoholfogyasztas || null,
+    patient.dohanyzasSzam || null,
+    patient.kezelesreErkezesIndoka || null,
+    patient.maxilladefektusVan || false,
+    patient.brownFuggolegesOsztaly || null,
+    patient.brownVizszintesKomponens || null,
+    patient.mandibuladefektusVan || false,
+    patient.kovacsDobakOsztaly || null,
+    patient.nyelvmozgásokAkadályozottak || false,
+    patient.gombocosBeszed || false,
+    patient.nyalmirigyAllapot || null,
+    patient.fabianFejerdyProtetikaiOsztalyFelso || null,
+    patient.fabianFejerdyProtetikaiOsztalyAlso || null,
+    patient.radioterapia || false,
+    patient.radioterapiaDozis || null,
+    patient.radioterapiaDatumIntervallum || null,
+    patient.chemoterapia || false,
+    patient.chemoterapiaLeiras || null,
+    patient.fabianFejerdyProtetikaiOsztaly || null,
+    patient.kezeleoorvos || null,
+    patient.kezeleoorvosIntezete || null,
+    patient.felvetelDatuma || null,
+    patient.felsoFogpotlasVan || false,
+    patient.felsoFogpotlasMikor || null,
+    patient.felsoFogpotlasKeszito || null,
+    patient.felsoFogpotlasElegedett ?? true,
+    patient.felsoFogpotlasProblema || null,
+    patient.alsoFogpotlasVan || false,
+    patient.alsoFogpotlasMikor || null,
+    patient.alsoFogpotlasKeszito || null,
+    patient.alsoFogpotlasElegedett ?? true,
+    patient.alsoFogpotlasProblema || null,
+    patient.meglevoFogak
+      ? JSON.parse(JSON.stringify(patient.meglevoFogak))
+      : {},
+    patient.felsoFogpotlasTipus || null,
+    patient.alsoFogpotlasTipus || null,
+    patient.meglevoImplantatumok
+      ? JSON.parse(JSON.stringify(patient.meglevoImplantatumok))
+      : {},
+    patient.nemIsmertPoziciokbanImplantatum || false,
+    patient.nemIsmertPoziciokbanImplantatumRészletek || null,
+    patient.tnmStaging || null,
+    patient.bno || null,
+    patient.diagnozis || null,
+    patient.primerMutetLeirasa || null,
+    patient.balesetIdopont || null,
+    patient.balesetEtiologiaja || null,
+    patient.balesetEgyeb || null,
+    patient.veleszuletettRendellenessegek && Array.isArray(patient.veleszuletettRendellenessegek)
+      ? JSON.stringify(patient.veleszuletettRendellenessegek)
+      : '[]',
+    patient.veleszuletettMutetekLeirasa || null,
+    patient.kezelesiTervFelso && Array.isArray(patient.kezelesiTervFelso)
+      ? JSON.stringify(patient.kezelesiTervFelso)
+      : '[]',
+    patient.kezelesiTervAlso && Array.isArray(patient.kezelesiTervAlso)
+      ? JSON.stringify(patient.kezelesiTervAlso)
+      : '[]',
+    patient.kezelesiTervArcotErinto && Array.isArray(patient.kezelesiTervArcotErinto)
+      ? JSON.stringify(patient.kezelesiTervArcotErinto)
+      : '[]',
+    patient.kortortenetiOsszefoglalo || null,
+    patient.kezelesiTervMelleklet || null,
+    patient.szakorvosiVelemény || null,
+    patient.halalDatum || null,
+    userEmail,
+  ];
+}
+
+/**
+ * Detects field-level changes between the old DB row and the incoming update,
+ * writes them to `patient_changes`, and creates an `activity_logs` entry.
+ */
+async function trackPatientChanges(
+  pool: Pool,
+  request: NextRequest,
+  patientId: string,
+  oldPatient: Record<string, unknown>,
+  validatedPatient: ValidatedPatient,
+  newPatient: Record<string, unknown>,
+  userEmail: string
+): Promise<void> {
+  const ipHeader = request.headers.get('x-forwarded-for') || '';
+  const ipAddress = ipHeader.split(',')[0]?.trim() || null;
+
+  const changes: string[] = [];
+  const structuredChanges: Array<{
+    fieldName: string;
+    fieldDisplayName: string;
+    oldValue: string;
+    newValue: string;
+  }> = [];
+
+  for (const [dbField, displayName] of Object.entries(FIELD_DISPLAY_NAMES)) {
+    const oldVal = normalizeFieldValue(oldPatient[dbField], dbField);
+    const camelField = DB_TO_CAMEL[dbField] ?? dbField.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+    const newVal = normalizeFieldValue(
+      (validatedPatient as Record<string, unknown>)[camelField] ?? (validatedPatient as Record<string, unknown>)[dbField],
+      dbField
+    );
+
+    if (oldVal !== newVal) {
+      changes.push(`${displayName}: "${oldVal || '(üres)'}" → "${newVal || '(üres)'}"`);
+      structuredChanges.push({
+        fieldName: dbField,
+        fieldDisplayName: displayName,
+        oldValue: oldVal,
+        newValue: newVal,
+      });
+    }
+  }
+
+  const jsonbFields = [
+    { db: 'meglevo_fogak', patient: 'meglevoFogak', name: 'Meglévő fogak' },
+    { db: 'meglevo_implantatumok', patient: 'meglevoImplantatumok', name: 'Meglévő implantátumok' },
+  ] as const;
+
+  for (const { db, patient, name } of jsonbFields) {
+    const oldJson = oldPatient[db] ? normalizeJSON(oldPatient[db]) : '{}';
+    const newJson = (validatedPatient as Record<string, unknown>)[patient]
+      ? normalizeJSON((validatedPatient as Record<string, unknown>)[patient])
+      : '{}';
+    if (oldJson !== newJson) {
+      changes.push(`${name}: módosítva`);
+      structuredChanges.push({
+        fieldName: db,
+        fieldDisplayName: name,
+        oldValue: oldJson,
+        newValue: newJson,
+      });
+    }
+  }
+
+  if (structuredChanges.length > 0) {
+    for (const change of structuredChanges) {
+      try {
+        await pool.query(
+          `INSERT INTO patient_changes (patient_id, field_name, field_display_name, old_value, new_value, changed_by, ip_address)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [
+            patientId,
+            change.fieldName,
+            change.fieldDisplayName,
+            change.oldValue || null,
+            change.newValue || null,
+            userEmail,
+            ipAddress,
+          ]
+        );
+      } catch (changeLogError) {
+        logger.error('Failed to log structured change:', changeLogError);
+      }
+    }
+  }
+
+  const detailText = changes.length > 0
+    ? `Patient ID: ${patientId}, Name: ${(newPatient.nev as string) || 'N/A'}; Módosítások: ${changes.join('; ')}`
+    : `Patient ID: ${patientId}, Name: ${(newPatient.nev as string) || 'N/A'}; Nincs változás`;
+
+  await logActivity(request, userEmail, 'patient_updated', detailText);
+}
+
+// ─── GET handler ────────────────────────────────────────────────────────────
+
+export const GET = optionalAuthHandler(async (req, { auth, params, correlationId }) => {
     const pool = getDbPool();
-    
-    // Ellenőrizzük a felhasználó szerepkörét és jogosultságait
-    const auth = await verifyAuth(request);
     const role = auth?.role || null;
     const userEmail = auth?.email || null;
-    
-    // Először lekérdezzük a beteget
+    const patientId = params.id;
+
     const result = await pool.query(
-      `SELECT 
-        id,
-        nev,
-        taj,
-        telefonszam,
-        szuletesi_datum as "szuletesiDatum",
-        nem,
-        email,
-        cim,
-        varos,
-        iranyitoszam,
-        beutalo_orvos as "beutaloOrvos",
-        beutalo_intezmeny as "beutaloIntezmeny",
-        beutalo_indokolas as "beutaloIndokolas",
-        primer_mutet_leirasa as "primerMutetLeirasa",
-        mutet_ideje as "mutetIdeje",
-        szovettani_diagnozis as "szovettaniDiagnozis",
-        nyaki_blokkdisszekcio as "nyakiBlokkdisszekcio",
-        alkoholfogyasztas,
-        dohanyzas_szam as "dohanyzasSzam",
-        kezelesre_erkezes_indoka as "kezelesreErkezesIndoka",
-        maxilladefektus_van as "maxilladefektusVan",
-        brown_fuggoleges_osztaly as "brownFuggolegesOsztaly",
-        brown_vizszintes_komponens as "brownVizszintesKomponens",
-        mandibuladefektus_van as "mandibuladefektusVan",
-        kovacs_dobak_osztaly as "kovacsDobakOsztaly",
-        nyelvmozgasok_akadalyozottak as "nyelvmozgásokAkadályozottak",
-        gombocos_beszed as "gombocosBeszed",
-        nyalmirigy_allapot as "nyalmirigyAllapot",
-        fabian_fejerdy_protetikai_osztaly_felso as "fabianFejerdyProtetikaiOsztalyFelso",
-        fabian_fejerdy_protetikai_osztaly_also as "fabianFejerdyProtetikaiOsztalyAlso",
-        radioterapia,
-        radioterapia_dozis as "radioterapiaDozis",
-        radioterapia_datum_intervallum as "radioterapiaDatumIntervallum",
-        chemoterapia,
-        chemoterapia_leiras as "chemoterapiaLeiras",
-        fabian_fejerdy_protetikai_osztaly as "fabianFejerdyProtetikaiOsztaly",
-        kezeleoorvos,
-        kezeleoorvos_intezete as "kezeleoorvosIntezete",
-        felvetel_datuma as "felvetelDatuma",
-        felso_fogpotlas_van as "felsoFogpotlasVan",
-        felso_fogpotlas_mikor as "felsoFogpotlasMikor",
-        felso_fogpotlas_keszito as "felsoFogpotlasKeszito",
-        felso_fogpotlas_elegedett as "felsoFogpotlasElegedett",
-        felso_fogpotlas_problema as "felsoFogpotlasProblema",
-        also_fogpotlas_van as "alsoFogpotlasVan",
-        also_fogpotlas_mikor as "alsoFogpotlasMikor",
-        also_fogpotlas_keszito as "alsoFogpotlasKeszito",
-        also_fogpotlas_elegedett as "alsoFogpotlasElegedett",
-        also_fogpotlas_problema as "alsoFogpotlasProblema",
-        meglevo_fogak as "meglevoFogak",
-        felso_fogpotlas_tipus as "felsoFogpotlasTipus",
-        also_fogpotlas_tipus as "alsoFogpotlasTipus",
-        meglevo_implantatumok as "meglevoImplantatumok",
-        nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
-        nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
-        tnm_staging as "tnmStaging",
-        bno, diagnozis, primer_mutet_leirasa as "primerMutetLeirasa",
-        baleset_idopont as "balesetIdopont",
-        baleset_etiologiaja as "balesetEtiologiaja",
-        baleset_egyeb as "balesetEgyeb",
-        veleszuletett_rendellenessegek as "veleszuletettRendellenessegek",
-        veleszuletett_mutetek_leirasa as "veleszuletettMutetekLeirasa",
-        kezelesi_terv_felso as "kezelesiTervFelso",
-        kezelesi_terv_also as "kezelesiTervAlso",
-        kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
-        kortorteneti_osszefoglalo as "kortortenetiOsszefoglalo",
-        kezelesi_terv_melleklet as "kezelesiTervMelleklet",
-        szakorvosi_velemeny as "szakorvosiVelemény",
-        halal_datum as "halalDatum",
-        created_at as "createdAt",
-        updated_at as "updatedAt",
-        created_by as "createdBy",
-        updated_by as "updatedBy"
-      FROM patients
-      WHERE id = $1`,
-      [params.id]
+      `SELECT ${PATIENT_SELECT_FIELDS} FROM patients WHERE id = $1`,
+      [patientId]
     );
 
     if (result.rows.length === 0) {
@@ -140,144 +812,47 @@ export async function GET(
     }
     // fogpótlástanász, admin, editor, viewer: mindent látnak (nincs szűrés)
 
-    // Activity logging: patient viewed (csak ha be van jelentkezve)
-    const authForLogging = await verifyAuth(request);
-    if (authForLogging) {
+    if (auth) {
       await logActivityWithAuth(
-        request,
-        authForLogging,
+        req,
+        auth,
         'patient_viewed',
-        `Patient ID: ${params.id}, Name: ${result.rows[0].nev || 'N/A'}`
+        `Patient ID: ${patientId}, Name: ${result.rows[0].nev || 'N/A'}`
       );
     }
 
     const response = NextResponse.json({ patient: result.rows[0] }, { status: 200 });
     response.headers.set('x-correlation-id', correlationId);
     return response;
-  } catch (error) {
-    console.error('Hiba a beteg lekérdezésekor:', error);
-    return handleApiError(error, 'Hiba történt a beteg lekérdezésekor', correlationId);
-  }
-}
+});
 
-// Beteg frissítése
-/**
- * Helper to get correlation ID from request
- */
-function getCorrelationId(request: NextRequest): string {
-  return request.headers.get('x-correlation-id')?.toLowerCase() || 
-    (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 
-     'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-       const r = (Math.random() * 16) | 0;
-       const v = c === 'x' ? r : (r & 0x3) | 0x8;
-       return v.toString(16);
-     }));
-}
+// ─── PUT handler ────────────────────────────────────────────────────────────
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const correlationId = getCorrelationId(request);
-  
-  try {
-    // Authorization: require authenticated user
-    const auth = await verifyAuth(request);
-    if (!auth) {
-      const response = NextResponse.json(
-        {
-          error: {
-            name: 'UnauthorizedError',
-            status: 401,
-            message: 'Bejelentkezés szükséges a módosításhoz',
-            correlationId,
-          },
-        },
-        { status: 401 }
-      );
-      response.headers.set('x-correlation-id', correlationId);
-      return response;
-    }
+export const PUT = authedHandler(async (req, { auth, params, correlationId }) => {
+    const patientId = params.id;
 
-    const body = await request.json();
-    let validatedPatient = patientSchema.parse(body);
+    const body = await req.json();
+    const parsed = patientSchema.parse(body);
 
-    // Kezelési terv: normalizálás + validáció (treatmentTypeCode must exist in treatment_types)
     const pool = getDbPool();
-    const validCodesResult = await pool.query(
-      `SELECT code FROM treatment_types`
-    );
-    const validCodes = new Set((validCodesResult.rows ?? []).map((r: { code: string }) => r.code));
 
-    const fieldErrors: Array<{ path: string; code: string; value: string }> = [];
+    // 1. Validate & normalize treatment plan codes
+    const treatmentResult = await validateAndNormalizeTreatmentPlan(pool, parsed, correlationId);
+    if (!treatmentResult.ok) return treatmentResult.response;
+    const validatedPatient = treatmentResult.patient;
 
-    const normalizeAndValidate = (
-      arr: Array<{ tipus?: string | null; treatmentTypeCode?: string | null; tervezettAtadasDatuma?: string | null; elkeszult?: boolean }> | null | undefined,
-      fieldPrefix: string
-    ): Array<{ treatmentTypeCode: string; tervezettAtadasDatuma: string | null; elkeszult: boolean }> => {
-      if (!arr || !Array.isArray(arr)) return [];
-      const out: Array<{ treatmentTypeCode: string; tervezettAtadasDatuma: string | null; elkeszult: boolean }> = [];
-      arr.forEach((item, idx) => {
-        const code =
-          normalizeToTreatmentTypeCode(item.treatmentTypeCode) ??
-          normalizeToTreatmentTypeCode(item.tipus);
-        if (!code || code.trim() === '') {
-          // Üres elem: kiszűrjük (ajánlott)
-          return;
-        }
-        if (!validCodes.has(code)) {
-          fieldErrors.push({
-            path: `${fieldPrefix}.${idx}.treatmentTypeCode`,
-            code: 'UNKNOWN_TREATMENT_TYPE_CODE',
-            value: item.treatmentTypeCode ?? item.tipus ?? '',
-          });
-          return;
-        }
-        out.push({
-          treatmentTypeCode: code,
-          tervezettAtadasDatuma: item.tervezettAtadasDatuma ?? null,
-          elkeszult: item.elkeszult ?? false,
-        });
-      });
-      return out;
-    };
-
-    const normalizedFelso = normalizeAndValidate(validatedPatient.kezelesiTervFelso, 'kezelesi_terv_felso');
-    const normalizedAlso = normalizeAndValidate(validatedPatient.kezelesiTervAlso, 'kezelesi_terv_also');
-
-    if (fieldErrors.length > 0) {
-      const response = NextResponse.json(
-        {
-          error: 'VALIDATION_ERROR',
-          message: 'Invalid treatmentTypeCode',
-          fieldErrors,
-        },
-        { status: 400 }
-      );
-      response.headers.set('x-correlation-id', correlationId);
-      return response;
-    }
-
-    validatedPatient = {
-      ...validatedPatient,
-      kezelesiTervFelso: normalizedFelso,
-      kezelesiTervAlso: normalizedAlso,
-    };
-
-    // Read headers (lowercase canonicalization)
-    const ifMatch = request.headers.get('if-match');
-    const saveSource = request.headers.get('x-save-source'); // auto|manual (for future snapshot use)
-    
+    const ifMatch = req.headers.get('if-match');
+    const saveSource = req.headers.get('x-save-source');
     const userEmail = auth.email;
-    const userId = auth.userId; // UUID from JWT
+    const userId = auth.userId;
     const role = auth.role;
-    
-    // Get old patient data for comparison (including updated_at for conflict detection)
+
+    // 2. Fetch old patient for comparison & conflict detection
     const oldPatientResult = await pool.query(
       `SELECT *, updated_at FROM patients WHERE id = $1`,
-      [params.id]
+      [patientId]
     );
-    
+
     if (oldPatientResult.rows.length === 0) {
       const response = NextResponse.json(
         {
@@ -293,374 +868,24 @@ export async function PUT(
       response.headers.set('x-correlation-id', correlationId);
       return response;
     }
-    
+
     const oldPatient = oldPatientResult.rows[0];
-    
-    // Conflict detection: If-Match header ellenőrzése
-    if (ifMatch) {
-      try {
-        // Kliens updated_at értéke (ISO string)
-        const clientUpdatedAtStr = ifMatch.trim();
-        const clientUpdatedAt = new Date(clientUpdatedAtStr);
-        
-        // Szerver jelenlegi updated_at értéke (PostgreSQL TIMESTAMPTZ)
-        const serverUpdatedAt = oldPatient.updated_at 
-          ? new Date(oldPatient.updated_at)
-          : null;
-        
-        // Összehasonlítás: timestamp milliszekundumban (pontosabb, mint string)
-        if (serverUpdatedAt && clientUpdatedAt.getTime() !== serverUpdatedAt.getTime()) {
-          // 409 Conflict: Stale write detected
-          const response = NextResponse.json(
-            {
-              error: {
-                name: 'ConflictError',
-                status: 409,
-                code: 'STALE_WRITE',
-                message: 'Másik felhasználó módosította a beteg adatait közben. Kérjük, frissítse az oldalt és próbálja újra.',
-                details: {
-                  serverUpdatedAt: serverUpdatedAt.toISOString(),
-                  clientUpdatedAt: clientUpdatedAt.toISOString(),
-                },
-                correlationId,
-              },
-            },
-            { status: 409 }
-          );
-          response.headers.set('x-correlation-id', correlationId);
-          return response;
-        }
-      } catch (dateParseError) {
-        // Invalid date format in If-Match: log but allow (backward compat)
-        console.warn(`[PUT /api/patients/${params.id}] Invalid If-Match date format: ${ifMatch}`, {
-          correlationId,
-          userEmail,
-          error: dateParseError,
-        });
-      }
-    } else {
-      // If-Match hiányzik: MVP-ben engedjük át (backward compat), de logoljuk
-      console.warn(`[PUT /api/patients/${params.id}] If-Match header missing - allowing update (backward compat)`, {
-        correlationId,
-        userEmail,
-      });
-    }
-    
-    // Szerepkör alapú jogosultság ellenőrzés szerkesztéshez
-    if (role === 'sebészorvos' && userEmail) {
-      // Sebészorvos: csak azokat a betegeket szerkesztheti, akiket ő utalt be
-      // Lekérdezzük a felhasználó doktor_neve mezőjét
-      const userResult = await pool.query(
-        `SELECT doktor_neve FROM users WHERE email = $1`,
-        [userEmail]
-      );
-      
-      if (userResult.rows.length > 0 && userResult.rows[0].doktor_neve) {
-        const doktorNeve = userResult.rows[0].doktor_neve;
-        // Ellenőrizzük, hogy a beteg beutalo_orvos mezője egyezik-e a felhasználó doktor_neve mezőjével
-        if (oldPatient.beutalo_orvos !== doktorNeve) {
-          const response = NextResponse.json(
-            {
-              error: {
-                name: 'ForbiddenError',
-                status: 403,
-                message: 'Nincs jogosultsága ehhez a beteg szerkesztéséhez. Csak a saját beutalt betegeit szerkesztheti.',
-                correlationId,
-              },
-            },
-            { status: 403 }
-          );
-          response.headers.set('x-correlation-id', correlationId);
-          return response;
-        }
-      } else {
-        // Ha nincs doktor_neve beállítva, ne szerkeszthesse a beteget
-        const response = NextResponse.json(
-          {
-            error: {
-              name: 'ForbiddenError',
-              status: 403,
-              message: 'Nincs jogosultsága ehhez a beteg szerkesztéséhez. Nincs beállítva doktor_neve.',
-              correlationId,
-            },
-          },
-          { status: 403 }
-        );
-        response.headers.set('x-correlation-id', correlationId);
-        return response;
-      }
-    } else if (role === 'technikus') {
-      // Technikus: csak azokat a betegeket szerkesztheti, akikhez epitézist rendeltek
-      const hasEpitesis = oldPatient.kezelesi_terv_arcot_erinto && 
-                          Array.isArray(oldPatient.kezelesi_terv_arcot_erinto) && 
-                          oldPatient.kezelesi_terv_arcot_erinto.length > 0;
-      if (!hasEpitesis) {
-        const response = NextResponse.json(
-          {
-            error: {
-              name: 'ForbiddenError',
-              status: 403,
-              message: 'Nincs jogosultsága ehhez a beteg szerkesztéséhez',
-              correlationId,
-            },
-          },
-          { status: 403 }
-        );
-        response.headers.set('x-correlation-id', correlationId);
-        return response;
-      }
-    }
-    
-    // TAJ-szám egyediség ellenőrzése (ha változott)
-    if (validatedPatient.taj && validatedPatient.taj.trim() !== '') {
-      // Normalizáljuk a TAJ-számot (eltávolítjuk a kötőjeleket)
-      const normalizedTAJ = validatedPatient.taj.replace(/-/g, '');
-      const oldNormalizedTAJ = oldPatient.taj ? oldPatient.taj.replace(/-/g, '') : '';
-      
-      // Csak akkor ellenőrizzük, ha a TAJ-szám változott
-      if (normalizedTAJ !== oldNormalizedTAJ) {
-        // Ellenőrizzük, hogy létezik-e már másik beteg ezzel a TAJ-számmal
-        const existingPatient = await pool.query(
-          `SELECT id, nev, taj FROM patients 
-           WHERE REPLACE(taj, '-', '') = $1 AND id != $2`,
-          [normalizedTAJ, params.id]
-        );
-        
-        if (existingPatient.rows.length > 0) {
-          const existing = existingPatient.rows[0];
-          const response = NextResponse.json(
-            {
-              error: {
-                name: 'ConflictError',
-                status: 409,
-                code: 'DUPLICATE_TAJ',
-                message: 'Már létezik beteg ezzel a TAJ-számmal',
-                details: `A TAJ-szám (${validatedPatient.taj}) már használatban van. Beteg: ${existing.nev || 'Név nélküli'} (ID: ${existing.id})`,
-                correlationId,
-              },
-            },
-            { status: 409 }
-          );
-          response.headers.set('x-correlation-id', correlationId);
-          return response;
-        }
-      }
-    }
-    
-    const result = await pool.query(
-      `UPDATE patients SET
-        nev = $2,
-        taj = $3,
-        telefonszam = $4,
-        szuletesi_datum = $5,
-        nem = $6,
-        email = $7,
-        cim = $8,
-        varos = $9,
-        iranyitoszam = $10,
-        beutalo_orvos = $11,
-        beutalo_intezmeny = $12,
-        beutalo_indokolas = $13,
-        mutet_ideje = $14,
-        szovettani_diagnozis = $15,
-        nyaki_blokkdisszekcio = $16,
-        alkoholfogyasztas = $17,
-        dohanyzas_szam = $18,
-        kezelesre_erkezes_indoka = $19,
-        maxilladefektus_van = $20,
-        brown_fuggoleges_osztaly = $21,
-        brown_vizszintes_komponens = $22,
-        mandibuladefektus_van = $23,
-        kovacs_dobak_osztaly = $24,
-        nyelvmozgasok_akadalyozottak = $25,
-        gombocos_beszed = $26,
-        nyalmirigy_allapot = $27,
-        fabian_fejerdy_protetikai_osztaly_felso = $28,
-        fabian_fejerdy_protetikai_osztaly_also = $29,
-        radioterapia = $30,
-        radioterapia_dozis = $31,
-        radioterapia_datum_intervallum = $32,
-        chemoterapia = $33,
-        chemoterapia_leiras = $34,
-        fabian_fejerdy_protetikai_osztaly = $35,
-        kezeleoorvos = $36,
-        kezeleoorvos_intezete = $37,
-        felvetel_datuma = $38,
-        felso_fogpotlas_van = $39,
-        felso_fogpotlas_mikor = $40,
-        felso_fogpotlas_keszito = $41,
-        felso_fogpotlas_elegedett = $42,
-        felso_fogpotlas_problema = $43,
-        also_fogpotlas_van = $44,
-        also_fogpotlas_mikor = $45,
-        also_fogpotlas_keszito = $46,
-        also_fogpotlas_elegedett = $47,
-        also_fogpotlas_problema = $48,
-        meglevo_fogak = $49,
-        felso_fogpotlas_tipus = $50,
-        also_fogpotlas_tipus = $51,
-        meglevo_implantatumok = $52,
-        nem_ismert_poziciokban_implantatum = $53,
-        nem_ismert_poziciokban_implantatum_reszletek = $54,
-        tnm_staging = $55,
-        bno = $56,
-        diagnozis = $57,
-        primer_mutet_leirasa = $58,
-        baleset_idopont = $59,
-        baleset_etiologiaja = $60,
-        baleset_egyeb = $61,
-        veleszuletett_rendellenessegek = $62::jsonb,
-        veleszuletett_mutetek_leirasa = $63,
-        kezelesi_terv_felso = $64::jsonb,
-        kezelesi_terv_also = $65::jsonb,
-        kezelesi_terv_arcot_erinto = $66::jsonb,
-        kortorteneti_osszefoglalo = $67,
-        kezelesi_terv_melleklet = $68,
-        szakorvosi_velemeny = $69,
-        halal_datum = $70,
-        updated_at = CURRENT_TIMESTAMP,
-        updated_by = $71
-      WHERE id = $1
-      RETURNING 
-        id, nev, taj, telefonszam, szuletesi_datum as "szuletesiDatum", nem,
-        email, cim, varos, iranyitoszam, beutalo_orvos as "beutaloOrvos",
-        beutalo_intezmeny as "beutaloIntezmeny", beutalo_indokolas as "beutaloIndokolas",
-        primer_mutet_leirasa as "primerMutetLeirasa",
-        mutet_ideje as "mutetIdeje", szovettani_diagnozis as "szovettaniDiagnozis",
-        nyaki_blokkdisszekcio as "nyakiBlokkdisszekcio", alkoholfogyasztas,
-        dohanyzas_szam as "dohanyzasSzam", kezelesre_erkezes_indoka as "kezelesreErkezesIndoka", maxilladefektus_van as "maxilladefektusVan",
-        brown_fuggoleges_osztaly as "brownFuggolegesOsztaly",
-        brown_vizszintes_komponens as "brownVizszintesKomponens",
-        mandibuladefektus_van as "mandibuladefektusVan",
-        kovacs_dobak_osztaly as "kovacsDobakOsztaly",
-        nyelvmozgasok_akadalyozottak as "nyelvmozgásokAkadályozottak",
-        gombocos_beszed as "gombocosBeszed", nyalmirigy_allapot as "nyalmirigyAllapot",
-        fabian_fejerdy_protetikai_osztaly_felso as "fabianFejerdyProtetikaiOsztalyFelso",
-        fabian_fejerdy_protetikai_osztaly_also as "fabianFejerdyProtetikaiOsztalyAlso",
-        radioterapia, radioterapia_dozis as "radioterapiaDozis",
-        radioterapia_datum_intervallum as "radioterapiaDatumIntervallum",
-        chemoterapia, chemoterapia_leiras as "chemoterapiaLeiras",
-        fabian_fejerdy_protetikai_osztaly as "fabianFejerdyProtetikaiOsztaly",
-        kezeleoorvos, kezeleoorvos_intezete as "kezeleoorvosIntezete",
-        felvetel_datuma as "felvetelDatuma",
-        felso_fogpotlas_van as "felsoFogpotlasVan",
-        felso_fogpotlas_mikor as "felsoFogpotlasMikor",
-        felso_fogpotlas_keszito as "felsoFogpotlasKeszito",
-        felso_fogpotlas_elegedett as "felsoFogpotlasElegedett",
-        felso_fogpotlas_problema as "felsoFogpotlasProblema",
-        also_fogpotlas_van as "alsoFogpotlasVan",
-        also_fogpotlas_mikor as "alsoFogpotlasMikor",
-        also_fogpotlas_keszito as "alsoFogpotlasKeszito",
-        also_fogpotlas_elegedett as "alsoFogpotlasElegedett",
-        also_fogpotlas_problema as "alsoFogpotlasProblema",
-        meglevo_fogak as "meglevoFogak",
-        felso_fogpotlas_tipus as "felsoFogpotlasTipus",
-        also_fogpotlas_tipus as "alsoFogpotlasTipus",
-        meglevo_implantatumok as "meglevoImplantatumok",
-        nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
-        nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
-        tnm_staging as "tnmStaging",
-        bno, diagnozis, primer_mutet_leirasa as "primerMutetLeirasa",
-        baleset_idopont as "balesetIdopont",
-        baleset_etiologiaja as "balesetEtiologiaja",
-        baleset_egyeb as "balesetEgyeb",
-        veleszuletett_rendellenessegek as "veleszuletettRendellenessegek",
-        veleszuletett_mutetek_leirasa as "veleszuletettMutetekLeirasa",
-        kezelesi_terv_felso as "kezelesiTervFelso",
-        kezelesi_terv_also as "kezelesiTervAlso",
-        kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
-        kortorteneti_osszefoglalo as "kortortenetiOsszefoglalo",
-        kezelesi_terv_melleklet as "kezelesiTervMelleklet",
-        szakorvosi_velemeny as "szakorvosiVelemény",
-        halal_datum as "halalDatum",
-        created_at as "createdAt", updated_at as "updatedAt",
-        created_by as "createdBy", updated_by as "updatedBy"`,
-      [
-        params.id,
-        validatedPatient.nev,
-        validatedPatient.taj || null,
-        validatedPatient.telefonszam || null,
-        validatedPatient.szuletesiDatum || null,
-        validatedPatient.nem || null,
-        validatedPatient.email || null,
-        validatedPatient.cim || null,
-        validatedPatient.varos || null,
-        validatedPatient.iranyitoszam || null,
-        validatedPatient.beutaloOrvos || null,
-        validatedPatient.beutaloIntezmeny || null,
-        validatedPatient.beutaloIndokolas || null,
-        validatedPatient.mutetIdeje || null,
-        validatedPatient.szovettaniDiagnozis || null,
-        validatedPatient.nyakiBlokkdisszekcio || null,
-        validatedPatient.alkoholfogyasztas || null,
-        validatedPatient.dohanyzasSzam || null,
-        validatedPatient.kezelesreErkezesIndoka || null,
-        validatedPatient.maxilladefektusVan || false,
-        validatedPatient.brownFuggolegesOsztaly || null,
-        validatedPatient.brownVizszintesKomponens || null,
-        validatedPatient.mandibuladefektusVan || false,
-        validatedPatient.kovacsDobakOsztaly || null,
-        validatedPatient.nyelvmozgásokAkadályozottak || false,
-        validatedPatient.gombocosBeszed || false,
-        validatedPatient.nyalmirigyAllapot || null,
-        validatedPatient.fabianFejerdyProtetikaiOsztalyFelso || null,
-        validatedPatient.fabianFejerdyProtetikaiOsztalyAlso || null,
-        validatedPatient.radioterapia || false,
-        validatedPatient.radioterapiaDozis || null,
-        validatedPatient.radioterapiaDatumIntervallum || null,
-        validatedPatient.chemoterapia || false,
-        validatedPatient.chemoterapiaLeiras || null,
-        validatedPatient.fabianFejerdyProtetikaiOsztaly || null,
-        validatedPatient.kezeleoorvos || null,
-        validatedPatient.kezeleoorvosIntezete || null,
-        validatedPatient.felvetelDatuma || null,
-        validatedPatient.felsoFogpotlasVan || false,
-        validatedPatient.felsoFogpotlasMikor || null,
-        validatedPatient.felsoFogpotlasKeszito || null,
-        validatedPatient.felsoFogpotlasElegedett ?? true,
-        validatedPatient.felsoFogpotlasProblema || null,
-        validatedPatient.alsoFogpotlasVan || false,
-        validatedPatient.alsoFogpotlasMikor || null,
-        validatedPatient.alsoFogpotlasKeszito || null,
-        validatedPatient.alsoFogpotlasElegedett ?? true,
-        validatedPatient.alsoFogpotlasProblema || null,
-        validatedPatient.meglevoFogak 
-          ? JSON.parse(JSON.stringify(validatedPatient.meglevoFogak))
-          : {},
-        validatedPatient.felsoFogpotlasTipus || null,
-        validatedPatient.alsoFogpotlasTipus || null,
-        validatedPatient.meglevoImplantatumok 
-          ? JSON.parse(JSON.stringify(validatedPatient.meglevoImplantatumok))
-          : {},
-        validatedPatient.nemIsmertPoziciokbanImplantatum || false,
-        validatedPatient.nemIsmertPoziciokbanImplantatumRészletek || null,
-        validatedPatient.tnmStaging || null,
-        validatedPatient.bno || null,
-        validatedPatient.diagnozis || null,
-        validatedPatient.primerMutetLeirasa || null,
-        validatedPatient.balesetIdopont || null,
-        validatedPatient.balesetEtiologiaja || null,
-        validatedPatient.balesetEgyeb || null,
-        validatedPatient.veleszuletettRendellenessegek && Array.isArray(validatedPatient.veleszuletettRendellenessegek)
-          ? JSON.stringify(validatedPatient.veleszuletettRendellenessegek)
-          : '[]',
-        validatedPatient.veleszuletettMutetekLeirasa || null,
-        validatedPatient.kezelesiTervFelso && Array.isArray(validatedPatient.kezelesiTervFelso)
-          ? JSON.stringify(validatedPatient.kezelesiTervFelso)
-          : '[]',
-        validatedPatient.kezelesiTervAlso && Array.isArray(validatedPatient.kezelesiTervAlso)
-          ? JSON.stringify(validatedPatient.kezelesiTervAlso)
-          : '[]',
-        validatedPatient.kezelesiTervArcotErinto && Array.isArray(validatedPatient.kezelesiTervArcotErinto)
-          ? JSON.stringify(validatedPatient.kezelesiTervArcotErinto)
-          : '[]',
-        validatedPatient.kortortenetiOsszefoglalo || null,
-        validatedPatient.kezelesiTervMelleklet || null,
-        validatedPatient.szakorvosiVelemény || null,
-        validatedPatient.halalDatum || null,
-        userEmail
-      ]
-    );
+
+    // 3. Conflict detection (If-Match / stale write)
+    const conflictResponse = checkStaleWrite(ifMatch, oldPatient, patientId, correlationId, userEmail);
+    if (conflictResponse) return conflictResponse;
+
+    // 4. Role-based edit permission
+    const permResponse = await checkEditPermission(pool, role, userEmail, oldPatient, correlationId);
+    if (permResponse) return permResponse;
+
+    // 5. TAJ uniqueness
+    const tajResponse = await checkTajUniqueness(pool, validatedPatient.taj, oldPatient.taj, patientId, correlationId);
+    if (tajResponse) return tajResponse;
+
+    // 6. Execute the update
+    const updateParams = buildUpdateParams(patientId, validatedPatient, userEmail);
+    const result = await pool.query(PATIENT_UPDATE_SQL, updateParams);
 
     if (result.rows.length === 0) {
       return NextResponse.json(
@@ -669,364 +894,47 @@ export async function PUT(
       );
     }
 
-    // Activity logging: patient updated with detailed changes
+    // 7. Change tracking & audit logging
     try {
-      const ipHeader = request.headers.get('x-forwarded-for') || '';
-      const ipAddress = ipHeader.split(',')[0]?.trim() || null;
-      
-      // Compare old and new values to detect changes
-      const changes: string[] = [];
-      const newPatient = result.rows[0];
-      
-      // Helper function to normalize dates to YYYY-MM-DD format
-      const normalizeDate = (val: any): string => {
-        if (!val) return '';
-        try {
-          const date = new Date(val);
-          if (isNaN(date.getTime())) return String(val).trim();
-          const year = date.getFullYear();
-          const month = String(date.getMonth() + 1).padStart(2, '0');
-          const day = String(date.getDate()).padStart(2, '0');
-          return `${year}-${month}-${day}`;
-        } catch {
-          return String(val).trim();
-        }
-      };
-
-      // Helper function to normalize JSON objects with sorted keys
-      const normalizeJSON = (val: any): string => {
-        if (!val) return '{}';
-        try {
-          if (typeof val === 'string') {
-            // Try to parse if it's a JSON string
-            const parsed = JSON.parse(val);
-            return normalizeJSON(parsed);
-          }
-          if (Array.isArray(val)) {
-            // Sort array items if they are objects
-            const sorted = val.map(item => {
-              if (typeof item === 'object' && item !== null) {
-                return Object.keys(item).sort().reduce((acc, key) => {
-                  acc[key] = item[key];
-                  return acc;
-                }, {} as any);
-              }
-              return item;
-            });
-            return JSON.stringify(sorted);
-          }
-          if (typeof val === 'object' && val !== null) {
-            // Sort object keys
-            const sorted = Object.keys(val).sort().reduce((acc, key) => {
-              acc[key] = val[key];
-              return acc;
-            }, {} as any);
-            return JSON.stringify(sorted);
-          }
-          return JSON.stringify(val);
-        } catch {
-          return JSON.stringify(val);
-        }
-      };
-
-      // Helper function to normalize values for comparison and storage
-      const normalize = (val: any, fieldName?: string): string => {
-        if (val === null || val === undefined) return '';
-        if (typeof val === 'boolean') return val ? 'true' : 'false';
-        
-        // Handle date fields
-        const dateFields = ['szuletesi_datum', 'mutet_ideje', 'felvetel_datuma', 'felso_fogpotlas_mikor', 
-                           'also_fogpotlas_mikor', 'baleset_idopont', 'arajanlatkero_datuma', 'halal_datum'];
-        if (fieldName && dateFields.includes(fieldName)) {
-          return normalizeDate(val);
-        }
-        
-        // Handle JSON array fields (kezelesi_terv fields)
-        const jsonArrayFields = ['kezelesi_terv_felso', 'kezelesi_terv_also', 'kezelesi_terv_arcot_erinto',
-                                 'veleszuletett_rendellenessegek'];
-        if (fieldName && jsonArrayFields.includes(fieldName)) {
-          return normalizeJSON(val);
-        }
-        
-        if (typeof val === 'object') {
-          return normalizeJSON(val);
-        }
-        
-        return String(val).trim();
-      };
-      
-      // Helper function to get display value (for showing in UI)
-      const getDisplayValue = (val: string): string => {
-        return val || '(üres)';
-      };
-      
-      // Field mapping: database field -> display name
-      const fieldNames: Record<string, string> = {
-        nev: 'Név',
-        taj: 'TAJ szám',
-        telefonszam: 'Telefonszám',
-        szuletesi_datum: 'Születési dátum',
-        nem: 'Nem',
-        email: 'Email',
-        cim: 'Cím',
-        varos: 'Város',
-        iranyitoszam: 'Irányítószám',
-        beutalo_orvos: 'Beutaló orvos',
-        beutalo_intezmeny: 'Beutaló intézmény',
-        beutalo_indokolas: 'Beutaló indokolás',
-        primer_mutet_leirasa: 'Primer műtét leírása',
-        mutet_ideje: 'Műtét ideje',
-        szovettani_diagnozis: 'Szövettani diagnózis',
-        nyaki_blokkdisszekcio: 'Nyaki blokkdisszekció',
-        alkoholfogyasztas: 'Alkoholfogyasztás',
-        dohanyzas_szam: 'Dohányzás',
-        kezelesre_erkezes_indoka: 'Kezelésre érkezés indoka',
-        maxilladefektus_van: 'Maxilladefektus',
-        brown_fuggoleges_osztaly: 'Brown függőleges osztály',
-        brown_vizszintes_komponens: 'Brown vízszintes komponens',
-        mandibuladefektus_van: 'Mandibuladefektus',
-        kovacs_dobak_osztaly: 'Kovács-Dobák osztály',
-        nyelvmozgasok_akadalyozottak: 'Nyelvmozgások akadályozottak',
-        gombocos_beszed: 'Gombócos beszéd',
-        nyalmirigy_allapot: 'Nyálmirigy állapot',
-        fabian_fejerdy_protetikai_osztaly_felso: 'Fábián-Fejérdy osztály (felső)',
-        fabian_fejerdy_protetikai_osztaly_also: 'Fábián-Fejérdy osztály (alsó)',
-        radioterapia: 'Radioterápia',
-        radioterapia_dozis: 'Radioterápia dózis',
-        radioterapia_datum_intervallum: 'Radioterápia dátumintervallum',
-        chemoterapia: 'Kemoterápia',
-        chemoterapia_leiras: 'Kemoterápia leírás',
-        fabian_fejerdy_protetikai_osztaly: 'Fábián-Fejérdy protetikai osztály',
-        kezeleoorvos: 'Kezelőorvos',
-        kezeleoorvos_intezete: 'Kezelőorvos intézete',
-        felvetel_datuma: 'Felvétel dátuma',
-        felso_fogpotlas_van: 'Felső fogpótlás van',
-        felso_fogpotlas_mikor: 'Felső fogpótlás mikor',
-        felso_fogpotlas_keszito: 'Felső fogpótlás készítő',
-        felso_fogpotlas_elegedett: 'Felső fogpótlás elégedett',
-        felso_fogpotlas_problema: 'Felső fogpótlás probléma',
-        also_fogpotlas_van: 'Alsó fogpótlás van',
-        also_fogpotlas_mikor: 'Alsó fogpótlás mikor',
-        also_fogpotlas_keszito: 'Alsó fogpótlás készítő',
-        also_fogpotlas_elegedett: 'Alsó fogpótlás elégedett',
-        also_fogpotlas_problema: 'Alsó fogpótlás probléma',
-        felso_fogpotlas_tipus: 'Felső fogpótlás típus',
-        also_fogpotlas_tipus: 'Alsó fogpótlás típus',
-        tnm_staging: 'TNM staging',
-        bno: 'BNO',
-        diagnozis: 'Diagnózis',
-        kezelesi_terv_felso: 'Kezelési terv (felső)',
-        kortorteneti_osszefoglalo: 'Kórtörténeti összefoglaló',
-        kezelesi_terv_melleklet: 'Kezelési terv melléklet',
-        szakorvosi_velemeny: 'Szakorvosi vélemény',
-        halal_datum: 'Halál dátuma',
-        arajanlatkero_szoveg: 'Árajánlatkérő szöveg',
-        arajanlatkero_datuma: 'Árajánlatkérő dátuma',
-        kezelesi_terv_also: 'Kezelési terv (alsó)',
-        kezelesi_terv_arcot_erinto: 'Kezelési terv (arcot érintő rehabilitáció)',
-      };
-      
-      // Track changes for structured logging
-      const structuredChanges: Array<{
-        fieldName: string;
-        fieldDisplayName: string;
-        oldValue: string;
-        newValue: string;
-      }> = [];
-      
-      // Check all fields for changes
-      for (const [dbField, displayName] of Object.entries(fieldNames)) {
-        const oldVal = normalize(oldPatient[dbField], dbField);
-        let newVal: string;
-        
-        // Map validated patient fields back to database field names
-        if (dbField === 'szuletesi_datum') newVal = normalize(validatedPatient.szuletesiDatum, dbField);
-        else if (dbField === 'beutalo_orvos') newVal = normalize(validatedPatient.beutaloOrvos, dbField);
-        else if (dbField === 'beutalo_intezmeny') newVal = normalize(validatedPatient.beutaloIntezmeny, dbField);
-        else if (dbField === 'beutalo_indokolas') newVal = normalize(validatedPatient.beutaloIndokolas, dbField);
-        else if (dbField === 'primer_mutet_leirasa') newVal = normalize(validatedPatient.primerMutetLeirasa, dbField);
-        else if (dbField === 'mutet_ideje') newVal = normalize(validatedPatient.mutetIdeje, dbField);
-        else if (dbField === 'szovettani_diagnozis') newVal = normalize(validatedPatient.szovettaniDiagnozis, dbField);
-        else if (dbField === 'nyaki_blokkdisszekcio') newVal = normalize(validatedPatient.nyakiBlokkdisszekcio, dbField);
-        else if (dbField === 'dohanyzas_szam') newVal = normalize(validatedPatient.dohanyzasSzam, dbField);
-        else if (dbField === 'kezelesre_erkezes_indoka') newVal = normalize(validatedPatient.kezelesreErkezesIndoka, dbField);
-        else if (dbField === 'maxilladefektus_van') newVal = normalize(validatedPatient.maxilladefektusVan, dbField);
-        else if (dbField === 'brown_fuggoleges_osztaly') newVal = normalize(validatedPatient.brownFuggolegesOsztaly, dbField);
-        else if (dbField === 'brown_vizszintes_komponens') newVal = normalize(validatedPatient.brownVizszintesKomponens, dbField);
-        else if (dbField === 'mandibuladefektus_van') newVal = normalize(validatedPatient.mandibuladefektusVan, dbField);
-        else if (dbField === 'kovacs_dobak_osztaly') newVal = normalize(validatedPatient.kovacsDobakOsztaly, dbField);
-        else if (dbField === 'nyelvmozgasok_akadalyozottak') newVal = normalize(validatedPatient.nyelvmozgásokAkadályozottak, dbField);
-        else if (dbField === 'gombocos_beszed') newVal = normalize(validatedPatient.gombocosBeszed, dbField);
-        else if (dbField === 'nyalmirigy_allapot') newVal = normalize(validatedPatient.nyalmirigyAllapot, dbField);
-        else if (dbField === 'fabian_fejerdy_protetikai_osztaly_felso') newVal = normalize(validatedPatient.fabianFejerdyProtetikaiOsztalyFelso, dbField);
-        else if (dbField === 'fabian_fejerdy_protetikai_osztaly_also') newVal = normalize(validatedPatient.fabianFejerdyProtetikaiOsztalyAlso, dbField);
-        else if (dbField === 'radioterapia_dozis') newVal = normalize(validatedPatient.radioterapiaDozis, dbField);
-        else if (dbField === 'radioterapia_datum_intervallum') newVal = normalize(validatedPatient.radioterapiaDatumIntervallum, dbField);
-        else if (dbField === 'chemoterapia_leiras') newVal = normalize(validatedPatient.chemoterapiaLeiras, dbField);
-        else if (dbField === 'fabian_fejerdy_protetikai_osztaly') newVal = normalize(validatedPatient.fabianFejerdyProtetikaiOsztaly, dbField);
-        else if (dbField === 'kezeleoorvos_intezete') newVal = normalize(validatedPatient.kezeleoorvosIntezete, dbField);
-        else if (dbField === 'felvetel_datuma') newVal = normalize(validatedPatient.felvetelDatuma, dbField);
-        else if (dbField === 'felso_fogpotlas_van') newVal = normalize(validatedPatient.felsoFogpotlasVan, dbField);
-        else if (dbField === 'felso_fogpotlas_mikor') newVal = normalize(validatedPatient.felsoFogpotlasMikor, dbField);
-        else if (dbField === 'felso_fogpotlas_keszito') newVal = normalize(validatedPatient.felsoFogpotlasKeszito, dbField);
-        else if (dbField === 'felso_fogpotlas_elegedett') newVal = normalize(validatedPatient.felsoFogpotlasElegedett, dbField);
-        else if (dbField === 'felso_fogpotlas_problema') newVal = normalize(validatedPatient.felsoFogpotlasProblema, dbField);
-        else if (dbField === 'also_fogpotlas_van') newVal = normalize(validatedPatient.alsoFogpotlasVan, dbField);
-        else if (dbField === 'also_fogpotlas_mikor') newVal = normalize(validatedPatient.alsoFogpotlasMikor, dbField);
-        else if (dbField === 'also_fogpotlas_keszito') newVal = normalize(validatedPatient.alsoFogpotlasKeszito, dbField);
-        else if (dbField === 'also_fogpotlas_elegedett') newVal = normalize(validatedPatient.alsoFogpotlasElegedett, dbField);
-        else if (dbField === 'also_fogpotlas_problema') newVal = normalize(validatedPatient.alsoFogpotlasProblema, dbField);
-        else if (dbField === 'felso_fogpotlas_tipus') newVal = normalize(validatedPatient.felsoFogpotlasTipus, dbField);
-        else if (dbField === 'also_fogpotlas_tipus') newVal = normalize(validatedPatient.alsoFogpotlasTipus, dbField);
-        else if (dbField === 'tnm_staging') newVal = normalize(validatedPatient.tnmStaging, dbField);
-        else if (dbField === 'bno') newVal = normalize(validatedPatient.bno, dbField);
-        else if (dbField === 'diagnozis') newVal = normalize(validatedPatient.diagnozis, dbField);
-        else if (dbField === 'kezelesi_terv_felso') newVal = normalize(validatedPatient.kezelesiTervFelso, dbField);
-        else if (dbField === 'kezelesi_terv_also') newVal = normalize(validatedPatient.kezelesiTervAlso, dbField);
-        else if (dbField === 'kezelesi_terv_arcot_erinto') newVal = normalize(validatedPatient.kezelesiTervArcotErinto, dbField);
-        else if (dbField === 'kortorteneti_osszefoglalo') newVal = normalize(validatedPatient.kortortenetiOsszefoglalo, dbField);
-        else if (dbField === 'kezelesi_terv_melleklet') newVal = normalize(validatedPatient.kezelesiTervMelleklet, dbField);
-        else if (dbField === 'szakorvosi_velemeny') newVal = normalize(validatedPatient.szakorvosiVelemény, dbField);
-        else if (dbField === 'halal_datum') newVal = normalize(validatedPatient.halalDatum, dbField);
-        else {
-          // Direct field name mapping (camelCase to snake_case handled above)
-          const camelField = dbField.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
-          newVal = normalize((validatedPatient as any)[camelField] ?? (validatedPatient as any)[dbField], dbField);
-        }
-        
-        if (oldVal !== newVal) {
-          const oldDisplay = getDisplayValue(oldVal);
-          const newDisplay = getDisplayValue(newVal);
-          changes.push(`${displayName}: "${oldDisplay}" → "${newDisplay}"`);
-          
-          // Store structured change
-          structuredChanges.push({
-            fieldName: dbField,
-            fieldDisplayName: displayName,
-            oldValue: oldVal,
-            newValue: newVal,
-          });
-        }
-      }
-      
-      // Special handling for JSONB fields
-      const jsonbFields = [
-        { db: 'meglevo_fogak', patient: 'meglevoFogak', name: 'Meglévő fogak' },
-        { db: 'meglevo_implantatumok', patient: 'meglevoImplantatumok', name: 'Meglévő implantátumok' },
-      ];
-      
-      for (const { db, patient, name } of jsonbFields) {
-        const oldJson = oldPatient[db] ? normalizeJSON(oldPatient[db]) : '{}';
-        const newJson = (validatedPatient as any)[patient] 
-          ? normalizeJSON((validatedPatient as any)[patient]) 
-          : '{}';
-        if (oldJson !== newJson) {
-          changes.push(`${name}: módosítva`);
-          
-          // Store structured change for JSONB fields
-          structuredChanges.push({
-            fieldName: db,
-            fieldDisplayName: name,
-            oldValue: oldJson,
-            newValue: newJson,
-          });
-        }
-      }
-      
-      // Log structured changes to patient_changes table
-      if (structuredChanges.length > 0) {
-        for (const change of structuredChanges) {
-          try {
-            await pool.query(
-              `INSERT INTO patient_changes (patient_id, field_name, field_display_name, old_value, new_value, changed_by, ip_address)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-              [
-                params.id,
-                change.fieldName,
-                change.fieldDisplayName,
-                change.oldValue || null,
-                change.newValue || null,
-                userEmail,
-                ipAddress
-              ]
-            );
-          } catch (changeLogError) {
-            // Log error but don't fail the request
-            console.error('Failed to log structured change:', changeLogError);
-          }
-        }
-      }
-      
-      // Keep existing activity_logs for compatibility
-      const detailText = changes.length > 0 
-        ? `Patient ID: ${params.id}, Name: ${newPatient.nev || 'N/A'}; Módosítások: ${changes.join('; ')}`
-        : `Patient ID: ${params.id}, Name: ${newPatient.nev || 'N/A'}; Nincs változás`;
-      
-      await logActivity(request, userEmail, 'patient_updated', detailText);
+      await trackPatientChanges(pool, req, patientId, oldPatient, validatedPatient, result.rows[0], userEmail);
     } catch (logError) {
-      // Activity logging failed, but don't fail the request
-      console.error('Failed to log activity:', logError);
+      logger.error('Failed to log activity:', logError);
     }
 
-    // Create snapshot for manual saves only
+    // 8. Create snapshot for manual saves
     if (saveSource === 'manual') {
       try {
         await pool.query(
           `INSERT INTO patient_snapshots (patient_id, snapshot_data, created_by_user_id, source, created_at)
            VALUES ($1, $2::jsonb, $3, $4, CURRENT_TIMESTAMP)`,
           [
-            params.id,
-            JSON.stringify(result.rows[0]), // Full patient object from DB (after save)
+            patientId,
+            JSON.stringify(result.rows[0]),
             userId,
             'manual',
           ]
         );
       } catch (snapshotError) {
-        // Snapshot creation failed, but don't fail the request
-        console.error('Failed to create patient snapshot:', snapshotError);
-        // Continue - snapshot is not critical for the save operation
+        logger.error('Failed to create patient snapshot:', snapshotError);
       }
     }
 
     const response = NextResponse.json({ patient: result.rows[0] }, { status: 200 });
     response.headers.set('x-correlation-id', correlationId);
     return response;
-  } catch (error: any) {
-    console.error('Hiba a beteg frissítésekor:', error);
-    return handleApiError(error, 'Hiba történt a beteg frissítésekor', correlationId);
-  }
-}
+});
 
-// Beteg törlése (csak admin)
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    // Authorization: require authenticated user
-    const auth = await verifyAuth(request);
-    if (!auth) {
-      return NextResponse.json(
-        { error: 'Bejelentkezés szükséges a törléshez' },
-        { status: 401 }
-      );
-    }
+// ─── DELETE handler ─────────────────────────────────────────────────────────
 
-    // Only admin can delete patients
-    if (auth.role !== 'admin') {
-      return NextResponse.json(
-        { error: 'Csak admin törölhet betegeket' },
-        { status: 403 }
-      );
-    }
-
+export const DELETE = roleHandler(['admin'], async (req, { auth, params }) => {
+    const patientId = params.id;
     const pool = getDbPool();
     const userEmail = auth.email;
     
     // Get patient details
     const patientResult = await pool.query(
       'SELECT id, nev, taj, email FROM patients WHERE id = $1',
-      [params.id]
+      [patientId]
     );
 
     if (patientResult.rows.length === 0) {
@@ -1038,7 +946,6 @@ export async function DELETE(
     
     const patient = patientResult.rows[0];
     
-    // Check if patient has appointments
     const appointmentResult = await pool.query(
       `SELECT 
         a.id,
@@ -1054,7 +961,7 @@ export async function DELETE(
       JOIN available_time_slots ats ON a.time_slot_id = ats.id
       JOIN users u ON ats.user_id = u.id
       WHERE a.patient_id = $1`,
-      [params.id]
+      [patientId]
     );
 
     const appointments = appointmentResult.rows;
@@ -1076,7 +983,7 @@ export async function DELETE(
       }
 
       // Delete the patient (this will cascade delete appointments due to ON DELETE CASCADE, but we already handled it)
-      await pool.query('DELETE FROM patients WHERE id = $1', [params.id]);
+      await pool.query('DELETE FROM patients WHERE id = $1', [patientId]);
 
       await pool.query('COMMIT');
 
@@ -1095,7 +1002,7 @@ export async function DELETE(
               userEmail
             );
           } catch (emailError) {
-            console.error('Failed to send time slot freed email to dentist:', emailError);
+            logger.error('Failed to send time slot freed email to dentist:', emailError);
             // Don't fail the request if email fails
           }
         }
@@ -1119,7 +1026,7 @@ export async function DELETE(
               appointment.google_calendar_event_id,
               targetCalendarId
             );
-            console.log('[Patient Deletion] Deleted patient event from target calendar');
+            logger.info('[Patient Deletion] Deleted patient event from target calendar');
             
             // Ha a time slot Google Calendar-ból származik, hozzuk vissza a "szabad" eseményt a forrás naptárba
             const isFromGoogleCalendar = appointment.time_slot_source === 'google_calendar' && appointment.time_slot_google_calendar_event_id;
@@ -1142,7 +1049,7 @@ export async function DELETE(
               );
               
               if (szabadEventId) {
-                console.log('[Patient Deletion] Recreated "szabad" event in source calendar');
+                logger.info('[Patient Deletion] Recreated "szabad" event in source calendar');
                 // Frissítjük a time slot google_calendar_event_id mezőjét az új esemény ID-jával
                 await pool.query(
                   `UPDATE available_time_slots 
@@ -1151,11 +1058,11 @@ export async function DELETE(
                   [szabadEventId, appointment.time_slot_id]
                 );
               } else {
-                console.error('[Patient Deletion] Failed to recreate "szabad" event in source calendar');
+                logger.error('[Patient Deletion] Failed to recreate "szabad" event in source calendar');
               }
             }
           } catch (error) {
-            console.error('Failed to handle Google Calendar event during patient deletion:', error);
+            logger.error('Failed to handle Google Calendar event during patient deletion:', error);
             // Nem blokkolja a beteg törlését
           }
         }
@@ -1185,13 +1092,13 @@ export async function DELETE(
                   appointment.dentist_email
                 );
               } catch (emailError) {
-                console.error('Failed to send time slot freed email to admins:', emailError);
+                logger.error('Failed to send time slot freed email to admins:', emailError);
                 // Don't fail the request if email fails
               }
             }
           }
         } catch (emailError) {
-          console.error('Failed to send time slot freed email to admins:', emailError);
+          logger.error('Failed to send time slot freed email to admins:', emailError);
           // Don't fail the request if email fails
         }
       }
@@ -1201,10 +1108,10 @@ export async function DELETE(
         ? `, ${appointments.length} időpont törölve és felszabadítva`
         : '';
       await logActivity(
-        request,
+        req,
         userEmail,
         'patient_deleted',
-        `Patient ID: ${params.id}, Name: ${patient.nev || 'N/A'}${appointmentInfo}`
+        `Patient ID: ${patientId}, Name: ${patient.nev || 'N/A'}${appointmentInfo}`
       );
 
       return NextResponse.json(
@@ -1218,12 +1125,4 @@ export async function DELETE(
       await pool.query('ROLLBACK');
       throw error;
     }
-  } catch (error) {
-    console.error('Hiba a beteg törlésekor:', error);
-    return NextResponse.json(
-      { error: 'Hiba történt a beteg törlésekor' },
-      { status: 500 }
-    );
-  }
-}
-
+});

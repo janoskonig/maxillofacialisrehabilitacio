@@ -1,43 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Calendar, Clock, Download, CheckCircle2, Plus, X, XCircle, AlertCircle, Clock as ClockIcon, Edit2 } from 'lucide-react';
-import { getCurrentUser } from '@/lib/auth';
+import { formatDateTime, digitsOnly } from '@/lib/dateUtils';
 import { DateTimePicker } from './DateTimePicker';
 import { Patient } from '@/lib/types';
-
-interface TimeSlot {
-  id: string;
-  startTime: string;
-  status: 'available' | 'booked';
-  cim?: string | null;
-  teremszam?: string | null;
-  userEmail?: string;
-  dentistName?: string | null;
-}
-
-interface Appointment {
-  id: string;
-  patientId: string;
-  episodeId?: string | null;
-  timeSlotId: string;
-  startTime: string;
-  dentistEmail: string | null;
-  cim?: string | null;
-  teremszam?: string | null;
-  appointmentStatus?: 'cancelled_by_doctor' | 'cancelled_by_patient' | 'completed' | 'no_show' | null;
-  completionNotes?: string | null;
-  isLate?: boolean;
-  appointmentType?: 'elso_konzultacio' | 'munkafazis' | 'kontroll' | null;
-  stepCode?: string | null;
-  stepLabel?: string | null;
-  pool?: 'consult' | 'work' | 'control' | null;
-  createdVia?: string | null;
-  createdAt?: string;
-  approvedAt?: string | null;
-  createdBy?: string;
-  timeSlotSource?: 'manual' | 'google_calendar' | null;
-}
+import {
+  useAppointmentBooking,
+  type Appointment,
+  type AppointmentType,
+} from '@/hooks/useAppointmentBooking';
 
 interface AppointmentBookingSectionProps {
   patientId: string | null | undefined;
@@ -60,147 +32,70 @@ export function AppointmentBookingSection({
   isNewPatient = false,
   onPatientSaved
 }: AppointmentBookingSectionProps) {
-  const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([]);
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [loading, setLoading] = useState(true);
+  const {
+    availableSlots,
+    appointments,
+    loading,
+    userRole,
+    roleLoaded,
+    availableCims,
+    DEFAULT_CIM,
+    bookAppointment,
+    cancelAppointment,
+    modifyAppointment,
+    updateAppointmentStatus,
+    createAndBookSlot,
+    downloadCalendar,
+  } = useAppointmentBooking(patientId);
+
+  // UI form state
   const [selectedSlot, setSelectedSlot] = useState<string>('');
-  const [userRole, setUserRole] = useState<string>('');
-  const [roleLoaded, setRoleLoaded] = useState(false);
   const [showNewSlotForm, setShowNewSlotForm] = useState(false);
   const [newSlotDateTime, setNewSlotDateTime] = useState<Date | null>(null);
   const [newSlotTeremszam, setNewSlotTeremszam] = useState<string>('');
   const [newSlotCim, setNewSlotCim] = useState<string>('');
-  const [newSlotAppointmentType, setNewSlotAppointmentType] = useState<'elso_konzultacio' | 'munkafazis' | 'kontroll' | null>(null);
+  const [newSlotAppointmentType, setNewSlotAppointmentType] = useState<AppointmentType | null>(null);
   const [customCim, setCustomCim] = useState<string>('');
   const [customTeremszam, setCustomTeremszam] = useState<string>('');
-  const [selectedAppointmentType, setSelectedAppointmentType] = useState<'elso_konzultacio' | 'munkafazis' | 'kontroll' | null>(null);
+  const [selectedAppointmentType, setSelectedAppointmentType] = useState<AppointmentType | null>(null);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [newModifyDateTime, setNewModifyDateTime] = useState<Date | null>(null);
   const [newModifyTeremszam, setNewModifyTeremszam] = useState<string>('');
-  const [newModifyAppointmentType, setNewModifyAppointmentType] = useState<'elso_konzultacio' | 'munkafazis' | 'kontroll' | null>(null);
+  const [newModifyAppointmentType, setNewModifyAppointmentType] = useState<AppointmentType | null>(null);
   const [editingStatus, setEditingStatus] = useState<Appointment | null>(null);
   const [statusForm, setStatusForm] = useState<{
     appointmentStatus: 'cancelled_by_doctor' | 'cancelled_by_patient' | 'completed' | 'no_show' | null;
     completionNotes: string;
     isLate: boolean;
-    appointmentType: 'elso_konzultacio' | 'munkafazis' | 'kontroll' | null;
+    appointmentType: AppointmentType | null;
   }>({
     appointmentStatus: null,
     completionNotes: '',
     isLate: false,
     appointmentType: null,
   });
-  
-  // Elérhető címek (egyelőre csak egy, de később bővíthető)
-  const availableCims = ['1088 Budapest, Szentkirályi utca 47'];
-  const DEFAULT_CIM = availableCims[0]; // Alapértelmezett cím
 
-  const loadAvailableSlots = async () => {
-    try {
-      // Több oldal lekérdezése, hogy minden szabad időpontot megkapjunk
-      let allSlots: TimeSlot[] = [];
-      let page = 1;
-      let hasMore = true;
-      const limit = 100; // Nagyobb limit, hogy kevesebb kérés legyen
-      const maxPages = 100; // Biztonsági limit, hogy ne legyen végtelen ciklus
-      
-      while (hasMore && page <= maxPages) {
-        const response = await fetch(`/api/time-slots?page=${page}&limit=${limit}`, {
-          credentials: 'include',
-        });
-        if (response.ok) {
-          const data = await response.json();
-          const slots = data.timeSlots || [];
-          allSlots = [...allSlots, ...slots];
-          
-          // Ellenőrizzük a paginációt: ha nincs több oldal, vagy kevesebb elemet kaptunk, akkor vége
-          const pagination = data.pagination;
-          if (pagination && page >= pagination.totalPages) {
-            hasMore = false;
-          } else if (slots.length < limit) {
-            hasMore = false;
-          } else {
-            page++;
-          }
-        } else {
-          hasMore = false;
+  const resolvePatientId = async (actionLabel = 'foglalása'): Promise<string | null> => {
+    let currentPatientId = patientId;
+    if ((isNewPatient || isPatientDirty) && onSavePatientBeforeBooking) {
+      try {
+        const savedPatient = await onSavePatientBeforeBooking();
+        currentPatientId = savedPatient.id;
+        if (onPatientSaved) {
+          onPatientSaved(savedPatient);
         }
+      } catch (error: any) {
+        const errorMessage = error instanceof Error ? error.message : 'Hiba történt a beteg mentésekor';
+        alert(`Hiba a beteg mentésekor: ${errorMessage}. Az időpont ${actionLabel} megszakadt.`);
+        return null;
       }
-      
-      // Csak a jövőbeli időpontokat jelenítjük meg (4 óra késleltetéssel)
-      const now = new Date();
-      const fourHoursFromNow = new Date(now.getTime() - 4 * 60 * 60 * 1000);
-      const futureSlots = allSlots.filter((slot: TimeSlot) => 
-        new Date(slot.startTime) >= fourHoursFromNow
-      );
-      setAvailableSlots(futureSlots);
-    } catch (error) {
-      console.error('Error loading time slots:', error);
     }
-  };
-
-  const loadAppointments = async () => {
-    if (!patientId) return;
-    
-    try {
-      // Optimalizálás: közvetlenül szűrjük a patientId alapján az API-ban
-      const response = await fetch(`/api/appointments?patientId=${patientId}`, {
-        credentials: 'include',
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setAppointments(data.appointments || []);
-      } else {
-        console.error('Failed to load appointments');
-        setAppointments([]);
-      }
-    } catch (error) {
-      console.error('Error loading appointments:', error);
-      setAppointments([]);
+    if (!currentPatientId) {
+      alert('Hiba: A beteg ID nem elérhető. Kérjük, mentse el először a beteg adatait.');
+      return null;
     }
+    return currentPatientId;
   };
-
-  const loadData = async () => {
-    if (!patientId) return;
-    
-    try {
-      setLoading(true);
-      await Promise.all([
-        loadAvailableSlots(),
-        loadAppointments(),
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    const initialize = async () => {
-      setLoading(true);
-      
-      // Check role
-      const user = await getCurrentUser();
-      if (user) {
-        setUserRole(user.role);
-        setRoleLoaded(true);
-      } else {
-        setRoleLoaded(true);
-      }
-      
-      // Load time slots even if patientId is not available (for new patients)
-      await loadAvailableSlots();
-      
-      // Load appointments if patientId exists
-      if (patientId) {
-        await loadAppointments();
-      }
-      
-      setLoading(false);
-    };
-    
-    initialize();
-  }, [patientId]);
 
   const handleBookAppointment = async () => {
     if (!selectedSlot) {
@@ -208,120 +103,47 @@ export function AppointmentBookingSection({
       return;
     }
 
-    // Check if patient needs to be saved first
-    let currentPatientId = patientId;
-    if ((isNewPatient || isPatientDirty) && onSavePatientBeforeBooking) {
-      try {
-        const savedPatient = await onSavePatientBeforeBooking();
-        currentPatientId = savedPatient.id;
-        
-        // Notify parent component about the saved patient
-        if (onPatientSaved) {
-          onPatientSaved(savedPatient);
-        }
-        
-        // Reload data with new patient ID
-        if (currentPatientId) {
-          await loadAppointments();
-        }
-      } catch (error: any) {
-        console.error('Error saving patient before booking:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Hiba történt a beteg mentésekor';
-        alert(`Hiba a beteg mentésekor: ${errorMessage}. Az időpont foglalása megszakadt.`);
-        return;
-      }
-    }
+    const resolvedPatientId = await resolvePatientId();
+    if (!resolvedPatientId) return;
 
-    if (!currentPatientId) {
-      alert('Hiba: A beteg ID nem elérhető. Kérjük, mentse el először a beteg adatait.');
-      return;
-    }
+    if (!confirm('Biztosan le szeretné foglalni ezt az időpontot?')) return;
 
-    if (!confirm('Biztosan le szeretné foglalni ezt az időpontot?')) {
-      return;
-    }
+    const result = await bookAppointment({
+      patientId: resolvedPatientId,
+      timeSlotId: selectedSlot,
+      episodeId: episodeId ?? null,
+      pool: pool ?? (episodeId ? 'work' : 'consult'),
+      cim: customCim || (availableCims.length === 1 ? DEFAULT_CIM : null),
+      teremszam: customTeremszam.trim() || null,
+      appointmentType: selectedAppointmentType || null,
+    });
 
-    try {
-      const response = await fetch('/api/appointments', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          patientId: currentPatientId,
-          timeSlotId: selectedSlot,
-          episodeId: episodeId ?? null,
-          pool: pool ?? (episodeId ? 'work' : 'consult'),
-          cim: customCim || (availableCims.length === 1 ? DEFAULT_CIM : null),
-          teremszam: customTeremszam.trim() || null,
-          appointmentType: selectedAppointmentType || null,
-          createdVia: 'patient_form',
-        }),
-      });
-
-      if (response.ok) {
-        await loadData();
-        setSelectedSlot('');
-        setCustomCim('');
-        setCustomTeremszam('');
-        setSelectedAppointmentType(null);
-        alert('Időpont sikeresen lefoglalva! A fogpótlástanász értesítést kapott.');
-      } else {
-        const data = await response.json();
-        alert(data.error || 'Hiba történt az időpont foglalásakor');
-      }
-    } catch (error) {
-      console.error('Error booking appointment:', error);
-      alert('Hiba történt az időpont foglalásakor');
+    if (result.success) {
+      setSelectedSlot('');
+      setCustomCim('');
+      setCustomTeremszam('');
+      setSelectedAppointmentType(null);
+      alert('Időpont sikeresen lefoglalva! A fogpótlástanász értesítést kapott.');
+    } else {
+      alert(result.error || 'Hiba történt az időpont foglalásakor');
     }
   };
 
   const handleDownloadCalendar = async (appointmentId: string) => {
-    try {
-      const response = await fetch(`/api/appointments/${appointmentId}/calendar.ics`, {
-        credentials: 'include',
-      });
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `appointment-${appointmentId}.ics`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-      } else {
-        alert('Hiba történt a naptár fájl letöltésekor');
-      }
-    } catch (error) {
-      console.error('Error downloading calendar:', error);
-      alert('Hiba történt a naptár fájl letöltésekor');
+    const result = await downloadCalendar(appointmentId);
+    if (!result.success) {
+      alert(result.error || 'Hiba történt a naptár fájl letöltésekor');
     }
   };
 
   const handleCancelAppointment = async (appointmentId: string) => {
-    if (!confirm('Biztosan le szeretné mondani ezt az időpontot?')) {
-      return;
-    }
+    if (!confirm('Biztosan le szeretné mondani ezt az időpontot?')) return;
 
-    try {
-      const response = await fetch(`/api/appointments/${appointmentId}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        await loadData();
-        alert('Időpont sikeresen lemondva!');
-      } else {
-        const data = await response.json();
-        alert(data.error || 'Hiba történt az időpont lemondásakor');
-      }
-    } catch (error) {
-      console.error('Error cancelling appointment:', error);
-      alert('Hiba történt az időpont lemondásakor');
+    const result = await cancelAppointment(appointmentId);
+    if (result.success) {
+      alert('Időpont sikeresen lemondva!');
+    } else {
+      alert(result.error || 'Hiba történt az időpont lemondásakor');
     }
   };
 
@@ -338,58 +160,26 @@ export function AppointmentBookingSection({
       return;
     }
 
-    // Check if date is in the future
     if (newModifyDateTime <= new Date()) {
       alert('Az időpont csak jövőbeli dátum lehet!');
       return;
     }
 
-    if (!confirm('Biztosan módosítani szeretné ezt az időpontot? A fogpótlástanász és a beteg értesítést kap.')) {
-      return;
-    }
+    if (!confirm('Biztosan módosítani szeretné ezt az időpontot? A fogpótlástanász és a beteg értesítést kap.')) return;
 
-    try {
-      // Convert Date to ISO format with timezone offset
-      const offset = -newModifyDateTime.getTimezoneOffset();
-      const offsetHours = Math.floor(Math.abs(offset) / 60);
-      const offsetMinutes = Math.abs(offset) % 60;
-      const offsetSign = offset >= 0 ? '+' : '-';
-      const offsetString = `${offsetSign}${String(offsetHours).padStart(2, '0')}:${String(offsetMinutes).padStart(2, '0')}`;
-      
-      const year = newModifyDateTime.getFullYear();
-      const month = String(newModifyDateTime.getMonth() + 1).padStart(2, '0');
-      const day = String(newModifyDateTime.getDate()).padStart(2, '0');
-      const hours = String(newModifyDateTime.getHours()).padStart(2, '0');
-      const minutes = String(newModifyDateTime.getMinutes()).padStart(2, '0');
-      const seconds = String(newModifyDateTime.getSeconds()).padStart(2, '0');
-      const isoDateTime = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetString}`;
+    const result = await modifyAppointment(editingAppointment.id, {
+      startTime: newModifyDateTime,
+      teremszam: newModifyTeremszam.trim() || null,
+      appointmentType: newModifyAppointmentType || null,
+    });
 
-      const response = await fetch(`/api/appointments/${editingAppointment.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          startTime: isoDateTime,
-          teremszam: newModifyTeremszam.trim() || null,
-          appointmentType: newModifyAppointmentType || null,
-        }),
-      });
-
-      if (response.ok) {
-        await loadData();
-        setEditingAppointment(null);
-        setNewModifyDateTime(null);
-        setNewModifyTeremszam('');
-        alert('Időpont sikeresen módosítva! A fogpótlástanász és a beteg (ha van email-címe) értesítést kapott.');
-      } else {
-        const data = await response.json();
-        alert(data.error || 'Hiba történt az időpont módosításakor');
-      }
-    } catch (error) {
-      console.error('Error modifying appointment:', error);
-      alert('Hiba történt az időpont módosításakor');
+    if (result.success) {
+      setEditingAppointment(null);
+      setNewModifyDateTime(null);
+      setNewModifyTeremszam('');
+      alert('Időpont sikeresen módosítva! A fogpótlástanász és a beteg (ha van email-címe) értesítést kapott.');
+    } else {
+      alert(result.error || 'Hiba történt az időpont módosításakor');
     }
   };
 
@@ -404,48 +194,31 @@ export function AppointmentBookingSection({
   };
 
   const handleSaveStatus = async () => {
-    if (!editingStatus) {
-      return;
-    }
+    if (!editingStatus) return;
 
-    // Validate: if status is 'completed', completionNotes is required
     if (statusForm.appointmentStatus === 'completed' && !statusForm.completionNotes.trim()) {
       alert('A "mi történt?" mező kitöltése kötelező sikeresen teljesült időpont esetén.');
       return;
     }
 
-    try {
-      const response = await fetch(`/api/appointments/${editingStatus.id}/status`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          appointmentStatus: statusForm.appointmentStatus,
-          completionNotes: statusForm.appointmentStatus === 'completed' ? statusForm.completionNotes : null,
-          isLate: statusForm.isLate,
-          appointmentType: statusForm.appointmentType,
-        }),
-      });
+    const result = await updateAppointmentStatus(editingStatus.id, {
+      appointmentStatus: statusForm.appointmentStatus,
+      completionNotes: statusForm.appointmentStatus === 'completed' ? statusForm.completionNotes : null,
+      isLate: statusForm.isLate,
+      appointmentType: statusForm.appointmentType,
+    });
 
-      if (response.ok) {
-        await loadData();
-        setEditingStatus(null);
-        setStatusForm({
-          appointmentStatus: null,
-          completionNotes: '',
-          isLate: false,
-          appointmentType: null,
-        });
-        alert('Időpont státusza sikeresen frissítve!');
-      } else {
-        const data = await response.json();
-        alert(data.error || 'Hiba történt az időpont státuszának frissítésekor');
-      }
-    } catch (error) {
-      console.error('Error updating appointment status:', error);
-      alert('Hiba történt az időpont státuszának frissítésekor');
+    if (result.success) {
+      setEditingStatus(null);
+      setStatusForm({
+        appointmentStatus: null,
+        completionNotes: '',
+        isLate: false,
+        appointmentType: null,
+      });
+      alert('Időpont státusza sikeresen frissítve!');
+    } else {
+      alert(result.error || 'Hiba történt az időpont státuszának frissítésekor');
     }
   };
 
@@ -455,148 +228,40 @@ export function AppointmentBookingSection({
       return;
     }
 
-    // Check if date is in the future
     if (newSlotDateTime <= new Date()) {
       alert('Az időpont csak jövőbeli dátum lehet!');
       return;
     }
 
-    // Check if patient needs to be saved first
-    let currentPatientId = patientId;
-    if ((isNewPatient || isPatientDirty) && onSavePatientBeforeBooking) {
-      try {
-        const savedPatient = await onSavePatientBeforeBooking();
-        currentPatientId = savedPatient.id;
-        
-        // Notify parent component about the saved patient
-        if (onPatientSaved) {
-          onPatientSaved(savedPatient);
-        }
-        
-        // Reload data with new patient ID
-        if (currentPatientId) {
-          await loadAppointments();
-        }
-      } catch (error: any) {
-        console.error('Error saving patient before booking:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Hiba történt a beteg mentésekor';
-        alert(`Hiba a beteg mentésekor: ${errorMessage}. Az időpont létrehozása megszakadt.`);
-        return;
-      }
-    }
+    const resolvedPatientId = await resolvePatientId('létrehozása');
+    if (!resolvedPatientId) return;
 
-    if (!currentPatientId) {
-      alert('Hiba: A beteg ID nem elérhető. Kérjük, mentse el először a beteg adatait.');
-      return;
-    }
+    if (!confirm('Biztosan létre szeretné hozni ezt az időpontot és rögtön lefoglalni a betegnek?')) return;
 
-    // Convert Date to ISO format with timezone offset
-    // This ensures the server interprets the time correctly regardless of server timezone
-    const offset = -newSlotDateTime.getTimezoneOffset();
-    const offsetHours = Math.floor(Math.abs(offset) / 60);
-    const offsetMinutes = Math.abs(offset) % 60;
-    const offsetSign = offset >= 0 ? '+' : '-';
-    const offsetString = `${offsetSign}${String(offsetHours).padStart(2, '0')}:${String(offsetMinutes).padStart(2, '0')}`;
-    
-    const year = newSlotDateTime.getFullYear();
-    const month = String(newSlotDateTime.getMonth() + 1).padStart(2, '0');
-    const day = String(newSlotDateTime.getDate()).padStart(2, '0');
-    const hours = String(newSlotDateTime.getHours()).padStart(2, '0');
-    const minutes = String(newSlotDateTime.getMinutes()).padStart(2, '0');
-    const seconds = String(newSlotDateTime.getSeconds()).padStart(2, '0');
-    const isoDateTime = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetString}`;
-
-    if (!confirm('Biztosan létre szeretné hozni ezt az időpontot és rögtön lefoglalni a betegnek?')) {
-      return;
-    }
-
-    try {
-      // First, create the new time slot
-      const createSlotResponse = await fetch('/api/time-slots', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          startTime: isoDateTime,
-          cim: newSlotCim || DEFAULT_CIM,
-          teremszam: newSlotTeremszam.trim() || null,
-        }),
-      });
-
-      if (!createSlotResponse.ok) {
-        const errorData = await createSlotResponse.json();
-        alert(errorData.error || 'Hiba történt az időpont létrehozásakor');
-        return;
-      }
-
-      const slotData = await createSlotResponse.json();
-      const newTimeSlotId = slotData.timeSlot.id;
-
-      // Then, immediately book it for the patient
-      const bookResponse = await fetch('/api/appointments', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          patientId: currentPatientId,
-          timeSlotId: newTimeSlotId,
-          cim: newSlotCim || DEFAULT_CIM,
-          teremszam: newSlotTeremszam.trim() || null,
-          appointmentType: newSlotAppointmentType || null,
-          createdVia: 'patient_form',
-        }),
-      });
-
-      if (bookResponse.ok) {
-        await loadData();
-        setNewSlotDateTime(null);
-        setNewSlotCim('');
-        setNewSlotTeremszam('');
-        setNewSlotAppointmentType(null);
-        setShowNewSlotForm(false);
-        alert('Új időpont sikeresen létrehozva és lefoglalva a betegnek!');
-      } else {
-        const errorData = await bookResponse.json();
-        alert(errorData.error || 'Hiba történt az időpont foglalásakor');
-        // If booking failed, we should probably delete the created slot
-        // But for now, just show the error
-      }
-    } catch (error) {
-      console.error('Error creating and booking new slot:', error);
-      alert('Hiba történt az időpont létrehozásakor vagy foglalásakor');
-    }
-  };
-
-  const formatDateTime = (dateTime: string) => {
-    const date = new Date(dateTime);
-    return date.toLocaleString('hu-HU', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
+    const result = await createAndBookSlot({
+      patientId: resolvedPatientId,
+      startTime: newSlotDateTime,
+      cim: newSlotCim || DEFAULT_CIM,
+      teremszam: newSlotTeremszam.trim() || null,
+      appointmentType: newSlotAppointmentType || null,
     });
+
+    if (result.success) {
+      setNewSlotDateTime(null);
+      setNewSlotCim('');
+      setNewSlotTeremszam('');
+      setNewSlotAppointmentType(null);
+      setShowNewSlotForm(false);
+      alert('Új időpont sikeresen létrehozva és lefoglalva a betegnek!');
+    } else {
+      alert(result.error || 'Hiba történt az időpont létrehozásakor vagy foglalásakor');
+    }
   };
 
-  // Validálja a teremszám mezőt: csak számokat fogad el
-  const validateTeremszam = (value: string): string => {
-    // Csak számokat enged be, eltávolítja az összes nem szám karaktert
-    const numbersOnly = value.replace(/[^0-9]/g, '');
-    return numbersOnly;
-  };
-
-  // Only show for surgeons, admins, and fogpótlástanász
-  // Wait for role to load before making decision
   if (!roleLoaded) {
-    // Still loading role, show nothing for now
     return null;
   }
   
-  // Role is loaded, check if user is surgeon, admin, or fogpótlástanász
   if (userRole !== 'sebészorvos' && userRole !== 'admin' && userRole !== 'fogpótlástanász') {
     return null;
   }
@@ -654,7 +319,7 @@ export function AppointmentBookingSection({
                 <input
                   type="text"
                   value={newModifyTeremszam}
-                  onChange={(e) => setNewModifyTeremszam(validateTeremszam(e.target.value))}
+                  onChange={(e) => setNewModifyTeremszam(digitsOnly(e.target.value))}
                   className="form-input w-full"
                   placeholder="Pl. 611"
                 />
@@ -825,7 +490,6 @@ export function AppointmentBookingSection({
           <h4 className="text-sm font-medium text-gray-700 mb-3">Lefoglalt időpontok</h4>
           <div className="space-y-2">
             {appointments.map((appointment) => {
-              const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
               const displayCim = appointment.cim || DEFAULT_CIM;
               return (
               <div
@@ -1073,7 +737,7 @@ export function AppointmentBookingSection({
                     <input
                       type="text"
                       value={newSlotTeremszam}
-                      onChange={(e) => setNewSlotTeremszam(validateTeremszam(e.target.value))}
+                      onChange={(e) => setNewSlotTeremszam(digitsOnly(e.target.value))}
                       className="form-input w-full"
                       placeholder="Pl. 611"
                     />
@@ -1134,7 +798,6 @@ export function AppointmentBookingSection({
               >
                 <option value="">Válasszon időpontot...</option>
                 {availableSlotsOnly.map((slot) => {
-                  const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
                   const displayCim = slot.cim || DEFAULT_CIM;
                   return (
                     <option key={slot.id} value={slot.id}>
@@ -1168,7 +831,6 @@ export function AppointmentBookingSection({
                   return (
                     <>
                       {(() => {
-                        const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
                         const displayCim = selectedSlotData?.cim || DEFAULT_CIM;
                         return (
                           <div className="text-sm text-gray-600 mt-1">
@@ -1220,7 +882,7 @@ export function AppointmentBookingSection({
                     <input
                       type="text"
                       value={customTeremszam}
-                      onChange={(e) => setCustomTeremszam(validateTeremszam(e.target.value))}
+                      onChange={(e) => setCustomTeremszam(digitsOnly(e.target.value))}
                       className="form-input w-full text-sm"
                       placeholder={availableSlotsOnly.find(s => s.id === selectedSlot)?.teremszam || 'Pl. 611'}
                     />
@@ -1259,4 +921,3 @@ export function AppointmentBookingSection({
     </div>
   );
 }
-

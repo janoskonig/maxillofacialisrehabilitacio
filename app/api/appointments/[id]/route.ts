@@ -1,27 +1,17 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
-import { verifyAuth } from '@/lib/auth-server';
+import { authedHandler } from '@/lib/api/route-handler';
 import { sendAppointmentCancellationNotification, sendAppointmentCancellationNotificationToPatient, sendAppointmentModificationNotification, sendAppointmentModificationNotificationToPatient } from '@/lib/email';
 import { generateIcsFile } from '@/lib/calendar';
 import { deleteGoogleCalendarEvent, updateGoogleCalendarEvent, createGoogleCalendarEvent } from '@/lib/google-calendar';
+import { logger } from '@/lib/logger';
 
 // Update an appointment (change time slot)
 export const dynamic = 'force-dynamic';
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const auth = await verifyAuth(request);
-    if (!auth) {
-      return NextResponse.json(
-        { error: 'Bejelentkezés szükséges' },
-        { status: 401 }
-      );
-    }
+export const PUT = authedHandler(async (req, { auth, params }) => {
+    const { id } = params;
 
-    // Only sebészorvos, fogpótlástanász, or admin can modify appointments
     if (auth.role !== 'sebészorvos' && auth.role !== 'fogpótlástanász' && auth.role !== 'admin') {
       return NextResponse.json(
         { error: 'Nincs jogosultsága az időpont módosításához' },
@@ -29,7 +19,7 @@ export async function PUT(
       );
     }
 
-    const body = await request.json();
+    const body = await req.json();
     const { timeSlotId, startTime, teremszam, appointmentType } = body;
 
     // Either timeSlotId or startTime must be provided
@@ -62,7 +52,7 @@ export async function PUT(
       JOIN patients p ON a.patient_id = p.id
       JOIN users u ON ats.user_id = u.id
       WHERE a.id = $1`,
-      [params.id]
+      [id]
     );
 
     if (appointmentResult.rows.length === 0) {
@@ -74,10 +64,6 @@ export async function PUT(
 
     const appointment = appointmentResult.rows[0];
 
-    // Check permissions:
-    // - Sebészorvos: can modify if they created the appointment
-    // - Fogpótlástanász: can modify if the time slot belongs to them
-    // - Admin: can modify any appointment
     if (auth.role === 'sebészorvos' && appointment.created_by !== auth.email) {
       return NextResponse.json(
         { error: 'Nincs jogosultsága ezt az időpontot módosítani' },
@@ -216,7 +202,7 @@ export async function PUT(
         paramIndex++;
       }
       
-      updateValues.push(params.id);
+      updateValues.push(id);
       
       const updateResult = await pool.query(
         `UPDATE appointments 
@@ -288,7 +274,7 @@ export async function PUT(
                 [newTimeSlot.dentist_user_id]
               );
               if (userCalendarResult.rows[0]?.google_calendar_enabled !== true) {
-                console.log('[Appointment Reschedule] Slot owner has Google Calendar disabled, skipping sync');
+                logger.info('[Appointment Reschedule] Slot owner has Google Calendar disabled, skipping sync');
                 return;
               }
               const targetCalendarId = userCalendarResult.rows[0]?.google_calendar_target_calendar_id || 'primary';
@@ -300,7 +286,7 @@ export async function PUT(
                   appointment.google_calendar_event_id,
                   targetCalendarId
                 ).catch((error) => {
-                  console.error('Failed to delete old Google Calendar event:', error);
+                  logger.error('Failed to delete old Google Calendar event:', error);
                   // Nem blokkoljuk, ha a törlés sikertelen
                 });
               }
@@ -322,17 +308,17 @@ export async function PUT(
               if (newEventId) {
                 await pool.query(
                   'UPDATE appointments SET google_calendar_event_id = $1 WHERE id = $2',
-                  [newEventId, params.id]
+                  [newEventId, id]
                 );
               }
             } catch (error) {
-              console.error('Failed to update Google Calendar event:', error);
+              logger.error('Failed to update Google Calendar event:', error);
               // Nem blokkolja az időpont módosítását
             }
           })(),
         ]);
       } catch (emailError) {
-        console.error('Failed to send modification email to dentist:', emailError);
+        logger.error('Failed to send modification email to dentist:', emailError);
         // Don't fail the request if email fails
       }
 
@@ -356,7 +342,7 @@ export async function PUT(
             icsFile
           );
         } catch (emailError) {
-          console.error('Failed to send modification email to patient:', emailError);
+          logger.error('Failed to send modification email to patient:', emailError);
           // Don't fail the request if email fails
         }
       }
@@ -366,30 +352,11 @@ export async function PUT(
       await pool.query('ROLLBACK');
       throw error;
     }
-  } catch (error) {
-    console.error('Error modifying appointment:', error);
-    return NextResponse.json(
-      { error: 'Hiba történt az időpont módosításakor' },
-      { status: 500 }
-    );
-  }
-}
+});
 
-// Delete an appointment (cancel booking)
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const auth = await verifyAuth(request);
-    if (!auth) {
-      return NextResponse.json(
-        { error: 'Bejelentkezés szükséges' },
-        { status: 401 }
-      );
-    }
+export const DELETE = authedHandler(async (req, { auth, params }) => {
+    const { id } = params;
 
-    // Only sebészorvos, fogpótlástanász, or admin can cancel appointments
     if (auth.role !== 'sebészorvos' && auth.role !== 'fogpótlástanász' && auth.role !== 'admin') {
       return NextResponse.json(
         { error: 'Nincs jogosultsága az időpont lemondásához' },
@@ -423,7 +390,7 @@ export async function DELETE(
       JOIN patients p ON a.patient_id = p.id
       JOIN users u ON ats.user_id = u.id
       WHERE a.id = $1`,
-      [params.id]
+      [id]
     );
 
     if (appointmentResult.rows.length === 0) {
@@ -435,10 +402,6 @@ export async function DELETE(
 
     const appointment = appointmentResult.rows[0];
 
-    // Check permissions:
-    // - Sebészorvos: can cancel if they created the appointment (created_by matches)
-    // - Fogpótlástanász: can cancel if the time slot belongs to them
-    // - Admin: can cancel any appointment
     if (auth.role === 'sebészorvos' && appointment.created_by !== auth.email) {
       return NextResponse.json(
         { error: 'Nincs jogosultsága ezt az időpontot lemondani' },
@@ -464,7 +427,7 @@ export async function DELETE(
 
     try {
       // Delete the appointment
-      await pool.query('DELETE FROM appointments WHERE id = $1', [params.id]);
+      await pool.query('DELETE FROM appointments WHERE id = $1', [id]);
 
       // Update time slot status back to available
       await pool.query(
@@ -523,7 +486,7 @@ export async function DELETE(
                   appointment.google_calendar_event_id,
                   targetCalendarId
                 );
-                console.log('[Appointment Cancellation] Deleted patient event from target calendar');
+                logger.info('[Appointment Cancellation] Deleted patient event from target calendar');
                 
                 // Ha a time slot Google Calendar-ból származik, hozzuk vissza a "szabad" eseményt a forrás naptárba
                 const isFromGoogleCalendar = appointment.time_slot_source === 'google_calendar' && appointment.time_slot_google_calendar_event_id;
@@ -546,7 +509,7 @@ export async function DELETE(
                   );
                   
                   if (szabadEventId) {
-                    console.log('[Appointment Cancellation] Recreated "szabad" event in source calendar');
+                    logger.info('[Appointment Cancellation] Recreated "szabad" event in source calendar');
                     // Frissítjük a time slot google_calendar_event_id mezőjét az új esemény ID-jával
                     await pool.query(
                       `UPDATE available_time_slots 
@@ -555,18 +518,18 @@ export async function DELETE(
                       [szabadEventId, appointment.time_slot_id]
                     );
                   } else {
-                    console.error('[Appointment Cancellation] Failed to recreate "szabad" event in source calendar');
+                    logger.error('[Appointment Cancellation] Failed to recreate "szabad" event in source calendar');
                   }
                 }
               } catch (error) {
-                console.error('Failed to handle Google Calendar event:', error);
+                logger.error('Failed to handle Google Calendar event:', error);
                 // Nem blokkolja az időpont törlését
               }
             }
           })(),
         ]);
       } catch (emailError) {
-        console.error('Failed to send cancellation email to dentist:', emailError);
+        logger.error('Failed to send cancellation email to dentist:', emailError);
         // Don't fail the request if email fails
       }
 
@@ -580,7 +543,7 @@ export async function DELETE(
             appointment.dentist_email
           );
         } catch (emailError) {
-          console.error('Failed to send cancellation email to patient:', emailError);
+          logger.error('Failed to send cancellation email to patient:', emailError);
           // Don't fail the request if email fails
         }
       }
@@ -590,11 +553,4 @@ export async function DELETE(
       await pool.query('ROLLBACK');
       throw error;
     }
-  } catch (error) {
-    console.error('Error cancelling appointment:', error);
-    return NextResponse.json(
-      { error: 'Hiba történt az időpont lemondásakor' },
-      { status: 500 }
-    );
-  }
-}
+});

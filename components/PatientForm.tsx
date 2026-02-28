@@ -1,113 +1,41 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback, useMemo, ReactNode } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Patient, patientSchema, nyakiBlokkdisszekcioOptions, fabianFejerdyProtetikaiOsztalyOptions, kezelesiTervOptions, kezelesiTervArcotErintoTipusOptions, kezelesiTervArcotErintoElhorgonyzasOptions } from '@/lib/types';
-import { normalizeToTreatmentTypeCode } from '@/lib/treatment-type-normalize';
+import { Patient, patientSchema } from '@/lib/types';
 import { formatDateForInput } from '@/lib/dateUtils';
-import { getEarliestReadyDate, formatEarliestReadyDisplay } from '@/lib/kezelesi-terv-estimate';
-import { X, Calendar, User, Phone, Mail, MapPin, FileText, AlertTriangle, Plus, Trash2, Download, Send, History } from 'lucide-react';
+import { X, Calendar, User, MapPin, FileText, AlertTriangle, History } from 'lucide-react';
+import {
+  AlapadatokSection,
+  SzemelyesAdatokSection,
+  BeutaloSection,
+  AnamnezisSection,
+  BetegvizsgalatSection,
+  ImplantatumokSection,
+  MeltanyossagiSection,
+  ArajanlatkeroSection,
+  ConflictModal,
+  StickySubmitBar,
+  getToothState,
+} from './patient-form';
 import { useRouter } from 'next/navigation';
 import { AppointmentBookingSection } from './AppointmentBookingSection';
 import { ConditionalAppointmentBooking } from './ConditionalAppointmentBooking';
 import { ContextBanner } from './ContextBanner';
 import { getCurrentUser } from '@/lib/auth';
-import { DatePicker } from './DatePicker';
-import { savePatient, ApiError, TimeoutError } from '@/lib/storage';
-import { logEvent } from '@/lib/event-logger';
+import { savePatient, ApiError } from '@/lib/storage';
 import { getMissingRequiredFields, REQUIRED_FIELDS } from '@/lib/clinical-rules';
 import { ClinicalChecklist } from './ClinicalChecklist';
-
-// Sentry import (conditional, only if enabled)
-let Sentry: typeof import('@sentry/nextjs') | null = null;
-if (typeof window !== 'undefined' && process.env.ENABLE_SENTRY === 'true') {
-  try {
-    Sentry = require('@sentry/nextjs');
-  } catch {
-    // Sentry not available, ignore
-  }
-}
-import { BNOAutocomplete } from './BNOAutocomplete';
+import { usePatientAutoSave, normalizeToothData, buildSavePayload, type ToothStatus } from '@/hooks/usePatientAutoSave';
+import { usePatientConflictResolution } from '@/hooks/usePatientConflictResolution';
 import { PatientDocuments } from './PatientDocuments';
 import { useToast } from '@/contexts/ToastContext';
-import { EQUITY_REQUEST_CONFIG } from '@/lib/equity-request-config';
 import { PatientFormSectionNavigation, Section } from './mobile/PatientFormSectionNavigation';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { PatientStageSection } from './PatientStageSection';
 import { OHIP14Section } from './OHIP14Section';
-import { ToothTreatmentProvider, ToothTreatmentInline } from './ToothTreatmentPanel';
-import { OPInlinePreview } from './OPInlinePreview';
 
-
-// Fog állapot típus
-type ToothStatus = { status?: 'D' | 'F' | 'M'; description?: string } | string;
-
-// Helper függvény: string-et objektummá konvertál (visszafelé kompatibilitás)
-function normalizeToothData(value: ToothStatus | undefined): { status?: 'D' | 'F' | 'M'; description?: string } | null {
-  if (!value) return null;
-  if (typeof value === 'string') {
-    // Üres string esetén null-t adunk vissza
-    if (value.trim() === '') return null;
-    return { description: value };
-  }
-  // Ha objektum, akkor ellenőrizzük
-  if (typeof value === 'object' && value !== null) {
-    const hasStatus = value.status !== undefined && value.status !== null;
-    const hasDescription = value.description !== undefined; // Van description kulcs (akár üres is)
-    const hasNonEmptyDescription = value.description && value.description.trim() !== '';
-    
-    // Ha van status (D, F, vagy M), akkor érvényes objektum, még akkor is, ha nincs description
-    if (hasStatus) {
-      return value;
-    }
-    
-    // Ha van description kulcs (akár üres is), akkor érvényes objektum
-    // Ez az implantátumok esetében fontos: { description: '' } azt jelenti, hogy be van jelölve
-    if (hasDescription) {
-      return value;
-    }
-    
-    // Üres objektum ({}) - ez érvényes állapot a fog státuszban (jelen van, de még nincs kiválasztva D/F)
-    // Csak akkor null, ha valóban nincs semmi
-    // Az üres objektumot visszaadjuk, mert ez azt jelenti, hogy a fog "present" állapotban van
-    if (Object.keys(value).length === 0) {
-      return value; // Üres objektum = jelen van, de még nincs kiválasztva D/F
-    }
-    
-    // Ha az objektum nem üres, de nincs benne semmi hasznos, akkor null
-    return null;
-  }
-  return value;
-}
-
-// Helper függvény: fog állapot lekérdezése
-function getToothState(value: ToothStatus | undefined): 'empty' | 'present' | 'missing' {
-  const normalized = normalizeToothData(value);
-  if (!normalized) return 'empty';
-  if (normalized.status === 'M') return 'missing';
-  return 'present';
-}
-
-// Stabil stringify - sorted keys, konzisztens típuskezelés, undefined -> null normalizálás
-function stableStringify(obj: any): string {
-  if (obj === null || obj === undefined) return "null";
-  const t = typeof obj;
-  if (t !== "object") return JSON.stringify(obj);
-
-  if (Array.isArray(obj)) {
-    return `[${obj.map(stableStringify).join(",")}]`;
-  }
-
-  const keys = Object.keys(obj).sort();
-  const parts: string[] = [];
-  for (const k of keys) {
-    const v = (obj as any)[k];
-    // undefined -> null normalizálás change detection-hez
-    parts.push(`${JSON.stringify(k)}:${stableStringify(v === undefined ? null : v)}`);
-  }
-  return `{${parts.join(",")}}`;
-}
 
 // Normalizálási segédfüggvények az összehasonlításhoz
 function normalizeDate(date: string | null | undefined): string | null {
@@ -157,116 +85,6 @@ function normalizeValue(value: any): any {
   return value;
 }
 
-// ToothCheckbox komponens - háromállapotú
-interface ToothCheckboxProps {
-  toothNumber: string;
-  value: ToothStatus | undefined;
-  onChange: () => void;
-  disabled?: boolean;
-  idPrefix?: string; // Egyedi ID prefix az elkerülésére, hogy ugyanaz az ID legyen több helyen
-}
-
-function ToothCheckbox({ toothNumber, value, onChange, disabled, idPrefix = 'tooth' }: ToothCheckboxProps) {
-  const state = getToothState(value);
-  const isPresent = state === 'present';
-  const isMissing = state === 'missing';
-  const isChecked = state !== 'empty';
-  
-  // Ellenőrizzük a szabadszavas leírást az ikon meghatározáshoz
-  const normalized = normalizeToothData(value);
-  const description = normalized?.description || '';
-  const descriptionLower = description.toLowerCase();
-  const hasKerdeses = descriptionLower.includes('kérdéses');
-  const hasRemenytelen = descriptionLower.includes('reménytelen');
-
-  // Meghatározzuk a megjelenítendő ikont és színt
-  let iconElement = null;
-  let borderColor = '';
-  let bgColor = '';
-  
-  if (isMissing) {
-    // Hiányzik → szürke X
-    borderColor = 'border-gray-400';
-    bgColor = 'bg-gray-200';
-    iconElement = (
-      <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M4 4L12 12M12 4L4 12" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-      </svg>
-    );
-  } else if (isPresent) {
-    if (hasRemenytelen) {
-      // Reménytelen → piros felkiáltójel
-      borderColor = 'border-red-500';
-      bgColor = 'bg-red-50';
-      iconElement = (
-        <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M8 2V9M8 11V13" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          <circle cx="8" cy="14" r="1" fill="#dc2626"/>
-        </svg>
-      );
-    } else if (hasKerdeses) {
-      // Kérdéses → sárga kérdőjel
-      borderColor = 'border-yellow-500';
-      bgColor = 'bg-yellow-50';
-      iconElement = (
-        <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M6 6C6 4.5 7 3.5 8 3.5C9 3.5 10 4.5 10 6C10 7 9 8 8 8.5V10" stroke="#eab308" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-          <circle cx="8" cy="13" r="1" fill="#eab308"/>
-        </svg>
-      );
-    } else {
-      // Normál → zöld pipa
-      borderColor = 'border-medical-primary';
-      bgColor = 'bg-green-50';
-      iconElement = (
-        <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M3 8L6 11L13 4" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-        </svg>
-      );
-    }
-  } else {
-    // Üres
-    borderColor = 'border-gray-300';
-    bgColor = '';
-  }
-
-  const checkboxId = `${idPrefix}-${toothNumber}`;
-  
-  return (
-    <div className="flex flex-col items-center gap-1">
-      <label 
-        htmlFor={checkboxId}
-        className="text-xs sm:text-xs text-gray-600 font-medium cursor-pointer"
-      >
-        {toothNumber}
-      </label>
-      <div className="relative">
-        <label
-          htmlFor={checkboxId}
-          className={`w-8 h-8 sm:w-7 sm:h-7 rounded border-2 flex items-center justify-center focus-within:ring-2 focus-within:ring-medical-primary focus-within:ring-offset-1 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${borderColor} ${bgColor}`}
-        >
-          <input
-            id={checkboxId}
-            type="checkbox"
-            checked={isChecked}
-            onChange={(e) => {
-              e.stopPropagation();
-              if (!disabled) {
-                onChange();
-              }
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-            }}
-            disabled={disabled}
-            className="sr-only"
-          />
-          {iconElement}
-        </label>
-      </div>
-    </div>
-  );
-}
 
 interface PatientFormProps {
   patient?: Patient | null;
@@ -296,18 +114,11 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
   const [currentPatient, setCurrentPatient] = useState<Patient | null | undefined>(patient);
   const patientId = currentPatient?.id || null;
   
-  // Conflict handling state
-  const [conflictError, setConflictError] = useState<ApiError | null>(null); // Manual save 409 → modal
-  const [showConflictModal, setShowConflictModal] = useState(false);
-
   // Ref for immediate access to current patient (for hasUnsavedChanges)
   const currentPatientRef = useRef<Patient | null | undefined>(patient);
   
   // Previous patient ID ref for change detection
   const previousPatientIdRef = useRef<string | null>(patient?.id || null);
-  
-  // Saving source state (for UX: auto-save indicator vs manual save button disabled)
-  const [savingSource, setSavingSource] = useState<'auto' | 'manual' | null>(null);
   
   // Wrapper function to update both state and ref
   const updateCurrentPatient = useCallback((newPatient: Patient | null | undefined) => {
@@ -506,85 +317,6 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
     },
   });
 
-  // Update currentPatient when patient prop changes (but not from auto-save)
-  // Reset form to mark as not dirty after initial load for existing patients
-  // Also reset when patient data changes (e.g., after save or refresh)
-  // BUT: Don't reset if the change came from auto-save to prevent flickering
-  useEffect(() => {
-    
-    if (!patient || isViewOnly) {
-      if (!patient && !isViewOnly) {
-        // Reset to default values for new patient
-        reset({
-          radioterapia: false,
-          chemoterapia: false,
-          nemIsmertPoziciokbanImplantatum: false,
-          felsoFogpotlasVan: false,
-          felsoFogpotlasElegedett: true,
-          alsoFogpotlasVan: false,
-          alsoFogpotlasElegedett: true,
-          kezelesiTervFelso: [],
-          kezelesiTervAlso: [],
-          kezelesiTervArcotErinto: [],
-        }, { keepDirty: false, keepDefaultValues: false });
-      }
-      updateCurrentPatient(patient || null);
-      return;
-    }
-
-    // Ha az id változott, biztosan külső betöltés
-    if (previousPatientIdRef.current !== patient.id) {
-      previousPatientIdRef.current = patient.id || null;
-      // Note: If backend doesn't return kezelesreErkezesIndoka, preserve it from currentPatientRef
-      const patientWithPreservedKezelesreErkezesIndoka = {
-        ...patient,
-        kezelesreErkezesIndoka: patient.kezelesreErkezesIndoka ?? currentPatientRef.current?.kezelesreErkezesIndoka ?? null,
-      };
-      updateCurrentPatient(patientWithPreservedKezelesreErkezesIndoka);
-      // Reset form with current values to clear dirty state
-      reset({
-        ...patient,
-        szuletesiDatum: formatDateForInput(patient.szuletesiDatum),
-        mutetIdeje: formatDateForInput(patient.mutetIdeje),
-        felvetelDatuma: formatDateForInput(patient.felvetelDatuma),
-        kezelesiTervFelso: patient.kezelesiTervFelso?.map(item => ({
-          ...item,
-          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-        })) || [],
-        kezelesiTervAlso: patient.kezelesiTervAlso?.map(item => ({
-          ...item,
-          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-        })) || [],
-        kezelesiTervArcotErinto: patient.kezelesiTervArcotErinto?.map(item => ({
-          ...item,
-          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-        })) || [],
-      }, { keepDirty: false, keepDefaultValues: false });
-      return;
-    }
-
-    // Ha az id megegyezik, de savingSource aktív (auto-save vagy manual save), ne fusson reset
-    // (A performSave már frissítette a state-et)
-    if (savingSource && previousPatientIdRef.current === patient.id) {
-      // Csak frissítsük a currentPatient-et, ha szükséges
-      const patientWithPreservedKezelesreErkezesIndoka = {
-        ...patient,
-        kezelesreErkezesIndoka: patient.kezelesreErkezesIndoka ?? currentPatientRef.current?.kezelesreErkezesIndoka ?? null,
-      };
-      updateCurrentPatient(patientWithPreservedKezelesreErkezesIndoka);
-      return;
-    }
-
-    // Egyébként ne fusson reset (valószínűleg első betöltés vagy külső változás)
-    // Csak frissítsük a currentPatient-et
-    // Note: If backend doesn't return kezelesreErkezesIndoka, preserve it from currentPatientRef
-    const patientWithPreservedKezelesreErkezesIndoka = {
-      ...patient,
-      kezelesreErkezesIndoka: patient.kezelesreErkezesIndoka ?? currentPatientRef.current?.kezelesreErkezesIndoka ?? null,
-    };
-    updateCurrentPatient(patientWithPreservedKezelesreErkezesIndoka);
-  }, [patient?.id, patient?.updatedAt, isViewOnly, reset, savingSource]);
-
   // Set kezeleoorvos value when options are loaded and patient has a value
   useEffect(() => {
     if (patient?.kezeleoorvos && kezeloorvosOptions.length > 0) {
@@ -612,50 +344,6 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
     return initial as Record<string, ToothStatus>;
   });
 
-  // Update implantatumok and fogak when patient data changes (but not from auto-save)
-  // Only update if it's an external change (different patient ID or significant time difference)
-  useEffect(() => {
-    if (!patient) {
-      setImplantatumok({});
-      setFogak({});
-      return;
-    }
-
-    // Ha az id változott, biztosan külső betöltés
-    if (previousPatientIdRef.current !== patient.id) {
-      if (patient.meglevoImplantatumok) {
-        setImplantatumok(patient.meglevoImplantatumok);
-      } else {
-        setImplantatumok({});
-      }
-      if (patient.meglevoFogak) {
-        setFogak(patient.meglevoFogak as Record<string, ToothStatus>);
-      } else {
-        setFogak({});
-      }
-      return;
-    }
-
-    // Ha savingSource aktív (auto-save vagy manual save), ne frissítsük
-    // (A performSave már frissítette a state-et)
-    if (savingSource && previousPatientIdRef.current === patient.id) {
-      return;
-    }
-
-    // Első betöltés esetén frissítsük
-    if (!previousPatientIdRef.current && patient.id) {
-      if (patient.meglevoImplantatumok) {
-        setImplantatumok(patient.meglevoImplantatumok);
-      } else {
-        setImplantatumok({});
-      }
-      if (patient.meglevoFogak) {
-        setFogak(patient.meglevoFogak as Record<string, ToothStatus>);
-      } else {
-        setFogak({});
-      }
-    }
-  }, [patient?.id, patient?.updatedAt, patient?.meglevoImplantatumok, patient?.meglevoFogak, savingSource]);
   const kezelesiTervFelso = watch('kezelesiTervFelso') || [];
   const kezelesiTervAlso = watch('kezelesiTervAlso') || [];
   const kezelesiTervArcotErinto = watch('kezelesiTervArcotErinto') || [];
@@ -672,45 +360,133 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
   // Watch all form values - useWatch for memoized snapshot
   const formValues = useWatch({ control });
 
-  // Best practice: request sequencing + source-aware abort
-  const saveSequenceRef = useRef(0);
-  const lastSavedHashRef = useRef<string | null>(null);
-  const autoSaveAbortRef = useRef<AbortController | null>(null);
-  const manualSaveAbortRef = useRef<AbortController | null>(null);
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // ----- Conflict resolution hook -----
+  const conflict = usePatientConflictResolution({
+    patientId,
+    updateCurrentPatient,
+    reset,
+    showToast,
+  });
 
-  // Telemetria / Debug jelzők
-  const lastSaveSourceRef = useRef<'auto' | 'manual' | null>(null);
-  const lastSaveAttemptAtRef = useRef<number | null>(null);
-  const lastSaveErrorRef = useRef<Error | null>(null);
-  
-  // State for conflict banner visibility (auto-save 409)
-  const [showConflictBanner, setShowConflictBanner] = useState(false);
+  // ----- Auto-save hook -----
+  const {
+    savingSource,
+    performSave,
+    fogakRef,
+    implantatumokRef,
+    vanBeutaloRef,
+  } = usePatientAutoSave({
+    patientId: patient?.id,
+    currentPatientRef,
+    isViewOnly,
+    getValues,
+    reset,
+    trigger,
+    formValues,
+    isDirty,
+    dirtyFields,
+    fogak,
+    implantatumok,
+    vanBeutalo,
+    setFogak,
+    setImplantatumok,
+    setVanBeutalo,
+    updateCurrentPatient,
+    onSave,
+    showToast,
+    lastSaveErrorRef: conflict.lastSaveErrorRef,
+    onAutoSaveConflict: conflict.handleAutoSaveConflict,
+    onManualSaveConflict: conflict.handleManualSaveConflict,
+  });
 
-  // State refs - hogy a performSave ne függjön closure-öktől
-  const fogakRef = useRef(fogak);
-  const implantatumokRef = useRef(implantatumok);
-  const vanBeutaloRef = useRef(vanBeutalo);
-  const currentPatientIdRef = useRef(currentPatient?.id);
-
-  // Sync refs with state
+  // Sync patient prop -> form + currentPatient (skip during auto-save)
   useEffect(() => {
-    fogakRef.current = fogak;
-    implantatumokRef.current = implantatumok;
-    vanBeutaloRef.current = vanBeutalo;
-    currentPatientIdRef.current = currentPatient?.id;
-  }, [fogak, implantatumok, vanBeutalo, currentPatient?.id]);
+    if (!patient || isViewOnly) {
+      if (!patient && !isViewOnly) {
+        reset({
+          radioterapia: false,
+          chemoterapia: false,
+          nemIsmertPoziciokbanImplantatum: false,
+          felsoFogpotlasVan: false,
+          felsoFogpotlasElegedett: true,
+          alsoFogpotlasVan: false,
+          alsoFogpotlasElegedett: true,
+          kezelesiTervFelso: [],
+          kezelesiTervAlso: [],
+          kezelesiTervArcotErinto: [],
+        }, { keepDirty: false, keepDefaultValues: false });
+      }
+      updateCurrentPatient(patient || null);
+      return;
+    }
 
-  // Reset hash és sequence új beteg betöltésekor
+    if (previousPatientIdRef.current !== patient.id) {
+      previousPatientIdRef.current = patient.id || null;
+      const patientWithPreservedKezelesreErkezesIndoka = {
+        ...patient,
+        kezelesreErkezesIndoka: patient.kezelesreErkezesIndoka ?? currentPatientRef.current?.kezelesreErkezesIndoka ?? null,
+      };
+      updateCurrentPatient(patientWithPreservedKezelesreErkezesIndoka);
+      reset({
+        ...patient,
+        szuletesiDatum: formatDateForInput(patient.szuletesiDatum),
+        mutetIdeje: formatDateForInput(patient.mutetIdeje),
+        felvetelDatuma: formatDateForInput(patient.felvetelDatuma),
+        kezelesiTervFelso: patient.kezelesiTervFelso?.map(item => ({
+          ...item,
+          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+        })) || [],
+        kezelesiTervAlso: patient.kezelesiTervAlso?.map(item => ({
+          ...item,
+          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+        })) || [],
+        kezelesiTervArcotErinto: patient.kezelesiTervArcotErinto?.map(item => ({
+          ...item,
+          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+        })) || [],
+      }, { keepDirty: false, keepDefaultValues: false });
+      return;
+    }
+
+    if (savingSource && previousPatientIdRef.current === patient.id) {
+      const patientWithPreservedKezelesreErkezesIndoka = {
+        ...patient,
+        kezelesreErkezesIndoka: patient.kezelesreErkezesIndoka ?? currentPatientRef.current?.kezelesreErkezesIndoka ?? null,
+      };
+      updateCurrentPatient(patientWithPreservedKezelesreErkezesIndoka);
+      return;
+    }
+
+    const patientWithPreservedKezelesreErkezesIndoka = {
+      ...patient,
+      kezelesreErkezesIndoka: patient.kezelesreErkezesIndoka ?? currentPatientRef.current?.kezelesreErkezesIndoka ?? null,
+    };
+    updateCurrentPatient(patientWithPreservedKezelesreErkezesIndoka);
+  }, [patient?.id, patient?.updatedAt, isViewOnly, reset, savingSource]);
+
+  // Sync implantatumok/fogak from patient prop (skip during auto-save)
   useEffect(() => {
-    lastSavedHashRef.current = null;
-    saveSequenceRef.current = 0;
-    lastSaveSourceRef.current = null;
-    lastSaveErrorRef.current = null;
-    setShowConflictBanner(false);
-    setShowConflictModal(false);
-    setConflictError(null);
-  }, [patient?.id]);
+    if (!patient) {
+      setImplantatumok({});
+      setFogak({});
+      return;
+    }
+
+    if (previousPatientIdRef.current !== patient.id) {
+      setImplantatumok(patient.meglevoImplantatumok || {});
+      setFogak((patient.meglevoFogak || {}) as Record<string, ToothStatus>);
+      return;
+    }
+
+    if (savingSource && previousPatientIdRef.current === patient.id) {
+      return;
+    }
+
+    if (!previousPatientIdRef.current && patient.id) {
+      setImplantatumok(patient.meglevoImplantatumok || {});
+      setFogak((patient.meglevoFogak || {}) as Record<string, ToothStatus>);
+    }
+  }, [patient?.id, patient?.updatedAt, patient?.meglevoImplantatumok, patient?.meglevoFogak, savingSource]);
 
   // Watch individual fields to ensure we catch all changes
   const nevValue = watch('nev');
@@ -1640,372 +1416,6 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
     };
   };
 
-  // Stabil payload builder - memoizált, hogy ne épüljön újra feleslegesen
-  const buildSavePayload = useCallback((
-    formData: Patient,
-    fogakData: Record<string, ToothStatus>,
-    implantData: Record<string, string>,
-    vanBeutaloVal: boolean,
-    patientId?: string | null
-  ): Patient => {
-    const normalizedFogak: Record<string, { status?: "D" | "F" | "M"; description?: string }> = {};
-    for (const [toothNumber, value] of Object.entries(fogakData)) {
-      const normalized = normalizeToothData(value);
-      if (normalized) normalizedFogak[toothNumber] = normalized;
-    }
-
-    return {
-      ...formData,
-      id: patientId ?? undefined,
-      meglevoImplantatumok: implantData,
-      meglevoFogak: normalizedFogak,
-      beutaloOrvos: vanBeutaloVal ? formData.beutaloOrvos : null,
-      beutaloIntezmeny: vanBeutaloVal ? formData.beutaloIntezmeny : null,
-      beutaloIndokolas: vanBeutaloVal ? formData.beutaloIndokolas : null,
-
-      radioterapia: formData.radioterapia ?? false,
-      chemoterapia: formData.chemoterapia ?? false,
-      felsoFogpotlasVan: formData.felsoFogpotlasVan ?? false,
-      felsoFogpotlasElegedett: formData.felsoFogpotlasElegedett ?? true,
-      alsoFogpotlasVan: formData.alsoFogpotlasVan ?? false,
-      alsoFogpotlasElegedett: formData.alsoFogpotlasElegedett ?? true,
-      nemIsmertPoziciokbanImplantatum: formData.nemIsmertPoziciokbanImplantatum ?? false,
-      maxilladefektusVan: formData.maxilladefektusVan ?? false,
-      kezelesiTervFelso: formData.kezelesiTervFelso || [],
-      kezelesiTervAlso: formData.kezelesiTervAlso || [],
-      kezelesiTervArcotErinto: formData.kezelesiTervArcotErinto || [],
-    };
-  }, []);
-
-  // Robusztus hiba típus detektálás - ApiError alapú (regex fallback eltávolítva)
-  const isRetryableError = useCallback((err: any): boolean => {
-    if (!err) return false;
-
-    // AbortError: user abort, ne retry
-    if (err.name === "AbortError") return false;
-
-    // TimeoutError: retry
-    if (err instanceof TimeoutError || err.name === "TimeoutError") return true;
-
-    // Network: fetch often throws TypeError
-    if (err instanceof TypeError) return true;
-
-    // Strukturált API hiba - ApiError instance vagy name check
-    if (err instanceof ApiError || err.name === "ApiError") {
-      const status = (err as ApiError).status;
-      // 409 (konfliktus): no retry
-      if (status === 409) return false;
-      // 429 (rate limit) vagy 5xx (server error): retry
-      return status === 429 || status >= 500;
-    }
-
-    // Ha ApiError, de nincs status mező (nem várható, de safety check)
-    if (err.name === "ApiError" && typeof (err as any).status === "number") {
-      const status = (err as any).status;
-      if (status === 409) return false;
-      return status === 429 || status >= 500;
-    }
-
-    // Egyéb esetek: no retry (biztonságos default)
-    return false;
-  }, []);
-
-  // Unified save function - best practice implementáció
-  const performSave = useCallback(async (
-    source: "auto" | "manual",
-    formData: Patient,
-    retryCount = 0
-  ): Promise<Patient | null> => {
-    // Source-aware abort: Manual abortálhatja az auto-save-t
-    if (source === "manual" && autoSaveAbortRef.current) {
-      autoSaveAbortRef.current.abort();
-      autoSaveAbortRef.current = null;
-    }
-
-    const abortRef = source === "auto" ? autoSaveAbortRef : manualSaveAbortRef;
-
-    // Cancel previous same-source request
-    if (abortRef.current) abortRef.current.abort();
-
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    const seq = ++saveSequenceRef.current;
-
-    // Event logging: attempt
-    const startTime = Date.now();
-    const eventType = source === 'auto' ? 'autosave_attempt' : 'manualsave_attempt';
-    logEvent(eventType, {
-      source,
-      patientId: currentPatientIdRef.current || undefined,
-    });
-
-    try {
-      setSavingSource(source);
-      lastSaveAttemptAtRef.current = startTime;
-      lastSaveErrorRef.current = null;
-
-      const payload = buildSavePayload(
-        formData,
-        fogakRef.current,
-        implantatumokRef.current,
-        vanBeutaloRef.current,
-        currentPatientIdRef.current
-      );
-
-      const parsed = patientSchema.safeParse(payload);
-      if (!parsed.success) {
-        await trigger();
-        if (source === "auto") return null;
-        const msg = parsed.error.errors.map(e => `${e.path.join(".")}: ${e.message}`).join("; ");
-        throw new Error(`Validációs hibák: ${msg}`);
-      }
-
-      const validatedPayload = parsed.data;
-
-      // Change detection csak auto-save-nél
-      if (source === "auto") {
-        const hash = stableStringify(validatedPayload);
-        if (lastSavedHashRef.current === hash) return null;
-      }
-
-      // Ensure updatedAt is included for conflict detection (use currentPatient's updatedAt)
-      const payloadWithUpdatedAt = {
-        ...validatedPayload,
-        updatedAt: currentPatientRef.current?.updatedAt || validatedPayload.updatedAt,
-      };
-
-      const saved = await savePatient(payloadWithUpdatedAt, { 
-        signal: controller.signal,
-        source 
-      });
-
-      // Sequencing: csak a legutolsó válasz érvényes
-      if (seq !== saveSequenceRef.current) {
-        console.log(`Save (${source}): outdated response, ignoring`);
-        return null;
-      }
-
-      // Update state
-      updateCurrentPatient(saved);
-      setVanBeutalo(!!(saved.beutaloOrvos || saved.beutaloIntezmeny));
-      if (saved.meglevoImplantatumok) setImplantatumok(saved.meglevoImplantatumok);
-      if (saved.meglevoFogak) setFogak(saved.meglevoFogak as Record<string, ToothStatus>);
-
-      // Update hash
-      lastSavedHashRef.current = stableStringify(validatedPayload);
-      lastSaveSourceRef.current = source;
-
-      // Event logging: success
-      const durationMs = Date.now() - startTime;
-      const successEventType = source === 'auto' ? 'autosave_success' : 'manualsave_success';
-      logEvent(successEventType, {
-        source,
-        durationMs,
-        patientId: currentPatientIdRef.current || undefined,
-      });
-
-      // Tiszta callback API
-      onSave(saved, { source });
-
-      // Manual save: reset form
-      if (source === "manual") {
-        const resetData = {
-          ...saved,
-          szuletesiDatum: formatDateForInput(saved.szuletesiDatum),
-          mutetIdeje: formatDateForInput(saved.mutetIdeje),
-          felvetelDatuma: formatDateForInput(saved.felvetelDatuma),
-          kezelesiTervFelso: saved.kezelesiTervFelso?.map(item => ({
-            ...item,
-            tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-          })) || [],
-          kezelesiTervAlso: saved.kezelesiTervAlso?.map(item => ({
-            ...item,
-            tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-          })) || [],
-          kezelesiTervArcotErinto: saved.kezelesiTervArcotErinto?.map(item => ({
-            ...item,
-            tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-          })) || [],
-        };
-        reset(resetData, { keepDirty: false, keepDefaultValues: false });
-      }
-
-      return saved;
-    } catch (err: any) {
-      if (err?.name === "AbortError" || controller.signal.aborted) return null;
-
-      // 409 Conflict (STALE_WRITE) külön kezelése
-      if (err instanceof ApiError && err.status === 409 && err.code === 'STALE_WRITE') {
-        // Event logging: fail (409 conflict)
-        const durationMs = Date.now() - startTime;
-        const failEventType = source === 'auto' ? 'autosave_fail' : 'manualsave_fail';
-        logEvent(failEventType, {
-          source,
-          durationMs,
-          status: err.status,
-          errorName: err.name,
-          code: err.code,
-          patientId: currentPatientIdRef.current || undefined,
-        }, err.correlationId);
-
-        if (source === "auto") {
-          // Auto-save: ne retry, csak log és return null
-          console.warn(`Auto-save conflict detected (409 STALE_WRITE):`, {
-            correlationId: err.correlationId,
-            details: err.details,
-          });
-          lastSaveErrorRef.current = err;
-          setShowConflictBanner(true);
-          return null;
-        } else {
-          // Manual save: modal megjelenítése (toast helyett)
-          setConflictError(err);
-          setShowConflictModal(true);
-          throw err; // Ne dobjuk tovább, a modal kezeli
-        }
-      }
-
-      if (retryCount < 2 && isRetryableError(err)) {
-        const delay = 1000 * (retryCount + 1);
-        console.warn(`Save (${source}) failed, retrying (${retryCount + 1}/2) after ${delay}ms...`, err);
-        await new Promise(r => setTimeout(r, delay));
-
-        if (source === "auto") {
-          // Auto retry: friss form állapot
-          return performSave("auto", getValues(), retryCount + 1);
-        }
-        // Manual retry: eredeti data
-        return performSave("manual", formData, retryCount + 1);
-      }
-
-      // Event logging: fail (other errors)
-      const durationMs = Date.now() - startTime;
-      const failEventType = source === 'auto' ? 'autosave_fail' : 'manualsave_fail';
-      const errorMetadata: {
-        source: 'auto' | 'manual';
-        durationMs: number;
-        status?: number;
-        errorName?: string;
-        code?: string;
-        patientId?: string;
-      } = {
-        source,
-        durationMs,
-        patientId: currentPatientIdRef.current || undefined,
-      };
-
-      if (err instanceof ApiError) {
-        errorMetadata.status = err.status;
-        errorMetadata.errorName = err.name;
-        errorMetadata.code = err.code;
-        logEvent(failEventType, errorMetadata, err.correlationId);
-      } else if (err instanceof TimeoutError) {
-        errorMetadata.errorName = 'TimeoutError';
-        logEvent(failEventType, errorMetadata);
-      } else {
-        errorMetadata.errorName = err?.name || 'UnknownError';
-        logEvent(failEventType, errorMetadata);
-      }
-
-      // Sentry: Capture unexpected errors (not ApiError 4xx, those are filtered in beforeSend)
-      if (Sentry && !(err instanceof ApiError && err.status >= 400 && err.status < 500)) {
-        // Only capture 5xx errors, TimeoutError, or unexpected exceptions
-        if (err instanceof TimeoutError || err instanceof ApiError || !(err instanceof Error)) {
-          if (err instanceof ApiError && err.correlationId) {
-            Sentry.setTag('correlation_id', err.correlationId);
-          }
-          Sentry.captureException(err);
-        }
-      }
-
-      // Error handling
-      if (source === "manual") {
-        showToast(`Hiba a mentés során: ${err?.message || "Ismeretlen hiba"}`, "error");
-        throw err;
-      }
-
-      // Auto-save: return null, ne dobjunk
-      console.error("Auto-save failed:", err);
-      lastSaveErrorRef.current = err;
-      return null;
-    } finally {
-      setSavingSource(null);
-      if (abortRef.current === controller) abortRef.current = null;
-    }
-  }, [
-    buildSavePayload,
-    getValues,
-    onSave,
-    reset,
-    setFogak,
-    setImplantatumok,
-    setVanBeutalo,
-    showToast,
-    trigger,
-    updateCurrentPatient,
-    isRetryableError,
-  ]);
-
-  // Auto-save effect - useWatch + dirtyFields alapú (teljesítmény-optimalizált)
-  // Nested dirtyFields → top-level kulcsok biztos kivonata
-  const dirtyTopKeys = useMemo(() => {
-    if (!isDirty) return [];
-    // RHF dirtyFields lehet nested; top-level kulcs akkor érdekes, ha truthy (true/obj/array)
-    return Object.keys(dirtyFields).filter(
-      (k) => !!(dirtyFields as any)[k]
-    );
-  }, [isDirty, dirtyFields]);
-
-  const dirtyHash = useMemo(() => {
-    if (!isDirty) return null;
-    const snap: any = {};
-    for (const k of dirtyTopKeys) snap[k] = (formValues as any)[k];
-    return stableStringify(snap);
-  }, [isDirty, dirtyTopKeys, formValues]);
-
-  useEffect(() => {
-    if (isViewOnly) return;
-    if (!isDirty) return;
-    if (!dirtyHash) return;
-
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-
-    saveTimeoutRef.current = setTimeout(() => {
-      performSave("auto", getValues()).catch(() => {
-        // Errors handled in performSave
-      });
-    }, 1000);
-
-    return () => {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    };
-  }, [
-    dirtyHash,
-    fogak,
-    implantatumok,
-    vanBeutalo,
-    isViewOnly,
-    isDirty,
-    performSave,
-    getValues,
-  ]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (autoSaveAbortRef.current) {
-        autoSaveAbortRef.current.abort();
-      }
-      if (manualSaveAbortRef.current) {
-        manualSaveAbortRef.current.abort();
-      }
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
-  }, []);
-
   // Watch kezelésre érkezés indoka for conditional logic
   const selectedIndok = watch('kezelesreErkezesIndoka');
 
@@ -2196,10 +1606,10 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
       )}
 
       {/* Auto-save conflict banner */}
-      {showConflictBanner && 
-       lastSaveErrorRef.current instanceof ApiError && 
-       lastSaveErrorRef.current.status === 409 && 
-       lastSaveErrorRef.current.code === 'STALE_WRITE' && (
+      {conflict.showConflictBanner && 
+       conflict.lastSaveErrorRef.current instanceof ApiError && 
+       conflict.lastSaveErrorRef.current.status === 409 && 
+       conflict.lastSaveErrorRef.current.code === 'STALE_WRITE' && (
         <div className="mb-4 bg-amber-50 border-l-4 border-amber-400 p-4 rounded-md">
           <div className="flex items-start justify-between">
             <div className="flex items-start">
@@ -2213,25 +1623,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
                 </p>
                 <button
                   type="button"
-                  onClick={async () => {
-                    if (!patientId) return;
-                    try {
-                      const response = await fetch(`/api/patients/${patientId}`, {
-                        credentials: 'include',
-                      });
-                      if (response.ok) {
-                        const data = await response.json();
-                        updateCurrentPatient(data.patient);
-                        reset(data.patient);
-                        lastSaveErrorRef.current = null;
-                        setShowConflictBanner(false);
-                        showToast('Adatok frissítve', 'success');
-                      }
-                    } catch (error) {
-                      console.error('Error refreshing patient:', error);
-                      showToast('Hiba az adatok frissítésekor', 'error');
-                    }
-                  }}
+                  onClick={() => conflict.refreshPatient()}
                   className="text-sm bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-md transition-colors"
                 >
                   Adatok frissítése
@@ -2240,10 +1632,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
             </div>
             <button
               type="button"
-              onClick={() => {
-                lastSaveErrorRef.current = null;
-                setShowConflictBanner(false);
-              }}
+              onClick={() => conflict.dismissBanner()}
               className="text-amber-600 hover:text-amber-800 ml-4"
               aria-label="Banner bezárása"
             >
@@ -2317,232 +1706,38 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
       <form id="patient-form" onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         {/* ALAPADATOK */}
         {shouldShowSection('alapadatok') && (
-        <div id="section-alapadatok" className="card scroll-mt-20 sm:scroll-mt-24">
-          <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <User className="w-5 h-5 mr-2 text-medical-primary" />
-            ALAPADATOK
-            {sectionErrors['alapadatok'] > 0 && (
-              <span className="ml-2 px-2 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full">
-                {sectionErrors['alapadatok']}
-              </span>
-            )}
-          </h4>
-          <div className="space-y-4">
-            <div>
-              <label className={`form-label ${REQUIRED_FIELDS.some(f => f.key === 'nev') ? 'form-label-required' : ''}`}>
-                NÉV
-              </label>
-              <input
-                {...register('nev')}
-                className="form-input"
-                placeholder="Teljes név"
-                readOnly={isViewOnly}
-              />
-              {errors.nev && (
-                <p className="text-red-500 text-sm mt-1">{errors.nev.message}</p>
-              )}
-            </div>
-            <div>
-              <label className={`form-label ${REQUIRED_FIELDS.some(f => f.key === 'taj') ? 'form-label-required' : ''}`}>
-                TAJ
-              </label>
-              <input
-                {...register('taj')}
-                onChange={handleTAJChange}
-                className={`form-input ${errors.taj ? 'border-red-500' : ''}`}
-                placeholder="000-000-000"
-                readOnly={isViewOnly}
-              />
-              {errors.taj ? (
-                <p className="text-red-500 text-sm mt-1">{errors.taj.message}</p>
-              ) : (
-                <p className="text-gray-500 text-xs mt-1">Formátum: XXX-XXX-XXX (9 számjegy)</p>
-              )}
-            </div>
-            <div>
-              <label className="form-label">
-                TELEFONSZÁM
-              </label>
-              <input
-                {...register('telefonszam')}
-                onChange={handlePhoneChange}
-                className={`form-input ${errors.telefonszam ? 'border-red-500' : ''}`}
-                placeholder="+36..."
-                readOnly={isViewOnly}
-              />
-              {errors.telefonszam ? (
-                <p className="text-red-500 text-sm mt-1">{errors.telefonszam.message}</p>
-              ) : (
-                <p className="text-gray-500 text-xs mt-1">Formátum: +36XXXXXXXXX (pl. +36123456789)</p>
-              )}
-            </div>
-            <div>
-              <label className={`form-label ${REQUIRED_FIELDS.some(f => f.key === 'email') ? 'form-label-required' : ''}`}>
-                EMAIL
-              </label>
-              <input
-                {...register('email')}
-                type="email"
-                className={`form-input ${errors.email ? 'border-red-500' : ''}`}
-                placeholder="nev@example.com"
-                readOnly={isViewOnly}
-              />
-              {errors.email ? (
-                <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>
-              ) : (
-                <p className="text-gray-500 text-xs mt-1">Formátum: nev@example.com</p>
-              )}
-            </div>
-          </div>
-        </div>
+          <AlapadatokSection
+            register={register}
+            errors={errors}
+            isViewOnly={isViewOnly}
+            handleTAJChange={handleTAJChange}
+            handlePhoneChange={handlePhoneChange}
+            sectionErrors={sectionErrors}
+          />
         )}
 
         {/* SZEMÉLYES ADATOK */}
         {shouldShowSection('szemelyes') && (
-        <div id="section-szemelyes" className="card scroll-mt-20 sm:scroll-mt-24">
-          <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <MapPin className="w-5 h-5 mr-2 text-medical-primary" />
-            SZEMÉLYES ADATOK
-            {sectionErrors['szemelyes'] > 0 && (
-              <span className="ml-2 px-2 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full">
-                {sectionErrors['szemelyes']}
-              </span>
-            )}
-          </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="form-label">Születési dátum</label>
-              <DatePicker
-                selected={watch('szuletesiDatum') ? new Date(watch('szuletesiDatum') || '') : null}
-                onChange={(date: Date | null) => {
-                  const formatted = date ? formatDateForInput(date.toISOString().split('T')[0]) : '';
-                  setValue('szuletesiDatum', formatted, { shouldValidate: true });
-                }}
-                placeholder="Válasszon dátumot"
-                disabled={isViewOnly}
-                maxDate={new Date()}
-              />
-            </div>
-            <div>
-              <label className="form-label">Nem</label>
-              <select {...register('nem')} className="form-input">
-                <option value="">Válasszon...</option>
-                <option value="ferfi">Férfi</option>
-                <option value="no">Nő</option>
-              </select>
-            </div>
-            <div>
-              <label className="form-label">Halál dátuma</label>
-              <DatePicker
-                selected={watch('halalDatum') ? new Date(watch('halalDatum') || '') : null}
-                onChange={(date: Date | null) => {
-                  const formatted = date ? formatDateForInput(date.toISOString().split('T')[0]) : '';
-                  setValue('halalDatum', formatted, { shouldValidate: true });
-                }}
-                placeholder="Válasszon dátumot"
-                disabled={isViewOnly}
-                maxDate={new Date()}
-              />
-              {errors.halalDatum && (
-                <p className="text-red-500 text-sm mt-1">{errors.halalDatum.message}</p>
-              )}
-            </div>
-            <div>
-              <label className="form-label">Cím</label>
-              <input
-                {...register('cim')}
-                className="form-input"
-                placeholder="Lakcím"
-              />
-            </div>
-            <div>
-              <label className="form-label">Város</label>
-              <input
-                {...register('varos')}
-                className="form-input"
-                placeholder="Város"
-              />
-            </div>
-            <div>
-              <label className="form-label">Irányítószám</label>
-              <input
-                {...register('iranyitoszam')}
-                className="form-input"
-                placeholder="Irányítószám"
-              />
-            </div>
-          </div>
-        </div>
+          <SzemelyesAdatokSection
+            register={register}
+            watch={watch}
+            setValue={setValue}
+            errors={errors}
+            isViewOnly={isViewOnly}
+            sectionErrors={sectionErrors}
+          />
         )}
 
         {/* BEUTALÓ */}
         {shouldShowSection('beutalo') && (
-        <div id="section-beutalo" className="card scroll-mt-20 sm:scroll-mt-24">
-          <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <FileText className="w-5 h-5 mr-2 text-medical-primary" />
-            BEUTALÓ
-          </h4>
-
-          <div className="flex items-center mb-4">
-            <input
-              id="beutalo-toggle"
-              type="checkbox"
-              checked={vanBeutalo}
-              onChange={() => setVanBeutalo((prev) => !prev)}
-              className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
-              disabled={isViewOnly}
-            />
-            <label htmlFor="beutalo-toggle" className="ml-2 text-sm text-gray-700">Van beutaló?</label>
-          </div>
-
-          {vanBeutalo && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="form-label">Beutaló orvos</label>
-                <input
-                  {...register('beutaloOrvos')}
-                  list="beutalo-orvos-options"
-                  className="form-input"
-                  placeholder="Beutaló orvos neve"
-                  readOnly={isViewOnly}
-                  disabled={!vanBeutalo}
-                />
-                <datalist id="beutalo-orvos-options">
-                  {doctorOptions.map((doctor) => (
-                    <option key={doctor.name} value={doctor.name} />
-                  ))}
-                </datalist>
-              </div>
-              <div>
-                <label className="form-label">Beutaló intézmény</label>
-                <input
-                  {...register('beutaloIntezmeny')}
-                  list="beutalo-intezmeny-options"
-                  className="form-input"
-                  placeholder="Válasszon vagy írjon be új intézményt..."
-                  readOnly={isViewOnly}
-                  disabled={!vanBeutalo}
-                />
-                <datalist id="beutalo-intezmeny-options">
-                  {institutionOptions.map((option) => (
-                    <option key={option} value={option} />
-                  ))}
-                </datalist>
-              </div>
-              <div className="md:col-span-2">
-                <label className="form-label">Indokolás</label>
-                <textarea
-                  {...register('beutaloIndokolas')}
-                  rows={3}
-                  className="form-input"
-                  placeholder="Miért kapott beutalót?"
-                  readOnly={isViewOnly}
-                  disabled={!vanBeutalo}
-                />
-              </div>
-            </div>
-          )}
-        </div>
+          <BeutaloSection
+            register={register}
+            isViewOnly={isViewOnly}
+            vanBeutalo={vanBeutalo}
+            onVanBeutaloChange={() => setVanBeutalo((prev) => !prev)}
+            doctorOptions={doctorOptions}
+            institutionOptions={institutionOptions}
+          />
         )}
 
         {/* STÁDIUM */}
@@ -2554,990 +1749,54 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
 
         {/* ANAMNÉZIS */}
         {shouldShowSection('anamnezis') && (
-        <div id="section-anamnezis" className="card scroll-mt-20 sm:scroll-mt-24">
-          <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <Calendar className="w-5 h-5 mr-2 text-medical-primary" />
-            ANAMNÉZIS
-            {sectionErrors['anamnezis'] > 0 && (
-              <span className="ml-2 px-2 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full">
-                {sectionErrors['anamnezis']}
-              </span>
-            )}
-          </h4>
-          <div className="space-y-4">
-            <div>
-              <label className={`form-label ${REQUIRED_FIELDS.some(f => f.key === 'kezelesreErkezesIndoka') ? 'form-label-required' : ''}`}>
-                Kezelésre érkezés indoka
-              </label>
-              <select {...register('kezelesreErkezesIndoka')} className="form-input" disabled={isViewOnly}>
-                <option value="">Válasszon...</option>
-                <option value="traumás sérülés">traumás sérülés</option>
-                <option value="veleszületett rendellenesség">veleszületett rendellenesség</option>
-                <option value="onkológiai kezelés utáni állapot">onkológiai kezelés utáni állapot</option>
-              </select>
-            </div>
-            {/* Ezeket mindig mutatjuk, conditionaltól függetlenül */}
-            <div>
-              <label className="form-label">Alkoholfogyasztás</label>
-              <textarea
-                {...register('alkoholfogyasztas')}
-                rows={2}
-                className="form-input"
-                placeholder="Szabadszavas leírás"
-                readOnly={isViewOnly}
-              />
-            </div>
-            <div>
-              <label className="form-label">Dohányzás (n szál/nap)</label>
-              <input
-                {...register('dohanyzasSzam')}
-                className="form-input"
-                placeholder="pl. 10 szál/nap"
-                readOnly={isViewOnly}
-              />
-            </div>
-            {/* BNO mező - mindenkitől kérjük */}
-            <div>
-              <label className="form-label">BNO</label>
-              <BNOAutocomplete
-                value={watch('bno') || ''}
-                onChange={(kod, nev) => {
-                  setValue('bno', kod, { shouldDirty: true, shouldValidate: true });
-                  setValue('diagnozis', nev, { shouldDirty: true, shouldValidate: true });
-                }}
-                placeholder="Kezdjen el gépelni a BNO kód vagy név alapján..."
-                readOnly={isViewOnly}
-                disabled={isViewOnly}
-              />
-            </div>
-            {/* Diagnózis mező - mindenkitől kérjük */}
-            <div>
-              <label className={`form-label ${REQUIRED_FIELDS.some(f => f.key === 'diagnozis') ? 'form-label-required' : ''}`}>
-                Diagnózis
-              </label>
-              <input
-                {...register('diagnozis')}
-                className="form-input"
-                placeholder="Diagnózis"
-                readOnly={isViewOnly}
-              />
-            </div>
-
-            {/* TRAUMA kérdések */}
-            {selectedIndok === 'traumás sérülés' && (
-              <>
-                <div>
-                  <label className="form-label">Baleset időpontja</label>
-                  <DatePicker
-                    selected={watch('balesetIdopont') ? new Date(watch('balesetIdopont') || '') : null}
-                    onChange={(date: Date | null) => {
-                      const formatted = date ? formatDateForInput(date.toISOString().split('T')[0]) : '';
-                      setValue('balesetIdopont', formatted, { shouldValidate: true });
-                    }}
-                    placeholder="Válasszon dátumot"
-                    disabled={isViewOnly}
-                    maxDate={new Date()}
-                  />
-                </div>
-                <div>
-                  <label className="form-label">Baleset etiológiája</label>
-                  <textarea
-                    {...register('balesetEtiologiaja')}
-                    rows={2}
-                    className="form-input"
-                    placeholder="Szabadszavas leírás (pl. közlekedési baleset, esés stb.)"
-                    readOnly={isViewOnly}
-                  />
-                </div>
-                <div>
-                  <label className="form-label">Egyéb körülmények, műtétek</label>
-                  <textarea
-                    {...register('balesetEgyeb')}
-                    rows={2}
-                    className="form-input"
-                    placeholder="Egyéb körülmények, műtétek, stb. (szabadszavas)"
-                    readOnly={isViewOnly}
-                  />
-                </div>
-              </>
-            )}
-
-            {/* ONKOLOGIA kérdések */}
-            {selectedIndok === 'onkológiai kezelés utáni állapot' && (
-              <>
-                <div>
-                  <label className="form-label">Tumor szövettani típusa</label>
-                  <input
-                    {...register('szovettaniDiagnozis')}
-                    className="form-input"
-                    placeholder="Szövettani diagnózis"
-                    readOnly={isViewOnly}
-                  />
-                </div>
-                {/* TNM-staging mező */}
-                <div>
-                  <label className="form-label">TNM-staging</label>
-                  <input
-                    {...register('tnmStaging')}
-                    className="form-input"
-                    placeholder="pl. pT3N2bM0, UICC 8. ed."
-                    readOnly={isViewOnly}
-                  />
-                </div>
-                {/* Műtét ideje csak onkológiai esetben */}
-                <div>
-                  <label className="form-label">Műtét ideje</label>
-                  <DatePicker
-                    selected={watch('mutetIdeje') ? new Date(watch('mutetIdeje') || '') : null}
-                    onChange={(date: Date | null) => {
-                      const formatted = date ? formatDateForInput(date.toISOString().split('T')[0]) : '';
-                      setValue('mutetIdeje', formatted, { shouldValidate: true });
-                    }}
-                    placeholder="Válasszon dátumot"
-                    disabled={isViewOnly}
-                    maxDate={new Date()}
-                  />
-                </div>
-                {/* Primer műtét leírása */}
-                <div>
-                  <label className="form-label">Primer műtét leírása</label>
-                  <textarea
-                    {...register('primerMutetLeirasa')}
-                    rows={2}
-                    className="form-input"
-                    placeholder="Primer műtét rövid leírása (szabadszavas)"
-                    readOnly={isViewOnly}
-                  />
-                </div>
-                {/* Nyaki blokkdisszekció most itt */}
-                <div>
-                  <label className="form-label">Nyaki blokkdisszekció</label>
-                  <select {...register('nyakiBlokkdisszekcio')} className="form-input" disabled={isViewOnly}>
-                    <option value="">Válasszon...</option>
-                    {nyakiBlokkdisszekcioOptions.map((option) => (
-                      <option key={option} value={option}>{option}</option>
-                    ))}
-                  </select>
-                </div>
-                {/* Adjuváns terápiák blokk (mindig utolsó onkológiai kérdés ebben a conditionalban) */}
-                <div className="mt-6 pt-6 border-t border-gray-200">
-                  <h5 className="text-md font-semibold text-gray-900 mb-4">Adjuváns terápiák</h5>
-                  <div className="space-y-4">
-                    <div className="flex items-center">
-                      <input
-                        {...register('radioterapia')}
-                        type="checkbox"
-                        className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
-                        disabled={isViewOnly}
-                      />
-                      <label className="ml-2 text-sm text-gray-700">Radioterápia</label>
-                    </div>
-                    {radioterapia && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-6">
-                        <div>
-                          <label className="form-label">Dózis (n Gy)</label>
-                          <input
-                            {...register('radioterapiaDozis')}
-                            className="form-input"
-                            placeholder="pl. 60 Gy"
-                            readOnly={isViewOnly}
-                          />
-                        </div>
-                        <div>
-                          <label className="form-label">Dátumintervallum</label>
-                          <input
-                            {...register('radioterapiaDatumIntervallum')}
-                            className="form-input"
-                            placeholder="pl. 2023.01.15 - 2023.03.15"
-                            readOnly={isViewOnly}
-                          />
-                        </div>
-                      </div>
-                    )}
-                    <div className="flex items-center">
-                      <input
-                        {...register('chemoterapia')}
-                        type="checkbox"
-                        className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
-                        disabled={isViewOnly}
-                      />
-                      <label className="ml-2 text-sm text-gray-700">Kemoterápia</label>
-                    </div>
-                    {chemoterapia && (
-                      <div className="ml-6">
-                        <label className="form-label">Mikor, mit, mennyit</label>
-                        <textarea
-                          {...register('chemoterapiaLeiras')}
-                          rows={3}
-                          className="form-input"
-                          placeholder="Részletes leírás: mikor, milyen készítmény, mennyiség"
-                          readOnly={isViewOnly}
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* VELESZÜLETETT kérdések */}
-            {selectedIndok === 'veleszületett rendellenesség' && (
-              <>
-                <div>
-                  <label className="form-label">Milyen rendellenesség(ek) áll(nak) fenn?</label>
-                  <div className="flex flex-col gap-2 ml-4">
-                    {["kemény szájpadhasadék", "lágyszájpad inszufficiencia", "állcsonthasadék", "ajakhasadék"]
-                      .map(opt => (
-                        <label key={opt} className="flex items-center">
-                          <input
-                            type="checkbox"
-                            value={opt}
-                            {...register('veleszuletettRendellenessegek')}
-                            className="mr-2"
-                            disabled={isViewOnly}
-                          />
-                          {opt}
-                        </label>
-                      ))}
-                  </div>
-                </div>
-                <div>
-                  <label className="form-label">Műtétek leírása, legutolsó beavatkozás</label>
-                  <textarea
-                    {...register('veleszuletettMutetekLeirasa')}
-                    rows={2}
-                    className="form-input"
-                    placeholder="Műtétek leírása, legutolsó beavatkozás (szabadszavas)"
-                    readOnly={isViewOnly}
-                  />
-                </div>
-              </>
-            )}
-
-            {/* Közös mezők (mindháromhoz) */}
-            {/* Műtét ideje már nem itt, hanem onkológiai esetben */}
-          </div>
-        </div>
+          <AnamnezisSection
+            register={register}
+            watch={watch}
+            setValue={setValue}
+            errors={errors}
+            isViewOnly={isViewOnly}
+            selectedIndok={selectedIndok}
+            radioterapia={radioterapia}
+            chemoterapia={chemoterapia}
+            sectionErrors={sectionErrors}
+          />
         )}
 
         {/* BETEGVIZSGÁLAT */}
         {shouldShowSection('betegvizsgalat') && (
-        <div id="section-betegvizsgalat" className="card scroll-mt-20 sm:scroll-mt-24">
-          <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <Calendar className="w-5 h-5 mr-2 text-medical-primary" />
-            BETEGVIZSGÁLAT
-            {sectionErrors['betegvizsgalat'] > 0 && (
-              <span className="ml-2 px-2 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full">
-                {sectionErrors['betegvizsgalat']}
-              </span>
-            )}
-          </h4>
-          <div className="space-y-4">
-            {/* OP inline preview above dental status */}
-            {patientId && (
-              <OPInlinePreview patientId={patientId} patientName={currentPatient?.nev || undefined} />
-            )}
-
-            {/* Fogazati státusz */}
-            <div className="border-t pt-4 mt-4">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-                <div className="flex items-center gap-2">
-                  <h5 className="text-base sm:text-md font-semibold text-gray-900">Felvételi státusz</h5>
-                  {REQUIRED_FIELDS.some(f => f.key === 'meglevoFogak') && (
-                    <span className="text-medical-error text-sm">*</span>
-                  )}
-                </div>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (isViewOnly) return;
-                      setFogak(prev => {
-                        const upperTeeth = [11, 12, 13, 14, 15, 16, 17, 18, 21, 22, 23, 24, 25, 26, 27, 28];
-                        const upperTeethStr = upperTeeth.map(t => t.toString());
-                        
-                        // Ellenőrizzük, hogy minden felső fog hiányzik-e
-                        const allMissing = upperTeethStr.every(tooth => {
-                          const value = prev[tooth];
-                          const normalized = normalizeToothData(value);
-                          return normalized?.status === 'M';
-                        });
-                        
-                        const newState = { ...prev };
-                        if (allMissing) {
-                          // Ha minden fog hiányzik, töröljük őket (visszaállítás)
-                          upperTeethStr.forEach(tooth => {
-                            delete newState[tooth];
-                          });
-                        } else {
-                          // Ha nem minden fog hiányzik, állítsuk be mindet M-re
-                          upperTeeth.forEach(tooth => {
-                            newState[tooth.toString()] = { status: 'M' };
-                          });
-                        }
-                        return newState;
-                      });
-                    }}
-                    disabled={isViewOnly}
-                    className="px-4 py-2 sm:px-3 sm:py-1.5 text-sm sm:text-xs rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0"
-                    title="Felső állcsont összes fogát hiányzónak jelöli / visszaállítja"
-                  >
-                    Felső teljes fogatlanság
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (isViewOnly) return;
-                      setFogak(prev => {
-                        const lowerTeeth = [31, 32, 33, 34, 35, 36, 37, 38, 41, 42, 43, 44, 45, 46, 47, 48];
-                        const lowerTeethStr = lowerTeeth.map(t => t.toString());
-                        
-                        // Ellenőrizzük, hogy minden alsó fog hiányzik-e
-                        const allMissing = lowerTeethStr.every(tooth => {
-                          const value = prev[tooth];
-                          const normalized = normalizeToothData(value);
-                          return normalized?.status === 'M';
-                        });
-                        
-                        const newState = { ...prev };
-                        if (allMissing) {
-                          // Ha minden fog hiányzik, töröljük őket (visszaállítás)
-                          lowerTeethStr.forEach(tooth => {
-                            delete newState[tooth];
-                          });
-                        } else {
-                          // Ha nem minden fog hiányzik, állítsuk be mindet M-re
-                          lowerTeeth.forEach(tooth => {
-                            newState[tooth.toString()] = { status: 'M' };
-                          });
-                        }
-                        return newState;
-                      });
-                    }}
-                    disabled={isViewOnly}
-                    className="px-4 py-2 sm:px-3 sm:py-1.5 text-sm sm:text-xs rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0"
-                    title="Alsó állcsont összes fogát hiányzónak jelöli / visszaállítja"
-                  >
-                    Alsó teljes fogatlanság
-                  </button>
-                </div>
-              </div>
-              <p className="text-sm text-gray-600 mb-3">Kattintás: jelen van → hiányzik → alaphelyzet. Jelen lévő fogaknál D (szuvas) vagy F (tömött) kiválasztható.</p>
-              <div className="bg-gray-50 p-3 sm:p-4 rounded-lg overflow-x-auto">
-                {/* Felső sor */}
-                <div className="flex justify-between mb-2 min-w-[600px] sm:min-w-0">
-                  <div className="flex gap-1 sm:gap-1">
-                    {[18, 17, 16, 15, 14, 13, 12, 11].map(tooth => {
-                      const toothStr = tooth.toString();
-                      return (
-                        <ToothCheckbox
-                          key={tooth}
-                          toothNumber={toothStr}
-                          value={fogak[toothStr]}
-                          onChange={() => handleToothStatusToggle(toothStr)}
-                          disabled={isViewOnly}
-                        />
-                      );
-                    })}
-                  </div>
-                  <div className="flex gap-1 sm:gap-1">
-                    {[21, 22, 23, 24, 25, 26, 27, 28].map(tooth => {
-                      const toothStr = tooth.toString();
-                      return (
-                        <ToothCheckbox
-                          key={tooth}
-                          toothNumber={toothStr}
-                          value={fogak[toothStr]}
-                          onChange={() => handleToothStatusToggle(toothStr)}
-                          disabled={isViewOnly}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
-                {/* Alsó sor */}
-                <div className="flex justify-between min-w-[600px] sm:min-w-0">
-                  <div className="flex gap-1 sm:gap-1">
-                    {[48, 47, 46, 45, 44, 43, 42, 41].map(tooth => {
-                      const toothStr = tooth.toString();
-                      return (
-                        <ToothCheckbox
-                          key={tooth}
-                          toothNumber={toothStr}
-                          value={fogak[toothStr]}
-                          onChange={() => handleToothStatusToggle(toothStr)}
-                          disabled={isViewOnly}
-                        />
-                      );
-                    })}
-                  </div>
-                  <div className="flex gap-1 sm:gap-1">
-                    {[31, 32, 33, 34, 35, 36, 37, 38].map(tooth => {
-                      const toothStr = tooth.toString();
-                      return (
-                        <ToothCheckbox
-                          key={tooth}
-                          toothNumber={toothStr}
-                          value={fogak[toothStr]}
-                          onChange={() => handleToothStatusToggle(toothStr)}
-                          disabled={isViewOnly}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {/* DMF-T index számolás és megjelenítés - mindig látható */}
-              {(() => {
-                let dCount = 0;
-                let fCount = 0;
-                let mCount = 0;
-                
-                Object.values(fogak).forEach(value => {
-                  const normalized = normalizeToothData(value);
-                  if (normalized) {
-                    if (normalized.status === 'D') dCount++;
-                    else if (normalized.status === 'F') fCount++;
-                    else if (normalized.status === 'M') mCount++;
-                  }
-                });
-                
-                const dmft = dCount + fCount + mCount;
-                
-                return (
-                  <div className="mt-4 p-3 sm:p-4 bg-blue-50 rounded-lg border border-blue-200">
-                    <h6 className="font-semibold text-gray-900 mb-2 text-sm sm:text-base">DMF-T index</h6>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 text-sm">
-                      <div>
-                        <span className="text-gray-600">D (szuvas):</span>
-                        <span className="ml-2 font-semibold text-red-700">{dCount}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">F (tömött):</span>
-                        <span className="ml-2 font-semibold text-blue-700">{fCount}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">M (hiányzik):</span>
-                        <span className="ml-2 font-semibold text-gray-700">{mCount}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">DMF-T:</span>
-                        <span className="ml-2 font-bold text-gray-900">{dmft}</span>
-                        <span className="ml-1 text-xs text-gray-500">/ 32</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Fog státusz részletek - csak a jelen lévő fogakhoz */}
-              {(() => {
-                const presentTeeth = Object.keys(fogak).filter(toothNumber => {
-                  const value = fogak[toothNumber];
-                  const state = getToothState(value);
-                  return state === 'present';
-                });
-                
-                if (presentTeeth.length === 0) return null;
-
-                const content = (
-                <div className="space-y-3 sm:space-y-4 mt-4">
-                    <h6 className="font-medium text-gray-700 text-sm sm:text-base">Fogak állapota</h6>
-                    {presentTeeth.sort().map(toothNumber => {
-                      const value = fogak[toothNumber];
-                      const normalized = normalizeToothData(value);
-                      const description = normalized?.description || '';
-                      const status = normalized?.status;
-                      
-                      return (
-                    <div key={toothNumber} className="border border-gray-200 rounded-md p-3 sm:p-4">
-                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
-                            <label className="form-label font-medium text-sm sm:text-base">
-                              {toothNumber}. fog – állapot
-                            </label>
-                            {!isViewOnly && (
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => handleToothStatusSelect(toothNumber, 'D')}
-                                  className={`px-3 py-2 sm:px-2 sm:py-1 text-sm sm:text-xs rounded border min-h-[44px] sm:min-h-0 ${
-                                    status === 'D'
-                                      ? 'bg-red-100 border-red-400 text-red-700 font-semibold'
-                                      : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-                                  }`}
-                                  title="Szuvas (D)"
-                                >
-                                  D
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleToothStatusSelect(toothNumber, 'F')}
-                                  className={`px-3 py-2 sm:px-2 sm:py-1 text-sm sm:text-xs rounded border min-h-[44px] sm:min-h-0 ${
-                                    status === 'F'
-                                      ? 'bg-blue-100 border-blue-400 text-blue-700 font-semibold'
-                                      : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-                                  }`}
-                                  title="Tömött (F)"
-                                >
-                                  F
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                          <textarea
-                            value={description}
-                            onChange={(e) => handleToothStatusDetailsChange(toothNumber, e.target.value)}
-                            rows={2}
-                            className="form-input text-base sm:text-sm"
-                            placeholder="Pl. korona, hídtag, gyökércsapos felépítmény, egyéb részletek"
-                            readOnly={isViewOnly}
-                          />
-                          {/* Per-tooth treatment needs */}
-                          <ToothTreatmentInline toothNumber={toothNumber} isViewOnly={isViewOnly} />
-                    </div>
-                      );
-                    })}
-                </div>
-                );
-
-                return patientId ? (
-                  <ToothTreatmentProvider patientId={patientId}>
-                    {content}
-                  </ToothTreatmentProvider>
-                ) : content;
-              })()}
-
-              {/* Export PDF button */}
-              {patientId && (Object.keys(fogak).length > 0 || patient?.felsoFogpotlasVan || patient?.alsoFogpotlasVan || (patient?.meglevoImplantatumok && Object.keys(patient.meglevoImplantatumok).length > 0)) && (
-                <div className="mt-4 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        const response = await fetch(`/api/patients/${patientId}/dental-status-export`);
-                        if (!response.ok) {
-                          const errorData = await response.json().catch(() => ({}));
-                          throw new Error(errorData.error || 'PDF generálás sikertelen');
-                        }
-                        const blob = await response.blob();
-                        const url = window.URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `fogazati-status-${patientId}.pdf`;
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                        window.URL.revokeObjectURL(url);
-                        showToast('PDF sikeresen letöltve', 'success');
-                      } catch (error) {
-                        console.error('Hiba a PDF exportálásakor:', error);
-                        const errorMessage = error instanceof Error ? error.message : 'Hiba történt a PDF exportálásakor';
-                        alert(errorMessage);
-                      }
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 bg-medical-primary text-white rounded-lg hover:bg-medical-primary-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={!patientId}
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>Fog. st. exportálása</span>
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Fogpótlások – felső és alsó állcsont külön */}
-            <div className="border-t pt-4 mt-4">
-              <h5 className="text-md font-semibold text-gray-900 mb-3">Fogpótlások</h5>
-              {/* Felső állcsont */}
-              <div className="mb-6">
-                <div className="flex items-center mb-2">
-                  <input
-                    {...register('felsoFogpotlasVan')}
-                    type="checkbox"
-                    className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
-                    disabled={isViewOnly}
-                  />
-                  <label className="ml-2 text-sm text-gray-700">Felső állcsont: van-e fogpótlása?</label>
-                </div>
-                {felsoFogpotlasVan && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-6 mt-2">
-                    <div>
-                      <label className="form-label">Mikor készült?</label>
-                      <input
-                        {...register('felsoFogpotlasMikor')}
-                        className="form-input"
-                        placeholder="pl. 2023 tavasz / 2023-05-10"
-                        readOnly={isViewOnly}
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Ki készítette / hol készült?</label>
-                      <input
-                        {...register('felsoFogpotlasKeszito')}
-                        className="form-input"
-                        placeholder="pl. Klinika / magánrendelő, orvos/technikus neve"
-                        readOnly={isViewOnly}
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="form-label">Meglévő fogpótlás típusa</label>
-                      <select {...register('felsoFogpotlasTipus')} className="form-input" disabled={isViewOnly}>
-                        <option value="">Válasszon...</option>
-                        {kezelesiTervOptions.filter(option => option !== 'sebészi sablon készítése').map((option) => (
-                          <option key={option} value={option}>{option}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="flex items-center md:col-span-2">
-                      <input
-                        {...register('felsoFogpotlasElegedett')}
-                        type="checkbox"
-                        className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
-                        disabled={isViewOnly}
-                      />
-                      <label className="ml-2 text-sm text-gray-700">Elégedett-e velük?</label>
-                    </div>
-                    {!felsoFogpotlasElegedett && (
-                      <div className="md:col-span-2">
-                        <label className="form-label">Ha nem, mi velük a baj?</label>
-                        <textarea
-                          {...register('felsoFogpotlasProblema')}
-                          rows={2}
-                          className="form-input"
-                          placeholder="Rövid leírás a problémákról"
-                          readOnly={isViewOnly}
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Alsó állcsont */}
-              <div>
-                <div className="flex items-center mb-2">
-                  <input
-                    {...register('alsoFogpotlasVan')}
-                    type="checkbox"
-                    className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
-                    disabled={isViewOnly}
-                  />
-                  <label className="ml-2 text-sm text-gray-700">Alsó állcsont: van-e fogpótlása?</label>
-                </div>
-                {alsoFogpotlasVan && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-6 mt-2">
-                    <div>
-                      <label className="form-label">Mikor készült?</label>
-                      <input
-                        {...register('alsoFogpotlasMikor')}
-                        className="form-input"
-                        placeholder="pl. 2022 ősz / 2022-11-20"
-                        readOnly={isViewOnly}
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Ki készítette / hol készült?</label>
-                      <input
-                        {...register('alsoFogpotlasKeszito')}
-                        className="form-input"
-                        placeholder="pl. Klinika / magánrendelő, orvos/technikus neve"
-                        readOnly={isViewOnly}
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="form-label">Meglévő fogpótlás típusa</label>
-                      <select {...register('alsoFogpotlasTipus')} className="form-input" disabled={isViewOnly}>
-                        <option value="">Válasszon...</option>
-                        {kezelesiTervOptions.filter(option => option !== 'sebészi sablon készítése').map((option) => (
-                          <option key={option} value={option}>{option}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="flex items-center md:col-span-2">
-                      <input
-                        {...register('alsoFogpotlasElegedett')}
-                        type="checkbox"
-                        className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
-                        disabled={isViewOnly}
-                      />
-                      <label className="ml-2 text-sm text-gray-700">Elégedett-e velük?</label>
-                    </div>
-                    {!alsoFogpotlasElegedett && (
-                      <div className="md:col-span-2">
-                        <label className="form-label">Ha nem, mi velük a baj?</label>
-                        <textarea
-                          {...register('alsoFogpotlasProblema')}
-                          rows={2}
-                          className="form-input"
-                          placeholder="Rövid leírás a problémákról"
-                          readOnly={isViewOnly}
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Maxilladefektus */}
-            <div>
-              <div className="flex items-center mb-2">
-                <input
-                  {...register('maxilladefektusVan')}
-                  type="checkbox"
-                  className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
-                  disabled={isViewOnly}
-                />
-                <label className="ml-2 text-sm text-gray-700">Maxilladefektus van</label>
-              </div>
-              {watch('maxilladefektusVan') && (
-                <div className="space-y-4 ml-6 mt-2">
-                  <div>
-                    <label className="form-label">Brown-féle klasszifikáció – függőleges komponens</label>
-                    <select {...register('brownFuggolegesOsztaly')} className="form-input" disabled={isViewOnly}>
-                      <option value="">Válasszon...</option>
-                      <option value="1">1. osztály – maxillectomia oroantralis sipoly nélkül</option>
-                      <option value="2">2. osztály – alacsony maxillectomia (orbita fenék/tartalom nélkül)</option>
-                      <option value="3">3. osztály – magas maxillectomia (orbita tartalom érintett)</option>
-                      <option value="4">4. osztály – radikális maxillectomia (orbitexenterációval)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="form-label">Brown – vízszintes/palatinalis komponens</label>
-                    <select {...register('brownVizszintesKomponens')} className="form-input" disabled={isViewOnly}>
-                      <option value="">Válasszon...</option>
-                      <option value="a">a – egyoldali alveolaris maxillectomia</option>
-                      <option value="b">b – kétoldali alveolaris maxillectomia</option>
-                      <option value="c">c – teljes alveolaris maxilla resectio</option>
-                    </select>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Mandibuladefektus */}
-            <div>
-              <div className="flex items-center mb-2">
-                <input
-                  {...register('mandibuladefektusVan')}
-                  type="checkbox"
-                  className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
-                  disabled={isViewOnly}
-                />
-                <label className="ml-2 text-sm text-gray-700">Mandibuladefektus van</label>
-              </div>
-              {watch('mandibuladefektusVan') && (
-                <div className="ml-6 mt-2">
-                  <label className="form-label">Kovács–Dobák osztályozás</label>
-                  <select {...register('kovacsDobakOsztaly')} className="form-input" disabled={isViewOnly}>
-                    <option value="">Válasszon...</option>
-                    <option value="1">1. osztály – két nagyobb mandibula-maradvány, 2+ értékes foggal</option>
-                    <option value="2">2. osztály – egy mandibula-maradvány</option>
-                    <option value="3">3. osztály – két, minimális nagyságú mandibula-maradvány</option>
-                    <option value="4">4. osztály – kétoldali egység alloplasztikával/osteosynthesissel helyreállítva</option>
-                    <option value="5">5. osztály – egy/két kisméretű maradvány, szájfenék nem mozgatható → fogpótlás nem készíthető</option>
-                  </select>
-                </div>
-              )}
-            </div>
-
-            {/* Funkciók */}
-            <div className="flex items-center">
-              <input
-                {...register('nyelvmozgásokAkadályozottak')}
-                type="checkbox"
-                className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
-                disabled={isViewOnly}
-              />
-              <label className="ml-2 text-sm text-gray-700">Nyelvmozgások akadályozottak</label>
-            </div>
-            <div className="flex items-center">
-              <input
-                {...register('gombocosBeszed')}
-                type="checkbox"
-                className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
-                disabled={isViewOnly}
-              />
-              <label className="ml-2 text-sm text-gray-700">Gombócos beszéd</label>
-            </div>
-            <div>
-              <label className="form-label">Nyálmirigy állapot</label>
-              <select {...register('nyalmirigyAllapot')} className="form-input" disabled={isViewOnly}>
-                <option value="">Válasszon...</option>
-                <option value="hiposzaliváció">Hiposzaliváció</option>
-                <option value="hiperszaliváció">Hiperszaliváció</option>
-                <option value="Nem számol be eltérésről">Nem számol be eltérésről</option>
-              </select>
-            </div>
-            <div>
-              <label className="form-label">Fábián–Fejérdy osztály (felső állcsont)</label>
-              <select {...register('fabianFejerdyProtetikaiOsztalyFelso')} className="form-input" disabled={isViewOnly}>
-                <option value="">Válasszon...</option>
-                {fabianFejerdyProtetikaiOsztalyOptions.map((option) => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="form-label">Fábián–Fejérdy osztály (alsó állcsont)</label>
-              <select {...register('fabianFejerdyProtetikaiOsztalyAlso')} className="form-input" disabled={isViewOnly}>
-                <option value="">Válasszon...</option>
-                {fabianFejerdyProtetikaiOsztalyOptions.map((option) => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </select>
-            </div>
-            {/* Felvétel dátuma már nem itt, hanem alapadatokban */}
-          </div>
-        </div>
+          <BetegvizsgalatSection
+            register={register}
+            watch={watch}
+            setValue={setValue}
+            errors={errors}
+            isViewOnly={isViewOnly}
+            fogak={fogak}
+            setFogak={setFogak}
+            handleToothStatusToggle={handleToothStatusToggle}
+            handleToothStatusSelect={handleToothStatusSelect}
+            handleToothStatusDetailsChange={handleToothStatusDetailsChange}
+            felsoFogpotlasVan={felsoFogpotlasVan}
+            felsoFogpotlasElegedett={felsoFogpotlasElegedett}
+            alsoFogpotlasVan={alsoFogpotlasVan}
+            alsoFogpotlasElegedett={alsoFogpotlasElegedett}
+            patientId={patientId}
+            currentPatientName={currentPatient?.nev}
+            patient={patient}
+            showToast={showToast}
+            sectionErrors={sectionErrors}
+          />
         )}
 
         {/* MEGLÉVŐ IMPLANTÁTUMOK */}
         {shouldShowSection('betegvizsgalat') && (
-        <div className="card">
-          <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <AlertTriangle className="w-5 h-5 mr-2 text-medical-primary" />
-            Meglévő implantátumok, ha vannak
-          </h4>
-          
-          {/* Zsigmondy-kereszt */}
-          <div className="mb-6">
-            <div className="bg-gray-50 p-3 sm:p-4 rounded-lg overflow-x-auto">
-              {/* Felső sor - 1. kvadráns (bal felső) és 2. kvadráns (jobb felső) */}
-              <div className="flex justify-between mb-2 min-w-[600px] sm:min-w-0">
-                <div className="flex gap-1 sm:gap-1">
-                  {[18, 17, 16, 15, 14, 13, 12, 11].map(tooth => {
-                    const toothStr = tooth.toString();
-                    const implantValue = toothStr in implantatumok
-                      ? { description: implantatumok[toothStr] || '' } 
-                      : undefined;
-                    return (
-                      <ToothCheckbox
-                        key={tooth}
-                        toothNumber={toothStr}
-                        value={implantValue}
-                        onChange={() => handleToothToggle(toothStr)}
-                        disabled={isViewOnly}
-                        idPrefix="implant"
-                      />
-                    );
-                  })}
-                </div>
-                <div className="flex gap-1 sm:gap-1">
-                  {[21, 22, 23, 24, 25, 26, 27, 28].map(tooth => {
-                    const toothStr = tooth.toString();
-                    const implantValue = toothStr in implantatumok
-                      ? { description: implantatumok[toothStr] || '' } 
-                      : undefined;
-                    return (
-                      <ToothCheckbox
-                        key={tooth}
-                        toothNumber={toothStr}
-                        value={implantValue}
-                        onChange={() => handleToothToggle(toothStr)}
-                        disabled={isViewOnly}
-                        idPrefix="implant"
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-              
-              {/* Alsó sor - 4. kvadráns (bal alsó) és 3. kvadráns (jobb alsó) */}
-              <div className="flex justify-between min-w-[600px] sm:min-w-0">
-                <div className="flex gap-1 sm:gap-1">
-                  {[48, 47, 46, 45, 44, 43, 42, 41].map(tooth => {
-                    const toothStr = tooth.toString();
-                    const implantValue = toothStr in implantatumok
-                      ? { description: implantatumok[toothStr] || '' } 
-                      : undefined;
-                    return (
-                      <ToothCheckbox
-                        key={tooth}
-                        toothNumber={toothStr}
-                        value={implantValue}
-                        onChange={() => handleToothToggle(toothStr)}
-                        disabled={isViewOnly}
-                        idPrefix="implant"
-                      />
-                    );
-                  })}
-                </div>
-                <div className="flex gap-1 sm:gap-1">
-                  {[31, 32, 33, 34, 35, 36, 37, 38].map(tooth => {
-                    const toothStr = tooth.toString();
-                    const implantValue = toothStr in implantatumok
-                      ? { description: implantatumok[toothStr] || '' } 
-                      : undefined;
-                    return (
-                      <ToothCheckbox
-                        key={tooth}
-                        toothNumber={toothStr}
-                        value={implantValue}
-                        onChange={() => handleToothToggle(toothStr)}
-                        disabled={isViewOnly}
-                        idPrefix="implant"
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Implantátum részletek */}
-          {Object.keys(implantatumok).length > 0 && (
-            <div className="space-y-3 sm:space-y-4 mb-4">
-              <h5 className="font-medium text-gray-700 mb-3 text-sm sm:text-base">Implantátum részletek</h5>
-              {Object.keys(implantatumok)
-                .sort()
-                .map(toothNumber => (
-                <div key={toothNumber} className="border border-gray-200 rounded-md p-3 sm:p-4">
-                  <label className="form-label font-medium text-sm sm:text-base">
-                    {toothNumber}. fog - Implantátum típusa, gyári száma, stb.
-                  </label>
-                  <textarea
-                    value={implantatumok[toothNumber] || ''}
-                    onChange={(e) => handleImplantatumDetailsChange(toothNumber, e.target.value)}
-                    rows={2}
-                    className="form-input text-base sm:text-sm"
-                    placeholder="Pl. Straumann BLT 4.1x10mm, Gyári szám: 028.015, Dátum: 2023.05.15"
-                    readOnly={isViewOnly}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Nem ismert pozíciókban implantátum */}
-          <div className="border-t pt-4 mt-4">
-            <div className="flex items-center mb-3">
-              <input
-                {...register('nemIsmertPoziciokbanImplantatum')}
-                type="checkbox"
-                className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
-                disabled={isViewOnly}
-              />
-              <label className="ml-2 text-sm font-medium text-gray-700">
-                Nem ismert pozíciókban
-              </label>
-            </div>
-            
-            {nemIsmertPoziciokbanImplantatum && (
-              <div className="ml-6">
-                <label className="form-label">Részletek (típus, mennyiség, stb.)</label>
-                <textarea
-                  {...register('nemIsmertPoziciokbanImplantatumRészletek')}
-                  rows={3}
-                  className="form-input"
-                  placeholder="Pl. Straumann implantátumok, pontos pozíció nem ismert, mennyiség: 3 db"
-                  readOnly={isViewOnly}
-                />
-              </div>
-            )}
-          </div>
-        </div>
+          <ImplantatumokSection
+            register={register}
+            isViewOnly={isViewOnly}
+            implantatumok={implantatumok}
+            handleToothToggle={handleToothToggle}
+            handleImplantatumDetailsChange={handleImplantatumDetailsChange}
+            nemIsmertPoziciokbanImplantatum={nemIsmertPoziciokbanImplantatum}
+          />
         )}
 
         {/* OHIP-14 Kérdőív */}
@@ -3563,363 +1822,32 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
 
         {/* Méltányossági kérelemhez szükséges adatok */}
         {shouldShowSection('adminisztracio') && patientId && (
-          <div className="card">
-            <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-              <FileText className="w-5 h-5 mr-2 text-medical-primary" />
-              Méltányossági kérelemhez szükséges adatok
-            </h4>
-            <div className="space-y-4">
-              {/* Kórtörténeti összefoglaló */}
-              <div>
-                <label className="form-label">
-                  Kórtörténeti összefoglaló (3 hónapnál nem régebbi)
-                </label>
-                <textarea
-                  {...register('kortortenetiOsszefoglalo')}
-                  className="form-input min-h-[100px]"
-                  placeholder="Kórtörténeti összefoglaló..."
-                  readOnly={isViewOnly}
-                  rows={4}
-                />
-                {errors.kortortenetiOsszefoglalo && (
-                  <p className="text-red-500 text-sm mt-1">{errors.kortortenetiOsszefoglalo.message}</p>
-                )}
-              </div>
-
-              {/* Szakorvosi vélemény */}
-              <div>
-                <label className="form-label">
-                  Szakorvosi vélemény az eszközrendelés szükségességéről (orvosszakmai indok)
-                </label>
-                <textarea
-                  {...register('szakorvosiVelemény')}
-                  className="form-input min-h-[100px]"
-                  placeholder="Szakorvosi vélemény..."
-                  readOnly={isViewOnly}
-                  rows={4}
-                />
-                {errors.szakorvosiVelemény && (
-                  <p className="text-red-500 text-sm mt-1">{errors.szakorvosiVelemény.message}</p>
-                )}
-              </div>
-
-              {/* Nyilatkozat */}
-              <div>
-                <label className="form-label">Nyilatkozat a kezelési tervben rögzített, tervezett ellátás vállalásáról</label>
-                <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
-                  <p className="text-gray-700">
-                    {EQUITY_REQUEST_CONFIG.megbizottNeve} megbízásából alulírott, a kezelési tervben foglaltak elvégzését vállalom.
-                  </p>
-                </div>
-              </div>
-
-              {/* PDF generáló gomb */}
-              {!isViewOnly && (
-                <div className="pt-4">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (!patientId) {
-                        showToast('Először mentse el a beteg adatait!', 'error');
-                        return;
-                      }
-                      
-                      try {
-                        showToast('PDF generálása folyamatban...', 'info');
-                        const response = await fetch(`/api/patients/${patientId}/generate-equity-request-pdf`, {
-                          method: 'GET',
-                          credentials: 'include',
-                        });
-
-                        if (!response.ok) {
-                          const errorData = await response.json();
-                          throw new Error(errorData.error || 'PDF generálási hiba');
-                        }
-
-                        const blob = await response.blob();
-                        const url = window.URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `Meltanyossagi_kerelm_${currentPatient?.nev || 'Beteg'}_${Date.now()}.pdf`;
-                        document.body.appendChild(a);
-                        a.click();
-                        window.URL.revokeObjectURL(url);
-                        document.body.removeChild(a);
-                        showToast('PDF sikeresen generálva és letöltve', 'success');
-                      } catch (error) {
-                        console.error('PDF generálási hiba:', error);
-                        showToast(
-                          error instanceof Error ? error.message : 'Hiba történt a PDF generálása során',
-                          'error'
-                        );
-                      }
-                    }}
-                    className="btn-primary flex items-center gap-2"
-                  >
-                    <Download className="w-4 h-4" />
-                    Méltányossági kérelem PDF generálása
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
+          <MeltanyossagiSection
+            register={register}
+            errors={errors}
+            isViewOnly={isViewOnly}
+            patientId={patientId}
+            currentPatientName={currentPatient?.nev}
+            showToast={showToast}
+          />
         )}
 
         {/* Árajánlatkérő laborba */}
         {shouldShowSection('adminisztracio') && patientId && (
-          <div className="card">
-            <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-              <FileText className="w-5 h-5 mr-2 text-medical-primary" />
-              Árajánlatkérő laborba
-            </h4>
-            <div className="space-y-4">
-              {/* Árajánlatkérők listája */}
-              {labQuoteRequests.length > 0 && (
-                <div className="space-y-2">
-                  <label className="form-label">Mentett árajánlatkérők</label>
-                  {labQuoteRequests.map((quote) => (
-                    <div key={quote.id} className="bg-gray-50 p-3 rounded-md border border-gray-200 flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="text-sm font-medium text-gray-900">
-                          {new Date(quote.datuma).toLocaleDateString('hu-HU')}
-                        </div>
-                        <div className="text-xs text-gray-600 mt-1 line-clamp-2">
-                          {quote.szoveg.substring(0, 100)}{quote.szoveg.length > 100 ? '...' : ''}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 ml-4">
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            try {
-                              const response = await fetch(`/api/patients/${patientId}/generate-lab-quote-request-pdf?quoteId=${quote.id}`, {
-                                method: 'GET',
-                                credentials: 'include',
-                              });
-
-                              if (!response.ok) {
-                                const errorData = await response.json();
-                                throw new Error(errorData.error || 'PDF generálási hiba');
-                              }
-
-                              const blob = await response.blob();
-                              const url = window.URL.createObjectURL(blob);
-                              const a = document.createElement('a');
-                              a.href = url;
-                              a.download = `Arajanlatkero_${currentPatient?.nev || 'Beteg'}_${Date.now()}.pdf`;
-                              document.body.appendChild(a);
-                              a.click();
-                              window.URL.revokeObjectURL(url);
-                              document.body.removeChild(a);
-                              showToast('PDF sikeresen generálva és letöltve', 'success');
-                            } catch (error) {
-                              console.error('PDF generálási hiba:', error);
-                              showToast(
-                                error instanceof Error ? error.message : 'Hiba történt a PDF generálása során',
-                                'error'
-                              );
-                            }
-                          }}
-                          className="btn-secondary text-xs px-3 py-1 flex items-center gap-1"
-                          title="PDF generálása"
-                        >
-                          <Download className="w-3 h-3" />
-                          PDF
-                        </button>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            const confirmed = await confirmDialog(
-                              'Biztosan elküldi az árajánlatkérőt emailben a laboratóriumnak?',
-                              {
-                                title: 'Email küldése',
-                                confirmText: 'Igen, elküldöm',
-                                cancelText: 'Mégse',
-                                type: 'info'
-                              }
-                            );
-                            if (!confirmed) return;
-
-                            try {
-                              showToast('Email küldése folyamatban...', 'info');
-                              const response = await fetch(`/api/patients/${patientId}/lab-quote-requests/${quote.id}/send-email`, {
-                                method: 'POST',
-                                credentials: 'include',
-                              });
-
-                              if (!response.ok) {
-                                const errorData = await response.json();
-                                throw new Error(errorData.error || 'Email küldési hiba');
-                              }
-
-                              showToast('Email sikeresen elküldve a laboratóriumnak', 'success');
-                            } catch (error) {
-                              console.error('Email küldési hiba:', error);
-                              showToast(
-                                error instanceof Error ? error.message : 'Hiba történt az email küldése során',
-                                'error'
-                              );
-                            }
-                          }}
-                          className="btn-secondary text-xs px-3 py-1 flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white"
-                          title="Email küldése a laboratóriumnak"
-                        >
-                          <Send className="w-3 h-3" />
-                          Email
-                        </button>
-                        {!isViewOnly && (userRole === 'admin' || userRole === 'editor') && (
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              const confirmed = await confirmDialog(
-                                'Biztosan törölni szeretné ezt az árajánlatkérőt?',
-                                {
-                                  title: 'Árajánlatkérő törlése',
-                                  confirmText: 'Igen, törlöm',
-                                  cancelText: 'Mégse',
-                                  type: 'warning'
-                                }
-                              );
-                              if (!confirmed) return;
-
-                              try {
-                                const response = await fetch(`/api/patients/${patientId}/lab-quote-requests/${quote.id}`, {
-                                  method: 'DELETE',
-                                  credentials: 'include',
-                                });
-
-                                if (!response.ok) {
-                                  const errorData = await response.json();
-                                  throw new Error(errorData.error || 'Törlési hiba');
-                                }
-
-                                // Újratöltjük a listát
-                                const reloadResponse = await fetch(`/api/patients/${patientId}/lab-quote-requests`, {
-                                  credentials: 'include',
-                                });
-                                if (reloadResponse.ok) {
-                                  const data = await reloadResponse.json();
-                                  setLabQuoteRequests(data.quoteRequests || []);
-                                }
-                                showToast('Árajánlatkérő sikeresen törölve', 'success');
-                              } catch (error) {
-                                console.error('Törlési hiba:', error);
-                                showToast(
-                                  error instanceof Error ? error.message : 'Hiba történt a törlés során',
-                                  'error'
-                                );
-                              }
-                            }}
-                            className="btn-secondary text-xs px-3 py-1 text-red-600 hover:text-red-700"
-                            title="Törlés"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Új árajánlatkérő létrehozása */}
-              {!isViewOnly && (
-                <div className={`${labQuoteRequests.length > 0 ? 'border-t pt-4' : ''}`}>
-                  <h5 className="text-md font-semibold text-gray-900 mb-3">Új árajánlatkérő</h5>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="form-label">
-                        Árajánlatkérő szöveg
-                      </label>
-                      <textarea
-                        value={newQuoteSzoveg}
-                        onChange={(e) => setNewQuoteSzoveg(e.target.value)}
-                        className="form-input min-h-[150px]"
-                        placeholder="Írja be az árajánlatkérő szövegét..."
-                        rows={6}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="form-label">
-                        Árajánlatkérő dátuma (egy héttel az ajánlatkérés után)
-                      </label>
-                      <DatePicker
-                        selected={newQuoteDatuma}
-                        onChange={(date: Date | null) => {
-                          setNewQuoteDatuma(date);
-                        }}
-                        placeholder="Válasszon dátumot"
-                        minDate={new Date()}
-                      />
-                    </div>
-
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (!newQuoteSzoveg.trim()) {
-                            showToast('Az árajánlatkérő szöveg kötelező', 'error');
-                            return;
-                          }
-
-                          if (!newQuoteDatuma) {
-                            showToast('Az árajánlatkérő dátuma kötelező', 'error');
-                            return;
-                          }
-
-                          try {
-                            const datuma = formatDateForInput(newQuoteDatuma.toISOString().split('T')[0]);
-                            const response = await fetch(`/api/patients/${patientId}/lab-quote-requests`, {
-                              method: 'POST',
-                              headers: {
-                                'Content-Type': 'application/json',
-                              },
-                              credentials: 'include',
-                              body: JSON.stringify({
-                                szoveg: newQuoteSzoveg.trim(),
-                                datuma,
-                              }),
-                            });
-
-                            if (!response.ok) {
-                              const errorData = await response.json();
-                              throw new Error(errorData.error || 'Létrehozási hiba');
-                            }
-
-                            // Újratöltjük a listát
-                            const reloadResponse = await fetch(`/api/patients/${patientId}/lab-quote-requests`, {
-                              credentials: 'include',
-                            });
-                            if (reloadResponse.ok) {
-                              const data = await reloadResponse.json();
-                              setLabQuoteRequests(data.quoteRequests || []);
-                            }
-
-                            // Form ürítése
-                            setNewQuoteSzoveg('');
-                            setNewQuoteDatuma(null);
-
-                            showToast('Árajánlatkérő sikeresen létrehozva', 'success');
-                          } catch (error) {
-                            console.error('Létrehozási hiba:', error);
-                            showToast(
-                              error instanceof Error ? error.message : 'Hiba történt a létrehozás során',
-                              'error'
-                            );
-                          }
-                        }}
-                        className="btn-primary flex items-center gap-2"
-                      >
-                        <Plus className="w-4 h-4" />
-                        Árajánlatkérő mentése
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+          <ArajanlatkeroSection
+            isViewOnly={isViewOnly}
+            patientId={patientId}
+            userRole={userRole}
+            labQuoteRequests={labQuoteRequests}
+            setLabQuoteRequests={setLabQuoteRequests}
+            newQuoteSzoveg={newQuoteSzoveg}
+            setNewQuoteSzoveg={setNewQuoteSzoveg}
+            newQuoteDatuma={newQuoteDatuma}
+            setNewQuoteDatuma={setNewQuoteDatuma}
+            currentPatientName={currentPatient?.nev}
+            confirmDialog={confirmDialog}
+            showToast={showToast}
+          />
         )}
 
         {/* Appointment Booking Section */}
@@ -3998,211 +1926,60 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
       </form>
 
       {/* Manual save conflict modal */}
-      {showConflictModal && conflictError && (() => {
-        const details = conflictError.details && typeof conflictError.details === 'object' && 'serverUpdatedAt' in conflictError.details
-          ? conflictError.details as { serverUpdatedAt?: string; clientUpdatedAt?: string }
-          : null;
-        
-        return (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-              <div className="p-6">
-                <div className="flex items-start mb-4">
-                  <AlertTriangle className="w-6 h-6 text-amber-600 mr-3 mt-0.5 flex-shrink-0" />
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                      Konfliktus észlelve
-                    </h3>
-                    <p className="text-sm text-gray-700 mb-4">
-                      Másik felhasználó módosította a beteg adatait közben. Mit szeretne tenni?
-                    </p>
-                    
-                    {/* Details section (collapsible) */}
-                    {details && (
-                      <details className="mb-4 text-xs text-gray-600">
-                        <summary className="cursor-pointer hover:text-gray-800 mb-2">
-                          Részletek
-                        </summary>
-                        <div className="pl-4 space-y-1">
-                          {conflictError.correlationId && (
-                            <div>
-                              <strong>Correlation ID:</strong> {String(conflictError.correlationId)}
-                            </div>
-                          )}
-                          {details.serverUpdatedAt && (
-                            <div>
-                              <strong>Szerver frissítve:</strong>{' '}
-                              {new Date(details.serverUpdatedAt).toLocaleString('hu-HU')}
-                            </div>
-                          )}
-                          {details.clientUpdatedAt && (
-                            <div>
-                              <strong>Kliens verzió:</strong>{' '}
-                              {new Date(details.clientUpdatedAt).toLocaleString('hu-HU')}
-                            </div>
-                          )}
-                        </div>
-                      </details>
-                    )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowConflictModal(false);
-                    setConflictError(null);
-                  }}
-                  className="text-gray-400 hover:text-gray-600"
-                  aria-label="Modal bezárása"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-                </div>
+      <ConflictModal
+        showConflictModal={conflict.showConflictModal}
+        conflictError={conflict.conflictError}
+        onDismiss={() => conflict.dismissModal()}
+        onRefresh={() => conflict.refreshPatient()}
+        onOverwrite={(userRole === 'admin' || userRole === 'editor') ? async () => {
+          const confirmed = await confirmDialog(
+            'Biztosan felülírja a másik felhasználó módosításait? Ez a művelet nem vonható vissza.',
+            { title: 'Felülírás megerősítése', type: 'warning' }
+          );
+          if (!confirmed) return;
 
-                <div className="flex flex-col sm:flex-row gap-3">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (!patientId) return;
-                    try {
-                      const response = await fetch(`/api/patients/${patientId}`, {
-                        credentials: 'include',
-                      });
-                      if (response.ok) {
-                        const data = await response.json();
-                        updateCurrentPatient(data.patient);
-                        reset(data.patient);
-                        setShowConflictModal(false);
-                        setConflictError(null);
-                        showToast('Adatok frissítve', 'success');
-                      } else {
-                        showToast('Hiba az adatok frissítésekor', 'error');
-                      }
-                    } catch (error) {
-                      console.error('Error refreshing patient:', error);
-                      showToast('Hiba az adatok frissítésekor', 'error');
-                    }
-                  }}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors text-sm font-medium"
-                >
-                  Frissítés
-                </button>
-                
-                {/* Felülírás csak admin/editor számára */}
-                {(userRole === 'admin' || userRole === 'editor') && (
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const confirmed = await confirmDialog(
-                        'Biztosan felülírja a másik felhasználó módosításait? Ez a művelet nem vonható vissza.',
-                        { title: 'Felülírás megerősítése', type: 'warning' }
-                      );
-                      if (!confirmed) return;
-
-                      if (!patientId) return;
-                      try {
-                        // Felülírás: először frissítjük az adatokat (hogy megkapjuk a legfrissebb updatedAt-t),
-                        // majd mentjük a jelenlegi form állapotot (ami felülírja)
-                        const refreshResponse = await fetch(`/api/patients/${patientId}`, {
-                          credentials: 'include',
-                        });
-                        if (!refreshResponse.ok) {
-                          showToast('Hiba az adatok frissítésekor', 'error');
-                          return;
-                        }
-                        const refreshData = await refreshResponse.json();
-                        
-                        // Most mentjük a jelenlegi form állapotot (felülírás)
-                        const currentFormData = getValues();
-                        const payload = buildSavePayload(
-                          currentFormData,
-                          fogakRef.current,
-                          implantatumokRef.current,
-                          vanBeutaloRef.current,
-                          patientId
-                        );
-                        
-                        // Felülírás: a legfrissebb updatedAt-tel küldjük (de a backend még mindig konfliktust dob)
-                        // Ezért explicit felülírás flag kellene, de MVP-ben: if-match nélkül (backward compat)
-                        // Jelenleg a backend engedi if-match nélkül, de ez nem teljesen "felülírás"
-                        // TODO: Később explicit felülírás API endpoint vagy flag
-                        const saved = await savePatient(payload, { source: 'manual' });
-                        updateCurrentPatient(saved);
-                        setShowConflictModal(false);
-                        setConflictError(null);
-                        showToast('Adatok felülírva', 'success');
-                      } catch (error) {
-                        console.error('Error overwriting patient:', error);
-                        showToast('Hiba a felülírás során', 'error');
-                      }
-                    }}
-                    className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md transition-colors text-sm font-medium"
-                  >
-                    Felülírás
-                  </button>
-                )}
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+          if (!patientId) return;
+          try {
+            const refreshResponse = await fetch(`/api/patients/${patientId}`, {
+              credentials: 'include',
+            });
+            if (!refreshResponse.ok) {
+              showToast('Hiba az adatok frissítésekor', 'error');
+              return;
+            }
+            await refreshResponse.json();
+            
+            const currentFormData = getValues();
+            const payload = buildSavePayload(
+              currentFormData,
+              fogakRef.current,
+              implantatumokRef.current,
+              vanBeutaloRef.current,
+              patientId
+            );
+            
+            const saved = await savePatient(payload, { source: 'manual' });
+            updateCurrentPatient(saved);
+            conflict.dismissModal();
+            showToast('Adatok felülírva', 'success');
+          } catch (error) {
+            console.error('Error overwriting patient:', error);
+            showToast('Hiba a felülírás során', 'error');
+          }
+        } : null}
+        userRole={userRole}
+      />
 
       {/* Sticky Submit Bar */}
       {!isViewOnly && (
-        <div className="mobile-cta-bar absolute bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 px-3 sm:px-6 md:px-8">
-          <div className="max-w-4xl mx-auto flex flex-col sm:flex-row justify-between gap-2 sm:gap-3 py-3 sm:py-4">
-            {/* Left: Next section button (mobile only if not last section) */}
-            {breakpoint === 'mobile' && (() => {
-              const currentActiveIndex = visibleSections.findIndex(s => s.id === activeSectionId);
-              return currentActiveIndex >= 0 && currentActiveIndex < visibleSections.length - 1;
-            })() && (
-              <button
-                type="button"
-                onClick={() => {
-                  const currentActiveIndex = visibleSections.findIndex(s => s.id === activeSectionId);
-                  const nextSection = visibleSections[currentActiveIndex + 1];
-                  if (nextSection) {
-                    setActiveSectionId(nextSection.id);
-                    setTimeout(() => {
-                      const element = document.getElementById(`section-${nextSection.id}`);
-                      if (element) {
-                        const headerOffset = 100;
-                        const elementPosition = element.getBoundingClientRect().top;
-                        const offsetPosition = elementPosition + (window.scrollY || window.pageYOffset) - headerOffset;
-                        window.scrollTo({
-                          top: offsetPosition,
-                          behavior: 'smooth',
-                        });
-                      }
-                    }, 100);
-                  }
-                }}
-                className="btn-secondary text-xs sm:text-sm px-3 sm:px-5 py-2 sm:py-2.5 mobile-touch-target w-full sm:w-auto order-2 sm:order-1"
-              >
-                Következő szekció →
-              </button>
-            )}
-            
-            {/* Right: Cancel and Save buttons */}
-            <div className="flex gap-2 sm:gap-3 w-full sm:w-auto order-1 sm:order-2 ml-auto">
-              <button
-                type="button"
-                onClick={handleCancel}
-                className="btn-secondary text-xs sm:text-sm px-3 sm:px-5 py-2 sm:py-2.5 mobile-touch-target flex-1 sm:flex-none"
-                data-patient-form-cancel
-              >
-                Mégse
-              </button>
-              <button
-                type="submit"
-                form="patient-form"
-                className="btn-primary text-xs sm:text-sm px-3 sm:px-5 py-2 sm:py-2.5 mobile-touch-target flex-1 sm:flex-none"
-              >
-                {patient ? 'Beteg frissítése' : 'Beteg mentése'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <StickySubmitBar
+          patient={patient}
+          breakpoint={breakpoint}
+          visibleSections={visibleSections}
+          activeSectionId={activeSectionId}
+          setActiveSectionId={setActiveSectionId}
+          handleCancel={handleCancel}
+        />
       )}
     </div>
   );

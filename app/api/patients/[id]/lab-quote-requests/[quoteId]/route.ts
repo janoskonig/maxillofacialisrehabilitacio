@@ -1,40 +1,30 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
-import { verifyAuth } from '@/lib/auth-server';
+import { authedHandler } from '@/lib/api/route-handler';
 import { labQuoteRequestSchema } from '@/lib/types';
+import { logger } from '@/lib/logger';
 
 /**
  * Árajánlatkérő frissítése
  */
 export const dynamic = 'force-dynamic';
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string; quoteId: string } }
-) {
+export const PUT = authedHandler(async (req, { auth, params }) => {
+  // Jogosultság ellenőrzése
+  if (auth.role !== 'admin' && auth.role !== 'editor' && auth.role !== 'sebészorvos') {
+    return NextResponse.json(
+      { error: 'Nincs jogosultsága árajánlatkérő módosításához' },
+      { status: 403 }
+    );
+  }
+
+  const pool = getDbPool();
+  const patientId = params.id;
+  const quoteId = params.quoteId;
+  const userEmail = auth.email;
+
+  const body = await req.json();
   try {
-    const auth = await verifyAuth(request);
-    if (!auth) {
-      return NextResponse.json(
-        { error: 'Bejelentkezés szükséges' },
-        { status: 401 }
-      );
-    }
-
-    // Jogosultság ellenőrzése
-    if (auth.role !== 'admin' && auth.role !== 'editor' && auth.role !== 'sebészorvos') {
-      return NextResponse.json(
-        { error: 'Nincs jogosultsága árajánlatkérő módosításához' },
-        { status: 403 }
-      );
-    }
-
-    const pool = getDbPool();
-    const patientId = params.id;
-    const quoteId = params.quoteId;
-    const userEmail = auth.email;
-
-    const body = await request.json();
     const validatedData = labQuoteRequestSchema.parse({
       ...body,
       patientId,
@@ -73,67 +63,44 @@ export async function PUT(
 
     return NextResponse.json({ quoteRequest: result.rows[0] }, { status: 200 });
   } catch (error) {
-    console.error('Hiba az árajánlatkérő frissítésekor:', error);
+    logger.error('Hiba az árajánlatkérő frissítésekor:', error);
     if (error instanceof Error && error.name === 'ZodError') {
       return NextResponse.json(
         { error: 'Érvénytelen adatok', details: error },
         { status: 400 }
       );
     }
-    return NextResponse.json(
-      { error: 'Hiba történt az árajánlatkérő frissítésekor' },
-      { status: 500 }
-    );
+    throw error;
   }
-}
+});
 
 /**
  * Árajánlatkérő törlése
  */
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string; quoteId: string } }
-) {
-  try {
-    const auth = await verifyAuth(request);
-    if (!auth) {
-      return NextResponse.json(
-        { error: 'Bejelentkezés szükséges' },
-        { status: 401 }
-      );
-    }
-
-    // Jogosultság ellenőrzése - csak admin és editor
-    if (auth.role !== 'admin' && auth.role !== 'editor') {
-      return NextResponse.json(
-        { error: 'Nincs jogosultsága árajánlatkérő törléséhez' },
-        { status: 403 }
-      );
-    }
-
-    const pool = getDbPool();
-    const patientId = params.id;
-    const quoteId = params.quoteId;
-
-    const result = await pool.query(
-      'DELETE FROM lab_quote_requests WHERE id = $1 AND patient_id = $2 RETURNING id',
-      [quoteId, patientId]
-    );
-
-    if (result.rows.length === 0) {
-      return NextResponse.json(
-        { error: 'Árajánlatkérő nem található' },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({ success: true }, { status: 200 });
-  } catch (error) {
-    console.error('Hiba az árajánlatkérő törlésekor:', error);
+export const DELETE = authedHandler(async (req, { auth, params }) => {
+  // Jogosultság ellenőrzése - csak admin és editor
+  if (auth.role !== 'admin' && auth.role !== 'editor') {
     return NextResponse.json(
-      { error: 'Hiba történt az árajánlatkérő törlésekor' },
-      { status: 500 }
+      { error: 'Nincs jogosultsága árajánlatkérő törléséhez' },
+      { status: 403 }
     );
   }
-}
 
+  const pool = getDbPool();
+  const patientId = params.id;
+  const quoteId = params.quoteId;
+
+  const result = await pool.query(
+    'DELETE FROM lab_quote_requests WHERE id = $1 AND patient_id = $2 RETURNING id',
+    [quoteId, patientId]
+  );
+
+  if (result.rows.length === 0) {
+    return NextResponse.json(
+      { error: 'Árajánlatkérő nem található' },
+      { status: 404 }
+    );
+  }
+
+  return NextResponse.json({ success: true }, { status: 200 });
+});

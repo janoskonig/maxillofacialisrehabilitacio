@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
+import { apiHandler } from '@/lib/api/route-handler';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export const GET = apiHandler(async (_req, { correlationId }) => {
   const publicKey = process.env.VAPID_PUBLIC_KEY;
-  
+
   if (!publicKey) {
-    console.error('[Push] VAPID_PUBLIC_KEY not configured in environment variables');
+    logger.error('[Push] VAPID_PUBLIC_KEY not configured in environment variables');
     return NextResponse.json(
       { 
         error: 'VAPID public key not configured',
@@ -17,4 +19,4 @@ export async function GET() {
   }
 
   return NextResponse.json({ publicKey });
-}
+});

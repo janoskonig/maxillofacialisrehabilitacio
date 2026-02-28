@@ -1,10 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { sendAppointmentBookingNotification, sendAppointmentBookingNotificationToPatient, sendAppointmentBookingNotificationToAdmins } from '@/lib/email';
 import { generateIcsFile } from '@/lib/calendar';
 import { createGoogleCalendarEvent } from '@/lib/google-calendar';
-import { handleApiError } from '@/lib/api-error-handler';
+import { apiHandler } from '@/lib/api/route-handler';
 import { sendPushNotification } from '@/lib/push-notifications';
+import { logger } from '@/lib/logger';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 
@@ -14,9 +15,8 @@ import { hu } from 'date-fns/locale';
  */
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: NextRequest) {
-  try {
-    const searchParams = request.nextUrl.searchParams;
+export const GET = apiHandler(async (req, { params }) => {
+    const searchParams = req.nextUrl.searchParams;
     const token = searchParams.get('token');
 
     if (!token) {
@@ -181,7 +181,7 @@ export async function GET(request: NextRequest) {
                 [appointment.dentist_user_id]
               );
               if (userCalendarResult.rows[0]?.google_calendar_enabled !== true) {
-                console.log('[Appointment Approval] Slot owner has Google Calendar disabled, skipping sync');
+                logger.info('[Appointment Approval] Slot owner has Google Calendar disabled, skipping sync');
                 return;
               }
               const targetCalendarId = userCalendarResult.rows[0]?.google_calendar_target_calendar_id || 'primary';
@@ -205,7 +205,7 @@ export async function GET(request: NextRequest) {
                 );
               }
             } catch (error) {
-              console.error('[Appointment Approval] Failed to create Google Calendar event:', error);
+              logger.error('[Appointment Approval] Failed to create Google Calendar event:', error);
             }
           })(),
         ]);
@@ -251,7 +251,7 @@ export async function GET(request: NextRequest) {
             }
           }
         } catch (pushError) {
-          console.error('Failed to send push notification to patient:', pushError);
+          logger.error('Failed to send push notification to patient:', pushError);
         }
 
         // Email to admins
@@ -269,7 +269,7 @@ export async function GET(request: NextRequest) {
           );
         }
       } catch (emailError) {
-        console.error('Failed to send appointment approval notifications:', emailError);
+        logger.error('Failed to send appointment approval notifications:', emailError);
         // Don't fail the request if email fails
       }
 
@@ -322,8 +322,5 @@ export async function GET(request: NextRequest) {
       await pool.query('ROLLBACK');
       throw error;
     }
-  } catch (error) {
-    return handleApiError(error, 'Hiba történt az időpont elfogadásakor');
-  }
-}
+});
 

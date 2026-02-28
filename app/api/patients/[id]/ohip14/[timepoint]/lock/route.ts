@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
-import { verifyAuth } from '@/lib/auth-server';
+import { roleHandler } from '@/lib/api/route-handler';
 import { getCurrentEpisodeAndStage } from '@/lib/ohip14-stage';
 import { OHIP14Timepoint } from '@/lib/types';
 import { logActivity } from '@/lib/activity';
@@ -11,27 +11,9 @@ import { logActivity } from '@/lib/activity';
  */
 export const dynamic = 'force-dynamic';
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string; timepoint: string } }
-) {
-  try {
-    const auth = await verifyAuth(request);
-    if (!auth) {
-      return NextResponse.json(
-        { error: 'Bejelentkezés szükséges' },
-        { status: 401 }
-      );
-    }
-
-    // Only admin and doctors can lock
-    if (auth.role !== 'admin' && auth.role !== 'sebészorvos' && auth.role !== 'fogpótlástanász') {
-      return NextResponse.json(
-        { error: 'Nincs jogosultsága a kérdőív lezárásához' },
-        { status: 403 }
-      );
-    }
-
+export const POST = roleHandler(
+  ['admin', 'sebészorvos', 'fogpótlástanász'],
+  async (req, { auth, params }) => {
     const pool = getDbPool();
     const patientId = params.id;
     const timepoint = params.timepoint as OHIP14Timepoint;
@@ -86,7 +68,7 @@ export async function POST(
     );
 
     await logActivity(
-      request,
+      req,
       auth.email,
       'ohip14_locked',
       JSON.stringify({ patientId, timepoint, episodeId: activeEpisodeId })
@@ -96,11 +78,5 @@ export async function POST(
       message: 'Kérdőív sikeresen lezárva',
       lockedAt: new Date().toISOString(),
     });
-  } catch (error) {
-    console.error('Error locking OHIP-14 response:', error);
-    return NextResponse.json(
-      { error: 'Hiba történt a lezárás során' },
-      { status: 500 }
-    );
   }
-}
+);

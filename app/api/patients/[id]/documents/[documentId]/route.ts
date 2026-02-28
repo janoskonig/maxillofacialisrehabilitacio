@@ -1,231 +1,182 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
-import { verifyAuth } from '@/lib/auth-server';
+import { authedHandler, roleHandler } from '@/lib/api/route-handler';
 import { downloadFile, deleteFile } from '@/lib/ftp-client';
 import { logActivity, logActivityWithAuth } from '@/lib/activity';
+import { logger } from '@/lib/logger';
 
 // Download a document
 export const dynamic = 'force-dynamic';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string; documentId: string } }
-) {
-  try {
-    // Authentication required
-    const auth = await verifyAuth(request);
-    if (!auth) {
-      return NextResponse.json(
-        { error: 'Bejelentkezés szükséges' },
-        { status: 401 }
-      );
-    }
+export const GET = authedHandler(async (req, { auth, params }) => {
+  const pool = getDbPool();
+  const patientId = params.id;
+  const documentId = params.documentId;
 
-    const pool = getDbPool();
-    const patientId = params.id;
-    const documentId = params.documentId;
+  // Get document metadata
+  const result = await pool.query(
+    `SELECT 
+      id,
+      patient_id,
+      filename,
+      file_path,
+      file_size,
+      mime_type,
+      uploaded_by
+    FROM patient_documents
+    WHERE id = $1 AND patient_id = $2`,
+    [documentId, patientId]
+  );
 
-    // Get document metadata
-    const result = await pool.query(
-      `SELECT 
-        id,
-        patient_id,
-        filename,
-        file_path,
-        file_size,
-        mime_type,
-        uploaded_by
-      FROM patient_documents
-      WHERE id = $1 AND patient_id = $2`,
-      [documentId, patientId]
-    );
-
-    if (result.rows.length === 0) {
-      return NextResponse.json(
-        { error: 'Dokumentum nem található' },
-        { status: 404 }
-      );
-    }
-
-    const document = result.rows[0];
-
-    // Role-based access control (same as patient view)
-    const role = auth.role;
-    const userEmail = auth.email;
-
-    if (role === 'technikus') {
-      const patientResult = await pool.query(
-        `SELECT kezelesi_terv_arcot_erinto FROM patients WHERE id = $1`,
-        [patientId]
-      );
-      const hasEpitesis = patientResult.rows[0]?.kezelesi_terv_arcot_erinto && 
-                          Array.isArray(patientResult.rows[0].kezelesi_terv_arcot_erinto) && 
-                          patientResult.rows[0].kezelesi_terv_arcot_erinto.length > 0;
-      if (!hasEpitesis) {
-        return NextResponse.json(
-          { error: 'Nincs jogosultsága ehhez a dokumentumhoz' },
-          { status: 403 }
-        );
-      }
-    } else if (role === 'sebészorvos' && userEmail) {
-      const userResult = await pool.query(
-        `SELECT intezmeny FROM users WHERE email = $1`,
-        [userEmail]
-      );
-      if (userResult.rows.length > 0 && userResult.rows[0].intezmeny) {
-        const userInstitution = userResult.rows[0].intezmeny;
-        const patientResult = await pool.query(
-          `SELECT beutalo_intezmeny FROM patients WHERE id = $1`,
-          [patientId]
-        );
-        if (patientResult.rows[0]?.beutalo_intezmeny !== userInstitution) {
-          return NextResponse.json(
-            { error: 'Nincs jogosultsága ehhez a dokumentumhoz' },
-            { status: 403 }
-          );
-        }
-      } else {
-        return NextResponse.json(
-          { error: 'Nincs jogosultsága ehhez a dokumentumhoz' },
-          { status: 403 }
-        );
-      }
-    }
-
-    // Download file from FTP
-    // Pass patientId to downloadFile so it can navigate to the correct directory
-    const fileBuffer = await downloadFile(document.file_path, patientId);
-
-    // Activity logging
-    await logActivityWithAuth(
-      request,
-      auth,
-      'patient_document_downloaded',
-      `Patient ID: ${patientId}, Document: ${document.filename}`
-    );
-
-    // Check if this is an image - if so, use inline disposition for viewing
-    const isImage = document.mime_type && (
-      document.mime_type.startsWith('image/') ||
-      document.mime_type === 'image/jpeg' ||
-      document.mime_type === 'image/jpg' ||
-      document.mime_type === 'image/png' ||
-      document.mime_type === 'image/gif' ||
-      document.mime_type === 'image/webp' ||
-      document.mime_type === 'image/svg+xml'
-    );
-    
-    // Check if request wants inline display (from query param or referer)
-    const url = new URL(request.url);
-    const viewInline = url.searchParams.get('inline') === 'true' || isImage;
-    
-    // Return file
-    // Convert Buffer to Uint8Array for NextResponse compatibility
-    return new NextResponse(new Uint8Array(fileBuffer), {
-      status: 200,
-      headers: {
-        'Content-Type': document.mime_type || 'application/octet-stream',
-        'Content-Disposition': viewInline 
-          ? `inline; filename="${encodeURIComponent(document.filename)}"`
-          : `attachment; filename="${encodeURIComponent(document.filename)}"`,
-        'Content-Length': document.file_size.toString(),
-        // Add CORS headers for cross-origin image loading if needed
-        'Cache-Control': 'private, max-age=3600',
-      },
-    });
-  } catch (error) {
-    console.error('Hiba a dokumentum letöltésekor:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Ismeretlen hiba';
+  if (result.rows.length === 0) {
     return NextResponse.json(
-      { error: `Hiba történt a dokumentum letöltésekor: ${errorMessage}` },
-      { status: 500 }
+      { error: 'Dokumentum nem található' },
+      { status: 404 }
     );
   }
-}
 
-// Delete a document
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string; documentId: string } }
-) {
-  try {
-    // Authentication required
-    const auth = await verifyAuth(request);
-    if (!auth) {
-      return NextResponse.json(
-        { error: 'Bejelentkezés szükséges' },
-        { status: 401 }
-      );
-    }
+  const document = result.rows[0];
 
-    // Only admins can delete documents
-    if (auth.role !== 'admin') {
+  // Role-based access control (same as patient view)
+  const role = auth.role;
+  const userEmail = auth.email;
+
+  if (role === 'technikus') {
+    const patientResult = await pool.query(
+      `SELECT kezelesi_terv_arcot_erinto FROM patients WHERE id = $1`,
+      [patientId]
+    );
+    const hasEpitesis = patientResult.rows[0]?.kezelesi_terv_arcot_erinto &&
+      Array.isArray(patientResult.rows[0].kezelesi_terv_arcot_erinto) &&
+      patientResult.rows[0].kezelesi_terv_arcot_erinto.length > 0;
+    if (!hasEpitesis) {
       return NextResponse.json(
-        { error: 'Csak admin törölhet dokumentumokat' },
+        { error: 'Nincs jogosultsága ehhez a dokumentumhoz' },
         { status: 403 }
       );
     }
-
-    const pool = getDbPool();
-    const patientId = params.id;
-    const documentId = params.documentId;
-    const userEmail = auth.email;
-
-    // Get document metadata
-    const result = await pool.query(
-      `SELECT 
-        id,
-        patient_id,
-        filename,
-        file_path
-      FROM patient_documents
-      WHERE id = $1 AND patient_id = $2`,
-      [documentId, patientId]
+  } else if (role === 'sebészorvos' && userEmail) {
+    const userResult = await pool.query(
+      `SELECT intezmeny FROM users WHERE email = $1`,
+      [userEmail]
     );
-
-    if (result.rows.length === 0) {
+    if (userResult.rows.length > 0 && userResult.rows[0].intezmeny) {
+      const userInstitution = userResult.rows[0].intezmeny;
+      const patientResult = await pool.query(
+        `SELECT beutalo_intezmeny FROM patients WHERE id = $1`,
+        [patientId]
+      );
+      if (patientResult.rows[0]?.beutalo_intezmeny !== userInstitution) {
+        return NextResponse.json(
+          { error: 'Nincs jogosultsága ehhez a dokumentumhoz' },
+          { status: 403 }
+        );
+      }
+    } else {
       return NextResponse.json(
-        { error: 'Dokumentum nem található' },
-        { status: 404 }
+        { error: 'Nincs jogosultsága ehhez a dokumentumhoz' },
+        { status: 403 }
       );
     }
+  }
 
-    const document = result.rows[0];
+  // Download file from FTP
+  // Pass patientId to downloadFile so it can navigate to the correct directory
+  const fileBuffer = await downloadFile(document.file_path, patientId);
 
-    // Delete from FTP
-    try {
-      // Pass patientId to deleteFile so it can navigate to the correct directory
-      await deleteFile(document.file_path, patientId);
-    } catch (error) {
-      console.error('Failed to delete file from FTP:', error);
-      // Continue with database deletion even if FTP deletion fails
-    }
+  // Activity logging
+  await logActivityWithAuth(
+    req,
+    auth,
+    'patient_document_downloaded',
+    `Patient ID: ${patientId}, Document: ${document.filename}`
+  );
 
-    // Delete from database
-    await pool.query(
-      'DELETE FROM patient_documents WHERE id = $1',
-      [documentId]
-    );
+  // Check if this is an image - if so, use inline disposition for viewing
+  const isImage = document.mime_type && (
+    document.mime_type.startsWith('image/') ||
+    document.mime_type === 'image/jpeg' ||
+    document.mime_type === 'image/jpg' ||
+    document.mime_type === 'image/png' ||
+    document.mime_type === 'image/gif' ||
+    document.mime_type === 'image/webp' ||
+    document.mime_type === 'image/svg+xml'
+  );
 
-    // Activity logging
-    await logActivity(
-      request,
-      userEmail,
-      'patient_document_deleted',
-      `Patient ID: ${patientId}, Document: ${document.filename}`
-    );
+  // Check if request wants inline display (from query param or referer)
+  const url = new URL(req.url);
+  const viewInline = url.searchParams.get('inline') === 'true' || isImage;
 
+  // Return file
+  // Convert Buffer to Uint8Array for NextResponse compatibility
+  return new NextResponse(new Uint8Array(fileBuffer), {
+    status: 200,
+    headers: {
+      'Content-Type': document.mime_type || 'application/octet-stream',
+      'Content-Disposition': viewInline
+        ? `inline; filename="${encodeURIComponent(document.filename)}"`
+        : `attachment; filename="${encodeURIComponent(document.filename)}"`,
+      'Content-Length': document.file_size.toString(),
+      // Add CORS headers for cross-origin image loading if needed
+      'Cache-Control': 'private, max-age=3600',
+    },
+  });
+});
+
+// Delete a document
+export const DELETE = roleHandler(['admin'], async (req, { auth, params }) => {
+  const pool = getDbPool();
+  const patientId = params.id;
+  const documentId = params.documentId;
+  const userEmail = auth.email;
+
+  // Get document metadata
+  const result = await pool.query(
+    `SELECT 
+      id,
+      patient_id,
+      filename,
+      file_path
+    FROM patient_documents
+    WHERE id = $1 AND patient_id = $2`,
+    [documentId, patientId]
+  );
+
+  if (result.rows.length === 0) {
     return NextResponse.json(
-      { message: 'Dokumentum sikeresen törölve' },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error('Hiba a dokumentum törlésekor:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Ismeretlen hiba';
-    return NextResponse.json(
-      { error: `Hiba történt a dokumentum törlésekor: ${errorMessage}` },
-      { status: 500 }
+      { error: 'Dokumentum nem található' },
+      { status: 404 }
     );
   }
-}
+
+  const document = result.rows[0];
+
+  // Delete from FTP
+  try {
+    // Pass patientId to deleteFile so it can navigate to the correct directory
+    await deleteFile(document.file_path, patientId);
+  } catch (error) {
+    logger.error('Failed to delete file from FTP:', error);
+    // Continue with database deletion even if FTP deletion fails
+  }
+
+  // Delete from database
+  await pool.query(
+    'DELETE FROM patient_documents WHERE id = $1',
+    [documentId]
+  );
+
+  // Activity logging
+  await logActivity(
+    req,
+    userEmail,
+    'patient_document_deleted',
+    `Patient ID: ${patientId}, Document: ${document.filename}`
+  );
+
+  return NextResponse.json(
+    { message: 'Dokumentum sikeresen törölve' },
+    { status: 200 }
+  );
+});
 

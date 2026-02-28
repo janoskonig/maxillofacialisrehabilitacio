@@ -1,314 +1,451 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
 import { OHIP14Response, OHIP14Timepoint } from '@/lib/types';
 import { calculateOHIP14Scores } from '@/lib/ohip14-questions';
 import { getCurrentStageCodeForOhip, getCurrentEpisodeAndStage } from '@/lib/ohip14-stage';
 import { getTimepointAvailability } from '@/lib/ohip14-timepoint-stage';
+import { apiHandler } from '@/lib/api/route-handler';
 
 export const dynamic = 'force-dynamic';
 
 const VALID_TIMEPOINTS = ['T0', 'T1', 'T2', 'T3'];
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { timepoint: string } }
-) {
-  try {
-    const patientId = await verifyPatientPortalSession(request);
+export const GET = apiHandler(async (req, { correlationId, params }) => {
+  const patientId = await verifyPatientPortalSession(req);
 
-    if (!patientId) {
-      return NextResponse.json(
-        { error: 'Bejelentkezés szükséges' },
-        { status: 401 }
-      );
-    }
-
-    const timepoint = params.timepoint as OHIP14Timepoint;
-    if (!VALID_TIMEPOINTS.includes(timepoint)) {
-      return NextResponse.json(
-        { error: 'Érvénytelen timepoint' },
-        { status: 400 }
-      );
-    }
-
-    const pool = getDbPool();
-    const { episodeId: activeEpisodeId } = await getCurrentEpisodeAndStage(pool, patientId);
-
-    const result = await pool.query(
-      `SELECT 
-        id,
-        patient_id as "patientId",
-        episode_id as "episodeId",
-        timepoint,
-        stage_code as "stageCode",
-        completed_at as "completedAt",
-        completed_by_patient as "completedByPatient",
-        q1_functional_limitation,
-        q2_functional_limitation,
-        q3_physical_pain,
-        q4_physical_pain,
-        q5_psychological_discomfort,
-        q6_psychological_discomfort,
-        q7_physical_disability,
-        q8_physical_disability,
-        q9_psychological_disability,
-        q10_psychological_disability,
-        q11_social_disability,
-        q12_social_disability,
-        q13_handicap,
-        q14_handicap,
-        total_score as "totalScore",
-        functional_limitation_score as "functionalLimitationScore",
-        physical_pain_score as "physicalPainScore",
-        psychological_discomfort_score as "psychologicalDiscomfortScore",
-        physical_disability_score as "physicalDisabilityScore",
-        psychological_disability_score as "psychologicalDisabilityScore",
-        social_disability_score as "socialDisabilityScore",
-        handicap_score as "handicapScore",
-        notes,
-        locked_at as "lockedAt",
-        created_at as "createdAt",
-        updated_at as "updatedAt",
-        created_by as "createdBy",
-        updated_by as "updatedBy"
-      FROM ohip14_responses
-      WHERE patient_id = $1
-        AND timepoint = $2
-        AND (episode_id = $3 OR episode_id IS NULL OR $3 IS NULL)
-      ORDER BY completed_at DESC
-      LIMIT 1`,
-      [patientId, timepoint, activeEpisodeId]
-    );
-
-    if (result.rows.length === 0) {
-      return NextResponse.json({
-        response: {
-          patientId,
-          episodeId: activeEpisodeId,
-          timepoint,
-          stageCode: null,
-          completedByPatient: true,
-          completed: false as const,
-          q1_functional_limitation: null,
-          q2_functional_limitation: null,
-          q3_physical_pain: null,
-          q4_physical_pain: null,
-          q5_psychological_discomfort: null,
-          q6_psychological_discomfort: null,
-          q7_physical_disability: null,
-          q8_physical_disability: null,
-          q9_psychological_disability: null,
-          q10_psychological_disability: null,
-          q11_social_disability: null,
-          q12_social_disability: null,
-          q13_handicap: null,
-          q14_handicap: null,
-        },
-      });
-    }
-
-    const row = result.rows[0];
-    const response = {
-      timepoint: row.timepoint,
-      completedAt: row.completedAt?.toISOString(),
-      completed: true as const,
-    };
-
-    return NextResponse.json({ response });
-  } catch (error) {
-    console.error('Error fetching OHIP-14 response:', error);
+  if (!patientId) {
     return NextResponse.json(
-      { error: 'Hiba történt a válasz lekérdezésekor' },
-      { status: 500 }
+      { error: 'Bejelentkezés szükséges' },
+      { status: 401 }
     );
   }
-}
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { timepoint: string } }
-) {
-  try {
-    const patientId = await verifyPatientPortalSession(request);
-
-    if (!patientId) {
-      return NextResponse.json(
-        { error: 'Bejelentkezés szükséges' },
-        { status: 401 }
-      );
-    }
-
-    const timepoint = params.timepoint as OHIP14Timepoint;
-    if (!VALID_TIMEPOINTS.includes(timepoint)) {
-      return NextResponse.json(
-        { error: 'Érvénytelen timepoint' },
-        { status: 400 }
-      );
-    }
-
-    const pool = getDbPool();
-    const body = await request.json();
-
-    const { episodeId: activeEpisodeId, stageCode: currentStageCode, deliveryDate } =
-      await getCurrentEpisodeAndStage(pool, patientId);
-
-    if (!activeEpisodeId) {
-      return NextResponse.json(
-        { error: 'Nincs aktív epizód. Kérjük, forduljon kezelőorvosához.' },
-        { status: 400 }
-      );
-    }
-
-    const availability = getTimepointAvailability(timepoint, currentStageCode, deliveryDate);
-    if (!availability.allowed) {
-      return NextResponse.json(
-        { error: availability.reason ?? 'Ez a timepoint jelenleg nem kitölthető.' },
-        { status: 403 }
-      );
-    }
-
-    // Check if response already exists
-    const existingResult = await pool.query(
-      `SELECT id, locked_at 
-       FROM ohip14_responses
-       WHERE patient_id = $1
-         AND timepoint = $2
-         AND episode_id = $3`,
-      [patientId, timepoint, activeEpisodeId]
+  const timepoint = params.timepoint as OHIP14Timepoint;
+  if (!VALID_TIMEPOINTS.includes(timepoint)) {
+    return NextResponse.json(
+      { error: 'Érvénytelen timepoint' },
+      { status: 400 }
     );
+  }
 
-    if (existingResult.rows.length > 0) {
-      return NextResponse.json(
-        { error: 'Egy stádiumban csak egyszer töltheti ki a kérdőívet. A kérdőív már kitöltve.' },
-        { status: 409 }
-      );
-    }
+  const pool = getDbPool();
+  const { episodeId: activeEpisodeId } = await getCurrentEpisodeAndStage(pool, patientId);
 
-    const ohipStageCode = await getCurrentStageCodeForOhip(pool, patientId, activeEpisodeId);
+  const result = await pool.query(
+    `SELECT 
+      id,
+      patient_id as "patientId",
+      episode_id as "episodeId",
+      timepoint,
+      stage_code as "stageCode",
+      completed_at as "completedAt",
+      completed_by_patient as "completedByPatient",
+      q1_functional_limitation,
+      q2_functional_limitation,
+      q3_physical_pain,
+      q4_physical_pain,
+      q5_psychological_discomfort,
+      q6_psychological_discomfort,
+      q7_physical_disability,
+      q8_physical_disability,
+      q9_psychological_disability,
+      q10_psychological_disability,
+      q11_social_disability,
+      q12_social_disability,
+      q13_handicap,
+      q14_handicap,
+      total_score as "totalScore",
+      functional_limitation_score as "functionalLimitationScore",
+      physical_pain_score as "physicalPainScore",
+      psychological_discomfort_score as "psychologicalDiscomfortScore",
+      physical_disability_score as "physicalDisabilityScore",
+      psychological_disability_score as "psychologicalDisabilityScore",
+      social_disability_score as "socialDisabilityScore",
+      handicap_score as "handicapScore",
+      notes,
+      locked_at as "lockedAt",
+      created_at as "createdAt",
+      updated_at as "updatedAt",
+      created_by as "createdBy",
+      updated_by as "updatedBy"
+    FROM ohip14_responses
+    WHERE patient_id = $1
+      AND timepoint = $2
+      AND (episode_id = $3 OR episode_id IS NULL OR $3 IS NULL)
+    ORDER BY completed_at DESC
+    LIMIT 1`,
+    [patientId, timepoint, activeEpisodeId]
+  );
 
-    const scores = calculateOHIP14Scores(body);
-
-    const requiredFields = [
-      'q1_functional_limitation',
-      'q2_functional_limitation',
-      'q3_physical_pain',
-      'q4_physical_pain',
-      'q5_psychological_discomfort',
-      'q6_psychological_discomfort',
-      'q7_physical_disability',
-      'q8_physical_disability',
-      'q9_psychological_disability',
-      'q10_psychological_disability',
-      'q11_social_disability',
-      'q12_social_disability',
-      'q13_handicap',
-      'q14_handicap',
-    ];
-
-    for (const field of requiredFields) {
-      const value = body[field];
-      if (value === null || value === undefined) {
-        return NextResponse.json(
-          { error: `Kérjük, válaszoljon minden kérdésre. Hiányzó: ${field}` },
-          { status: 400 }
-        );
-      }
-      if (value < 0 || value > 4) {
-        return NextResponse.json(
-          { error: `Érvénytelen érték: ${field}` },
-          { status: 400 }
-        );
-      }
-    }
-
-    const insertResult = await pool.query(
-      `INSERT INTO ohip14_responses (
-        patient_id,
-        episode_id,
-        timepoint,
-        stage_code,
-        completed_by_patient,
-        q1_functional_limitation,
-        q2_functional_limitation,
-        q3_physical_pain,
-        q4_physical_pain,
-        q5_psychological_discomfort,
-        q6_psychological_discomfort,
-        q7_physical_disability,
-        q8_physical_disability,
-        q9_psychological_disability,
-        q10_psychological_disability,
-        q11_social_disability,
-        q12_social_disability,
-        q13_handicap,
-        q14_handicap,
-        total_score,
-        functional_limitation_score,
-        physical_pain_score,
-        psychological_discomfort_score,
-        physical_disability_score,
-        psychological_disability_score,
-        social_disability_score,
-        handicap_score,
-        notes,
-        created_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, 'patient_portal')
-      RETURNING *`,
-      [
+  if (result.rows.length === 0) {
+    return NextResponse.json({
+      response: {
         patientId,
-        activeEpisodeId,
+        episodeId: activeEpisodeId,
         timepoint,
-        ohipStageCode ?? null,
-        true,
-        body.q1_functional_limitation,
-        body.q2_functional_limitation,
-        body.q3_physical_pain,
-        body.q4_physical_pain,
-        body.q5_psychological_discomfort,
-        body.q6_psychological_discomfort,
-        body.q7_physical_disability,
-        body.q8_physical_disability,
-        body.q9_psychological_disability,
-        body.q10_psychological_disability,
-        body.q11_social_disability,
-        body.q12_social_disability,
-        body.q13_handicap,
-        body.q14_handicap,
-        scores.totalScore,
-        scores.functionalLimitationScore,
-        scores.physicalPainScore,
-        scores.psychologicalDiscomfortScore,
-        scores.physicalDisabilityScore,
-        scores.psychologicalDisabilityScore,
-        scores.socialDisabilityScore,
-        scores.handicapScore,
-        body.notes || null,
-      ]
-    );
-
-    return NextResponse.json(
-      {
-        response: mapRowToResponse(insertResult.rows[0]),
-        message: 'Válaszok sikeresen mentve',
+        stageCode: null,
+        completedByPatient: true,
+        completed: false as const,
+        q1_functional_limitation: null,
+        q2_functional_limitation: null,
+        q3_physical_pain: null,
+        q4_physical_pain: null,
+        q5_psychological_discomfort: null,
+        q6_psychological_discomfort: null,
+        q7_physical_disability: null,
+        q8_physical_disability: null,
+        q9_psychological_disability: null,
+        q10_psychological_disability: null,
+        q11_social_disability: null,
+        q12_social_disability: null,
+        q13_handicap: null,
+        q14_handicap: null,
       },
-      { status: 201 }
-    );
-  } catch (error) {
-    console.error('Error saving OHIP-14 response:', error);
+    });
+  }
+
+  const row = result.rows[0];
+  const response = {
+    timepoint: row.timepoint,
+    completedAt: row.completedAt?.toISOString(),
+    completed: true as const,
+  };
+
+  return NextResponse.json({ response });
+});
+
+export const POST = apiHandler(async (req, { correlationId, params }) => {
+  const patientId = await verifyPatientPortalSession(req);
+
+  if (!patientId) {
     return NextResponse.json(
-      { error: 'Hiba történt a válaszok mentésekor' },
-      { status: 500 }
+      { error: 'Bejelentkezés szükséges' },
+      { status: 401 }
     );
   }
-}
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { timepoint: string } }
-) {
-  return POST(request, { params });
-}
+  const timepoint = params.timepoint as OHIP14Timepoint;
+  if (!VALID_TIMEPOINTS.includes(timepoint)) {
+    return NextResponse.json(
+      { error: 'Érvénytelen timepoint' },
+      { status: 400 }
+    );
+  }
+
+  const pool = getDbPool();
+  const body = await req.json();
+
+  const { episodeId: activeEpisodeId, stageCode: currentStageCode, deliveryDate } =
+    await getCurrentEpisodeAndStage(pool, patientId);
+
+  if (!activeEpisodeId) {
+    return NextResponse.json(
+      { error: 'Nincs aktív epizód. Kérjük, forduljon kezelőorvosához.' },
+      { status: 400 }
+    );
+  }
+
+  const availability = getTimepointAvailability(timepoint, currentStageCode, deliveryDate);
+  if (!availability.allowed) {
+    return NextResponse.json(
+      { error: availability.reason ?? 'Ez a timepoint jelenleg nem kitölthető.' },
+      { status: 403 }
+    );
+  }
+
+  const existingResult = await pool.query(
+    `SELECT id, locked_at 
+     FROM ohip14_responses
+     WHERE patient_id = $1
+       AND timepoint = $2
+       AND episode_id = $3`,
+    [patientId, timepoint, activeEpisodeId]
+  );
+
+  if (existingResult.rows.length > 0) {
+    return NextResponse.json(
+      { error: 'Egy stádiumban csak egyszer töltheti ki a kérdőívet. A kérdőív már kitöltve.' },
+      { status: 409 }
+    );
+  }
+
+  const ohipStageCode = await getCurrentStageCodeForOhip(pool, patientId, activeEpisodeId);
+
+  const scores = calculateOHIP14Scores(body);
+
+  const requiredFields = [
+    'q1_functional_limitation',
+    'q2_functional_limitation',
+    'q3_physical_pain',
+    'q4_physical_pain',
+    'q5_psychological_discomfort',
+    'q6_psychological_discomfort',
+    'q7_physical_disability',
+    'q8_physical_disability',
+    'q9_psychological_disability',
+    'q10_psychological_disability',
+    'q11_social_disability',
+    'q12_social_disability',
+    'q13_handicap',
+    'q14_handicap',
+  ];
+
+  for (const field of requiredFields) {
+    const value = body[field];
+    if (value === null || value === undefined) {
+      return NextResponse.json(
+        { error: `Kérjük, válaszoljon minden kérdésre. Hiányzó: ${field}` },
+        { status: 400 }
+      );
+    }
+    if (value < 0 || value > 4) {
+      return NextResponse.json(
+        { error: `Érvénytelen érték: ${field}` },
+        { status: 400 }
+      );
+    }
+  }
+
+  const insertResult = await pool.query(
+    `INSERT INTO ohip14_responses (
+      patient_id,
+      episode_id,
+      timepoint,
+      stage_code,
+      completed_by_patient,
+      q1_functional_limitation,
+      q2_functional_limitation,
+      q3_physical_pain,
+      q4_physical_pain,
+      q5_psychological_discomfort,
+      q6_psychological_discomfort,
+      q7_physical_disability,
+      q8_physical_disability,
+      q9_psychological_disability,
+      q10_psychological_disability,
+      q11_social_disability,
+      q12_social_disability,
+      q13_handicap,
+      q14_handicap,
+      total_score,
+      functional_limitation_score,
+      physical_pain_score,
+      psychological_discomfort_score,
+      physical_disability_score,
+      psychological_disability_score,
+      social_disability_score,
+      handicap_score,
+      notes,
+      created_by
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, 'patient_portal')
+    RETURNING *`,
+    [
+      patientId,
+      activeEpisodeId,
+      timepoint,
+      ohipStageCode ?? null,
+      true,
+      body.q1_functional_limitation,
+      body.q2_functional_limitation,
+      body.q3_physical_pain,
+      body.q4_physical_pain,
+      body.q5_psychological_discomfort,
+      body.q6_psychological_discomfort,
+      body.q7_physical_disability,
+      body.q8_physical_disability,
+      body.q9_psychological_disability,
+      body.q10_psychological_disability,
+      body.q11_social_disability,
+      body.q12_social_disability,
+      body.q13_handicap,
+      body.q14_handicap,
+      scores.totalScore,
+      scores.functionalLimitationScore,
+      scores.physicalPainScore,
+      scores.psychologicalDiscomfortScore,
+      scores.physicalDisabilityScore,
+      scores.psychologicalDisabilityScore,
+      scores.socialDisabilityScore,
+      scores.handicapScore,
+      body.notes || null,
+    ]
+  );
+
+  return NextResponse.json(
+    {
+      response: mapRowToResponse(insertResult.rows[0]),
+      message: 'Válaszok sikeresen mentve',
+    },
+    { status: 201 }
+  );
+});
+
+export const PUT = apiHandler(async (req, { correlationId, params }) => {
+  // Delegate to POST handler logic
+  const patientId = await verifyPatientPortalSession(req);
+
+  if (!patientId) {
+    return NextResponse.json(
+      { error: 'Bejelentkezés szükséges' },
+      { status: 401 }
+    );
+  }
+
+  const timepoint = params.timepoint as OHIP14Timepoint;
+  if (!VALID_TIMEPOINTS.includes(timepoint)) {
+    return NextResponse.json(
+      { error: 'Érvénytelen timepoint' },
+      { status: 400 }
+    );
+  }
+
+  const pool = getDbPool();
+  const body = await req.json();
+
+  const { episodeId: activeEpisodeId, stageCode: currentStageCode, deliveryDate } =
+    await getCurrentEpisodeAndStage(pool, patientId);
+
+  if (!activeEpisodeId) {
+    return NextResponse.json(
+      { error: 'Nincs aktív epizód. Kérjük, forduljon kezelőorvosához.' },
+      { status: 400 }
+    );
+  }
+
+  const availability = getTimepointAvailability(timepoint, currentStageCode, deliveryDate);
+  if (!availability.allowed) {
+    return NextResponse.json(
+      { error: availability.reason ?? 'Ez a timepoint jelenleg nem kitölthető.' },
+      { status: 403 }
+    );
+  }
+
+  const existingResult = await pool.query(
+    `SELECT id, locked_at 
+     FROM ohip14_responses
+     WHERE patient_id = $1
+       AND timepoint = $2
+       AND episode_id = $3`,
+    [patientId, timepoint, activeEpisodeId]
+  );
+
+  if (existingResult.rows.length > 0) {
+    return NextResponse.json(
+      { error: 'Egy stádiumban csak egyszer töltheti ki a kérdőívet. A kérdőív már kitöltve.' },
+      { status: 409 }
+    );
+  }
+
+  const ohipStageCode = await getCurrentStageCodeForOhip(pool, patientId, activeEpisodeId);
+  const scores = calculateOHIP14Scores(body);
+
+  const requiredFields = [
+    'q1_functional_limitation',
+    'q2_functional_limitation',
+    'q3_physical_pain',
+    'q4_physical_pain',
+    'q5_psychological_discomfort',
+    'q6_psychological_discomfort',
+    'q7_physical_disability',
+    'q8_physical_disability',
+    'q9_psychological_disability',
+    'q10_psychological_disability',
+    'q11_social_disability',
+    'q12_social_disability',
+    'q13_handicap',
+    'q14_handicap',
+  ];
+
+  for (const field of requiredFields) {
+    const value = body[field];
+    if (value === null || value === undefined) {
+      return NextResponse.json(
+        { error: `Kérjük, válaszoljon minden kérdésre. Hiányzó: ${field}` },
+        { status: 400 }
+      );
+    }
+    if (value < 0 || value > 4) {
+      return NextResponse.json(
+        { error: `Érvénytelen érték: ${field}` },
+        { status: 400 }
+      );
+    }
+  }
+
+  const insertResult = await pool.query(
+    `INSERT INTO ohip14_responses (
+      patient_id,
+      episode_id,
+      timepoint,
+      stage_code,
+      completed_by_patient,
+      q1_functional_limitation,
+      q2_functional_limitation,
+      q3_physical_pain,
+      q4_physical_pain,
+      q5_psychological_discomfort,
+      q6_psychological_discomfort,
+      q7_physical_disability,
+      q8_physical_disability,
+      q9_psychological_disability,
+      q10_psychological_disability,
+      q11_social_disability,
+      q12_social_disability,
+      q13_handicap,
+      q14_handicap,
+      total_score,
+      functional_limitation_score,
+      physical_pain_score,
+      psychological_discomfort_score,
+      physical_disability_score,
+      psychological_disability_score,
+      social_disability_score,
+      handicap_score,
+      notes,
+      created_by
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, 'patient_portal')
+    RETURNING *`,
+    [
+      patientId,
+      activeEpisodeId,
+      timepoint,
+      ohipStageCode ?? null,
+      true,
+      body.q1_functional_limitation,
+      body.q2_functional_limitation,
+      body.q3_physical_pain,
+      body.q4_physical_pain,
+      body.q5_psychological_discomfort,
+      body.q6_psychological_discomfort,
+      body.q7_physical_disability,
+      body.q8_physical_disability,
+      body.q9_psychological_disability,
+      body.q10_psychological_disability,
+      body.q11_social_disability,
+      body.q12_social_disability,
+      body.q13_handicap,
+      body.q14_handicap,
+      scores.totalScore,
+      scores.functionalLimitationScore,
+      scores.physicalPainScore,
+      scores.psychologicalDiscomfortScore,
+      scores.physicalDisabilityScore,
+      scores.psychologicalDisabilityScore,
+      scores.socialDisabilityScore,
+      scores.handicapScore,
+      body.notes || null,
+    ]
+  );
+
+  return NextResponse.json(
+    {
+      response: mapRowToResponse(insertResult.rows[0]),
+      message: 'Válaszok sikeresen mentve',
+    },
+    { status: 201 }
+  );
+});
 
 function mapRowToResponse(row: any): OHIP14Response {
   return {

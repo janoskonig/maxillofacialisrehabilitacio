@@ -1,7 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
-import { verifyAuth } from '@/lib/auth-server';
-import { handleApiError } from '@/lib/api-error-handler';
+import { authedHandler } from '@/lib/api/route-handler';
 import { REQUIRED_DOC_TAGS, REQUIRED_DOC_RULES, getMissingRequiredDocRules, getMissingRequiredDocTags, getChecklistStatus, getMissingRequiredFields } from '@/lib/clinical-rules';
 import { Patient, LabQuoteRequest } from '@/lib/types';
 import { patientSelectSql, normalizePatientRow } from '@/lib/patient-select';
@@ -16,6 +15,7 @@ import { markdownToPDF, generatePatientSummaryMarkdown, generateMedicalHistoryMa
 import { createPlaceholderPdf } from '@/lib/pdf/placeholder-pdf';
 import { generateEquityRequestPDF } from '@/lib/pdf/equity-request';
 import { generatePatientDataEquityPDF } from '@/lib/pdf/equity-request-patient';
+import { logger } from '@/lib/logger';
 
 // Force Node.js runtime (required for archiver, pdf-lib, Buffer operations)
 export const runtime = 'nodejs';
@@ -35,13 +35,6 @@ const EXPORT_LIMITS: ExportLimits = {
 
 // Feature flag: ENABLE_NEAK_EXPORT
 const ENABLE_NEAK_EXPORT = process.env.ENABLE_NEAK_EXPORT === 'true';
-
-/**
- * Helper to get correlation ID from request
- */
-function getCorrelationId(req: NextRequest): string {
-  return req.headers.get('x-correlation-id')?.toLowerCase() || 'unknown';
-}
 
 // Régi PDF helper függvények eltávolítva - már nem kellenek, mert markdown → HTML → PDF workflow-t használunk
 
@@ -187,48 +180,25 @@ function generateReadme(
  */
 export const dynamic = 'force-dynamic';
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const correlationId = getCorrelationId(req);
-  
-  try {
-    // Feature flag check
-    if (!ENABLE_NEAK_EXPORT) {
-      const response = NextResponse.json(
-        {
-          error: 'NEAK export feature is not enabled',
-          code: 'FEATURE_DISABLED',
-          correlationId,
-        },
-        { status: 404 }
-      );
-      response.headers.set('x-correlation-id', correlationId);
-      return response;
-    }
+export const GET = authedHandler(async (req, { auth, params, correlationId }) => {
+  // Feature flag check
+  if (!ENABLE_NEAK_EXPORT) {
+    return NextResponse.json(
+      {
+        error: 'NEAK export feature is not enabled',
+        code: 'FEATURE_DISABLED',
+        correlationId,
+      },
+      { status: 404 }
+    );
+  }
 
-    // Authentication
-    const auth = await verifyAuth(req);
-    if (!auth) {
-      const response = NextResponse.json(
-        {
-          error: 'Bejelentkezés szükséges',
-          code: 'UNAUTHORIZED',
-          correlationId,
-        },
-        { status: 401 }
-      );
-      response.headers.set('x-correlation-id', correlationId);
-      return response;
-    }
+  // Extract patient ID from params and check dryRun query param
+  const patientId = params.id;
+  const url = new URL(req.url);
+  const isDryRun = url.searchParams.get('dryRun') === '1';
 
-    // Extract patient ID from params and check dryRun query param
-    const patientId = params.id;
-    const url = new URL(req.url);
-    const isDryRun = url.searchParams.get('dryRun') === '1';
-
-    if (!patientId) {
+  if (!patientId) {
       return NextResponse.json(
         {
           error: 'Beteg ID hiányzik',
@@ -499,7 +469,7 @@ export async function GET(
       patientSummaryBuffer = await markdownToPDF(patientSummaryMarkdown, 'Beteg Összefoglaló');
       limiter.addFile(patientSummaryBuffer.length);
     } catch (error) {
-      console.error('[NEAK Export] Error generating patient summary PDF:', error);
+      logger.error('[NEAK Export] Error generating patient summary PDF:', error);
       // Fallback: empty PDF vagy hibaüzenet
       throw new Error(
         `Beteg összefoglaló PDF generálás sikertelen: ${error instanceof Error ? error.message : 'Ismeretlen hiba'}`
@@ -512,7 +482,7 @@ export async function GET(
       medicalHistoryBuffer = await markdownToPDF(medicalHistoryMarkdown, 'Kórtörténet');
       limiter.addFile(medicalHistoryBuffer.length);
     } catch (error) {
-      console.error('[NEAK Export] Error generating medical history PDF:', error);
+      logger.error('[NEAK Export] Error generating medical history PDF:', error);
       // Fallback: empty PDF vagy hibaüzenet
       throw new Error(
         `Kórtörténet PDF generálás sikertelen: ${error instanceof Error ? error.message : 'Ismeretlen hiba'}`
@@ -526,7 +496,7 @@ export async function GET(
       dentalStatusBuffer = await generateDentalStatusPDF(patient);
       limiter.addFile(dentalStatusBuffer.length);
     } catch (error) {
-      console.error('[NEAK Export] Dental status PDF generation failed (DENTAL_PDF_GEN_FAILED):', error);
+      logger.error('[NEAK Export] Dental status PDF generation failed (DENTAL_PDF_GEN_FAILED):', error);
       dentalPdfFailed = true;
       if (process.env.ENABLE_SENTRY === 'true') {
         try {
@@ -546,7 +516,7 @@ export async function GET(
       equityDentalBuffer = await generateEquityRequestPDF(patient);
       limiter.addFile(equityDentalBuffer.length);
     } catch (error) {
-      console.error('[NEAK Export] Equity request dental PDF failed:', error);
+      logger.error('[NEAK Export] Equity request dental PDF failed:', error);
       throw new Error(
         `Méltányossági kérelem (152) PDF generálás sikertelen: ${error instanceof Error ? error.message : 'Ismeretlen hiba'}`
       );
@@ -561,7 +531,7 @@ export async function GET(
       equityPatientMissingFields = result.missingFields;
       limiter.addFile(equityPatientBuffer.length);
     } catch (error) {
-      console.error('[NEAK Export] Equity request patient data PDF failed:', error);
+      logger.error('[NEAK Export] Equity request patient data PDF failed:', error);
       throw new Error(
         `Méltányossági páciens adat (150) PDF generálás sikertelen: ${error instanceof Error ? error.message : 'Ismeretlen hiba'}`
       );
@@ -600,7 +570,7 @@ export async function GET(
     // Handle archive errors (critical for proper cleanup)
     archive.on('error', (err: unknown) => {
       const error: Error = err instanceof Error ? err : new Error(String(err));
-      console.error('[NEAK Export] Archive error:', error);
+      logger.error('[NEAK Export] Archive error:', error);
       archiveError = error;
       archive.abort(); // Abort archive on error
     });
@@ -609,7 +579,7 @@ export async function GET(
     archive.on('end', () => {
       archiveFinished = true;
       if (process.env.NODE_ENV === 'development') {
-        console.log('[NEAK Export] Archive finalized successfully');
+        logger.info('[NEAK Export] Archive finalized successfully');
       }
     });
 
@@ -692,10 +662,10 @@ export async function GET(
 
         // Log progress (for debugging)
         if (process.env.NODE_ENV === 'development') {
-          console.log(`[NEAK Export] Added document: ${filePath} (${actualSize} bytes, total: ${limiter.totalBytes} bytes)`);
+          logger.info(`[NEAK Export] Added document: ${filePath} (${actualSize} bytes, total: ${limiter.totalBytes} bytes)`);
         }
       } catch (error) {
-        console.error(`[NEAK Export] Error adding document ${doc.id} to archive:`, error);
+        logger.error(`[NEAK Export] Error adding document ${doc.id} to archive:`, error);
         
         // Check if it's a limit error and format it properly
         if (error instanceof Error && (
@@ -758,7 +728,4 @@ export async function GET(
     // (This is handled in PatientDocuments.tsx - success log only after blob download)
 
     return response;
-  } catch (error: any) {
-    return handleApiError(error, correlationId);
-  }
-}
+});
