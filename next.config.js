@@ -14,7 +14,7 @@ const nextConfig = {
     instrumentationHook: true,
     webpackBuildWorker: true,
     serverSourceMaps: false,
-    // enablePrerenderSourceMaps: false,  // opcionális: prerender fázis OOM esetén
+    optimizePackageImports: ['recharts', 'lucide-react', '@dnd-kit/core', '@dnd-kit/sortable'],
   },
   
   // Production optimalizációk

@@ -122,91 +122,10 @@ export async function computeInputsHashBatch(episodeIds: string[]): Promise<Map<
   return result;
 }
 
-/** Deterministic hash of forecast inputs. Do NOT include computed_at or time-dependent values. */
+/** Deterministic hash of forecast inputs. Delegates to the batch version for a single episode. */
 export async function computeInputsHash(episodeId: string): Promise<string> {
-  const pool = getDbPool();
-
-  const [episodeRow, pathwayRow, stageRow, statsRow, analyticsRow] = await Promise.all([
-    pool.query(
-      `SELECT pe.id, pe.care_pathway_id as "carePathwayId", pe.treatment_type_id as "treatmentTypeId"
-       FROM patient_episodes pe WHERE pe.id = $1`,
-      [episodeId]
-    ),
-    pool.query(
-      `SELECT cp.steps_json FROM patient_episodes pe
-       LEFT JOIN care_pathways cp ON pe.care_pathway_id = cp.id
-       WHERE pe.id = $1`,
-      [episodeId]
-    ),
-    pool.query(
-      `SELECT se.stage_code, se.at as "changedAt", se.id as "eventId"
-       FROM stage_events se WHERE se.episode_id = $1 ORDER BY se.at DESC LIMIT 1`,
-      [episodeId]
-    ),
-    pool.query(
-      `SELECT
-         (SELECT COUNT(*)::int FROM appointments a WHERE a.episode_id = $1 AND a.appointment_status = 'completed') as "completedCount",
-         (SELECT COUNT(*)::int FROM appointments a WHERE a.episode_id = $1 AND a.start_time > CURRENT_TIMESTAMP
-          AND (a.appointment_status IS NULL OR a.appointment_status != 'cancelled')) as "futureActiveCount",
-         (SELECT MAX(COALESCE(a.start_time, a.created_at)) FROM appointments a
-          WHERE a.episode_id = $1 AND a.appointment_status = 'completed') as "lastCompletedAt",
-         (SELECT MIN(a.start_time) FROM appointments a WHERE a.episode_id = $1
-          AND a.start_time > CURRENT_TIMESTAMP AND (a.appointment_status IS NULL OR a.appointment_status != 'cancelled')) as "nextBookedAt"`,
-      [episodeId]
-    ),
-    pool.query(
-      `SELECT cpa.median_visits, cpa.p80_visits, cpa.median_cadence_days, cpa.recorded_at as "updatedAt"
-       FROM patient_episodes pe
-       LEFT JOIN care_pathway_analytics cpa ON pe.care_pathway_id = cpa.care_pathway_id
-       WHERE pe.id = $1`,
-      [episodeId]
-    ),
-  ]);
-
-  const episode = episodeRow.rows[0];
-  const pathway = pathwayRow.rows[0];
-  const stage = stageRow.rows[0];
-  const stats = statsRow.rows[0];
-  const analytics = analyticsRow.rows[0];
-
-  const stepsJson = pathway?.steps_json;
-  const pathwayStepsHash = stepsJson != null
-    ? createHash('sha256').update(JSON.stringify(stepsJson)).digest('hex')
-    : '';
-
-  const stageSignature = stage
-    ? { stage_code: stage.stage_code, event_id: stage.eventId, changed_at: stage.changedAt?.toISOString?.() ?? null }
-    : null;
-
-  const appointmentsSignature = stats
-    ? {
-        completedCount: stats.completedCount ?? 0,
-        futureActiveCount: stats.futureActiveCount ?? 0,
-        lastCompletedAt: stats.lastCompletedAt?.toISOString?.() ?? null,
-        nextBookedAt: stats.nextBookedAt?.toISOString?.() ?? null,
-      }
-    : null;
-
-  const analyticsSignature = analytics
-    ? {
-        median_visits: analytics.median_visits,
-        p80_visits: analytics.p80_visits,
-        median_cadence_days: analytics.median_cadence_days,
-        updated_at: analytics.updatedAt?.toISOString?.() ?? null,
-      }
-    : null;
-
-  const payload = {
-    episodeId,
-    carePathwayId: episode?.carePathwayId ?? null,
-    treatmentTypeId: episode?.treatmentTypeId ?? null,
-    pathwayStepsHash,
-    stageSignature,
-    appointmentsSignature,
-    analyticsSignature,
-  };
-
-  return createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+  const result = await computeInputsHashBatch([episodeId]);
+  return result.get(episodeId) ?? createHash('sha256').update(episodeId).digest('hex');
 }
 
 /**

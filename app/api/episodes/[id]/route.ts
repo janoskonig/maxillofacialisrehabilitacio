@@ -42,34 +42,19 @@ export const GET = authedHandler(async (req, { auth, params }) => {
 
   const row = epRow.rows[0];
 
-  const stageRow = await pool.query(
-    `SELECT se.stage_code, sc.label_hu
-     FROM stage_events se
-     LEFT JOIN stage_catalog sc ON se.stage_code = sc.code AND sc.reason = $2
-     WHERE se.episode_id = $1 ORDER BY se.at DESC LIMIT 1`,
-    [episodeId, row.reason]
-  );
-
-  let currentRulesetVersion: number | null = null;
-  try {
-    const rulesetRow = await pool.query(
+  const [stageRow, rulesetRow, stageSuggestionResult, epPathsResult] = await Promise.all([
+    pool.query(
+      `SELECT se.stage_code, sc.label_hu
+       FROM stage_events se
+       LEFT JOIN stage_catalog sc ON se.stage_code = sc.code AND sc.reason = $2
+       WHERE se.episode_id = $1 ORDER BY se.at DESC LIMIT 1`,
+      [episodeId, row.reason]
+    ),
+    pool.query(
       `SELECT version FROM stage_transition_rulesets WHERE status = 'PUBLISHED' LIMIT 1`
-    );
-    currentRulesetVersion = rulesetRow.rows[0]?.version ?? null;
-  } catch {
-    // Table might not exist yet
-  }
-
-  let stageSuggestion = null;
-  try {
-    stageSuggestion = await getCurrentSuggestion(episodeId);
-  } catch {
-    // Table might not exist yet
-  }
-
-  let episodePathways: Array<{ id: string; carePathwayId: string; ordinal: number; pathwayName: string; stepCount: number }> = [];
-  try {
-    const epPaths = await pool.query(
+    ).catch(() => ({ rows: [] as any[] })),
+    getCurrentSuggestion(episodeId).catch(() => null),
+    pool.query(
       `SELECT ep.id, ep.care_pathway_id as "carePathwayId", ep.ordinal,
               cp.name as "pathwayName",
               (SELECT COUNT(*)::int FROM episode_steps es WHERE es.source_episode_pathway_id = ep.id) as "stepCount"
@@ -78,11 +63,12 @@ export const GET = authedHandler(async (req, { auth, params }) => {
        WHERE ep.episode_id = $1
        ORDER BY ep.ordinal`,
       [episodeId]
-    );
-    episodePathways = epPaths.rows;
-  } catch {
-    // episode_pathways table might not exist yet (pre-migration)
-  }
+    ).catch(() => ({ rows: [] as any[] })),
+  ]);
+
+  const currentRulesetVersion: number | null = rulesetRow.rows[0]?.version ?? null;
+  const stageSuggestion = stageSuggestionResult;
+  const episodePathways = epPathsResult.rows;
 
   const episode = {
     id: row.id,
