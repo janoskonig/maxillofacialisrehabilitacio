@@ -504,7 +504,7 @@ export function PatientMessages() {
       </div>
 
       {/* Input Area */}
-      <div className="border-t bg-white p-3 sm:p-4">
+      <div className="border-t bg-white p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-4">
         {recipients.length > 1 && (
           <div className="mb-2 sm:mb-3 relative">
             <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
@@ -566,27 +566,19 @@ export function PatientMessages() {
             </p>
           </div>
         )}
-        <div className="flex gap-2">
+        <div className="flex items-end gap-2">
           <textarea
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
-            className="form-input flex-1 resize-none text-sm sm:text-base rounded-xl border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+            className="form-input flex-1 resize-none rounded-xl border-gray-300 focus:border-blue-500 focus:ring-blue-500 min-h-[44px]"
             rows={2}
             placeholder="Írja be üzenetét..."
             disabled={sending}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                if (newMessage.trim() && !sending && selectedRecipientId) {
-                  handleSendMessage();
-                }
-              }
-            }}
           />
           <button
             onClick={handleSendMessage}
             disabled={sending || !newMessage.trim() || !selectedRecipientId}
-            className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 sm:px-6 py-2.5 flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 shadow-sm hover:shadow-md mobile-touch-target"
+            className="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white rounded-full w-10 h-10 sm:w-auto sm:h-auto sm:rounded-xl sm:px-6 sm:py-2.5 flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 shadow-sm hover:shadow-md"
           >
             {sending ? (
               <Loader2 className="w-4 h-4 animate-spin" />

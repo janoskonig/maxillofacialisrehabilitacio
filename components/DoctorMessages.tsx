@@ -859,13 +859,8 @@ export function DoctorMessages() {
     setCursorPosition(e.target.selectionStart);
   };
 
-  const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      if (newMessage.trim() && !sending) {
-        handleSendMessage();
-      }
-    }
+  const handleTextareaKeyDown = (_e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Enter adds a newline (default textarea behavior); send via button only
   };
 
   const handleTextareaSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
@@ -1190,8 +1185,8 @@ export function DoctorMessages() {
       </div>
 
       {/* Message Input */}
-      <div className="border-t bg-white p-2 sm:p-4 relative">
-        <div className="flex flex-col sm:flex-row gap-2">
+      <div className="border-t bg-white p-2 sm:p-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-4 relative">
+        <div className="flex items-end gap-2">
           <div className="flex-1 relative">
             <textarea
               ref={textareaRef}
@@ -1199,7 +1194,7 @@ export function DoctorMessages() {
               onChange={handleTextareaChange}
               onKeyDown={handleTextareaKeyDown}
               onSelect={handleTextareaSelect}
-              className="form-input flex-1 resize-none w-full min-h-[60px] sm:min-h-0"
+              className="form-input flex-1 resize-none w-full min-h-[44px]"
               rows={2}
               placeholder="Írja be üzenetét... (használjon @ jelet beteg jelöléséhez)"
               disabled={sending}
@@ -1208,14 +1203,12 @@ export function DoctorMessages() {
               text={newMessage}
               cursorPosition={cursorPosition}
               onSelect={(mentionFormat, patientName) => {
-                // Replace @query with mentionFormat
                 const textBefore = newMessage.substring(0, cursorPosition);
                 const lastAtIndex = textBefore.lastIndexOf('@');
                 if (lastAtIndex !== -1) {
                   const textAfter = newMessage.substring(cursorPosition);
                   const newText = `${newMessage.substring(0, lastAtIndex)}${mentionFormat} ${textAfter}`;
                   setNewMessage(newText);
-                  // Set cursor position after mention
                   setTimeout(() => {
                     if (textareaRef.current) {
                       const newPos = lastAtIndex + mentionFormat.length + 1;
@@ -1230,10 +1223,10 @@ export function DoctorMessages() {
           <button
             onClick={() => handleSendMessage()}
             disabled={sending || !newMessage.trim()}
-            className="btn-primary flex items-center justify-center gap-2 px-4 py-2 sm:self-end w-full sm:w-auto mobile-touch-target"
+            className="flex-shrink-0 bg-medical-primary hover:bg-medical-primary-dark text-white rounded-full w-10 h-10 sm:w-auto sm:h-auto sm:rounded-lg sm:px-4 sm:py-2.5 flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 shadow-soft"
           >
             <Send className="w-4 h-4" />
-            <span className="sm:inline">{sending ? '...' : 'Küldés'}</span>
+            <span className="hidden sm:inline text-sm font-medium">{sending ? '...' : 'Küldés'}</span>
           </button>
         </div>
       </div>

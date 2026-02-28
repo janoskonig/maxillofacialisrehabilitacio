@@ -214,60 +214,71 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
   return (
     <div className="space-y-4">
       {/* Dashboard Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-medical-primary/10 rounded-lg">
-            <LayoutDashboard className="w-5 h-5 text-medical-primary" />
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-medical-primary/10 rounded-lg">
+              <LayoutDashboard className="w-5 h-5 text-medical-primary" />
+            </div>
+            <h2 className="text-heading-2">Dashboard</h2>
+            {canSeeStages && (
+              <div className="hidden sm:block">
+                <IntakeRecommendationBadge />
+              </div>
+            )}
           </div>
-          <h2 className="text-heading-2">Dashboard</h2>
-          {canSeeStages && <IntakeRecommendationBadge />}
+          <button
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 p-2 rounded-lg hover:bg-gray-100 transition-all duration-200"
+          >
+            {isCollapsed ? (
+              <>
+                <ChevronDown className="w-4 h-4" />
+                <span className="hidden sm:inline">Kibontás</span>
+              </>
+            ) : (
+              <>
+                <ChevronUp className="w-4 h-4" />
+                <span className="hidden sm:inline">Összecsukás</span>
+              </>
+            )}
+          </button>
         </div>
-        <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 p-2 rounded-lg hover:bg-gray-100 transition-all duration-200"
-        >
-          {isCollapsed ? (
-            <>
-              <ChevronDown className="w-4 h-4" />
-              <span className="hidden sm:inline">Kibontás</span>
-            </>
-          ) : (
-            <>
-              <ChevronUp className="w-4 h-4" />
-              <span className="hidden sm:inline">Összecsukás</span>
-            </>
-          )}
-        </button>
+        {canSeeStages && (
+          <div className="sm:hidden">
+            <IntakeRecommendationBadge />
+          </div>
+        )}
       </div>
 
       {!isCollapsed && (
         <>
           {/* Tabs */}
-          <div className="border-b border-gray-200">
-            <nav className="flex gap-1" aria-label="Dashboard tabs">
+          <div className="border-b border-gray-200 overflow-x-auto scrollbar-hide scroll-smooth">
+            <nav className="flex gap-1 w-max" aria-label="Dashboard tabs">
               <button
                 onClick={() => setActiveTab('overview')}
-                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
                   activeTab === 'overview'
                     ? 'text-medical-primary border-medical-primary'
                     : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
                 }`}
               >
-                <LayoutDashboard className="w-4 h-4" />
+                <LayoutDashboard className="w-4 h-4 hidden sm:block" />
                 Áttekintés
               </button>
               <button
                 onClick={() => setActiveTab('new-registrations')}
-                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors relative ${
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors relative flex-shrink-0 ${
                   activeTab === 'new-registrations'
                     ? 'text-medical-primary border-medical-primary'
                     : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
                 }`}
               >
-                <UserPlus className="w-4 h-4" />
+                <UserPlus className="w-4 h-4 hidden sm:block" />
                 Új jelentkezők
                 {data?.newRegistrations && data.newRegistrations.length > 0 && (
-                  <span className="ml-1.5 px-2 py-0.5 text-xs font-semibold rounded-full bg-medical-primary text-white">
+                  <span className="ml-1 px-1.5 py-0.5 text-xs font-semibold rounded-full bg-medical-primary text-white">
                     {data.newRegistrations.length}
                   </span>
                 )}
@@ -275,52 +286,52 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
               {canSeeStages && (
                 <button
                   onClick={() => setActiveTab('worklist')}
-                  className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                  className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
                     activeTab === 'worklist'
                       ? 'text-medical-primary border-medical-primary'
                       : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
                   }`}
                 >
-                  <ClipboardList className="w-4 h-4" />
+                  <ClipboardList className="w-4 h-4 hidden sm:block" />
                   Munkalista
                 </button>
               )}
               {canSeeStages && (
                 <button
                   onClick={() => setActiveTab('treatment-plans')}
-                  className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                  className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
                     activeTab === 'treatment-plans'
                       ? 'text-medical-primary border-medical-primary'
                       : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
                   }`}
                 >
-                  <Calendar className="w-4 h-4" />
+                  <Calendar className="w-4 h-4 hidden sm:block" />
                   Kezelési tervek
                 </button>
               )}
               {canSeeStages && (
                 <button
                   onClick={() => setActiveTab('gantt')}
-                  className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                  className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
                     activeTab === 'gantt'
                       ? 'text-medical-primary border-medical-primary'
                       : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
                   }`}
                 >
-                  <BarChart3 className="w-4 h-4" />
+                  <BarChart3 className="w-4 h-4 hidden sm:block" />
                   GANTT
                 </button>
               )}
               {canSeeStages && (
                 <button
                   onClick={() => setActiveTab('workload')}
-                  className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                  className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
                     activeTab === 'workload'
                       ? 'text-medical-primary border-medical-primary'
                       : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
                   }`}
                 >
-                  <Activity className="w-4 h-4" />
+                  <Activity className="w-4 h-4 hidden sm:block" />
                   Orvos terhelés
                 </button>
               )}

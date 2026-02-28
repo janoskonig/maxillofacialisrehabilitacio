@@ -518,31 +518,23 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
                   </div>
 
                   {/* Message Input */}
-                  <div className="border-t bg-white p-4">
-                    <div className="flex gap-2">
+                  <div className="border-t bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+                    <div className="flex items-end gap-2">
                       <textarea
                         value={message}
                         onChange={(e) => setMessage(e.target.value)}
-                        className="form-input flex-1 resize-none"
+                        className="form-input flex-1 resize-none min-h-[44px]"
                         rows={2}
                         placeholder="Írja be üzenetét..."
                         disabled={sending}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            if (message.trim() && !sending) {
-                              handleSendMessage();
-                            }
-                          }
-                        }}
                       />
                       <button
                         onClick={() => handleSendMessage()}
                         disabled={!message.trim() || sending}
-                        className="btn-primary flex items-center gap-2 px-4 self-end"
+                        className="flex-shrink-0 bg-medical-primary hover:bg-medical-primary-dark text-white rounded-full w-10 h-10 sm:w-auto sm:h-auto sm:rounded-lg sm:px-4 sm:py-2.5 flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 shadow-soft"
                       >
                         <Send className="w-4 h-4" />
-                        {sending ? '...' : 'Küldés'}
+                        <span className="hidden sm:inline text-sm font-medium">{sending ? '...' : 'Küldés'}</span>
                       </button>
                     </div>
                   </div>

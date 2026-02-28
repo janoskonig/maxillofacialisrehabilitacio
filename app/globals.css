@@ -314,9 +314,9 @@
     min-width: 44px;
   }
   
-  /* Prevent zoom on input focus (iOS) */
-  input, select, textarea {
-    font-size: 16px;
+  /* Prevent zoom on input focus (iOS) - !important needed to override Tailwind class specificity */
+  input, select, textarea, .form-input {
+    font-size: 16px !important;
   }
   
   /* Better scrolling on mobile */
