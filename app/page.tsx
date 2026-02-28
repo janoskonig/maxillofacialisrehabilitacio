@@ -649,8 +649,8 @@ export default function Home() {
                 </div>
               )}
 
-              {/* Footer: Utmutató link */}
-              <div className="mt-8 pt-6 border-t border-gray-200 flex justify-center">
+              {/* Footer */}
+              <div className="mt-8 pt-6 border-t border-gray-200 flex flex-col items-center gap-3">
                 <Link
                   href="/docs/kezelesi-ut-utmutato"
                   className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-medical-primary transition-colors"
@@ -658,6 +658,15 @@ export default function Home() {
                   <BookOpen className="w-4 h-4" />
                   Kezelési út és ütemezés — Használati útmutató
                 </Link>
+                <div className="flex gap-4 text-xs">
+                  <Link href="/privacy" className="text-gray-400 hover:text-gray-600 transition-colors">
+                    Privacy Policy
+                  </Link>
+                  <span className="text-gray-300">|</span>
+                  <Link href="/terms" className="text-gray-400 hover:text-gray-600 transition-colors">
+                    Terms of Service
+                  </Link>
+                </div>
               </div>
             </>
 

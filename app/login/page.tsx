@@ -176,8 +176,17 @@ export default function Login() {
         </div>
       </div>
 
-      {/* Kézjegy */}
-      <div className="mt-8 text-center">
+      {/* Footer */}
+      <div className="mt-8 text-center space-y-2">
+        <div className="flex justify-center gap-4 text-xs">
+          <Link href="/privacy" className="text-gray-400 hover:text-gray-600 transition-colors">
+            Privacy Policy
+          </Link>
+          <span className="text-gray-300">|</span>
+          <Link href="/terms" className="text-gray-400 hover:text-gray-600 transition-colors">
+            Terms of Service
+          </Link>
+        </div>
         <p className="text-xs text-gray-400">
           Készítette: König
         </p>
