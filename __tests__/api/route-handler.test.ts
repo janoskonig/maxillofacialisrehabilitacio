@@ -21,7 +21,7 @@ vi.mock('@/lib/api-error-handler', () => ({
   handleApiError: vi.fn((error: any, msg: string, correlationId?: string) => {
     const status = error?.status || 500;
     const res = NextResponse.json(
-      { error: { message: error?.message || msg, status } },
+      { error: error?.message || msg },
       { status }
     );
     if (correlationId) res.headers.set('x-correlation-id', correlationId);
