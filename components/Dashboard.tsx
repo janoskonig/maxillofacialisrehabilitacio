@@ -2,15 +2,13 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import Link from 'next/link';
 import { TodaysAppointmentsWidget } from './widgets/TodaysAppointmentsWidget';
 import { PendingApprovalsWidget } from './widgets/PendingApprovalsWidget';
 import { SendMessageWidget } from './widgets/SendMessageWidget';
 import { WaitingTimeWidget } from './widgets/WaitingTimeWidget';
 import { BusynessOMeter } from './widgets/BusynessOMeter';
-import { ChevronDown, ChevronUp, LayoutDashboard, UserPlus, Clock, BarChart3, Activity, ClipboardList, Calendar } from 'lucide-react';
-import { DashboardWidget } from './DashboardWidget';
-import { PatientList } from './PatientList';
+import { ChevronDown, ChevronUp, LayoutDashboard, Layers, BarChart3, Activity, ClipboardList, Calendar } from 'lucide-react';
+import { PatientPipelineBoard } from './PatientPipelineBoard';
 import { Patient } from '@/lib/types';
 import { StagesGanttChart, type GanttEpisode, type GanttInterval } from './StagesGanttChart';
 import { WorklistWidget } from './widgets/WorklistWidget';
@@ -33,22 +31,15 @@ interface DashboardProps {
   onViewFoto?: (patient: Patient) => void;
 }
 
-interface LongInPreparatoryPatient {
-  patientId: string;
-  patientName: string;
-  stageCode: string;
-  stageSince: string;
-}
+const VALID_TABS = ['overview', 'patient-preparation', 'gantt', 'workload', 'worklist', 'treatment-plans'] as const;
 
-const VALID_TABS = ['overview', 'new-registrations', 'gantt', 'workload', 'worklist', 'treatment-plans'] as const;
-
-export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, onViewFoto }: DashboardProps) {
+export function Dashboard({ userRole }: DashboardProps) {
   const searchParams = useSearchParams();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'new-registrations' | 'gantt' | 'workload' | 'worklist' | 'treatment-plans'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'patient-preparation' | 'gantt' | 'workload' | 'worklist' | 'treatment-plans'>('overview');
 
   useEffect(() => {
     const tab = searchParams.get('tab');
@@ -56,13 +47,10 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
       setActiveTab(tab as (typeof VALID_TABS)[number]);
     }
   }, [searchParams]);
-  const [longInPreparatory, setLongInPreparatory] = useState<LongInPreparatoryPatient[]>([]);
   const [ganttEpisodes, setGanttEpisodes] = useState<GanttEpisode[]>([]);
   const [ganttIntervals, setGanttIntervals] = useState<GanttInterval[]>([]);
   const [ganttCatalog, setGanttCatalog] = useState<StageCatalogEntry[]>([]);
   const [ganttLoading, setGanttLoading] = useState(false);
-
-  const canEdit = userRole === 'admin' || userRole === 'editor' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos';
 
   const refreshData = useCallback(async () => {
     try {
@@ -104,22 +92,7 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
     fetchDashboardData();
   }, []);
 
-  // Refresh data when switching to new registrations tab
-  useEffect(() => {
-    if (activeTab === 'new-registrations' && !loading && data) {
-      refreshData();
-    }
-  }, [activeTab, loading, data, refreshData]);
-
   const canSeeStages = userRole === 'admin' || userRole === 'sebészorvos' || userRole === 'fogpótlástanász';
-
-  useEffect(() => {
-    if (!canSeeStages) return;
-    fetch('/api/patients/stages/long-in-preparatory', { credentials: 'include' })
-      .then((res) => res.ok ? res.json() : { patients: [] })
-      .then((d) => setLongInPreparatory(d.patients ?? []))
-      .catch(() => setLongInPreparatory([]));
-  }, [canSeeStages]);
 
   // GANTT adatok (összes beteg) – csak az utolsó 3 hónap, ha a GANTT fül aktív
   useEffect(() => {
@@ -174,42 +147,6 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
   if (!data) {
     return null;
   }
-
-  // Convert newRegistrations to Patient format
-  const newRegistrationsAsPatients: Patient[] = (data?.newRegistrations || []).map((reg: any) => ({
-    id: reg.id,
-    nev: reg.nev || null,
-    taj: reg.taj || null,
-    email: reg.email || null,
-    telefonszam: reg.telefonszam || null,
-    szuletesiDatum: reg.szuletesi_datum || null,
-    nem: reg.nem || null,
-    cim: reg.cim || null,
-    varos: reg.varos || null,
-    iranyitoszam: reg.iranyitoszam || null,
-    beutaloOrvos: reg.beutalo_orvos || null,
-    beutaloIndokolas: reg.beutalo_indokolas || null,
-    kezeleoorvos: null,
-    kezeleoorvosIntezete: null,
-    createdAt: reg.created_at || null,
-    createdBy: reg.created_by || null,
-    // Required boolean fields with defaults
-    radioterapia: false,
-    chemoterapia: false,
-    maxilladefektusVan: false,
-    mandibuladefektusVan: false,
-    nyelvmozgásokAkadályozottak: false,
-    gombocosBeszed: false,
-    felsoFogpotlasVan: false,
-    felsoFogpotlasElegedett: true,
-    alsoFogpotlasVan: false,
-    alsoFogpotlasElegedett: true,
-    nemIsmertPoziciokbanImplantatum: false,
-    // Required array fields with defaults
-    kezelesiTervFelso: [],
-    kezelesiTervAlso: [],
-    kezelesiTervArcotErinto: [],
-  }));
 
   return (
     <div className="space-y-4">
@@ -268,20 +205,15 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
                 Áttekintés
               </button>
               <button
-                onClick={() => setActiveTab('new-registrations')}
+                onClick={() => setActiveTab('patient-preparation')}
                 className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors relative flex-shrink-0 ${
-                  activeTab === 'new-registrations'
+                  activeTab === 'patient-preparation'
                     ? 'text-medical-primary border-medical-primary'
                     : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
                 }`}
               >
-                <UserPlus className="w-4 h-4 hidden sm:block" />
-                Új jelentkezők
-                {data?.newRegistrations && data.newRegistrations.length > 0 && (
-                  <span className="ml-1 px-1.5 py-0.5 text-xs font-semibold rounded-full bg-medical-primary text-white">
-                    {data.newRegistrations.length}
-                  </span>
-                )}
+                <Layers className="w-4 h-4 hidden sm:block" />
+                Beteg előkészítés
               </button>
               {canSeeStages && (
                 <button
@@ -340,7 +272,7 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
 
           {/* Tab Content */}
           {activeTab === 'overview' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-4">
               {/* Send Message Widget */}
               <SendMessageWidget />
 
@@ -353,34 +285,6 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
               {/* Pending Appointments */}
               {data.pendingAppointments.length > 0 && (
                 <PendingApprovalsWidget approvals={data.pendingAppointments} />
-              )}
-
-              {/* 4. Előkészítő stádiumban */}
-              {canSeeStages && (
-                <DashboardWidget
-                  title="Előkészítő stádiumban"
-                  icon={<Clock className="w-5 h-5" />}
-                >
-                  {longInPreparatory.length === 0 ? (
-                    <p className="text-sm text-gray-500">Nincs ilyen beteg.</p>
-                  ) : (
-                    <ul className="space-y-1.5">
-                      {longInPreparatory.map((p) => (
-                        <li key={p.patientId}>
-                          <Link
-                            href={`/patients/${p.patientId}/view`}
-                            className="text-sm text-medical-primary hover:underline"
-                          >
-                            {p.patientName}
-                          </Link>
-                          <span className="text-xs text-gray-500 ml-2">
-                            ({new Date(p.stageSince).toLocaleDateString('hu-HU')} óta)
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </DashboardWidget>
               )}
 
               {/* Waiting Times Widget */}
@@ -409,31 +313,8 @@ export function Dashboard({ userRole, onViewPatient, onEditPatient, onViewOP, on
             </div>
           )}
 
-          {activeTab === 'new-registrations' && (
-            <div className="space-y-4">
-              {newRegistrationsAsPatients.length === 0 ? (
-                <div className="card text-center py-8">
-                  <UserPlus className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-1">Nincs új jelentkező</h3>
-                  <p className="text-sm text-gray-500">
-                    Jelenleg nincs olyan beteg, aki magától regisztrált és még nincs kezelőorvosa.
-                  </p>
-                </div>
-              ) : (
-                <PatientList
-                  patients={newRegistrationsAsPatients}
-                  onView={onViewPatient || (() => {})}
-                  onEdit={canEdit && onEditPatient ? onEditPatient : undefined}
-                  onViewOP={onViewOP}
-                  onViewFoto={onViewFoto}
-                  canEdit={canEdit}
-                  canDelete={false}
-                  userRole={userRole as any}
-                  sortField="createdAt"
-                  sortDirection="asc"
-                />
-              )}
-            </div>
+          {activeTab === 'patient-preparation' && (
+            <PatientPipelineBoard />
           )}
 
           {activeTab === 'treatment-plans' && canSeeStages && (
