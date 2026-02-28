@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { MessageCircle, Send, Check, CheckCheck, Loader2, Users, UserPlus, Edit2, X, Trash2 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
 import { PatientMention } from './PatientMention';
@@ -220,8 +220,11 @@ export function DoctorMessages() {
     setCursorPosition(e.target.selectionStart);
   };
 
-  const handleTextareaKeyDown = (_e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Enter adds a newline (default textarea behavior); send via button only
+  const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey && !isMobile) {
+      e.preventDefault();
+      handleSendMessage();
+    }
   };
 
   const handleTextareaSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
@@ -278,16 +281,29 @@ export function DoctorMessages() {
     }] : []),
   ] : [];
 
+  const formatConversationTime = (date: Date | string) => {
+    const d = new Date(date);
+    if (isToday(d)) return format(d, 'HH:mm');
+    if (isYesterday(d)) return 'Tegnap';
+    return format(d, 'MM.dd.');
+  };
+
   // Conversations list content
   const conversationsListContent = conversations.length === 0 && !loading ? (
     <div className="p-4 text-center text-gray-500 text-sm">
       Még nincsenek beszélgetések
-      <p className="text-xs mt-2 text-gray-400">Kattintson az "Új beszélgetés" gombra egy orvos kiválasztásához</p>
+      <p className="text-xs mt-2 text-gray-400">Kattintson az &quot;Új beszélgetés&quot; gombra egy orvos kiválasztásához</p>
     </div>
   ) : (
     conversations.map((conv) => {
       const isSelected = (conv.type === 'individual' && selectedDoctorId === conv.doctorId) ||
                         (conv.type === 'group' && selectedGroupId === conv.groupId);
+      const displayName = conv.type === 'individual' 
+        ? conv.doctorName 
+        : (conv.groupName || `Csoport (${conv.participantCount || 0} résztvevő)`);
+      const monogram = conv.type === 'group' 
+        ? null 
+        : getMonogram(conv.doctorName);
       
       return (
         <div
@@ -299,38 +315,45 @@ export function DoctorMessages() {
               handleSelectGroup(conv.groupId, conv.groupName || null);
             }
           }}
-          className={`p-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 ${
-            isSelected ? 'bg-blue-50' : ''
+          className={`p-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${
+            isSelected ? 'bg-blue-100 border-l-4 border-l-blue-600' : ''
           }`}
         >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              {conv.type === 'group' && (
-                <Users className="w-4 h-4 text-blue-600 flex-shrink-0" />
-              )}
-              <div className="font-medium text-sm truncate">
-                {conv.type === 'individual' 
-                  ? conv.doctorName 
-                  : (conv.groupName || `Csoport (${conv.participantCount || 0} résztvevő)`)}
+          <div className="flex items-center gap-3">
+            <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ${
+              conv.type === 'group' ? 'bg-blue-100 text-blue-700' : conv.unreadCount > 0 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+            }`}>
+              {conv.type === 'group' ? <Users className="w-4 h-4" /> : monogram}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <span className={`text-sm truncate ${conv.unreadCount > 0 ? 'font-semibold text-gray-900' : 'font-medium text-gray-900'}`}>
+                  {displayName}
+                </span>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {conv.lastMessage && (
+                    <span className="text-xs text-gray-400">{formatConversationTime(conv.lastMessage.createdAt)}</span>
+                  )}
+                  {conv.unreadCount > 0 && (
+                    <span className="px-1.5 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full min-w-[20px] text-center">
+                      {conv.unreadCount}
+                    </span>
+                  )}
+                </div>
               </div>
+              {conv.lastMessage && (
+                <p className={`text-xs mt-0.5 truncate ${conv.unreadCount > 0 ? 'text-gray-700 font-medium' : 'text-gray-500'}`}>
+                  {conv.lastMessage.message.substring(0, 50)}
+                  {conv.lastMessage.message.length > 50 ? '...' : ''}
+                </p>
+              )}
+              {conv.type === 'group' && conv.participantCount && (
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {conv.participantCount} résztvevő
+                </p>
+              )}
             </div>
-            {conv.unreadCount > 0 && (
-              <span className="px-2 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full flex-shrink-0">
-                {conv.unreadCount}
-              </span>
-            )}
           </div>
-          {conv.lastMessage && (
-            <div className="text-xs text-gray-500 mt-1 truncate">
-              {conv.lastMessage.message.substring(0, 50)}
-              {conv.lastMessage.message.length > 50 ? '...' : ''}
-            </div>
-          )}
-          {conv.type === 'group' && conv.participantCount && (
-            <div className="text-xs text-gray-400 mt-1">
-              {conv.participantCount} résztvevő
-            </div>
-          )}
         </div>
       );
     })
@@ -421,7 +444,7 @@ export function DoctorMessages() {
             <p>Még nincsenek üzenetek</p>
           </div>
         ) : (
-          messages.map((message) => {
+          messages.map((message, index) => {
             const isFromMe = currentUserId ? message.senderId === currentUserId : false;
             const isPending = message.pending === true;
             const isRead = message.readAt !== null;
@@ -429,9 +452,26 @@ export function DoctorMessages() {
             const lastName = getLastName(senderName);
             const monogram = getMonogram(senderName);
 
+            const msgDate = new Date(message.createdAt);
+            const prevMsg = index > 0 ? messages[index - 1] : null;
+            const showDateSeparator = !prevMsg || !isSameDay(msgDate, new Date(prevMsg.createdAt));
+
+            const dateSeparatorLabel = isToday(msgDate)
+              ? 'Ma'
+              : isYesterday(msgDate)
+              ? 'Tegnap'
+              : format(msgDate, 'yyyy. MMMM d.', { locale: hu });
+
             return (
+              <div key={message.id}>
+                {showDateSeparator && (
+                  <div className="flex items-center gap-3 my-4">
+                    <div className="flex-1 border-t border-gray-300" />
+                    <span className="text-xs font-medium text-gray-500 whitespace-nowrap">{dateSeparatorLabel}</span>
+                    <div className="flex-1 border-t border-gray-300" />
+                  </div>
+                )}
               <div
-                key={message.id}
                 data-message-id={message.id}
                 className={`flex flex-col ${isFromMe ? 'items-end' : 'items-start'}`}
               >
@@ -535,6 +575,7 @@ export function DoctorMessages() {
                   )}
                 </div>
               </div>
+              </div>
             );
           })
         )}
@@ -542,7 +583,7 @@ export function DoctorMessages() {
       </div>
 
       {/* Message Input */}
-      <div className="border-t bg-white p-2 sm:p-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-4 relative">
+      <div className="flex-shrink-0 border-t bg-white p-2 sm:p-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-4 relative">
         <div className="flex items-end gap-2">
           <div className="flex-1 relative">
             <textarea

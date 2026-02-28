@@ -140,13 +140,20 @@ export function MessagesShell({
             </div>
 
             {/* Content */}
-            {detailContent}
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+              {detailContent}
+            </div>
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center text-gray-500">
-            <div className="text-center">
-              <MessageCircle className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-              <p>Válasszon egy beszélgetést</p>
+            <div className="text-center max-w-xs mx-auto">
+              <div className="w-20 h-20 mx-auto mb-5 rounded-full bg-gray-100 flex items-center justify-center">
+                <MessageCircle className="w-10 h-10 text-gray-300" />
+              </div>
+              <p className="text-base font-medium text-gray-700">Válasszon egy beszélgetést</p>
+              <p className="text-sm mt-2 text-gray-400">
+                Válasszon a bal oldali listából, vagy indítson új beszélgetést.
+              </p>
             </div>
           </div>
         )}
@@ -192,7 +199,9 @@ export function MessagesShell({
               </div>
 
               {/* Content */}
-              {detailContent}
+              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                {detailContent}
+              </div>
             </div>
           ) : (
             <div className="flex-1 flex flex-col w-full">

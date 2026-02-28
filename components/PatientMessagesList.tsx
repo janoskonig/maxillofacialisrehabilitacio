@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { MessageCircle, Send, Check, CheckCheck, Loader2, Search, User, ArrowRight, Plus, X } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
 import { useRouter } from 'next/navigation';
@@ -557,6 +557,13 @@ export function PatientMessagesList() {
     },
   ] : [];
 
+  const formatConversationTime = (date: Date) => {
+    const d = new Date(date);
+    if (isToday(d)) return format(d, 'HH:mm');
+    if (isYesterday(d)) return 'Tegnap';
+    return format(d, 'MM.dd.');
+  };
+
   // Conversations list content
   const conversationsListContent = filteredConversations.length === 0 ? (
     <div className="p-4 text-center text-gray-500 text-sm">
@@ -568,6 +575,7 @@ export function PatientMessagesList() {
   ) : (
     filteredConversations.map((conv) => {
       const isSelected = selectedPatientId === conv.patientId;
+      const monogram = getMonogram(conv.patientName);
       
       return (
         <div
@@ -578,27 +586,39 @@ export function PatientMessagesList() {
             messagesLoadedRef.current.clear();
           }}
           className={`p-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${
-            isSelected ? 'bg-blue-50' : ''
+            isSelected ? 'bg-blue-100 border-l-4 border-l-blue-600' : ''
           }`}
         >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <div className="font-medium text-sm truncate">
-                {conv.patientName}
+          <div className="flex items-center gap-3">
+            <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ${
+              conv.unreadCount > 0 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+            }`}>
+              {monogram}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <span className={`text-sm truncate ${conv.unreadCount > 0 ? 'font-semibold text-gray-900' : 'font-medium text-gray-900'}`}>
+                  {conv.patientName}
+                </span>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {conv.lastMessage && (
+                    <span className="text-xs text-gray-400">{formatConversationTime(conv.lastMessage.createdAt)}</span>
+                  )}
+                  {conv.unreadCount > 0 && (
+                    <span className="px-1.5 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full min-w-[20px] text-center">
+                      {conv.unreadCount}
+                    </span>
+                  )}
+                </div>
               </div>
+              {conv.lastMessage && (
+                <p className={`text-xs mt-0.5 truncate ${conv.unreadCount > 0 ? 'text-gray-700 font-medium' : 'text-gray-500'}`}>
+                  {conv.lastMessage.senderType === 'doctor' ? 'Ön: ' : ''}{conv.lastMessage.message.substring(0, 50)}
+                  {conv.lastMessage.message.length > 50 ? '...' : ''}
+                </p>
+              )}
             </div>
-            {conv.unreadCount > 0 && (
-              <span className="px-2 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full flex-shrink-0">
-                {conv.unreadCount}
-              </span>
-            )}
           </div>
-          {conv.lastMessage && (
-            <div className="text-xs text-gray-500 mt-1 truncate">
-              {conv.lastMessage.message.substring(0, 50)}
-              {conv.lastMessage.message.length > 50 ? '...' : ''}
-            </div>
-          )}
         </div>
       );
     })
@@ -625,7 +645,7 @@ export function PatientMessagesList() {
 
   // Detail content (messages + input)
   const detailContent = selectedPatientId ? (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* Messages */}
       {loadingMessages ? (
         <div className="flex-1 flex items-center justify-center bg-gray-50">
@@ -642,7 +662,7 @@ export function PatientMessagesList() {
               <p>Még nincsenek üzenetek</p>
             </div>
           ) : (
-            messages.map((message) => {
+            messages.map((message, index) => {
               // Orvos oldalon: orvos üzenetei JOBBRA (kék), beteg üzenetei BALRA (fehér)
               const isFromMe = currentUserId ? message.senderType === 'doctor' && message.senderId === currentUserId : message.senderType === 'doctor';
               const isPending = message.pending === true;
@@ -654,9 +674,26 @@ export function PatientMessagesList() {
               const lastName = getLastName(senderName);
               const monogram = getMonogram(senderName);
 
+              const msgDate = new Date(message.createdAt);
+              const prevMsg = index > 0 ? messages[index - 1] : null;
+              const showDateSeparator = !prevMsg || !isSameDay(msgDate, new Date(prevMsg.createdAt));
+
+              const dateSeparatorLabel = isToday(msgDate)
+                ? 'Ma'
+                : isYesterday(msgDate)
+                ? 'Tegnap'
+                : format(msgDate, 'yyyy. MMMM d.', { locale: hu });
+
               return (
+                <div key={message.id}>
+                  {showDateSeparator && (
+                    <div className="flex items-center gap-3 my-4">
+                      <div className="flex-1 border-t border-gray-300" />
+                      <span className="text-xs font-medium text-gray-500 whitespace-nowrap">{dateSeparatorLabel}</span>
+                      <div className="flex-1 border-t border-gray-300" />
+                    </div>
+                  )}
                 <div
-                  key={message.id}
                   data-message-id={message.id}
                   className={`flex flex-col ${isFromMe ? 'items-end' : 'items-start'}`}
                 >
@@ -708,6 +745,7 @@ export function PatientMessagesList() {
                     </div>
                   </div>
                 </div>
+                </div>
               );
             })
           )}
@@ -716,11 +754,17 @@ export function PatientMessagesList() {
       )}
 
       {/* Message Input */}
-      <div className="border-t bg-white p-2 sm:p-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-4">
+      <div className="flex-shrink-0 border-t bg-white p-2 sm:p-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-4">
         <div className="flex items-end gap-2">
           <textarea
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !isMobile) {
+                e.preventDefault();
+                handleSendMessage();
+              }
+            }}
             className="form-input flex-1 resize-none min-h-[44px]"
             rows={2}
             placeholder="Írja be üzenetét..."
@@ -739,11 +783,13 @@ export function PatientMessagesList() {
     </div>
   ) : (
     <div className="flex-1 flex items-center justify-center text-gray-500">
-      <div className="text-center">
-        <MessageCircle className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-        <p>Válasszon egy beszélgetést</p>
+      <div className="text-center max-w-xs mx-auto">
+        <div className="w-20 h-20 mx-auto mb-5 rounded-full bg-gray-100 flex items-center justify-center">
+          <MessageCircle className="w-10 h-10 text-gray-300" />
+        </div>
+        <p className="text-base font-medium text-gray-700">Válasszon egy beszélgetést</p>
         <p className="text-sm mt-2 text-gray-400">
-          Válasszon egy beteget a bal oldali listából
+          Válasszon egy beteget a bal oldali listából, vagy indítson új beszélgetést az &quot;Új beszélgetés&quot; gombbal.
         </p>
       </div>
     </div>

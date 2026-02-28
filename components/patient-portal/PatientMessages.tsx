@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { MessageCircle, Send, Clock, Check, CheckCheck, Loader2, ChevronDown } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
 import { useRouter } from 'next/navigation';
@@ -407,7 +407,7 @@ export function PatientMessages() {
             <p className="text-sm mt-2">Küldjön üzenetet az orvosának!</p>
           </div>
         ) : (
-          messages.map((message) => {
+          messages.map((message, index) => {
             // Páciens portálon: beteg üzenetei JOBBRA (zöld), orvos üzenetei BALRA (fehér/kék)
             const isMyMessage = message.senderType === 'patient'; // Beteg üzenete = saját üzenet
             const isTheirMessage = message.senderType === 'doctor'; // Orvos üzenete = másik üzenet
@@ -421,9 +421,26 @@ export function PatientMessages() {
             const lastName = getLastName(senderName);
             const monogram = getMonogram(senderName);
 
+            const msgDate = new Date(message.createdAt);
+            const prevMsg = index > 0 ? messages[index - 1] : null;
+            const showDateSeparator = !prevMsg || !isSameDay(msgDate, new Date(prevMsg.createdAt));
+
+            const dateSeparatorLabel = isToday(msgDate)
+              ? 'Ma'
+              : isYesterday(msgDate)
+              ? 'Tegnap'
+              : format(msgDate, 'yyyy. MMMM d.', { locale: hu });
+
             return (
+              <div key={message.id}>
+                {showDateSeparator && (
+                  <div className="flex items-center gap-3 my-4">
+                    <div className="flex-1 border-t border-gray-300" />
+                    <span className="text-xs font-medium text-gray-500 whitespace-nowrap">{dateSeparatorLabel}</span>
+                    <div className="flex-1 border-t border-gray-300" />
+                  </div>
+                )}
               <div
-                key={message.id}
                 className={`flex w-full ${isMyMessage ? 'justify-end' : 'justify-start'} animate-message-pop`}
               >
                 <div className={`flex gap-2 max-w-[80%] sm:max-w-[70%] ${isMyMessage ? 'flex-row-reverse' : 'flex-row'}`}>
@@ -497,6 +514,7 @@ export function PatientMessages() {
                   {isMyMessage && <div className="flex-shrink-0 w-8"></div>}
                 </div>
               </div>
+              </div>
             );
           })
         )}
@@ -504,7 +522,7 @@ export function PatientMessages() {
       </div>
 
       {/* Input Area */}
-      <div className="border-t bg-white p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-4">
+      <div className="flex-shrink-0 border-t bg-white p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-4">
         {recipients.length > 1 && (
           <div className="mb-2 sm:mb-3 relative">
             <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
@@ -570,6 +588,12 @@ export function PatientMessages() {
           <textarea
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !isMobile) {
+                e.preventDefault();
+                handleSendMessage();
+              }
+            }}
             className="form-input flex-1 resize-none rounded-xl border-gray-300 focus:border-blue-500 focus:ring-blue-500 min-h-[44px]"
             rows={2}
             placeholder="Írja be üzenetét..."
