@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
               ls.patient_id, ls.stage_code, ls.stage_since
             FROM latest_stage ls
             WHERE ls.stage_code = ANY($1::varchar[])
-            ORDER BY ls.patient_id, ls.stage_since ASC
+            ORDER BY ls.patient_id, ls.stage_since DESC
           )
           SELECT
             pr.patient_id AS "patientId",
