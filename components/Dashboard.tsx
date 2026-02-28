@@ -1,21 +1,49 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
 import { TodaysAppointmentsWidget } from './widgets/TodaysAppointmentsWidget';
 import { PendingApprovalsWidget } from './widgets/PendingApprovalsWidget';
 import { SendMessageWidget } from './widgets/SendMessageWidget';
 import { WaitingTimeWidget } from './widgets/WaitingTimeWidget';
-import { BusynessOMeter } from './widgets/BusynessOMeter';
 import { ChevronDown, ChevronUp, LayoutDashboard, Layers, BarChart3, Activity, ClipboardList, Calendar } from 'lucide-react';
-import { PatientPipelineBoard } from './PatientPipelineBoard';
 import { Patient } from '@/lib/types';
-import { StagesGanttChart, type GanttEpisode, type GanttInterval } from './StagesGanttChart';
-import { WorklistWidget } from './widgets/WorklistWidget';
-import { WipForecastWidget } from './widgets/WipForecastWidget';
+import type { GanttEpisode, GanttInterval } from './StagesGanttChart';
 import { IntakeRecommendationBadge } from './widgets/IntakeRecommendationBadge';
-import { TreatmentPlanGantt } from './TreatmentPlanGantt';
 import type { StageCatalogEntry } from '@/lib/types';
+
+const TabSkeleton = () => (
+  <div className="card flex items-center justify-center py-12">
+    <div className="animate-spin rounded-full h-8 w-8 border-2 border-medical-primary/20 border-t-medical-primary" />
+    <span className="ml-3 text-body-sm">Betöltés...</span>
+  </div>
+);
+
+const PatientPipelineBoard = dynamic(
+  () => import('./PatientPipelineBoard').then(m => ({ default: m.PatientPipelineBoard })),
+  { ssr: false, loading: TabSkeleton }
+);
+const StagesGanttChart = dynamic(
+  () => import('./StagesGanttChart').then(m => ({ default: m.StagesGanttChart })),
+  { ssr: false, loading: TabSkeleton }
+);
+const WorklistWidget = dynamic(
+  () => import('./widgets/WorklistWidget').then(m => ({ default: m.WorklistWidget })),
+  { ssr: false, loading: TabSkeleton }
+);
+const WipForecastWidget = dynamic(
+  () => import('./widgets/WipForecastWidget').then(m => ({ default: m.WipForecastWidget })),
+  { ssr: false, loading: TabSkeleton }
+);
+const BusynessOMeter = dynamic(
+  () => import('./widgets/BusynessOMeter').then(m => ({ default: m.BusynessOMeter })),
+  { ssr: false, loading: TabSkeleton }
+);
+const TreatmentPlanGantt = dynamic(
+  () => import('./TreatmentPlanGantt').then(m => ({ default: m.TreatmentPlanGantt })),
+  { ssr: false, loading: TabSkeleton }
+);
 
 interface DashboardData {
   nextAppointments: any[];

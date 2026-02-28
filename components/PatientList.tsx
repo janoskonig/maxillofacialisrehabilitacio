@@ -44,142 +44,40 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
   const isMobile = useIsMobile();
   const router = useRouter();
 
-  // Load appointments for all roles
-  // Optimalizálás: csak akkor töltjük újra, ha a betegek ID-ja változott
   const patientIdsString = useMemo(() => patients.map(p => p.id).filter(Boolean).join(','), [patients]);
+
   useEffect(() => {
-    if (patientIdsString) {
-      loadAppointments();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [patientIdsString]);
+    if (!patientIdsString) return;
+    const patientIds = patientIdsString.split(',');
+    let cancelled = false;
 
-  // Load OP documents for quick access
-  // Optimalizálás: csak akkor töltjük újra, ha a betegek ID-ja változott
-  useEffect(() => {
-    if (patientIdsString) {
-      loadOpDocuments();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [patientIdsString]);
-
-  // Load foto documents for quick access
-  // Optimalizálás: csak akkor töltjük újra, ha a betegek ID-ja változott
-  useEffect(() => {
-    if (patientIdsString) {
-      loadFotoDocuments();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [patientIdsString]);
-
-  // Load stages for quick access
-  // Optimalizálás: csak akkor töltjük újra, ha a betegek ID-ja változott
-  useEffect(() => {
-    if (patientIdsString) {
-      loadStages();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [patientIdsString]);
-
-  const loadOpDocuments = async () => {
-    // Optimalizálás: batch API hívás minden beteghez egyszerre
-    const patientIds = patients.filter(p => p.id).map(p => p.id!);
-    
-    if (patientIds.length === 0) {
-      setOpDocuments({});
-      return;
-    }
-
-    try {
-      const response = await fetch('/api/patients/documents/batch', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({ patientIds }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setOpDocuments(data.opDocuments || {});
-      } else {
-        console.error('Failed to load OP documents batch');
-        setOpDocuments({});
+    const loadEnrichment = async () => {
+      setLoadingAppointments(true);
+      try {
+        const response = await fetch('/api/patients/list-enrichment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ patientIds }),
+        });
+        if (!cancelled && response.ok) {
+          const data = await response.json();
+          setAppointments(data.appointments || {});
+          setOpDocuments(data.opDocuments || {});
+          setFotoDocuments(data.fotoDocuments || {});
+          setStages(data.stages || {});
+        }
+      } catch (error) {
+        console.error('Error loading list enrichment:', error);
+      } finally {
+        if (!cancelled) setLoadingAppointments(false);
       }
-    } catch (error) {
-      // Silently fail - not critical
-      console.error('Error loading OP documents batch:', error);
-      setOpDocuments({});
-    }
-  };
+    };
 
-  const loadFotoDocuments = async () => {
-    // Optimalizálás: batch API hívás minden beteghez egyszerre
-    const patientIds = patients.filter(p => p.id).map(p => p.id!);
-    
-    if (patientIds.length === 0) {
-      setFotoDocuments({});
-      return;
-    }
-
-    try {
-      const response = await fetch('/api/patients/documents/batch', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({ patientIds }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setFotoDocuments(data.fotoDocuments || {});
-      } else {
-        console.error('Failed to load foto documents batch');
-        setFotoDocuments({});
-      }
-    } catch (error) {
-      // Silently fail - not critical
-      console.error('Error loading foto documents batch:', error);
-      setFotoDocuments({});
-    }
-  };
-
-  const loadStages = async () => {
-    // Optimalizálás: batch API hívás minden beteghez egyszerre
-    const patientIds = patients.filter(p => p.id).map(p => p.id!);
-    
-    if (patientIds.length === 0) {
-      setStages({});
-      return;
-    }
-
-    try {
-      const response = await fetch('/api/patients/stages/batch', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({ patientIds }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setStages(data.stages || {});
-      } else {
-        console.error('Failed to load stages batch');
-        setStages({});
-      }
-    } catch (error) {
-      // Silently fail - not critical
-      console.error('Error loading stages batch:', error);
-      setStages({});
-    }
-  };
-
+    loadEnrichment();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patientIdsString]);
 
   // Sort patients by appointment if needed
   const sortedPatients = useMemo(() => {
@@ -211,41 +109,6 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
     return patients;
   }, [patients, appointments, sortField, sortDirection]);
 
-  const loadAppointments = async () => {
-    try {
-      setLoadingAppointments(true);
-      
-      // Optimalizálás: batch API hívás minden beteghez egyszerre
-      const patientIds = patients.filter(p => p.id).map(p => p.id!);
-      
-      if (patientIds.length === 0) {
-        setAppointments({});
-        return;
-      }
-
-      const response = await fetch('/api/appointments/batch', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({ patientIds }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setAppointments(data.appointments || {});
-      } else {
-        console.error('Failed to load appointments batch');
-        setAppointments({});
-      }
-    } catch (error) {
-      console.error('Error loading appointments:', error);
-      setAppointments({});
-    } finally {
-      setLoadingAppointments(false);
-    }
-  };
   // Helper function to render sortable header
   const renderSortableHeader = (label: string, field: 'nev' | 'idopont' | 'createdAt', className?: string) => {
     const isActive = sortField === field;

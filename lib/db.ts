@@ -2,7 +2,7 @@ import { Pool } from 'pg';
 
 let pool: Pool | null = null;
 
-const SLOW_QUERY_THRESHOLD = parseInt(process.env.SLOW_QUERY_MS || '1000', 10);
+const SLOW_QUERY_THRESHOLD = parseInt(process.env.SLOW_QUERY_MS || '500', 10);
 
 export function getDbPool(): Pool {
   if (!pool) {

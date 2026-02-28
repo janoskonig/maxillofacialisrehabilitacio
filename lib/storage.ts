@@ -342,7 +342,7 @@ export async function getAllPatients(): Promise<Patient[]> {
 // Beteg keresése (opcionális lapozással)
 export async function searchPatients(
   query: string,
-  options?: { view?: 'neak_pending' | 'missing_docs'; limit?: number; offset?: number }
+  options?: { view?: 'neak_pending' | 'missing_docs'; limit?: number; offset?: number; sort?: string; direction?: 'asc' | 'desc' }
 ): Promise<Patient[] | { patients: Patient[]; total: number }> {
   try {
     const params = new URLSearchParams();
@@ -357,6 +357,12 @@ export async function searchPatients(
     }
     if (options?.offset != null) {
       params.append('offset', String(options.offset));
+    }
+    if (options?.sort) {
+      params.append('sort', options.sort);
+    }
+    if (options?.direction) {
+      params.append('direction', options.direction);
     }
 
     const response = await fetchWithTimeout(

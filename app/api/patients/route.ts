@@ -95,6 +95,12 @@ export const GET = optionalAuthHandler(async (req, { auth, correlationId }) => {
   const limit = forMention ? undefined : (limitParam ? Math.min(Math.max(1, parseInt(limitParam, 10)), 500) : undefined);
   const offset = forMention ? undefined : (offsetParam ? Math.max(0, parseInt(offsetParam, 10)) : undefined);
 
+  const sortParam = searchParams.get('sort');
+  const directionParam = searchParams.get('direction');
+  const ALLOWED_SORT_COLUMNS: Record<string, string> = { nev: 'nev', createdAt: 'created_at' };
+  const sortColumn = (sortParam && ALLOWED_SORT_COLUMNS[sortParam]) || 'created_at';
+  const sortDir = directionParam === 'asc' ? 'ASC' : 'DESC';
+
   const role = auth?.role || null;
   const userEmail = auth?.email || null;
   
@@ -133,11 +139,11 @@ export const GET = optionalAuthHandler(async (req, { auth, correlationId }) => {
         }
         return `p.${trimmed}`;
       }).join(', ');
-      orderBy = 'p.created_at';
+      orderBy = `p.${sortColumn}`;
     } else {
       fromClause = `FROM patients`;
       selectFields = PATIENT_SELECT_FIELDS;
-      orderBy = 'created_at';
+      orderBy = sortColumn;
     }
     
     const columnPrefix = needsUserJoin ? 'p.' : '';
@@ -181,7 +187,7 @@ export const GET = optionalAuthHandler(async (req, { auth, correlationId }) => {
       `SELECT ${selectFields}
        ${fromClause}
        WHERE ${searchCondition}
-       ORDER BY ${orderBy} DESC${limitOffset}`,
+       ORDER BY ${orderBy} ${sortDir}${limitOffset}`,
       dataQueryParams
     );
   } else {
@@ -202,11 +208,11 @@ export const GET = optionalAuthHandler(async (req, { auth, correlationId }) => {
         }
         return `p.${trimmed}`;
       }).join(', ');
-      orderBy = 'p.created_at';
+      orderBy = `p.${sortColumn}`;
     } else {
       fromClause = `FROM patients`;
       selectFields = PATIENT_SELECT_FIELDS;
-      orderBy = 'created_at';
+      orderBy = sortColumn;
       finalQueryParams = queryParams;
     }
     
@@ -237,7 +243,7 @@ export const GET = optionalAuthHandler(async (req, { auth, correlationId }) => {
       `SELECT ${selectFields}
        ${fromClause}
        ${whereClause}
-       ORDER BY ${orderBy} DESC${limitOffset}`,
+       ORDER BY ${orderBy} ${sortDir}${limitOffset}`,
       dataQueryParams
     );
   }

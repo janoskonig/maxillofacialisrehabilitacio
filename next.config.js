@@ -36,6 +36,13 @@ const nextConfig = {
   
   // Production build optimalizációk
   productionBrowserSourceMaps: false,
+
+  // Strip console.log/info in production via SWC (keep error & warn)
+  compiler: {
+    removeConsole: {
+      exclude: ['error', 'warn'],
+    },
+  },
   
   // PWA cache control headers
   async headers() {
@@ -61,23 +68,11 @@ const nextConfig = {
     ];
   },
   
-  // Webpack konfiguráció console.log eltávolításához production-ben
-  webpack: (config, { dev, isServer }) => {
-    if (!dev && !isServer) {
-      // Production build-ben eltávolítjuk a console.log, console.warn, console.info hívásokat
-      // console.error meghagyása, mert az fontos lehet debugging-hoz
-      config.optimization = {
-        ...config.optimization,
-        minimize: true,
-      };
-    }
-
-    // Build memory: cache memória-típusra állítása (Next Memory guide). Ne írjuk felül, ha már explicit false.
+  webpack: (config, { dev }) => {
+    // Build memory: cache memória-típusra állítása (Next Memory guide)
     if (config.cache !== false && !dev) {
       config.cache = Object.freeze({ type: 'memory' });
     }
-    // Ha ez nem elég, kipróbálható teljes kikapcsolás: if (!dev) config.cache = false
-
     return config;
   },
 }

@@ -59,8 +59,9 @@ export const POST = roleHandler(['admin', 'fogpótlástanász'], async (req, { a
 const TT_CACHE_KEY = 'treatment-types';
 
 export const GET = authedHandler(async (req, { auth }) => {
+  const cacheHeaders = { 'Cache-Control': 'public, max-age=300, stale-while-revalidate=600' };
   const cached = getCached<any[]>(TT_CACHE_KEY);
-  if (cached) return NextResponse.json({ treatmentTypes: cached });
+  if (cached) return NextResponse.json({ treatmentTypes: cached }, { headers: cacheHeaders });
 
   const pool = getDbPool();
 
@@ -76,5 +77,5 @@ export const GET = authedHandler(async (req, { auth }) => {
   );
 
   setCache(TT_CACHE_KEY, r.rows, CATALOG_TTL);
-  return NextResponse.json({ treatmentTypes: r.rows });
+  return NextResponse.json({ treatmentTypes: r.rows }, { headers: cacheHeaders });
 });

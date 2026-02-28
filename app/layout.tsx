@@ -46,9 +46,6 @@ export const viewport: Viewport = {
   viewportFit: "cover"
 }
 
-// Ne próbálja a build statikusan generálni az oldalakat (cookies/auth miatt sok route dinamikus)
-export const dynamic = 'force-dynamic'
-
 export default function RootLayout({
   children,
 }: {

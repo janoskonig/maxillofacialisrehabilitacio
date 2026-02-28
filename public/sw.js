@@ -192,19 +192,18 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Next statikus: cache + háttérben frissít
+  // Next statikus: content-hashed, immutable — cache-first
   if (url.pathname.startsWith("/_next/static/")) {
     event.respondWith(
       (async () => {
         const cache = await caches.open(CACHE_NAME);
         const cached = await cache.match(req);
-        const fetchPromise = fetch(req)
-          .then((fresh) => {
-            cache.put(req, fresh.clone());
-            return fresh;
-          })
-          .catch(() => cached);
-        return cached || fetchPromise;
+        if (cached) return cached;
+        const fresh = await fetch(req);
+        if (fresh && fresh.status === 200) {
+          cache.put(req, fresh.clone());
+        }
+        return fresh;
       })()
     );
     return;

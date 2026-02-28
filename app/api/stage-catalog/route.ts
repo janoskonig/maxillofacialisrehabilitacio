@@ -60,8 +60,9 @@ export const GET = authedHandler(async (req, { auth }) => {
   const pool = getDbPool();
   const reason = req.nextUrl.searchParams.get('reason') as ReasonType | null;
   const cacheKey = `stage-catalog:${reason ?? 'all'}`;
+  const cacheHeaders = { 'Cache-Control': 'public, max-age=300, stale-while-revalidate=600' };
   const cached = getCached<StageCatalogEntry[]>(cacheKey);
-  if (cached) return NextResponse.json({ catalog: cached });
+  if (cached) return NextResponse.json({ catalog: cached }, { headers: cacheHeaders });
 
   const tableExists = await pool.query(
     `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'stage_catalog'`
@@ -92,5 +93,5 @@ export const GET = authedHandler(async (req, { auth }) => {
   }));
 
   setCache(cacheKey, catalog, CATALOG_TTL);
-  return NextResponse.json({ catalog });
+  return NextResponse.json({ catalog }, { headers: cacheHeaders });
 });

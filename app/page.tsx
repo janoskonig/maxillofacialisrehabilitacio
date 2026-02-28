@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useReducer, Suspense, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -37,26 +37,77 @@ const SendMessageModal = dynamic(() => import('@/components/SendMessageModal').t
 
 type UserRoleType = 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
 
+interface ListState {
+  patients: Patient[];
+  totalPatients: number;
+  searchQuery: string;
+  selectedView: 'all' | 'neak_pending' | 'missing_docs';
+  sortField: 'nev' | 'idopont' | 'createdAt' | null;
+  sortDirection: 'asc' | 'desc';
+  page: number;
+  refreshKey: number;
+}
+
+type ListAction =
+  | { type: 'SEARCH_RESULTS'; patients: Patient[]; total: number }
+  | { type: 'SET_SEARCH'; query: string }
+  | { type: 'SET_VIEW'; view: ListState['selectedView'] }
+  | { type: 'TOGGLE_SORT'; field: 'nev' | 'idopont' | 'createdAt' }
+  | { type: 'SET_PAGE'; page: number }
+  | { type: 'REFRESH' };
+
+function listReducer(state: ListState, action: ListAction): ListState {
+  switch (action.type) {
+    case 'SEARCH_RESULTS':
+      return { ...state, patients: action.patients, totalPatients: action.total };
+    case 'SET_SEARCH':
+      return { ...state, searchQuery: action.query, page: 1 };
+    case 'SET_VIEW':
+      return { ...state, selectedView: action.view, page: 1 };
+    case 'TOGGLE_SORT': {
+      const sameField = state.sortField === action.field;
+      return {
+        ...state,
+        sortField: action.field,
+        sortDirection: sameField ? (state.sortDirection === 'asc' ? 'desc' : 'asc') : 'asc',
+      };
+    }
+    case 'SET_PAGE':
+      return { ...state, page: action.page };
+    case 'REFRESH':
+      return { ...state, refreshKey: state.refreshKey + 1 };
+    default:
+      return state;
+  }
+}
+
+const initialListState: ListState = {
+  patients: [],
+  totalPatients: 0,
+  searchQuery: '',
+  selectedView: 'all',
+  sortField: 'createdAt',
+  sortDirection: 'desc',
+  page: 1,
+  refreshKey: 0,
+};
+
 export default function Home() {
   const router = useRouter();
-  const [patients, setPatients] = useState<Patient[]>([]);
+  const [list, dispatch] = useReducer(listReducer, initialListState);
+  const { patients, totalPatients, searchQuery, selectedView, sortField, sortDirection, page, refreshKey } = list;
+  const PAGE_SIZE = 25;
+
   const [showForm, setShowForm] = useState(false);
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
   const [isViewMode, setIsViewMode] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedView, setSelectedView] = useState<'all' | 'neak_pending' | 'missing_docs'>('all');
-  const [filteredPatients, setFilteredPatients] = useState<Patient[]>([]);
+  const [searchInput, setSearchInput] = useState('');
+  const searchDebounceRef = useRef<NodeJS.Timeout>();
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<UserRoleType>('viewer');
   const [userInstitution, setUserInstitution] = useState<string | null>(null);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [sortField, setSortField] = useState<'nev' | 'idopont' | 'createdAt' | null>('createdAt');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-  const [refreshKey, setRefreshKey] = useState<number>(0);
-  const [page, setPage] = useState(1);
-  const [totalPatients, setTotalPatients] = useState(0);
-  const PAGE_SIZE = 25;
   const [opViewerPatient, setOpViewerPatient] = useState<Patient | null>(null);
   const [fotoViewerPatient, setFotoViewerPatient] = useState<Patient | null>(null);
   const [showMessageModal, setShowMessageModal] = useState(false);
@@ -111,6 +162,17 @@ export default function Home() {
     checkAuth();
   }, [router]);
 
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchInput(value);
+    clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => dispatch({ type: 'SET_SEARCH', query: value }), 400);
+  }, []);
+
+  useEffect(() => {
+    return () => clearTimeout(searchDebounceRef.current);
+  }, []);
+
   // Check if PWA announcement should be shown
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -133,13 +195,9 @@ export default function Home() {
     const urlParams = new URLSearchParams(window.location.search);
     const viewParam = urlParams.get('view');
     if (viewParam === 'neak_pending' || viewParam === 'missing_docs') {
-      setSelectedView(viewParam);
+      dispatch({ type: 'SET_VIEW', view: viewParam });
     }
   }, []);
-
-  useEffect(() => {
-    setPage(1);
-  }, [searchQuery, selectedView]);
 
   useEffect(() => {
     const loadPatientsData = async () => {
@@ -149,12 +207,13 @@ export default function Home() {
           ...viewOption,
           limit: PAGE_SIZE,
           offset: (page - 1) * PAGE_SIZE,
+          sort: sortField || undefined,
+          direction: sortDirection,
         });
         const isPaginated = typeof result === 'object' && 'patients' in result && 'total' in result;
-        const list = isPaginated ? (result as { patients: Patient[]; total: number }).patients : (result as Patient[]);
-        const total = isPaginated ? (result as { patients: Patient[]; total: number }).total : list.length;
-        setPatients(list);
-        setTotalPatients(total);
+        const pList = isPaginated ? (result as { patients: Patient[]; total: number }).patients : (result as Patient[]);
+        const total = isPaginated ? (result as { patients: Patient[]; total: number }).total : pList.length;
+        dispatch({ type: 'SEARCH_RESULTS', patients: pList, total });
 
         const url = new URL(window.location.href);
         if (selectedView !== 'all') {
@@ -163,24 +222,6 @@ export default function Home() {
           url.searchParams.delete('view');
         }
         window.history.replaceState({}, '', url.toString());
-
-        let sortedResults = [...list];
-        if (sortField === 'nev' || sortField === 'createdAt') {
-          sortedResults = sortedResults.sort((a, b) => {
-            let comparison = 0;
-            if (sortField === 'nev') {
-              const nameA = (a.nev || '').toLowerCase();
-              const nameB = (b.nev || '').toLowerCase();
-              comparison = nameA.localeCompare(nameB, 'hu');
-            } else if (sortField === 'createdAt') {
-              const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-              const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-              comparison = dateA - dateB;
-            }
-            return sortDirection === 'asc' ? comparison : -comparison;
-          });
-        }
-        setFilteredPatients(sortedResults);
       } catch (error) {
         console.error('Hiba a betegek betöltésekor:', error);
         showToast('Hiba történt a betegek betöltésekor. Kérjük, próbálja újra.', 'error');
@@ -190,11 +231,9 @@ export default function Home() {
     loadPatientsData();
   }, [searchQuery, selectedView, sortField, sortDirection, refreshKey, page]);
 
-  const loadPatients = async () => {
-    // Force reload by incrementing refreshKey
-    // This will trigger the useEffect to reload data
-    setRefreshKey(prev => prev + 1);
-  };
+  const loadPatients = useCallback(() => {
+    dispatch({ type: 'REFRESH' });
+  }, []);
 
   const handleSavePatient = async (patientData: Patient, options?: { source?: 'auto' | 'manual' }) => {
     try {
@@ -304,15 +343,8 @@ export default function Home() {
   }, [loadPatients]);
 
   const handleSort = useCallback((field: 'nev' | 'idopont' | 'createdAt') => {
-    if (sortField === field) {
-      // Toggle direction if same field
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      // New field, default to ascending
-      setSortField(field);
-      setSortDirection('asc');
-    }
-  }, [sortField, sortDirection]);
+    dispatch({ type: 'TOGGLE_SORT', field });
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -566,8 +598,8 @@ export default function Home() {
                   <input
                     type="text"
                     placeholder="Keresés név, TAJ szám vagy telefon alapján..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    value={searchInput}
+                    onChange={handleSearchChange}
                     className="form-input pl-12 py-3 text-base"
                   />
                 </div>
@@ -594,7 +626,7 @@ export default function Home() {
 
               {/* Patient List - 25 per page */}
               <PatientList
-                patients={filteredPatients}
+                patients={patients}
                 onView={handleViewPatient}
                 onEdit={handleEditPatient}
                 onDelete={userRole === 'admin' ? handleDeletePatient : undefined}
@@ -618,7 +650,7 @@ export default function Home() {
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      onClick={() => dispatch({ type: 'SET_PAGE', page: Math.max(1, page - 1) })}
                       disabled={page <= 1}
                       className="btn-secondary text-sm px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -626,7 +658,7 @@ export default function Home() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setPage((p) => p + 1)}
+                      onClick={() => dispatch({ type: 'SET_PAGE', page: page + 1 })}
                       disabled={page * PAGE_SIZE >= totalPatients}
                       className="btn-secondary text-sm px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                     >

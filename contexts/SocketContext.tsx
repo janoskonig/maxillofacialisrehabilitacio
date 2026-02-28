@@ -18,16 +18,24 @@ const SocketContext = createContext<SocketContextType>({
   leaveRoom: () => {},
 });
 
+const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/privacy', '/privacy-hu', '/terms', '/terms-hu'];
+
+function isPublicPath(): boolean {
+  if (typeof window === 'undefined') return false;
+  return PUBLIC_PATHS.some(p => window.location.pathname === p || window.location.pathname.startsWith(p + '/'));
+}
+
 export function SocketProvider({ children }: { children: ReactNode }) {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
+    if (isPublicPath()) return;
+
     let newSocket: Socket | null = null;
     let checkInterval: NodeJS.Timeout | null = null;
     
     const initializeSocket = async () => {
-      // Csak akkor próbálunk csatlakozni, ha van bejelentkezett felhasználó
       const user = await getCurrentUser();
       if (!user) {
         return null;

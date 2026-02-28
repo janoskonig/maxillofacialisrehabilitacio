@@ -8,8 +8,9 @@ export const dynamic = 'force-dynamic';
 const CACHE_KEY = 'institutions';
 
 export const GET = apiHandler(async (_req, { correlationId }) => {
+  const cacheHeaders = { 'Cache-Control': 'public, max-age=3600, stale-while-revalidate=7200' };
   const cached = getCached<string[]>(CACHE_KEY);
-  if (cached) return NextResponse.json({ institutions: cached });
+  if (cached) return NextResponse.json({ institutions: cached }, { headers: cacheHeaders });
 
   const pool = getDbPool();
   const result = await pool.query(
@@ -22,5 +23,5 @@ export const GET = apiHandler(async (_req, { correlationId }) => {
   const institutions = result.rows.map(row => row.intezmeny);
   setCache(CACHE_KEY, institutions, INSTITUTION_TTL);
 
-  return NextResponse.json({ institutions });
+  return NextResponse.json({ institutions }, { headers: cacheHeaders });
 });
