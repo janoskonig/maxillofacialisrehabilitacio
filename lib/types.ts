@@ -346,6 +346,7 @@ export type MedicalStats = {
       dSzama: number;
       fSzama: number;
       mSzama: number;
+      egeszsSeges: number;
       osszes: number;
     }>;
   };

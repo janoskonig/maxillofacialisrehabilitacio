@@ -116,6 +116,7 @@ export async function GET(request: NextRequest) {
         COUNT(*) FILTER (WHERE status = 'D') as "dSzama",
         COUNT(*) FILTER (WHERE status = 'F') as "fSzama",
         COUNT(*) FILTER (WHERE status = 'M') as "mSzama",
+        COUNT(*) FILTER (WHERE status IS DISTINCT FROM 'D' AND status IS DISTINCT FROM 'F' AND status IS DISTINCT FROM 'M') as "egeszsSeges",
         COUNT(*) as osszes
       FROM tooth_positions
       WHERE fog_szam BETWEEN 11 AND 48
@@ -298,6 +299,7 @@ export async function GET(request: NextRequest) {
           dSzama: parseInt(row.dSzama),
           fSzama: parseInt(row.fSzama),
           mSzama: parseInt(row.mSzama),
+          egeszsSeges: parseInt(row.egeszsSeges),
           osszes: parseInt(row.osszes)
         }))
       },

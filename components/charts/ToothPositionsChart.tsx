@@ -8,6 +8,7 @@ interface ToothPositionsChartProps {
     dSzama: number;
     fSzama: number;
     mSzama: number;
+    egeszsSeges?: number;
     osszes: number;
   }>;
 }
@@ -32,15 +33,15 @@ export function ToothPositionsChart({ data }: ToothPositionsChartProps) {
   // Adatok indexelése fog szám szerint
   const dataMap = new Map(data.map(item => [item.fogSzam, item]));
 
-  // Üres értékek létrehozása, ha nincs adat egy pozícióhoz
   const getToothData = (fogSzam: number) => {
-    return dataMap.get(fogSzam) || {
-      fogSzam,
-      dSzama: 0,
-      fSzama: 0,
-      mSzama: 0,
-      osszes: 0
-    };
+    const d = dataMap.get(fogSzam);
+    if (d) {
+      return {
+        ...d,
+        egeszsSeges: d.egeszsSeges ?? (d.osszes - d.dSzama - d.fSzama - d.mSzama),
+      };
+    }
+    return { fogSzam, dSzama: 0, fSzama: 0, mSzama: 0, egeszsSeges: 0, osszes: 0 };
   };
 
   // Kvadráns adatok előkészítése
@@ -48,12 +49,19 @@ export function ToothPositionsChart({ data }: ToothPositionsChartProps) {
     return quadrant.map(fogSzam => getToothData(fogSzam));
   };
 
+  const LABELS: Record<string, string> = {
+    egeszsSeges: 'Egészséges',
+    dSzama: 'Szuvas (D)',
+    fSzama: 'Tömött (F)',
+    mSzama: 'Hiányzik (M)',
+  };
+
   const QuadrantChart = ({ 
     title, 
     quadrantData 
   }: { 
     title: string; 
-    quadrantData: Array<{ fogSzam: number; dSzama: number; fSzama: number; mSzama: number; osszes: number }> 
+    quadrantData: Array<{ fogSzam: number; dSzama: number; fSzama: number; mSzama: number; egeszsSeges: number; osszes: number }> 
   }) => {
     return (
       <div className="space-y-2">
@@ -73,25 +81,14 @@ export function ToothPositionsChart({ data }: ToothPositionsChartProps) {
             <YAxis />
             <Tooltip 
               formatter={(value: number | undefined, name: string | undefined) => {
-                const labels: Record<string, string> = {
-                  dSzama: 'Szuvas (D)',
-                  fSzama: 'Tömött (F)',
-                  mSzama: 'Hiányzik (M)'
-                };
-                return [`${value ?? 0} fog`, labels[name ?? ''] || name || ''];
+                return [`${value ?? 0} fog`, LABELS[name ?? ''] || name || ''];
               }}
               labelFormatter={(label) => `${label}. fog`}
             />
             <Legend 
-              formatter={(value: string) => {
-                const labels: Record<string, string> = {
-                  dSzama: 'Szuvas (D)',
-                  fSzama: 'Tömött (F)',
-                  mSzama: 'Hiányzik (M)'
-                };
-                return labels[value] || value;
-              }}
+              formatter={(value: string) => LABELS[value] || value}
             />
+            <Bar dataKey="egeszsSeges" stackId="a" fill="#22c55e" name="egeszsSeges" />
             <Bar dataKey="dSzama" stackId="a" fill="#ef4444" name="dSzama" />
             <Bar dataKey="fSzama" stackId="a" fill="#3b82f6" name="fSzama" />
             <Bar dataKey="mSzama" stackId="a" fill="#6b7280" name="mSzama" />
