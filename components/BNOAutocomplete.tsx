@@ -72,7 +72,7 @@ export function BNOAutocomplete({
     loadBNOCodes();
   }, []);
 
-  // Szűrés a keresési kifejezés alapján
+  // Debounced filtering to avoid re-filtering on every keystroke
   useEffect(() => {
     if (isLoadingCodes || bnoCodes.length === 0) {
       return;
@@ -84,18 +84,22 @@ export function BNOAutocomplete({
       return;
     }
 
-    const term = searchTerm.toLowerCase();
-    const filtered = bnoCodes
-      .filter(code => {
-        const kodMatch = code.kod.toLowerCase().includes(term);
-        const nevMatch = code.nev.toLowerCase().includes(term);
-        return kodMatch || nevMatch;
-      })
-      .slice(0, 15); // Maximum 15 eredmény
+    const timer = setTimeout(() => {
+      const term = searchTerm.toLowerCase();
+      const filtered = bnoCodes
+        .filter(code => {
+          const kodMatch = code.kod.toLowerCase().includes(term);
+          const nevMatch = code.nev.toLowerCase().includes(term);
+          return kodMatch || nevMatch;
+        })
+        .slice(0, 15);
 
-    setFilteredCodes(filtered);
-    setShowDropdown(filtered.length > 0);
-    setSelectedIndex(-1);
+      setFilteredCodes(filtered);
+      setShowDropdown(filtered.length > 0);
+      setSelectedIndex(-1);
+    }, 300);
+
+    return () => clearTimeout(timer);
   }, [searchTerm, bnoCodes, isLoadingCodes]);
 
   // Input érték szinkronizálása a value prop-pal

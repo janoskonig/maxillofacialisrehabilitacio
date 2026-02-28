@@ -98,31 +98,14 @@ export const POST = apiHandler(async (req, { correlationId }) => {
   }
 
   if (beutaloOrvos || beutaloIndokolas) {
-    const updateFields: string[] = [];
-    const updateValues: (string | null)[] = [];
-    let paramIndex = 1;
-
-    if (beutaloOrvos !== undefined) {
-      updateFields.push(`beutalo_orvos = $${paramIndex}`);
-      updateValues.push(beutaloOrvos?.trim() || null);
-      paramIndex++;
-    }
-
-    if (beutaloIndokolas !== undefined) {
-      updateFields.push(`beutalo_indokolas = $${paramIndex}`);
-      updateValues.push(beutaloIndokolas?.trim() || null);
-      paramIndex++;
-    }
-
-    if (updateFields.length > 0) {
-      updateValues.push(patientId);
-      await pool.query(
-        `UPDATE patients 
-         SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP
-         WHERE id = $${paramIndex}`,
-        updateValues
-      );
-    }
+    await pool.query(
+      `INSERT INTO patient_referral (patient_id, beutalo_orvos, beutalo_indokolas)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (patient_id) DO UPDATE SET
+         beutalo_orvos = COALESCE(EXCLUDED.beutalo_orvos, patient_referral.beutalo_orvos),
+         beutalo_indokolas = COALESCE(EXCLUDED.beutalo_indokolas, patient_referral.beutalo_indokolas)`,
+      [patientId, beutaloOrvos?.trim() || null, beutaloIndokolas?.trim() || null]
+    );
   }
 
   try {

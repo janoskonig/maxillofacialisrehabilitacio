@@ -7,7 +7,7 @@ import { sendPatientCreationNotification } from '@/lib/email';
 import { logActivity, logActivityWithAuth } from '@/lib/activity';
 import { optionalAuthHandler, authedHandler } from '@/lib/api/route-handler';
 import { logger } from '@/lib/logger';
-import { PATIENT_SELECT_FIELDS } from '@/lib/queries/patient-fields';
+import { PATIENT_LIST_FIELDS, PATIENT_SELECT_FIELDS } from '@/lib/queries/patient-fields';
 import { REQUIRED_DOC_TAGS } from '@/lib/clinical-rules';
 
 type ViewPreset = 'neak_pending' | 'missing_docs';
@@ -95,79 +95,84 @@ export const GET = optionalAuthHandler(async (req, { auth, correlationId }) => {
   const limit = forMention ? undefined : (limitParam ? Math.min(Math.max(1, parseInt(limitParam, 10)), 500) : undefined);
   const offset = forMention ? undefined : (offsetParam ? Math.max(0, parseInt(offsetParam, 10)) : undefined);
 
+  const sortParam = searchParams.get('sort');
+  const directionParam = searchParams.get('direction');
+  const ALLOWED_SORT_COLUMNS: Record<string, string> = { nev: 'nev', createdAt: 'created_at' };
+  const sortColumn = (sortParam && ALLOWED_SORT_COLUMNS[sortParam]) || 'created_at';
+  const sortDir = directionParam === 'asc' ? 'ASC' : 'DESC';
+
   const role = auth?.role || null;
   const userEmail = auth?.email || null;
   
   let whereConditions: string[] = [];
   let queryParams: any[] = [];
   let paramIndex = 1;
-  
-  let needsUserJoin = false;
-  let surgeonEmail: string | null = null;
-  
-  if (role === 'technikus') {
-    whereConditions.push(`kezelesi_terv_arcot_erinto IS NOT NULL AND jsonb_array_length(kezelesi_terv_arcot_erinto) > 0`);
-  } else if (role === 'sebészorvos' && userEmail) {
-    needsUserJoin = true;
-    surgeonEmail = userEmail;
+
+  const needsSurgeonJoin = role === 'sebészorvos' && !!userEmail;
+  const needsTechnikJoin = role === 'technikus';
+  const needsReferralJoin = needsSurgeonJoin || !!query;
+
+  const prefixedListFields = PATIENT_LIST_FIELDS.split(',').map(f => {
+    const trimmed = f.trim();
+    if (!trimmed) return '';
+    if (trimmed.includes(' as ')) {
+      const parts = trimmed.split(' as ');
+      return `p.${parts[0].trim()} as ${parts[1].trim()}`;
+    }
+    return `p.${trimmed}`;
+  }).filter(Boolean).join(', ');
+
+  // Build FROM clause with conditional JOINs to child tables
+  let fromParts = ['FROM patients p'];
+  if (needsReferralJoin) {
+    fromParts.push('LEFT JOIN patient_referral r ON r.patient_id = p.id');
   }
-  
+  if (needsTechnikJoin) {
+    fromParts.push('LEFT JOIN patient_treatment_plans t ON t.patient_id = p.id');
+  }
+  if (needsSurgeonJoin) {
+    fromParts.push(`JOIN users u ON u.email = $${paramIndex} AND r.beutalo_intezmeny = u.intezmeny AND u.intezmeny IS NOT NULL`);
+    queryParams.push(userEmail);
+    paramIndex++;
+  }
+  const fromClause = fromParts.join('\n       ');
+
+  if (needsTechnikJoin) {
+    whereConditions.push(`t.kezelesi_terv_arcot_erinto IS NOT NULL AND jsonb_array_length(t.kezelesi_terv_arcot_erinto) > 0`);
+  }
+
+  const selectFields = prefixedListFields;
+  const orderBy = `p.${sortColumn}`;
+
   let countResult;
   let result;
-  
+
   if (query) {
-    let fromClause: string;
-    let selectFields: string;
-    let orderBy: string;
-    
-    if (needsUserJoin && surgeonEmail) {
-      const emailForQuery: string = surgeonEmail;
-      fromClause = `FROM patients p JOIN users u ON u.email = $${paramIndex} AND p.beutalo_intezmeny = u.intezmeny AND u.intezmeny IS NOT NULL`;
-      queryParams.push(emailForQuery);
-      paramIndex++;
-      selectFields = PATIENT_SELECT_FIELDS.split(',').map(f => {
-        const trimmed = f.trim();
-        if (trimmed.includes(' as ')) {
-          const parts = trimmed.split(' as ');
-          return `p.${parts[0].trim()} as ${parts[1].trim()}`;
-        }
-        return `p.${trimmed}`;
-      }).join(', ');
-      orderBy = 'p.created_at';
-    } else {
-      fromClause = `FROM patients`;
-      selectFields = PATIENT_SELECT_FIELDS;
-      orderBy = 'created_at';
-    }
-    
-    const columnPrefix = needsUserJoin ? 'p.' : '';
-    const searchBase = `(${columnPrefix}nev ILIKE $${paramIndex} OR ${columnPrefix}taj ILIKE $${paramIndex} OR ${columnPrefix}telefonszam ILIKE $${paramIndex} OR ${columnPrefix}email ILIKE $${paramIndex} OR ${columnPrefix}beutalo_orvos ILIKE $${paramIndex} OR ${columnPrefix}beutalo_intezmeny ILIKE $${paramIndex} OR ${columnPrefix}kezeleoorvos ILIKE $${paramIndex})`;
+    const searchBase = `(p.nev ILIKE $${paramIndex} OR p.taj ILIKE $${paramIndex} OR p.telefonszam ILIKE $${paramIndex} OR p.email ILIKE $${paramIndex} OR r.beutalo_orvos ILIKE $${paramIndex} OR r.beutalo_intezmeny ILIKE $${paramIndex} OR p.kezeleoorvos ILIKE $${paramIndex})`;
     queryParams.push(`%${query}%`);
     paramIndex++;
-    
-    const prefixedWhereConditions = needsUserJoin
-      ? whereConditions.map(cond => cond.replace(/\b(kezelesi_terv_arcot_erinto)\b/g, 'p.$1'))
-      : whereConditions;
-    
+
     let viewCondition = '';
     if (view && VIEWS[view]) {
-      const viewResult = VIEWS[view]('', queryParams, paramIndex, needsUserJoin);
+      const viewResult = VIEWS[view]('', queryParams, paramIndex, true);
       viewCondition = viewResult.whereClause;
       queryParams = viewResult.params;
       paramIndex = viewResult.paramIndex;
     }
-    
+
     const allConditions = [
       searchBase,
-      ...prefixedWhereConditions,
+      ...whereConditions,
       ...(viewCondition ? [viewCondition] : []),
     ].filter(Boolean);
-    
+
     const searchCondition = allConditions.join(' AND ');
-    
-    const countQuery = `SELECT COUNT(*) as total ${fromClause} WHERE ${searchCondition}`;
-    countResult = await pool.query(countQuery, queryParams);
-    
+
+    countResult = await pool.query(
+      `SELECT COUNT(*) as total ${fromClause} WHERE ${searchCondition}`,
+      queryParams
+    );
+
     let dataQueryParams: unknown[] = queryParams;
     let limitOffset = '';
     if (limit !== undefined && offset !== undefined) {
@@ -181,63 +186,33 @@ export const GET = optionalAuthHandler(async (req, { auth, correlationId }) => {
       `SELECT ${selectFields}
        ${fromClause}
        WHERE ${searchCondition}
-       ORDER BY ${orderBy} DESC${limitOffset}`,
+       ORDER BY ${orderBy} ${sortDir}${limitOffset}`,
       dataQueryParams
     );
   } else {
-    let fromClause: string;
-    let selectFields: string;
-    let orderBy: string;
-    let finalQueryParams: unknown[];
-    
-    if (needsUserJoin && surgeonEmail) {
-      const emailForQuery: string = surgeonEmail;
-      fromClause = `FROM patients p JOIN users u ON u.email = $1 AND p.beutalo_intezmeny = u.intezmeny AND u.intezmeny IS NOT NULL`;
-      finalQueryParams = [emailForQuery, ...queryParams];
-      selectFields = PATIENT_SELECT_FIELDS.split(',').map(f => {
-        const trimmed = f.trim();
-        if (trimmed.includes(' as ')) {
-          const parts = trimmed.split(' as ');
-          return `p.${parts[0].trim()} as ${parts[1].trim()}`;
-        }
-        return `p.${trimmed}`;
-      }).join(', ');
-      orderBy = 'p.created_at';
-    } else {
-      fromClause = `FROM patients`;
-      selectFields = PATIENT_SELECT_FIELDS;
-      orderBy = 'created_at';
-      finalQueryParams = queryParams;
-    }
-    
-    const prefixedWhereConditions = needsUserJoin
-      ? whereConditions.map(cond => cond.replace(/\b(kezelesi_terv_arcot_erinto)\b/g, 'p.$1'))
-      : whereConditions;
-    
-    const whereClause = prefixedWhereConditions.length > 0
-      ? `WHERE ${prefixedWhereConditions.join(' AND ')}`
+    const whereClause = whereConditions.length > 0
+      ? `WHERE ${whereConditions.join(' AND ')}`
       : '';
-    
-    const countQuery = `SELECT COUNT(*) as total ${fromClause} ${whereClause}`;
+
     countResult = await pool.query(
-      countQuery,
-      finalQueryParams
+      `SELECT COUNT(*) as total ${fromClause} ${whereClause}`,
+      queryParams
     );
-    
-    let dataQueryParams: unknown[] = finalQueryParams;
+
+    let dataQueryParams: unknown[] = queryParams;
     let limitOffset = '';
     if (limit !== undefined && offset !== undefined) {
-      dataQueryParams = [...finalQueryParams, limit, offset];
+      dataQueryParams = [...queryParams, limit, offset];
       limitOffset = ` LIMIT $${dataQueryParams.length - 1} OFFSET $${dataQueryParams.length}`;
     } else if (limit !== undefined) {
-      dataQueryParams = [...finalQueryParams, limit];
+      dataQueryParams = [...queryParams, limit];
       limitOffset = ` LIMIT $${dataQueryParams.length}`;
     }
     result = await pool.query(
       `SELECT ${selectFields}
        ${fromClause}
        ${whereClause}
-       ORDER BY ${orderBy} DESC${limitOffset}`,
+       ORDER BY ${orderBy} ${sortDir}${limitOffset}`,
       dataQueryParams
     );
   }
@@ -380,185 +355,57 @@ export const POST = authedHandler(async (req, { auth }) => {
     }
   }
   
-  const patientId = validatedPatient.id || null;
-  
-  const values: (string | number | boolean | null | Record<string, unknown>)[] = [];
-  let paramIndex = 1;
-  
-  if (patientId) {
-    values.push(patientId);
+  const p = validatedPatient;
+  const client = await pool.connect();
+  let result;
+  try {
+    await client.query('BEGIN');
+
+    const coreResult = await client.query(
+      `INSERT INTO patients (${p.id ? 'id, ' : ''}nev, taj, telefonszam, szuletesi_datum, nem, email, cim, varos, iranyitoszam, kezeleoorvos, kezeleoorvos_intezete, felvetel_datuma, halal_datum, created_by)
+       VALUES (${p.id ? '$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15' : '$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14'})
+       RETURNING id`,
+      p.id
+        ? [p.id, p.nev||null, p.taj||null, p.telefonszam||null, p.szuletesiDatum||null, p.nem||null, p.email||null, p.cim||null, p.varos||null, p.iranyitoszam||null, p.kezeleoorvos||null, p.kezeleoorvosIntezete||null, p.felvetelDatuma||null, p.halalDatum||null, userEmail]
+        : [p.nev||null, p.taj||null, p.telefonszam||null, p.szuletesiDatum||null, p.nem||null, p.email||null, p.cim||null, p.varos||null, p.iranyitoszam||null, p.kezeleoorvos||null, p.kezeleoorvosIntezete||null, p.felvetelDatuma||null, p.halalDatum||null, userEmail]
+    );
+    const newId = coreResult.rows[0].id;
+
+    await Promise.all([
+      client.query(
+        `INSERT INTO patient_referral (patient_id, beutalo_orvos, beutalo_intezmeny, beutalo_indokolas, primer_mutet_leirasa, mutet_ideje, szovettani_diagnozis, nyaki_blokkdisszekcio)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [newId, p.beutaloOrvos||null, p.beutaloIntezmeny||null, p.beutaloIndokolas||null, p.primerMutetLeirasa||null, p.mutetIdeje||null, p.szovettaniDiagnozis||null, p.nyakiBlokkdisszekcio||null]
+      ),
+      client.query(
+        `INSERT INTO patient_anamnesis (patient_id, kezelesre_erkezes_indoka, alkoholfogyasztas, dohanyzas_szam, maxilladefektus_van, brown_fuggoleges_osztaly, brown_vizszintes_komponens, mandibuladefektus_van, kovacs_dobak_osztaly, nyelvmozgasok_akadalyozottak, gombocos_beszed, nyalmirigy_allapot, fabian_fejerdy_protetikai_osztaly, fabian_fejerdy_protetikai_osztaly_felso, fabian_fejerdy_protetikai_osztaly_also, radioterapia, radioterapia_dozis, radioterapia_datum_intervallum, chemoterapia, chemoterapia_leiras, tnm_staging, bno, diagnozis, baleset_idopont, baleset_etiologiaja, baleset_egyeb, veleszuletett_rendellenessegek, veleszuletett_mutetek_leirasa)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27::jsonb,$28)`,
+        [newId, p.kezelesreErkezesIndoka||null, p.alkoholfogyasztas||null, p.dohanyzasSzam||null, p.maxilladefektusVan||false, p.brownFuggolegesOsztaly||null, p.brownVizszintesKomponens||null, p.mandibuladefektusVan||false, p.kovacsDobakOsztaly||null, p.nyelvmozgásokAkadályozottak||false, p.gombocosBeszed||false, p.nyalmirigyAllapot||null, p.fabianFejerdyProtetikaiOsztaly||null, p.fabianFejerdyProtetikaiOsztalyFelso||null, p.fabianFejerdyProtetikaiOsztalyAlso||null, p.radioterapia||false, p.radioterapiaDozis||null, p.radioterapiaDatumIntervallum||null, p.chemoterapia||false, p.chemoterapiaLeiras||null, p.tnmStaging||null, p.bno||null, p.diagnozis||null, p.balesetIdopont||null, p.balesetEtiologiaja||null, p.balesetEgyeb||null, Array.isArray(p.veleszuletettRendellenessegek) ? JSON.stringify(p.veleszuletettRendellenessegek) : '[]', p.veleszuletettMutetekLeirasa||null]
+      ),
+      client.query(
+        `INSERT INTO patient_dental_status (patient_id, meglevo_fogak, meglevo_implantatumok, nem_ismert_poziciokban_implantatum, nem_ismert_poziciokban_implantatum_reszletek, felso_fogpotlas_van, felso_fogpotlas_mikor, felso_fogpotlas_keszito, felso_fogpotlas_elegedett, felso_fogpotlas_problema, felso_fogpotlas_tipus, also_fogpotlas_van, also_fogpotlas_mikor, also_fogpotlas_keszito, also_fogpotlas_elegedett, also_fogpotlas_problema, also_fogpotlas_tipus)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+        [newId, p.meglevoFogak && typeof p.meglevoFogak === 'object' ? p.meglevoFogak : {}, p.meglevoImplantatumok && typeof p.meglevoImplantatumok === 'object' ? p.meglevoImplantatumok : {}, p.nemIsmertPoziciokbanImplantatum||false, p.nemIsmertPoziciokbanImplantatumRészletek||null, p.felsoFogpotlasVan||false, p.felsoFogpotlasMikor||null, p.felsoFogpotlasKeszito||null, p.felsoFogpotlasElegedett??true, p.felsoFogpotlasProblema||null, p.felsoFogpotlasTipus||null, p.alsoFogpotlasVan||false, p.alsoFogpotlasMikor||null, p.alsoFogpotlasKeszito||null, p.alsoFogpotlasElegedett??true, p.alsoFogpotlasProblema||null, p.alsoFogpotlasTipus||null]
+      ),
+      client.query(
+        `INSERT INTO patient_treatment_plans (patient_id, kezelesi_terv_felso, kezelesi_terv_also, kezelesi_terv_arcot_erinto, kortorteneti_osszefoglalo, kezelesi_terv_melleklet, szakorvosi_velemeny)
+         VALUES ($1,$2::jsonb,$3::jsonb,$4::jsonb,$5,$6,$7)`,
+        [newId, Array.isArray(p.kezelesiTervFelso) ? JSON.stringify(p.kezelesiTervFelso) : '[]', Array.isArray(p.kezelesiTervAlso) ? JSON.stringify(p.kezelesiTervAlso) : '[]', Array.isArray(p.kezelesiTervArcotErinto) ? JSON.stringify(p.kezelesiTervArcotErinto) : '[]', p.kortortenetiOsszefoglalo||null, p.kezelesiTervMelleklet||null, p.szakorvosiVelemény||null]
+      ),
+    ]);
+
+    await client.query('COMMIT');
+
+    result = await pool.query(
+      `SELECT ${PATIENT_SELECT_FIELDS} FROM patients_full WHERE id = $1`,
+      [newId]
+    );
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
   }
-  
-  values.push(
-    validatedPatient.nev || null,
-    validatedPatient.taj || null,
-    validatedPatient.telefonszam || null,
-    validatedPatient.szuletesiDatum || null,
-    validatedPatient.nem || null,
-    validatedPatient.email || null,
-    validatedPatient.cim || null,
-    validatedPatient.varos || null,
-    validatedPatient.iranyitoszam || null,
-    validatedPatient.beutaloOrvos || null,
-    validatedPatient.beutaloIntezmeny || null,
-    validatedPatient.beutaloIndokolas || null,
-    validatedPatient.mutetIdeje || null,
-    validatedPatient.szovettaniDiagnozis || null,
-    validatedPatient.nyakiBlokkdisszekcio || null,
-    validatedPatient.alkoholfogyasztas || null,
-    validatedPatient.dohanyzasSzam || null,
-    validatedPatient.kezelesreErkezesIndoka || null,
-    validatedPatient.maxilladefektusVan || false,
-    validatedPatient.brownFuggolegesOsztaly || null,
-    validatedPatient.brownVizszintesKomponens || null,
-    validatedPatient.mandibuladefektusVan || false,
-    validatedPatient.kovacsDobakOsztaly || null,
-    validatedPatient.nyelvmozgásokAkadályozottak || false,
-    validatedPatient.gombocosBeszed || false,
-    validatedPatient.nyalmirigyAllapot || null,
-    validatedPatient.fabianFejerdyProtetikaiOsztalyFelso || null,
-    validatedPatient.fabianFejerdyProtetikaiOsztalyAlso || null,
-    validatedPatient.radioterapia || false,
-    validatedPatient.radioterapiaDozis || null,
-    validatedPatient.radioterapiaDatumIntervallum || null,
-    validatedPatient.chemoterapia || false,
-    validatedPatient.chemoterapiaLeiras || null,
-    validatedPatient.fabianFejerdyProtetikaiOsztaly || null,
-    validatedPatient.kezeleoorvos || null,
-    validatedPatient.kezeleoorvosIntezete || null,
-    validatedPatient.felvetelDatuma || null,
-    validatedPatient.felsoFogpotlasVan || false,
-    validatedPatient.felsoFogpotlasMikor || null,
-    validatedPatient.felsoFogpotlasKeszito || null,
-    validatedPatient.felsoFogpotlasElegedett ?? true,
-    validatedPatient.felsoFogpotlasProblema || null,
-    validatedPatient.alsoFogpotlasVan || false,
-    validatedPatient.alsoFogpotlasMikor || null,
-    validatedPatient.alsoFogpotlasKeszito || null,
-    validatedPatient.alsoFogpotlasElegedett ?? true,
-    validatedPatient.alsoFogpotlasProblema || null,
-    validatedPatient.meglevoFogak && typeof validatedPatient.meglevoFogak === 'object'
-      ? validatedPatient.meglevoFogak
-      : {},
-    validatedPatient.felsoFogpotlasTipus || null,
-    validatedPatient.alsoFogpotlasTipus || null,
-    validatedPatient.meglevoImplantatumok && typeof validatedPatient.meglevoImplantatumok === 'object'
-      ? validatedPatient.meglevoImplantatumok
-      : {},
-    validatedPatient.nemIsmertPoziciokbanImplantatum || false,
-    validatedPatient.nemIsmertPoziciokbanImplantatumRészletek || null,
-    validatedPatient.tnmStaging || null,
-    validatedPatient.bno || null,
-    validatedPatient.diagnozis || null,
-    validatedPatient.primerMutetLeirasa || null,
-    validatedPatient.balesetIdopont || null,
-    validatedPatient.balesetEtiologiaja || null,
-    validatedPatient.balesetEgyeb || null,
-    validatedPatient.veleszuletettRendellenessegek && Array.isArray(validatedPatient.veleszuletettRendellenessegek)
-      ? JSON.stringify(validatedPatient.veleszuletettRendellenessegek)
-      : '[]',
-    validatedPatient.veleszuletettMutetekLeirasa || null,
-    validatedPatient.kezelesiTervFelso && Array.isArray(validatedPatient.kezelesiTervFelso)
-      ? JSON.stringify(validatedPatient.kezelesiTervFelso)
-      : '[]',
-    validatedPatient.kezelesiTervAlso && Array.isArray(validatedPatient.kezelesiTervAlso)
-      ? JSON.stringify(validatedPatient.kezelesiTervAlso)
-      : '[]',
-    validatedPatient.kezelesiTervArcotErinto && Array.isArray(validatedPatient.kezelesiTervArcotErinto)
-      ? JSON.stringify(validatedPatient.kezelesiTervArcotErinto)
-      : '[]',
-    validatedPatient.kortortenetiOsszefoglalo || null,
-    validatedPatient.kezelesiTervMelleklet || null,
-    validatedPatient.szakorvosiVelemény || null,
-    validatedPatient.halalDatum || null,
-    userEmail
-  );
-  
-  const idPart = patientId ? 'id, ' : '';
-  const paramPlaceholders = values.map((_, i) => `$${i + 1}`).join(', ');
-  
-  const result = await pool.query(
-    `INSERT INTO patients (
-      ${idPart}nev, taj, telefonszam, szuletesi_datum, nem, email, cim, varos,
-      iranyitoszam, beutalo_orvos, beutalo_intezmeny, beutalo_indokolas,
-      mutet_ideje, szovettani_diagnozis, nyaki_blokkdisszekcio,
-      alkoholfogyasztas, dohanyzas_szam, kezelesre_erkezes_indoka, maxilladefektus_van,
-      brown_fuggoleges_osztaly, brown_vizszintes_komponens,
-      mandibuladefektus_van, kovacs_dobak_osztaly,
-      nyelvmozgasok_akadalyozottak, gombocos_beszed, nyalmirigy_allapot,
-      fabian_fejerdy_protetikai_osztaly_felso, fabian_fejerdy_protetikai_osztaly_also,
-      radioterapia, radioterapia_dozis, radioterapia_datum_intervallum,
-      chemoterapia, chemoterapia_leiras, fabian_fejerdy_protetikai_osztaly,
-      kezeleoorvos, kezeleoorvos_intezete, felvetel_datuma,
-      felso_fogpotlas_van, felso_fogpotlas_mikor, felso_fogpotlas_keszito, felso_fogpotlas_elegedett, felso_fogpotlas_problema,
-      also_fogpotlas_van, also_fogpotlas_mikor, also_fogpotlas_keszito, also_fogpotlas_elegedett, also_fogpotlas_problema,
-      meglevo_fogak, felso_fogpotlas_tipus, also_fogpotlas_tipus,
-      meglevo_implantatumok, nem_ismert_poziciokban_implantatum,
-      nem_ismert_poziciokban_implantatum_reszletek,
-      tnm_staging, bno, diagnozis, primer_mutet_leirasa,
-      baleset_idopont, baleset_etiologiaja, baleset_egyeb,
-      veleszuletett_rendellenessegek, veleszuletett_mutetek_leirasa,
-      kezelesi_terv_felso, kezelesi_terv_also, kezelesi_terv_arcot_erinto,
-      kortorteneti_osszefoglalo, kezelesi_terv_melleklet, szakorvosi_velemeny,
-      halal_datum, created_by
-    ) VALUES (
-      ${paramPlaceholders}
-    )
-    RETURNING 
-      id, nev, taj, telefonszam, szuletesi_datum as "szuletesiDatum", nem,
-      email, cim, varos, iranyitoszam, beutalo_orvos as "beutaloOrvos",
-      beutalo_intezmeny as "beutaloIntezmeny", beutalo_indokolas as "beutaloIndokolas",
-      mutet_ideje as "mutetIdeje", szovettani_diagnozis as "szovettaniDiagnozis",
-      nyaki_blokkdisszekcio as "nyakiBlokkdisszekcio", alkoholfogyasztas,
-      dohanyzas_szam as "dohanyzasSzam", kezelesre_erkezes_indoka as "kezelesreErkezesIndoka", maxilladefektus_van as "maxilladefektusVan",
-      brown_fuggoleges_osztaly as "brownFuggolegesOsztaly",
-      brown_vizszintes_komponens as "brownVizszintesKomponens",
-      mandibuladefektus_van as "mandibuladefektusVan",
-      kovacs_dobak_osztaly as "kovacsDobakOsztaly",
-      nyelvmozgasok_akadalyozottak as "nyelvmozgásokAkadályozottak",
-      gombocos_beszed as "gombocosBeszed", nyalmirigy_allapot as "nyalmirigyAllapot",
-      fabian_fejerdy_protetikai_osztaly_felso as "fabianFejerdyProtetikaiOsztalyFelso",
-      fabian_fejerdy_protetikai_osztaly_also as "fabianFejerdyProtetikaiOsztalyAlso",
-      radioterapia, radioterapia_dozis as "radioterapiaDozis",
-      radioterapia_datum_intervallum as "radioterapiaDatumIntervallum",
-      chemoterapia, chemoterapia_leiras as "chemoterapiaLeiras",
-      fabian_fejerdy_protetikai_osztaly as "fabianFejerdyProtetikaiOsztaly",
-      kezeleoorvos, kezeleoorvos_intezete as "kezeleoorvosIntezete",
-      felvetel_datuma as "felvetelDatuma",
-      felso_fogpotlas_van as "felsoFogpotlasVan",
-      felso_fogpotlas_mikor as "felsoFogpotlasMikor",
-      felso_fogpotlas_keszito as "felsoFogpotlasKeszito",
-      felso_fogpotlas_elegedett as "felsoFogpotlasElegedett",
-      felso_fogpotlas_problema as "felsoFogpotlasProblema",
-      also_fogpotlas_van as "alsoFogpotlasVan",
-      also_fogpotlas_mikor as "alsoFogpotlasMikor",
-      also_fogpotlas_keszito as "alsoFogpotlasKeszito",
-      also_fogpotlas_elegedett as "alsoFogpotlasElegedett",
-      also_fogpotlas_problema as "alsoFogpotlasProblema",
-      meglevo_fogak as "meglevoFogak",
-      felso_fogpotlas_tipus as "felsoFogpotlasTipus",
-      also_fogpotlas_tipus as "alsoFogpotlasTipus",
-      meglevo_implantatumok as "meglevoImplantatumok",
-      nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
-      nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumRészletek",
-      tnm_staging as "tnmStaging",
-      bno, diagnozis, primer_mutet_leirasa as "primerMutetLeirasa",
-      baleset_idopont as "balesetIdopont",
-      baleset_etiologiaja as "balesetEtiologiaja",
-      baleset_egyeb as "balesetEgyeb",
-      veleszuletett_rendellenessegek as "veleszuletettRendellenessegek",
-      veleszuletett_mutetek_leirasa as "veleszuletettMutetekLeirasa",
-      kezelesi_terv_felso as "kezelesiTervFelso",
-      kezelesi_terv_also as "kezelesiTervAlso",
-      kezelesi_terv_arcot_erinto as "kezelesiTervArcotErinto",
-      kortorteneti_osszefoglalo as "kortortenetiOsszefoglalo",
-      kezelesi_terv_melleklet as "kezelesiTervMelleklet",
-      szakorvosi_velemeny as "szakorvosiVelemény",
-      halal_datum as "halalDatum",
-      created_at as "createdAt", updated_at as "updatedAt",
-      created_by as "createdBy", updated_by as "updatedBy"`,
-    values
-  );
 
   logger.info('Beteg sikeresen mentve, ID:', result.rows[0].id);
   

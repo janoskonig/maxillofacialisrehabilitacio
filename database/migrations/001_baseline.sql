@@ -1,0 +1,3 @@
+-- Baseline: the current schema already exists in production.
+-- This migration is intentionally empty.
+-- It marks the starting point for node-pg-migrate version control.

@@ -136,7 +136,10 @@ export const POST = roleHandler(
     const patientId = params.id;
 
     const patientCheck = await pool.query(
-      'SELECT id, kezelesre_erkezes_indoka as "reason" FROM patients WHERE id = $1',
+      `SELECT p.id, a.kezelesre_erkezes_indoka as "reason"
+       FROM patients p
+       LEFT JOIN patient_anamnesis a ON a.patient_id = p.id
+       WHERE p.id = $1`,
       [patientId]
     );
     if (patientCheck.rows.length === 0) {

@@ -19,22 +19,23 @@ export const GET = apiHandler(async (req, { correlationId }) => {
 
   const result = await pool.query(
     `SELECT 
-      id,
-      nev,
-      taj,
-      telefonszam,
-      szuletesi_datum as "szuletesiDatum",
-      nem,
-      email,
-      cim,
-      varos,
-      iranyitoszam,
-      felvetel_datuma as "felvetelDatuma",
-      beutalo_orvos as "beutaloOrvos",
-      beutalo_indokolas as "beutaloIndokolas",
-      kezeleoorvos
-    FROM patients
-    WHERE id = $1`,
+      p.id,
+      p.nev,
+      p.taj,
+      p.telefonszam,
+      p.szuletesi_datum as "szuletesiDatum",
+      p.nem,
+      p.email,
+      p.cim,
+      p.varos,
+      p.iranyitoszam,
+      p.felvetel_datuma as "felvetelDatuma",
+      r.beutalo_orvos as "beutaloOrvos",
+      r.beutalo_indokolas as "beutaloIndokolas",
+      p.kezeleoorvos
+    FROM patients p
+    LEFT JOIN patient_referral r ON r.patient_id = p.id
+    WHERE p.id = $1`,
     [patientId]
   );
 
@@ -108,73 +109,76 @@ export const PUT = apiHandler(async (req, { correlationId }) => {
     );
   }
 
-  const updateFields: string[] = [];
-  const updateValues: any[] = [];
+  const patientUpdateFields: string[] = [];
+  const patientUpdateValues: any[] = [];
   let paramIndex = 1;
 
-  updateFields.push(`nev = $${paramIndex}`);
-  updateValues.push(nev.trim());
+  patientUpdateFields.push(`nev = $${paramIndex}`);
+  patientUpdateValues.push(nev.trim());
   paramIndex++;
 
-  updateFields.push(`telefonszam = $${paramIndex}`);
-  updateValues.push(telefonszam?.trim() || null);
+  patientUpdateFields.push(`telefonszam = $${paramIndex}`);
+  patientUpdateValues.push(telefonszam?.trim() || null);
   paramIndex++;
 
-  updateFields.push(`szuletesi_datum = $${paramIndex}`);
-  updateValues.push(szuletesiDatum);
+  patientUpdateFields.push(`szuletesi_datum = $${paramIndex}`);
+  patientUpdateValues.push(szuletesiDatum);
   paramIndex++;
 
-  updateFields.push(`nem = $${paramIndex}`);
-  updateValues.push(nem);
+  patientUpdateFields.push(`nem = $${paramIndex}`);
+  patientUpdateValues.push(nem);
   paramIndex++;
 
-  updateFields.push(`cim = $${paramIndex}`);
-  updateValues.push(cim?.trim() || null);
+  patientUpdateFields.push(`cim = $${paramIndex}`);
+  patientUpdateValues.push(cim?.trim() || null);
   paramIndex++;
 
-  updateFields.push(`varos = $${paramIndex}`);
-  updateValues.push(varos?.trim() || null);
+  patientUpdateFields.push(`varos = $${paramIndex}`);
+  patientUpdateValues.push(varos?.trim() || null);
   paramIndex++;
 
-  updateFields.push(`iranyitoszam = $${paramIndex}`);
-  updateValues.push(iranyitoszam?.trim() || null);
+  patientUpdateFields.push(`iranyitoszam = $${paramIndex}`);
+  patientUpdateValues.push(iranyitoszam?.trim() || null);
   paramIndex++;
 
-  updateFields.push(`beutalo_orvos = $${paramIndex}`);
-  updateValues.push(beutaloOrvos?.trim() || null);
-  paramIndex++;
-
-  updateFields.push(`beutalo_indokolas = $${paramIndex}`);
-  updateValues.push(beutaloIndokolas?.trim() || null);
-  paramIndex++;
-
-  updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
-  updateValues.push(patientId);
+  patientUpdateFields.push(`updated_at = CURRENT_TIMESTAMP`);
+  patientUpdateValues.push(patientId);
 
   await pool.query(
     `UPDATE patients 
-     SET ${updateFields.join(', ')}
+     SET ${patientUpdateFields.join(', ')}
      WHERE id = $${paramIndex}`,
-    updateValues
+    patientUpdateValues
+  );
+
+  // Update patient_referral for referral fields (always included in PUT body)
+  await pool.query(
+    `INSERT INTO patient_referral (patient_id, beutalo_orvos, beutalo_indokolas)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (patient_id) DO UPDATE SET
+       beutalo_orvos = EXCLUDED.beutalo_orvos,
+       beutalo_indokolas = EXCLUDED.beutalo_indokolas`,
+    [patientId, beutaloOrvos?.trim() || null, beutaloIndokolas?.trim() || null]
   );
 
   const result = await pool.query(
     `SELECT 
-      id,
-      nev,
-      taj,
-      telefonszam,
-      szuletesi_datum as "szuletesiDatum",
-      nem,
-      email,
-      cim,
-      varos,
-      iranyitoszam,
-      felvetel_datuma as "felvetelDatuma",
-      beutalo_orvos as "beutaloOrvos",
-      beutalo_indokolas as "beutaloIndokolas"
-    FROM patients
-    WHERE id = $1`,
+      p.id,
+      p.nev,
+      p.taj,
+      p.telefonszam,
+      p.szuletesi_datum as "szuletesiDatum",
+      p.nem,
+      p.email,
+      p.cim,
+      p.varos,
+      p.iranyitoszam,
+      p.felvetel_datuma as "felvetelDatuma",
+      r.beutalo_orvos as "beutaloOrvos",
+      r.beutalo_indokolas as "beutaloIndokolas"
+    FROM patients p
+    LEFT JOIN patient_referral r ON r.patient_id = p.id
+    WHERE p.id = $1`,
     [patientId]
   );
 

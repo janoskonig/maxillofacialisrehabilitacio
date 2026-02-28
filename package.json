@@ -8,13 +8,17 @@
   "scripts": {
     "dev": "tsx server.ts",
     "build": "next build",
+    "build:analyze": "ANALYZE=true next build",
     "start": "NODE_ENV=production tsx server.ts",
     "lint": "next lint",
     "convert-logo": "node scripts/convert-logo.js",
     "pwa:icons": "node scripts/generate-pwa-icons.mjs",
     "vapid:generate": "node scripts/generate-vapid-keys.mjs",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "migrate": "node-pg-migrate up --database-url-var DATABASE_URL --migrations-dir database/migrations --migration-file-language sql",
+    "migrate:down": "node-pg-migrate down --database-url-var DATABASE_URL --migrations-dir database/migrations --migration-file-language sql",
+    "migrate:create": "node-pg-migrate create --migrations-dir database/migrations --migration-file-language sql"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -23,6 +27,7 @@
     "@hookform/resolvers": "^3.3.2",
     "@pdf-lib/fontkit": "^1.1.1",
     "@sentry/nextjs": "^10.34.0",
+    "@tanstack/react-virtual": "^3.13.19",
     "@types/archiver": "^7.0.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/marked": "^5.0.2",
@@ -44,6 +49,7 @@
     "lucide-react": "^0.294.0",
     "marked": "^12.0.2",
     "next": "14.0.4",
+    "node-pg-migrate": "^8.0.4",
     "nodemailer": "^7.0.10",
     "openai": "^4.0.0",
     "pdf-lib": "^1.17.1",
@@ -63,6 +69,7 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@next/bundle-analyzer": "^16.1.6",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/xlsx": "^0.0.35",

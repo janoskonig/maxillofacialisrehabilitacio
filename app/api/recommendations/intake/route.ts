@@ -29,51 +29,71 @@ export const GET = authedHandler(async (req, { auth }) => {
     excludeParams
   );
 
+  const doctorIds = doctorsResult.rows.map((d: any) => d.id);
+
+  // ── Batch all per-doctor queries into 4 total queries ──
+  const nextParamIdx = excludeParams.length + 1;
+  const [slotStatsRows, bookedStatsRows, wipRows, worklistRows] = await Promise.all([
+    pool.query(
+      `SELECT ats.user_id,
+              COALESCE(SUM(COALESCE(ats.duration_minutes, 30)), 0)::int as available_minutes,
+              COALESCE(SUM(CASE WHEN a.id IS NOT NULL AND (a.appointment_status IS NULL OR a.appointment_status = 'completed') AND a.start_time > CURRENT_TIMESTAMP
+                AND (a.hold_expires_at IS NULL OR a.hold_expires_at <= CURRENT_TIMESTAMP) THEN COALESCE(a.duration_minutes, 30) ELSE 0 END), 0)::int as booked_minutes,
+              COALESCE(SUM(CASE WHEN a.id IS NOT NULL AND a.hold_expires_at IS NOT NULL AND a.hold_expires_at > CURRENT_TIMESTAMP THEN COALESCE(a.duration_minutes, 30) ELSE 0 END), 0)::int as held_minutes
+       FROM available_time_slots ats
+       LEFT JOIN appointments a ON a.time_slot_id = ats.id
+       WHERE ats.user_id = ANY($1) AND ats.start_time >= CURRENT_TIMESTAMP AND ats.start_time <= $2
+         AND (ats.state = 'free' OR ats.state = 'booked' OR ats.state = 'held')
+       GROUP BY ats.user_id`,
+      [doctorIds, horizonEnd]
+    ),
+    pool.query(
+      `SELECT ats.user_id,
+              COALESCE(SUM(COALESCE(a.duration_minutes, 30)), 0)::int as booked
+       FROM appointments a
+       JOIN available_time_slots ats ON a.time_slot_id = ats.id
+       WHERE ats.user_id = ANY($1) AND a.start_time > CURRENT_TIMESTAMP AND a.start_time <= $2
+         AND (a.appointment_status IS NULL OR a.appointment_status = 'completed')
+         AND (a.hold_expires_at IS NULL OR a.hold_expires_at <= CURRENT_TIMESTAMP)
+       GROUP BY ats.user_id`,
+      [doctorIds, horizonEnd]
+    ),
+    pool.query(
+      `SELECT COALESCE(pe.assigned_provider_id, ect.user_id) as user_id, COUNT(*)::int as cnt
+       FROM patient_episodes pe
+       LEFT JOIN (SELECT DISTINCT ON (episode_id) episode_id, stage_code FROM stage_events ORDER BY episode_id, at DESC) se ON pe.id = se.episode_id
+       LEFT JOIN episode_care_team ect ON pe.id = ect.episode_id AND ect.is_primary = true
+       WHERE pe.status = 'open' AND (se.stage_code IS NULL OR se.stage_code IN (${WIP_STAGE_CODES.map((c) => `'${c}'`).join(',')}))
+         AND (pe.assigned_provider_id = ANY($1) OR ect.user_id = ANY($1))
+       GROUP BY COALESCE(pe.assigned_provider_id, ect.user_id)`,
+      [doctorIds]
+    ),
+    pool.query(
+      `SELECT provider_id as user_id, COUNT(*)::int as cnt
+       FROM episode_next_step_cache
+       WHERE provider_id = ANY($1) AND status = 'ready'
+       GROUP BY provider_id`,
+      [doctorIds]
+    ),
+  ]);
+
+  // Build lookup maps
+  const slotMap = new Map(slotStatsRows.rows.map((r: any) => [r.user_id, r]));
+  const bookedMap = new Map(bookedStatsRows.rows.map((r: any) => [r.user_id, r]));
+  const wipMap = new Map(wipRows.rows.map((r: any) => [r.user_id, r.cnt as number]));
+  const worklistMap = new Map(worklistRows.rows.map((r: any) => [r.user_id, r.cnt as number]));
+
   let busynessScore = 0;
   let nearCriticalIfNewStarts = false;
 
   for (const doc of doctorsResult.rows) {
-    const [slotStats, bookedStats, wipResult, worklistResult] = await Promise.all([
-      pool.query(
-        `SELECT
-          COALESCE(SUM(COALESCE(ats.duration_minutes, 30)), 0)::int as available_minutes,
-          COALESCE(SUM(CASE WHEN a.id IS NOT NULL AND (a.appointment_status IS NULL OR a.appointment_status = 'completed') AND a.start_time > CURRENT_TIMESTAMP
-            AND (a.hold_expires_at IS NULL OR a.hold_expires_at <= CURRENT_TIMESTAMP) THEN COALESCE(a.duration_minutes, 30) ELSE 0 END), 0)::int as booked_minutes,
-          COALESCE(SUM(CASE WHEN a.id IS NOT NULL AND a.hold_expires_at IS NOT NULL AND a.hold_expires_at > CURRENT_TIMESTAMP THEN COALESCE(a.duration_minutes, 30) ELSE 0 END), 0)::int as held_minutes
-         FROM available_time_slots ats
-         LEFT JOIN appointments a ON a.time_slot_id = ats.id
-         WHERE ats.user_id = $1 AND ats.start_time >= CURRENT_TIMESTAMP AND ats.start_time <= $2
-         AND (ats.state = 'free' OR ats.state = 'booked' OR ats.state = 'held')`,
-        [doc.id, horizonEnd]
-      ),
-      pool.query(
-        `SELECT COALESCE(SUM(COALESCE(a.duration_minutes, 30)), 0)::int as booked
-         FROM appointments a
-         JOIN available_time_slots ats ON a.time_slot_id = ats.id
-         WHERE ats.user_id = $1 AND a.start_time > CURRENT_TIMESTAMP AND a.start_time <= $2
-         AND (a.appointment_status IS NULL OR a.appointment_status = 'completed')
-         AND (a.hold_expires_at IS NULL OR a.hold_expires_at <= CURRENT_TIMESTAMP)`,
-        [doc.id, horizonEnd]
-      ),
-      pool.query(
-        `SELECT COUNT(*)::int as cnt FROM patient_episodes pe
-         LEFT JOIN (SELECT DISTINCT ON (episode_id) episode_id, stage_code FROM stage_events ORDER BY episode_id, at DESC) se ON pe.id = se.episode_id
-         LEFT JOIN episode_care_team ect ON pe.id = ect.episode_id AND ect.is_primary = true
-         WHERE pe.status = 'open' AND (se.stage_code IS NULL OR se.stage_code IN (${WIP_STAGE_CODES.map((c) => `'${c}'`).join(',')}))
-         AND (pe.assigned_provider_id = $1 OR ect.user_id = $1)`,
-        [doc.id]
-      ),
-      pool.query(
-        `SELECT COUNT(*)::int as cnt FROM episode_next_step_cache WHERE provider_id = $1 AND status = 'ready'`,
-        [doc.id]
-      ),
-    ]);
-
-    const availableMinutes = slotStats.rows[0]?.available_minutes ?? 0;
-    const bookedMinutes = bookedStats.rows[0]?.booked ?? slotStats.rows[0]?.booked_minutes ?? 0;
-    const heldMinutes = slotStats.rows[0]?.held_minutes ?? 0;
-    const wipCount = wipResult.rows[0]?.cnt ?? 0;
-    const worklistCount = worklistResult.rows[0]?.cnt ?? 0;
+    const slot = slotMap.get(doc.id);
+    const booked = bookedMap.get(doc.id);
+    const availableMinutes = slot?.available_minutes ?? 0;
+    const bookedMinutes = booked?.booked ?? slot?.booked_minutes ?? 0;
+    const heldMinutes = slot?.held_minutes ?? 0;
+    const wipCount = wipMap.get(doc.id) ?? 0;
+    const worklistCount = worklistMap.get(doc.id) ?? 0;
 
     const utilization = availableMinutes > 0 ? bookedMinutes / availableMinutes : 0;
     const holdPressure = availableMinutes > 0 ? heldMinutes / availableMinutes : 0;

@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
-import { allPendingSteps, isBlockedAll } from '@/lib/next-step-engine';
+import {
+  allPendingStepsWithData,
+  isBlockedAll,
+  type EpisodeBatchData,
+  type EpisodeStepRow,
+  type PathwayStep,
+} from '@/lib/next-step-engine';
 import { extractSuggestedTreatmentTypeCodes } from '@/lib/treatment-type-normalize';
-import { getEffectiveTreatmentType } from '@/lib/effective-treatment-type';
 import { WIP_STAGE_CODES } from '@/lib/wip-stage';
 import {
   computeInputsHashBatch,
-  computeEpisodeForecast,
   refreshEpisodeForecastCache,
 } from '@/lib/episode-forecast';
 import type { WorklistItemBackend } from '@/lib/worklist-types';
@@ -55,44 +59,217 @@ export const GET = authedHandler(async (req, { auth }) => {
     queryParams
   );
 
+  if (episodesResult.rows.length === 0) {
+    return NextResponse.json({ items: [], serverNowISO });
+  }
+
+  // ── Batch pre-fetch: ~11 parallel queries instead of N×(6-13) sequential ──
+  const allEpisodeIds = episodesResult.rows.map((r: any) => r.episodeId);
+  const allPatientIds = Array.from(new Set(episodesResult.rows.map((r: any) => r.patientId))) as string[];
+
+  const [
+    stageRows,
+    noShowRows,
+    blockRows,
+    completedStatsRows,
+    episodeStepRows,
+    multiPathwayRows,
+    legacyPathwayRows,
+    episodeTreatmentRows,
+    patientDataRows,
+    treatmentTypesRows,
+    episodeOpenedRows,
+  ] = await Promise.all([
+    pool.query(
+      `SELECT DISTINCT ON (episode_id) episode_id, stage_code
+       FROM stage_events WHERE episode_id = ANY($1)
+       ORDER BY episode_id, at DESC`,
+      [allEpisodeIds]
+    ),
+    pool.query(
+      `SELECT patient_id, COUNT(*)::int as cnt
+       FROM appointments
+       WHERE patient_id = ANY($1) AND appointment_status = 'no_show'
+         AND created_at > CURRENT_TIMESTAMP - INTERVAL '12 months'
+       GROUP BY patient_id`,
+      [allPatientIds]
+    ),
+    pool.query(
+      `SELECT episode_id, key, expires_at
+       FROM episode_blocks
+       WHERE episode_id = ANY($1) AND active = true AND expires_at > CURRENT_TIMESTAMP`,
+      [allEpisodeIds]
+    ),
+    pool.query(
+      `SELECT a.episode_id,
+              COUNT(*)::int as completed_count,
+              MAX(COALESCE(a.start_time, a.created_at)) as last_completed_at
+       FROM appointments a
+       WHERE a.episode_id = ANY($1) AND a.appointment_status = 'completed'
+       GROUP BY a.episode_id`,
+      [allEpisodeIds]
+    ),
+    pool.query(
+      `SELECT episode_id, step_code, pathway_order_index, seq, status, completed_at
+       FROM episode_steps WHERE episode_id = ANY($1)
+       ORDER BY episode_id, COALESCE(seq, pathway_order_index), pathway_order_index`,
+      [allEpisodeIds]
+    ),
+    pool.query(
+      `SELECT ep.episode_id, cp.steps_json
+       FROM episode_pathways ep
+       JOIN care_pathways cp ON ep.care_pathway_id = cp.id
+       WHERE ep.episode_id = ANY($1)
+       ORDER BY ep.episode_id, ep.ordinal`,
+      [allEpisodeIds]
+    ).catch(() => ({ rows: [] as any[] })),
+    pool.query(
+      `SELECT pe.id as episode_id, cp.steps_json
+       FROM patient_episodes pe
+       JOIN care_pathways cp ON pe.care_pathway_id = cp.id
+       WHERE pe.id = ANY($1)`,
+      [allEpisodeIds]
+    ),
+    pool.query(
+      `SELECT pe.id as episode_id, pe.treatment_type_id, cp.treatment_type_id as pathway_treatment_type_id
+       FROM patient_episodes pe
+       LEFT JOIN care_pathways cp ON pe.care_pathway_id = cp.id
+       WHERE pe.id = ANY($1)`,
+      [allEpisodeIds]
+    ),
+    pool.query(
+      `SELECT p.id, t.kezelesi_terv_felso as "kezelesiTervFelso", t.kezelesi_terv_also as "kezelesiTervAlso"
+       FROM patients p
+       LEFT JOIN patient_treatment_plans t ON t.patient_id = p.id
+       WHERE p.id = ANY($1)`,
+      [allPatientIds]
+    ),
+    pool.query(`SELECT id, code, label_hu FROM treatment_types`),
+    pool.query(
+      `SELECT id, opened_at FROM patient_episodes WHERE id = ANY($1)`,
+      [allEpisodeIds]
+    ),
+  ]);
+
+  // ── Build lookup Maps ──
+  const stageMap = new Map<string, string>(
+    stageRows.rows.map((r: any) => [r.episode_id, r.stage_code])
+  );
+  const noShowMap = new Map<string, number>(
+    noShowRows.rows.map((r: any) => [r.patient_id, r.cnt])
+  );
+
+  // Blocks grouped by episode
+  const blocksMap = new Map<string, Array<{ key: string; expires_at: Date }>>();
+  for (const r of blockRows.rows) {
+    const arr = blocksMap.get(r.episode_id) ?? [];
+    arr.push({ key: r.key, expires_at: r.expires_at });
+    blocksMap.set(r.episode_id, arr);
+  }
+
+  // Completed stats by episode
+  const completedStatsMap = new Map<string, { completedCount: number; lastCompletedAt: Date | null }>(
+    completedStatsRows.rows.map((r: any) => [
+      r.episode_id,
+      { completedCount: r.completed_count, lastCompletedAt: r.last_completed_at ? new Date(r.last_completed_at) : null },
+    ])
+  );
+
+  // Episode steps grouped by episode
+  const episodeStepsMap = new Map<string, EpisodeStepRow[]>();
+  for (const r of episodeStepRows.rows) {
+    const arr = episodeStepsMap.get(r.episode_id) ?? [];
+    arr.push(r as EpisodeStepRow);
+    episodeStepsMap.set(r.episode_id, arr);
+  }
+
+  // Pathway steps: prefer multi-pathway, fallback to legacy
+  const multiPathwayMap = new Map<string, PathwayStep[]>();
+  for (const r of (multiPathwayRows as any).rows) {
+    const existing = multiPathwayMap.get(r.episode_id) ?? [];
+    if (Array.isArray(r.steps_json)) existing.push(...(r.steps_json as PathwayStep[]));
+    multiPathwayMap.set(r.episode_id, existing);
+  }
+  const legacyPathwayMap = new Map<string, PathwayStep[]>(
+    legacyPathwayRows.rows
+      .filter((r: any) => Array.isArray(r.steps_json))
+      .map((r: any) => [r.episode_id, r.steps_json as PathwayStep[]])
+  );
+  function getPathwayStepsForEpisode(episodeId: string): PathwayStep[] | null {
+    const multi = multiPathwayMap.get(episodeId);
+    if (multi && multi.length > 0) return multi;
+    const legacy = legacyPathwayMap.get(episodeId);
+    return legacy && legacy.length > 0 ? legacy : null;
+  }
+
+  // Episode treatment type IDs
+  const episodeTreatmentMap = new Map<string, { treatmentTypeId: string | null; pathwayTreatmentTypeId: string | null }>(
+    episodeTreatmentRows.rows.map((r: any) => [r.episode_id, {
+      treatmentTypeId: r.treatment_type_id,
+      pathwayTreatmentTypeId: r.pathway_treatment_type_id,
+    }])
+  );
+
+  // Patient data
+  const patientDataMap = new Map<string, { kezelesiTervFelso: any; kezelesiTervAlso: any }>(
+    patientDataRows.rows.map((r: any) => [r.id, {
+      kezelesiTervFelso: r.kezelesiTervFelso,
+      kezelesiTervAlso: r.kezelesiTervAlso,
+    }])
+  );
+
+  // Treatment types by ID and by code
+  const ttById = new Map<string, { code: string; label_hu: string }>(
+    treatmentTypesRows.rows.map((r: any) => [r.id, { code: r.code, label_hu: r.label_hu }])
+  );
+  const ttByCode = new Map<string, { id: string; label_hu: string }>(
+    treatmentTypesRows.rows.map((r: any) => [r.code, { id: r.id, label_hu: r.label_hu }])
+  );
+
+  // Episode opened_at
+  const openedAtMap = new Map<string, Date>(
+    episodeOpenedRows.rows.map((r: any) => [r.id, r.opened_at ? new Date(r.opened_at) : new Date()])
+  );
+
+  // ── Process episodes using batch data (no per-episode DB queries) ──
   const items: WorklistItemBackend[] = [];
 
   for (let epIdx = 0; epIdx < episodesResult.rows.length; epIdx++) {
     const row = episodesResult.rows[epIdx];
-    const result = await allPendingSteps(row.episodeId);
+    const episodeId = row.episodeId;
+
+    const batchData: EpisodeBatchData = {
+      blocks: blocksMap.get(episodeId) ?? [],
+      pathwaySteps: getPathwayStepsForEpisode(episodeId),
+      completedStats: completedStatsMap.get(episodeId) ?? { completedCount: 0, lastCompletedAt: null },
+      episodeSteps: episodeStepsMap.get(episodeId) ?? null,
+      openedAt: openedAtMap.get(episodeId) ?? new Date(),
+      currentStage: stageMap.get(episodeId) ?? null,
+    };
+
+    const result = allPendingStepsWithData(episodeId, batchData);
 
     if (isBlockedAll(result)) {
-      const stageRow = await pool.query(
-        `SELECT stage_code FROM stage_events WHERE episode_id = $1 ORDER BY at DESC LIMIT 1`,
-        [row.episodeId]
-      );
+      const currentStage = stageMap.get(episodeId) ?? 'STAGE_0';
       let suggestedTreatmentTypeCode: string | null = null;
       let suggestedTreatmentTypeLabel: string | null = null;
       if (result.code === 'NO_CARE_PATHWAY') {
-        const patientRow = await pool.query(
-          `SELECT kezelesi_terv_felso as "kezelesiTervFelso", kezelesi_terv_also as "kezelesiTervAlso"
-           FROM patients WHERE id = $1`,
-          [row.patientId]
-        );
-        const p = patientRow.rows[0];
+        const pData = patientDataMap.get(row.patientId);
         const suggested = extractSuggestedTreatmentTypeCodes(
-          p?.kezelesiTervFelso,
-          p?.kezelesiTervAlso
+          pData?.kezelesiTervFelso,
+          pData?.kezelesiTervAlso
         );
         if (suggested.length > 0) {
           suggestedTreatmentTypeCode = suggested[0];
-          const labelRow = await pool.query(
-            `SELECT label_hu FROM treatment_types WHERE code = $1`,
-            [suggestedTreatmentTypeCode]
-          );
-          suggestedTreatmentTypeLabel = labelRow.rows[0]?.label_hu ?? suggestedTreatmentTypeCode;
+          const ttRow = ttByCode.get(suggestedTreatmentTypeCode);
+          suggestedTreatmentTypeLabel = ttRow?.label_hu ?? suggestedTreatmentTypeCode;
         }
       }
       items.push({
-        episodeId: row.episodeId,
+        episodeId,
         patientId: row.patientId,
         patientName: row.patientName ?? null,
-        currentStage: stageRow.rows[0]?.stage_code ?? 'STAGE_0',
+        currentStage,
         nextStep: '-',
         stepCode: undefined,
         overdueByDays: 0,
@@ -114,48 +291,47 @@ export const GET = authedHandler(async (req, { auth }) => {
 
     if (result.length === 0) continue;
 
-    const stageResult = await pool.query(
-      `SELECT stage_code FROM stage_events WHERE episode_id = $1 ORDER BY at DESC LIMIT 1`,
-      [row.episodeId]
-    );
-    const currentStage = stageResult.rows[0]?.stage_code ?? 'STAGE_0';
-
-    const patientNoShowResult = await pool.query(
-      `SELECT COUNT(*)::int as cnt FROM appointments a
-       WHERE a.patient_id = $1 AND a.appointment_status = 'no_show'
-       AND a.created_at > CURRENT_TIMESTAMP - INTERVAL '12 months'`,
-      [row.patientId]
-    );
-    const noShowCount = patientNoShowResult.rows[0]?.cnt ?? 0;
+    const currentStage = stageMap.get(episodeId) ?? 'STAGE_0';
+    const noShowCount = noShowMap.get(row.patientId) ?? 0;
     const noShowRisk = Math.min(0.95, 0.05 + noShowCount * 0.15);
 
     let treatmentTypeCode: string | undefined;
     let treatmentTypeLabel: string | undefined;
     let treatmentTypeSource: 'episode' | 'pathway' | 'patient' | undefined;
     if (currentStage === 'STAGE_5') {
-      const epRow = await pool.query(
-        `SELECT pe.treatment_type_id as "episodeTreatmentTypeId", cp.treatment_type_id as "pathwayTreatmentTypeId"
-         FROM patient_episodes pe
-         LEFT JOIN care_pathways cp ON pe.care_pathway_id = cp.id
-         WHERE pe.id = $1`,
-        [row.episodeId]
-      );
-      const patientRow = await pool.query(
-        `SELECT kezelesi_terv_felso as "kezelesiTervFelso", kezelesi_terv_also as "kezelesiTervAlso"
-         FROM patients WHERE id = $1`,
-        [row.patientId]
-      );
-      const ep = epRow.rows[0];
-      const p = patientRow.rows[0];
-      const effective = await getEffectiveTreatmentType(pool, {
-        episodeTreatmentTypeId: ep?.episodeTreatmentTypeId,
-        pathwayTreatmentTypeId: ep?.pathwayTreatmentTypeId,
-        kezelesiTervFelso: p?.kezelesiTervFelso,
-        kezelesiTervAlso: p?.kezelesiTervAlso,
-      });
-      treatmentTypeCode = effective.code ?? undefined;
-      treatmentTypeLabel = effective.label ?? undefined;
-      treatmentTypeSource = effective.source ?? undefined;
+      const epTt = episodeTreatmentMap.get(episodeId);
+      const pData = patientDataMap.get(row.patientId);
+
+      if (epTt?.treatmentTypeId) {
+        const tt = ttById.get(epTt.treatmentTypeId);
+        if (tt) {
+          treatmentTypeCode = tt.code;
+          treatmentTypeLabel = tt.label_hu;
+          treatmentTypeSource = 'episode';
+        }
+      }
+      if (!treatmentTypeCode && epTt?.pathwayTreatmentTypeId) {
+        const tt = ttById.get(epTt.pathwayTreatmentTypeId);
+        if (tt) {
+          treatmentTypeCode = tt.code;
+          treatmentTypeLabel = tt.label_hu;
+          treatmentTypeSource = 'pathway';
+        }
+      }
+      if (!treatmentTypeCode && pData) {
+        const codes = extractSuggestedTreatmentTypeCodes(
+          pData.kezelesiTervFelso,
+          pData.kezelesiTervAlso
+        );
+        if (codes.length > 0) {
+          const tt = ttByCode.get(codes[0]);
+          if (tt) {
+            treatmentTypeCode = codes[0];
+            treatmentTypeLabel = tt.label_hu;
+            treatmentTypeSource = 'patient';
+          }
+        }
+      }
     }
 
     for (const step of result) {
@@ -165,7 +341,7 @@ export const GET = authedHandler(async (req, { auth }) => {
       const priorityScore = Math.min(100, 50 + overdueByDays * 5);
 
       const item: WorklistItemBackend = {
-        episodeId: row.episodeId,
+        episodeId,
         patientId: row.patientId,
         patientName: row.patientName ?? null,
         currentStage,
@@ -194,6 +370,7 @@ export const GET = authedHandler(async (req, { auth }) => {
     }
   }
 
+  // ── Booked appointments enrichment ──
   const readyItems = items.filter((i) => i.status !== 'blocked');
   if (readyItems.length > 0) {
     const episodeIds = Array.from(new Set(readyItems.map((i) => i.episodeId)));
@@ -239,6 +416,7 @@ export const GET = authedHandler(async (req, { auth }) => {
     }
   }
 
+  // ── Forecast enrichment ──
   const forecastEpisodeIds = items.filter((i) => i.status !== 'blocked').map((i) => i.episodeId);
   const forecastMap: Record<string, { p50: string | null; p80: string | null; rem50: number; rem80: number }> = {};
 

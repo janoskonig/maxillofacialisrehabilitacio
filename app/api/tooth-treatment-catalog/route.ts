@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler, roleHandler } from '@/lib/api/route-handler';
+import { getCached, setCache, invalidateCache, CATALOG_TTL } from '@/lib/catalog-cache';
 
 export const dynamic = 'force-dynamic';
 
 export const GET = authedHandler(async (req, { auth }) => {
+  const onlyActive = req.nextUrl.searchParams.get('all') !== 'true';
+  const cacheKey = `tooth-treatment-catalog:${onlyActive ? 'active' : 'all'}`;
+  const cached = getCached<any[]>(cacheKey);
+  if (cached) return NextResponse.json({ items: cached });
+
   const pool = getDbPool();
 
   const tableExists = await pool.query(
@@ -14,7 +20,6 @@ export const GET = authedHandler(async (req, { auth }) => {
     return NextResponse.json({ items: [] });
   }
 
-  const onlyActive = req.nextUrl.searchParams.get('all') !== 'true';
   const whereClause = onlyActive ? 'WHERE is_active = true' : '';
 
   const result = await pool.query(
@@ -26,6 +31,7 @@ export const GET = authedHandler(async (req, { auth }) => {
      ORDER BY sort_order, code`
   );
 
+  setCache(cacheKey, result.rows, CATALOG_TTL);
   return NextResponse.json({ items: result.rows });
 });
 
@@ -56,6 +62,8 @@ export const POST = roleHandler(['admin', 'fogpótlástanász'], async (req, { a
       [code, labelHu, labelEn, defaultCarePathwayId, sortOrder]
     );
 
+    invalidateCache('tooth-treatment-catalog:active');
+    invalidateCache('tooth-treatment-catalog:all');
     return NextResponse.json({ item: result.rows[0] }, { status: 201 });
   } catch (err: unknown) {
     const msg = String(err ?? '');
@@ -117,6 +125,8 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász'], async (req, { 
     return NextResponse.json({ error: 'Nem található' }, { status: 404 });
   }
 
+  invalidateCache('tooth-treatment-catalog:active');
+  invalidateCache('tooth-treatment-catalog:all');
   return NextResponse.json({ item: result.rows[0] });
 });
 
@@ -136,5 +146,7 @@ export const DELETE = roleHandler(['admin'], async (req, { auth }) => {
     return NextResponse.json({ error: 'Nem található' }, { status: 404 });
   }
 
+  invalidateCache('tooth-treatment-catalog:active');
+  invalidateCache('tooth-treatment-catalog:all');
   return NextResponse.json({ deleted: code });
 });

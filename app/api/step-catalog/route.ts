@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
+import { getCached, setCache, CATALOG_TTL } from '@/lib/catalog-cache';
 
 export const dynamic = 'force-dynamic';
 
+const CACHE_KEY = 'step-catalog';
+
 export const GET = roleHandler(['admin', 'fogpótlástanász'], async (req, { auth }) => {
+  const cached = getCached<any[]>(CACHE_KEY);
+  if (cached) return NextResponse.json({ items: cached });
+
   const pool = getDbPool();
 
   const tableExists = await pool.query(
@@ -29,5 +35,6 @@ export const GET = roleHandler(['admin', 'fogpótlástanász'], async (req, { au
     updatedAt: row.updatedAt,
   }));
 
+  setCache(CACHE_KEY, items, CATALOG_TTL);
   return NextResponse.json({ items });
 });

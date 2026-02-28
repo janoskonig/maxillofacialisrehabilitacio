@@ -1,3 +1,8 @@
+// Bundle analyzer (ANALYZE=true npm run build)
+const withBundleAnalyzer = require('@next/bundle-analyzer')({
+  enabled: process.env.ANALYZE === 'true',
+});
+
 // Sentry integration (if enabled)
 const { withSentryConfig } = require('@sentry/nextjs');
 
@@ -9,7 +14,7 @@ const nextConfig = {
     instrumentationHook: true,
     webpackBuildWorker: true,
     serverSourceMaps: false,
-    // enablePrerenderSourceMaps: false,  // opcionális: prerender fázis OOM esetén
+    optimizePackageImports: ['recharts', 'lucide-react', '@dnd-kit/core', '@dnd-kit/sortable'],
   },
   
   // Production optimalizációk
@@ -31,6 +36,13 @@ const nextConfig = {
   
   // Production build optimalizációk
   productionBrowserSourceMaps: false,
+
+  // Strip console.log/info in production via SWC (keep error & warn)
+  compiler: {
+    removeConsole: {
+      exclude: ['error', 'warn'],
+    },
+  },
   
   // PWA cache control headers
   async headers() {
@@ -56,43 +68,29 @@ const nextConfig = {
     ];
   },
   
-  // Webpack konfiguráció console.log eltávolításához production-ben
-  webpack: (config, { dev, isServer }) => {
-    if (!dev && !isServer) {
-      // Production build-ben eltávolítjuk a console.log, console.warn, console.info hívásokat
-      // console.error meghagyása, mert az fontos lehet debugging-hoz
-      config.optimization = {
-        ...config.optimization,
-        minimize: true,
-      };
-    }
-
-    // Build memory: cache memória-típusra állítása (Next Memory guide). Ne írjuk felül, ha már explicit false.
+  webpack: (config, { dev }) => {
+    // Build memory: cache memória-típusra állítása (Next Memory guide)
     if (config.cache !== false && !dev) {
       config.cache = Object.freeze({ type: 'memory' });
     }
-    // Ha ez nem elég, kipróbálható teljes kikapcsolás: if (!dev) config.cache = false
-
     return config;
   },
 }
 
 // Wrap with Sentry config only if enabled
+const analyzedConfig = withBundleAnalyzer(nextConfig);
+
 if (process.env.ENABLE_SENTRY === 'true') {
   module.exports = withSentryConfig(
-    nextConfig,
+    analyzedConfig,
     {
-      // Sentry options
-      silent: true, // Suppress source map upload logs
+      silent: true,
       org: process.env.SENTRY_ORG,
       project: process.env.SENTRY_PROJECT,
-      // Disable source maps upload for now (can be enabled later)
       widenClientFileUpload: true,
       hideSourceMaps: true,
-      // Note: disableLogger is deprecated (removed)
-      // Use silent: true instead, and tree-shaking will remove Sentry logger in production builds
     }
   );
 } else {
-  module.exports = nextConfig;
+  module.exports = analyzedConfig;
 }

@@ -102,14 +102,6 @@ export const POST = apiHandler(async (req, { correlationId }) => {
       insertFields.push('iranyitoszam');
       insertValues.push(iranyitoszam.trim());
     }
-    if (beutaloOrvos && beutaloOrvos.trim()) {
-      insertFields.push('beutalo_orvos');
-      insertValues.push(beutaloOrvos.trim());
-    }
-    if (beutaloIndokolas && beutaloIndokolas.trim()) {
-      insertFields.push('beutalo_indokolas');
-      insertValues.push(beutaloIndokolas.trim());
-    }
 
     insertFields.push('created_at', 'updated_at');
 
@@ -131,6 +123,18 @@ export const POST = apiHandler(async (req, { correlationId }) => {
 
     const insertResult = await pool.query(insertQuery, insertValues);
     patientId = insertResult.rows[0].id;
+
+    // Insert referral data into patient_referral if provided
+    if (beutaloOrvos?.trim() || beutaloIndokolas?.trim()) {
+      await pool.query(
+        `INSERT INTO patient_referral (patient_id, beutalo_orvos, beutalo_indokolas)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (patient_id) DO UPDATE SET
+           beutalo_orvos = EXCLUDED.beutalo_orvos,
+           beutalo_indokolas = EXCLUDED.beutalo_indokolas`,
+        [patientId, beutaloOrvos?.trim() || null, beutaloIndokolas?.trim() || null]
+      );
+    }
   } else {
     patientId = patientResult.rows[0].id;
     const existingEmail = (patientResult.rows[0].email || '').trim();
@@ -179,16 +183,6 @@ export const POST = apiHandler(async (req, { correlationId }) => {
       updateValues.push(iranyitoszam.trim());
       paramIndex++;
     }
-    if (beutaloOrvos && beutaloOrvos.trim()) {
-      updateFields.push(`beutalo_orvos = $${paramIndex}`);
-      updateValues.push(beutaloOrvos.trim());
-      paramIndex++;
-    }
-    if (beutaloIndokolas && beutaloIndokolas.trim()) {
-      updateFields.push(`beutalo_indokolas = $${paramIndex}`);
-      updateValues.push(beutaloIndokolas.trim());
-      paramIndex++;
-    }
 
     if (updateFields.length > 0) {
       updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
@@ -199,6 +193,18 @@ export const POST = apiHandler(async (req, { correlationId }) => {
          SET ${updateFields.join(', ')}
          WHERE id = $${paramIndex}`,
         updateValues
+      );
+    }
+
+    // Update patient_referral for referral fields if provided
+    if (beutaloOrvos?.trim() || beutaloIndokolas?.trim()) {
+      await pool.query(
+        `INSERT INTO patient_referral (patient_id, beutalo_orvos, beutalo_indokolas)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (patient_id) DO UPDATE SET
+           beutalo_orvos = EXCLUDED.beutalo_orvos,
+           beutalo_indokolas = EXCLUDED.beutalo_indokolas`,
+        [patientId, beutaloOrvos?.trim() || null, beutaloIndokolas?.trim() || null]
       );
     }
   }

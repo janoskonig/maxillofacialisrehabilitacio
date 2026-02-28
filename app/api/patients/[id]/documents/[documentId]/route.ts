@@ -43,7 +43,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
 
   if (role === 'technikus') {
     const patientResult = await pool.query(
-      `SELECT kezelesi_terv_arcot_erinto FROM patients WHERE id = $1`,
+      `SELECT kezelesi_terv_arcot_erinto FROM patient_treatment_plans WHERE patient_id = $1`,
       [patientId]
     );
     const hasEpitesis = patientResult.rows[0]?.kezelesi_terv_arcot_erinto &&
@@ -63,7 +63,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
     if (userResult.rows.length > 0 && userResult.rows[0].intezmeny) {
       const userInstitution = userResult.rows[0].intezmeny;
       const patientResult = await pool.query(
-        `SELECT beutalo_intezmeny FROM patients WHERE id = $1`,
+        `SELECT beutalo_intezmeny FROM patient_referral WHERE patient_id = $1`,
         [patientId]
       );
       if (patientResult.rows[0]?.beutalo_intezmeny !== userInstitution) {
