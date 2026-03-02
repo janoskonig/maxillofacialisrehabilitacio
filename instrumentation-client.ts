@@ -9,14 +9,21 @@
  * @see https://nextjs.org/docs/app/building-your-application/optimizing/instrumentation
  */
 
-// Only run in browser
+function hasSentryConsent(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return localStorage.getItem('gdpr-sentry-consent') === 'true';
+  } catch {
+    return false;
+  }
+}
+
+// Only run in browser, and only if user has given GDPR consent
 if (typeof window !== 'undefined') {
-  // Feature flag check
-  if (process.env.NEXT_PUBLIC_ENABLE_SENTRY === 'true') {
+  if (process.env.NEXT_PUBLIC_ENABLE_SENTRY === 'true' && hasSentryConsent()) {
     const SENTRY_DSN = process.env.NEXT_PUBLIC_SENTRY_DSN;
     
     if (SENTRY_DSN) {
-      // Dynamically import Sentry to avoid bundling issues
       import('@sentry/nextjs').then((Sentry) => {
         const ENVIRONMENT = process.env.NODE_ENV || 'development';
 

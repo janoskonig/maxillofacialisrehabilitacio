@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Mail, CreditCard, User, Loader2, Phone, Calendar, MapPin } from 'lucide-react';
+import Link from 'next/link';
 import { useToast } from '@/contexts/ToastContext';
 
 export function PortalRegister() {
@@ -16,6 +17,7 @@ export function PortalRegister() {
   const [iranyitoszam, setIranyitoszam] = useState('');
   const [beutaloOrvos, setBeutaloOrvos] = useState('');
   const [beutaloIndokolas, setBeutaloIndokolas] = useState('');
+  const [privacyConsent, setPrivacyConsent] = useState(false);
   const [loading, setLoading] = useState(false);
   const { showToast } = useToast();
 
@@ -29,6 +31,11 @@ export function PortalRegister() {
 
     if (!nev.trim()) {
       showToast('Kérjük, töltse ki a nevet', 'error');
+      return;
+    }
+
+    if (!privacyConsent) {
+      showToast('Az adatvédelmi irányelvek elfogadása kötelező a regisztrációhoz', 'error');
       return;
     }
 
@@ -52,6 +59,8 @@ export function PortalRegister() {
           iranyitoszam: iranyitoszam.trim() || undefined,
           beutaloOrvos: beutaloOrvos.trim() || undefined,
           beutaloIndokolas: beutaloIndokolas.trim() || undefined,
+          privacyConsent: true,
+          privacyPolicyVersion: '1.0',
         }),
       });
 
@@ -301,9 +310,29 @@ export function PortalRegister() {
           </div>
         </div>
 
+        {/* GDPR Consent */}
+        <div className="border-t pt-4">
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={privacyConsent}
+              onChange={(e) => setPrivacyConsent(e.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-gray-300 text-medical-primary focus:ring-medical-primary flex-shrink-0"
+              disabled={loading}
+            />
+            <span className="text-sm text-gray-700">
+              Elolvastam és elfogadom az{' '}
+              <Link href="/privacy-hu" target="_blank" className="text-medical-primary hover:underline font-medium">
+                Adatvédelmi Irányelveket
+              </Link>{' '}
+              és hozzájárulok személyes és egészségügyi adataim kezeléséhez a kezelés céljából. *
+            </span>
+          </label>
+        </div>
+
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || !privacyConsent}
           className="btn-primary w-full flex items-center justify-center gap-2 py-2.5 mobile-touch-target"
         >
           {loading ? (

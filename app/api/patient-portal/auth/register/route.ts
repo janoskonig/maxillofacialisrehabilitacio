@@ -22,7 +22,9 @@ export const POST = apiHandler(async (req, { correlationId }) => {
     varos,
     iranyitoszam,
     beutaloOrvos,
-    beutaloIndokolas
+    beutaloIndokolas,
+    privacyConsent,
+    privacyPolicyVersion,
   } = body;
 
   if (!email || !taj) {
@@ -35,6 +37,13 @@ export const POST = apiHandler(async (req, { correlationId }) => {
   if (!nev || !nev.trim()) {
     return NextResponse.json(
       { error: 'Név megadása kötelező' },
+      { status: 400 }
+    );
+  }
+
+  if (!privacyConsent) {
+    return NextResponse.json(
+      { error: 'Az adatvédelmi irányelvek elfogadása kötelező a regisztrációhoz' },
       { status: 400 }
     );
   }
@@ -114,6 +123,23 @@ export const POST = apiHandler(async (req, { correlationId }) => {
   );
 
   const newPatient = insertResult.rows[0];
+
+  // Record GDPR consent
+  try {
+    await pool.query(
+      `INSERT INTO gdpr_consents (patient_id, purpose, policy_version, ip_address, user_agent)
+       VALUES ($1, 'data_processing', $2, $3::inet, $4),
+              ($1, 'health_data_processing', $2, $3::inet, $4)`,
+      [
+        newPatient.id,
+        privacyPolicyVersion || '1.0',
+        ipAddress,
+        req.headers.get('user-agent') || null,
+      ]
+    );
+  } catch (consentError) {
+    logger.error('Failed to record GDPR consent:', consentError);
+  }
 
   // Insert referral data into patient_referral if provided
   if (beutaloOrvos?.trim() || beutaloIndokolas?.trim()) {

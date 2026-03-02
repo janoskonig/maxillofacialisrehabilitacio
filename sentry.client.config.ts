@@ -1,14 +1,23 @@
 // Sentry client-side configuration
 // This file configures Sentry for the browser/client-side code
+// GDPR: Only initializes if user has given consent via cookie banner
 
 import * as Sentry from '@sentry/nextjs';
 
-// Feature flag: ENABLE_SENTRY
 const ENABLE_SENTRY = process.env.ENABLE_SENTRY === 'true';
 const SENTRY_DSN = process.env.NEXT_PUBLIC_SENTRY_DSN;
 const ENVIRONMENT = process.env.NODE_ENV || 'development';
 
-if (ENABLE_SENTRY && SENTRY_DSN) {
+function hasSentryConsent(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return localStorage.getItem('gdpr-sentry-consent') === 'true';
+  } catch {
+    return false;
+  }
+}
+
+if (ENABLE_SENTRY && SENTRY_DSN && hasSentryConsent()) {
   Sentry.init({
     dsn: SENTRY_DSN,
     environment: ENVIRONMENT,

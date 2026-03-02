@@ -21,6 +21,7 @@ export default function Register() {
   const [accessReason, setAccessReason] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [privacyConsent, setPrivacyConsent] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const institutionInputRef = useRef<HTMLInputElement>(null);
@@ -139,6 +140,12 @@ export default function Register() {
       return;
     }
 
+    if (!privacyConsent) {
+      setError('Az adatvédelmi irányelvek elfogadása kötelező a regisztrációhoz');
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const response = await fetch('/api/auth/register', {
         method: 'POST',
@@ -153,7 +160,9 @@ export default function Register() {
           confirmPassword, 
           role,
           institution,
-          accessReason: accessReason.trim()
+          accessReason: accessReason.trim(),
+          privacyConsent: true,
+          privacyPolicyVersion: '1.0',
         }),
       });
 
@@ -376,6 +385,30 @@ export default function Register() {
               <p className="mt-1 text-xs text-gray-500">Kérjük, röviden indokolja, miért kér hozzáférést</p>
             </div>
 
+            {/* GDPR Consent */}
+            <div className="border-t pt-4">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={privacyConsent}
+                  onChange={(e) => setPrivacyConsent(e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-gray-300 text-medical-primary focus:ring-medical-primary flex-shrink-0"
+                  disabled={isLoading}
+                />
+                <span className="text-sm text-gray-700">
+                  Elolvastam és elfogadom az{' '}
+                  <Link href="/privacy-hu" target="_blank" className="text-medical-primary hover:underline font-medium">
+                    Adatvédelmi Irányelveket
+                  </Link>{' '}
+                  és a{' '}
+                  <Link href="/terms-hu" target="_blank" className="text-medical-primary hover:underline font-medium">
+                    Felhasználási Feltételeket
+                  </Link>
+                  . Hozzájárulok személyes adataim kezeléséhez. *
+                </span>
+              </label>
+            </div>
+
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md text-sm">
                 {error}
@@ -385,7 +418,7 @@ export default function Register() {
             <div>
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || !privacyConsent}
                 className="btn-primary w-full flex justify-center items-center"
               >
                 {isLoading ? (

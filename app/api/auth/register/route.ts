@@ -38,7 +38,7 @@ export const dynamic = 'force-dynamic';
 
 export const POST = apiHandler(async (req) => {
   const body = await req.json();
-  const { email, fullName, password, confirmPassword, role, institution, accessReason } = body;
+  const { email, fullName, password, confirmPassword, role, institution, accessReason, privacyConsent, privacyPolicyVersion } = body;
 
   if (!email || !password) {
     return NextResponse.json(
@@ -71,6 +71,13 @@ export const POST = apiHandler(async (req) => {
   if (!accessReason || !accessReason.trim()) {
     return NextResponse.json(
       { error: 'Hozzáférés indokolásának megadása kötelező' },
+      { status: 400 }
+    );
+  }
+
+  if (!privacyConsent) {
+    return NextResponse.json(
+      { error: 'Az adatvédelmi irányelvek elfogadása kötelező a regisztrációhoz' },
       { status: 400 }
     );
   }
@@ -132,6 +139,24 @@ export const POST = apiHandler(async (req) => {
   );
 
   const user = result.rows[0];
+
+  // Record GDPR consent
+  try {
+    const ipHeader = req.headers.get('x-forwarded-for') || '';
+    const ipAddress = ipHeader.split(',')[0]?.trim() || null;
+    await pool.query(
+      `INSERT INTO gdpr_consents (user_id, purpose, policy_version, ip_address, user_agent)
+       VALUES ($1, 'data_processing', $2, $3::inet, $4)`,
+      [
+        user.id,
+        privacyPolicyVersion || '1.0',
+        ipAddress,
+        req.headers.get('user-agent') || null,
+      ]
+    );
+  } catch (consentError) {
+    logger.error('Failed to record GDPR consent:', consentError);
+  }
 
   await logActivity(req, user.email, 'register', 'pending_approval');
 

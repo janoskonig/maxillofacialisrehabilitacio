@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, Mail, Phone, MapPin, Calendar, CreditCard, Edit2, Save, X, Building, FileText } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Calendar, CreditCard, Edit2, Save, X, Building, FileText, Download, Trash2, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
+import Link from 'next/link';
 import { useToast } from '@/contexts/ToastContext';
 
 interface Patient {
@@ -31,6 +32,9 @@ export function PatientProfileView() {
   const [editing, setEditing] = useState(false);
   const [patient, setPatient] = useState<Patient | null>(null);
   const [editedPatient, setEditedPatient] = useState<Partial<Patient>>({});
+  const [exporting, setExporting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     fetchPatientData();
@@ -127,6 +131,65 @@ export function PatientProfileView() {
       );
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleExportData = async () => {
+    setExporting(true);
+    try {
+      const response = await fetch('/api/patient-portal/my-data/export', {
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error('Export failed');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `gdpr-data-export-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      showToast('Adatok sikeresen exportálva', 'success');
+    } catch (error) {
+      console.error('Export error:', error);
+      showToast('Hiba történt az adatok exportálása során', 'error');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      const response = await fetch('/api/patient-portal/my-account', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ confirmDeletion: true }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Hiba történt');
+      }
+
+      showToast(data.message, 'success');
+      router.push('/patient-portal');
+    } catch (error) {
+      console.error('Delete error:', error);
+      showToast(
+        error instanceof Error ? error.message : 'Hiba történt a fiók törlése során',
+        'error'
+      );
+    } finally {
+      setDeleting(false);
+      setShowDeleteConfirm(false);
     }
   };
 
@@ -428,6 +491,82 @@ export function PatientProfileView() {
                 </>
               )}
             </button>
+          </div>
+        )}
+      </div>
+
+      {/* GDPR Data Rights Section */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+        <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Adatvédelmi jogok</h2>
+        <p className="text-xs sm:text-sm text-gray-600 mb-4">
+          A GDPR és a magyar adatvédelmi törvények szerint Önnek joga van az adataihoz hozzáférni, 
+          azokat exportálni, valamint kérni azok törlését.{' '}
+          <Link href="/privacy-hu" className="text-medical-primary hover:underline">
+            Adatvédelmi Irányelvek
+          </Link>
+        </p>
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button
+            onClick={handleExportData}
+            disabled={exporting}
+            className="btn-secondary flex items-center justify-center gap-2 text-sm py-2 px-4"
+          >
+            {exporting ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                Exportálás...
+              </>
+            ) : (
+              <>
+                <Download className="w-4 h-4" />
+                Adataim letöltése (JSON)
+              </>
+            )}
+          </button>
+
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="flex items-center justify-center gap-2 text-sm py-2 px-4 border border-red-300 text-red-600 rounded-md hover:bg-red-50 transition-colors"
+          >
+            <Trash2 className="w-4 h-4" />
+            Fiók törlése
+          </button>
+        </div>
+
+        {showDeleteConfirm && (
+          <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-red-800">Fiók törlése</h3>
+                <p className="text-xs sm:text-sm text-red-700 mt-1">
+                  A fiók törlésével a személyes adatai (email, telefon, cím) anonimizálva lesznek, 
+                  és a jövőbeli időpontjai törlésre kerülnek. 
+                </p>
+                <p className="text-xs sm:text-sm text-red-700 mt-2 font-medium">
+                  A magyar egészségügyi törvény (1997. évi CLIV. tv.) szerint az egészségügyi 
+                  nyilvántartásokat az utolsó kezeléstől számított 30 évig meg kell őrizni. 
+                  Ezek az adatok korlátozott hozzáféréssel megőrzésre kerülnek.
+                </p>
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={handleDeleteAccount}
+                    disabled={deleting}
+                    className="text-sm py-1.5 px-4 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
+                  >
+                    {deleting ? 'Törlés...' : 'Igen, törlöm a fiókomat'}
+                  </button>
+                  <button
+                    onClick={() => setShowDeleteConfirm(false)}
+                    disabled={deleting}
+                    className="text-sm py-1.5 px-4 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-100 transition-colors"
+                  >
+                    Mégse
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

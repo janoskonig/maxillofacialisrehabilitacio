@@ -441,16 +441,29 @@ export const GET = authedHandler(async (req, { auth, params, correlationId }) =>
       historySummary: patient.kortortenetiOsszefoglalo || null,
     };
 
+    // Check GDPR consent for AI processing before calling OpenAI
+    let hasAiConsent = false;
+    try {
+      const consentResult = await pool.query(
+        `SELECT id FROM gdpr_consents 
+         WHERE patient_id = $1 AND purpose = 'ai_processing' AND withdrawn_at IS NULL
+         LIMIT 1`,
+        [patientId]
+      );
+      hasAiConsent = consentResult.rows.length > 0;
+    } catch (e) {
+      logger.warn('Could not check AI consent, falling back to non-AI summary');
+    }
+
     // Generate anamnesis summary (AI vagy fallback)
     let anamnesisSummary: string;
     let aiGenerated = false;
     
-    if (shouldCallAI(patient)) {
+    if (hasAiConsent && shouldCallAI(patient)) {
       const result = await generateAnamnesisSummary(anamnesisInput);
       anamnesisSummary = result.text;
       aiGenerated = result.aiGenerated;
     } else {
-      // Fallback direktben, ha nincs elég adat (ugyanaz a függvény, de aiGenerated=false lesz)
       const result = await generateAnamnesisSummary(anamnesisInput);
       anamnesisSummary = result.text;
       aiGenerated = false;

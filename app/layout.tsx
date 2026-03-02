@@ -9,6 +9,7 @@ import { ToastProvider } from '@/contexts/ToastContext'
 import { ToastContainer } from '@/components/ToastContainer'
 import { SocketProvider } from '@/contexts/SocketContext'
 import PWARegister from '@/components/PWARegister'
+import { CookieConsent } from '@/components/CookieConsent'
 
 const inter = Inter({ 
   subsets: ['latin'],
@@ -63,6 +64,7 @@ export default function RootLayout({
                 <FeedbackModal />
                 <ToastContainer />
                 <PWARegister />
+                <CookieConsent />
               </FeedbackProvider>
             </ToastProvider>
           </SocketProvider>
