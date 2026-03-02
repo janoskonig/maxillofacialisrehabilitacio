@@ -22,4 +22,4 @@ export type {
   GoogleCalendarEvent,
 } from './api';
 
-export { syncTimeSlotsFromGoogleCalendar } from './sync';
+export { syncTimeSlotsFromGoogleCalendar, syncMissingAppointmentsToGoogleCalendar } from './sync';

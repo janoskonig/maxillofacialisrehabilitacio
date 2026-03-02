@@ -106,8 +106,8 @@ export const DELETE = apiHandler(async (req, { correlationId, params }) => {
     );
 
     await pool.query(
-      'UPDATE available_time_slots SET status = $1 WHERE id = $2',
-      ['available', appointment.time_slot_id]
+      `UPDATE available_time_slots SET status = 'available', state = 'free' WHERE id = $1`,
+      [appointment.time_slot_id]
     );
 
     await pool.query('COMMIT');

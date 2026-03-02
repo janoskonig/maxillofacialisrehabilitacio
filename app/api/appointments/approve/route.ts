@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { sendAppointmentBookingNotification, sendAppointmentBookingNotificationToPatient, sendAppointmentBookingNotificationToAdmins } from '@/lib/email';
 import { generateIcsFile } from '@/lib/calendar';
-import { createGoogleCalendarEvent } from '@/lib/google-calendar';
+import { createGoogleCalendarEvent, deleteGoogleCalendarEvent } from '@/lib/google-calendar';
 import { apiHandler } from '@/lib/api/route-handler';
 import { sendPushNotification } from '@/lib/push-notifications';
 import { logger } from '@/lib/logger';
@@ -32,6 +32,7 @@ export const GET = apiHandler(async (req, { params }) => {
     const appointmentResult = await pool.query(
       `SELECT a.*, p.nev as patient_name, p.taj as patient_taj, p.email as patient_email, p.nem as patient_nem,
               ats.start_time, ats.cim, ats.teremszam, ats.user_id as dentist_user_id,
+              ats.source as time_slot_source, ats.google_calendar_event_id as time_slot_google_calendar_event_id,
               u.doktor_neve as dentist_name, u.email as dentist_email
        FROM appointments a
        JOIN patients p ON a.patient_id = p.id
@@ -121,8 +122,8 @@ export const GET = apiHandler(async (req, { params }) => {
         if (validIds.length > 0) {
           // Free all alternative time slots
           await pool.query(
-            'UPDATE available_time_slots SET status = $1 WHERE id = ANY($2::uuid[])',
-            ['available', validIds]
+            `UPDATE available_time_slots SET status = 'available', state = 'free' WHERE id = ANY($1::uuid[])`,
+            [validIds]
           );
         }
       }
@@ -175,7 +176,7 @@ export const GET = apiHandler(async (req, { params }) => {
           (async () => {
             try {
               const userCalendarResult = await pool.query(
-                `SELECT google_calendar_enabled, google_calendar_target_calendar_id 
+                `SELECT google_calendar_enabled, google_calendar_source_calendar_id, google_calendar_target_calendar_id 
                  FROM users 
                  WHERE id = $1`,
                 [appointment.dentist_user_id]
@@ -184,8 +185,24 @@ export const GET = apiHandler(async (req, { params }) => {
                 logger.info('[Appointment Approval] Slot owner has Google Calendar disabled, skipping sync');
                 return;
               }
+              const sourceCalendarId = userCalendarResult.rows[0]?.google_calendar_source_calendar_id || 'primary';
               const targetCalendarId = userCalendarResult.rows[0]?.google_calendar_target_calendar_id || 'primary';
-              
+
+              const isFromGoogleCalendar =
+                appointment.time_slot_google_calendar_event_id &&
+                appointment.time_slot_source === 'google_calendar';
+
+              if (isFromGoogleCalendar) {
+                logger.info('[Appointment Approval] Deleting "szabad" event from source calendar:', appointment.time_slot_google_calendar_event_id);
+                await deleteGoogleCalendarEvent(
+                  appointment.dentist_user_id,
+                  appointment.time_slot_google_calendar_event_id,
+                  sourceCalendarId
+                ).catch((err) => {
+                  logger.error('[Appointment Approval] Failed to delete "szabad" event:', err);
+                });
+              }
+
               const newEventId = await createGoogleCalendarEvent(
                 appointment.dentist_user_id,
                 {
@@ -205,7 +222,7 @@ export const GET = apiHandler(async (req, { params }) => {
                 );
               }
             } catch (error) {
-              logger.error('[Appointment Approval] Failed to create Google Calendar event:', error);
+              logger.error('[Appointment Approval] Failed to handle Google Calendar event:', error);
             }
           })(),
         ]);

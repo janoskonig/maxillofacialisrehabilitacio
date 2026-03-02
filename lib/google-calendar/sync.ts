@@ -1,6 +1,6 @@
 import { getDbPool } from '../db';
 import { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } from './auth';
-import { fetchGoogleCalendarEvents } from './api';
+import { fetchGoogleCalendarEvents, createGoogleCalendarEvent, deleteGoogleCalendarEvent } from './api';
 
 export async function syncTimeSlotsFromGoogleCalendar(userId: string): Promise<{
   created: number;
@@ -225,4 +225,125 @@ export async function syncTimeSlotsFromGoogleCalendar(userId: string): Promise<{
     result.errors.push(`Sync error: ${errorMessage}`);
     return result;
   }
+}
+
+/**
+ * Sync appointments that are missing from Google Calendar (google_calendar_event_id IS NULL).
+ * For each such appointment, create a "Betegfogadás" event in the target calendar
+ * and (if applicable) delete the "szabad" event from the source calendar.
+ */
+export async function syncMissingAppointmentsToGoogleCalendar(userId: string): Promise<{
+  total: number;
+  synced: number;
+  errors: Array<{ appointmentId: string; error: string }>;
+}> {
+  const results = {
+    total: 0,
+    synced: 0,
+    errors: [] as Array<{ appointmentId: string; error: string }>,
+  };
+
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+    return results;
+  }
+
+  const pool = getDbPool();
+
+  const userResult = await pool.query(
+    `SELECT id, google_calendar_enabled, google_calendar_source_calendar_id, google_calendar_target_calendar_id
+     FROM users WHERE id = $1 AND google_calendar_enabled = true`,
+    [userId]
+  );
+
+  if (userResult.rows.length === 0) {
+    return results;
+  }
+
+  const user = userResult.rows[0];
+  const sourceCalendarId = user.google_calendar_source_calendar_id || 'primary';
+  const targetCalendarId = user.google_calendar_target_calendar_id || 'primary';
+
+  const appointmentsResult = await pool.query(
+    `SELECT 
+      a.id as appointment_id,
+      a.created_by,
+      ats.start_time,
+      ats.google_calendar_event_id as time_slot_google_calendar_event_id,
+      ats.source as time_slot_source,
+      p.nev as patient_name,
+      p.taj as patient_taj
+    FROM appointments a
+    JOIN available_time_slots ats ON a.time_slot_id = ats.id
+    JOIN patients p ON a.patient_id = p.id
+    WHERE ats.user_id = $1
+      AND a.google_calendar_event_id IS NULL
+      AND (a.appointment_status IS NULL OR a.appointment_status NOT IN ('cancelled_by_patient', 'cancelled_by_doctor'))
+      AND ats.start_time > NOW()
+    ORDER BY ats.start_time ASC`,
+    [userId]
+  );
+
+  const appointments = appointmentsResult.rows;
+  results.total = appointments.length;
+
+  for (const appointment of appointments) {
+    try {
+      const appointmentId = appointment.appointment_id;
+      const startTime = new Date(appointment.start_time);
+      const endTime = new Date(startTime);
+      endTime.setMinutes(endTime.getMinutes() + 30);
+
+      const patientName = appointment.patient_name || 'Név nélküli beteg';
+      const patientTaj = appointment.patient_taj || 'Nincs megadva';
+      const createdBy = appointment.created_by || 'Ismeretlen';
+
+      const isFromGoogleCalendar =
+        appointment.time_slot_google_calendar_event_id &&
+        appointment.time_slot_source === 'google_calendar';
+
+      if (isFromGoogleCalendar) {
+        const deleteResult = await deleteGoogleCalendarEvent(
+          userId,
+          appointment.time_slot_google_calendar_event_id,
+          sourceCalendarId
+        );
+        if (!deleteResult) {
+          console.warn(`[syncMissingAppointments] Failed to delete "szabad" event for appointment ${appointmentId}`);
+        }
+      }
+
+      const newEventId = await createGoogleCalendarEvent(userId, {
+        summary: `Betegfogadás - ${patientName}`,
+        description: `Beteg: ${patientName}\nTAJ: ${patientTaj}\nBeutaló orvos: ${createdBy}`,
+        startTime,
+        endTime,
+        location: 'Maxillofaciális Rehabilitáció',
+        calendarId: targetCalendarId,
+      });
+
+      if (!newEventId) {
+        results.errors.push({
+          appointmentId,
+          error: 'Failed to create Google Calendar event',
+        });
+        continue;
+      }
+
+      await pool.query(
+        'UPDATE appointments SET google_calendar_event_id = $1 WHERE id = $2',
+        [newEventId, appointmentId]
+      );
+
+      results.synced++;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      results.errors.push({
+        appointmentId: appointment.appointment_id,
+        error: errorMessage,
+      });
+      console.error(`[syncMissingAppointments] Error syncing appointment ${appointment.appointment_id}:`, error);
+    }
+  }
+
+  return results;
 }

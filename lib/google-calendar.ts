@@ -13,6 +13,7 @@ export {
   updateGoogleCalendarEvent,
   fetchGoogleCalendarEvents,
   syncTimeSlotsFromGoogleCalendar,
+  syncMissingAppointmentsToGoogleCalendar,
 } from './google-calendar/index';
 
 export type {

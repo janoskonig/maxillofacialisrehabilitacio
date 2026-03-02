@@ -219,18 +219,18 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
         updateValues
       );
 
-      // Update old time slot status back to available
+      // Update old time slot status and state back to available/free
       await pool.query(
-        'UPDATE available_time_slots SET status = $1 WHERE id = $2',
-        ['available', appointment.old_time_slot_id]
+        `UPDATE available_time_slots SET status = 'available', state = 'free' WHERE id = $1`,
+        [appointment.old_time_slot_id]
       );
 
       // New time slot is already booked (created as booked or updated to booked)
       if (!startTime) {
-        // Only update status if using existing time slot
+        // Only update status/state if using existing time slot
         await pool.query(
-          'UPDATE available_time_slots SET status = $1 WHERE id = $2',
-          ['booked', finalTimeSlotId]
+          `UPDATE available_time_slots SET status = 'booked', state = 'booked' WHERE id = $1`,
+          [finalTimeSlotId]
         );
       }
 
@@ -429,10 +429,10 @@ export const DELETE = authedHandler(async (req, { auth, params }) => {
       // Delete the appointment
       await pool.query('DELETE FROM appointments WHERE id = $1', [id]);
 
-      // Update time slot status back to available
+      // Update time slot status and state back to available/free
       await pool.query(
-        'UPDATE available_time_slots SET status = $1 WHERE id = $2',
-        ['available', appointment.time_slot_id]
+        `UPDATE available_time_slots SET status = 'available', state = 'free' WHERE id = $1`,
+        [appointment.time_slot_id]
       );
 
       // If this was a conditional appointment (pending), also free any alternative time slots
@@ -442,12 +442,11 @@ export const DELETE = authedHandler(async (req, { auth, params }) => {
           : (appointment.alternative_time_slot_ids ? [appointment.alternative_time_slot_ids] : []);
         
         if (alternativeIds.length > 0) {
-          // Filter out any null/undefined values and ensure they're valid UUIDs
           const validIds = alternativeIds.filter((id: any) => id && typeof id === 'string');
           if (validIds.length > 0) {
             await pool.query(
-              'UPDATE available_time_slots SET status = $1 WHERE id = ANY($2::uuid[])',
-              ['available', validIds]
+              `UPDATE available_time_slots SET status = 'available', state = 'free' WHERE id = ANY($1::uuid[])`,
+              [validIds]
             );
           }
         }

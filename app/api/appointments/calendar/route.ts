@@ -143,7 +143,8 @@ export const GET = authedHandler(async (req, { auth }) => {
 
   const appointmentsByDate: Record<string, any[]> = {};
   appointmentsResult.rows.forEach((appointment: any) => {
-    const dateKey = new Date(appointment.startTime).toISOString().split('T')[0];
+    const dateKey = toDateOnlyBudapest(appointment.startTime);
+    if (!dateKey) return;
     if (!appointmentsByDate[dateKey]) {
       appointmentsByDate[dateKey] = [];
     }
@@ -152,7 +153,8 @@ export const GET = authedHandler(async (req, { auth }) => {
 
   const slotsByDate: Record<string, any[]> = {};
   availableSlots.forEach((slot: any) => {
-    const dateKey = new Date(slot.startTime).toISOString().split('T')[0];
+    const dateKey = toDateOnlyBudapest(slot.startTime);
+    if (!dateKey) return;
     if (!slotsByDate[dateKey]) {
       slotsByDate[dateKey] = [];
     }

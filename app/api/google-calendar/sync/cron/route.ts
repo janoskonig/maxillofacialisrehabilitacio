@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
-import { syncTimeSlotsFromGoogleCalendar } from '@/lib/google-calendar';
+import { syncTimeSlotsFromGoogleCalendar, syncMissingAppointmentsToGoogleCalendar } from '@/lib/google-calendar';
 import { apiHandler } from '@/lib/api/route-handler';
 import { logger } from '@/lib/logger';
 
@@ -52,13 +52,23 @@ export const GET = apiHandler(async (req, { correlationId }) => {
     try {
       logger.info(`[${new Date().toISOString()}] Syncing user ${i + 1}/${usersResult.rows.length}: ${user.email} (${user.id})`);
       const syncResult = await syncTimeSlotsFromGoogleCalendar(user.id);
+      const slotDuration = Date.now() - userStartTime;
+      logger.info(`[${new Date().toISOString()}] User ${user.email} slots synced in ${slotDuration}ms: ${syncResult.created} created, ${syncResult.updated} updated, ${syncResult.deleted} deleted`);
+
+      // Also sync appointments missing from Google Calendar
+      const apptSyncResult = await syncMissingAppointmentsToGoogleCalendar(user.id);
       const userDuration = Date.now() - userStartTime;
-      logger.info(`[${new Date().toISOString()}] User ${user.email} synced in ${userDuration}ms: ${syncResult.created} created, ${syncResult.updated} updated, ${syncResult.deleted} deleted`);
+      if (apptSyncResult.total > 0) {
+        logger.info(`[${new Date().toISOString()}] User ${user.email} appointments synced: ${apptSyncResult.synced}/${apptSyncResult.total} (${apptSyncResult.errors.length} errors)`);
+      }
 
       results.push({
         userId: user.id,
         email: user.email,
         ...syncResult,
+        appointmentsSynced: apptSyncResult.synced,
+        appointmentsTotal: apptSyncResult.total,
+        appointmentErrors: apptSyncResult.errors,
       });
     } catch (error) {
       hasErrors = true;
