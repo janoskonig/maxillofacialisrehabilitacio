@@ -241,6 +241,8 @@ export function AppointmentBookingSection({
     const result = await createAndBookSlot({
       patientId: resolvedPatientId,
       startTime: newSlotDateTime,
+      pool: pool ?? 'consult',
+      episodeId: episodeId ?? null,
       cim: newSlotCim || DEFAULT_CIM,
       teremszam: newSlotTeremszam.trim() || null,
       appointmentType: newSlotAppointmentType || null,

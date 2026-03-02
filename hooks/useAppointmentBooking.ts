@@ -55,6 +55,8 @@ export interface BookAppointmentParams {
 export interface CreateAndBookSlotParams {
   patientId: string;
   startTime: Date;
+  pool?: Pool | null;
+  episodeId?: string | null;
   cim?: string | null;
   teremszam?: string | null;
   appointmentType?: AppointmentType | null;
@@ -338,6 +340,8 @@ export function useAppointmentBooking(patientId: string | null | undefined): Use
         body: JSON.stringify({
           patientId: params.patientId,
           timeSlotId: newTimeSlotId,
+          pool: params.pool ?? 'consult',
+          episodeId: params.episodeId ?? null,
           cim: params.cim || DEFAULT_CIM,
           teremszam: params.teremszam || null,
           appointmentType: params.appointmentType || null,
