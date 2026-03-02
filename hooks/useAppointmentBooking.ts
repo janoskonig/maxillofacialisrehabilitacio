@@ -214,7 +214,7 @@ export function useAppointmentBooking(patientId: string | null | undefined): Use
           patientId: params.patientId,
           timeSlotId: params.timeSlotId,
           episodeId: params.episodeId ?? null,
-          pool: params.pool ?? null,
+          pool: params.pool ?? 'consult',
           cim: params.cim || (AVAILABLE_CIMS.length === 1 ? DEFAULT_CIM : null),
           teremszam: params.teremszam || null,
           appointmentType: params.appointmentType || null,

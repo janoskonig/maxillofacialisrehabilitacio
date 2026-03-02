@@ -18,7 +18,8 @@
     "test:watch": "vitest",
     "migrate": "node-pg-migrate up --database-url-var DATABASE_URL --migrations-dir database/migrations --migration-file-language sql",
     "migrate:down": "node-pg-migrate down --database-url-var DATABASE_URL --migrations-dir database/migrations --migration-file-language sql",
-    "migrate:create": "node-pg-migrate create --migrations-dir database/migrations --migration-file-language sql"
+    "migrate:create": "node-pg-migrate create --migrations-dir database/migrations --migration-file-language sql",
+    "migrate:created-via-patient-form": "tsx scripts/run-created-via-patient-form-migration.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

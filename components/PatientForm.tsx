@@ -216,7 +216,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
         const data = await res.json();
         const episodes = data.episodes ?? [];
         const openEpisode = episodes.find((e: { status?: string }) => e.status === 'open');
-        setActiveEpisodeId(openEpisode?.id ?? null);
+        // Use open episode for booking; if none open, use most recent (API orders by opened_at DESC) so episodeId is available for work pool
+        setActiveEpisodeId(openEpisode?.id ?? episodes[0]?.id ?? null);
       } catch {
         setActiveEpisodeId(null);
       }

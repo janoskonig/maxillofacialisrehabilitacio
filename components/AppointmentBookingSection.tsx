@@ -108,11 +108,12 @@ export function AppointmentBookingSection({
 
     if (!confirm('Biztosan le szeretné foglalni ezt az időpontot?')) return;
 
+    const effectivePool = pool === 'work' && !episodeId ? 'consult' : (pool ?? (episodeId ? 'work' : 'consult'));
     const result = await bookAppointment({
       patientId: resolvedPatientId,
       timeSlotId: selectedSlot,
       episodeId: episodeId ?? null,
-      pool: pool ?? (episodeId ? 'work' : 'consult'),
+      pool: effectivePool,
       cim: customCim || (availableCims.length === 1 ? DEFAULT_CIM : null),
       teremszam: customTeremszam.trim() || null,
       appointmentType: selectedAppointmentType || null,
@@ -238,10 +239,11 @@ export function AppointmentBookingSection({
 
     if (!confirm('Biztosan létre szeretné hozni ezt az időpontot és rögtön lefoglalni a betegnek?')) return;
 
+    const effectivePool = pool === 'work' && !episodeId ? 'consult' : (pool ?? (episodeId ? 'work' : 'consult'));
     const result = await createAndBookSlot({
       patientId: resolvedPatientId,
       startTime: newSlotDateTime,
-      pool: pool ?? 'consult',
+      pool: effectivePool,
       episodeId: episodeId ?? null,
       cim: newSlotCim || DEFAULT_CIM,
       teremszam: newSlotTeremszam.trim() || null,
