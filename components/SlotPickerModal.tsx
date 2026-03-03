@@ -214,8 +214,15 @@ export function SlotPickerModal({
     return weeklyDemand.get(key) ?? 0;
   }
 
+  function toBudapestDate(iso: string): string {
+    return new Date(iso).toLocaleDateString('sv-SE', { timeZone: 'Europe/Budapest' });
+  }
+  function toBudapestTime(iso: string): string {
+    return new Date(iso).toLocaleTimeString('hu-HU', { timeZone: 'Europe/Budapest', hour: '2-digit', minute: '2-digit' });
+  }
+
   const groupedByDay = slots.reduce<Record<string, Slot[]>>((acc, slot) => {
-    const d = slot.startTime.split('T')[0];
+    const d = toBudapestDate(slot.startTime);
     if (!acc[d]) acc[d] = [];
     acc[d].push(slot);
     return acc;
@@ -366,7 +373,7 @@ export function SlotPickerModal({
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
                     {groupedByDay[day].map((slot) => {
-                      const time = slot.startTime.split('T')[1]?.slice(0, 5) ?? slot.startTime;
+                      const time = toBudapestTime(slot.startTime);
                       const isSelected = selectedSlotId === slot.id;
                       return (
                         <button

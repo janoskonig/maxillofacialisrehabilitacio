@@ -24,8 +24,7 @@ export const GET = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'], 
 
   const db = getDbPool();
 
-  let whereClause = `WHERE ats.state = 'free' AND ats.start_time > CURRENT_TIMESTAMP
-     AND (ats.source = 'manual' OR ats.source IS NULL)`;
+  let whereClause = `WHERE ats.state = 'free' AND ats.start_time > CURRENT_TIMESTAMP`;
   const params: unknown[] = [];
   let paramIndex = 1;
 

@@ -299,6 +299,35 @@ export async function createAppointment(
       }
     }
 
+    // Cancel any existing pending appointment for the same step (rebook scenario).
+    // The idx_appointments_unique_pending_step index allows at most one pending
+    // appointment per (episode_id, step_code, step_seq). When the user picks a
+    // new slot for the same step, we cancel the old one and free its slot.
+    if (episodeId && effectiveStepCode != null && effectiveStepSeq != null) {
+      const existing = await db.query(
+        `SELECT id, time_slot_id FROM appointments
+          WHERE episode_id = $1 AND step_code = $2 AND step_seq = $3
+            AND appointment_status IS NULL
+            AND time_slot_id != $4
+          FOR UPDATE`,
+        [episodeId, effectiveStepCode, effectiveStepSeq, timeSlotId],
+      );
+      for (const row of existing.rows) {
+        await db.query(
+          `UPDATE appointments SET appointment_status = 'cancelled_by_doctor' WHERE id = $1`,
+          [row.id],
+        );
+        await db.query(
+          `UPDATE available_time_slots SET status = 'available', state = 'free' WHERE id = $1`,
+          [row.time_slot_id],
+        );
+        logger.info('[createAppointment] Cancelled existing pending appointment for step rebook', {
+          cancelledId: row.id, freedSlot: row.time_slot_id,
+          episodeId, stepCode: effectiveStepCode, stepSeq: effectiveStepSeq,
+        });
+      }
+    }
+
     const appointmentResult = await db.query(
       `INSERT INTO appointments (
         patient_id, episode_id, time_slot_id, created_by, dentist_email, appointment_type,
