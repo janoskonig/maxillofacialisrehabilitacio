@@ -41,21 +41,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
   const role = auth.role;
   const userEmail = auth.email;
 
-  if (role === 'technikus') {
-    const patientResult = await pool.query(
-      `SELECT kezelesi_terv_arcot_erinto FROM patient_treatment_plans WHERE patient_id = $1`,
-      [patientId]
-    );
-    const hasEpitesis = patientResult.rows[0]?.kezelesi_terv_arcot_erinto &&
-      Array.isArray(patientResult.rows[0].kezelesi_terv_arcot_erinto) &&
-      patientResult.rows[0].kezelesi_terv_arcot_erinto.length > 0;
-    if (!hasEpitesis) {
-      return NextResponse.json(
-        { error: 'Nincs jogosultsága ehhez a dokumentumhoz' },
-        { status: 403 }
-      );
-    }
-  } else if (role === 'sebészorvos' && userEmail) {
+  if (role === 'sebészorvos' && userEmail) {
     const userResult = await pool.query(
       `SELECT intezmeny FROM users WHERE email = $1`,
       [userEmail]

@@ -431,24 +431,6 @@ async function checkEditPermission(
       response.headers.set('x-correlation-id', correlationId);
       return response;
     }
-  } else if (role === 'technikus') {
-    const arcotErinto = oldPatient.kezelesi_terv_arcot_erinto;
-    const hasEpitesis = arcotErinto && Array.isArray(arcotErinto) && arcotErinto.length > 0;
-    if (!hasEpitesis) {
-      const response = NextResponse.json(
-        {
-          error: {
-            name: 'ForbiddenError',
-            status: 403,
-            message: 'Nincs jogosultsága ehhez a beteg szerkesztéséhez',
-            correlationId,
-          },
-        },
-        { status: 403 }
-      );
-      response.headers.set('x-correlation-id', correlationId);
-      return response;
-    }
   }
   return null;
 }
@@ -707,33 +689,17 @@ export const GET = optionalAuthHandler(async (req, { auth, params, correlationId
     
     const patient = result.rows[0];
     
-    // Szerepkör alapú jogosultság ellenőrzés
     if (role === 'technikus') {
-      // Technikus: csak azokat a betegeket látja, akikhez epitézist rendeltek
-      const hasEpitesis = patient.kezelesiTervArcotErinto && 
-                          Array.isArray(patient.kezelesiTervArcotErinto) && 
-                          patient.kezelesiTervArcotErinto.length > 0;
-      if (!hasEpitesis) {
-        const response = NextResponse.json(
-          {
-            error: {
-              name: 'ForbiddenError',
-              status: 403,
-              message: 'Nincs jogosultsága ehhez a beteghez',
-              correlationId,
-            },
-          },
-          { status: 403 }
-        );
-        response.headers.set('x-correlation-id', correlationId);
-        return response;
-      }
-    }
-
-    if (role === 'technikus') {
-      const TECHNIKUS_HIDDEN_FIELDS = ['taj', 'telefonszam', 'email', 'cim', 'varos', 'iranyitoszam', 'szuletesiDatum', 'nem', 'halalDatum'];
-      for (const field of TECHNIKUS_HIDDEN_FIELDS) {
-        patient[field] = null;
+      const TECHNIKUS_ALLOWED_FIELDS = new Set([
+        'id', 'nev',
+        'kezeleoorvos', 'kezeleoorvosIntezete',
+        'kezelesiTervFelso', 'kezelesiTervAlso', 'kezelesiTervArcotErinto', 'kezelesiTervMelleklet',
+        'createdAt', 'updatedAt',
+      ]);
+      for (const key of Object.keys(patient)) {
+        if (!TECHNIKUS_ALLOWED_FIELDS.has(key)) {
+          patient[key] = null;
+        }
       }
     }
 

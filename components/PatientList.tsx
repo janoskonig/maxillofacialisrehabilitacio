@@ -151,6 +151,8 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
   const renderTableHeader = () => (
     <>
       {renderSortableHeader(searchQuery.trim() ? 'Keresési eredmény' : 'Beteg', 'nev')}
+      {userRole !== 'technikus' && (
+      <>
       <th className="px-3 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider w-20">
         Foto
       </th>
@@ -160,18 +162,16 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
       <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
         Stádium
       </th>
-      {userRole !== 'technikus' && (
       <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
         TAJ szám
       </th>
-      )}
-      {userRole !== 'technikus' && (
       <th className="px-2 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-32">
         Kapcsolat
       </th>
+      </>
       )}
-      {renderSortableHeader('Következő időpont', 'idopont', 'w-32')}
-      {renderSortableHeader('Létrehozva', 'createdAt')}
+      {userRole !== 'technikus' && renderSortableHeader('Következő időpont', 'idopont', 'w-32')}
+      {userRole !== 'technikus' && renderSortableHeader('Létrehozva', 'createdAt')}
       <th className="px-3 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
         Műveletek
       </th>
@@ -243,6 +243,8 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                     </div>
                   </div>
                 </td>
+                {userRole !== 'technikus' && (
+                <>
                 <td className="px-3 py-2 text-center">
                   {fotoDocuments[patient.id || ''] > 0 ? (
                     <button
@@ -325,12 +327,9 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                     );
                   })()}
                 </td>
-                {userRole !== 'technikus' && (
                 <td className="px-3 py-2 whitespace-nowrap">
                   <div className="text-xs text-gray-900">{patient.taj || '-'}</div>
                 </td>
-                )}
-                {userRole !== 'technikus' && (
                 <td className="px-2 py-2 whitespace-nowrap w-32">
                   <div 
                     className="flex items-center text-xs text-gray-900 truncate"
@@ -349,7 +348,9 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                     </div>
                   )}
                 </td>
+                </>
                 )}
+                {userRole !== 'technikus' && (
                 <td className="px-2 py-2 w-32">
                   {loadingAppointments ? (
                     <div className="text-xs text-gray-500">...</div>
@@ -430,6 +431,8 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                     <div className="text-xs text-gray-400">-</div>
                   )}
                 </td>
+                )}
+                {userRole !== 'technikus' && (
                 <td className="px-3 py-2 whitespace-nowrap">
                   <div className="text-xs text-gray-500">
                     {patient.createdAt && (
@@ -449,6 +452,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                     )}
                   </div>
                 </td>
+                )}
                 <td className="px-3 py-2 whitespace-nowrap text-right text-xs font-medium">
                   <div className="flex justify-end space-x-1.5">
                     <button

@@ -38,18 +38,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
   const patient = patientResult.rows[0];
 
   // Role-based access control (same as patient view)
-  if (role === 'technikus') {
-    // Technikus: csak azokat a betegeket látja, akikhez epitézist rendeltek
-    const hasEpitesis = patient.kezelesiTervArcotErinto &&
-      Array.isArray(patient.kezelesiTervArcotErinto) &&
-      patient.kezelesiTervArcotErinto.length > 0;
-    if (!hasEpitesis) {
-      return NextResponse.json(
-        { error: 'Nincs jogosultsága ehhez a beteghez' },
-        { status: 403 }
-      );
-    }
-  } else if (role === 'sebészorvos' && userEmail) {
+  if (role === 'sebészorvos' && userEmail) {
     // Sebészorvos: csak azokat a betegeket látja, akik az ő intézményéből származnak
     const userResult = await pool.query(
       `SELECT intezmeny FROM users WHERE email = $1`,

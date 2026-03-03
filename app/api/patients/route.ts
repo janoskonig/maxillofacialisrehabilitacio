@@ -109,7 +109,6 @@ export const GET = optionalAuthHandler(async (req, { auth, correlationId }) => {
   let paramIndex = 1;
 
   const needsSurgeonJoin = role === 'sebészorvos' && !!userEmail;
-  const needsTechnikJoin = role === 'technikus';
   const needsReferralJoin = needsSurgeonJoin || !!query;
 
   const prefixedListFields = PATIENT_LIST_FIELDS.split(',').map(f => {
@@ -127,19 +126,12 @@ export const GET = optionalAuthHandler(async (req, { auth, correlationId }) => {
   if (needsReferralJoin) {
     fromParts.push('LEFT JOIN patient_referral r ON r.patient_id = p.id');
   }
-  if (needsTechnikJoin) {
-    fromParts.push('LEFT JOIN patient_treatment_plans t ON t.patient_id = p.id');
-  }
   if (needsSurgeonJoin) {
     fromParts.push(`JOIN users u ON u.email = $${paramIndex} AND r.beutalo_intezmeny = u.intezmeny AND u.intezmeny IS NOT NULL`);
     queryParams.push(userEmail);
     paramIndex++;
   }
   const fromClause = fromParts.join('\n       ');
-
-  if (needsTechnikJoin) {
-    whereConditions.push(`t.kezelesi_terv_arcot_erinto IS NOT NULL AND jsonb_array_length(t.kezelesi_terv_arcot_erinto) > 0`);
-  }
 
   const selectFields = prefixedListFields;
   const orderBy = `p.${sortColumn}`;
@@ -267,11 +259,13 @@ export const GET = optionalAuthHandler(async (req, { auth, correlationId }) => {
   let patients = result.rows;
 
   if (role === 'technikus') {
-    const TECHNIKUS_HIDDEN_FIELDS = ['taj', 'telefonszam', 'email', 'cim', 'varos', 'iranyitoszam', 'szuletesiDatum', 'nem', 'halalDatum'];
+    const TECHNIKUS_ALLOWED_FIELDS = new Set(['id', 'nev', 'kezeleoorvos', 'kezeleoorvosIntezete', 'createdAt', 'updatedAt']);
     patients = patients.map((p: any) => {
       const masked = { ...p };
-      for (const field of TECHNIKUS_HIDDEN_FIELDS) {
-        masked[field] = null;
+      for (const key of Object.keys(masked)) {
+        if (!TECHNIKUS_ALLOWED_FIELDS.has(key)) {
+          masked[key] = null;
+        }
       }
       return masked;
     });

@@ -160,8 +160,9 @@ export default function PatientViewPage() {
     { id: 'uzenet', label: 'Üzenet a betegnek', shortLabel: 'Üzenet', icon: <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
   ];
 
+  const TECHNIKUS_TABS = new Set(['alapadatok', 'anamnezis', 'adminisztracio', 'konzilium']);
   const tabs = userRole === 'technikus'
-    ? allTabs.filter(t => t.id !== 'uzenet')
+    ? allTabs.filter(t => TECHNIKUS_TABS.has(t.id))
     : allTabs;
 
   return (
@@ -279,7 +280,9 @@ export default function PatientViewPage() {
               isViewOnly={false}
               onSave={handleSavePatient}
               onCancel={handleBack}
-              showOnlySections={['alapadatok', 'szemelyes', 'beutalo', 'kezeloorvos', 'stadium']}
+              showOnlySections={userRole === 'technikus'
+                ? ['alapadatok', 'kezeloorvos']
+                : ['alapadatok', 'szemelyes', 'beutalo', 'kezeloorvos', 'stadium']}
             />
           )}
 
@@ -289,7 +292,9 @@ export default function PatientViewPage() {
               isViewOnly={false}
               onSave={handleSavePatient}
               onCancel={handleBack}
-              showOnlySections={['anamnezis', 'betegvizsgalat', 'ohip14', 'kezelesi_terv']}
+              showOnlySections={userRole === 'technikus'
+                ? ['kezelesi_terv']
+                : ['anamnezis', 'betegvizsgalat', 'ohip14', 'kezelesi_terv']}
             />
           )}
 

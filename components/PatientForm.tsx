@@ -1810,7 +1810,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
         )}
 
         {/* Documents Section */}
-        {shouldShowSection('adminisztracio') && (
+        {shouldShowSection('adminisztracio') && userRole !== 'technikus' && (
         <div id="section-adminisztracio" className="scroll-mt-20 sm:scroll-mt-24">
           <PatientDocuments
             patientId={patientId}
@@ -1824,7 +1824,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
         )}
 
         {/* Méltányossági kérelemhez szükséges adatok */}
-        {shouldShowSection('adminisztracio') && patientId && (
+        {shouldShowSection('adminisztracio') && patientId && userRole !== 'technikus' && (
           <MeltanyossagiSection
             register={register}
             errors={errors}

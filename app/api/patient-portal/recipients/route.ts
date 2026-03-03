@@ -34,7 +34,7 @@ export const GET = apiHandler(async (req, { correlationId }) => {
   if (kezeleoorvos) {
     const treatingDoctorResult = await pool.query(
       `SELECT id, email, doktor_neve FROM users 
-       WHERE (email = $1 OR doktor_neve = $1) AND active = true 
+       WHERE (email = $1 OR doktor_neve = $1) AND active = true AND role != 'technikus'
        LIMIT 1`,
       [kezeleoorvos]
     );
