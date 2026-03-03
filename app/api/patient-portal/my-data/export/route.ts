@@ -58,7 +58,7 @@ export const GET = apiHandler(async (req) => {
       ),
       pool.query(
         `SELECT a.id, ats.start_time, a.appointment_type, a.appointment_status,
-                ats.dentist_email, a.created_at
+                a.dentist_email, a.created_at
          FROM appointments a
          JOIN available_time_slots ats ON a.time_slot_id = ats.id
          WHERE a.patient_id = $1
