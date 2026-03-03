@@ -73,9 +73,9 @@ export function MeltanyossagiSection({
           </div>
         </div>
 
-        {/* PDF generáló gomb */}
+        {/* Dokumentum generáló gombok */}
         {!isViewOnly && (
-          <div className="pt-4">
+          <div className="pt-4 flex flex-wrap gap-3">
             <button
               type="button"
               onClick={async () => {
@@ -118,6 +118,49 @@ export function MeltanyossagiSection({
             >
               <Download className="w-4 h-4" />
               Méltányossági kérelem PDF generálása
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                if (!patientId) {
+                  showToast('Először mentse el a beteg adatait!', 'error');
+                  return;
+                }
+
+                try {
+                  showToast('Allergia vizsgálat kérés generálása...', 'info');
+                  const response = await fetch(`/api/patients/${patientId}/generate-allergy-referral-docx`, {
+                    method: 'GET',
+                    credentials: 'include',
+                  });
+
+                  if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Dokumentum generálási hiba');
+                  }
+
+                  const blob = await response.blob();
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `Allergia_vizsgalat_kerese_${currentPatientName || 'Beteg'}_${Date.now()}.docx`;
+                  document.body.appendChild(a);
+                  a.click();
+                  window.URL.revokeObjectURL(url);
+                  document.body.removeChild(a);
+                  showToast('Allergia vizsgálat kérés sikeresen generálva', 'success');
+                } catch (error) {
+                  console.error('Dokumentum generálási hiba:', error);
+                  showToast(
+                    error instanceof Error ? error.message : 'Hiba történt a dokumentum generálása során',
+                    'error',
+                  );
+                }
+              }}
+              className="btn-secondary flex items-center gap-2"
+            >
+              <Download className="w-4 h-4" />
+              Allergia vizsgálat kérés
             </button>
           </div>
         )}
