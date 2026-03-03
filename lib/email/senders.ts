@@ -497,8 +497,6 @@ export async function sendRegistrationNotificationToAdmins(
     'fogpótlástanász': 'Fogpótlástanász',
     'technikus': 'Technikus',
     'admin': 'Adminisztrátor',
-    'editor': 'Szerkesztő',
-    'viewer': 'Megtekintő',
   };
   const roleDisplayName = roleMap[role] || role;
 

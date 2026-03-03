@@ -1,6 +1,6 @@
 'use client';
 
-export type UserRole = 'admin' | 'editor' | 'viewer';
+export type UserRole = 'admin' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
 
 const ROLES_STORAGE_KEY = 'userRoles';
 
@@ -20,9 +20,9 @@ function writeRoles(map: Record<string, UserRole>): void {
 }
 
 export function getUserRole(email: string | null): UserRole {
-  if (!email) return 'viewer';
+  if (!email) return 'fogpótlástanász';
   const roles = readRoles();
-  return roles[email] || 'editor';
+  return roles[email] || 'fogpótlástanász';
 }
 
 export function setUserRole(email: string, role: UserRole): void {
@@ -35,10 +35,3 @@ export function listUserRoles(): Array<{ email: string; role: UserRole }> {
   const roles = readRoles();
   return Object.entries(roles).map(([email, role]) => ({ email, role }));
 }
-
-
-
-
-
-
-

@@ -73,8 +73,6 @@ export default function TermsOfServiceHu() {
                 <li><strong>Sebészorvos:</strong> Időpontokat foglalhat betegeknek</li>
                 <li><strong>Fogpótlástanász:</strong> Időpontokat kezelhet és megtekintheti az időpontokat</li>
                 <li><strong>Technikus:</strong> Korlátozott hozzáférés műszaki műveletekhez</li>
-                <li><strong>Szerkesztő:</strong> Létrehozhat és szerkeszthet betegadatokat</li>
-                <li><strong>Megtekintő:</strong> Csak olvasási hozzáférés a betegadatokhoz</li>
               </ul>
 
               <h3 className="text-lg font-semibold text-gray-800 mt-4 mb-2">3.3 Felhasználói Felelősségek</h3>

@@ -729,7 +729,13 @@ export const GET = optionalAuthHandler(async (req, { auth, params, correlationId
         return response;
       }
     }
-    // fogpótlástanász, admin, editor, viewer: mindent látnak (nincs szűrés)
+
+    if (role === 'technikus') {
+      const TECHNIKUS_HIDDEN_FIELDS = ['taj', 'telefonszam', 'email', 'cim', 'varos', 'iranyitoszam', 'szuletesiDatum', 'nem', 'halalDatum'];
+      for (const field of TECHNIKUS_HIDDEN_FIELDS) {
+        patient[field] = null;
+      }
+    }
 
     if (auth) {
       await logActivityWithAuth(
@@ -740,7 +746,7 @@ export const GET = optionalAuthHandler(async (req, { auth, params, correlationId
       );
     }
 
-    const response = NextResponse.json({ patient: result.rows[0] }, { status: 200 });
+    const response = NextResponse.json({ patient }, { status: 200 });
     response.headers.set('x-correlation-id', correlationId);
     return response;
 });

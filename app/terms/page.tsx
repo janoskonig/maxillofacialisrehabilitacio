@@ -72,8 +72,6 @@ export default function TermsOfService() {
                 <li><strong>Sebészorvos (Surgeon):</strong> Can book appointments for patients</li>
                 <li><strong>Fogpótlástanász (Dental Prosthetist):</strong> Can manage time slots and view appointments</li>
                 <li><strong>Technikus (Technician):</strong> Limited access for technical operations</li>
-                <li><strong>Editor:</strong> Can create and edit patient records</li>
-                <li><strong>Viewer:</strong> Read-only access to patient records</li>
               </ul>
 
               <h3 className="text-lg font-semibold text-gray-800 mt-4 mb-2">3.3 User Responsibilities</h3>

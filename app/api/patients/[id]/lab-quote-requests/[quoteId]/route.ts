@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 
 export const PUT = authedHandler(async (req, { auth, params }) => {
   // Jogosultság ellenőrzése
-  if (auth.role !== 'admin' && auth.role !== 'editor' && auth.role !== 'sebészorvos') {
+  if (auth.role !== 'admin' && auth.role !== 'fogpótlástanász' && auth.role !== 'sebészorvos' && auth.role !== 'technikus') {
     return NextResponse.json(
       { error: 'Nincs jogosultsága árajánlatkérő módosításához' },
       { status: 403 }
@@ -78,8 +78,7 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
  * Árajánlatkérő törlése
  */
 export const DELETE = authedHandler(async (req, { auth, params }) => {
-  // Jogosultság ellenőrzése - csak admin és editor
-  if (auth.role !== 'admin' && auth.role !== 'editor') {
+  if (auth.role !== 'admin' && auth.role !== 'fogpótlástanász') {
     return NextResponse.json(
       { error: 'Nincs jogosultsága árajánlatkérő törléséhez' },
       { status: 403 }

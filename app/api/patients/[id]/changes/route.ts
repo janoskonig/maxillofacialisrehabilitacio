@@ -71,7 +71,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
       );
     }
   }
-  // fogpótlástanász, admin, editor, viewer: mindent látnak (nincs szűrés)
+  // fogpótlástanász, admin: mindent látnak (nincs szűrés)
 
   // Get query parameters for filtering
   const { searchParams } = new URL(req.url);

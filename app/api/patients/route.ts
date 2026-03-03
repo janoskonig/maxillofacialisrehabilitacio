@@ -264,8 +264,21 @@ export const GET = optionalAuthHandler(async (req, { auth, correlationId }) => {
     }, { status: 200 });
   }
 
+  let patients = result.rows;
+
+  if (role === 'technikus') {
+    const TECHNIKUS_HIDDEN_FIELDS = ['taj', 'telefonszam', 'email', 'cim', 'varos', 'iranyitoszam', 'szuletesiDatum', 'nem', 'halalDatum'];
+    patients = patients.map((p: any) => {
+      const masked = { ...p };
+      for (const field of TECHNIKUS_HIDDEN_FIELDS) {
+        masked[field] = null;
+      }
+      return masked;
+    });
+  }
+
   return NextResponse.json({ 
-    patients: result.rows,
+    patients,
     total: total
   }, { status: 200 });
 });

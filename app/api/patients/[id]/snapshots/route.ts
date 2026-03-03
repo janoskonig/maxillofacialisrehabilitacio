@@ -23,9 +23,7 @@ export const GET = authedHandler(async (req, { auth, params, correlationId }) =>
     return response;
   }
 
-  // Role-based access: viewer can only view, editor/admin can view and edit
-  // For snapshots, all authenticated users can view (read-only)
-  // (Additional restrictions can be added if needed)
+  // All authenticated users can view snapshots (read-only)
 
   // Fetch snapshots (ordered by created_at DESC)
   const snapshotsResult = await pool.query(

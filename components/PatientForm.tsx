@@ -1714,6 +1714,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
             handleTAJChange={handleTAJChange}
             handlePhoneChange={handlePhoneChange}
             sectionErrors={sectionErrors}
+            userRole={userRole}
           />
         )}
 
@@ -1726,6 +1727,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
             errors={errors}
             isViewOnly={isViewOnly}
             sectionErrors={sectionErrors}
+            userRole={userRole}
           />
         )}
 
@@ -1813,7 +1815,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
           <PatientDocuments
             patientId={patientId}
             isViewOnly={isViewOnly}
-            canUpload={userRole === 'admin' || userRole === 'editor' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos'}
+            canUpload={userRole === 'admin' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos'}
             canDelete={userRole === 'admin'}
             onSavePatientBeforeUpload={!isViewOnly ? savePatientSilently : undefined}
             isPatientDirty={!isViewOnly && hasUnsavedChanges()}
@@ -1932,7 +1934,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
         conflictError={conflict.conflictError}
         onDismiss={() => conflict.dismissModal()}
         onRefresh={() => conflict.refreshPatient()}
-        onOverwrite={(userRole === 'admin' || userRole === 'editor') ? async () => {
+        onOverwrite={(userRole === 'admin' || userRole === 'fogpótlástanász') ? async () => {
           const confirmed = await confirmDialog(
             'Biztosan felülírja a másik felhasználó módosításait? Ez a művelet nem vonható vissza.',
             { title: 'Felülírás megerősítése', type: 'warning' }

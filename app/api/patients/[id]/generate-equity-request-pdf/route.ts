@@ -14,8 +14,7 @@ import { logger } from '@/lib/logger';
 export const dynamic = 'force-dynamic';
 
 export const GET = authedHandler(async (req, { auth, params }) => {
-  // Jogosultság ellenőrzése - csak admin, editor és sebészorvos
-  if (auth.role !== 'admin' && auth.role !== 'editor' && auth.role !== 'sebészorvos') {
+  if (auth.role !== 'admin' && auth.role !== 'fogpótlástanász' && auth.role !== 'sebészorvos') {
     return NextResponse.json(
       { error: 'Nincs jogosultsága PDF generáláshoz' },
       { status: 403 }

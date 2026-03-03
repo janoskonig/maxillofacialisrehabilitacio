@@ -135,7 +135,7 @@ export function ArajanlatkeroSection({
                     <Send className="w-3 h-3" />
                     Email
                   </button>
-                  {!isViewOnly && (userRole === 'admin' || userRole === 'editor') && (
+                  {!isViewOnly && (userRole === 'admin' || userRole === 'fogpótlástanász') && (
                     <button
                       type="button"
                       onClick={async () => {

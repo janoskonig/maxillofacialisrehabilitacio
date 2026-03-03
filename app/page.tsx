@@ -35,7 +35,7 @@ const SendMessageModal = dynamic(() => import('@/components/SendMessageModal').t
   ssr: false
 });
 
-type UserRoleType = 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
+type UserRoleType = 'admin' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
 
 interface ListState {
   patients: Patient[];
@@ -104,7 +104,7 @@ export default function Home() {
   const [searchInput, setSearchInput] = useState('');
   const searchDebounceRef = useRef<NodeJS.Timeout>();
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState<UserRoleType>('viewer');
+  const [userRole, setUserRole] = useState<UserRoleType>('admin');
   const [userInstitution, setUserInstitution] = useState<string | null>(null);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
@@ -510,7 +510,7 @@ export default function Home() {
         </div>
         {/* Mobile: New Patient Button */}
         <div className="md:hidden">
-          {(userRole === 'admin' || userRole === 'editor' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos') && (
+          {(userRole === 'admin' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos') && (
             <button
               onClick={handleNewPatient}
               className="btn-primary w-full flex items-center justify-center gap-1.5 text-sm px-4 py-2.5"
@@ -522,7 +522,7 @@ export default function Home() {
         </div>
         {/* Desktop: All buttons */}
         <div className="hidden md:flex gap-1.5">
-          {(userRole === 'admin' || userRole === 'editor' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos') && (
+          {(userRole === 'admin' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos') && (
             <button
               onClick={handleNewPatient}
               className="btn-primary flex items-center gap-1.5 text-sm px-3 py-1.5"
@@ -632,7 +632,7 @@ export default function Home() {
                 onDelete={userRole === 'admin' ? handleDeletePatient : undefined}
                 onViewOP={handleViewOP}
                 onViewFoto={handleViewFoto}
-                canEdit={userRole === 'admin' || userRole === 'editor' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos'}
+                canEdit={userRole === 'admin' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos'}
                 canDelete={userRole === 'admin'}
                 userRole={userRole}
                 sortField={sortField}

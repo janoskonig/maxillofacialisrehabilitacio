@@ -40,13 +40,13 @@ export const GET = roleHandler(['admin'], async (req, { auth }) => {
 
 export const POST = roleHandler(['admin'], async (req, { auth }) => {
   const body = await req.json();
-  const { email, password, role = 'editor', doktor_neve } = body;
+  const { email, password, role = 'fogpótlástanász', doktor_neve } = body;
 
   if (!email || !password) {
     throw new HttpError(400, 'Email cím és jelszó megadása kötelező');
   }
 
-  if (!['admin', 'editor', 'viewer', 'fogpótlástanász', 'technikus', 'sebészorvos'].includes(role)) {
+  if (!['admin', 'fogpótlástanász', 'technikus', 'sebészorvos'].includes(role)) {
     throw new HttpError(400, 'Érvénytelen szerepkör');
   }
 

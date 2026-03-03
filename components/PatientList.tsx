@@ -18,7 +18,7 @@ interface PatientListProps {
   onViewFoto?: (patient: Patient) => void;
   canEdit?: boolean;
   canDelete?: boolean;
-  userRole?: 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
+  userRole?: 'admin' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
   sortField?: 'nev' | 'idopont' | 'createdAt' | null;
   sortDirection?: 'asc' | 'desc';
   onSort?: (field: 'nev' | 'idopont' | 'createdAt') => void;
@@ -160,12 +160,16 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
       <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
         Stádium
       </th>
+      {userRole !== 'technikus' && (
       <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
         TAJ szám
       </th>
+      )}
+      {userRole !== 'technikus' && (
       <th className="px-2 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-32">
         Kapcsolat
       </th>
+      )}
       {renderSortableHeader('Következő időpont', 'idopont', 'w-32')}
       {renderSortableHeader('Létrehozva', 'createdAt')}
       <th className="px-3 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
@@ -223,13 +227,17 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                         )}
                       </div>
                       <div className="text-xs text-gray-500 mt-0.5">
-                        {patient.nem === 'ferfi' ? 'Férfi' : patient.nem === 'no' ? 'Nő' : ''} 
-                        {patient.nem && (() => {
-                          const age = calculateAge(patient.szuletesiDatum);
-                          return age !== null ? ` • ${age} éves` : '';
-                        })()}
-                        {patient.halalDatum && (
-                          <span className="text-gray-600 ml-1">• Halál: {formatDateForDisplay(patient.halalDatum)}</span>
+                        {userRole !== 'technikus' && (
+                          <>
+                            {patient.nem === 'ferfi' ? 'Férfi' : patient.nem === 'no' ? 'Nő' : ''} 
+                            {patient.nem && (() => {
+                              const age = calculateAge(patient.szuletesiDatum);
+                              return age !== null ? ` • ${age} éves` : '';
+                            })()}
+                            {patient.halalDatum && (
+                              <span className="text-gray-600 ml-1">• Halál: {formatDateForDisplay(patient.halalDatum)}</span>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>
@@ -317,9 +325,12 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                     );
                   })()}
                 </td>
+                {userRole !== 'technikus' && (
                 <td className="px-3 py-2 whitespace-nowrap">
                   <div className="text-xs text-gray-900">{patient.taj || '-'}</div>
                 </td>
+                )}
+                {userRole !== 'technikus' && (
                 <td className="px-2 py-2 whitespace-nowrap w-32">
                   <div 
                     className="flex items-center text-xs text-gray-900 truncate"
@@ -338,6 +349,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                     </div>
                   )}
                 </td>
+                )}
                 <td className="px-2 py-2 w-32">
                   {loadingAppointments ? (
                     <div className="text-xs text-gray-500">...</div>

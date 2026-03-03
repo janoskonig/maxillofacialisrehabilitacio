@@ -38,7 +38,7 @@ export const GET = authedHandler(async (req, { params }) => {
  * POST /api/patients/:id/tooth-treatments — add tooth treatment need
  */
 export const POST = authedHandler(async (req, { auth, params }) => {
-  if (!['admin', 'sebészorvos', 'fogpótlástanász', 'editor'].includes(auth.role)) {
+  if (!['admin', 'sebészorvos', 'fogpótlástanász'].includes(auth.role)) {
     return NextResponse.json({ error: 'Nincs jogosultság' }, { status: 403 });
   }
 

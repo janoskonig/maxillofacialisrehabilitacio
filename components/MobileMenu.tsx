@@ -179,7 +179,7 @@ export function MobileMenu({ currentPath, onMessageClick, onNewPatientClick, sho
                     </button>
                   )}
 
-                  {onNewPatientClick && (user.role === 'admin' || user.role === 'editor' || user.role === 'fogpótlástanász' || user.role === 'sebészorvos') && (
+                  {onNewPatientClick && (user.role === 'admin' || user.role === 'fogpótlástanász' || user.role === 'sebészorvos') && (
                     <button
                       onClick={() => {
                         setIsOpen(false);

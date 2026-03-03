@@ -28,7 +28,7 @@ interface PatientCardProps {
   onViewFoto?: (patient: Patient) => void;
   canEdit?: boolean;
   canDelete?: boolean;
-  userRole?: 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
+  userRole?: 'admin' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
 }
 
 function PatientCardComponent({
@@ -153,10 +153,10 @@ function PatientCardComponent({
               </span>
             )}
           </div>
-          {patient.taj && (
+          {userRole !== 'technikus' && patient.taj && (
             <p className="text-sm text-gray-600 mt-0.5">TAJ: {patient.taj}</p>
           )}
-          {patient.halalDatum && (
+          {userRole !== 'technikus' && patient.halalDatum && (
             <p className="text-sm text-gray-600 mt-0.5">Halál dátuma: {formatDateForDisplay(patient.halalDatum)}</p>
           )}
         </div>
@@ -191,7 +191,7 @@ function PatientCardComponent({
         </div>
       </div>
 
-      {/* Contact Info */}
+      {userRole !== 'technikus' && (
       <div className="space-y-1.5">
         {patient.telefonszam && (
           <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -206,6 +206,7 @@ function PatientCardComponent({
           </div>
         )}
       </div>
+      )}
 
       {/* Appointment Info */}
       {appointment && (

@@ -151,7 +151,7 @@ export default function PatientViewPage() {
     return null;
   }
 
-  const tabs: Array<{ id: TabType; label: string; shortLabel: string; icon: React.ReactNode }> = [
+  const allTabs: Array<{ id: TabType; label: string; shortLabel: string; icon: React.ReactNode }> = [
     { id: 'alapadatok', label: 'Alapadatok', shortLabel: 'Alap', icon: <User className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
     { id: 'anamnezis', label: 'Anamnézis és betegvizsgálat', shortLabel: 'Anamnézis', icon: <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
     { id: 'adminisztracio', label: 'Adminisztráció', shortLabel: 'Admin', icon: <ClipboardList className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
@@ -159,6 +159,10 @@ export default function PatientViewPage() {
     { id: 'konzilium', label: 'Konzílium', shortLabel: 'Konzílium', icon: <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
     { id: 'uzenet', label: 'Üzenet a betegnek', shortLabel: 'Üzenet', icon: <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
   ];
+
+  const tabs = userRole === 'technikus'
+    ? allTabs.filter(t => t.id !== 'uzenet')
+    : allTabs;
 
   return (
     <div className="min-h-screen bg-gray-50">

@@ -3,7 +3,7 @@
 export type AuthUser = {
   id?: string;
   email: string;
-  role: 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
+  role: 'admin' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
   intezmeny?: string | null;
   name?: string | null;
 };
@@ -43,7 +43,7 @@ export const getUserEmail = async (): Promise<string | null> => {
   return user?.email || null;
 };
 
-export const getUserRole = async (): Promise<'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos' | null> => {
+export const getUserRole = async (): Promise<'admin' | 'fogpótlástanász' | 'technikus' | 'sebészorvos' | null> => {
   const user = await getCurrentUser();
   return user?.role || null;
 };

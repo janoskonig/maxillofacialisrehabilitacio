@@ -10,7 +10,7 @@ import { MobileMenu } from '@/components/MobileMenu';
 
 export default function TimeSlotsPage() {
   const router = useRouter();
-  const [userRole, setUserRole] = useState<'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos'>('viewer');
+  const [userRole, setUserRole] = useState<'admin' | 'fogpótlástanász' | 'technikus' | 'sebészorvos'>('admin');
   const [authorized, setAuthorized] = useState(false);
 
   useEffect(() => {

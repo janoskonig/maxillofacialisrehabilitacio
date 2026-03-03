@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { MessageCircle, ChevronDown, ChevronUp, AlertCircle, Bug, Lightbulb, Mail, Send, ArrowUp, ArrowDown, User, LogIn, Search, UserCircle } from 'lucide-react';
 
-type UserRole = 'admin' | 'editor' | 'viewer' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
+type UserRole = 'admin' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
 
 type UserRow = {
   id: string;

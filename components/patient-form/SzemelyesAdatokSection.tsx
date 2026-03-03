@@ -13,6 +13,7 @@ interface SzemelyesAdatokSectionProps {
   errors: FieldErrors<Patient>;
   isViewOnly: boolean;
   sectionErrors: Record<string, number>;
+  userRole?: string;
 }
 
 export function SzemelyesAdatokSection({
@@ -22,7 +23,10 @@ export function SzemelyesAdatokSection({
   errors,
   isViewOnly,
   sectionErrors,
+  userRole,
 }: SzemelyesAdatokSectionProps) {
+  if (userRole === 'technikus') return null;
+
   return (
     <div id="section-szemelyes" className="card scroll-mt-20 sm:scroll-mt-24">
       <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">

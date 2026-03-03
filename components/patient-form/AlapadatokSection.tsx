@@ -12,6 +12,7 @@ interface AlapadatokSectionProps {
   handleTAJChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handlePhoneChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   sectionErrors: Record<string, number>;
+  userRole?: string;
 }
 
 export function AlapadatokSection({
@@ -21,7 +22,10 @@ export function AlapadatokSection({
   handleTAJChange,
   handlePhoneChange,
   sectionErrors,
+  userRole,
 }: AlapadatokSectionProps) {
+  const isTechnikus = userRole === 'technikus';
+
   return (
     <div id="section-alapadatok" className="card scroll-mt-20 sm:scroll-mt-24">
       <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
@@ -48,6 +52,8 @@ export function AlapadatokSection({
             <p className="text-red-500 text-sm mt-1">{errors.nev.message}</p>
           )}
         </div>
+        {!isTechnikus && (
+        <>
         <div>
           <label className={`form-label ${REQUIRED_FIELDS.some(f => f.key === 'taj') ? 'form-label-required' : ''}`}>
             TAJ
@@ -99,6 +105,8 @@ export function AlapadatokSection({
             <p className="text-gray-500 text-xs mt-1">Formátum: nev@example.com</p>
           )}
         </div>
+        </>
+        )}
       </div>
     </div>
   );

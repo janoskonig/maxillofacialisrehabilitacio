@@ -115,8 +115,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
 
 // Upload a document for a patient
 export const POST = authedHandler(async (req, { auth, params }) => {
-  // Only doctors (admin, editor, fogpótlástanász, sebészorvos) can upload
-  const doctorRoles = ['admin', 'editor', 'fogpótlástanász', 'sebészorvos'];
+  const doctorRoles = ['admin', 'fogpótlástanász', 'sebészorvos'];
   if (!doctorRoles.includes(auth.role)) {
     return NextResponse.json(
       { error: 'Nincs jogosultsága dokumentumok feltöltéséhez' },

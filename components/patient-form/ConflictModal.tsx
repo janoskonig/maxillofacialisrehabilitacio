@@ -86,7 +86,7 @@ export function ConflictModal({
             Frissítés
           </button>
           
-          {(userRole === 'admin' || userRole === 'editor') && onOverwrite && (
+          {(userRole === 'admin' || userRole === 'fogpótlástanász') && onOverwrite && (
             <button
               type="button"
               onClick={onOverwrite}
