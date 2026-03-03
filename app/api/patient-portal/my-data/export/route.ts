@@ -27,7 +27,6 @@ export const GET = apiHandler(async (req) => {
       appointmentsResult,
       documentsResult,
       ohipResult,
-      episodesResult,
       consentsResult,
     ] = await Promise.all([
       pool.query(
@@ -37,23 +36,28 @@ export const GET = apiHandler(async (req) => {
         [patientId]
       ),
       pool.query(
-        `SELECT beutalo_orvos, beutalo_indokolas, beutalo_intezet, mutet_datuma, diagnozis, bno_kod
+        `SELECT beutalo_orvos, beutalo_indokolas, beutalo_intezmeny, mutet_ideje, szovettani_diagnozis
          FROM patient_referral WHERE patient_id = $1`,
         [patientId]
       ),
       pool.query(
-        `SELECT anamnezis, radioterpia, radioterpia_dozisgray, radioterpia_ido, kemoterpia, kemoterpia_leiras,
-                dohanyzas, alkohol, etiologia, egyeb_anamnezis, baleset_datum, kortorteneti_osszefoglalo
+        `SELECT kezelesre_erkezes_indoka, alkoholfogyasztas, dohanyzas_szam,
+                radioterapia, radioterapia_dozis, radioterapia_datum_intervallum,
+                chemoterapia, chemoterapia_leiras,
+                tnm_staging, bno, diagnozis,
+                baleset_idopont, baleset_etiologiaja, baleset_egyeb
          FROM patient_anamnesis WHERE patient_id = $1`,
         [patientId]
       ),
       pool.query(
-        `SELECT fogak, implantatum, fogpotlas
+        `SELECT meglevo_fogak, meglevo_implantatumok,
+                felso_fogpotlas_van, felso_fogpotlas_tipus,
+                also_fogpotlas_van, also_fogpotlas_tipus
          FROM patient_dental_status WHERE patient_id = $1`,
         [patientId]
       ),
       pool.query(
-        `SELECT a.id, ats.start_time, ats.end_time, a.appointment_type, a.notes, a.status,
+        `SELECT a.id, ats.start_time, a.appointment_type, a.appointment_status,
                 ats.dentist_email, a.created_at
          FROM appointments a
          JOIN available_time_slots ats ON a.time_slot_id = ats.id
@@ -62,21 +66,15 @@ export const GET = apiHandler(async (req) => {
         [patientId]
       ),
       pool.query(
-        `SELECT id, filename, original_filename, mime_type, file_size, tags, uploaded_at, uploaded_by
+        `SELECT id, filename, file_size, mime_type, description, tags, uploaded_at, uploaded_by
          FROM patient_documents WHERE patient_id = $1
          ORDER BY uploaded_at DESC`,
         [patientId]
       ),
       pool.query(
-        `SELECT stage, responses, completed_at, created_at
+        `SELECT timepoint, total_score, completed_at, created_at
          FROM ohip14_responses WHERE patient_id = $1
          ORDER BY created_at DESC`,
-        [patientId]
-      ),
-      pool.query(
-        `SELECT id, stage, status, started_at, completed_at, notes
-         FROM episodes WHERE patient_id = $1
-         ORDER BY started_at DESC`,
         [patientId]
       ),
       pool.query(
@@ -111,7 +109,6 @@ export const GET = apiHandler(async (req) => {
         note: 'File contents are not included in this export. Contact the data controller to request document copies.',
       })),
       ohip14Responses: ohipResult.rows,
-      episodes: episodesResult.rows,
       consentRecords: consentsResult.rows,
     };
 
