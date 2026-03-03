@@ -1,5 +1,5 @@
 /* eslint-disable no-restricted-globals */
-const SW_VERSION = "v1"; // emeld, ha logikát változtatsz (nem kötelező, de hasznos)
+const SW_VERSION = "v3"; // emeld, ha logikát változtatsz (nem kötelező, de hasznos)
 const CACHE_NAME = `maxrehab-static-${SW_VERSION}`;
 
 const STATIC_ASSETS = [
@@ -155,10 +155,14 @@ self.addEventListener("notificationclose", (event) => {
 });
 
 // Fetch stratégia:
-// - ikonok, manifest, favicon: cache-first
-// - Next statikus chunkok (/_next/static/...): stale-while-revalidate jelleg (cache, de frissít)
-// - API: network-only (ne cache-eljünk)
-// - minden más: network-first (de ha nincs net, fallback cache ha van)
+// - localhost (dev): NE cache-eljünk semmit, csak push notificationök működjenek
+// - production:
+//   - ikonok, manifest, favicon: cache-first
+//   - Next statikus chunkok (/_next/static/...): cache-first (content-hashed)
+//   - API: network-only
+//   - minden más: network-first, fallback cache
+const IS_DEV = self.location.hostname === "localhost" || self.location.hostname === "127.0.0.1";
+
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   const url = new URL(req.url);
@@ -166,9 +170,12 @@ self.addEventListener("fetch", (event) => {
   // Csak same-origin
   if (url.origin !== self.location.origin) return;
 
+  // Dev módban ne interceptáljunk semmit — a Next.js dev server kezel mindent
+  if (IS_DEV) return;
+
   // API ne legyen cache-elve
   if (url.pathname.startsWith("/api/")) {
-    return; // default network
+    return;
   }
 
   // Cache-first ikonok/manifest/favicon
@@ -184,9 +191,15 @@ self.addEventListener("fetch", (event) => {
         const cache = await caches.open(CACHE_NAME);
         const cached = await cache.match(req);
         if (cached) return cached;
-        const fresh = await fetch(req);
-        cache.put(req, fresh.clone());
-        return fresh;
+        try {
+          const fresh = await fetch(req);
+          if (fresh && fresh.status === 200) {
+            cache.put(req, fresh.clone());
+          }
+          return fresh;
+        } catch {
+          return new Response("", { status: 503, statusText: "Service Unavailable" });
+        }
       })()
     );
     return;
@@ -199,11 +212,16 @@ self.addEventListener("fetch", (event) => {
         const cache = await caches.open(CACHE_NAME);
         const cached = await cache.match(req);
         if (cached) return cached;
-        const fresh = await fetch(req);
-        if (fresh && fresh.status === 200) {
-          cache.put(req, fresh.clone());
+        try {
+          const fresh = await fetch(req);
+          if (fresh && fresh.status === 200) {
+            cache.put(req, fresh.clone());
+          }
+          return fresh;
+        } catch (error) {
+          console.warn(`[SW] Failed to fetch ${url.pathname}:`, error);
+          return new Response("", { status: 503, statusText: "Service Unavailable" });
         }
-        return fresh;
       })()
     );
     return;
@@ -215,7 +233,6 @@ self.addEventListener("fetch", (event) => {
       const cache = await caches.open(CACHE_NAME);
       try {
         const fresh = await fetch(req);
-        // csak GET-et tegyünk cache-be
         if (req.method === "GET" && fresh && fresh.status === 200) {
           cache.put(req, fresh.clone());
         }
@@ -223,7 +240,6 @@ self.addEventListener("fetch", (event) => {
       } catch {
         const cached = await cache.match(req);
         if (cached) return cached;
-        // ha semmi nincs cache-ben, dobjuk vissza jobb hibaüzenettel
         return new Response(
           "Az alkalmazás offline módban nem elérhető. Kérjük, ellenőrizze az internetkapcsolatot.",
           { 
