@@ -35,6 +35,7 @@ export function generateAllergyReferralDocx(patient: Patient): Buffer {
       : '',
     lakcim: addressParts.join(', '),
     taj: patient.taj || '',
+    kezelesre_erkezes_indoka: patient.kezelesreErkezesIndoka || '',
     datum: formatHungarianDate(new Date()),
   });
 
