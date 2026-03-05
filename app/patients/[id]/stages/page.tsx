@@ -202,7 +202,7 @@ export default function PatientStagesPage() {
           )}
 
           {/* Zsigmondy-kereszt: fogankénti kezelési igények */}
-          <ZsigmondyCrossStages patientId={patientId} meglevoFogak={patient.meglevoFogak} />
+          <ZsigmondyCrossStages patientId={patientId} patientName={patient.nev || undefined} meglevoFogak={patient.meglevoFogak} />
 
           {/* Új ellátási epizód indítása */}
           {(userRole === 'admin' || userRole === 'sebészorvos' || userRole === 'fogpótlástanász') && (

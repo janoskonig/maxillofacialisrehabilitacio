@@ -3,6 +3,7 @@
 import { useState, useContext, createContext, useCallback, useEffect } from 'react';
 import { normalizeToothData, type ToothStatus } from '@/hooks/usePatientAutoSave';
 import { ToothTreatmentProvider, ToothTreatmentInline } from './ToothTreatmentPanel';
+import { OPInlinePreview } from './OPInlinePreview';
 import type { ToothTreatment, ToothTreatmentCatalogItem } from '@/lib/types';
 
 const UPPER_LEFT = [18, 17, 16, 15, 14, 13, 12, 11];
@@ -12,6 +13,7 @@ const LOWER_RIGHT = [31, 32, 33, 34, 35, 36, 37, 38];
 
 interface ZsigmondyCrossStagesProps {
   patientId: string;
+  patientName?: string;
   meglevoFogak: Record<string, ToothStatus> | undefined;
 }
 
@@ -171,7 +173,7 @@ function ToothGrid({
   );
 }
 
-export function ZsigmondyCrossStages({ patientId, meglevoFogak }: ZsigmondyCrossStagesProps) {
+export function ZsigmondyCrossStages({ patientId, patientName, meglevoFogak }: ZsigmondyCrossStagesProps) {
   const [selectedTooth, setSelectedTooth] = useState<string | null>(null);
 
   const handleSelect = (toothStr: string) => {
@@ -194,6 +196,8 @@ export function ZsigmondyCrossStages({ patientId, meglevoFogak }: ZsigmondyCross
       <h3 className="text-base font-semibold text-gray-900 mb-3">
         Zsigmondy-kereszt — Foganként kezelési igények
       </h3>
+
+      <OPInlinePreview patientId={patientId} patientName={patientName} />
 
       <div className="flex flex-wrap gap-3 mb-3 text-xs text-gray-500">
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-50 border border-green-300" /> Jelen van</span>
