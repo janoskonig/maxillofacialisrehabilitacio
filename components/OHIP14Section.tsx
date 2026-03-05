@@ -492,9 +492,11 @@ export function OHIP14Section({
               <div key={question.id} className="border-b border-gray-100 pb-4 last:border-b-0">
                 <label className="block text-sm font-medium text-gray-900 mb-2">
                   {question.questionNumber}. {question.question}
-                  <span className="text-xs text-gray-500 ml-2">
-                    ({question.dimensionHungarian})
-                  </span>
+                  {!isPatientPortal && (
+                    <span className="text-xs text-gray-500 ml-2">
+                      ({question.dimensionHungarian})
+                    </span>
+                  )}
                 </label>
                 <div className="flex flex-wrap gap-2">
                   {ohip14ResponseValueOptions.map((option) => (
