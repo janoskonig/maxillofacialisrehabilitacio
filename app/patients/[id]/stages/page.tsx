@@ -8,7 +8,7 @@ import type { PatientEpisode, PatientStageEntry, StageEventEntry } from '@/lib/t
 import Link from 'next/link';
 import { ArrowLeft, BarChart3, Calendar } from 'lucide-react';
 import { Logo } from '@/components/Logo';
-import { MobileMenu } from '@/components/MobileMenu';
+import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
 import { EpisodePathwayEditor } from '@/components/EpisodePathwayEditor';
 import { EpisodeStepsManager } from '@/components/EpisodeStepsManager';
 import { EpisodeStepProjections } from '@/components/EpisodeStepProjections';
@@ -150,12 +150,12 @@ export default function PatientStagesPage() {
               </button>
               <Logo />
             </div>
-            <MobileMenu />
+            {/* Mobile nav is at the bottom */}
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-20 md:pb-6">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -276,6 +276,8 @@ export default function PatientStagesPage() {
           />
         </div>
       </main>
+
+      <MobileBottomNav />
     </div>
   );
 }

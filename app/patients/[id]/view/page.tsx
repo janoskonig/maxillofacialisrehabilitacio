@@ -7,7 +7,7 @@ import { PatientForm } from '@/components/PatientForm';
 import { Patient, patientStageOptions, PatientStageEntry } from '@/lib/types';
 import { ArrowLeft, User, FileText, Calendar, ClipboardList, MessageCircle, Users } from 'lucide-react';
 import { Logo } from '@/components/Logo';
-import { MobileMenu } from '@/components/MobileMenu';
+import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
 import { CommunicationLog } from '@/components/CommunicationLog';
 import { PatientMessages } from '@/components/PatientMessages';
 import { DoctorMessagesForPatient } from '@/components/DoctorMessagesForPatient';
@@ -224,7 +224,7 @@ export default function PatientViewPage() {
                   <span className="hidden sm:inline">Belépés betegként</span>
                 </button>
               )}
-              <MobileMenu showBackButton={true} />
+              {/* Mobile nav is at the bottom */}
               <button
                 onClick={handleBack}
                 className="btn-secondary flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-sm"
@@ -238,7 +238,7 @@ export default function PatientViewPage() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-6">
+      <main className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-6 pb-20 md:pb-6">
         {/* Episode & Stage Card */}
         <div className="mb-4 sm:mb-6">
           <EpisodeStageCard
@@ -347,6 +347,8 @@ export default function PatientViewPage() {
           )}
         </div>
       </main>
+
+      <MobileBottomNav />
     </div>
   );
 }

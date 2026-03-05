@@ -8,7 +8,7 @@ import { PatientMessages } from '@/components/PatientMessages';
 import { DoctorMessagesForPatient } from '@/components/DoctorMessagesForPatient';
 import { ArrowLeft, User } from 'lucide-react';
 import { Logo } from '@/components/Logo';
-import { MobileMenu } from '@/components/MobileMenu';
+import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
 
 export default function PatientDetailPage() {
   const router = useRouter();
@@ -142,7 +142,6 @@ export default function PatientDetailPage() {
                   <span className="hidden sm:inline">Belépés betegként</span>
                 </button>
               )}
-              <MobileMenu showBackButton={true} />
               <button
                 onClick={handleBack}
                 className="btn-secondary flex items-center gap-2"
@@ -156,7 +155,7 @@ export default function PatientDetailPage() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-20 md:pb-6">
         <div className="space-y-6">
           {/* Chat Messages - csak ha van email-cím */}
           {patientEmail && (
@@ -170,6 +169,8 @@ export default function PatientDetailPage() {
           <CommunicationLog patientId={patientId} patientName={patientName} />
         </div>
       </main>
+
+      <MobileBottomNav />
     </div>
   );
 }

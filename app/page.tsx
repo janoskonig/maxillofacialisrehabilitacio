@@ -1,25 +1,19 @@
 'use client';
 
-import { useState, useEffect, useRef, useReducer, Suspense, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useReducer, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Patient, patientSchema } from '@/lib/types';
-import { getAllPatients, savePatient, searchPatients, getPatientById } from '@/lib/storage';
+import { Patient } from '@/lib/types';
+import { getAllPatients, searchPatients, getPatientById } from '@/lib/storage';
 import { PatientList } from '@/components/PatientList';
 import { useToast } from '@/contexts/ToastContext';
 import { Plus, Search, Users, LogOut, Shield, Settings, Calendar, CalendarDays, MessageCircle, Filter, Download, Bell, X, BookOpen } from 'lucide-react';
 import { getCurrentUser, getUserEmail, getUserRole, logout } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
-import { MobileMenu } from '@/components/MobileMenu';
+import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
 import { Dashboard } from '@/components/Dashboard';
 import { FeedbackButtonTrigger } from '@/components/FeedbackButton';
-
-// Lazy load heavy components
-const PatientForm = dynamic(() => import('@/components/PatientForm').then(mod => ({ default: mod.PatientForm })), {
-  loading: () => <div className="card text-center py-12"><p className="text-gray-600">Beteg űrlap betöltése...</p></div>,
-  ssr: false
-});
 
 const OPImageViewer = dynamic(() => import('@/components/OPImageViewer').then(mod => ({ default: mod.OPImageViewer })), {
   loading: () => <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"><p className="text-white">Kép betöltése...</p></div>,
@@ -98,9 +92,6 @@ export default function Home() {
   const { patients, totalPatients, searchQuery, selectedView, sortField, sortDirection, page, refreshKey } = list;
   const PAGE_SIZE = 25;
 
-  const [showForm, setShowForm] = useState(false);
-  const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
-  const [isViewMode, setIsViewMode] = useState(false);
   const [searchInput, setSearchInput] = useState('');
   const searchDebounceRef = useRef<NodeJS.Timeout>();
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -235,75 +226,8 @@ export default function Home() {
     dispatch({ type: 'REFRESH' });
   }, []);
 
-  const handleSavePatient = async (patientData: Patient, options?: { source?: 'auto' | 'manual' }) => {
-    try {
-      const source = options?.source || 'manual';
-      
-      // If patient already has an ID, it means it was already saved in PatientForm
-      // Optimalizálás: ne kérdezzük le újra az adatbázisból, használjuk a kapott adatot
-      if (patientData.id) {
-        // Use the provided patient data directly (it's already up-to-date from the save response)
-        // Set editing patient FIRST to ensure patient prop is updated with all fields (including kezelesreErkezesIndoka)
-        // before any useEffect runs that might reload patient data
-        setEditingPatient(patientData);
-        // Reload patients list in background (but patient prop is already updated with complete data)
-        // Use setTimeout to ensure setEditingPatient completes before loadPatients triggers useEffect
-        setTimeout(() => {
-          loadPatients();
-        }, 0);
-        
-        // Auto-save: silent update, no toast
-        if (source === 'auto') {
-          return;
-        }
-        
-        // Manual save: show toast
-        showToast('Betegadat sikeresen mentve', 'success');
-        return;
-      }
-      
-      // For new patients or if save failed in PatientForm, save here
-      // Note: If save failed in PatientForm, onSubmit already handled the error
-      // This should only be called for truly new patients (without ID)
-      const validatedPatient = patientSchema.parse(patientData);
-      await savePatient(validatedPatient);
-      await loadPatients();
-      // Ne zárjuk be az űrlapot automatikusan - a felhasználó manuálisan zárhatja be
-      // setShowForm(false);
-      // setEditingPatient(null);
-      
-      if (source === 'manual') {
-        showToast('Betegadat sikeresen mentve', 'success');
-      }
-    } catch (error: any) {
-      console.error('Hiba a beteg mentésekor:', error);
-      let errorMessage = 'Kérjük, ellenőrizze az összes kötelező mezőt és próbálja újra.';
-      
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      } else if (error?.message) {
-        errorMessage = error.message;
-      }
-      
-      // További információ a hálózati hibákról
-      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('Load failed') || errorMessage.includes('csatlakozni')) {
-        errorMessage = 'Nem sikerült csatlakozni a szerverhez. Ellenőrizze az internetkapcsolatot és próbálja újra.';
-      } else if (errorMessage.includes('túl hosszú')) {
-        errorMessage = 'A kérés túl hosszú ideig tartott. Lehet, hogy az adatok túl nagyok. Próbálja újra.';
-      }
-      
-      // Only show toast for manual saves
-      const source = options?.source || 'manual';
-      if (source === 'manual') {
-        showToast(`Hiba a mentés során: ${errorMessage}`, 'error');
-      }
-    }
-  };
-
   const handleNewPatient = () => {
-    setEditingPatient(null);
-    setIsViewMode(false);
-    setShowForm(true);
+    router.push('/patients/new');
   };
 
   const handleViewPatient = async (patient: Patient) => {
@@ -331,16 +255,6 @@ export default function Home() {
     // Navigate to separate page instead of opening modal
     router.push(`/patients/${patient.id}/view`);
   };
-
-  const handleCloseForm = useCallback(async () => {
-    // This will be called by PatientForm's handleCancel after checking for unsaved changes
-    setShowForm(false);
-    setEditingPatient(null);
-    setIsViewMode(false);
-    
-    // Reload patients list to get latest data from database
-    await loadPatients();
-  }, [loadPatients]);
 
   const handleSort = useCallback((field: 'nev' | 'idopont' | 'createdAt') => {
     dispatch({ type: 'TOGGLE_SORT', field });
@@ -446,11 +360,7 @@ export default function Home() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <MobileMenu 
-                currentPath="/" 
-                onMessageClick={() => setShowMessageModal(true)}
-                onNewPatientClick={handleNewPatient}
-              />
+              {/* Desktop-only nav is below */}
               {/* Desktop Navigation */}
               <div className="hidden md:flex gap-2">
                 <FeedbackButtonTrigger />
@@ -496,7 +406,7 @@ export default function Home() {
           </div>
         </div>
       </header>
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 md:py-4">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 md:py-4 pb-20 md:pb-4">
         <div className="space-y-2 md:space-y-3">
           {/* Header - hidden on mobile to save space */}
           <div className="hidden md:flex flex-row justify-between items-center gap-4">
@@ -689,39 +599,6 @@ export default function Home() {
               </div>
             </>
 
-      {/* Patient Form Modal */}
-      {showForm && (
-        <div 
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-0 md:p-4 z-50 animate-fade-in"
-          onClick={(e) => {
-            // Only close if clicking directly on the background (not on the form)
-            if (e.target === e.currentTarget) {
-              // Trigger the cancel button click, which will call handleCancel
-              // and check for unsaved changes
-              const cancelButton = document.querySelector('[data-patient-form-cancel]') as HTMLButtonElement;
-              if (cancelButton) {
-                cancelButton.click();
-              } else {
-                // Fallback: direct close
-                handleCloseForm();
-              }
-            }
-          }}
-        >
-          <div 
-            className="bg-white rounded-none md:rounded-xl max-w-4xl w-full h-full md:h-auto max-h-[100vh] md:max-h-[90vh] overflow-y-auto shadow-soft-xl animate-slide-up"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <PatientForm
-              patient={editingPatient}
-              onSave={handleSavePatient}
-              onCancel={handleCloseForm}
-              isViewOnly={isViewMode}
-            />
-          </div>
-        </div>
-      )}
-
       {/* OP Image Viewer Modal */}
       {opViewerPatient && opViewerPatient.id && (
         <OPImageViewer
@@ -749,7 +626,7 @@ export default function Home() {
       {(userRole === 'admin' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos') && (
         <button
           onClick={handleNewPatient}
-          className="md:hidden fixed bottom-5 right-5 z-30 w-14 h-14 rounded-full bg-gradient-to-r from-medical-primary to-medical-primary-light text-white shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+          className="md:hidden fixed bottom-20 right-5 z-30 w-14 h-14 rounded-full bg-gradient-to-r from-medical-primary to-medical-primary-light text-white shadow-lg flex items-center justify-center active:scale-95 transition-transform"
           aria-label="Új beteg"
         >
           <Plus className="w-6 h-6" />
@@ -761,6 +638,8 @@ export default function Home() {
         isOpen={showMessageModal}
         onClose={() => setShowMessageModal(false)}
       />
+
+      <MobileBottomNav />
     </div>
   );
 }

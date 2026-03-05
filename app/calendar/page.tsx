@@ -7,7 +7,7 @@ import { CalendarView } from '@/components/CalendarView';
 import { Logo } from '@/components/Logo';
 import { LogOut, Shield, Settings, ArrowLeft, Download, Edit2, X, Calendar } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
-import { MobileMenu } from '@/components/MobileMenu';
+import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
 import { FeedbackButtonTrigger } from '@/components/FeedbackButton';
 
 interface Appointment {
@@ -115,7 +115,7 @@ export default function CalendarPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <MobileMenu currentPath="/calendar" showBackButton={true} />
+              {/* Mobile nav is at the bottom */}
               <div className="hidden md:flex gap-2">
                 <FeedbackButtonTrigger />
                 {currentUser?.role === 'admin' && (
@@ -154,7 +154,7 @@ export default function CalendarPage() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-20 md:pb-8">
         <div className="space-y-6">
           {/* Link to time slots management page for fogpótlástanász and admin */}
           {currentUser && (currentUser.role === 'fogpótlástanász' || currentUser.role === 'admin') && (
@@ -303,6 +303,8 @@ export default function CalendarPage() {
           </div>
         </div>
       )}
+
+      <MobileBottomNav />
     </div>
   );
 }

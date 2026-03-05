@@ -6,7 +6,7 @@ import { getCurrentUser, logout } from '@/lib/auth';
 import { TimeSlotsManager } from '@/components/TimeSlotsManager';
 import { LogOut, ArrowLeft, Shield, Settings, CalendarDays } from 'lucide-react';
 import { Logo } from '@/components/Logo';
-import { MobileMenu } from '@/components/MobileMenu';
+import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
 
 export default function TimeSlotsPage() {
   const router = useRouter();
@@ -65,7 +65,7 @@ export default function TimeSlotsPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <MobileMenu currentPath="/time-slots" showBackButton={true} />
+              {/* Mobile nav is at the bottom */}
               <div className="hidden md:flex gap-2">
                 {userRole === 'admin' && (
                   <button
@@ -109,7 +109,7 @@ export default function TimeSlotsPage() {
           </div>
         </div>
       </header>
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-20 md:pb-8">
         <div className="space-y-6">
           {/* Google Calendar Settings Info */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -136,6 +136,8 @@ export default function TimeSlotsPage() {
           </div>
         </div>
       </main>
+
+      <MobileBottomNav />
     </div>
   );
 }

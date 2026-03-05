@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { ArrowLeft, BarChart3, User, Users } from 'lucide-react';
 import { Logo } from '@/components/Logo';
-import { MobileMenu } from '@/components/MobileMenu';
+import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
 import { StagesGanttChart, type GanttEpisode, type GanttInterval, type GanttVirtualWindow } from '@/components/StagesGanttChart';
 import type { StageCatalogEntry } from '@/lib/types';
 import { useToast } from '@/contexts/ToastContext';
@@ -188,12 +188,12 @@ export default function StagesGanttPage() {
               </button>
               <Logo />
             </div>
-            <MobileMenu />
+            {/* Mobile nav is at the bottom */}
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-20 md:pb-6">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <BarChart3 className="w-6 h-6 text-medical-primary" />
@@ -344,6 +344,8 @@ export default function StagesGanttPage() {
           />
         )}
       </main>
+
+      <MobileBottomNav />
     </div>
   );
 }

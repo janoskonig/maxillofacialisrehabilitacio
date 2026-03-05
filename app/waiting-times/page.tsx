@@ -7,7 +7,7 @@ import { ArrowLeft, Clock, Calendar, User } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { Logo } from '@/components/Logo';
-import { MobileMenu } from '@/components/MobileMenu';
+import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
 import { MobileTable } from '@/components/mobile/MobileTable';
 import { MobileKeyValueGrid } from '@/components/mobile/MobileKeyValueGrid';
 
@@ -147,7 +147,7 @@ export default function WaitingTimesPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <MobileMenu showBackButton={true} />
+              {/* Mobile nav is at the bottom */}
               <button
                 onClick={handleBack}
                 className="btn-secondary flex items-center gap-2"
@@ -161,7 +161,7 @@ export default function WaitingTimesPage() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-20 md:pb-6">
         {/* Tabs */}
         <div className="mb-6 border-b border-gray-200">
           <nav className="flex gap-1" aria-label="Várakozási idők fülök">
@@ -379,6 +379,8 @@ export default function WaitingTimesPage() {
           />
         )}
       </main>
+
+      <MobileBottomNav />
     </div>
   );
 }

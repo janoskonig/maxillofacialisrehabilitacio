@@ -6,7 +6,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { PatientHistory } from '@/components/PatientHistory';
 import { ArrowLeft, Clock } from 'lucide-react';
 import { Logo } from '@/components/Logo';
-import { MobileMenu } from '@/components/MobileMenu';
+import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
 
 export default function PatientHistoryPage() {
   const router = useRouter();
@@ -101,14 +101,13 @@ export default function PatientHistoryPage() {
               </button>
             </div>
             <div className="flex items-center gap-4">
-              <MobileMenu showBackButton={true} />
             </div>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-20 md:pb-8">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">
             Páciens életút
@@ -122,6 +121,8 @@ export default function PatientHistoryPage() {
 
         <PatientHistory patientId={patientId} />
       </main>
+
+      <MobileBottomNav />
     </div>
   );
 }

@@ -7,7 +7,7 @@ import { DoctorMessages } from '@/components/DoctorMessages';
 import { PatientMessagesList } from '@/components/PatientMessagesList';
 import { ArrowLeft, MessageCircle, Users } from 'lucide-react';
 import { Logo } from '@/components/Logo';
-import { MobileMenu } from '@/components/MobileMenu';
+import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
 
 export default function MessagesPage() {
   const router = useRouter();
@@ -115,7 +115,7 @@ export default function MessagesPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <MobileMenu showBackButton={true} />
+              {/* Mobile nav is at the bottom */}
               <button
                 onClick={handleBack}
                 className="btn-secondary flex items-center gap-2"
@@ -129,7 +129,7 @@ export default function MessagesPage() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-20 md:pb-6">
         {/* Tabs */}
         <div className="mb-4 border-b border-gray-200">
           <nav className="flex gap-1" aria-label="Üzenetek fülök">
@@ -178,6 +178,8 @@ export default function MessagesPage() {
           )}
         </div>
       </main>
+
+      <MobileBottomNav />
     </div>
   );
 }
