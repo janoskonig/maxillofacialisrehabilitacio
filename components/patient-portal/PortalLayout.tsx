@@ -16,9 +16,9 @@ export function PortalLayout({ children }: PortalLayoutProps) {
   const { showToast } = useToast();
   const [patientName, setPatientName] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [ohipPending, setOhipPending] = useState(false);
 
   useEffect(() => {
-    // Fetch patient name for header
     const fetchPatientInfo = async () => {
       try {
         const response = await fetch('/api/patient-portal/patient', {
@@ -33,6 +33,31 @@ export function PortalLayout({ children }: PortalLayoutProps) {
       }
     };
     fetchPatientInfo();
+
+    const checkOhipStatus = async () => {
+      try {
+        const [ohipRes, stagesRes] = await Promise.all([
+          fetch('/api/patient-portal/ohip14', { credentials: 'include' }),
+          fetch('/api/patient-portal/stages/current', { credentials: 'include' }),
+        ]);
+        if (!ohipRes.ok || !stagesRes.ok) return;
+        const ohipData = await ohipRes.json();
+        const stagesData = await stagesRes.json();
+        const cs = stagesData.currentStage;
+        const stageCode = cs?.stageCode ?? null;
+        const dd = cs?.deliveryDate ? new Date(cs.deliveryDate) : null;
+        const completedTps = (ohipData.responses || []).map((r: any) => r.timepoint);
+
+        const { getTimepointAvailability } = await import('@/lib/ohip14-timepoint-stage');
+        const { ohip14TimepointOptions } = await import('@/lib/types');
+        const pending = ohip14TimepointOptions.some((tp) => {
+          const avail = getTimepointAvailability(tp.value, stageCode, dd);
+          return avail.allowed && !completedTps.includes(tp.value);
+        });
+        setOhipPending(pending);
+      } catch {}
+    };
+    checkOhipStatus();
   }, []);
 
   const handleLogout = async () => {
@@ -153,6 +178,9 @@ export function PortalLayout({ children }: PortalLayoutProps) {
                 >
                   <ClipboardList className="w-4 h-4" />
                   OHIP-14 kérdőív
+                  {ohipPending && (
+                    <span className="ml-auto w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0" />
+                  )}
                 </a>
                 <a
                   href="/patient-portal/messages"
@@ -221,7 +249,7 @@ export function PortalLayout({ children }: PortalLayoutProps) {
             </a>
             <a
               href="/patient-portal/ohip14"
-              className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
+              className={`relative flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
                 pathname === '/patient-portal/ohip14'
                   ? 'text-medical-primary border-medical-primary'
                   : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
@@ -230,6 +258,9 @@ export function PortalLayout({ children }: PortalLayoutProps) {
               <ClipboardList className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               <span className="hidden xs:inline">OHIP-14</span>
               <span className="xs:hidden">OHIP</span>
+              {ohipPending && (
+                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-white" />
+              )}
             </a>
             <a
               href="/patient-portal/messages"
