@@ -426,13 +426,13 @@ export default function Home() {
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-soft border-b border-gray-200/60 sticky top-0 z-40 backdrop-blur-sm bg-white/95">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-3">
-            <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
+          <div className="flex justify-between items-center py-2 md:py-3">
+            <div className="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
               <div className="flex-shrink-0">
-                <Logo width={40} height={46} className="md:w-[50px] md:h-[58px]" />
+                <Logo width={32} height={37} className="md:w-[50px] md:h-[58px]" />
               </div>
               <div className="min-w-0 flex-1">
-                <h1 className="text-heading-3 text-medical-primary truncate">
+                <h1 className="text-base md:text-xl font-semibold text-medical-primary truncate tracking-tight">
                   Maxillofaciális Rehabilitáció
                 </h1>
                 <p className="text-xs text-gray-500 hidden sm:block font-medium mt-0.5">
@@ -496,43 +496,30 @@ export default function Home() {
           </div>
         </div>
       </header>
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-        <div className="space-y-3">
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-        <div>
-          <h2 className="text-heading-2">eCRF-katalógus (electronic Case Report Form)</h2>
-          {userEmail && (
-            <p className="text-body-sm mt-1.5">
-              Bejelentkezve: <span className="font-medium text-medical-primary hidden sm:inline">{userEmail}</span><span className="font-medium text-medical-primary sm:hidden">{userEmail.split('@')[0]}</span>
-            </p>
-          )}
-        </div>
-        {/* Mobile: New Patient Button */}
-        <div className="md:hidden">
-          {(userRole === 'admin' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos') && (
-            <button
-              onClick={handleNewPatient}
-              className="btn-primary w-full flex items-center justify-center gap-1.5 text-sm px-4 py-2.5"
-            >
-              <Plus className="w-4 h-4" />
-              Új beteg
-            </button>
-          )}
-        </div>
-        {/* Desktop: All buttons */}
-        <div className="hidden md:flex gap-1.5">
-          {(userRole === 'admin' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos') && (
-            <button
-              onClick={handleNewPatient}
-              className="btn-primary flex items-center gap-1.5 text-sm px-3 py-1.5"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Új beteg
-            </button>
-          )}
-        </div>
-      </div>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 md:py-4">
+        <div className="space-y-2 md:space-y-3">
+          {/* Header - hidden on mobile to save space */}
+          <div className="hidden md:flex flex-row justify-between items-center gap-4">
+            <div>
+              <h2 className="text-heading-2">eCRF-katalógus (electronic Case Report Form)</h2>
+              {userEmail && (
+                <p className="text-body-sm mt-1.5">
+                  Bejelentkezve: <span className="font-medium text-medical-primary">{userEmail}</span>
+                </p>
+              )}
+            </div>
+            <div className="flex gap-1.5">
+              {(userRole === 'admin' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos') && (
+                <button
+                  onClick={handleNewPatient}
+                  className="btn-primary flex items-center gap-1.5 text-sm px-3 py-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Új beteg
+                </button>
+              )}
+            </div>
+          </div>
 
           {/* PWA Announcement Banner */}
           {showPWAAnnouncement && (
@@ -578,7 +565,7 @@ export default function Home() {
           )}
 
           {/* Dashboard Section */}
-          <div className="mb-6">
+          <div className="mb-3 md:mb-6">
             <Dashboard 
               userRole={userRole} 
               onViewPatient={handleViewPatient}
@@ -757,6 +744,17 @@ export default function Home() {
 
         </div>
       </main>
+
+      {/* Mobile FAB for new patient */}
+      {(userRole === 'admin' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos') && (
+        <button
+          onClick={handleNewPatient}
+          className="md:hidden fixed bottom-5 right-5 z-30 w-14 h-14 rounded-full bg-gradient-to-r from-medical-primary to-medical-primary-light text-white shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+          aria-label="Új beteg"
+        >
+          <Plus className="w-6 h-6" />
+        </button>
+      )}
 
       {/* Send Message Modal */}
       <SendMessageModal

@@ -83,7 +83,7 @@
   
   /* Cards */
   .card {
-    @apply bg-white rounded-xl shadow-soft border border-gray-200/60 p-6;
+    @apply bg-white rounded-xl shadow-soft border border-gray-200/60 p-4 md:p-6;
     @apply transition-all duration-200 ease-smooth;
   }
   
@@ -127,15 +127,15 @@
   }
   
   .text-heading-2 {
-    @apply text-2xl font-bold text-gray-900 tracking-tight;
+    @apply text-xl md:text-2xl font-bold text-gray-900 tracking-tight;
   }
   
   .text-heading-3 {
-    @apply text-xl font-semibold text-gray-900 tracking-tight;
+    @apply text-lg md:text-xl font-semibold text-gray-900 tracking-tight;
   }
   
   .text-heading-4 {
-    @apply text-lg font-semibold text-gray-900;
+    @apply text-base md:text-lg font-semibold text-gray-900;
   }
   
   .text-body {

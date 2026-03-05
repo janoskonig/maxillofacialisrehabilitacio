@@ -31,10 +31,10 @@ export function DashboardWidget({
       className={`card card-hover ${className} animate-fade-in ${onClick ? 'cursor-pointer' : ''}`}
       onClick={onClick}
     >
-      <div className="flex items-center justify-between p-4 border-b border-gray-100">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between p-3 md:p-4 border-b border-gray-100">
+        <div className="flex items-center gap-2 md:gap-3">
           {icon && <div className="text-medical-primary flex-shrink-0">{icon}</div>}
-          <h3 className="text-heading-4">{title}</h3>
+          <h3 className="text-base md:text-lg font-semibold text-gray-900">{title}</h3>
         </div>
         <div className="flex items-center gap-2">
           {collapsible && (
@@ -58,7 +58,7 @@ export function DashboardWidget({
         </div>
       </div>
       {!isCollapsed && (
-        <div className="p-4">
+        <div className="p-3 md:p-4">
           {children}
         </div>
       )}

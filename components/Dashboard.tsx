@@ -177,43 +177,32 @@ export function Dashboard({ userRole }: DashboardProps) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2 md:space-y-4">
       {/* Dashboard Header */}
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-medical-primary/10 rounded-lg">
-              <LayoutDashboard className="w-5 h-5 text-medical-primary" />
-            </div>
-            <h2 className="text-heading-2">Dashboard</h2>
-            {canSeeStages && (
-              <div className="hidden sm:block">
-                <IntakeRecommendationBadge />
-              </div>
-            )}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 md:gap-3 flex-wrap min-w-0">
+          <div className="hidden md:block p-2 bg-medical-primary/10 rounded-lg">
+            <LayoutDashboard className="w-5 h-5 text-medical-primary" />
           </div>
-          <button
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 p-2 rounded-lg hover:bg-gray-100 transition-all duration-200"
-          >
-            {isCollapsed ? (
-              <>
-                <ChevronDown className="w-4 h-4" />
-                <span className="hidden sm:inline">Kibontás</span>
-              </>
-            ) : (
-              <>
-                <ChevronUp className="w-4 h-4" />
-                <span className="hidden sm:inline">Összecsukás</span>
-              </>
-            )}
-          </button>
+          <h2 className="text-lg md:text-2xl font-bold text-gray-900 tracking-tight">Dashboard</h2>
+          {canSeeStages && <IntakeRecommendationBadge />}
         </div>
-        {canSeeStages && (
-          <div className="sm:hidden">
-            <IntakeRecommendationBadge />
-          </div>
-        )}
+        <button
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 p-1.5 md:p-2 rounded-lg hover:bg-gray-100 transition-all duration-200"
+        >
+          {isCollapsed ? (
+            <>
+              <ChevronDown className="w-4 h-4" />
+              <span className="hidden sm:inline">Kibontás</span>
+            </>
+          ) : (
+            <>
+              <ChevronUp className="w-4 h-4" />
+              <span className="hidden sm:inline">Összecsukás</span>
+            </>
+          )}
+        </button>
       </div>
 
       {!isCollapsed && (
@@ -223,7 +212,7 @@ export function Dashboard({ userRole }: DashboardProps) {
             <nav className="flex gap-1 w-max" aria-label="Dashboard tabs">
               <button
                 onClick={() => setActiveTab('overview')}
-                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
+                className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
                   activeTab === 'overview'
                     ? 'text-medical-primary border-medical-primary'
                     : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
@@ -234,7 +223,7 @@ export function Dashboard({ userRole }: DashboardProps) {
               </button>
               <button
                 onClick={() => setActiveTab('patient-preparation')}
-                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors relative flex-shrink-0 ${
+                className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors relative flex-shrink-0 ${
                   activeTab === 'patient-preparation'
                     ? 'text-medical-primary border-medical-primary'
                     : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
@@ -246,7 +235,7 @@ export function Dashboard({ userRole }: DashboardProps) {
               {canSeeStages && (
                 <button
                   onClick={() => setActiveTab('worklist')}
-                  className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
+                  className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
                     activeTab === 'worklist'
                       ? 'text-medical-primary border-medical-primary'
                       : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
@@ -259,7 +248,7 @@ export function Dashboard({ userRole }: DashboardProps) {
               {canSeeStages && (
                 <button
                   onClick={() => setActiveTab('treatment-plans')}
-                  className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
+                  className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
                     activeTab === 'treatment-plans'
                       ? 'text-medical-primary border-medical-primary'
                       : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
@@ -272,7 +261,7 @@ export function Dashboard({ userRole }: DashboardProps) {
               {canSeeStages && (
                 <button
                   onClick={() => setActiveTab('gantt')}
-                  className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
+                  className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
                     activeTab === 'gantt'
                       ? 'text-medical-primary border-medical-primary'
                       : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
@@ -285,7 +274,7 @@ export function Dashboard({ userRole }: DashboardProps) {
               {canSeeStages && (
                 <button
                   onClick={() => setActiveTab('workload')}
-                  className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
+                  className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
                     activeTab === 'workload'
                       ? 'text-medical-primary border-medical-primary'
                       : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
