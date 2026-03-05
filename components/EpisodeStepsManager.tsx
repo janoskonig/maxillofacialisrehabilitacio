@@ -48,7 +48,13 @@ interface EpisodePathwayInfo {
   id: string;
   carePathwayId: string;
   pathwayName: string;
+  jaw?: 'felso' | 'also' | null;
 }
+
+const JAW_SHORT: Record<string, string> = {
+  felso: 'felső',
+  also: 'alsó',
+};
 
 export interface EpisodeStepsManagerProps {
   episodeId: string;
@@ -612,8 +618,12 @@ export function EpisodeStepsManager({
   };
 
   const getPathwayLabel = (sourceId: string | null): string | null => {
-    if (!sourceId || !hasMultiplePathways) return null;
-    return episodePathways.find((p) => p.id === sourceId)?.pathwayName ?? null;
+    if (!sourceId) return null;
+    const pw = episodePathways.find((p) => p.id === sourceId);
+    if (!pw) return null;
+    const jawSuffix = pw.jaw ? ` (${JAW_SHORT[pw.jaw] ?? pw.jaw})` : '';
+    if (!hasMultiplePathways && !pw.jaw) return null;
+    return pw.pathwayName + jawSuffix;
   };
 
   const getPathwayColor = (sourceId: string | null): string => {

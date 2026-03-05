@@ -36,7 +36,13 @@ interface EpisodePathwayRow {
   ordinal: number;
   pathwayName: string;
   stepCount: number;
+  jaw?: 'felso' | 'also' | null;
 }
+
+const JAW_LABELS: Record<string, string> = {
+  felso: 'Felső állcsont',
+  also: 'Alsó állcsont',
+};
 
 export function EpisodePathwayEditor({
   episodeId,
@@ -59,6 +65,7 @@ export function EpisodePathwayEditor({
   const [episodePathways, setEpisodePathways] = useState<EpisodePathwayRow[]>([]);
   const [addingPathway, setAddingPathway] = useState(false);
   const [newPathwayId, setNewPathwayId] = useState('');
+  const [newJaw, setNewJaw] = useState<'felso' | 'also'>('felso');
   const [removingPathwayId, setRemovingPathwayId] = useState<string | null>(null);
 
   // Provider state (still single per episode)
@@ -139,7 +146,7 @@ export function EpisodePathwayEditor({
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ action: 'addPathway', carePathwayId: newPathwayId }),
+        body: JSON.stringify({ action: 'addPathway', carePathwayId: newPathwayId, jaw: newJaw }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -158,16 +165,16 @@ export function EpisodePathwayEditor({
     }
   };
 
-  const handleRemovePathway = async (carePathwayId: string) => {
+  const handleRemovePathway = async (epPathwayId: string) => {
     if (removingPathwayId) return;
-    setRemovingPathwayId(carePathwayId);
+    setRemovingPathwayId(epPathwayId);
     setError(null);
     try {
       const res = await fetch(`/api/episodes/${episodeId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ action: 'removePathway', carePathwayId }),
+        body: JSON.stringify({ action: 'removePathway', episodePathwayId: epPathwayId }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -212,9 +219,9 @@ export function EpisodePathwayEditor({
     }
   };
 
-  // Pathways already assigned — filter them out of the dropdown
-  const assignedPathwayIds = new Set(episodePathways.map((ep) => ep.carePathwayId));
-  const availablePathways = pathways.filter((p) => !assignedPathwayIds.has(p.id));
+  // Pathways already assigned — a pathway is still available if it hasn't been added for the currently selected jaw
+  const assignedKeys = new Set(episodePathways.map((ep) => `${ep.carePathwayId}:${ep.jaw ?? '_none_'}`));
+  const availablePathways = pathways.filter((p) => !assignedKeys.has(`${p.id}:${newJaw}`));
 
   if (loadingLists) {
     return (
@@ -266,15 +273,20 @@ export function EpisodePathwayEditor({
                 <li key={ep.id} className="flex items-center justify-between gap-2 px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-sm font-medium text-gray-900 truncate">{ep.pathwayName}</span>
+                    {ep.jaw && (
+                      <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-indigo-100 text-indigo-700 shrink-0">
+                        {JAW_LABELS[ep.jaw] ?? ep.jaw}
+                      </span>
+                    )}
                     <span className="text-xs text-gray-500 shrink-0">{ep.stepCount} lépés</span>
                   </div>
                   <button
-                    onClick={() => handleRemovePathway(ep.carePathwayId)}
-                    disabled={removingPathwayId === ep.carePathwayId}
+                    onClick={() => handleRemovePathway(ep.id)}
+                    disabled={removingPathwayId === ep.id}
                     className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 bg-red-50 rounded hover:bg-red-100 disabled:opacity-50 transition-colors shrink-0"
                     title="Kezelési út eltávolítása"
                   >
-                    {removingPathwayId === ep.carePathwayId ? (
+                    {removingPathwayId === ep.id ? (
                       <Loader2 className="w-3 h-3 animate-spin" />
                     ) : (
                       <Trash2 className="w-3 h-3" />
@@ -293,12 +305,12 @@ export function EpisodePathwayEditor({
             <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="episode-add-pathway-select">
               Kezelési út hozzáadása
             </label>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <select
                 id="episode-add-pathway-select"
                 value={newPathwayId}
                 onChange={(e) => setNewPathwayId(e.target.value)}
-                className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm disabled:opacity-50"
+                className="flex-1 min-w-[180px] rounded-md border border-gray-300 px-3 py-2 text-sm disabled:opacity-50"
                 disabled={addingPathway}
               >
                 <option value="">— Válassz kezelési utat</option>
@@ -310,6 +322,16 @@ export function EpisodePathwayEditor({
                     </option>
                   );
                 })}
+              </select>
+              <select
+                id="episode-add-jaw-select"
+                value={newJaw}
+                onChange={(e) => setNewJaw(e.target.value as 'felso' | 'also')}
+                className="rounded-md border border-gray-300 px-3 py-2 text-sm disabled:opacity-50"
+                disabled={addingPathway}
+              >
+                <option value="felso">Felső állcsont</option>
+                <option value="also">Alsó állcsont</option>
               </select>
               <button
                 onClick={handleAddPathway}

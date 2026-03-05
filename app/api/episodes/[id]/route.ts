@@ -54,16 +54,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
       `SELECT version FROM stage_transition_rulesets WHERE status = 'PUBLISHED' LIMIT 1`
     ).catch(() => ({ rows: [] as any[] })),
     getCurrentSuggestion(episodeId).catch(() => null),
-    pool.query(
-      `SELECT ep.id, ep.care_pathway_id as "carePathwayId", ep.ordinal,
-              cp.name as "pathwayName",
-              (SELECT COUNT(*)::int FROM episode_steps es WHERE es.source_episode_pathway_id = ep.id) as "stepCount"
-       FROM episode_pathways ep
-       JOIN care_pathways cp ON ep.care_pathway_id = cp.id
-       WHERE ep.episode_id = $1
-       ORDER BY ep.ordinal`,
-      [episodeId]
-    ).catch(() => ({ rows: [] as any[] })),
+    pool.query(EPISODE_PATHWAYS_QUERY, [episodeId]).catch(() => ({ rows: [] as any[] })),
   ]);
 
   const currentRulesetVersion: number | null = rulesetRow.rows[0]?.version ?? null;
@@ -112,10 +103,11 @@ export const PATCH = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász']
   const pool = getDbPool();
 
   if (body.action === 'addPathway') {
-    return await handleAddPathway(pool, episodeId, body.carePathwayId);
+    const jaw = body.jaw && ['felso', 'also'].includes(body.jaw) ? body.jaw : null;
+    return await handleAddPathway(pool, episodeId, body.carePathwayId, jaw);
   }
   if (body.action === 'removePathway') {
-    return await handleRemovePathway(pool, episodeId, body.carePathwayId);
+    return await handleRemovePathway(pool, episodeId, body.carePathwayId, body.episodePathwayId);
   }
 
   const { carePathwayId, carePathwayVersion, assignedProviderId, treatmentTypeId } = body;
@@ -207,13 +199,27 @@ export const PATCH = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász']
 });
 
 // ────────────────────────────────────────────────────────────────────────────
+// Shared helpers
+// ────────────────────────────────────────────────────────────────────────────
+
+const EPISODE_PATHWAYS_QUERY = `
+  SELECT ep.id, ep.care_pathway_id as "carePathwayId", ep.ordinal, ep.jaw,
+         cp.name as "pathwayName",
+         (SELECT COUNT(*)::int FROM episode_steps es WHERE es.source_episode_pathway_id = ep.id) as "stepCount"
+  FROM episode_pathways ep
+  JOIN care_pathways cp ON ep.care_pathway_id = cp.id
+  WHERE ep.episode_id = $1
+  ORDER BY ep.ordinal`;
+
+// ────────────────────────────────────────────────────────────────────────────
 // Multi-pathway helpers
 // ────────────────────────────────────────────────────────────────────────────
 
 async function handleAddPathway(
   pool: Awaited<ReturnType<typeof getDbPool>>,
   episodeId: string,
-  carePathwayId: unknown
+  carePathwayId: unknown,
+  jaw: 'felso' | 'also' | null
 ) {
   if (!carePathwayId || typeof carePathwayId !== 'string') {
     return NextResponse.json({ error: 'carePathwayId kötelező (string UUID)' }, { status: 400 });
@@ -258,15 +264,16 @@ async function handleAddPathway(
     let epPathwayId: string;
     try {
       const ins = await client.query(
-        `INSERT INTO episode_pathways (episode_id, care_pathway_id, ordinal)
-         VALUES ($1, $2, $3) RETURNING id`,
-        [episodeId, carePathwayId, ordinal]
+        `INSERT INTO episode_pathways (episode_id, care_pathway_id, ordinal, jaw)
+         VALUES ($1, $2, $3, $4) RETURNING id`,
+        [episodeId, carePathwayId, ordinal, jaw]
       );
       epPathwayId = ins.rows[0].id;
     } catch (e: unknown) {
       await client.query('ROLLBACK');
       if (typeof e === 'object' && e !== null && 'code' in e && (e as { code: string }).code === '23505') {
-        return NextResponse.json({ error: 'Ez a kezelési út már hozzá van rendelve ehhez az epizódhoz' }, { status: 409 });
+        const jawLabel = jaw === 'felso' ? 'felső állcsontra' : jaw === 'also' ? 'alsó állcsontra' : '';
+        return NextResponse.json({ error: `Ez a kezelési út már hozzá van rendelve ehhez az epizódhoz${jawLabel ? ` (${jawLabel})` : ''}` }, { status: 409 });
       }
       throw e;
     }
@@ -320,16 +327,7 @@ async function handleAddPathway(
       await invalidateIntentsForEpisode(episodeId, 'pathway_changed');
     } catch { /* non-blocking */ }
 
-    const epPathways = await pool.query(
-      `SELECT ep.id, ep.care_pathway_id as "carePathwayId", ep.ordinal,
-              cp.name as "pathwayName",
-              (SELECT COUNT(*)::int FROM episode_steps es WHERE es.source_episode_pathway_id = ep.id) as "stepCount"
-       FROM episode_pathways ep
-       JOIN care_pathways cp ON ep.care_pathway_id = cp.id
-       WHERE ep.episode_id = $1
-       ORDER BY ep.ordinal`,
-      [episodeId]
-    );
+    const epPathways = await pool.query(EPISODE_PATHWAYS_QUERY, [episodeId]);
 
     return NextResponse.json({ episodePathways: epPathways.rows, added: true }, { status: 201 });
   } catch (txError) {
@@ -343,20 +341,33 @@ async function handleAddPathway(
 async function handleRemovePathway(
   pool: Awaited<ReturnType<typeof getDbPool>>,
   episodeId: string,
-  carePathwayId: unknown
+  carePathwayId: unknown,
+  episodePathwayIdParam?: unknown
 ) {
-  if (!carePathwayId || typeof carePathwayId !== 'string') {
-    return NextResponse.json({ error: 'carePathwayId kötelező (string UUID)' }, { status: 400 });
-  }
+  let epPathwayId: string;
 
-  const epPathway = await pool.query(
-    `SELECT ep.id FROM episode_pathways ep WHERE ep.episode_id = $1 AND ep.care_pathway_id = $2`,
-    [episodeId, carePathwayId]
-  );
-  if (epPathway.rows.length === 0) {
-    return NextResponse.json({ error: 'Ez a pathway nincs hozzárendelve az epizódhoz' }, { status: 404 });
+  if (episodePathwayIdParam && typeof episodePathwayIdParam === 'string') {
+    const epPathway = await pool.query(
+      `SELECT ep.id FROM episode_pathways ep WHERE ep.id = $1 AND ep.episode_id = $2`,
+      [episodePathwayIdParam, episodeId]
+    );
+    if (epPathway.rows.length === 0) {
+      return NextResponse.json({ error: 'Ez a pathway nincs hozzárendelve az epizódhoz' }, { status: 404 });
+    }
+    epPathwayId = epPathway.rows[0].id;
+  } else {
+    if (!carePathwayId || typeof carePathwayId !== 'string') {
+      return NextResponse.json({ error: 'carePathwayId vagy episodePathwayId kötelező (string UUID)' }, { status: 400 });
+    }
+    const epPathway = await pool.query(
+      `SELECT ep.id FROM episode_pathways ep WHERE ep.episode_id = $1 AND ep.care_pathway_id = $2`,
+      [episodeId, carePathwayId]
+    );
+    if (epPathway.rows.length === 0) {
+      return NextResponse.json({ error: 'Ez a pathway nincs hozzárendelve az epizódhoz' }, { status: 404 });
+    }
+    epPathwayId = epPathway.rows[0].id;
   }
-  const epPathwayId = epPathway.rows[0].id;
 
   const activeSteps = await pool.query(
     `SELECT COUNT(*)::int as cnt FROM episode_steps
@@ -410,16 +421,7 @@ async function handleRemovePathway(
       await invalidateIntentsForEpisode(episodeId, 'pathway_changed');
     } catch { /* non-blocking */ }
 
-    const epPathways = await pool.query(
-      `SELECT ep.id, ep.care_pathway_id as "carePathwayId", ep.ordinal,
-              cp.name as "pathwayName",
-              (SELECT COUNT(*)::int FROM episode_steps es WHERE es.source_episode_pathway_id = ep.id) as "stepCount"
-       FROM episode_pathways ep
-       JOIN care_pathways cp ON ep.care_pathway_id = cp.id
-       WHERE ep.episode_id = $1
-       ORDER BY ep.ordinal`,
-      [episodeId]
-    );
+    const epPathways = await pool.query(EPISODE_PATHWAYS_QUERY, [episodeId]);
 
     return NextResponse.json({ episodePathways: epPathways.rows, removed: true });
   } catch (txError) {

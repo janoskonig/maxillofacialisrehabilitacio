@@ -15,6 +15,7 @@ import { EpisodeStepProjections } from '@/components/EpisodeStepProjections';
 import { PatientStageSelector } from '@/components/PatientStageSelector';
 import { PatientStageTimeline } from '@/components/PatientStageTimeline';
 import { PatientEpisodeForm } from '@/components/PatientEpisodeForm';
+import { ZsigmondyCrossStages } from '@/components/ZsigmondyCrossStages';
 import { useToast } from '@/contexts/ToastContext';
 
 export default function PatientStagesPage() {
@@ -200,6 +201,9 @@ export default function PatientStagesPage() {
             </div>
           )}
 
+          {/* Zsigmondy-kereszt: fogankénti kezelési igények */}
+          <ZsigmondyCrossStages patientId={patientId} meglevoFogak={patient.meglevoFogak} />
+
           {/* Új ellátási epizód indítása */}
           {(userRole === 'admin' || userRole === 'sebészorvos' || userRole === 'fogpótlástanász') && (
             <PatientEpisodeForm
@@ -239,6 +243,7 @@ export default function PatientStagesPage() {
                   id: ep.id,
                   carePathwayId: ep.carePathwayId,
                   pathwayName: ep.pathwayName,
+                  jaw: ep.jaw,
                 }))}
                 onStepChanged={refreshStagesAndEpisodes}
               />

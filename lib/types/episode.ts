@@ -38,6 +38,7 @@ export interface PatientEpisode {
     ordinal: number;
     pathwayName: string;
     stepCount: number;
+    jaw?: 'felso' | 'also' | null;
   }>;
 }
 
