@@ -26,6 +26,7 @@ import { ContextBanner } from './ContextBanner';
 import { getCurrentUser } from '@/lib/auth';
 import { savePatient, ApiError } from '@/lib/storage';
 import { getMissingRequiredFields, REQUIRED_FIELDS } from '@/lib/clinical-rules';
+import { tajHasChecksumError } from '@/lib/taj-validation';
 import { ClinicalChecklist } from './ClinicalChecklist';
 import { usePatientAutoSave, normalizeToothData, buildSavePayload, type ToothStatus } from '@/hooks/usePatientAutoSave';
 import { usePatientConflictResolution } from '@/hooks/usePatientConflictResolution';
@@ -1715,6 +1716,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
             handlePhoneChange={handlePhoneChange}
             sectionErrors={sectionErrors}
             userRole={userRole}
+            tajChecksumWarning={tajHasChecksumError(formValues.taj)}
           />
         )}
 

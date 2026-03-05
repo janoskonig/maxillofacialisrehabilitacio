@@ -3,7 +3,7 @@
 import { UseFormRegister, FieldErrors } from 'react-hook-form';
 import { Patient } from '@/lib/types';
 import { REQUIRED_FIELDS } from '@/lib/clinical-rules';
-import { User } from 'lucide-react';
+import { User, AlertTriangle } from 'lucide-react';
 
 interface AlapadatokSectionProps {
   register: UseFormRegister<Patient>;
@@ -13,6 +13,7 @@ interface AlapadatokSectionProps {
   handlePhoneChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   sectionErrors: Record<string, number>;
   userRole?: string;
+  tajChecksumWarning?: boolean;
 }
 
 export function AlapadatokSection({
@@ -23,6 +24,7 @@ export function AlapadatokSection({
   handlePhoneChange,
   sectionErrors,
   userRole,
+  tajChecksumWarning,
 }: AlapadatokSectionProps) {
   const isTechnikus = userRole === 'technikus';
 
@@ -61,12 +63,17 @@ export function AlapadatokSection({
           <input
             {...register('taj')}
             onChange={handleTAJChange}
-            className={`form-input ${errors.taj ? 'border-red-500' : ''}`}
+            className={`form-input ${errors.taj ? 'border-red-500' : tajChecksumWarning ? 'border-amber-400' : ''}`}
             placeholder="000-000-000"
             readOnly={isViewOnly}
           />
           {errors.taj ? (
             <p className="text-red-500 text-sm mt-1">{errors.taj.message}</p>
+          ) : tajChecksumWarning ? (
+            <p className="text-amber-600 text-xs mt-1 flex items-center gap-1">
+              <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+              Az ellenőrző számjegy nem megfelelő. Kérjük, ellenőrizze a TAJ számot.
+            </p>
           ) : (
             <p className="text-gray-500 text-xs mt-1">Formátum: XXX-XXX-XXX (9 számjegy)</p>
           )}

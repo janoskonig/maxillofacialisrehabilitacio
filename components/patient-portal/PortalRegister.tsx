@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { Mail, CreditCard, User, Loader2, Phone, Calendar, MapPin } from 'lucide-react';
+import { Mail, CreditCard, User, Loader2, Phone, Calendar, MapPin, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import { useToast } from '@/contexts/ToastContext';
+import { tajHasChecksumError } from '@/lib/taj-validation';
 
 export function PortalRegister() {
   const [email, setEmail] = useState('');
@@ -135,15 +136,22 @@ export function PortalRegister() {
             type="text"
             value={taj}
             onChange={(e) => setTaj(e.target.value)}
-            className="form-input mobile-touch-target"
+            className={`form-input mobile-touch-target ${tajHasChecksumError(taj) ? 'border-amber-400' : ''}`}
             placeholder="123-456-789"
             required
             disabled={loading}
             maxLength={11}
           />
-          <p className="text-xs text-gray-500 mt-1">
-            Formátum: XXX-XXX-XXX (9 számjegy)
-          </p>
+          {tajHasChecksumError(taj) ? (
+            <p className="text-amber-600 text-xs mt-1 flex items-center gap-1">
+              <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+              Az ellenőrző számjegy nem megfelelő. Kérjük, ellenőrizze a TAJ számot.
+            </p>
+          ) : (
+            <p className="text-xs text-gray-500 mt-1">
+              Formátum: XXX-XXX-XXX (9 számjegy)
+            </p>
+          )}
         </div>
 
         <div>
