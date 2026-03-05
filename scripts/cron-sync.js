@@ -149,17 +149,20 @@ async function callEndpoint(path, label) {
     if (!API_KEY) {
       console.warn(`[${new Date().toISOString()}] WARNING: GOOGLE_CALENDAR_SYNC_API_KEY is not set. The sync may fail if the endpoint requires authentication.`);
     }
-    
-    await syncCalendar();
 
-    // Weekly OHIP-14 reminders: run on Monday between 08:00-08:01 Budapest time
+    // Capture Budapest time at startup (before any async work eats time)
     const nowBudapest = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Budapest' }));
     const isMonday = nowBudapest.getDay() === 1;
     const hour = nowBudapest.getHours();
-    const minute = nowBudapest.getMinutes();
-    if (isMonday && hour === 8 && minute === 0) {
+
+    // Weekly OHIP-14 reminders — run on Mondays between 08:00-08:59 Budapest time.
+    // The ohip_reminder_log table guarantees at most one email per patient per 7 days,
+    // so a wider window is safe and avoids missing the slot due to cold-start / sync delays.
+    if (isMonday && hour === 8) {
       await callEndpoint('/api/ohip14/reminders', 'OHIP-14 reminders');
     }
+
+    await syncCalendar();
 
     console.log(`[${new Date().toISOString()}] Cron job completed successfully`);
     process.exit(0);

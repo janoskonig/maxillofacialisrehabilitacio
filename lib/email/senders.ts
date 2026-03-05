@@ -1,6 +1,13 @@
 import { sendEmail } from './config';
 import { formatDateForEmail, formatDateForEmailShort, getBaseUrlForEmail } from './templates';
 
+function patientGreeting(name: string | null, nem?: string | null, fallback = 'Betegünk'): string {
+  if (name) return `Kedves ${name.trim()}`;
+  if (nem === 'no') return 'Tisztelt Asszonyom';
+  if (nem === 'ferfi') return 'Tisztelt Uram';
+  return `Kedves ${fallback}`;
+}
+
 /**
  * Send user approval email
  */
@@ -173,20 +180,7 @@ export async function sendAppointmentBookingNotificationToPatient(
     formattedAddress = formattedAddress.replace(/\.$/, '');
   }
   
-  let greeting = 'Tisztelt';
-  if (patientName) {
-    const nameParts = patientName.trim().split(/\s+/);
-    if (nameParts.length >= 2) {
-      const vezeteknev = nameParts[0];
-      const keresztnev = nameParts.slice(1).join(' ');
-      const title = patientNem === 'no' ? 'Hölgy' : patientNem === 'ferfi' ? 'Úr' : '';
-      greeting = `Tisztelt ${vezeteknev} ${keresztnev} ${title}`.trim();
-    } else {
-      greeting = `Tisztelt ${patientName}`;
-    }
-  } else {
-    greeting = 'Tisztelt Beteg';
-  }
+  const greeting = patientGreeting(patientName, patientNem);
   
   let contactText = 'rendszerünkön keresztül';
   if (adminEmail && dentistEmail) {
@@ -618,21 +612,7 @@ export async function sendConditionalAppointmentRequestToPatient(
   showAlternatives?: boolean
 ): Promise<void> {
   const formattedDate = formatDateForEmail(appointmentTime);
-  
-  let greeting = 'Tisztelt';
-  if (patientName) {
-    const nameParts = patientName.trim().split(/\s+/);
-    if (nameParts.length >= 2) {
-      const vezeteknev = nameParts[0];
-      const keresztnev = nameParts.slice(1).join(' ');
-      const title = patientNem === 'no' ? 'Hölgy' : patientNem === 'ferfi' ? 'Úr' : '';
-      greeting = `Tisztelt ${vezeteknev} ${keresztnev} ${title}`.trim();
-    } else {
-      greeting = `Tisztelt ${patientName}`;
-    }
-  } else {
-    greeting = 'Tisztelt Beteg';
-  }
+  const greeting = patientGreeting(patientName, patientNem);
   
   const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
   const displayCim = cim || DEFAULT_CIM;
@@ -828,20 +808,8 @@ export async function sendNewMessageNotification(
   messagePreview: string,
   baseUrl: string
 ): Promise<void> {
-  let greeting = 'Tisztelt';
-  if (recipientName) {
-    const nameParts = recipientName.trim().split(/\s+/);
-    if (nameParts.length >= 2) {
-      const vezeteknev = nameParts[0];
-      const keresztnev = nameParts.slice(1).join(' ');
-      const title = recipientNem === 'no' ? 'Hölgy' : recipientNem === 'ferfi' ? 'Úr' : '';
-      greeting = `Tisztelt ${vezeteknev} ${keresztnev} ${title}`.trim();
-    } else {
-      greeting = `Tisztelt ${recipientName}`;
-    }
-  } else {
-    greeting = senderType === 'doctor' ? 'Tisztelt Beteg' : 'Tisztelt Orvos';
-  }
+  const fallback = senderType === 'doctor' ? 'Betegünk' : 'Doktor Úr/Hölgy';
+  const greeting = patientGreeting(recipientName, recipientNem, fallback);
 
   const senderLabel = senderType === 'doctor' ? 'orvosától' : 'betegétől';
   const portalLink = senderType === 'doctor' 
@@ -953,20 +921,7 @@ export async function sendAppointmentReminderEmail(
   const displayCim = cim || DEFAULT_CIM;
   const formattedDate = formatDateForEmail(appointmentTime);
   
-  let greeting = 'Tisztelt';
-  if (patientName) {
-    const nameParts = patientName.trim().split(/\s+/);
-    if (nameParts.length >= 2) {
-      const vezeteknev = nameParts[0];
-      const keresztnev = nameParts.slice(1).join(' ');
-      const title = patientNem === 'no' ? 'Hölgy' : patientNem === 'ferfi' ? 'Úr' : '';
-      greeting = `Tisztelt ${vezeteknev} ${keresztnev} ${title}`.trim();
-    } else {
-      greeting = `Tisztelt ${patientName}`;
-    }
-  } else {
-    greeting = 'Tisztelt Beteg';
-  }
+  const greeting = patientGreeting(patientName, patientNem);
   
   let formattedAddress = displayCim.replace(/,/g, '');
   if (teremszam) {
@@ -1009,6 +964,7 @@ export async function sendOhipReminderEmail(
   timepoint: string,
   windowClosesAt: Date | null,
   portalUrl: string,
+  adminEmails?: string[],
 ): Promise<void> {
   const timepointLabels: Record<string, string> = {
     T0: 'Protetikai fázis előtt',
@@ -1018,26 +974,17 @@ export async function sendOhipReminderEmail(
   };
   const label = timepointLabels[timepoint] || timepoint;
 
-  let greeting = 'Tisztelt';
-  if (patientName) {
-    const nameParts = patientName.trim().split(/\s+/);
-    if (nameParts.length >= 2) {
-      const vezeteknev = nameParts[0];
-      const keresztnev = nameParts.slice(1).join(' ');
-      const title = patientNem === 'no' ? 'Hölgy' : patientNem === 'ferfi' ? 'Úr' : '';
-      greeting = `Tisztelt ${vezeteknev} ${keresztnev} ${title}`.trim();
-    } else {
-      greeting = `Tisztelt ${patientName}`;
-    }
-  } else {
-    greeting = 'Tisztelt Beteg';
-  }
+  const greeting = patientGreeting(patientName, patientNem);
 
   const deadlineHtml = windowClosesAt
     ? `<p style="color: #b45309; font-size: 14px; margin-top: 15px;">
         <strong>Határidő:</strong> ${windowClosesAt.toLocaleDateString('hu-HU', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Europe/Budapest' })}
       </p>`
     : '';
+
+  const baseUrl = portalUrl.replace(/\/patient-portal.*$/, '');
+  const privacyUrl = `${baseUrl}/privacy-hu`;
+  const termsUrl = `${baseUrl}/terms-hu`;
 
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -1056,7 +1003,18 @@ export async function sendOhipReminderEmail(
         Ha a gomb nem működik, másolja be az alábbi linket a böngészőjébe:<br>
         <a href="${portalUrl}" style="color: #3b82f6;">${portalUrl}</a>
       </p>
-      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
+      <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
+        <p style="color: #6b7280; font-size: 12px; line-height: 1.6; margin: 0;">
+          <strong>Adatkezelési tájékoztató:</strong> Az OHIP-14 kérdőív válaszait a Semmelweis Egyetem Maxillofaciális Rehabilitáció 
+          Rendszere az Ön kezelésének tudományos értékelése és a protetikai ellátás minőségének javítása céljából kezeli. 
+          Az adatkezelés jogalapja az Ön önkéntes hozzájárulása (GDPR 6. cikk (1) a) és 9. cikk (2) a) pont). 
+          A kérdőív kitöltése nem kötelező, és bármikor kérheti adatai törlését a páciens portálon keresztül.
+        </p>
+        <p style="color: #6b7280; font-size: 12px; margin-top: 8px;">
+          <a href="${privacyUrl}" style="color: #3b82f6;">Adatvédelmi Irányelvek</a> &middot; 
+          <a href="${termsUrl}" style="color: #3b82f6;">Felhasználási Feltételek</a>
+        </p>
+      </div>
     </div>
   `;
 
@@ -1064,5 +1022,6 @@ export async function sendOhipReminderEmail(
     to: patientEmail,
     subject: `OHIP-14 kérdőív kitöltése (${timepoint}) - Maxillofaciális Rehabilitáció`,
     html,
+    bcc: adminEmails && adminEmails.length > 0 ? adminEmails : undefined,
   });
 }

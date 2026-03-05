@@ -20,7 +20,8 @@ interface ReminderResult {
 export async function sendOhipReminders(): Promise<ReminderResult> {
   const pool = getDbPool();
   const result: ReminderResult = { sent: 0, skipped: 0, errors: 0 };
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://rehabilitacios-protetika.hu';
+  const envUrl = process.env.NEXT_PUBLIC_BASE_URL || '';
+  const baseUrl = envUrl && !envUrl.includes('localhost') ? envUrl : 'https://rehabilitacios-protetika.hu';
 
   // 1) Get all patients with open episodes + email
   const patientsRes = await pool.query(`
@@ -37,6 +38,12 @@ export async function sendOhipReminders(): Promise<ReminderResult> {
   `);
 
   if (patientsRes.rows.length === 0) return result;
+
+  // Fetch admin emails so they receive a BCC copy of every reminder
+  const adminRes = await pool.query(
+    "SELECT email FROM users WHERE role = 'admin' AND active = true"
+  );
+  const adminEmails: string[] = adminRes.rows.map((r: any) => r.email);
 
   // 2) For each patient, determine pending timepoints
   for (const row of patientsRes.rows) {
@@ -100,7 +107,7 @@ export async function sendOhipReminders(): Promise<ReminderResult> {
         continue;
       }
 
-      // Send email
+      // Send email (admins receive a BCC copy)
       const portalUrl = `${baseUrl}/patient-portal/ohip14`;
       await sendOhipReminderEmail(
         email,
@@ -109,6 +116,7 @@ export async function sendOhipReminders(): Promise<ReminderResult> {
         pendingTp,
         pendingAvail.closesAt ?? null,
         portalUrl,
+        adminEmails,
       );
 
       // Log
