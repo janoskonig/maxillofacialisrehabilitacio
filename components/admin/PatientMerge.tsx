@@ -84,6 +84,11 @@ export function PatientMerge() {
     setSecondaryPatients(prev => prev.filter(p => p.id !== id));
   };
 
+  const formatDate = (d: string) => {
+    if (!d) return '—';
+    try { return new Date(d).toLocaleDateString('hu-HU'); } catch { return d; }
+  };
+
   const oldestIsNotPrimary = useMemo(() => {
     if (!primaryPatient || secondaryPatients.length === 0) return false;
     const allPatients = [primaryPatient, ...secondaryPatients];
@@ -177,10 +182,7 @@ export function PatientMerge() {
     setMergedCount(0);
   };
 
-  const formatDate = (d: string) => {
-    if (!d) return '—';
-    try { return new Date(d).toLocaleDateString('hu-HU'); } catch { return d; }
-  };
+  // formatDate moved above useMemo calls that reference it
 
   const PatientCard = ({ patient, label, color, onRemove, compact }: {
     patient: PatientSummary;
