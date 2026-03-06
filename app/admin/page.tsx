@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser, type AuthUser } from '@/lib/auth';
-import { Settings, ListOrdered } from 'lucide-react';
+import { Settings, ListOrdered, Users } from 'lucide-react';
 import { CarePathwaysEditor } from '@/components/admin/CarePathwaysEditor';
 import { StageCatalogEditor } from '@/components/admin/StageCatalogEditor';
 import { StepCatalogEditor } from '@/components/admin/StepCatalogEditor';
@@ -12,13 +12,14 @@ import { TreatmentTypesEditor } from '@/components/admin/TreatmentTypesEditor';
 import { ToothTreatmentCatalogEditor } from '@/components/admin/ToothTreatmentCatalogEditor';
 import { Logo } from '@/components/Logo';
 import { UserManagementTab } from './_components/UserManagementTab';
+import { PatientMerge } from '@/components/admin/PatientMerge';
 
 export default function AdminPage() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [authorized, setAuthorized] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [adminTab, setAdminTab] = useState<'felhasznalok' | 'folyamatok'>('felhasznalok');
+  const [adminTab, setAdminTab] = useState<'felhasznalok' | 'folyamatok' | 'merge'>('felhasznalok');
   const [editPathwayId, setEditPathwayId] = useState<string | null>(null);
   const carePathwaysRef = useRef<HTMLDivElement>(null);
 
@@ -76,6 +77,12 @@ export default function AdminPage() {
                   <Settings className="w-4 h-4" />
                   Folyamatok
                 </button>
+                {currentUser?.role === 'admin' && (
+                  <button onClick={() => setAdminTab('merge')} className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1 ${effectiveTab === 'merge' ? 'bg-medical-primary text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>
+                    <Users className="w-4 h-4" />
+                    Összevonás
+                  </button>
+                )}
               </div>
               <Link href="/" className="btn-secondary text-sm">Vissza</Link>
             </div>
@@ -84,7 +91,15 @@ export default function AdminPage() {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {effectiveTab === 'folyamatok' ? (
+        {effectiveTab === 'merge' ? (
+          <section className="card" aria-labelledby="section-merge">
+            <div className="mb-4">
+              <h2 id="section-merge" className="text-lg font-semibold text-gray-900">Páciens profilok összevonása</h2>
+              <p className="text-sm text-gray-500 mt-1">Duplikált páciens profilok egyesítése — az összes adat megmarad.</p>
+            </div>
+            <PatientMerge />
+          </section>
+        ) : effectiveTab === 'folyamatok' ? (
           <div className="space-y-8">
             <div className="card border-l-4 border-blue-500 bg-blue-50/40">
               <div className="flex items-start gap-3">
