@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Search, ArrowRight, AlertTriangle, CheckCircle, X, Users, Plus, Trash2, Repeat } from 'lucide-react';
+import { Search, ArrowRight, AlertTriangle, CheckCircle, X, Users, Plus, Trash2, Repeat, Sparkles } from 'lucide-react';
 
 interface PatientSummary {
   id: string;
@@ -102,6 +102,33 @@ export function PatientMerge() {
     setPrimaryPatient(oldest);
     setSecondaryPatients(allPatients.filter(p => p.id !== oldest.id));
   };
+
+  const mergedPreview = useMemo(() => {
+    if (!primaryPatient) return null;
+    const fields: Array<{ label: string; key: keyof PatientSummary; format?: (v: string) => string }> = [
+      { label: 'TAJ', key: 'taj' },
+      { label: 'Születési dátum', key: 'szuletesiDatum', format: formatDate },
+      { label: 'Telefon', key: 'telefonszam' },
+      { label: 'Email', key: 'email' },
+    ];
+    const result: Array<{ label: string; value: string; source: 'primary' | 'secondary'; sourceName?: string }> = [];
+    for (const f of fields) {
+      const pVal = primaryPatient[f.key] as string;
+      if (pVal) {
+        result.push({ label: f.label, value: f.format ? f.format(pVal) : pVal, source: 'primary' });
+      } else {
+        const donor = secondaryPatients.find(s => !!(s[f.key] as string));
+        if (donor) {
+          const val = donor[f.key] as string;
+          result.push({ label: f.label, value: f.format ? f.format(val) : val, source: 'secondary', sourceName: donor.nev });
+        } else {
+          result.push({ label: f.label, value: '—', source: 'primary' });
+        }
+      }
+    }
+    return result;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [primaryPatient, secondaryPatients]);
 
   const handleMerge = async () => {
     if (!primaryPatient || secondaryPatients.length === 0) return;
@@ -282,15 +309,38 @@ export function PatientMerge() {
           </div>
           <div>
             <h4 className="text-sm font-semibold text-green-700 uppercase tracking-wide mb-3">
-              Megmaradó (elsődleges)
+              Eredmény összevonás után
             </h4>
             {primaryPatient && (
-              <PatientCard
-                patient={primaryPatient}
-                label="Megmaradó"
-                color="green"
-                onRemove={() => { setPrimaryPatient(null); setStep('search'); }}
-              />
+              <div className="border-2 border-green-400 bg-green-50 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wide text-green-700 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Egyesített profil
+                  </span>
+                  <button onClick={() => { setPrimaryPatient(null); setStep('search'); }} className="text-gray-400 hover:text-gray-600 transition-colors" title="Eltávolítás">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <p className="font-semibold text-gray-900 text-lg">{primaryPatient.nev}</p>
+                <div className="mt-2 space-y-1.5 text-sm">
+                  {mergedPreview?.map((f) => (
+                    <div key={f.label} className="flex items-start gap-1">
+                      <span className="text-gray-600">{f.label}:</span>
+                      {f.source === 'secondary' && f.value !== '—' ? (
+                        <span className="font-medium text-green-700 bg-green-100 px-1.5 py-0.5 rounded text-xs">
+                          {f.value} ← {f.sourceName}
+                        </span>
+                      ) : (
+                        <span className={`font-medium ${f.value === '—' ? 'text-gray-400' : 'text-gray-800'}`}>{f.value}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-3 text-xs text-green-700 bg-green-100 rounded px-2 py-1.5">
+                  + Összes dokumentum, időpont, epizód, üzenet és egyéb adat átkerül a törlendő profilokból.
+                </p>
+              </div>
             )}
           </div>
         </div>
