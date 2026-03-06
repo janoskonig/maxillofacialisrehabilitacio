@@ -211,7 +211,7 @@ export const POST = roleHandler(['admin'], async (req, { auth, correlationId }) 
     );
   }
 
-  const uniqueIds = [...new Set(secondaryIds)];
+  const uniqueIds = Array.from(new Set(secondaryIds));
 
   const pool = getDbPool();
 
