@@ -26,6 +26,7 @@ export const GET = authedHandler(async (req, { auth }) => {
       JOIN available_time_slots ats ON a.time_slot_id = ats.id
       WHERE ats.start_time > $1::timestamp with time zone
         AND (a.appointment_type IS NULL OR a.appointment_type = 'elso_konzultacio')
+        AND a.appointment_status IS NULL
       ORDER BY p.id, ats.start_time ASC, a.created_at ASC
     `, [nowISO]);
 
@@ -35,7 +36,7 @@ export const GET = authedHandler(async (req, { auth }) => {
         patientId: row.patient_id,
         patientName: row.patient_name,
         patientTaj: row.patient_taj,
-        appointmentCreatedAt: row.idopont_letrehozas,
+        currentDate: row.idopont_letrehozas,
         firstConsultationDate: row.elso_konzultacio_idopont,
         waitingTimeDays: parseFloat(row.varakozasi_ido_napokban) || 0,
       })),
@@ -54,6 +55,7 @@ export const GET = authedHandler(async (req, { auth }) => {
       JOIN available_time_slots ats ON a.time_slot_id = ats.id
       WHERE a.appointment_type = 'munkafazis'
         AND ats.start_time > $1::timestamp with time zone
+        AND a.appointment_status IS NULL
       ORDER BY p.id, ats.start_time ASC, a.created_at ASC
     `, [nowISO]);
 
@@ -63,7 +65,7 @@ export const GET = authedHandler(async (req, { auth }) => {
         patientId: row.patient_id,
         patientName: row.patient_name,
         patientTaj: row.patient_taj,
-        appointmentCreatedAt: row.idopont_letrehozas,
+        lastAppointmentDate: row.idopont_letrehozas,
         nextWorkPhaseDate: row.kovetkezo_munkafazis_idopont,
         waitingTimeDays: parseFloat(row.varakozasi_ido_napokban) || 0,
       })),

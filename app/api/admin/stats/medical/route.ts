@@ -160,6 +160,7 @@ export const GET = roleHandler(['admin'], async (req, { auth }) => {
         JOIN available_time_slots ats ON a.time_slot_id = ats.id
         WHERE ats.start_time > a.created_at
           AND (a.appointment_type IS NULL OR a.appointment_type = 'elso_konzultacio')
+          AND a.appointment_status IS NULL
         ORDER BY p.id, ats.start_time ASC, a.created_at ASC
       )
       SELECT 

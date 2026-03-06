@@ -319,11 +319,11 @@ export default function WaitingTimesPage() {
                     items={
                       activeTab === 'elso_konzultacio' 
                         ? [
-                            { key: 'Jelenlegi dátum', value: formatDateOnly(item.currentDate) },
+                            { key: 'Foglalás dátuma', value: formatDateOnly(item.currentDate) },
                             { key: 'Első konzultáció', value: item.firstConsultationDate ? formatDate(item.firstConsultationDate) : '-' },
                           ]
                         : [
-                            { key: 'Legutolsó időpont', value: item.lastAppointmentDate ? formatDate(item.lastAppointmentDate) : '-' },
+                            { key: 'Foglalás dátuma', value: item.lastAppointmentDate ? formatDate(item.lastAppointmentDate) : '-' },
                             { key: 'Következő munkafázis', value: item.nextWorkPhaseDate ? formatDate(item.nextWorkPhaseDate) : '-' },
                           ]
                     }
@@ -346,7 +346,7 @@ export default function WaitingTimesPage() {
                 {activeTab === 'elso_konzultacio' ? (
                   <>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Jelenlegi dátum
+                      Foglalás dátuma
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Első konzultáció időpontja
@@ -358,7 +358,7 @@ export default function WaitingTimesPage() {
                 ) : (
                   <>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Legutolsó időpont
+                      Foglalás dátuma
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Következő munkafázis időpontja

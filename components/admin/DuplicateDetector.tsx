@@ -70,7 +70,9 @@ export function DuplicateDetector() {
 
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || 'Hiba az összevonás során');
+        const meta = data._errorMeta;
+        const detail = meta ? ` [${meta.code || ''} ${meta.constraint || ''} ${meta.table || ''}]`.trim() : '';
+        setError((data.error || 'Hiba az összevonás során') + detail);
         return;
       }
 

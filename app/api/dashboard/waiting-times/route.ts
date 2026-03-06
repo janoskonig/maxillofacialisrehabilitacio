@@ -22,6 +22,7 @@ export const GET = authedHandler(async (req, { auth }) => {
       JOIN available_time_slots ats ON a.time_slot_id = ats.id
       WHERE ats.start_time > $1::timestamp with time zone
         AND (a.appointment_type IS NULL OR a.appointment_type = 'elso_konzultacio')
+        AND a.appointment_status IS NULL
       ORDER BY p.id, ats.start_time ASC, a.created_at ASC
     )
     SELECT 
@@ -43,6 +44,7 @@ export const GET = authedHandler(async (req, { auth }) => {
       JOIN available_time_slots ats ON a.time_slot_id = ats.id
       WHERE a.appointment_type = 'munkafazis'
         AND ats.start_time > $1::timestamp with time zone
+        AND a.appointment_status IS NULL
       ORDER BY p.id, ats.start_time ASC, a.created_at ASC
     )
     SELECT 
