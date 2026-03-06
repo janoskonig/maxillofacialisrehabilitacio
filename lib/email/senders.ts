@@ -1,5 +1,6 @@
 import { sendEmail } from './config';
 import { formatDateForEmail, formatDateForEmailShort, getBaseUrlForEmail } from './templates';
+import { queueAdminNotification } from './admin-notification-queue';
 
 function patientGreeting(name: string | null, nem?: string | null, fallback = 'Betegünk'): string {
   if (name) return `Kedves ${name.trim()}`;
@@ -72,7 +73,7 @@ export async function sendPasswordResetEmail(
 }
 
 /**
- * Send patient creation notification to admins
+ * Queue patient creation notification for admin daily summary
  */
 export async function sendPatientCreationNotification(
   adminEmails: string[],
@@ -81,28 +82,14 @@ export async function sendPatientCreationNotification(
   surgeonName: string,
   creationDate: string
 ): Promise<void> {
-  const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #2563eb;">Új beteg regisztrálva</h2>
-      <p>Kedves adminisztrátor,</p>
-      <p>Egy új beteg lett regisztrálva a rendszerben:</p>
-      <ul>
-        <li><strong>Beteg neve:</strong> ${patientName || 'Név nélküli'}</li>
-        <li><strong>TAJ szám:</strong> ${taj || 'Nincs megadva'}</li>
-        <li><strong>Beutaló orvos:</strong> ${surgeonName}</li>
-        <li><strong>Létrehozás dátuma:</strong> ${formatDateForEmail(new Date(creationDate))}</li>
-      </ul>
-      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
-    </div>
-  `;
+  if (adminEmails.length === 0) return;
 
-  if (adminEmails.length > 0) {
-    await sendEmail({
-      to: adminEmails,
-      subject: 'Új beteg regisztrálva - Maxillofaciális Rehabilitáció',
-      html,
-    });
-  }
+  const name = patientName || 'Név nélküli';
+  await queueAdminNotification(
+    'patient_created',
+    `${name} (TAJ: ${taj || '–'}) – beutaló: ${surgeonName}`,
+    { patientName: name, taj, surgeonName, creationDate }
+  );
 }
 
 /**
@@ -232,7 +219,7 @@ export async function sendAppointmentBookingNotificationToPatient(
 }
 
 /**
- * Send appointment booking notification to admins
+ * Queue appointment booking notification for admin daily summary
  */
 export async function sendAppointmentBookingNotificationToAdmins(
   adminEmails: string[],
@@ -241,48 +228,19 @@ export async function sendAppointmentBookingNotificationToAdmins(
   appointmentTime: Date,
   surgeonName: string,
   dentistName: string,
-  icsFile: Buffer,
+  _icsFile: Buffer,
   cim?: string | null,
   teremszam?: string | null
 ): Promise<void> {
-  if (adminEmails.length === 0) {
-    return;
-  }
+  if (adminEmails.length === 0) return;
 
-  const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
-  const displayCim = cim || DEFAULT_CIM;
-
-  const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #2563eb;">Új időpont foglalás</h2>
-      <p>Kedves adminisztrátor,</p>
-      <p>Egy új időpont lett lefoglalva:</p>
-      <ul>
-        <li><strong>Beteg neve:</strong> ${patientName || 'Név nélküli'}</li>
-        <li><strong>TAJ szám:</strong> ${patientTaj || 'Nincs megadva'}</li>
-        <li><strong>Időpont:</strong> ${formatDateForEmail(appointmentTime)}</li>
-        <li><strong>Cím:</strong> ${displayCim}</li>
-        ${teremszam ? `<li><strong>Teremszám:</strong> ${teremszam}</li>` : ''}
-        <li><strong>Fogpótlástanász:</strong> ${dentistName}</li>
-        <li><strong>Beutaló orvos:</strong> ${surgeonName}</li>
-      </ul>
-      <p>Az időpont részleteit a mellékelt naptár fájlban találja, amelyet importálhat naptárkezelő alkalmazásába.</p>
-      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
-    </div>
-  `;
-
-  await sendEmail({
-    to: adminEmails,
-    subject: 'Új időpont foglalás - Maxillofaciális Rehabilitáció',
-    html,
-    attachments: [
-      {
-        filename: 'appointment.ics',
-        content: icsFile,
-        contentType: 'text/calendar',
-      },
-    ],
-  });
+  const name = patientName || 'Név nélküli';
+  const time = formatDateForEmailShort(appointmentTime);
+  await queueAdminNotification(
+    'appointment_booked',
+    `${name} – ${time}, fogpótlástanász: ${dentistName}`,
+    { patientName: name, patientTaj, appointmentTime: appointmentTime.toISOString(), surgeonName, dentistName, cim, teremszam }
+  );
 }
 
 /**
@@ -435,7 +393,9 @@ export async function sendAppointmentModificationNotificationToPatient(
 }
 
 /**
- * Send appointment time slot freed notification (when patient is deleted)
+ * Send appointment time slot freed notification (when patient is deleted).
+ * For admin recipients (string[]) the notification is queued for daily summary.
+ * For individual dentists (string) the email is sent immediately.
  */
 export async function sendAppointmentTimeSlotFreedNotification(
   recipientEmail: string | string[],
@@ -446,10 +406,22 @@ export async function sendAppointmentTimeSlotFreedNotification(
   dentistEmail?: string | null
 ): Promise<void> {
   const isAdmin = Array.isArray(recipientEmail);
+
+  if (isAdmin) {
+    const name = patientName || 'Név nélküli';
+    const time = formatDateForEmailShort(appointmentTime);
+    await queueAdminNotification(
+      'time_slot_freed',
+      `${name} – ${time}, törölte: ${deletedBy}`,
+      { patientName: name, patientTaj, appointmentTime: appointmentTime.toISOString(), deletedBy, dentistEmail }
+    );
+    return;
+  }
+
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <h2 style="color: #059669;">Időpont felszabadult</h2>
-      <p>Kedves ${isAdmin ? 'adminisztrátor' : 'fogpótlástanász'},</p>
+      <p>Kedves fogpótlástanász,</p>
       <p>Egy időpont felszabadult, mert a beteg törölve lett a rendszerből:</p>
       <ul>
         <li><strong>Beteg neve:</strong> ${patientName || 'Név nélküli'}</li>
@@ -471,7 +443,7 @@ export async function sendAppointmentTimeSlotFreedNotification(
 }
 
 /**
- * Send registration notification to admins
+ * Queue staff registration notification for admin daily summary
  */
 export async function sendRegistrationNotificationToAdmins(
   adminEmails: string[],
@@ -482,9 +454,7 @@ export async function sendRegistrationNotificationToAdmins(
   accessReason: string,
   registrationDate: Date
 ): Promise<void> {
-  if (adminEmails.length === 0) {
-    return;
-  }
+  if (adminEmails.length === 0) return;
 
   const roleMap: Record<string, string> = {
     'sebészorvos': 'Sebész',
@@ -494,33 +464,15 @@ export async function sendRegistrationNotificationToAdmins(
   };
   const roleDisplayName = roleMap[role] || role;
 
-  const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #2563eb;">Új regisztráció</h2>
-      <p>Kedves adminisztrátor,</p>
-      <p>Egy új felhasználó regisztrált a rendszerben és jóváhagyásra vár:</p>
-      <ul>
-        <li><strong>Email cím:</strong> ${userEmail}</li>
-        <li><strong>Név:</strong> ${userName}</li>
-        <li><strong>Szerepkör:</strong> ${roleDisplayName}</li>
-        <li><strong>Intézmény:</strong> ${institution}</li>
-        <li><strong>Hozzáférés indoklása:</strong> ${accessReason}</li>
-        <li><strong>Regisztráció dátuma:</strong> ${formatDateForEmail(registrationDate)}</li>
-      </ul>
-      <p>Kérjük, jelentkezzen be az adminisztrációs felületre, hogy jóváhagyja vagy elutasítsa a regisztrációt.</p>
-      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
-    </div>
-  `;
-
-  await sendEmail({
-    to: adminEmails,
-    subject: 'Új regisztráció - Maxillofaciális Rehabilitáció',
-    html,
-  });
+  await queueAdminNotification(
+    'staff_registered',
+    `${userName} (${userEmail}) – ${roleDisplayName}, ${institution}`,
+    { userEmail, userName, role, roleDisplayName, institution, accessReason, registrationDate: registrationDate.toISOString() }
+  );
 }
 
 /**
- * Send patient registration notification to admins
+ * Queue patient portal registration notification for admin daily summary
  */
 export async function sendPatientRegistrationNotificationToAdmins(
   adminEmails: string[],
@@ -529,35 +481,18 @@ export async function sendPatientRegistrationNotificationToAdmins(
   patientTaj: string | null,
   registrationDate: Date
 ): Promise<void> {
-  if (adminEmails.length === 0) {
-    return;
-  }
+  if (adminEmails.length === 0) return;
 
-  const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #2563eb;">Új beteg regisztráció a páciens portálon</h2>
-      <p>Kedves adminisztrátor,</p>
-      <p>Egy új beteg regisztrált a páciens portálon:</p>
-      <ul>
-        <li><strong>Beteg neve:</strong> ${patientName || 'Név nélküli'}</li>
-        <li><strong>Email cím:</strong> ${patientEmail}</li>
-        <li><strong>TAJ szám:</strong> ${patientTaj || 'Nincs megadva'}</li>
-        <li><strong>Regisztráció dátuma:</strong> ${formatDateForEmail(registrationDate)}</li>
-      </ul>
-      <p>A beteg email címének megerősítésére vár, majd be tud jelentkezni a portálra.</p>
-      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
-    </div>
-  `;
-
-  await sendEmail({
-    to: adminEmails,
-    subject: 'Új beteg regisztráció a páciens portálon - Maxillofaciális Rehabilitáció',
-    html,
-  });
+  const name = patientName || 'Név nélküli';
+  await queueAdminNotification(
+    'patient_portal_registered',
+    `${name} (${patientEmail}, TAJ: ${patientTaj || '–'})`,
+    { patientEmail, patientName: name, patientTaj, registrationDate: registrationDate.toISOString() }
+  );
 }
 
 /**
- * Send patient login notification to admins
+ * Queue patient login notification for admin daily summary
  */
 export async function sendPatientLoginNotificationToAdmins(
   adminEmails: string[],
@@ -567,31 +502,14 @@ export async function sendPatientLoginNotificationToAdmins(
   loginTime: Date,
   ipAddress: string | null
 ): Promise<void> {
-  if (adminEmails.length === 0) {
-    return;
-  }
+  if (adminEmails.length === 0) return;
 
-  const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #2563eb;">Beteg bejelentkezés a páciens portálra</h2>
-      <p>Kedves adminisztrátor,</p>
-      <p>Egy beteg bejelentkezett a páciens portálra:</p>
-      <ul>
-        <li><strong>Beteg neve:</strong> ${patientName || 'Név nélküli'}</li>
-        <li><strong>Email cím:</strong> ${patientEmail}</li>
-        <li><strong>TAJ szám:</strong> ${patientTaj || 'Nincs megadva'}</li>
-        <li><strong>Bejelentkezés ideje:</strong> ${formatDateForEmail(loginTime)}</li>
-        ${ipAddress ? `<li><strong>IP cím:</strong> ${ipAddress}</li>` : ''}
-      </ul>
-      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
-    </div>
-  `;
-
-  await sendEmail({
-    to: adminEmails,
-    subject: 'Beteg bejelentkezés a páciens portálra - Maxillofaciális Rehabilitáció',
-    html,
-  });
+  const name = patientName || 'Név nélküli';
+  await queueAdminNotification(
+    'patient_login',
+    `${name} (${patientEmail})`,
+    { patientEmail, patientName: name, patientTaj, loginTime: loginTime.toISOString(), ipAddress }
+  );
 }
 
 /**
@@ -683,7 +601,7 @@ export async function sendConditionalAppointmentRequestToPatient(
 }
 
 /**
- * Send notification to admin when conditional appointment is created
+ * Queue conditional appointment notification for admin daily summary
  */
 export async function sendConditionalAppointmentNotificationToAdmin(
   adminEmails: string[],
@@ -697,66 +615,19 @@ export async function sendConditionalAppointmentNotificationToAdmin(
   alternativeSlots: Array<{ id: string; startTime: Date; cim: string | null; teremszam: string | null }>,
   createdBy: string
 ): Promise<void> {
-  if (adminEmails.length === 0) {
-    return;
-  }
+  if (adminEmails.length === 0) return;
 
-  const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
-  const displayCim = cim || DEFAULT_CIM;
-  const displayTeremszam = teremszam || null;
-  
-  let formattedAddress = displayCim.replace(/,/g, '');
-  if (displayTeremszam) {
-    formattedAddress = `${formattedAddress.replace(/\.$/, '')}. ${displayTeremszam}. terem`;
-  } else {
-    formattedAddress = formattedAddress.replace(/\.$/, '');
-  }
-
-  let alternativeSlotsHtml = '';
-  if (alternativeSlots && alternativeSlots.length > 0) {
-    const altSlotsList = alternativeSlots.map((slot, index) => {
-      const altDate = formatDateForEmailShort(slot.startTime);
-      const altCim = slot.cim || DEFAULT_CIM;
-      const altTerem = slot.teremszam ? ` (${slot.teremszam}. terem)` : '';
-      return `<li><strong>Alternatíva ${index + 1}:</strong> ${altDate} - ${altCim.replace(/,/g, '')}${altTerem}</li>`;
-    }).join('');
-    alternativeSlotsHtml = `
-      <p style="margin-top: 15px;"><strong>Alternatív időpontok:</strong></p>
-      <ul style="margin-top: 10px;">
-        ${altSlotsList}
-      </ul>
-    `;
-  }
-
-  const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #2563eb;">Feltételes időpontfoglalás létrehozva</h2>
-      <p>Kedves adminisztrátor,</p>
-      <p>Egy új feltételes időpontfoglalás lett létrehozva:</p>
-      <ul>
-        <li><strong>Beteg neve:</strong> ${patientName || 'Név nélküli'}</li>
-        <li><strong>TAJ szám:</strong> ${patientTaj || 'Nincs megadva'}</li>
-        <li><strong>Email cím:</strong> ${patientEmail || 'Nincs megadva'}</li>
-        <li><strong>Időpont:</strong> ${formatDateForEmail(appointmentTime)}</li>
-        <li><strong>Cím:</strong> ${formattedAddress}</li>
-        <li><strong>Kezelőorvos:</strong> ${dentistFullName}</li>
-        <li><strong>Létrehozta:</strong> ${createdBy}</li>
-      </ul>
-      ${alternativeSlotsHtml}
-      <p style="margin-top: 20px;">A páciens emailben értesítést kapott és jóváhagyhatja vagy elvetheti az időpontot.</p>
-      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
-    </div>
-  `;
-
-  await sendEmail({
-    to: adminEmails,
-    subject: 'Feltételes időpontfoglalás létrehozva - Maxillofaciális Rehabilitáció',
-    html,
-  });
+  const name = patientName || 'Név nélküli';
+  const time = formatDateForEmailShort(appointmentTime);
+  await queueAdminNotification(
+    'conditional_appointment',
+    `${name} – ${time}, kezelőorvos: ${dentistFullName}, létrehozta: ${createdBy}`,
+    { patientName: name, patientTaj, patientEmail, appointmentTime: appointmentTime.toISOString(), dentistFullName, cim, teremszam, alternativeSlots: alternativeSlots.length, createdBy }
+  );
 }
 
 /**
- * Send notification to admin when patient requests a new appointment
+ * Queue new appointment request notification for admin daily summary
  */
 export async function sendNewAppointmentRequestToAdmin(
   adminEmails: string[],
@@ -766,32 +637,15 @@ export async function sendNewAppointmentRequestToAdmin(
   oldAppointmentTime: Date,
   appointmentId: string
 ): Promise<void> {
-  if (adminEmails.length === 0) {
-    return;
-  }
+  if (adminEmails.length === 0) return;
 
-  const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #3b82f6;">Új időpont kérése</h2>
-      <p>Kedves adminisztrátor,</p>
-      <p>A páciens új időpontot kért:</p>
-      <ul>
-        <li><strong>Beteg neve:</strong> ${patientName || 'Név nélküli'}</li>
-        <li><strong>TAJ szám:</strong> ${patientTaj || 'Nincs megadva'}</li>
-        <li><strong>Email cím:</strong> ${patientEmail || 'Nincs megadva'}</li>
-        <li><strong>Eredeti időpont:</strong> ${formatDateForEmail(oldAppointmentTime)}</li>
-        <li><strong>Időpont ID:</strong> ${appointmentId}</li>
-      </ul>
-      <p>Kérjük, jelentkezzen be a rendszerbe és válasszon új időpontot a páciens számára.</p>
-      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
-    </div>
-  `;
-
-  await sendEmail({
-    to: adminEmails,
-    subject: 'Új időpont kérése - Maxillofaciális Rehabilitáció',
-    html,
-  });
+  const name = patientName || 'Név nélküli';
+  const time = formatDateForEmailShort(oldAppointmentTime);
+  await queueAdminNotification(
+    'new_appointment_request',
+    `${name} (${patientEmail || '–'}) – eredeti időpont: ${time}`,
+    { patientName: name, patientTaj, patientEmail, oldAppointmentTime: oldAppointmentTime.toISOString(), appointmentId }
+  );
 }
 
 /**
