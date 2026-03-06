@@ -57,6 +57,14 @@ export function isBlockedAll(r: AllPendingStepsResult): r is BlockedResult {
   return !Array.isArray(r) && 'status' in r && r.status === 'blocked';
 }
 
+const DEFAULT_CONSULT_STEP: PathwayStep = {
+  step_code: 'consult_1',
+  label: 'Első konzultáció',
+  pool: 'consult',
+  duration_minutes: 30,
+  default_days_offset: 0,
+};
+
 /** Get current stage code for an episode (latest stage_event) */
 async function getCurrentStage(pool: Awaited<ReturnType<typeof getDbPool>>, episodeId: string): Promise<string | null> {
   const r = await pool.query(
@@ -196,14 +204,21 @@ export async function nextRequiredStep(episodeId: string): Promise<NextRequiredS
     };
   }
 
-  // No pathway → cannot compute (explicit üzenet)
+  // No pathway → default to first consultation (pathway will be assigned after consult)
   if (!pathwaySteps || pathwaySteps.length === 0) {
+    const anchorDate =
+      completedStats.lastCompletedAt ?? (await getEpisodeAnchorFallback(pool, episodeId));
+    const { windowStart, windowEnd } = computeStepWindow(anchorDate, DEFAULT_CONSULT_STEP.default_days_offset);
     return {
-      status: 'blocked',
-      required_prereq_keys: ['care_pathway'],
-      reason: 'Epizódhoz nincs hozzárendelve kezelési út. Először válasszon pathway-t.',
-      block_keys: [],
-      code: 'NO_CARE_PATHWAY',
+      step_code: DEFAULT_CONSULT_STEP.step_code,
+      label: DEFAULT_CONSULT_STEP.label,
+      pool: DEFAULT_CONSULT_STEP.pool,
+      duration_minutes: DEFAULT_CONSULT_STEP.duration_minutes,
+      earliest_date: windowStart,
+      latest_date: windowEnd,
+      reason: 'Első konzultáció (nincs pathway)',
+      anchor: anchorDate.toISOString(),
+      inputs_used: { mode: 'no_pathway_default_consult' },
     };
   }
 
@@ -334,13 +349,21 @@ export async function allPendingSteps(episodeId: string): Promise<AllPendingStep
   }
 
   if (!pathwaySteps || pathwaySteps.length === 0) {
-    return {
-      status: 'blocked',
-      required_prereq_keys: ['care_pathway'],
-      reason: 'Epizódhoz nincs hozzárendelve kezelési út. Először válasszon pathway-t.',
-      block_keys: [],
-      code: 'NO_CARE_PATHWAY',
-    };
+    const anchorDate =
+      completedStats.lastCompletedAt ?? (await getEpisodeAnchorFallback(pool, episodeId));
+    const { windowStart, windowEnd } = computeStepWindow(anchorDate, DEFAULT_CONSULT_STEP.default_days_offset);
+    return [{
+      step_code: DEFAULT_CONSULT_STEP.step_code,
+      label: DEFAULT_CONSULT_STEP.label,
+      pool: DEFAULT_CONSULT_STEP.pool,
+      duration_minutes: DEFAULT_CONSULT_STEP.duration_minutes,
+      earliest_date: windowStart,
+      latest_date: windowEnd,
+      reason: 'Első konzultáció (nincs pathway)',
+      anchor: anchorDate.toISOString(),
+      stepSeq: 0,
+      isFirstPending: true,
+    }];
   }
 
   if (episodeSteps) {
@@ -466,13 +489,20 @@ export function allPendingStepsWithData(
   }
 
   if (!pathwaySteps || pathwaySteps.length === 0) {
-    return {
-      status: 'blocked',
-      required_prereq_keys: ['care_pathway'],
-      reason: 'Epizódhoz nincs hozzárendelve kezelési út. Először válasszon pathway-t.',
-      block_keys: [],
-      code: 'NO_CARE_PATHWAY',
-    };
+    const anchorDate = completedStats.lastCompletedAt ?? openedAt;
+    const { windowStart, windowEnd } = computeStepWindow(anchorDate, DEFAULT_CONSULT_STEP.default_days_offset);
+    return [{
+      step_code: DEFAULT_CONSULT_STEP.step_code,
+      label: DEFAULT_CONSULT_STEP.label,
+      pool: DEFAULT_CONSULT_STEP.pool,
+      duration_minutes: DEFAULT_CONSULT_STEP.duration_minutes,
+      earliest_date: windowStart,
+      latest_date: windowEnd,
+      reason: 'Első konzultáció (nincs pathway)',
+      anchor: anchorDate.toISOString(),
+      stepSeq: 0,
+      isFirstPending: true,
+    }];
   }
 
   if (episodeSteps) {

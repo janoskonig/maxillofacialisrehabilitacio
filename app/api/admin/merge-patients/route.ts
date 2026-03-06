@@ -221,13 +221,17 @@ async function mergeSecondaryIntoPrimary(
   await client.query('DELETE FROM patients WHERE id = $1', [secondaryPatientId]);
 
   // --- 6. Audit log ---
+  const spAudit = `sp_audit_${Date.now()}`;
+  await client.query(`SAVEPOINT ${spAudit}`);
   try {
     await client.query(
-      `INSERT INTO patient_changes (patient_id, field_name, old_value, new_value, changed_by, changed_at)
-       VALUES ($1, 'merge', $2, $3, $4, NOW())`,
+      `INSERT INTO patient_changes (patient_id, field_name, field_display_name, old_value, new_value, changed_by, changed_at)
+       VALUES ($1, 'merge', 'Profil összevonás', $2, $3, $4, NOW())`,
       [primaryPatientId, `Összevonva: ${secondaryName} (${secondaryTaj || 'TAJ nélkül'})`, `Elsődleges: ${pRow.nev}`, auth.email],
     );
+    await client.query(`RELEASE SAVEPOINT ${spAudit}`);
   } catch (auditErr) {
+    await client.query(`ROLLBACK TO SAVEPOINT ${spAudit}`);
     logger.warn('[merge] Failed to insert audit log:', auditErr);
   }
 
