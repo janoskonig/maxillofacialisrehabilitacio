@@ -256,8 +256,8 @@ export function PortalLayout({ children }: PortalLayoutProps) {
               }`}
             >
               <ClipboardList className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              <span className="hidden xs:inline">OHIP-14</span>
-              <span className="xs:hidden">OHIP</span>
+              <span className="hidden xs:inline">Kérdőív</span>
+              <span className="xs:hidden">Kérdőív</span>
               {ohipPending && (
                 <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-white" />
               )}
