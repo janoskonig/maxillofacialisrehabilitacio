@@ -28,7 +28,7 @@ interface Message {
 interface Recipient {
   id: string;
   name: string;
-  type: 'treating_doctor' | 'admin';
+  type: 'treating_doctor' | 'admin' | 'doctor';
 }
 
 export function PatientMessages() {
@@ -547,7 +547,7 @@ export function PatientMessages() {
                     className="fixed inset-0 z-10"
                     onClick={() => setShowRecipientSelector(false)}
                   />
-                  <div className="absolute z-20 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-auto">
+                  <div className="absolute z-20 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto">
                     {recipients.map((recipient) => (
                       <button
                         key={recipient.id}

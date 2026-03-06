@@ -71,37 +71,10 @@ export const POST = apiHandler(async (req) => {
       );
     }
 
-    const patientData = patientResult.rows[0];
-    let treatingDoctorId: string | null = null;
-    
-    if (patientData.kezeleoorvos) {
-      const treatingDoctorResult = await pool.query(
-        `SELECT id FROM users 
-         WHERE (email = $1 OR doktor_neve = $1) AND active = true 
-         LIMIT 1`,
-        [patientData.kezeleoorvos]
-      );
-      if (treatingDoctorResult.rows.length > 0) {
-        treatingDoctorId = treatingDoctorResult.rows[0].id;
-      }
-    }
-
-    const adminResult = await pool.query(
-      `SELECT id FROM users WHERE role = 'admin' AND active = true LIMIT 1`
-    );
-    const adminId = adminResult.rows.length > 0 ? adminResult.rows[0].id : null;
-
     if (finalRecipientDoctorId) {
-      if (finalRecipientDoctorId !== treatingDoctorId && finalRecipientDoctorId !== adminId) {
-        return NextResponse.json(
-          { error: 'Csak a kezelőorvosnak vagy az adminnak küldhet üzenetet' },
-          { status: 403 }
-        );
-      }
-
       const doctorResult = await pool.query(
         `SELECT id, email, doktor_neve FROM users 
-         WHERE id = $1 AND active = true`,
+         WHERE id = $1 AND active = true AND role != 'technikus'`,
         [finalRecipientDoctorId]
       );
 
@@ -114,7 +87,29 @@ export const POST = apiHandler(async (req) => {
 
       recipientDoctorIdFinal = finalRecipientDoctorId;
     } else {
-      recipientDoctorIdFinal = treatingDoctorId || adminId;
+      const patientData = patientResult.rows[0];
+      let treatingDoctorId: string | null = null;
+
+      if (patientData.kezeleoorvos) {
+        const treatingDoctorResult = await pool.query(
+          `SELECT id FROM users 
+           WHERE (email = $1 OR doktor_neve = $1) AND active = true 
+           LIMIT 1`,
+          [patientData.kezeleoorvos]
+        );
+        if (treatingDoctorResult.rows.length > 0) {
+          treatingDoctorId = treatingDoctorResult.rows[0].id;
+        }
+      }
+
+      if (!treatingDoctorId) {
+        const adminResult = await pool.query(
+          `SELECT id FROM users WHERE role = 'admin' AND active = true LIMIT 1`
+        );
+        treatingDoctorId = adminResult.rows.length > 0 ? adminResult.rows[0].id : null;
+      }
+
+      recipientDoctorIdFinal = treatingDoctorId;
     }
   } else if (auth) {
     senderType = 'doctor';

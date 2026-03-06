@@ -28,44 +28,45 @@ export const GET = apiHandler(async (req, { correlationId }) => {
     );
   }
 
-  const recipients: Array<{ id: string; name: string; type: 'treating_doctor' | 'admin' }> = [];
-
   const kezeleoorvos = patientResult.rows[0].kezeleoorvos;
-  if (kezeleoorvos) {
-    const treatingDoctorResult = await pool.query(
-      `SELECT id, email, doktor_neve FROM users 
-       WHERE (email = $1 OR doktor_neve = $1) AND active = true AND role != 'technikus'
-       LIMIT 1`,
-      [kezeleoorvos]
-    );
 
-    if (treatingDoctorResult.rows.length > 0) {
-      const doctor = treatingDoctorResult.rows[0];
-      recipients.push({
-        id: doctor.id,
-        name: doctor.doktor_neve || doctor.email,
-        type: 'treating_doctor',
-      });
-    }
-  }
-
-  const adminResult = await pool.query(
-    `SELECT id, email, doktor_neve FROM users 
-     WHERE role = 'admin' AND active = true 
-     ORDER BY email ASC 
-     LIMIT 1`
+  const allDoctorsResult = await pool.query(
+    `SELECT id, email, doktor_neve, role FROM users 
+     WHERE active = true AND role != 'technikus'
+     ORDER BY doktor_neve ASC, email ASC`
   );
 
-  if (adminResult.rows.length > 0) {
-    const admin = adminResult.rows[0];
-    if (recipients.length === 0 || recipients[0].id !== admin.id) {
-      recipients.push({
-        id: admin.id,
-        name: admin.doktor_neve || admin.email,
-        type: 'admin',
-      });
+  let treatingDoctorId: string | null = null;
+  if (kezeleoorvos) {
+    const match = allDoctorsResult.rows.find(
+      (r: any) => r.email === kezeleoorvos || r.doktor_neve === kezeleoorvos
+    );
+    if (match) {
+      treatingDoctorId = match.id;
     }
   }
+
+  const recipients: Array<{ id: string; name: string; type: 'treating_doctor' | 'admin' | 'doctor' }> = [];
+
+  for (const doctor of allDoctorsResult.rows) {
+    let type: 'treating_doctor' | 'admin' | 'doctor' = 'doctor';
+    if (doctor.id === treatingDoctorId) {
+      type = 'treating_doctor';
+    } else if (doctor.role === 'admin') {
+      type = 'admin';
+    }
+    recipients.push({
+      id: doctor.id,
+      name: doctor.doktor_neve || doctor.email,
+      type,
+    });
+  }
+
+  // Kezelőorvos legyen elöl, utána admin, majd a többi
+  recipients.sort((a, b) => {
+    const order = { treating_doctor: 0, admin: 1, doctor: 2 };
+    return order[a.type] - order[b.type];
+  });
 
   return NextResponse.json({ recipients });
 });
