@@ -108,8 +108,14 @@ export const GET = optionalAuthHandler(async (req, { auth, correlationId }) => {
   let queryParams: any[] = [];
   let paramIndex = 1;
 
+  // When forMention=true and query is in mention format (contains +),
+  // skip SQL ILIKE (which can't match accented names with spaces) and
+  // filter by normalized mentionFormat in JS instead
+  const isMentionFormatQuery = forMention && query && query.includes('+');
+  const sqlQuery = isMentionFormatQuery ? null : query;
+
   const needsSurgeonJoin = false;
-  const needsReferralJoin = needsSurgeonJoin || !!query;
+  const needsReferralJoin = needsSurgeonJoin || !!sqlQuery;
 
   const prefixedListFields = PATIENT_LIST_FIELDS.split(',').map(f => {
     const trimmed = f.trim();
@@ -139,9 +145,9 @@ export const GET = optionalAuthHandler(async (req, { auth, correlationId }) => {
   let countResult;
   let result;
 
-  if (query) {
+  if (sqlQuery) {
     const searchBase = `(p.nev ILIKE $${paramIndex} OR p.taj ILIKE $${paramIndex} OR p.telefonszam ILIKE $${paramIndex} OR p.email ILIKE $${paramIndex} OR r.beutalo_orvos ILIKE $${paramIndex} OR r.beutalo_intezmeny ILIKE $${paramIndex} OR p.kezeleoorvos ILIKE $${paramIndex})`;
-    queryParams.push(`%${query}%`);
+    queryParams.push(`%${sqlQuery}%`);
     paramIndex++;
 
     let viewCondition = '';

@@ -151,75 +151,30 @@ function MentionLink({ mentionFormat, displayText }: MentionLinkProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Extract mention format without @
     const mentionWithoutAt = mentionFormat.substring(1); // kovacs+janos
     
     const findPatient = async () => {
       try {
-        // First try with query parameter for better performance
-        const searchResponse = await fetch(`/api/patients?forMention=true&q=${encodeURIComponent(mentionWithoutAt)}`, {
+        const response = await fetch(`/api/patients?forMention=true&q=${encodeURIComponent(mentionWithoutAt)}`, {
           credentials: 'include',
         });
         
-        if (!searchResponse.ok) {
+        if (!response.ok) {
           throw new Error('Failed to fetch patients');
         }
         
-        const searchData = await searchResponse.json();
+        const data = await response.json();
         
-        if (searchData.patients && searchData.patients.length > 0) {
-          // Find exact match by mentionFormat (case insensitive)
-          let match = searchData.patients.find(
+        if (data.patients && data.patients.length > 0) {
+          const match = data.patients.find(
             (p: any) => p.mentionFormat?.toLowerCase() === mentionFormat.toLowerCase()
-          );
-          
-          // If no exact match but only one result, use it (API already filtered)
-          if (!match && searchData.patients.length === 1) {
-            match = searchData.patients[0];
-          }
-          
-          // If still no match, try fetching all patients and search there
-          if (!match) {
-            const allResponse = await fetch(`/api/patients?forMention=true`, {
-              credentials: 'include',
-            });
-            
-            if (allResponse.ok) {
-              const allData = await allResponse.json();
-              if (allData.patients && allData.patients.length > 0) {
-                match = allData.patients.find(
-                  (p: any) => p.mentionFormat?.toLowerCase() === mentionFormat.toLowerCase()
-                );
-              }
-            }
-          }
+          ) || (data.patients.length === 1 ? data.patients[0] : null);
           
           if (match) {
             setPatientId(match.id);
             setPatientName(match.nev);
           } else {
             console.warn('Patient not found for mention:', mentionFormat);
-          }
-        } else {
-          // No results from search, try fetching all patients
-          const allResponse = await fetch(`/api/patients?forMention=true`, {
-            credentials: 'include',
-          });
-          
-          if (allResponse.ok) {
-            const allData = await allResponse.json();
-            if (allData.patients && allData.patients.length > 0) {
-              const match = allData.patients.find(
-                (p: any) => p.mentionFormat?.toLowerCase() === mentionFormat.toLowerCase()
-              );
-              
-              if (match) {
-                setPatientId(match.id);
-                setPatientName(match.nev);
-              } else {
-                console.warn('Patient not found for mention:', mentionFormat);
-              }
-            }
           }
         }
       } catch (err) {
