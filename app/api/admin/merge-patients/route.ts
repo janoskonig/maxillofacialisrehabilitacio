@@ -175,7 +175,7 @@ async function mergeSecondaryIntoPrimary(
 
   // --- 1. Fill empty core fields from secondary ---
   const coreCols = [
-    'telefonszam', 'szuletesi_datum', 'nem', 'email', 'cim', 'varos',
+    'taj', 'telefonszam', 'szuletesi_datum', 'nem', 'email', 'cim', 'varos',
     'iranyitoszam', 'kezeleoorvos', 'kezeleoorvos_intezete', 'felvetel_datuma',
   ];
   const coreUpdates: string[] = [];
