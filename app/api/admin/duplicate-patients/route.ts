@@ -67,40 +67,51 @@ export const GET = roleHandler(['admin'], async (req, { auth }) => {
     }
   }
 
-  // 2. Same normalized name + birth date
-  for (let i = 0; i < patients.length; i++) {
-    for (let j = i + 1; j < patients.length; j++) {
-      const a = patients[i];
-      const b = patients[j];
-      const nameA = normalizeName(a.nev);
-      const nameB = normalizeName(b.nev);
-      if (!nameA || !nameB) continue;
+  // 2. Name matching (exact or partial) + optional birth date
+  const normalizedPatients = patients.map(p => ({ ...p, _norm: normalizeName(p.nev) }));
 
-      if (nameA === nameB && a.szuletesiDatum && b.szuletesiDatum &&
-          new Date(a.szuletesiDatum).getTime() === new Date(b.szuletesiDatum).getTime()) {
-        addToGroup(`name_dob:${nameA}:${a.szuletesiDatum}`, `Azonos név és születési dátum`, a, b);
+  for (let i = 0; i < normalizedPatients.length; i++) {
+    for (let j = i + 1; j < normalizedPatients.length; j++) {
+      const a = normalizedPatients[i];
+      const b = normalizedPatients[j];
+      if (!a._norm || !b._norm || a._norm.length < 4 || b._norm.length < 4) continue;
+
+      const exact = a._norm === b._norm;
+      const partial = !exact && namesPartiallyMatch(a._norm, b._norm);
+      if (!exact && !partial) continue;
+
+      const sameDob = a.szuletesiDatum && b.szuletesiDatum &&
+        new Date(a.szuletesiDatum).getTime() === new Date(b.szuletesiDatum).getTime();
+
+      if (exact && sameDob) {
+        addToGroup(
+          `name_dob:${a._norm}:${a.szuletesiDatum}`,
+          `Azonos név és születési dátum`,
+          a, b,
+        );
+      } else if (partial && sameDob) {
+        const shorter = a.nev.length <= b.nev.length ? a.nev : b.nev;
+        const longer = a.nev.length > b.nev.length ? a.nev : b.nev;
+        addToGroup(
+          `partial_dob:${[a.id, b.id].sort().join(':')}`,
+          `Hasonló név („${shorter}" / „${longer}") és azonos születési dátum`,
+          a, b,
+        );
+      } else if (exact) {
+        addToGroup(
+          `name:${a._norm}`,
+          `Azonos név: „${a.nev}"`,
+          a, b,
+        );
+      } else if (partial) {
+        const shorter = a.nev.length <= b.nev.length ? a.nev : b.nev;
+        const longer = a.nev.length > b.nev.length ? a.nev : b.nev;
+        addToGroup(
+          `partial:${[a.id, b.id].sort().join(':')}`,
+          `Hasonló név: „${shorter}" / „${longer}"`,
+          a, b,
+        );
       }
-    }
-  }
-
-  // 3. Same normalized name (without birth date match)
-  const nameMap = new Map<string, (typeof patients)[0][]>();
-  for (const p of patients) {
-    const name = normalizeName(p.nev);
-    if (!name || name.length < 4) continue;
-    const existing = nameMap.get(name);
-    if (existing) { existing.push(p); } else { nameMap.set(name, [p]); }
-  }
-  for (const [name, group] of Array.from(nameMap.entries())) {
-    if (group.length < 2) continue;
-    const key = `name:${name}`;
-    if (groupMap.has(key)) continue;
-    const alreadyCoveredByNameDob = group.every((p, _, arr) =>
-      arr.some(other => other.id !== p.id && groupMap.has(`name_dob:${name}:${p.szuletesiDatum}`))
-    );
-    if (alreadyCoveredByNameDob) continue;
-    for (let i = 1; i < group.length; i++) {
-      addToGroup(key, `Azonos név: "${group[0].nev}"`, group[0], group[i]);
     }
   }
 
@@ -143,9 +154,11 @@ export const GET = roleHandler(['admin'], async (req, { auth }) => {
     const order = (k: string) => {
       if (k.startsWith('taj:')) return 0;
       if (k.startsWith('name_dob:')) return 1;
-      if (k.startsWith('name:')) return 2;
-      if (k.startsWith('phone:')) return 3;
-      return 4;
+      if (k.startsWith('partial_dob:')) return 2;
+      if (k.startsWith('name:')) return 3;
+      if (k.startsWith('partial:')) return 4;
+      if (k.startsWith('phone:')) return 5;
+      return 6;
     };
     return order(a[0]) - order(b[0]);
   });
@@ -186,6 +199,33 @@ function normalizeName(name: string | null | undefined): string {
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/\s+/g, ' ')
     .replace(/[^a-z0-9 ]/g, '');
+}
+
+/**
+ * Check if two names partially match:
+ * - One name's words are a subset of the other's (e.g. "Lakatos Anna" ⊂ "Lakatos Anna Flora")
+ * - Or the family name matches and at least one given name matches
+ */
+function namesPartiallyMatch(normA: string, normB: string): boolean {
+  const wordsA = normA.split(' ').filter(w => w.length > 1);
+  const wordsB = normB.split(' ').filter(w => w.length > 1);
+  if (wordsA.length < 2 || wordsB.length < 2) return false;
+  if (wordsA.length === wordsB.length) return false; // same word count → exact match handles it
+
+  const shorter = wordsA.length < wordsB.length ? wordsA : wordsB;
+  const longer = wordsA.length >= wordsB.length ? wordsA : wordsB;
+
+  // All words of the shorter name must appear in the longer name
+  const allShorterInLonger = shorter.every(w => longer.includes(w));
+  if (allShorterInLonger) return true;
+
+  // Family name (first word) must match, plus at least one other word
+  if (shorter[0] === longer[0]) {
+    const commonGiven = shorter.slice(1).filter(w => longer.slice(1).includes(w));
+    if (commonGiven.length > 0) return true;
+  }
+
+  return false;
 }
 
 function normalizePhone(phone: string | null | undefined): string {
