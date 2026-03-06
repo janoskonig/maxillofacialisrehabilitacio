@@ -59,12 +59,16 @@ async function safeReassign(client: PoolClient, table: string, primaryId: string
   if (!(await tableExists(client, table))) return;
   if (!(await tableHasColumn(client, table, 'patient_id'))) return;
 
+  const sp = `sp_${table}_${Date.now()}`;
+  await client.query(`SAVEPOINT ${sp}`);
   try {
     await client.query(
       `UPDATE ${table} SET patient_id = $1 WHERE patient_id = $2`,
       [primaryId, secondaryId],
     );
+    await client.query(`RELEASE SAVEPOINT ${sp}`);
   } catch (err: any) {
+    await client.query(`ROLLBACK TO SAVEPOINT ${sp}`);
     if (err?.code === '23505') {
       logger.warn(`[merge] Unique conflict in ${table}, removing secondary duplicates and retrying`);
       await client.query(`DELETE FROM ${table} WHERE patient_id = $1`, [secondaryId]);
