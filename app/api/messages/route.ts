@@ -399,12 +399,31 @@ export const GET = apiHandler(async (req) => {
   }
 
   const isAdmin = auth?.role === 'admin';
+
+  let filterDoctorId: string | undefined;
+  if (auth) {
+    filterDoctorId = auth.userId;
+  } else if (patientSessionId) {
+    const doctorIdParam = searchParams.get('doctorId');
+    if (doctorIdParam) {
+      try {
+        filterDoctorId = validateUUID(doctorIdParam, 'Orvos ID');
+      } catch {
+        return NextResponse.json(
+          { error: 'Érvénytelen orvos ID' },
+          { status: 400 }
+        );
+      }
+    }
+  }
+
   const messages = await getPatientMessages(validatedPatientId, {
     unreadOnly,
     limit: validatedLimit,
     offset: validatedOffset,
-    doctorId: auth ? auth.userId : undefined,
+    doctorId: filterDoctorId,
     isAdmin: isAdmin,
+    isPatientPortal: !!patientSessionId && !auth,
   });
 
   return NextResponse.json({

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { MessageCircle, Send, Clock, Check, CheckCheck, Loader2, ChevronDown } from 'lucide-react';
+import { MessageCircle, Send, Clock, Check, CheckCheck, Loader2, ChevronDown, Users, Search, X } from 'lucide-react';
 import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
@@ -31,6 +31,17 @@ interface Recipient {
   type: 'treating_doctor' | 'admin' | 'doctor';
 }
 
+interface Conversation {
+  doctorId: string;
+  doctorName: string;
+  lastMessage: {
+    message: string;
+    senderType: 'doctor' | 'patient';
+    createdAt: string;
+  } | null;
+  unreadCount: number;
+}
+
 export function PatientMessages() {
   const router = useRouter();
   const { showToast } = useToast();
@@ -38,23 +49,28 @@ export function PatientMessages() {
   
   const [patientId, setPatientId] = useState<string | null>(null);
   const [patientName, setPatientName] = useState<string | null>(null);
-  const [doctorName, setDoctorName] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
+  const [messagesLoading, setMessagesLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [newMessage, setNewMessage] = useState('');
-  const [unreadCount, setUnreadCount] = useState(0);
+
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [recipients, setRecipients] = useState<Recipient[]>([]);
-  const [selectedRecipientId, setSelectedRecipientId] = useState<string | null>(null);
-  const [showRecipientSelector, setShowRecipientSelector] = useState(false);
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string | null>(null);
+  const [selectedDoctorName, setSelectedDoctorName] = useState<string | null>(null);
+
+  const [showNewChat, setShowNewChat] = useState(false);
+  const [doctorSearchQuery, setDoctorSearchQuery] = useState('');
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesLoadedRef = useRef<Set<string>>(new Set());
   
-  // Hooks must be called unconditionally at the top level
   const breakpoint = useBreakpoint();
   const isMobile = breakpoint === 'mobile';
+
+  const totalUnreadCount = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
 
   // Fetch patient info
   useEffect(() => {
@@ -73,7 +89,6 @@ export function PatientMessages() {
         if (data.patient) {
           setPatientId(data.patient.id);
           setPatientName(data.patient.nev);
-          setDoctorName(data.patient.kezeleoorvos || null);
         }
       } catch (error) {
         console.error('Hiba a beteg adatok betöltésekor:', error);
@@ -84,7 +99,7 @@ export function PatientMessages() {
     fetchPatientInfo();
   }, [router]);
 
-  // Fetch recipients
+  // Fetch recipients (all doctors)
   useEffect(() => {
     const fetchRecipients = async () => {
       try {
@@ -101,9 +116,8 @@ export function PatientMessages() {
         }
 
         const data = await response.json();
-        if (data.recipients && data.recipients.length > 0) {
+        if (data.recipients) {
           setRecipients(data.recipients);
-          setSelectedRecipientId(data.recipients[0].id);
         }
       } catch (error) {
         console.error('Hiba a címzettek betöltésekor:', error);
@@ -113,14 +127,45 @@ export function PatientMessages() {
     fetchRecipients();
   }, [router]);
 
-  // Initial message load from API
-  const fetchMessages = useCallback(async () => {
+  // Fetch conversations
+  const fetchConversations = useCallback(async () => {
     if (!patientId) return;
-
     try {
-      const response = await fetch(`/api/messages?patientId=${patientId}`, {
+      const response = await fetch('/api/patient-portal/conversations', {
         credentials: 'include',
       });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          router.push('/patient-portal');
+          return;
+        }
+        throw new Error('Hiba a beszélgetések betöltésekor');
+      }
+
+      const data = await response.json();
+      setConversations(data.conversations || []);
+    } catch (error) {
+      console.error('Hiba a beszélgetések betöltésekor:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [patientId, router]);
+
+  useEffect(() => {
+    fetchConversations();
+  }, [fetchConversations]);
+
+  // Fetch messages for selected doctor
+  const fetchMessages = useCallback(async () => {
+    if (!patientId || !selectedDoctorId) return;
+
+    try {
+      setMessagesLoading(true);
+      const response = await fetch(
+        `/api/messages?patientId=${patientId}&doctorId=${selectedDoctorId}`,
+        { credentials: 'include' }
+      );
 
       if (!response.ok) {
         if (response.status === 401) {
@@ -133,38 +178,35 @@ export function PatientMessages() {
       const data = await response.json();
       const loadedMessages = (data.messages || []).reverse() as Message[];
       
+      messagesLoadedRef.current.clear();
       loadedMessages.forEach(msg => messagesLoadedRef.current.add(msg.id));
       
       setMessages(loadedMessages);
-      
-      const unread = loadedMessages.filter(
-        (m: Message) => m.senderType === 'doctor' && !m.readAt
-      ).length;
-      setUnreadCount(unread);
     } catch (error) {
       console.error('Hiba az üzenetek betöltésekor:', error);
       showToast('Hiba történt az üzenetek betöltésekor', 'error');
     } finally {
-      setLoading(false);
+      setMessagesLoading(false);
     }
-  }, [patientId, router, showToast]);
+  }, [patientId, selectedDoctorId, router, showToast]);
 
-  // Load messages and setup WebSocket
   useEffect(() => {
-    if (patientId) {
+    if (selectedDoctorId) {
       fetchMessages();
-      
-      if (isConnected) {
-        joinRoom(patientId);
-      }
-      
+    } else {
+      setMessages([]);
+    }
+  }, [selectedDoctorId, fetchMessages]);
+
+  // WebSocket setup
+  useEffect(() => {
+    if (patientId && isConnected) {
+      joinRoom(patientId);
       return () => {
-        if (isConnected) {
-          leaveRoom(patientId);
-        }
+        leaveRoom(patientId);
       };
     }
-  }, [patientId, isConnected, joinRoom, leaveRoom, fetchMessages]);
+  }, [patientId, isConnected, joinRoom, leaveRoom]);
 
   // WebSocket: Listen for new messages
   useEffect(() => {
@@ -177,23 +219,23 @@ export function PatientMessages() {
         return;
       }
 
-      messagesLoadedRef.current.add(data.message.id);
+      const incomingDoctorId = data.message.senderType === 'doctor'
+        ? data.message.senderId
+        : (data.message as any).recipientDoctorId;
 
-      setMessages(prev => {
-        if (prev.some(m => m.id === data.message.id)) {
-          return prev;
-        }
-        
-        return [...prev, {
-          ...data.message,
-          createdAt: new Date(data.message.createdAt),
-          readAt: data.message.readAt ? new Date(data.message.readAt) : null,
-        }];
-      });
-
-      if (data.message.senderType === 'doctor' && !data.message.readAt) {
-        setUnreadCount(prev => prev + 1);
+      if (selectedDoctorId && incomingDoctorId === selectedDoctorId) {
+        messagesLoadedRef.current.add(data.message.id);
+        setMessages(prev => {
+          if (prev.some(m => m.id === data.message.id)) return prev;
+          return [...prev, {
+            ...data.message,
+            createdAt: new Date(data.message.createdAt),
+            readAt: data.message.readAt ? new Date(data.message.readAt) : null,
+          }];
+        });
       }
+
+      fetchConversations();
     };
 
     const handleMessageRead = (data: { messageId: string; patientId: string }) => {
@@ -204,8 +246,6 @@ export function PatientMessages() {
           m.id === data.messageId ? { ...m, readAt: new Date() } : m
         )
       );
-
-      setUnreadCount(prev => Math.max(0, prev - 1));
     };
 
     socket.on('new-message', handleNewMessage);
@@ -215,14 +255,12 @@ export function PatientMessages() {
       socket.off('new-message', handleNewMessage);
       socket.off('message-read', handleMessageRead);
     };
-  }, [socket, patientId]);
+  }, [socket, patientId, selectedDoctorId, fetchConversations]);
 
-  // Auto-mark doctor messages as read when conversation opens
-  // Egyszerűbb és megbízhatóbb: amikor a beszélgetés megnyílik, jelöljük olvasottnak az összes olvasatlant
+  // Auto-mark doctor messages as read when conversation is open
   useEffect(() => {
-    if (messages.length === 0 || loading || !patientId) return;
+    if (messages.length === 0 || messagesLoading || !patientId || !selectedDoctorId) return;
 
-    // Várunk egy kicsit, hogy biztosan renderelődtek az üzenetek
     const timeoutId = setTimeout(() => {
       const unreadDoctorMessages = messages.filter(
         m => m.senderType === 'doctor' && 
@@ -232,7 +270,6 @@ export function PatientMessages() {
       );
       
       if (unreadDoctorMessages.length > 0) {
-        // Mark as read optimistically
         setMessages(prevMessages => 
           prevMessages.map(m => 
             unreadDoctorMessages.some(um => um.id === m.id) 
@@ -241,9 +278,12 @@ export function PatientMessages() {
           )
         );
         
-        setUnreadCount(prev => Math.max(0, prev - unreadDoctorMessages.length));
+        setConversations(prev => prev.map(c =>
+          c.doctorId === selectedDoctorId
+            ? { ...c, unreadCount: Math.max(0, c.unreadCount - unreadDoctorMessages.length) }
+            : c
+        ));
         
-        // Send API requests to mark as read
         Promise.all(
           unreadDoctorMessages.map(msg => 
             fetch(`/api/messages/${msg.id}/read`, {
@@ -251,55 +291,53 @@ export function PatientMessages() {
               credentials: 'include',
             }).catch(err => {
               console.error(`Hiba az üzenet ${msg.id} olvasottnak jelölésekor:`, err);
-              // Revert on error
               setMessages(prevMessages => 
                 prevMessages.map(m => 
                   m.id === msg.id ? { ...m, readAt: null } : m
                 )
               );
-              setUnreadCount(prev => prev + 1);
             })
           )
         );
       }
-    }, 500); // 500ms delay, hogy biztosan renderelődtek az üzenetek
+    }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [patientId, loading, messages.length]);
+  }, [patientId, selectedDoctorId, messagesLoading, messages.length]);
 
-  // Scroll to bottom when messages change or loading finishes
+  // Scroll to bottom when messages change
   useEffect(() => {
-    if (!loading) {
-      // Use requestAnimationFrame to ensure DOM is updated
+    if (!messagesLoading && selectedDoctorId) {
       requestAnimationFrame(() => {
         setTimeout(() => {
           if (messagesContainerRef.current) {
             messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
-          } else if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: 'auto', block: 'end' });
           }
         }, 50);
       });
     }
-  }, [messages, loading]);
+  }, [messages, messagesLoading, selectedDoctorId]);
 
-  // Force scroll to bottom when component mounts
-  useEffect(() => {
-    if (!loading) {
-      setTimeout(() => {
-        if (messagesContainerRef.current) {
-          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
-        } else if (messagesEndRef.current) {
-          messagesEndRef.current.scrollIntoView({ behavior: 'auto', block: 'end' });
-        }
-      }, 200);
-    }
-  }, [loading]);
+  // Select doctor
+  const handleSelectDoctor = (doctorId: string, doctorName: string) => {
+    setSelectedDoctorId(doctorId);
+    setSelectedDoctorName(doctorName);
+    setShowNewChat(false);
+    setDoctorSearchQuery('');
+  };
+
+  // Start new chat
+  const handleStartNewChat = () => {
+    setShowNewChat(true);
+    setSelectedDoctorId(null);
+    setSelectedDoctorName(null);
+    setDoctorSearchQuery('');
+  };
 
   // Send message
   const handleSendMessage = async () => {
     const textToSend = newMessage.trim();
-    if (!patientId || !textToSend || !selectedRecipientId) {
+    if (!patientId || !textToSend || !selectedDoctorId) {
       showToast('Kérjük, írjon üzenetet', 'error');
       return;
     }
@@ -309,15 +347,13 @@ export function PatientMessages() {
       
       const response = await fetch('/api/messages', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
           patientId,
           subject: null,
           message: textToSend,
-          recipientDoctorId: selectedRecipientId,
+          recipientDoctorId: selectedDoctorId,
         }),
       });
 
@@ -335,9 +371,7 @@ export function PatientMessages() {
       if (data.message) {
         messagesLoadedRef.current.add(data.message.id);
         setMessages(prev => {
-          if (prev.some(m => m.id === data.message.id)) {
-            return prev;
-          }
+          if (prev.some(m => m.id === data.message.id)) return prev;
           return [...prev, {
             ...data.message,
             createdAt: new Date(data.message.createdAt),
@@ -348,6 +382,8 @@ export function PatientMessages() {
       
       setNewMessage('');
       showToast('Üzenet sikeresen elküldve', 'success');
+
+      setTimeout(() => fetchConversations(), 500);
     } catch (error: any) {
       console.error('Hiba az üzenet küldésekor:', error);
       showToast(error.message || 'Hiba történt az üzenet küldésekor', 'error');
@@ -356,12 +392,23 @@ export function PatientMessages() {
     }
   };
 
+  // Filtered doctors for new chat
+  const filteredRecipients = recipients.filter(r => {
+    const existingConvDoctorIds = conversations.map(c => c.doctorId);
+    const notAlreadyInConversation = !existingConvDoctorIds.includes(r.id);
+    if (!doctorSearchQuery) return notAlreadyInConversation;
+    const query = doctorSearchQuery.toLowerCase();
+    return notAlreadyInConversation && r.name.toLowerCase().includes(query);
+  });
+
   if (loading) {
     return (
-      <div className="card p-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-4 bg-gray-200 rounded w-1/4"></div>
-          <div className="h-20 bg-gray-200 rounded"></div>
+      <div className="card">
+        <div className="flex h-[calc(100vh-200px)] sm:h-[700px] border border-gray-200 rounded-lg overflow-hidden bg-white items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-500">Betöltés...</p>
+          </div>
         </div>
       </div>
     );
@@ -375,21 +422,93 @@ export function PatientMessages() {
     );
   }
 
-  // Detail header content
+  const formatConversationTime = (dateStr: string) => {
+    const d = new Date(dateStr);
+    if (isToday(d)) return format(d, 'HH:mm');
+    if (isYesterday(d)) return 'Tegnap';
+    return format(d, 'MM.dd.');
+  };
+
+  // Conversations list
+  const conversationsListContent = conversations.length === 0 && !loading ? (
+    <div className="p-4 text-center text-gray-500 text-sm">
+      Még nincsenek beszélgetések
+      <p className="text-xs mt-2 text-gray-400">Kattintson az &quot;Új beszélgetés&quot; gombra egy orvos kiválasztásához</p>
+    </div>
+  ) : (
+    conversations.map((conv) => {
+      const isSelected = selectedDoctorId === conv.doctorId;
+      const monogram = getMonogram(conv.doctorName);
+      const recipient = recipients.find(r => r.id === conv.doctorId);
+      
+      return (
+        <div
+          key={conv.doctorId}
+          onClick={() => handleSelectDoctor(conv.doctorId, conv.doctorName)}
+          className={`p-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${
+            isSelected ? 'bg-blue-100 border-l-4 border-l-blue-600' : ''
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ${
+              conv.unreadCount > 0 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+            }`}>
+              {monogram}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className={`text-sm truncate ${conv.unreadCount > 0 ? 'font-semibold text-gray-900' : 'font-medium text-gray-900'}`}>
+                    {conv.doctorName}
+                  </span>
+                  {recipient?.type === 'treating_doctor' && (
+                    <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full flex-shrink-0">Kezelőorvos</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {conv.lastMessage && (
+                    <span className="text-xs text-gray-400">{formatConversationTime(conv.lastMessage.createdAt)}</span>
+                  )}
+                  {conv.unreadCount > 0 && (
+                    <span className="px-1.5 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full min-w-[20px] text-center">
+                      {conv.unreadCount}
+                    </span>
+                  )}
+                </div>
+              </div>
+              {conv.lastMessage && (
+                <p className={`text-xs mt-0.5 truncate ${conv.unreadCount > 0 ? 'text-gray-700 font-medium' : 'text-gray-500'}`}>
+                  {conv.lastMessage.senderType === 'patient' ? 'Ön: ' : ''}
+                  {conv.lastMessage.message.substring(0, 50)}
+                  {conv.lastMessage.message.length > 50 ? '...' : ''}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    })
+  );
+
+  // Detail header
   const detailHeaderContent = (
     <>
-      <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">Üzenetek</h3>
-      {doctorName && (
-        <p className="text-xs sm:text-sm text-gray-500 truncate mt-1">{doctorName}</p>
-      )}
+      <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">
+        {selectedDoctorName || 'Üzenetek'}
+      </h3>
+      {(() => {
+        const recipient = recipients.find(r => r.id === selectedDoctorId);
+        if (recipient?.type === 'treating_doctor') {
+          return <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full mt-1 inline-block">Kezelőorvos</span>;
+        }
+        if (recipient?.type === 'admin') {
+          return <span className="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full mt-1 inline-block">Admin</span>;
+        }
+        return null;
+      })()}
       <div className="flex items-center gap-2 flex-shrink-0 mt-1 sm:mt-0">
         {isConnected && (
           <div className="w-2 h-2 bg-green-500 rounded-full animate-connection-pulse" title="Kapcsolódva" />
-        )}
-        {unreadCount > 0 && (
-          <span className="px-2 py-1 text-xs font-semibold text-white bg-red-500 rounded-full">
-            {unreadCount}
-          </span>
         )}
       </div>
     </>
@@ -400,24 +519,28 @@ export function PatientMessages() {
     <>
       {/* Messages */}
       <div ref={messagesContainerRef} className="flex-1 overflow-y-auto bg-gradient-to-b from-gray-50 to-gray-100 p-4 space-y-4 scroll-smooth">
-        {messages.length === 0 ? (
+        {messagesLoading ? (
+          <div className="text-center py-12">
+            <Loader2 className="w-8 h-8 mx-auto mb-2 text-gray-300 animate-spin" />
+            <p className="text-sm text-gray-500">Üzenetek betöltése...</p>
+          </div>
+        ) : messages.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             <MessageCircle className="w-16 h-16 mx-auto mb-4 text-gray-300" />
             <p className="text-base font-medium">Még nincsenek üzenetek</p>
-            <p className="text-sm mt-2">Küldjön üzenetet az orvosának!</p>
+            <p className="text-sm mt-2">Küldjön üzenetet!</p>
           </div>
         ) : (
           messages.map((message, index) => {
-            // Páciens portálon: beteg üzenetei JOBBRA (zöld), orvos üzenetei BALRA (fehér/kék)
-            const isMyMessage = message.senderType === 'patient'; // Beteg üzenete = saját üzenet
-            const isTheirMessage = message.senderType === 'doctor'; // Orvos üzenete = másik üzenet
+            const isMyMessage = message.senderType === 'patient';
+            const isTheirMessage = message.senderType === 'doctor';
             const isUnread = !message.readAt && isTheirMessage;
             const isPending = message.pending === true;
             const isRead = message.readAt !== null;
 
             const senderName = isMyMessage 
               ? (patientName || 'Én')
-              : (doctorName || 'Orvos');
+              : (selectedDoctorName || 'Orvos');
             const lastName = getLastName(senderName);
             const monogram = getMonogram(senderName);
 
@@ -444,23 +567,19 @@ export function PatientMessages() {
                 className={`flex w-full ${isMyMessage ? 'justify-end' : 'justify-start'} animate-message-pop`}
               >
                 <div className={`flex gap-2 max-w-[80%] sm:max-w-[70%] ${isMyMessage ? 'flex-row-reverse' : 'flex-row'}`}>
-                  {/* Avatar - csak másik üzeneteinél */}
                   {isTheirMessage && (
                     <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-semibold">
                       {monogram}
                     </div>
                   )}
                   
-                  {/* Message Bubble */}
                   <div className={`flex flex-col ${isMyMessage ? 'items-end' : 'items-start'}`}>
-                    {/* Sender name - csak másik üzeneteinél */}
                     {isTheirMessage && (
                       <div className="text-xs font-medium text-gray-600 mb-1 px-1">
                         {lastName}
                       </div>
                     )}
                     
-                    {/* Message bubble */}
                     <div
                       className={`rounded-2xl px-4 py-2.5 shadow-sm transition-all duration-200 ${
                         isMyMessage
@@ -485,7 +604,6 @@ export function PatientMessages() {
                         />
                       </div>
                       
-                      {/* Footer with time and status */}
                       <div className={`flex items-center gap-1.5 mt-1.5 ${isMyMessage ? 'justify-end' : 'justify-start'}`}>
                         <span className={`text-[10px] ${isMyMessage ? 'text-green-100' : 'text-gray-500'}`}>
                           {format(new Date(message.createdAt), 'HH:mm', { locale: hu })}
@@ -510,7 +628,6 @@ export function PatientMessages() {
                     </div>
                   </div>
                   
-                  {/* Spacer for alignment */}
                   {isMyMessage && <div className="flex-shrink-0 w-8"></div>}
                 </div>
               </div>
@@ -523,67 +640,6 @@ export function PatientMessages() {
 
       {/* Input Area */}
       <div className="flex-shrink-0 border-t bg-white p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-4">
-        {recipients.length > 1 && (
-          <div className="mb-2 sm:mb-3 relative">
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-              Üzenet küldése:
-            </label>
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setShowRecipientSelector(!showRecipientSelector)}
-                className="w-full px-3 py-2 text-left text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 flex items-center justify-between transition-all duration-200 mobile-touch-target"
-              >
-                <span className="truncate">
-                  {selectedRecipientId
-                    ? recipients.find(r => r.id === selectedRecipientId)?.name || 'Válasszon címzettet'
-                    : 'Válasszon címzettet'}
-                </span>
-                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${showRecipientSelector ? 'transform rotate-180' : ''}`} />
-              </button>
-              {showRecipientSelector && (
-                <>
-                  <div
-                    className="fixed inset-0 z-10"
-                    onClick={() => setShowRecipientSelector(false)}
-                  />
-                  <div className="absolute z-20 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto">
-                    {recipients.map((recipient) => (
-                      <button
-                        key={recipient.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedRecipientId(recipient.id);
-                          setShowRecipientSelector(false);
-                        }}
-                        className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 transition-colors duration-200 mobile-touch-target ${
-                          selectedRecipientId === recipient.id ? 'bg-blue-50 text-blue-700' : 'text-gray-900'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span>{recipient.name}</span>
-                          {recipient.type === 'treating_doctor' && (
-                            <span className="text-xs text-gray-500">(Kezelőorvos)</span>
-                          )}
-                          {recipient.type === 'admin' && (
-                            <span className="text-xs text-gray-500">(Admin)</span>
-                          )}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-        {recipients.length === 1 && (
-          <div className="mb-2 sm:mb-3">
-            <p className="text-xs sm:text-sm text-gray-600">
-              Üzenet küldése: <span className="font-medium text-gray-900">{recipients[0].name}</span>
-            </p>
-          </div>
-        )}
         <div className="flex items-end gap-2">
           <textarea
             value={newMessage}
@@ -601,7 +657,7 @@ export function PatientMessages() {
           />
           <button
             onClick={handleSendMessage}
-            disabled={sending || !newMessage.trim() || !selectedRecipientId}
+            disabled={sending || !newMessage.trim() || !selectedDoctorId}
             className="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white rounded-full w-10 h-10 sm:w-auto sm:h-auto sm:rounded-xl sm:px-6 sm:py-2.5 flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 shadow-sm hover:shadow-md"
           >
             {sending ? (
@@ -616,12 +672,67 @@ export function PatientMessages() {
     </>
   );
 
-  // Empty conversations list (portal has no list, only single conversation)
-  const conversationsListContent = (
-    <div className="p-4 text-center text-gray-500 text-sm">
-      <MessageCircle className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-      <p>Üzenetek</p>
-    </div>
+  // New chat content
+  const newChatContent = (
+    <>
+      <div className="p-3 sm:p-4 border-b border-gray-200 bg-gray-50">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900">Új beszélgetés</h3>
+          <button
+            onClick={() => {
+              setShowNewChat(false);
+              setDoctorSearchQuery('');
+            }}
+            className="p-1 hover:bg-gray-200 rounded transition-colors mobile-touch-target"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            value={doctorSearchQuery}
+            onChange={(e) => setDoctorSearchQuery(e.target.value)}
+            placeholder="Orvos keresése..."
+            className="form-input w-full pl-9"
+            autoFocus
+          />
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto">
+        {filteredRecipients.length === 0 ? (
+          <div className="p-4 text-center text-gray-500 text-sm">
+            {doctorSearchQuery ? 'Nincs találat' : 'Minden orvossal van már beszélgetése'}
+          </div>
+        ) : (
+          filteredRecipients.map((recipient) => (
+            <div
+              key={recipient.id}
+              onClick={() => handleSelectDoctor(recipient.id, recipient.name)}
+              className="p-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-sm font-semibold flex-shrink-0">
+                  {getMonogram(recipient.name)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-medium text-gray-900 truncate">{recipient.name}</span>
+                    {recipient.type === 'treating_doctor' && (
+                      <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full flex-shrink-0">Kezelőorvos</span>
+                    )}
+                    {recipient.type === 'admin' && (
+                      <span className="text-[10px] text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded-full flex-shrink-0">Admin</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </>
   );
 
   return (
@@ -629,12 +740,20 @@ export function PatientMessages() {
       <MessagesShell
         listTitle="Üzenetek"
         listIcon={<MessageCircle className="w-5 h-5" />}
-        unreadCount={unreadCount}
+        unreadCount={totalUnreadCount}
+        onNewChat={handleStartNewChat}
         conversationsList={conversationsListContent}
-        showDetail={true}
+        showDetail={!!selectedDoctorId}
+        onBack={() => {
+          setSelectedDoctorId(null);
+          setSelectedDoctorName(null);
+          setMessages([]);
+        }}
         detailHeader={detailHeaderContent}
         detailContent={detailContent}
         detailActions={[]}
+        showNewChat={showNewChat}
+        newChatContent={newChatContent}
       />
     </div>
   );

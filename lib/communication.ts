@@ -129,8 +129,9 @@ export async function getPatientMessages(
     unreadOnly?: boolean;
     limit?: number;
     offset?: number;
-    doctorId?: string | null; // Ha meg van adva, csak az adott orvosnak küldött üzeneteket mutatja (betegtől érkező üzeneteknél)
-    isAdmin?: boolean; // Ha true, admin minden üzenetet lát (nem szűrünk recipient_doctor_id alapján)
+    doctorId?: string | null;
+    isAdmin?: boolean;
+    isPatientPortal?: boolean;
   }
 ): Promise<Message[]> {
   const pool = getDbPool();
@@ -176,14 +177,17 @@ export async function getPatientMessages(
   //   * (recipient_doctor_id IS NULL ÉS az orvos a kezelőorvos)
   // - Ha orvos küldi (sender_type = 'doctor'), akkor csak akkor mutatjuk, ha sender_id = doctorId
   if (options?.doctorId && !options?.isAdmin) {
-    if (isTreatingDoctor) {
-      // Ha a kezelőorvos, akkor látja a recipient_doctor_id IS NULL üzeneteket is
+    if (options?.isPatientPortal) {
+      query += ` AND (
+        (m.sender_type = 'patient' AND m.recipient_doctor_id = $${params.length + 1})
+        OR (m.sender_type = 'doctor' AND m.sender_id = $${params.length + 1})
+      )`;
+    } else if (isTreatingDoctor) {
       query += ` AND (
         (m.sender_type = 'patient' AND (m.recipient_doctor_id = $${params.length + 1} OR m.recipient_doctor_id IS NULL))
         OR (m.sender_type = 'doctor' AND m.sender_id = $${params.length + 1})
       )`;
     } else {
-      // Ha nem a kezelőorvos, akkor csak az explicit neki küldött üzeneteket látja
       query += ` AND (
         (m.sender_type = 'patient' AND m.recipient_doctor_id = $${params.length + 1})
         OR (m.sender_type = 'doctor' AND m.sender_id = $${params.length + 1})
