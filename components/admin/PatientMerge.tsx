@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { Search, ArrowRight, AlertTriangle, CheckCircle, X, Users, Plus, Trash2 } from 'lucide-react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { Search, ArrowRight, AlertTriangle, CheckCircle, X, Users, Plus, Trash2, Repeat } from 'lucide-react';
 
 interface PatientSummary {
   id: string;
@@ -82,6 +82,25 @@ export function PatientMerge() {
 
   const removeSecondary = (id: string) => {
     setSecondaryPatients(prev => prev.filter(p => p.id !== id));
+  };
+
+  const oldestIsNotPrimary = useMemo(() => {
+    if (!primaryPatient || secondaryPatients.length === 0) return false;
+    const allPatients = [primaryPatient, ...secondaryPatients];
+    const oldest = allPatients.reduce((a, b) =>
+      new Date(a.createdAt).getTime() <= new Date(b.createdAt).getTime() ? a : b
+    );
+    return oldest.id !== primaryPatient.id;
+  }, [primaryPatient, secondaryPatients]);
+
+  const swapToOldest = () => {
+    if (!primaryPatient) return;
+    const allPatients = [primaryPatient, ...secondaryPatients];
+    const oldest = allPatients.reduce((a, b) =>
+      new Date(a.createdAt).getTime() <= new Date(b.createdAt).getTime() ? a : b
+    );
+    setPrimaryPatient(oldest);
+    setSecondaryPatients(allPatients.filter(p => p.id !== oldest.id));
   };
 
   const handleMerge = async () => {
@@ -219,6 +238,25 @@ export function PatientMerge() {
             </div>
           </div>
         </div>
+
+        {oldestIsNotPrimary && (
+          <div className="bg-blue-50 border border-blue-300 rounded-lg p-4 mb-6">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <Repeat className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                <p className="text-sm text-blue-800">
+                  A kiválasztott elsődleges profil <strong>nem a legrégebbi</strong>. Javasoljuk, hogy a legkorábban létrehozott profilt tartsd meg.
+                </p>
+              </div>
+              <button
+                onClick={swapToOldest}
+                className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-4 py-2 rounded-md transition-colors whitespace-nowrap"
+              >
+                Legrégebbi legyen az elsődleges
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-4 items-start mb-6">
           <div className="space-y-3">
