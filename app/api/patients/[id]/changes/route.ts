@@ -37,30 +37,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
 
   const patient = patientResult.rows[0];
 
-  // Role-based access control (same as patient view)
-  if (role === 'sebészorvos' && userEmail) {
-    // Sebészorvos: csak azokat a betegeket látja, akik az ő intézményéből származnak
-    const userResult = await pool.query(
-      `SELECT intezmeny FROM users WHERE email = $1`,
-      [userEmail]
-    );
-
-    if (userResult.rows.length > 0 && userResult.rows[0].intezmeny) {
-      const userInstitution = userResult.rows[0].intezmeny;
-      if (patient.beutaloIntezmeny !== userInstitution) {
-        return NextResponse.json(
-          { error: 'Nincs jogosultsága ehhez a beteghez' },
-          { status: 403 }
-        );
-      }
-    } else {
-      return NextResponse.json(
-        { error: 'Nincs jogosultsága ehhez a beteghez' },
-        { status: 403 }
-      );
-    }
-  }
-  // fogpótlástanász, admin: mindent látnak (nincs szűrés)
+  // All authenticated users can see all patients
 
   // Get query parameters for filtering
   const { searchParams } = new URL(req.url);

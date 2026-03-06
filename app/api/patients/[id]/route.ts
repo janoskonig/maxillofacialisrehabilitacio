@@ -394,44 +394,7 @@ async function checkEditPermission(
   oldPatient: Record<string, unknown>,
   correlationId: string
 ): Promise<NextResponse | null> {
-  if (role === 'sebészorvos' && userEmail) {
-    const userResult = await pool.query(
-      `SELECT doktor_neve FROM users WHERE email = $1`,
-      [userEmail]
-    );
-
-    if (userResult.rows.length > 0 && userResult.rows[0].doktor_neve) {
-      if (oldPatient.beutalo_orvos !== userResult.rows[0].doktor_neve) {
-        const response = NextResponse.json(
-          {
-            error: {
-              name: 'ForbiddenError',
-              status: 403,
-              message: 'Nincs jogosultsága ehhez a beteg szerkesztéséhez. Csak a saját beutalt betegeit szerkesztheti.',
-              correlationId,
-            },
-          },
-          { status: 403 }
-        );
-        response.headers.set('x-correlation-id', correlationId);
-        return response;
-      }
-    } else {
-      const response = NextResponse.json(
-        {
-          error: {
-            name: 'ForbiddenError',
-            status: 403,
-            message: 'Nincs jogosultsága ehhez a beteg szerkesztéséhez. Nincs beállítva doktor_neve.',
-            correlationId,
-          },
-        },
-        { status: 403 }
-      );
-      response.headers.set('x-correlation-id', correlationId);
-      return response;
-    }
-  }
+  // All authenticated users can edit all patients
   return null;
 }
 

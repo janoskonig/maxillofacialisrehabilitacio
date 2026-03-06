@@ -108,7 +108,7 @@ export const GET = optionalAuthHandler(async (req, { auth, correlationId }) => {
   let queryParams: any[] = [];
   let paramIndex = 1;
 
-  const needsSurgeonJoin = role === 'sebészorvos' && !!userEmail;
+  const needsSurgeonJoin = false;
   const needsReferralJoin = needsSurgeonJoin || !!query;
 
   const prefixedListFields = PATIENT_LIST_FIELDS.split(',').map(f => {

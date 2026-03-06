@@ -33,20 +33,7 @@ export const GET = authedHandler(async (req, { auth }) => {
 
   query += ` WHERE m.sender_type = 'patient'`;
 
-  if (auth.role !== 'admin') {
-    query += ` AND (
-      p.kezeleoorvos = $${paramIndex} OR 
-      p.kezeleoorvos = (SELECT doktor_neve FROM users WHERE id = $${paramIndex + 1})
-    ) AND (
-      m.recipient_doctor_id = $${paramIndex + 1} 
-      OR (m.recipient_doctor_id IS NULL AND (
-        p.kezeleoorvos = $${paramIndex} OR 
-        p.kezeleoorvos = (SELECT doktor_neve FROM users WHERE id = $${paramIndex + 1})
-      ))
-    )`;
-    params.push(auth.email, auth.userId);
-    paramIndex += 2;
-  }
+  // All authenticated users can see all messages
 
   if (unreadOnly) {
     query += ` AND m.read_at IS NULL`;

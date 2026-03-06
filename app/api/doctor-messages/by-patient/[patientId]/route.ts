@@ -25,34 +25,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
   }
 
   const patient = patientResult.rows[0];
-  const role = auth.role;
-  const userEmail = auth.email;
-  
-  if (role === 'sebészorvos' && userEmail) {
-    const userResult = await pool.query(
-      `SELECT intezmeny FROM users WHERE email = $1`,
-      [userEmail]
-    );
-    
-    if (userResult.rows.length > 0 && userResult.rows[0].intezmeny) {
-      const userInstitution = userResult.rows[0].intezmeny;
-      const patientFullResult = await pool.query(
-        `SELECT beutalo_intezmeny FROM patient_referral WHERE patient_id = $1`,
-        [patientId]
-      );
-      if (patientFullResult.rows[0]?.beutalo_intezmeny !== userInstitution) {
-        return NextResponse.json(
-          { error: 'Nincs jogosultsága az üzenetek megtekintéséhez' },
-          { status: 403 }
-        );
-      }
-    } else {
-      return NextResponse.json(
-        { error: 'Nincs jogosultsága az üzenetek megtekintéséhez' },
-        { status: 403 }
-      );
-    }
-  }
+  // All authenticated users can access all doctor messages
 
   const result = await pool.query(
     `SELECT 

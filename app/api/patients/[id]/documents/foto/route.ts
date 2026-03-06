@@ -22,34 +22,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
     );
   }
 
-  // Role-based access control (same as patient view)
-  const role = auth.role;
-  const userEmail = auth.email;
-
-  if (role === 'sebészorvos' && userEmail) {
-    const userResult = await pool.query(
-      `SELECT intezmeny FROM users WHERE email = $1`,
-      [userEmail]
-    );
-    if (userResult.rows.length > 0 && userResult.rows[0].intezmeny) {
-      const userInstitution = userResult.rows[0].intezmeny;
-      const patientResult = await pool.query(
-        `SELECT beutalo_intezmeny FROM patient_referral WHERE patient_id = $1`,
-        [patientId]
-      );
-      if (patientResult.rows[0]?.beutalo_intezmeny !== userInstitution) {
-        return NextResponse.json(
-          { error: 'Nincs jogosultsága ehhez a beteghez' },
-          { status: 403 }
-        );
-      }
-    } else {
-      return NextResponse.json(
-        { error: 'Nincs jogosultsága ehhez a beteghez' },
-        { status: 403 }
-      );
-    }
-  }
+  // All authenticated users can access all documents
 
   // Get foto-tagged documents (tags containing "foto")
   const result = await pool.query(

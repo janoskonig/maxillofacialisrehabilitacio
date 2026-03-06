@@ -42,21 +42,8 @@ export const GET = authedHandler(async (req, { auth }) => {
 
   if (canSeeStages) {
     try {
-      const surgeonEmail = auth.role === 'sebészorvos' ? auth.email : null;
       let institutionFilter = '';
       const params: (string[] | string)[] = [PREPARATORY_STAGES];
-
-      if (surgeonEmail) {
-        const userRow = await pool.query(
-          'SELECT intezmeny FROM users WHERE email = $1',
-          [surgeonEmail]
-        );
-        const intezmeny = userRow.rows[0]?.intezmeny;
-        if (intezmeny) {
-          institutionFilter = ' AND r.beutalo_intezmeny = $2';
-          params.push(intezmeny);
-        }
-      }
 
       const stageResult = await pool.query(`
         WITH latest_stage AS (

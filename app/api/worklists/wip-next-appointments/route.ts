@@ -35,11 +35,7 @@ export const GET = authedHandler(async (req, { auth }) => {
     queryParams.push(patientId);
     paramIndex++;
   }
-  if (auth.role !== 'admin') {
-    extraConditions.push(`(pe.assigned_provider_id IS NULL OR pe.assigned_provider_id = $${paramIndex})`);
-    queryParams.push(auth.userId);
-    paramIndex++;
-  }
+  // All authenticated users can see all worklist items
   const extraWhere = extraConditions.length ? ' AND ' + extraConditions.join(' AND ') : '';
 
   const wipStageList = WIP_STAGE_CODES.map((c) => `'${c}'`).join(',');

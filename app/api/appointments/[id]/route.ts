@@ -65,13 +65,6 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
 
     const appointment = appointmentResult.rows[0];
 
-    if (auth.role === 'sebészorvos' && appointment.created_by !== auth.email) {
-      return NextResponse.json(
-        { error: 'Nincs jogosultsága ezt az időpontot módosítani' },
-        { status: 403 }
-      );
-    }
-
     if (auth.role === 'fogpótlástanász' && appointment.time_slot_user_email !== auth.email) {
       return NextResponse.json(
         { error: 'Nincs jogosultsága ezt az időpontot módosítani' },
@@ -404,13 +397,6 @@ export const DELETE = authedHandler(async (req, { auth, params }) => {
     }
 
     const appointment = appointmentResult.rows[0];
-
-    if (auth.role === 'sebészorvos' && appointment.created_by !== auth.email) {
-      return NextResponse.json(
-        { error: 'Nincs jogosultsága ezt az időpontot lemondani' },
-        { status: 403 }
-      );
-    }
 
     if (auth.role === 'fogpótlástanász' && appointment.time_slot_user_email !== auth.email) {
       return NextResponse.json(

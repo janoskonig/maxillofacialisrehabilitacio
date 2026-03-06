@@ -352,7 +352,7 @@ export default function Home() {
                 <p className="text-xs text-gray-500 hidden sm:block font-medium mt-0.5">
                   BETEGREGISZTER ÉS IDŐPONTKEZELŐ
                 </p>
-                {userRole === 'sebészorvos' && userInstitution && (
+                {false && userRole === 'sebészorvos' && userInstitution && (
                   <p className="text-xs font-semibold text-medical-error mt-0.5 truncate badge badge-error inline-block px-2 py-0.5 mt-1">
                     SEBÉSZ MÓD (csak a {userInstitution} páciensei)
                   </p>

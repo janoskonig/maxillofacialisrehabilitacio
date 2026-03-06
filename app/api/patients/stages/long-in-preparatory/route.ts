@@ -17,21 +17,8 @@ export const GET = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'], 
     return NextResponse.json({ patients: [] });
   }
 
-  const surgeonEmail = auth.role === 'sebészorvos' ? auth.email : null;
   let institutionFilter = '';
   const params: (string[] | string)[] = [PREPARATORY_STAGES];
-
-  if (surgeonEmail) {
-    const userRow = await pool.query(
-      'SELECT intezmeny FROM users WHERE email = $1',
-      [surgeonEmail]
-    );
-    const intezmeny = userRow.rows[0]?.intezmeny;
-    if (intezmeny) {
-      institutionFilter = ' AND r.beutalo_intezmeny = $2';
-      params.push(intezmeny);
-    }
-  }
 
   const query = `
     WITH latest_stage AS (

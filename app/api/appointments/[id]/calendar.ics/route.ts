@@ -35,13 +35,6 @@ export const GET = authedHandler(async (req, { auth, params }) => {
 
   const appointment = appointmentResult.rows[0];
 
-  if (auth.role === 'sebészorvos' && appointment.created_by !== auth.email) {
-    return NextResponse.json(
-      { error: 'Nincs jogosultsága ehhez a foglaláshoz' },
-      { status: 403 }
-    );
-  }
-
   const icsFile = await generateIcsFile({
     patientName: appointment.patient_name,
     patientTaj: appointment.patient_taj,
