@@ -40,7 +40,7 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
   }
 
   const body = await req.json();
-  const { startTime, status, cim, teremszam } = body;
+  const { startTime, status, cim, teremszam, slotPurpose, durationMinutes } = body;
 
   const updates: string[] = [];
   const values: any[] = [];
@@ -86,6 +86,39 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
     paramIndex++;
   }
 
+  if (slotPurpose !== undefined) {
+    if (existingTimeSlot.status === 'booked') {
+      return NextResponse.json(
+        { error: 'Foglalt slot célját nem lehet módosítani' },
+        { status: 400 }
+      );
+    }
+    const validPurposes = ['consult', 'work', 'control', 'flexible'];
+    const finalPurpose = slotPurpose === null || slotPurpose === '' ? null : slotPurpose;
+    if (finalPurpose !== null && !validPurposes.includes(finalPurpose)) {
+      return NextResponse.json(
+        { error: 'Érvénytelen slot cél. Engedélyezett értékek: consult, work, control, flexible' },
+        { status: 400 }
+      );
+    }
+    updates.push(`slot_purpose = $${paramIndex}`);
+    values.push(finalPurpose);
+    paramIndex++;
+  }
+
+  if (durationMinutes !== undefined) {
+    const dur = durationMinutes === null ? null : Number(durationMinutes);
+    if (dur !== null && (isNaN(dur) || dur <= 0)) {
+      return NextResponse.json(
+        { error: 'Az időtartamnak pozitív számnak kell lennie' },
+        { status: 400 }
+      );
+    }
+    updates.push(`duration_minutes = $${paramIndex}`);
+    values.push(dur);
+    paramIndex++;
+  }
+
   if (updates.length === 0) {
     return NextResponse.json(
       { error: 'Nincs módosítandó mező' },
@@ -104,6 +137,10 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
       status,
       cim,
       teremszam,
+      slot_purpose as "slotPurpose",
+      source,
+      state,
+      duration_minutes as "durationMinutes",
       created_at as "createdAt",
       updated_at as "updatedAt"
   `;

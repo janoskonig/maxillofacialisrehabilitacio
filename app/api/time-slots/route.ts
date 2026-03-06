@@ -35,7 +35,11 @@ export const GET = authedHandler(async (req, { auth }) => {
       ats.created_at as "createdAt",
       ats.updated_at as "updatedAt",
       u.email as "userEmail",
-      u.doktor_neve as "dentistName"
+      u.doktor_neve as "dentistName",
+      ats.slot_purpose as "slotPurpose",
+      ats.source,
+      ats.state,
+      ats.duration_minutes as "durationMinutes"
     FROM available_time_slots ats
     JOIN users u ON ats.user_id = u.id
     ${statusFilter}

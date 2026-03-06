@@ -98,6 +98,7 @@ export async function createAppointment(
 
   const durationMinutes = 30;
   let usedOverride = false;
+  let effectivePool: 'consult' | 'work' | 'control' = poolValue;
 
   // Pre-fetch risk settings with a rough start estimate
   let noShowRisk = 0;
@@ -143,95 +144,89 @@ export async function createAppointment(
         } catch { /* episode_pathways table might not exist */ }
       }
       if (!hasAnyPathway) {
-        await db.query('ROLLBACK');
-        return {
-          ok: false,
-          validationError: {
-            error: 'Epizódhoz nincs hozzárendelve kezelési út. Először válasszon pathway-t.',
-            code: 'NO_CARE_PATHWAY',
-            overrideHint: 'Assign care_pathway_id to episode before booking work pool.',
-            status: 409,
-          },
-        };
+        // No pathway → downgrade to consult pool (consultation before pathway assignment)
+        effectivePool = 'consult';
       }
 
-      // Derive requiresPrecommit from pathway step definition
-      let allPathwaySteps: Array<{ step_code: string; requires_precommit?: boolean }> = [];
-      try {
-        const multiPwResult = await db.query(
-          `SELECT cp.steps_json FROM episode_pathways ep
-           JOIN care_pathways cp ON ep.care_pathway_id = cp.id
-           WHERE ep.episode_id = $1`,
-          [episodeId],
-        );
-        for (const row of multiPwResult.rows) {
-          if (Array.isArray(row.steps_json)) {
-            allPathwaySteps.push(...(row.steps_json as Array<{ step_code: string; requires_precommit?: boolean }>));
+      if (hasAnyPathway) {
+        // Derive requiresPrecommit from pathway step definition
+        let allPathwaySteps: Array<{ step_code: string; requires_precommit?: boolean }> = [];
+        try {
+          const multiPwResult = await db.query(
+            `SELECT cp.steps_json FROM episode_pathways ep
+             JOIN care_pathways cp ON ep.care_pathway_id = cp.id
+             WHERE ep.episode_id = $1`,
+            [episodeId],
+          );
+          for (const row of multiPwResult.rows) {
+            if (Array.isArray(row.steps_json)) {
+              allPathwaySteps.push(...(row.steps_json as Array<{ step_code: string; requires_precommit?: boolean }>));
+            }
+          }
+        } catch {
+          if (episodeLock.rows[0].care_pathway_id) {
+            const pathwayResult = await db.query(
+              `SELECT cp.steps_json FROM care_pathways cp WHERE cp.id = $1`,
+              [episodeLock.rows[0].care_pathway_id],
+            );
+            allPathwaySteps = (pathwayResult.rows[0]?.steps_json as Array<{ step_code: string; requires_precommit?: boolean }>) ?? [];
           }
         }
-      } catch {
-        if (episodeLock.rows[0].care_pathway_id) {
-          const pathwayResult = await db.query(
-            `SELECT cp.steps_json FROM care_pathways cp WHERE cp.id = $1`,
-            [episodeLock.rows[0].care_pathway_id],
-          );
-          allPathwaySteps = (pathwayResult.rows[0]?.steps_json as Array<{ step_code: string; requires_precommit?: boolean }>) ?? [];
-        }
-      }
-      const matchedStep = typeof stepCode === 'string' ? allPathwaySteps.find((s) => s.step_code === stepCode) : null;
-      const pathwayStepRequiresPrecommit = matchedStep?.requires_precommit === true;
-      requiresPrecommit = pathwayStepRequiresPrecommit || bodyRequiresPrecommit;
+        const matchedStep = typeof stepCode === 'string' ? allPathwaySteps.find((s) => s.step_code === stepCode) : null;
+        const pathwayStepRequiresPrecommit = matchedStep?.requires_precommit === true;
+        requiresPrecommit = pathwayStepRequiresPrecommit || bodyRequiresPrecommit;
 
-      const assignedProviderId = episodeLock.rows[0].assigned_provider_id;
-      if (assignedProviderId && auth.role !== 'admin') {
-        if (auth.userId !== assignedProviderId) {
-          await db.query('ROLLBACK');
-          return {
-            ok: false,
-            validationError: {
-              error: 'Csak a hozzárendelt felelős orvos (vagy admin) foglalhat work pool időpontot ehhez az epizódhoz.',
-              code: 'ASSIGNED_PROVIDER_ONLY',
-              status: 403,
-            },
-          };
+        const assignedProviderId = episodeLock.rows[0].assigned_provider_id;
+        if (assignedProviderId && auth.role !== 'admin') {
+          if (auth.userId !== assignedProviderId) {
+            await db.query('ROLLBACK');
+            return {
+              ok: false,
+              validationError: {
+                error: 'Csak a hozzárendelt felelős orvos (vagy admin) foglalhat work pool időpontot ehhez az epizódhoz.',
+                code: 'ASSIGNED_PROVIDER_ONLY',
+                status: 403,
+              },
+            };
+          }
         }
-      }
 
-      const oneHardNext = await checkOneHardNext(episodeId, 'work', {
-        requiresPrecommit: requiresPrecommit === true,
-        stepCode: typeof stepCode === 'string' ? stepCode : undefined,
-      });
-      if (!oneHardNext.allowed) {
-        const strictOneHardNext = await getSchedulingFeatureFlag('strict_one_hard_next');
-        const mayOverride =
-          !strictOneHardNext &&
-          (auth.role === 'admin' || auth.role === 'sebészorvos' || auth.role === 'fogpótlástanász') &&
-          overrideReason &&
-          typeof overrideReason === 'string' &&
-          overrideReason.trim().length >= 10;
-        if (mayOverride) {
+        const oneHardNext = await checkOneHardNext(episodeId, 'work', {
+          requiresPrecommit: requiresPrecommit === true,
+          stepCode: typeof stepCode === 'string' ? stepCode : undefined,
+        });
+        if (!oneHardNext.allowed) {
+          const strictOneHardNext = await getSchedulingFeatureFlag('strict_one_hard_next');
+          const mayOverride =
+            !strictOneHardNext &&
+            (auth.role === 'admin' || auth.role === 'sebészorvos' || auth.role === 'fogpótlástanász') &&
+            overrideReason &&
+            typeof overrideReason === 'string' &&
+            overrideReason.trim().length >= 10;
+          if (mayOverride) {
+            await db.query(
+              `INSERT INTO scheduling_override_audit (episode_id, user_id, override_reason) VALUES ($1, $2, $3)`,
+              [episodeId, auth.userId, overrideReason!.trim()],
+            );
+            usedOverride = true;
+          } else {
+            await db.query('ROLLBACK');
+            return {
+              ok: false,
+              validationError: {
+                error: oneHardNext.reason ?? 'Episode already has a future work appointment (one-hard-next)',
+                code: 'ONE_HARD_NEXT_VIOLATION',
+                overrideHint: 'Provide overrideReason (min 10 chars) to bypass. Admin/sebészorvos/fogpótlástanász only.',
+                status: 409,
+              },
+            };
+          }
+        } else if (requiresPrecommit === true && episodeId) {
           await db.query(
             `INSERT INTO scheduling_override_audit (episode_id, user_id, override_reason) VALUES ($1, $2, $3)`,
-            [episodeId, auth.userId, overrideReason!.trim()],
+            [episodeId, auth.userId, `precommit: ${typeof stepCode === 'string' ? stepCode : 'unknown'}`],
           );
-          usedOverride = true;
-        } else {
-          await db.query('ROLLBACK');
-          return {
-            ok: false,
-            validationError: {
-              error: oneHardNext.reason ?? 'Episode already has a future work appointment (one-hard-next)',
-              code: 'ONE_HARD_NEXT_VIOLATION',
-              overrideHint: 'Provide overrideReason (min 10 chars) to bypass. Admin/sebészorvos/fogpótlástanász only.',
-              status: 409,
-            },
-          };
         }
-      } else if (requiresPrecommit === true && episodeId) {
-        await db.query(
-          `INSERT INTO scheduling_override_audit (episode_id, user_id, override_reason) VALUES ($1, $2, $3)`,
-          [episodeId, auth.userId, `precommit: ${typeof stepCode === 'string' ? stepCode : 'unknown'}`],
-        );
       }
     }
 
@@ -377,7 +372,7 @@ export async function createAppointment(
          duration_minutes as "durationMinutes"`,
       [
         patientId, episodeId || null, timeSlotId, auth.email, timeSlot.dentist_email, appointmentType || null,
-        poolValue, durationMinutes, noShowRisk, requiresConfirmation, holdExpiresAt,
+        effectivePool, durationMinutes, noShowRisk, requiresConfirmation, holdExpiresAt,
         usedOverride ? (auth.role === 'admin' ? 'admin_override' : 'surgeon_override') : createdVia,
         reqPrecommit, startTime, endTime, effectiveIntentId, effectiveStepCode, effectiveStepSeq,
       ],

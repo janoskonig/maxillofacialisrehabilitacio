@@ -1,13 +1,54 @@
 'use client';
 
 import { useState } from 'react';
-import { Calendar, Plus, Trash2, Edit2, Clock, X, ChevronDown, ChevronUp, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, Plus, Trash2, Edit2, Clock, X, ChevronDown, ChevronUp, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Globe } from 'lucide-react';
 import { formatDateTime, digitsOnly } from '@/lib/dateUtils';
 import { DateTimePicker } from './DateTimePicker';
 import { MobileTable } from './mobile/MobileTable';
 import { MobileKeyValueGrid } from './mobile/MobileKeyValueGrid';
 import { useTimeSlots } from '@/hooks/useTimeSlots';
-import type { TimeSlot, SortField, AppointmentType } from '@/hooks/useTimeSlots';
+import type { TimeSlot, SortField, AppointmentType, SlotPurpose } from '@/hooks/useTimeSlots';
+
+const PURPOSE_LABELS: Record<string, string> = {
+  consult: 'Konzultáció',
+  work: 'Munkafázis',
+  control: 'Kontroll',
+  flexible: 'Rugalmas',
+};
+
+const PURPOSE_COLORS: Record<string, string> = {
+  consult: 'bg-blue-100 text-blue-800',
+  work: 'bg-purple-100 text-purple-800',
+  control: 'bg-teal-100 text-teal-800',
+  flexible: 'bg-yellow-100 text-yellow-800',
+};
+
+function SlotPurposeBadge({ purpose }: { purpose?: SlotPurpose | null }) {
+  if (!purpose) {
+    return <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-500">(nincs)</span>;
+  }
+  return (
+    <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${PURPOSE_COLORS[purpose] || 'bg-gray-100 text-gray-500'}`}>
+      {PURPOSE_LABELS[purpose] || purpose}
+    </span>
+  );
+}
+
+function SlotSourceBadge({ source }: { source?: string | null }) {
+  if (source === 'google_calendar') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-emerald-50 text-emerald-700">
+        <Globe className="w-3 h-3" />
+        Google
+      </span>
+    );
+  }
+  return (
+    <span className="px-2 py-0.5 text-xs rounded-full bg-gray-50 text-gray-500">
+      Manuális
+    </span>
+  );
+}
 
 export function TimeSlotsManager() {
   // ── Hook: all data, filtering, sorting, pagination, CRUD ─────────
@@ -19,6 +60,7 @@ export function TimeSlotsManager() {
   const [newStartTime, setNewStartTime] = useState<Date | null>(null);
   const [newTeremszam, setNewTeremszam] = useState('');
   const [selectedUserId, setSelectedUserId] = useState('');
+  const [newSlotPurpose, setNewSlotPurpose] = useState<SlotPurpose | ''>('');
 
   const [modifyingAppointment, setModifyingAppointment] = useState<{
     appointmentId: string;
@@ -52,12 +94,14 @@ export function TimeSlotsManager() {
       startTime: newStartTime,
       teremszam: newTeremszam,
       userId: ts.userRole === 'admin' ? selectedUserId : undefined,
+      slotPurpose: newSlotPurpose || undefined,
     });
 
     if (success) {
       setNewStartTime(null);
       setNewTeremszam('');
       setSelectedUserId('');
+      setNewSlotPurpose('');
       setShowForm(false);
     }
   };
@@ -163,6 +207,8 @@ export function TimeSlotsManager() {
           )}
         </th>
         {renderSortableHeader('Időpont', 'startTime')}
+        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cél</th>
+        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Forrás</th>
         {renderSortableHeader('Cím', 'cim')}
         {renderSortableHeader('Teremszám', 'teremszam')}
         {renderSortableHeader('Fogpótlástanász', 'dentistName')}
@@ -200,6 +246,29 @@ export function TimeSlotsManager() {
                 {formatDateTime(slot.startTime)}
               </span>
             </div>
+          </td>
+          <td className="px-4 py-4 whitespace-nowrap">
+            {slot.status === 'available' ? (
+              <select
+                value={slot.slotPurpose || ''}
+                onChange={(e) => {
+                  const val = e.target.value as SlotPurpose | '';
+                  ts.updateSlotPurpose(slot.id, val || null);
+                }}
+                className="text-xs border border-gray-200 rounded px-1.5 py-0.5 bg-white focus:ring-1 focus:ring-blue-400"
+              >
+                <option value="">(nincs)</option>
+                <option value="consult">Konzultáció</option>
+                <option value="work">Munkafázis</option>
+                <option value="control">Kontroll</option>
+                <option value="flexible">Rugalmas</option>
+              </select>
+            ) : (
+              <SlotPurposeBadge purpose={slot.slotPurpose} />
+            )}
+          </td>
+          <td className="px-4 py-4 whitespace-nowrap">
+            <SlotSourceBadge source={slot.source} />
           </td>
           <td className="px-6 py-4">
             <span className={`text-sm ${isPast ? 'text-gray-500' : 'text-gray-600'}`}>
@@ -349,6 +418,11 @@ export function TimeSlotsManager() {
             <div className="flex-shrink-0 ml-2">
               {statusBadge}
             </div>
+          </div>
+
+          <div className="flex items-center gap-2 mb-3">
+            <SlotPurposeBadge purpose={slot.slotPurpose} />
+            <SlotSourceBadge source={slot.source} />
           </div>
 
           <MobileKeyValueGrid
@@ -816,6 +890,22 @@ export function TimeSlotsManager() {
                   className="form-input w-full"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Slot célja
+                </label>
+                <select
+                  value={newSlotPurpose}
+                  onChange={(e) => setNewSlotPurpose(e.target.value as SlotPurpose | '')}
+                  className="form-input w-full"
+                >
+                  <option value="">Nincs megadva</option>
+                  <option value="consult">Konzultáció</option>
+                  <option value="work">Munkafázis</option>
+                  <option value="control">Kontroll</option>
+                  <option value="flexible">Rugalmas</option>
+                </select>
+              </div>
               <div className="flex gap-2">
                 <button
                   onClick={handleCreateTimeSlot}
@@ -829,6 +919,7 @@ export function TimeSlotsManager() {
                     setNewStartTime(null);
                     setNewTeremszam('');
                     setSelectedUserId('');
+                    setNewSlotPurpose('');
                     setEditingSlot(null);
                   }}
                   className="btn-secondary"

@@ -6,10 +6,10 @@ import { savePatient, ApiError, TimeoutError } from '@/lib/storage';
 import { logEvent } from '@/lib/event-logger';
 import { formatDateForInput } from '@/lib/dateUtils';
 
-function ensureArray<T>(val: unknown): T[] {
-  if (Array.isArray(val)) return val;
+function ensureArray<T = Record<string, unknown>>(val: unknown): T[] {
+  if (Array.isArray(val)) return val as T[];
   if (typeof val === 'string') {
-    try { const parsed = JSON.parse(val); if (Array.isArray(parsed)) return parsed; } catch {}
+    try { const parsed = JSON.parse(val); if (Array.isArray(parsed)) return parsed as T[]; } catch {}
   }
   return [];
 }
@@ -349,17 +349,17 @@ export function usePatientAutoSave(
             kezelesiTervFelso:
               ensureArray(saved.kezelesiTervFelso).map((item) => ({
                 ...item,
-                tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma),
+                tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma as string | null | undefined),
               })),
             kezelesiTervAlso:
               ensureArray(saved.kezelesiTervAlso).map((item) => ({
                 ...item,
-                tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma),
+                tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma as string | null | undefined),
               })),
             kezelesiTervArcotErinto:
               ensureArray(saved.kezelesiTervArcotErinto).map((item) => ({
                 ...item,
-                tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma),
+                tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma as string | null | undefined),
               })),
           };
           reset(resetData, { keepDirty: false, keepDefaultValues: false });

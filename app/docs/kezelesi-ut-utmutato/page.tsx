@@ -106,6 +106,132 @@ export default function KezelesiUtUtmutatoPage() {
               <h3 className="text-lg font-medium text-gray-800 mt-4 mb-2">A beteg a portálon miért nem lát work időpontot?</h3>
               <p>A work (lenyomatvétel, próba, átadás) slotokat csak a rendelő foglalja worklistből. A beteg consult vagy admin által kiosztott időpontot kap.</p>
             </section>
+
+            {/* Időpont-rendszer */}
+            <section>
+              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">5. Időpont-rendszer (Slot-ok)</h2>
+
+              <h3 className="text-lg font-medium text-gray-800 mt-4 mb-2">Mi az a slot?</h3>
+              <p>
+                Egy slot egy szabad időablak, amelyre beteg foglalhat vagy a rendelő foglalhat számára. A slotokat kétféleképp lehet létrehozni:
+              </p>
+              <ul className="list-disc pl-6 space-y-1 mt-2">
+                <li><strong>Manuális kiírás:</strong> az Időpontkezelés oldalon az „Új időpont" gombbal.</li>
+                <li><strong>Google Naptár szinkron:</strong> ha a Beállítások oldalon be van kapcsolva, a Google Naptárból „szabad" nevű eseményeket importálja a rendszer automatikusan.</li>
+              </ul>
+
+              <h3 className="text-lg font-medium text-gray-800 mt-4 mb-2">Slot célok (slot_purpose)</h3>
+              <p>Minden slotnak lehet célja, amely meghatározza, milyen típusú foglalásra használható:</p>
+              <div className="overflow-x-auto mt-2">
+                <table className="min-w-full text-sm border border-gray-200 rounded-lg">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-2 text-left font-medium text-gray-700 border-b">Cél</th>
+                      <th className="px-4 py-2 text-left font-medium text-gray-700 border-b">Jelentés</th>
+                      <th className="px-4 py-2 text-left font-medium text-gray-700 border-b">Ki foglalhat?</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    <tr>
+                      <td className="px-4 py-2"><span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800">consult</span></td>
+                      <td className="px-4 py-2">Első konzultáció</td>
+                      <td className="px-4 py-2">Beteg portálról + rendelő</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2"><span className="px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 text-purple-800">work</span></td>
+                      <td className="px-4 py-2">Munkafázis (lenyomat, próba, átadás)</td>
+                      <td className="px-4 py-2">Csak rendelő (worklist)</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2"><span className="px-2 py-0.5 text-xs font-medium rounded-full bg-teal-100 text-teal-800">control</span></td>
+                      <td className="px-4 py-2">Kontroll vizsgálat</td>
+                      <td className="px-4 py-2">Rendelő + recall rendszer</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2"><span className="px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800">flexible</span></td>
+                      <td className="px-4 py-2">Rugalmas — bármelyik pool számára</td>
+                      <td className="px-4 py-2">Bárki (beteg portál is)</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2"><span className="px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-500">(nincs)</span></td>
+                      <td className="px-4 py-2">Nem címkézett</td>
+                      <td className="px-4 py-2">Ugyanúgy kezelődik mint flexible</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <h3 className="text-lg font-medium text-gray-800 mt-4 mb-2">Puha szűrés</h3>
+              <p>
+                A <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">flexible</code> és a <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">NULL</code> (nem címkézett) slotokból bármelyik pool foglalhat — ezek „puhán" szűrtek.
+              </p>
+
+              <h3 className="text-lg font-medium text-gray-800 mt-4 mb-2">Páciens portál korlátozás</h3>
+              <p>
+                A beteg a páciens portálon csak azokat a szabad slotokat látja, amelyek célja <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">consult</code> vagy <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">flexible</code>. A <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">work</code> és <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">control</code> slotok nem jelennek meg — ezeket a rendelő foglalja.
+              </p>
+            </section>
+
+            {/* Kapacitás-kezelés */}
+            <section>
+              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">6. Kapacitás-kezelés</h2>
+
+              <h3 className="text-lg font-medium text-gray-800 mt-4 mb-2">Éjszakai rebalance</h3>
+              <p>
+                Minden éjszaka lefut egy automatikus folyamat, amely a <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">flexible</code> (vagy nem címkézett) szabad slotokat átcímkézi, ha a heti kvóták alapján hiányzó slotok vannak. Például ha a heti cél 20 work slot, de csak 15 van címkézve, a rebalance 5 flexible slotot átcímkéz work-re.
+              </p>
+
+              <h3 className="text-lg font-medium text-gray-800 mt-4 mb-2">capacity_pool_config</h3>
+              <p>A heti kvótákat a <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">capacity_pool_config</code> tábla tárolja. Mezők:</p>
+              <ul className="list-disc pl-6 space-y-1 mt-2">
+                <li><strong>consult_min:</strong> minimum konzultációs slotok száma (pl. 2)</li>
+                <li><strong>consult_target:</strong> cél konzultációs slotok száma, ha van várakozó (pl. 4)</li>
+                <li><strong>work_target:</strong> munkafázis cél (pl. 20)</li>
+                <li><strong>control_target:</strong> kontroll cél (pl. 6)</li>
+                <li><strong>flex_target:</strong> rugalmas cél (pl. 0 — ami nem lett átcímkézve, az marad flexible)</li>
+              </ul>
+              <p className="mt-2">
+                Ezeket az Időpontkezelés oldalon a „Kapacitás kvóták" szekció alatt lehet szerkeszteni (admin jogosultsággal).
+              </p>
+
+              <h3 className="text-lg font-medium text-gray-800 mt-4 mb-2">24 órás freeze horizon</h3>
+              <p>
+                A rebalance <strong>nem nyúl a következő 24 órán belüli slotokhoz</strong>. Ezzel elkerüljük, hogy közvetlenül a rendelés előtt átcímkéződjön egy már egyeztetett időpont.
+              </p>
+            </section>
+
+            {/* Előrejelzés */}
+            <section>
+              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">7. Előrejelzés (Forecast)</h2>
+
+              <h3 className="text-lg font-medium text-gray-800 mt-4 mb-2">ETA becslés</h3>
+              <p>
+                A rendszer minden aktív kezelési epizódhoz becsli a kezelés várható befejezésének dátumát. Két értéket ad:
+              </p>
+              <ul className="list-disc pl-6 space-y-1 mt-2">
+                <li><strong>P50:</strong> 50%-os valószínűségű becslés (medián)</li>
+                <li><strong>P80:</strong> 80%-os valószínűségű becslés (konzervatív)</li>
+              </ul>
+
+              <h3 className="text-lg font-medium text-gray-800 mt-4 mb-2">Három bemenet-forgatókönyv</h3>
+              <p>Az ETA számítás három lehetséges adatforrásból származik, prioritás szerint:</p>
+              <ol className="list-decimal pl-6 space-y-1 mt-2">
+                <li><strong>Analytics (történeti):</strong> korábbi hasonló kezelések tényleges időtartamaiból számol.</li>
+                <li><strong>Pathway steps:</strong> a kezelési út (care pathway) lépéseinek becsült időtartamából.</li>
+                <li><strong>Fallback:</strong> ha nincs elég adat, fix alapértelmezett értékeket használ.</li>
+              </ol>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 my-4">
+                <p className="text-sm text-amber-900">
+                  <strong>Fontos:</strong> az ETA nem veszi figyelembe a szabad slotok hiányát — „ideális kadencia" alapú becslés. Ha nincs elég szabad időpont, a tényleges befejezés később lesz.
+                </p>
+              </div>
+
+              <h3 className="text-lg font-medium text-gray-800 mt-4 mb-2">BLOCKED_CAPACITY jelzés</h3>
+              <p>
+                Ha az SLA ablakban (a beteg kezelési tervéhez rendelt időkeretben) nincs szabad <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">work</code> slot, a rendszer <strong>BLOCKED_CAPACITY</strong> jelzést ad. Ez figyelmeztet, hogy a beteg kezelése akadályozott — további szabad időpontok kiírása szükséges.
+              </p>
+            </section>
           </div>
 
           <div className="mt-12 pt-6 border-t border-gray-200">

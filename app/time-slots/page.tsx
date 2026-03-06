@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser, logout } from '@/lib/auth';
 import { TimeSlotsManager } from '@/components/TimeSlotsManager';
+import { CapacityPoolConfigManager } from '@/components/CapacityPoolConfigManager';
 import { LogOut, ArrowLeft, Shield, Settings, CalendarDays } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
@@ -134,6 +135,11 @@ export default function TimeSlotsPage() {
           <div className="card p-6">
             <TimeSlotsManager />
           </div>
+
+          {/* Capacity Pool Config — admin only */}
+          {userRole === 'admin' && (
+            <CapacityPoolConfigManager />
+          )}
         </div>
       </main>
 

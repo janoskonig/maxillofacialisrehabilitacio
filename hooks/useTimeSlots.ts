@@ -6,6 +6,8 @@ import { toLocalISOString } from '@/lib/dateUtils';
 
 // ── Types ────────────────────────────────────────────────────────────
 
+export type SlotPurpose = 'consult' | 'work' | 'control' | 'flexible';
+
 export interface TimeSlot {
   id: string;
   startTime: string;
@@ -16,6 +18,10 @@ export interface TimeSlot {
   updatedAt: string;
   userEmail?: string;
   dentistName?: string | null;
+  slotPurpose?: SlotPurpose | null;
+  source?: 'manual' | 'google_calendar' | null;
+  state?: 'free' | 'held' | 'booked' | null;
+  durationMinutes?: number | null;
 }
 
 export interface AppointmentInfo {
@@ -41,6 +47,7 @@ export interface CreateTimeSlotParams {
   startTime: Date;
   teremszam: string;
   userId?: string;
+  slotPurpose?: SlotPurpose;
 }
 
 // ── Constants ────────────────────────────────────────────────────────
@@ -359,13 +366,14 @@ export function useTimeSlots() {
 
   // ── CRUD operations ────────────────────────────────────────────────
 
-  const createTimeSlot = async ({ startTime, teremszam, userId }: CreateTimeSlotParams): Promise<boolean> => {
+  const createTimeSlot = async ({ startTime, teremszam, userId, slotPurpose }: CreateTimeSlotParams): Promise<boolean> => {
     const body: Record<string, unknown> = {
       startTime: toLocalISOString(startTime),
       cim: DEFAULT_CIM,
       teremszam: teremszam || null,
     };
     if (userId) body.userId = userId;
+    if (slotPurpose) body.slotPurpose = slotPurpose;
 
     try {
       const res = await fetch('/api/time-slots', {
@@ -550,6 +558,32 @@ export function useTimeSlots() {
     return { successCount, errorCount };
   };
 
+  const updateSlotPurpose = async (
+    slotId: string,
+    purpose: SlotPurpose | null,
+  ): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/time-slots/${slotId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ slotPurpose: purpose }),
+      });
+
+      if (res.ok) {
+        await loadTimeSlots();
+        return true;
+      }
+      const data = await res.json();
+      alert(data.error || 'Hiba történt a slot cél módosításakor');
+      return false;
+    } catch (error) {
+      console.error('Error updating slot purpose:', error);
+      alert('Hiba történt a slot cél módosításakor');
+      return false;
+    }
+  };
+
   // ── Public API ─────────────────────────────────────────────────────
 
   return {
@@ -617,6 +651,7 @@ export function useTimeSlots() {
     updateAppointmentType,
     bulkUpdateAppointmentType,
     isBulkUpdating,
+    updateSlotPurpose,
 
     // Reload
     refresh: loadTimeSlots,

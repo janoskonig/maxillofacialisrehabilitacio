@@ -173,8 +173,8 @@ export async function syncTimeSlotsFromGoogleCalendar(userId: string): Promise<{
       } else {
         try {
           await pool.query(
-            `INSERT INTO available_time_slots (user_id, start_time, status, google_calendar_event_id, source, teremszam)
-             VALUES ($1, $2, 'available', $3, 'google_calendar', $4)`,
+            `INSERT INTO available_time_slots (user_id, start_time, status, google_calendar_event_id, source, teremszam, slot_purpose)
+             VALUES ($1, $2, 'available', $3, 'google_calendar', $4, 'flexible')`,
             [userId, startTime.toISOString(), event.id, teremszam]
           );
           result.created++;

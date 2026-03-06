@@ -38,10 +38,10 @@ import { PatientStageSection } from './PatientStageSection';
 import { OHIP14Section } from './OHIP14Section';
 
 
-function ensureArray<T>(val: unknown): T[] {
-  if (Array.isArray(val)) return val;
+function ensureArray<T = Record<string, unknown>>(val: unknown): T[] {
+  if (Array.isArray(val)) return val as T[];
   if (typeof val === 'string') {
-    try { const parsed = JSON.parse(val); if (Array.isArray(parsed)) return parsed; } catch {}
+    try { const parsed = JSON.parse(val); if (Array.isArray(parsed)) return parsed as T[]; } catch {}
   }
   return [];
 }
@@ -303,15 +303,15 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
       felvetelDatuma: formatDateForInput(patient.felvetelDatuma),
       kezelesiTervFelso: ensureArray(patient.kezelesiTervFelso).map(item => ({
         ...item,
-        tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+        tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma as string | null | undefined)
       })),
       kezelesiTervAlso: ensureArray(patient.kezelesiTervAlso).map(item => ({
         ...item,
-        tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+        tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma as string | null | undefined)
       })),
       kezelesiTervArcotErinto: ensureArray(patient.kezelesiTervArcotErinto).map(item => ({
         ...item,
-        tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+        tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma as string | null | undefined)
       })),
     } : {
       radioterapia: false,
@@ -444,15 +444,15 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
         felvetelDatuma: formatDateForInput(patient.felvetelDatuma),
         kezelesiTervFelso: ensureArray(patient.kezelesiTervFelso).map(item => ({
           ...item,
-          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma as string | null | undefined)
         })),
         kezelesiTervAlso: ensureArray(patient.kezelesiTervAlso).map(item => ({
           ...item,
-          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma as string | null | undefined)
         })),
         kezelesiTervArcotErinto: ensureArray(patient.kezelesiTervArcotErinto).map(item => ({
           ...item,
-          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+          tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma as string | null | undefined)
         })),
       }, { keepDirty: false, keepDefaultValues: false });
       return;
@@ -823,15 +823,15 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
       felvetelDatuma: formatDateForInput(savedPatient.felvetelDatuma),
       kezelesiTervFelso: ensureArray(savedPatient.kezelesiTervFelso).map(item => ({
         ...item,
-        tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+        tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma as string | null | undefined)
       })),
       kezelesiTervAlso: ensureArray(savedPatient.kezelesiTervAlso).map(item => ({
         ...item,
-        tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+        tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma as string | null | undefined)
       })),
       kezelesiTervArcotErinto: ensureArray(savedPatient.kezelesiTervArcotErinto).map(item => ({
         ...item,
-        tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+        tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma as string | null | undefined)
       })),
     } : undefined, { keepDirty: false, keepDefaultValues: false });
     
@@ -897,15 +897,15 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
       felvetelDatuma: formatDateForInput(savedPatient.felvetelDatuma),
       kezelesiTervFelso: ensureArray(savedPatient.kezelesiTervFelso).map(item => ({
         ...item,
-        tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+        tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma as string | null | undefined)
       })),
       kezelesiTervAlso: ensureArray(savedPatient.kezelesiTervAlso).map(item => ({
         ...item,
-        tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+        tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma as string | null | undefined)
       })),
       kezelesiTervArcotErinto: ensureArray(savedPatient.kezelesiTervArcotErinto).map(item => ({
         ...item,
-        tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
+        tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma as string | null | undefined)
       })),
     } : undefined, { keepDirty: false, keepDefaultValues: false });
     
