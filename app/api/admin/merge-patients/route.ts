@@ -5,24 +5,17 @@ import { PoolClient } from 'pg';
 
 export const dynamic = 'force-dynamic';
 
-const REASSIGN_TABLES = [
-  'appointments',
+const SIMPLE_REASSIGN_TABLES = [
   'patient_documents',
   'patient_changes',
   'patient_snapshots',
   'patient_portal_tokens',
-  'patient_stages',
-  'patient_episodes',
-  'stage_events',
   'patient_milestones',
   'messages',
   'communication_logs',
   'lab_quote_requests',
   'gdpr_consents',
-  'tooth_treatments',
-  'ohip14_responses',
   'ohip_reminder_log',
-  'patient_intake_items',
   'intake_status_overrides',
 ] as const;
 
@@ -32,6 +25,22 @@ const ONETO_ONE_TABLES = [
   { table: 'patient_dental_status', columns: ['meglevo_fogak', 'meglevo_implantatumok', 'felso_fogpotlas_jellege', 'also_fogpotlas_jellege'] },
   { table: 'patient_treatment_plans', columns: ['kezelesi_terv_felso', 'kezelesi_terv_also', 'kezelesi_terv_arcot_erinto', 'kortorteneti_osszefoglalo', 'kezelesi_terv_melleklet', 'szakorvosi_velemeny'] },
 ] as const;
+
+async function tableExists(client: PoolClient, table: string): Promise<boolean> {
+  const r = await client.query(
+    `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = $1`,
+    [table],
+  );
+  return r.rows.length > 0;
+}
+
+async function safeReassign(client: PoolClient, table: string, primaryId: string, secondaryId: string): Promise<void> {
+  if (!(await tableExists(client, table))) return;
+  await client.query(
+    `UPDATE ${table} SET patient_id = $1 WHERE patient_id = $2`,
+    [primaryId, secondaryId],
+  );
+}
 
 async function mergeOneToOneTable(
   client: PoolClient,
@@ -89,6 +98,104 @@ async function mergeOneToOneTable(
   await client.query(`DELETE FROM ${table} WHERE patient_id = $1`, [secondaryId]);
 }
 
+async function mergePatientStages(client: PoolClient, primaryId: string, secondaryId: string): Promise<void> {
+  if (!(await tableExists(client, 'patient_stages'))) return;
+  // Delete secondary's stages that conflict on (patient_id, stage_date)
+  await client.query(
+    `DELETE FROM patient_stages
+     WHERE patient_id = $1
+       AND stage_date IN (SELECT stage_date FROM patient_stages WHERE patient_id = $2)`,
+    [secondaryId, primaryId],
+  );
+  await client.query(
+    `UPDATE patient_stages SET patient_id = $1 WHERE patient_id = $2`,
+    [primaryId, secondaryId],
+  );
+}
+
+async function mergeToothTreatments(client: PoolClient, primaryId: string, secondaryId: string): Promise<void> {
+  if (!(await tableExists(client, 'tooth_treatments'))) return;
+  // Delete secondary's active treatments that conflict on (patient_id, tooth_number, treatment_code)
+  await client.query(
+    `DELETE FROM tooth_treatments tt_sec
+     WHERE tt_sec.patient_id = $1
+       AND tt_sec.completed_at IS NULL
+       AND EXISTS (
+         SELECT 1 FROM tooth_treatments tt_pri
+         WHERE tt_pri.patient_id = $2
+           AND tt_pri.tooth_number = tt_sec.tooth_number
+           AND tt_pri.treatment_code = tt_sec.treatment_code
+           AND tt_pri.completed_at IS NULL
+       )`,
+    [secondaryId, primaryId],
+  );
+  await client.query(
+    `UPDATE tooth_treatments SET patient_id = $1 WHERE patient_id = $2`,
+    [primaryId, secondaryId],
+  );
+}
+
+async function mergePatientIntakeItems(client: PoolClient, primaryId: string, secondaryId: string): Promise<void> {
+  if (!(await tableExists(client, 'patient_intake_items'))) return;
+  // Delete secondary's open intake items that conflict on (patient_id, kind) WHERE status='OPEN'
+  await client.query(
+    `DELETE FROM patient_intake_items
+     WHERE patient_id = $1
+       AND status = 'OPEN'
+       AND kind IN (
+         SELECT kind FROM patient_intake_items WHERE patient_id = $2 AND status = 'OPEN'
+       )`,
+    [secondaryId, primaryId],
+  );
+  await client.query(
+    `UPDATE patient_intake_items SET patient_id = $1 WHERE patient_id = $2`,
+    [primaryId, secondaryId],
+  );
+}
+
+async function mergeEpisodesAndRelated(client: PoolClient, primaryId: string, secondaryId: string): Promise<void> {
+  // Reassign episodes first, then episode-dependent tables
+  if (await tableExists(client, 'patient_episodes')) {
+    await client.query(
+      `UPDATE patient_episodes SET patient_id = $1 WHERE patient_id = $2`,
+      [primaryId, secondaryId],
+    );
+  }
+  if (await tableExists(client, 'stage_events')) {
+    await client.query(
+      `UPDATE stage_events SET patient_id = $1 WHERE patient_id = $2`,
+      [primaryId, secondaryId],
+    );
+  }
+  if (await tableExists(client, 'ohip14_responses')) {
+    // Episodes are already reassigned, so episode_id conflicts shouldn't happen.
+    // Delete any remaining conflicts just in case.
+    await client.query(
+      `DELETE FROM ohip14_responses
+       WHERE patient_id = $1
+         AND (patient_id, episode_id, timepoint) IN (
+           SELECT $2, episode_id, timepoint FROM ohip14_responses WHERE patient_id = $2
+         )`,
+      [secondaryId, primaryId],
+    );
+    await client.query(
+      `UPDATE ohip14_responses SET patient_id = $1 WHERE patient_id = $2`,
+      [primaryId, secondaryId],
+    );
+  }
+}
+
+async function mergeAppointments(client: PoolClient, primaryId: string, secondaryId: string): Promise<void> {
+  if (!(await tableExists(client, 'appointments'))) return;
+  // Simple reassign — time_slot_id is unique per appointment (not per patient),
+  // so no conflict. The one-hard-next index is per episode_id and episodes are
+  // already reassigned, so we just reassign.
+  await client.query(
+    `UPDATE appointments SET patient_id = $1 WHERE patient_id = $2`,
+    [primaryId, secondaryId],
+  );
+}
+
 async function updateDoctorMessageMentions(
   client: PoolClient,
   primaryId: string,
@@ -125,6 +232,7 @@ async function mergeSecondaryIntoPrimary(
   const pRow = primaryFull.rows[0];
   const sRow = secondaryFull.rows[0];
 
+  // --- 1. Fill empty core fields from secondary ---
   const coreCols = [
     'telefonszam', 'szuletesi_datum', 'nem', 'email', 'cim', 'varos',
     'iranyitoszam', 'kezeleoorvos', 'kezeleoorvos_intezete', 'felvetel_datuma',
@@ -151,31 +259,34 @@ async function mergeSecondaryIntoPrimary(
     );
   }
 
+  // --- 2. Merge 1:1 child tables ---
   for (const { table, columns } of ONETO_ONE_TABLES) {
     await mergeOneToOneTable(client, table, columns, primaryPatientId, secondaryPatientId);
   }
 
-  for (const table of REASSIGN_TABLES) {
-    const tableExists = await client.query(
-      `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = $1`,
-      [table],
-    );
-    if (tableExists.rows.length > 0) {
-      await client.query(
-        `UPDATE ${table} SET patient_id = $1 WHERE patient_id = $2`,
-        [primaryPatientId, secondaryPatientId],
-      );
-    }
+  // --- 3. Tables with unique constraints (handle conflicts) ---
+  await mergePatientStages(client, primaryPatientId, secondaryPatientId);
+  await mergeEpisodesAndRelated(client, primaryPatientId, secondaryPatientId);
+  await mergeAppointments(client, primaryPatientId, secondaryPatientId);
+  await mergeToothTreatments(client, primaryPatientId, secondaryPatientId);
+  await mergePatientIntakeItems(client, primaryPatientId, secondaryPatientId);
+
+  // --- 4. Simple reassign tables (no unique constraint conflicts) ---
+  for (const table of SIMPLE_REASSIGN_TABLES) {
+    await safeReassign(client, table, primaryPatientId, secondaryPatientId);
   }
 
+  // --- 5. Doctor message mentions (JSONB) ---
   try {
     await updateDoctorMessageMentions(client, primaryPatientId, secondaryPatientId);
   } catch {
     // doctor_messages table might not exist
   }
 
+  // --- 6. Delete secondary patient (CASCADE handles any remaining FK refs) ---
   await client.query('DELETE FROM patients WHERE id = $1', [secondaryPatientId]);
 
+  // --- 7. Audit log ---
   await client.query(
     `INSERT INTO patient_changes (patient_id, field_name, old_value, new_value, changed_by, changed_at)
      VALUES ($1, 'merge', $2, $3, $4, NOW())`,
@@ -189,7 +300,6 @@ export const POST = roleHandler(['admin'], async (req, { auth, correlationId }) 
   const body = await req.json();
   const { primaryPatientId } = body;
 
-  // Accept both single secondaryPatientId and array secondaryPatientIds
   let secondaryIds: string[] = [];
   if (body.secondaryPatientIds && Array.isArray(body.secondaryPatientIds)) {
     secondaryIds = body.secondaryPatientIds;
