@@ -73,24 +73,15 @@ export async function sendPasswordResetEmail(
 }
 
 /**
- * Queue patient creation notification for admin daily summary
+ * No-op: admin notification is handled by logActivity → daily summary pipeline.
  */
 export async function sendPatientCreationNotification(
-  adminEmails: string[],
-  patientName: string | null,
-  taj: string | null,
-  surgeonName: string,
-  creationDate: string
-): Promise<void> {
-  if (adminEmails.length === 0) return;
-
-  const name = patientName || 'Név nélküli';
-  await queueAdminNotification(
-    'patient_created',
-    `${name} (TAJ: ${taj || '–'}) – beutaló: ${surgeonName}`,
-    { patientName: name, taj, surgeonName, creationDate }
-  );
-}
+  _adminEmails: string[],
+  _patientName: string | null,
+  _taj: string | null,
+  _surgeonName: string,
+  _creationDate: string
+): Promise<void> {}
 
 /**
  * Send appointment booking notification
@@ -219,29 +210,19 @@ export async function sendAppointmentBookingNotificationToPatient(
 }
 
 /**
- * Queue appointment booking notification for admin daily summary
+ * No-op: admin notification is handled by the approve route → daily summary pipeline.
  */
 export async function sendAppointmentBookingNotificationToAdmins(
-  adminEmails: string[],
-  patientName: string | null,
-  patientTaj: string | null,
-  appointmentTime: Date,
-  surgeonName: string,
-  dentistName: string,
+  _adminEmails: string[],
+  _patientName: string | null,
+  _patientTaj: string | null,
+  _appointmentTime: Date,
+  _surgeonName: string,
+  _dentistName: string,
   _icsFile: Buffer,
-  cim?: string | null,
-  teremszam?: string | null
-): Promise<void> {
-  if (adminEmails.length === 0) return;
-
-  const name = patientName || 'Név nélküli';
-  const time = formatDateForEmailShort(appointmentTime);
-  await queueAdminNotification(
-    'appointment_booked',
-    `${name} – ${time}, fogpótlástanász: ${dentistName}`,
-    { patientName: name, patientTaj, appointmentTime: appointmentTime.toISOString(), surgeonName, dentistName, cim, teremszam }
-  );
-}
+  _cim?: string | null,
+  _teremszam?: string | null
+): Promise<void> {}
 
 /**
  * Send appointment cancellation notification to dentist
@@ -443,33 +424,17 @@ export async function sendAppointmentTimeSlotFreedNotification(
 }
 
 /**
- * Queue staff registration notification for admin daily summary
+ * No-op: admin notification is handled by logActivity → daily summary pipeline.
  */
 export async function sendRegistrationNotificationToAdmins(
-  adminEmails: string[],
-  userEmail: string,
-  userName: string,
-  role: string,
-  institution: string,
-  accessReason: string,
-  registrationDate: Date
-): Promise<void> {
-  if (adminEmails.length === 0) return;
-
-  const roleMap: Record<string, string> = {
-    'sebészorvos': 'Sebész',
-    'fogpótlástanász': 'Fogpótlástanász',
-    'technikus': 'Technikus',
-    'admin': 'Adminisztrátor',
-  };
-  const roleDisplayName = roleMap[role] || role;
-
-  await queueAdminNotification(
-    'staff_registered',
-    `${userName} (${userEmail}) – ${roleDisplayName}, ${institution}`,
-    { userEmail, userName, role, roleDisplayName, institution, accessReason, registrationDate: registrationDate.toISOString() }
-  );
-}
+  _adminEmails: string[],
+  _userEmail: string,
+  _userName: string,
+  _role: string,
+  _institution: string,
+  _accessReason: string,
+  _registrationDate: Date
+): Promise<void> {}
 
 /**
  * Queue patient portal registration notification for admin daily summary

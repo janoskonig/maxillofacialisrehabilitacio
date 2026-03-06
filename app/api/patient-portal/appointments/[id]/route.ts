@@ -5,6 +5,7 @@ import { sendAppointmentCancellationNotification, sendEmail } from '@/lib/email'
 import { deleteGoogleCalendarEvent, createGoogleCalendarEvent } from '@/lib/google-calendar';
 import { apiHandler } from '@/lib/api/route-handler';
 import { logger } from '@/lib/logger';
+import { queueAdminNotification } from '@/lib/email/admin-notification-queue';
 
 /**
  * Modify patient's appointment (change time slot)
@@ -111,6 +112,12 @@ export const DELETE = apiHandler(async (req, { correlationId, params }) => {
     );
 
     await pool.query('COMMIT');
+
+    await queueAdminNotification(
+      'appointment_cancelled_by_patient',
+      `${appointment.patient_name || 'Név nélküli'} lemondta az időpontot: ${startTime.toLocaleString('hu-HU')}`,
+      { patientName: appointment.patient_name, appointmentTime: startTime.toISOString() }
+    ).catch(() => {});
 
     try {
       const dentistFullName = appointment.dentist_name || appointment.dentist_email;

@@ -11,14 +11,47 @@ interface NotificationRow {
 }
 
 const NOTIFICATION_TYPE_LABELS: Record<string, string> = {
+  // Auth & user management
+  login: 'Bejelentkezés',
+  register: 'Új felhasználó regisztráció',
+  password_change: 'Jelszó módosítás',
+  password_reset_requested: 'Jelszó-visszaállítás kérés',
+  password_reset_completed: 'Jelszó-visszaállítás végrehajtva',
+  password_reset_failed: 'Jelszó-visszaállítás sikertelen',
+  impersonate: 'Imperszonálás (admin)',
+  impersonate_patient: 'Beteg imperszonálás',
+
+  // Patient management
   patient_created: 'Új beteg regisztrálva',
-  appointment_booked: 'Új időpont foglalás',
-  staff_registered: 'Új felhasználó regisztráció',
-  patient_portal_registered: 'Új beteg regisztráció (páciens portál)',
-  patient_login: 'Beteg bejelentkezés (páciens portál)',
+  patient_updated: 'Beteg adatok módosítva',
+  patient_search: 'Beteg keresés',
+  patient_stage_created: 'Beteg stádium módosítás',
+  patient_document_deleted: 'Dokumentum törölve',
+
+  // Appointments
+  appointment_approved: 'Időpont elfogadva (páciens)',
+  appointment_rejected: 'Időpont elvetve (páciens)',
+  appointment_modified: 'Időpont módosítva',
+  appointment_cancelled: 'Időpont lemondva',
+  appointment_cancelled_by_patient: 'Időpont lemondva (páciens)',
   conditional_appointment: 'Feltételes időpontfoglalás',
   new_appointment_request: 'Új időpont kérése',
   time_slot_freed: 'Időpont felszabadult',
+
+  // Messages
+  message_sent: 'Üzenet küldve (betegnek)',
+  message_sent_impersonated: 'Üzenet küldve (imperszonálva)',
+  doctor_message_sent: 'Orvos-orvos üzenet',
+  doctor_group_message_sent: 'Csoportos orvos üzenet',
+
+  // Patient portal
+  patient_portal_registered: 'Új beteg regisztráció (páciens portál)',
+  patient_login: 'Beteg bejelentkezés (páciens portál)',
+
+  // Clinical
+  ohip14_created: 'OHIP-14 kitöltve',
+  ohip14_updated: 'OHIP-14 módosítva',
+  communication_log_created: 'Érintkezési napló bejegyzés',
 };
 
 export async function queueAdminNotification(
@@ -92,14 +125,35 @@ export async function sendAdminDailySummary(): Promise<{ sent: boolean; count: n
   }
 
   const displayOrder = [
-    'staff_registered',
+    'register',
+    'login',
+    'impersonate',
+    'impersonate_patient',
     'patient_created',
-    'appointment_booked',
+    'patient_updated',
+    'patient_stage_created',
+    'appointment_approved',
+    'appointment_rejected',
+    'appointment_modified',
+    'appointment_cancelled',
+    'appointment_cancelled_by_patient',
     'conditional_appointment',
     'new_appointment_request',
     'time_slot_freed',
+    'message_sent',
+    'message_sent_impersonated',
+    'doctor_message_sent',
+    'doctor_group_message_sent',
+    'ohip14_created',
+    'ohip14_updated',
+    'communication_log_created',
     'patient_portal_registered',
     'patient_login',
+    'patient_document_deleted',
+    'password_change',
+    'password_reset_requested',
+    'password_reset_completed',
+    'password_reset_failed',
   ];
 
   const sortedTypes = [

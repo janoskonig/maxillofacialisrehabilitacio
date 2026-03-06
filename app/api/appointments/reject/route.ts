@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { apiHandler } from '@/lib/api/route-handler';
 import { sendConditionalAppointmentRequestToPatient } from '@/lib/email';
 import { logger } from '@/lib/logger';
+import { queueAdminNotification } from '@/lib/email/admin-notification-queue';
 
 /**
  * Reject a pending appointment (via email link)
@@ -102,6 +103,12 @@ export const GET = apiHandler(async (req) => {
   } else if (currentAlternativeIndex < alternativeIds.length - 1) {
     nextAlternativeIndex = currentAlternativeIndex + 1;
   }
+
+  await queueAdminNotification(
+    'appointment_rejected',
+    `${appointment.patient_name || 'Név nélküli'} elvetette az időpontot: ${new Date(appointment.start_time).toLocaleString('hu-HU')}`,
+    { patientName: appointment.patient_name, appointmentTime: appointment.start_time }
+  ).catch(() => {});
 
   await pool.query('BEGIN');
 

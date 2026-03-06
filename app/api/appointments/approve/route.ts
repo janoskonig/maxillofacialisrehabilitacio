@@ -8,6 +8,7 @@ import { sendPushNotification } from '@/lib/push-notifications';
 import { logger } from '@/lib/logger';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
+import { queueAdminNotification } from '@/lib/email/admin-notification-queue';
 
 /**
  * Approve a pending appointment (via email link)
@@ -289,6 +290,12 @@ export const GET = apiHandler(async (req, { params }) => {
         logger.error('Failed to send appointment approval notifications:', emailError);
         // Don't fail the request if email fails
       }
+
+      await queueAdminNotification(
+        'appointment_approved',
+        `${appointment.patient_name || 'Név nélküli'} elfogadta: ${updatedStartTime.toLocaleString('hu-HU')}, kezelőorvos: ${dentistFullName}`,
+        { patientName: appointment.patient_name, appointmentTime: updatedStartTime.toISOString(), dentistFullName }
+      ).catch(() => {});
 
       // Return success page HTML
       const html = `

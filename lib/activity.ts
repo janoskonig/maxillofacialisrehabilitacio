@@ -1,6 +1,14 @@
 import { NextRequest } from 'next/server';
 import { getDbPool } from './db';
 import { logger } from './logger';
+import { queueAdminNotification } from './email/admin-notification-queue';
+
+const READ_ONLY_ACTIONS = new Set([
+  'patients_list_viewed',
+  'patient_search',
+  'patient_documents_listed',
+  'patient_document_downloaded',
+]);
 
 /**
  * Központi activity logolási helper függvény
@@ -27,6 +35,14 @@ export async function logActivity(
        VALUES ($1, $2, $3, $4)`,
       [userEmail, action, detail || null, ipAddress]
     );
+
+    if (!READ_ONLY_ACTIONS.has(action)) {
+      queueAdminNotification(
+        action,
+        `${userEmail}: ${detail || action}`,
+        { userEmail, action, detail }
+      ).catch(() => {});
+    }
 
     return true;
   } catch (error) {

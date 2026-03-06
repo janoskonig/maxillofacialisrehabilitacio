@@ -5,6 +5,7 @@ import { sendAppointmentCancellationNotification, sendAppointmentCancellationNot
 import { generateIcsFile } from '@/lib/calendar';
 import { deleteGoogleCalendarEvent, updateGoogleCalendarEvent, createGoogleCalendarEvent } from '@/lib/google-calendar';
 import { logger } from '@/lib/logger';
+import { logActivity } from '@/lib/activity';
 
 // Update an appointment (change time slot)
 export const dynamic = 'force-dynamic';
@@ -347,6 +348,8 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
         }
       }
 
+      await logActivity(req, auth.email, 'appointment_modified', `Appointment ${id}: ${appointment.patient_name || 'N/A'}, old: ${oldStartTime.toISOString()}, new: ${newStartTime.toISOString()}`);
+
       return NextResponse.json({ appointment: updatedAppointment });
     } catch (error) {
       await pool.query('ROLLBACK');
@@ -546,6 +549,8 @@ export const DELETE = authedHandler(async (req, { auth, params }) => {
           // Don't fail the request if email fails
         }
       }
+
+      await logActivity(req, auth.email, 'appointment_cancelled', `Appointment ${id}: ${appointment.patient_name || 'N/A'}, time: ${startTime.toISOString()}`);
 
       return NextResponse.json({ success: true });
     } catch (error) {
