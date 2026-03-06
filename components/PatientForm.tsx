@@ -38,6 +38,14 @@ import { PatientStageSection } from './PatientStageSection';
 import { OHIP14Section } from './OHIP14Section';
 
 
+function ensureArray<T>(val: unknown): T[] {
+  if (Array.isArray(val)) return val;
+  if (typeof val === 'string') {
+    try { const parsed = JSON.parse(val); if (Array.isArray(parsed)) return parsed; } catch {}
+  }
+  return [];
+}
+
 // Normalizálási segédfüggvények az összehasonlításhoz
 function normalizeDate(date: string | null | undefined): string | null {
   if (!date) return null;
@@ -293,18 +301,18 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
       szuletesiDatum: formatDateForInput(patient.szuletesiDatum),
       mutetIdeje: formatDateForInput(patient.mutetIdeje),
       felvetelDatuma: formatDateForInput(patient.felvetelDatuma),
-      kezelesiTervFelso: patient.kezelesiTervFelso?.map(item => ({
+      kezelesiTervFelso: ensureArray(patient.kezelesiTervFelso).map(item => ({
         ...item,
         tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-      })) || [],
-      kezelesiTervAlso: patient.kezelesiTervAlso?.map(item => ({
+      })),
+      kezelesiTervAlso: ensureArray(patient.kezelesiTervAlso).map(item => ({
         ...item,
         tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-      })) || [],
-      kezelesiTervArcotErinto: patient.kezelesiTervArcotErinto?.map(item => ({
+      })),
+      kezelesiTervArcotErinto: ensureArray(patient.kezelesiTervArcotErinto).map(item => ({
         ...item,
         tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-      })) || [],
+      })),
     } : {
       radioterapia: false,
       chemoterapia: false,
@@ -434,18 +442,18 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
         szuletesiDatum: formatDateForInput(patient.szuletesiDatum),
         mutetIdeje: formatDateForInput(patient.mutetIdeje),
         felvetelDatuma: formatDateForInput(patient.felvetelDatuma),
-        kezelesiTervFelso: patient.kezelesiTervFelso?.map(item => ({
+        kezelesiTervFelso: ensureArray(patient.kezelesiTervFelso).map(item => ({
           ...item,
           tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-        })) || [],
-        kezelesiTervAlso: patient.kezelesiTervAlso?.map(item => ({
+        })),
+        kezelesiTervAlso: ensureArray(patient.kezelesiTervAlso).map(item => ({
           ...item,
           tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-        })) || [],
-        kezelesiTervArcotErinto: patient.kezelesiTervArcotErinto?.map(item => ({
+        })),
+        kezelesiTervArcotErinto: ensureArray(patient.kezelesiTervArcotErinto).map(item => ({
           ...item,
           tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-        })) || [],
+        })),
       }, { keepDirty: false, keepDefaultValues: false });
       return;
     }
@@ -813,18 +821,18 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
       szuletesiDatum: formatDateForInput(savedPatient.szuletesiDatum),
       mutetIdeje: formatDateForInput(savedPatient.mutetIdeje),
       felvetelDatuma: formatDateForInput(savedPatient.felvetelDatuma),
-      kezelesiTervFelso: savedPatient.kezelesiTervFelso?.map(item => ({
+      kezelesiTervFelso: ensureArray(savedPatient.kezelesiTervFelso).map(item => ({
         ...item,
         tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-      })) || [],
-      kezelesiTervAlso: savedPatient.kezelesiTervAlso?.map(item => ({
+      })),
+      kezelesiTervAlso: ensureArray(savedPatient.kezelesiTervAlso).map(item => ({
         ...item,
         tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-      })) || [],
-      kezelesiTervArcotErinto: savedPatient.kezelesiTervArcotErinto?.map(item => ({
+      })),
+      kezelesiTervArcotErinto: ensureArray(savedPatient.kezelesiTervArcotErinto).map(item => ({
         ...item,
         tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-      })) || [],
+      })),
     } : undefined, { keepDirty: false, keepDefaultValues: false });
     
     // Don't call onSave callback to avoid triggering alert
@@ -887,18 +895,18 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
       szuletesiDatum: formatDateForInput(savedPatient.szuletesiDatum),
       mutetIdeje: formatDateForInput(savedPatient.mutetIdeje),
       felvetelDatuma: formatDateForInput(savedPatient.felvetelDatuma),
-      kezelesiTervFelso: savedPatient.kezelesiTervFelso?.map(item => ({
+      kezelesiTervFelso: ensureArray(savedPatient.kezelesiTervFelso).map(item => ({
         ...item,
         tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-      })) || [],
-      kezelesiTervAlso: savedPatient.kezelesiTervAlso?.map(item => ({
+      })),
+      kezelesiTervAlso: ensureArray(savedPatient.kezelesiTervAlso).map(item => ({
         ...item,
         tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-      })) || [],
-      kezelesiTervArcotErinto: savedPatient.kezelesiTervArcotErinto?.map(item => ({
+      })),
+      kezelesiTervArcotErinto: ensureArray(savedPatient.kezelesiTervArcotErinto).map(item => ({
         ...item,
         tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma)
-      })) || [],
+      })),
     } : undefined, { keepDirty: false, keepDefaultValues: false });
     
     return savedPatient;

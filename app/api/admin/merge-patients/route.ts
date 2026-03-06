@@ -120,8 +120,9 @@ async function mergeOneToOneTable(
       (typeof pVal === 'object' && pVal !== null && !Array.isArray(pVal) && Object.keys(pVal).length === 0);
 
     if (pEmpty && sVal !== null && sVal !== undefined && sVal !== '') {
-      updates.push(`${col} = $${idx}`);
-      values.push(sVal);
+      const isJsonb = typeof sVal === 'object' && sVal !== null;
+      updates.push(`${col} = $${idx}${isJsonb ? '::jsonb' : ''}`);
+      values.push(isJsonb ? JSON.stringify(sVal) : sVal);
       idx++;
     }
   }

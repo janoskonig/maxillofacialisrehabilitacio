@@ -6,6 +6,14 @@ import { savePatient, ApiError, TimeoutError } from '@/lib/storage';
 import { logEvent } from '@/lib/event-logger';
 import { formatDateForInput } from '@/lib/dateUtils';
 
+function ensureArray<T>(val: unknown): T[] {
+  if (Array.isArray(val)) return val;
+  if (typeof val === 'string') {
+    try { const parsed = JSON.parse(val); if (Array.isArray(parsed)) return parsed; } catch {}
+  }
+  return [];
+}
+
 let Sentry: typeof import('@sentry/nextjs') | null = null;
 if (typeof window !== 'undefined' && process.env.ENABLE_SENTRY === 'true') {
   try {
@@ -339,20 +347,20 @@ export function usePatientAutoSave(
             mutetIdeje: formatDateForInput(saved.mutetIdeje),
             felvetelDatuma: formatDateForInput(saved.felvetelDatuma),
             kezelesiTervFelso:
-              saved.kezelesiTervFelso?.map((item) => ({
+              ensureArray(saved.kezelesiTervFelso).map((item) => ({
                 ...item,
                 tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma),
-              })) || [],
+              })),
             kezelesiTervAlso:
-              saved.kezelesiTervAlso?.map((item) => ({
+              ensureArray(saved.kezelesiTervAlso).map((item) => ({
                 ...item,
                 tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma),
-              })) || [],
+              })),
             kezelesiTervArcotErinto:
-              saved.kezelesiTervArcotErinto?.map((item) => ({
+              ensureArray(saved.kezelesiTervArcotErinto).map((item) => ({
                 ...item,
                 tervezettAtadasDatuma: formatDateForInput(item.tervezettAtadasDatuma),
-              })) || [],
+              })),
           };
           reset(resetData, { keepDirty: false, keepDefaultValues: false });
         }
