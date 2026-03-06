@@ -13,6 +13,7 @@ import { ToothTreatmentCatalogEditor } from '@/components/admin/ToothTreatmentCa
 import { Logo } from '@/components/Logo';
 import { UserManagementTab } from './_components/UserManagementTab';
 import { PatientMerge } from '@/components/admin/PatientMerge';
+import { DuplicateDetector } from '@/components/admin/DuplicateDetector';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -92,13 +93,23 @@ export default function AdminPage() {
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {effectiveTab === 'merge' ? (
-          <section className="card" aria-labelledby="section-merge">
-            <div className="mb-4">
-              <h2 id="section-merge" className="text-lg font-semibold text-gray-900">Páciens profilok összevonása</h2>
-              <p className="text-sm text-gray-500 mt-1">Duplikált páciens profilok egyesítése — az összes adat megmarad.</p>
-            </div>
-            <PatientMerge />
-          </section>
+          <div className="space-y-8">
+            <section className="card" aria-labelledby="section-duplicates">
+              <div className="mb-4">
+                <h2 id="section-duplicates" className="text-lg font-semibold text-gray-900">Duplikátum-figyelő</h2>
+                <p className="text-sm text-gray-500 mt-1">Automatikus felismerés: azonos TAJ, név, születési dátum, telefonszám vagy email alapján.</p>
+              </div>
+              <DuplicateDetector />
+            </section>
+
+            <section className="card" aria-labelledby="section-merge">
+              <div className="mb-4">
+                <h2 id="section-merge" className="text-lg font-semibold text-gray-900">Kézi összevonás</h2>
+                <p className="text-sm text-gray-500 mt-1">Ha a fenti figyelő nem találta meg — keresd meg és vond össze kézzel.</p>
+              </div>
+              <PatientMerge />
+            </section>
+          </div>
         ) : effectiveTab === 'folyamatok' ? (
           <div className="space-y-8">
             <div className="card border-l-4 border-blue-500 bg-blue-50/40">
