@@ -4,6 +4,7 @@ import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { logger } from '@/lib/logger';
+import { getFullStepQuery } from '@/lib/episode-step-select';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,11 +28,16 @@ export const PATCH = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász']
 
   const pool = getDbPool();
 
+  // Fetch all steps; separate primary (not merged) from merged-into
   const verification = await pool.query(
-    `SELECT id FROM episode_steps WHERE episode_id = $1`,
+    `SELECT id, merged_into_episode_step_id FROM episode_steps WHERE episode_id = $1`,
     [episodeId]
   );
-  const existingIds = new Set(verification.rows.map((r: { id: string }) => r.id));
+  const allRows: Array<{ id: string; merged_into_episode_step_id: string | null }> = verification.rows;
+  const existingIds = new Set(allRows.map((r) => r.id));
+  const mergedIds = new Set(allRows.filter((r) => r.merged_into_episode_step_id).map((r) => r.id));
+
+  // stepIds should contain only primary (non-merged) steps
   const invalidIds = stepIds.filter((id: string) => !existingIds.has(id));
   if (invalidIds.length > 0) {
     return NextResponse.json(
@@ -40,16 +46,17 @@ export const PATCH = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász']
     );
   }
 
-  const missingIds = Array.from(existingIds).filter((id) => !stepIds.includes(id));
-  if (missingIds.length > 0) {
-    console.warn(`[reorder] ${missingIds.length} step(s) not in stepIds — they will be appended after reordered steps`);
+  const primaryIds = new Set(allRows.filter((r) => !r.merged_into_episode_step_id).map((r) => r.id));
+  const missingPrimaryIds = Array.from(primaryIds).filter((id) => !stepIds.includes(id));
+  if (missingPrimaryIds.length > 0) {
+    console.warn(`[reorder] ${missingPrimaryIds.length} primary step(s) not in stepIds — appending`);
   }
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    // 1. Update seq values
+    // 1. Update seq for primary steps
     for (let i = 0; i < stepIds.length; i++) {
       await client.query(
         `UPDATE episode_steps SET seq = $1 WHERE id = $2 AND episode_id = $3`,
@@ -57,15 +64,27 @@ export const PATCH = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász']
       );
     }
 
-    if (missingIds.length > 0) {
+    // Append missing primary steps
+    if (missingPrimaryIds.length > 0) {
       let nextSeq = stepIds.length;
-      for (const missingId of missingIds) {
+      for (const missingId of missingPrimaryIds) {
         await client.query(
           `UPDATE episode_steps SET seq = $1 WHERE id = $2 AND episode_id = $3`,
           [nextSeq, missingId, episodeId]
         );
         nextSeq++;
       }
+    }
+
+    // Merged steps inherit their primary's seq
+    if (mergedIds.size > 0) {
+      await client.query(
+        `UPDATE episode_steps child SET seq = parent.seq
+         FROM episode_steps parent
+         WHERE child.merged_into_episode_step_id = parent.id
+           AND child.episode_id = $1`,
+        [episodeId]
+      );
     }
 
     // 2. Appointment-stays-step-shifts: reassign future appointments if the
@@ -89,25 +108,7 @@ export const PATCH = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász']
     await emitSchedulingEvent('episode', episodeId, 'steps_reordered');
   } catch { /* non-blocking */ }
 
-  let customLabelCol = '';
-  try {
-    const colCheck = await pool.query(
-      `SELECT 1 FROM information_schema.columns WHERE table_name = 'episode_steps' AND column_name = 'custom_label' LIMIT 1`
-    );
-    if (colCheck.rows.length > 0) customLabelCol = `, custom_label as "customLabel"`;
-  } catch { /* column may not exist */ }
-
-  const allSteps = await pool.query(
-    `SELECT id, episode_id as "episodeId", step_code as "stepCode",
-            pathway_order_index as "pathwayOrderIndex", pool,
-            duration_minutes as "durationMinutes",
-            default_days_offset as "defaultDaysOffset",
-            status, appointment_id as "appointmentId",
-            created_at as "createdAt", completed_at as "completedAt",
-            source_episode_pathway_id as "sourceEpisodePathwayId", seq${customLabelCol}
-     FROM episode_steps WHERE episode_id = $1 ORDER BY COALESCE(seq, pathway_order_index)`,
-    [episodeId]
-  );
+  const allSteps = await getFullStepQuery(pool, episodeId);
 
   return NextResponse.json({ steps: allSteps.rows });
 });

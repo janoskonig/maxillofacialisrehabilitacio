@@ -5,7 +5,7 @@ import { useToast } from '@/contexts/ToastContext';
 import {
   Loader2, SkipForward, RotateCcw, CheckCircle2, Circle, Clock,
   ChevronDown, ChevronUp, ArrowUp, ArrowDown, GripVertical, Trash2,
-  Plus, Search, FileText, Layers, PenLine,
+  Plus, Search, FileText, Layers, PenLine, Merge, Unlink, Calendar,
 } from 'lucide-react';
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors,
@@ -37,6 +37,19 @@ interface EpisodeStep {
   sourceEpisodePathwayId: string | null;
   seq: number | null;
   customLabel?: string | null;
+  toothTreatmentId?: string | null;
+  mergedIntoStepId?: string | null;
+  toothNumber?: number | null;
+  treatmentLabel?: string | null;
+}
+
+interface LinkedToothTreatment {
+  id: string;
+  toothNumber: number;
+  treatmentCode: string;
+  status: string;
+  labelHu: string;
+  inSteps: boolean;
 }
 
 interface StepCatalogItem {
@@ -85,14 +98,17 @@ const PATHWAY_COLORS = [
   'bg-cyan-100 text-cyan-700',
 ];
 
-type AdderTab = 'catalog' | 'freetext';
+type AdderTab = 'catalog' | 'freetext' | 'tooth';
 
 // ─── Sortable step row ───────────────────────────────────────────────────────
 
 function SortableStepRow({
   step, idx, isNext, stepLabel, pathwayLabel, pathwayColor,
+  mergedChildren,
   onSkipConfirm, onUnskipConfirm, onDelete, onMoveUp, onMoveDown,
   canMoveUp, canMoveDown, reordering,
+  mergeMode, mergeSelected, onToggleMerge,
+  onEditTiming, onUnmerge,
 }: {
   step: EpisodeStep;
   idx: number;
@@ -100,6 +116,7 @@ function SortableStepRow({
   stepLabel: string;
   pathwayLabel: string | null;
   pathwayColor: string;
+  mergedChildren: EpisodeStep[];
   onSkipConfirm: () => void;
   onUnskipConfirm: () => void;
   onDelete: () => void;
@@ -108,6 +125,11 @@ function SortableStepRow({
   canMoveUp: boolean;
   canMoveDown: boolean;
   reordering: boolean;
+  mergeMode: boolean;
+  mergeSelected: boolean;
+  onToggleMerge: () => void;
+  onEditTiming: () => void;
+  onUnmerge: () => void;
 }) {
   const {
     attributes, listeners, setNodeRef, setActivatorNodeRef,
@@ -128,6 +150,8 @@ function SortableStepRow({
   const canUnskip = step.status === 'skipped';
   const canDelete = step.status === 'pending' || step.status === 'skipped';
   const isAdHoc = !step.sourceEpisodePathwayId;
+  const isTooth = !!step.toothTreatmentId;
+  const hasMerged = mergedChildren.length > 0;
 
   return (
     <div ref={setNodeRef} style={style}>
@@ -136,6 +160,15 @@ function SortableStepRow({
           isDragging ? 'shadow-lg ring-2 ring-medical-primary/30' : ''
         } ${isNext ? 'bg-medical-primary/5 border border-medical-primary/20' : config.bgColor}`}
       >
+        {mergeMode && (
+          <input
+            type="checkbox"
+            checked={mergeSelected}
+            onChange={onToggleMerge}
+            className="w-4 h-4 shrink-0 accent-medical-primary"
+          />
+        )}
+
         {/* Drag handle */}
         <button
           ref={setActivatorNodeRef}
@@ -190,9 +223,19 @@ function SortableStepRow({
                 {pathwayLabel}
               </span>
             )}
-            {isAdHoc && (
+            {isTooth && (
+              <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-teal-100 text-teal-700">
+                fog #{step.toothNumber}
+              </span>
+            )}
+            {isAdHoc && !isTooth && (
               <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
                 egyedi
+              </span>
+            )}
+            {hasMerged && (
+              <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">
+                +{mergedChildren.length} összevonva
               </span>
             )}
           </div>
@@ -201,13 +244,46 @@ function SortableStepRow({
             <span className="text-xs text-gray-400">·</span>
             <span className="text-xs text-gray-500">{step.durationMinutes} perc</span>
             <span className="text-xs text-gray-400">·</span>
+            <span className="text-xs text-gray-500">{step.defaultDaysOffset} nap offset</span>
+            <span className="text-xs text-gray-400">·</span>
             <span className={`text-xs ${config.color}`}>{config.label}</span>
           </div>
+          {/* Merged children list */}
+          {hasMerged && (
+            <div className="mt-1 ml-1 space-y-0.5">
+              {mergedChildren.map((child) => (
+                <div key={child.id} className="flex items-center gap-1.5 text-xs text-violet-600">
+                  <Merge className="w-3 h-3" />
+                  <span>{child.customLabel || child.treatmentLabel || child.stepCode.replace(/_/g, ' ')}</span>
+                  {child.toothNumber && <span className="text-violet-400">(fog #{child.toothNumber})</span>}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Actions */}
         <div className="shrink-0 flex items-center gap-1">
-          {canDelete && (
+          {!mergeMode && (
+            <button
+              onClick={onEditTiming}
+              className="p-1.5 text-gray-400 hover:text-medical-primary hover:bg-medical-primary/10 rounded transition-colors"
+              title="Időzítés szerkesztése"
+            >
+              <Calendar className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {hasMerged && !mergeMode && (
+            <button
+              onClick={onUnmerge}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-violet-600 bg-violet-50 rounded hover:bg-violet-100 transition-colors"
+              title="Összevonás felbontása"
+            >
+              <Unlink className="w-3 h-3" />
+              Szétbont
+            </button>
+          )}
+          {canDelete && !mergeMode && (
             <button
               onClick={onDelete}
               className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 bg-red-50 rounded hover:bg-red-100 transition-colors"
@@ -217,7 +293,7 @@ function SortableStepRow({
               Elhagyom
             </button>
           )}
-          {canSkip && (
+          {canSkip && !mergeMode && (
             <button
               onClick={onSkipConfirm}
               className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-amber-700 bg-amber-100 rounded hover:bg-amber-200 transition-colors"
@@ -227,7 +303,7 @@ function SortableStepRow({
               Átugrom
             </button>
           )}
-          {canUnskip && (
+          {canUnskip && !mergeMode && (
             <button
               onClick={onUnskipConfirm}
               className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-600 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
@@ -247,20 +323,26 @@ function SortableStepRow({
 
 function StepRowWithConfirm({
   step, idx, isNext, stepLabel, pathwayLabel, pathwayColor,
+  mergedChildren,
   confirmStepId, confirmAction, skipReason, saving, reordering,
   canMoveUp, canMoveDown,
+  mergeMode, mergeSelected, onToggleMerge,
   onSkipConfirm, onUnskipConfirm, onDelete, onMoveUp, onMoveDown,
   onSkip, onUnskip, onDeleteConfirm, onCancel, onSkipReasonChange,
+  onEditTiming, onUnmerge,
 }: {
   step: EpisodeStep; idx: number; isNext: boolean; stepLabel: string;
   pathwayLabel: string | null; pathwayColor: string;
-  confirmStepId: string | null; confirmAction: 'skip' | 'unskip' | 'delete' | null;
+  mergedChildren: EpisodeStep[];
+  confirmStepId: string | null; confirmAction: 'skip' | 'unskip' | 'delete' | 'timing' | null;
   skipReason: string; saving: boolean; reordering: boolean;
   canMoveUp: boolean; canMoveDown: boolean;
+  mergeMode: boolean; mergeSelected: boolean; onToggleMerge: () => void;
   onSkipConfirm: () => void; onUnskipConfirm: () => void; onDelete: () => void;
   onMoveUp: () => void; onMoveDown: () => void;
   onSkip: () => void; onUnskip: () => void; onDeleteConfirm: () => void;
   onCancel: () => void; onSkipReasonChange: (v: string) => void;
+  onEditTiming: () => void; onUnmerge: () => void;
 }) {
   const isConfirming = confirmStepId === step.id;
   return (
@@ -268,9 +350,12 @@ function StepRowWithConfirm({
       <SortableStepRow
         step={step} idx={idx} isNext={isNext}
         stepLabel={stepLabel} pathwayLabel={pathwayLabel} pathwayColor={pathwayColor}
+        mergedChildren={mergedChildren}
         onSkipConfirm={onSkipConfirm} onUnskipConfirm={onUnskipConfirm} onDelete={onDelete}
         onMoveUp={onMoveUp} onMoveDown={onMoveDown}
         canMoveUp={canMoveUp} canMoveDown={canMoveDown} reordering={reordering}
+        mergeMode={mergeMode} mergeSelected={mergeSelected} onToggleMerge={onToggleMerge}
+        onEditTiming={onEditTiming} onUnmerge={onUnmerge}
       />
       {isConfirming && (
         <div className="mt-1 ml-12 p-3 rounded-lg border border-gray-200 bg-white">
@@ -319,8 +404,68 @@ function StepRowWithConfirm({
               </div>
             </>
           )}
+          {confirmAction === 'timing' && (
+            <TimingEditor step={step} saving={saving} onCancel={onCancel} />
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Timing editor (inline) ───────────────────────────────────────────────────
+
+function TimingEditor({ step, saving, onCancel }: {
+  step: EpisodeStep; saving: boolean; onCancel: () => void;
+}) {
+  const [daysOffset, setDaysOffset] = useState(step.defaultDaysOffset);
+  const [duration, setDuration] = useState(step.durationMinutes);
+  const [localSaving, setLocalSaving] = useState(false);
+  const { showToast } = useToast();
+
+  const handleSave = async () => {
+    setLocalSaving(true);
+    try {
+      const res = await fetch(`/api/episodes/${step.episodeId}/steps/${step.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ defaultDaysOffset: daysOffset, durationMinutes: duration }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Hiba');
+      showToast('Időzítés frissítve', 'success');
+      onCancel();
+      window.dispatchEvent(new Event('episode-steps-reload'));
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Hiba történt', 'error');
+    } finally {
+      setLocalSaving(false);
+    }
+  };
+
+  return (
+    <div>
+      <p className="text-sm text-gray-700 mb-2 font-medium">Időzítés szerkesztése</p>
+      <div className="flex items-center gap-3 mb-2">
+        <div className="flex items-center gap-1">
+          <label className="text-xs text-gray-500 whitespace-nowrap">Nap offset:</label>
+          <input type="number" value={daysOffset} onChange={(e) => setDaysOffset(Math.max(0, parseInt(e.target.value) || 0))}
+            min={0} className="w-16 text-sm border border-gray-300 rounded px-2 py-1 text-center" />
+        </div>
+        <div className="flex items-center gap-1">
+          <label className="text-xs text-gray-500 whitespace-nowrap">Időtartam:</label>
+          <input type="number" value={duration} onChange={(e) => setDuration(Math.max(5, parseInt(e.target.value) || 30))}
+            min={5} step={5} className="w-16 text-sm border border-gray-300 rounded px-2 py-1 text-center" />
+          <span className="text-xs text-gray-400">perc</span>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <button onClick={handleSave} disabled={saving || localSaving}
+          className="inline-flex items-center gap-1 px-3 py-1.5 bg-medical-primary text-white rounded text-xs font-medium hover:bg-medical-primary-dark disabled:opacity-50">
+          {(saving || localSaving) && <Loader2 className="w-3 h-3 animate-spin" />} Mentés
+        </button>
+        <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-800">Mégse</button>
+      </div>
     </div>
   );
 }
@@ -342,14 +487,28 @@ export function EpisodeStepsManager({
   const [generating, setGenerating] = useState(false);
   const [skipReason, setSkipReason] = useState('');
   const [confirmStepId, setConfirmStepId] = useState<string | null>(null);
-  const [confirmAction, setConfirmAction] = useState<'skip' | 'unskip' | 'delete' | null>(null);
+  const [confirmAction, setConfirmAction] = useState<'skip' | 'unskip' | 'delete' | 'timing' | null>(null);
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState(true);
   const [reordering, setReordering] = useState(false);
   const [episodePathways, setEpisodePathways] = useState<EpisodePathwayInfo[]>(initialEpisodePathways ?? []);
   const [mounted, setMounted] = useState(false);
 
+  // Merge mode
+  const [mergeMode, setMergeMode] = useState(false);
+  const [mergeSelection, setMergeSelection] = useState<Set<string>>(new Set());
+
+  // Linked tooth treatments
+  const [linkedTreatments, setLinkedTreatments] = useState<LinkedToothTreatment[]>([]);
+
   useEffect(() => { setMounted(true); }, []);
+
+  // Reload steps on timing save
+  useEffect(() => {
+    const handler = () => { loadSteps(); onStepChanged?.(); };
+    window.addEventListener('episode-steps-reload', handler);
+    return () => window.removeEventListener('episode-steps-reload', handler);
+  });
 
   // Step adder panel
   const [adderOpen, setAdderOpen] = useState(false);
@@ -424,10 +583,20 @@ export function EpisodeStepsManager({
     } catch { /* non-critical */ }
   }, [episodeId]);
 
+  const loadLinkedTreatments = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/episodes/${episodeId}/linked-tooth-treatments`, { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setLinkedTreatments(data.treatments ?? []);
+      }
+    } catch { /* non-critical */ }
+  }, [episodeId]);
+
   useEffect(() => {
     setLoading(true);
-    Promise.all([loadSteps(), loadLabels(), loadEpisodePathways()]).finally(() => setLoading(false));
-  }, [carePathwayId, loadSteps, loadLabels, loadEpisodePathways]);
+    Promise.all([loadSteps(), loadLabels(), loadEpisodePathways(), loadLinkedTreatments()]).finally(() => setLoading(false));
+  }, [carePathwayId, loadSteps, loadLabels, loadEpisodePathways, loadLinkedTreatments]);
 
   // ─── Step actions ────────────────────────────────────────────────────────
 
@@ -512,18 +681,18 @@ export function EpisodeStepsManager({
 
   // ─── Reorder (arrows) ───────────────────────────────────────────────────
 
-  const persistReorder = async (newSteps: EpisodeStep[]) => {
+  const persistReorder = async (newPrimarySteps: EpisodeStep[]) => {
     setReordering(true);
     try {
       const res = await fetch(`/api/episodes/${episodeId}/steps/reorder`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ stepIds: newSteps.map((s) => s.id) }),
+        body: JSON.stringify({ stepIds: newPrimarySteps.map((s) => s.id) }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Hiba');
       const data = await res.json();
-      setSteps(data.steps ?? newSteps);
+      setSteps(data.steps ?? []);
       onStepChanged?.();
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Hiba az átrendezésnél', 'error');
@@ -534,13 +703,12 @@ export function EpisodeStepsManager({
   };
 
   const handleMoveStep = (stepId: string, direction: 'up' | 'down') => {
-    const idx = steps.findIndex((s) => s.id === stepId);
+    const idx = primarySteps.findIndex((s) => s.id === stepId);
     if (idx < 0) return;
     const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
-    if (targetIdx < 0 || targetIdx >= steps.length) return;
-    const newSteps = [...steps];
+    if (targetIdx < 0 || targetIdx >= primarySteps.length) return;
+    const newSteps = [...primarySteps];
     [newSteps[idx], newSteps[targetIdx]] = [newSteps[targetIdx], newSteps[idx]];
-    setSteps(newSteps);
     persistReorder(newSteps);
   };
 
@@ -549,14 +717,82 @@ export function EpisodeStepsManager({
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldIdx = steps.findIndex((s) => s.id === active.id);
-    const newIdx = steps.findIndex((s) => s.id === over.id);
+    const oldIdx = primarySteps.findIndex((s) => s.id === active.id);
+    const newIdx = primarySteps.findIndex((s) => s.id === over.id);
     if (oldIdx < 0 || newIdx < 0) return;
-    const newSteps = [...steps];
+    const newSteps = [...primarySteps];
     const [removed] = newSteps.splice(oldIdx, 1);
     newSteps.splice(newIdx, 0, removed);
-    setSteps(newSteps);
     persistReorder(newSteps);
+  };
+
+  // ─── Merge / Unmerge ────────────────────────────────────────────────────
+
+  const handleMergeConfirm = async () => {
+    if (mergeSelection.size < 2) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/episodes/${episodeId}/steps/merge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ stepIds: Array.from(mergeSelection) }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Hiba');
+      const data = await res.json();
+      setSteps(data.steps ?? []);
+      setMergeMode(false);
+      setMergeSelection(new Set());
+      showToast('Lépések összevonva', 'success');
+      onStepChanged?.();
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Hiba az összevonásnál', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUnmerge = async (primaryStepId: string) => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/episodes/${episodeId}/steps/${primaryStepId}/unmerge`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Hiba');
+      const data = await res.json();
+      setSteps(data.steps ?? []);
+      showToast('Összevonás felbontva', 'success');
+      onStepChanged?.();
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Hiba a szétbontásnál', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ─── Add tooth treatment to steps ──────────────────────────────────────
+
+  const addToothTreatmentStep = async (tt: LinkedToothTreatment) => {
+    setAddingStep(true);
+    try {
+      const res = await fetch(`/api/episodes/${episodeId}/steps/from-tooth-treatment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ toothTreatmentId: tt.id }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Hiba');
+      const data = await res.json();
+      setSteps(data.steps ?? []);
+      await loadLinkedTreatments();
+      showToast(`${tt.labelHu} – ${tt.toothNumber} hozzáadva`, 'success');
+      onStepChanged?.();
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Hiba a hozzáadásnál', 'error');
+    } finally {
+      setAddingStep(false);
+    }
   };
 
   // ─── Step adder ─────────────────────────────────────────────────────────
@@ -614,6 +850,8 @@ export function EpisodeStepsManager({
 
   const getStepLabel = (step: EpisodeStep): string => {
     if (step.customLabel) return step.customLabel;
+    if (step.treatmentLabel && step.toothNumber) return `${step.treatmentLabel} – ${step.toothNumber}`;
+    if (step.treatmentLabel) return step.treatmentLabel;
     return stepLabels.get(step.stepCode) ?? step.stepCode.replace(/_/g, ' ');
   };
 
@@ -639,10 +877,24 @@ export function EpisodeStepsManager({
     );
   }, [catalogItems, catalogSearch]);
 
-  const nextPendingIndex = steps.findIndex((s) => s.status === 'pending' || s.status === 'scheduled');
-  const stepIds = useMemo(() => steps.map((s) => s.id), [steps]);
+  const primarySteps = useMemo(() => steps.filter((s) => !s.mergedIntoStepId), [steps]);
+  const mergedChildrenMap = useMemo(() => {
+    const m = new Map<string, EpisodeStep[]>();
+    for (const s of steps) {
+      if (s.mergedIntoStepId) {
+        const arr = m.get(s.mergedIntoStepId) ?? [];
+        arr.push(s);
+        m.set(s.mergedIntoStepId, arr);
+      }
+    }
+    return m;
+  }, [steps]);
+
+  const nextPendingIndex = primarySteps.findIndex((s) => s.status === 'pending' || s.status === 'scheduled');
+  const stepIds = useMemo(() => primarySteps.map((s) => s.id), [primarySteps]);
 
   const hasPathways = carePathwayId || (episodePathways && episodePathways.length > 0);
+  const availableToothTreatments = useMemo(() => linkedTreatments.filter((t) => !t.inSteps), [linkedTreatments]);
 
   // ─── Render ──────────────────────────────────────────────────────────────
 
@@ -682,7 +934,7 @@ export function EpisodeStepsManager({
               {/* ─── Step adder panel ─────────────────────────────────── */}
               <div className="mb-4">
                 {!adderOpen ? (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     {steps.length === 0 && hasPathways && (
                       <button
                         onClick={handleGenerate}
@@ -701,11 +953,24 @@ export function EpisodeStepsManager({
                       <Plus className="w-3.5 h-3.5" />
                       Lépés hozzáadása
                     </button>
+                    {primarySteps.length >= 2 && (
+                      <button
+                        onClick={() => { setMergeMode(!mergeMode); setMergeSelection(new Set()); }}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors ${
+                          mergeMode
+                            ? 'bg-violet-100 text-violet-700 border border-violet-300'
+                            : 'border border-gray-300 text-gray-600 hover:border-violet-400 hover:text-violet-600'
+                        }`}
+                      >
+                        <Merge className="w-3.5 h-3.5" />
+                        {mergeMode ? 'Összevonás mód' : 'Összevonás'}
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="border border-gray-200 rounded-lg p-3 bg-gray-50/50">
                     {/* Tab switcher */}
-                    <div className="flex items-center gap-1 mb-3">
+                    <div className="flex items-center gap-1 mb-3 flex-wrap">
                       <button
                         onClick={() => setAdderTab('catalog')}
                         className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
@@ -728,6 +993,18 @@ export function EpisodeStepsManager({
                         <PenLine className="w-3 h-3" />
                         Szabad lépés
                       </button>
+                      {availableToothTreatments.length > 0 && (
+                        <button
+                          onClick={() => setAdderTab('tooth')}
+                          className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                            adderTab === 'tooth'
+                              ? 'bg-teal-600 text-white'
+                              : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                          }`}
+                        >
+                          🦷 Fogkezelés
+                        </button>
+                      )}
                       <div className="flex-1" />
                       <button
                         onClick={() => setAdderOpen(false)}
@@ -813,12 +1090,59 @@ export function EpisodeStepsManager({
                         </div>
                       </div>
                     )}
+
+                    {/* Tooth treatment tab */}
+                    {adderTab === 'tooth' && (
+                      <div>
+                        {availableToothTreatments.length === 0 ? (
+                          <p className="text-xs text-gray-500 py-2 text-center">Nincs hozzáadható fogkezelés (mindegyik már a lépéssorban van)</p>
+                        ) : (
+                          <div className="max-h-48 overflow-y-auto space-y-0.5">
+                            {availableToothTreatments.map((tt) => (
+                              <button
+                                key={tt.id}
+                                onClick={() => addToothTreatmentStep(tt)}
+                                disabled={addingStep}
+                                className="w-full text-left flex items-center gap-2 px-2.5 py-2 rounded-md hover:bg-white hover:shadow-sm transition-all text-sm disabled:opacity-50 group"
+                              >
+                                <Plus className="w-3.5 h-3.5 text-teal-400 group-hover:text-teal-600 shrink-0" />
+                                <span className="font-medium text-gray-800 group-hover:text-teal-700">{tt.labelHu}</span>
+                                <span className="text-xs text-teal-600 ml-1">fog #{tt.toothNumber}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
 
+              {/* ─── Merge mode toolbar ──────────────────────────────── */}
+              {mergeMode && (
+                <div className="mb-3 flex items-center gap-2 p-2 rounded-lg bg-violet-50 border border-violet-200">
+                  <Merge className="w-4 h-4 text-violet-600" />
+                  <span className="text-sm text-violet-700">Jelölje ki a lépéseket, amelyeket egy időpontra szeretne összevonni.</span>
+                  <div className="flex-1" />
+                  <button
+                    onClick={handleMergeConfirm}
+                    disabled={mergeSelection.size < 2 || saving}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-violet-600 text-white rounded-md text-xs font-medium hover:bg-violet-700 disabled:opacity-50"
+                  >
+                    {saving && <Loader2 className="w-3 h-3 animate-spin" />}
+                    Összevonás ({mergeSelection.size})
+                  </button>
+                  <button
+                    onClick={() => { setMergeMode(false); setMergeSelection(new Set()); }}
+                    className="px-2 py-1 text-xs text-violet-600 hover:text-violet-800"
+                  >
+                    Mégse
+                  </button>
+                </div>
+              )}
+
               {/* ─── Step list with DnD ──────────────────────────────── */}
-              {steps.length === 0 ? (
+              {primarySteps.length === 0 ? (
                 <p className="text-sm text-gray-500 py-2">Még nincsenek lépések. Adj hozzá lépéseket fent a tervhez.</p>
               ) : (
                 <div className="space-y-1">
@@ -828,7 +1152,7 @@ export function EpisodeStepsManager({
                   {mounted ? (
                   <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd} modifiers={[restrictToVerticalAxis]}>
                     <SortableContext items={stepIds} strategy={verticalListSortingStrategy}>
-                      {steps.map((step, idx) => (
+                      {primarySteps.map((step, idx) => (
                         <StepRowWithConfirm
                           key={step.id}
                           step={step}
@@ -837,13 +1161,23 @@ export function EpisodeStepsManager({
                           stepLabel={getStepLabel(step)}
                           pathwayLabel={getPathwayLabel(step.sourceEpisodePathwayId)}
                           pathwayColor={getPathwayColor(step.sourceEpisodePathwayId)}
+                          mergedChildren={mergedChildrenMap.get(step.id) ?? []}
                           confirmStepId={confirmStepId}
                           confirmAction={confirmAction}
                           skipReason={skipReason}
                           saving={saving}
                           reordering={reordering}
                           canMoveUp={idx > 0}
-                          canMoveDown={idx < steps.length - 1}
+                          canMoveDown={idx < primarySteps.length - 1}
+                          mergeMode={mergeMode}
+                          mergeSelected={mergeSelection.has(step.id)}
+                          onToggleMerge={() => {
+                            setMergeSelection((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(step.id)) next.delete(step.id); else next.add(step.id);
+                              return next;
+                            });
+                          }}
                           onSkipConfirm={() => { setConfirmStepId(step.id); setConfirmAction('skip'); setSkipReason(''); }}
                           onUnskipConfirm={() => { setConfirmStepId(step.id); setConfirmAction('unskip'); }}
                           onDelete={() => { setConfirmStepId(step.id); setConfirmAction('delete'); }}
@@ -854,13 +1188,15 @@ export function EpisodeStepsManager({
                           onDeleteConfirm={() => handleDelete(step.id)}
                           onCancel={() => { setConfirmStepId(null); setConfirmAction(null); }}
                           onSkipReasonChange={setSkipReason}
+                          onEditTiming={() => { setConfirmStepId(step.id); setConfirmAction('timing'); }}
+                          onUnmerge={() => handleUnmerge(step.id)}
                         />
                       ))}
                     </SortableContext>
                   </DndContext>
                   ) : (
                     <div className="animate-pulse space-y-2">
-                      {steps.map((_, i) => (
+                      {primarySteps.map((_, i) => (
                         <div key={i} className="h-12 bg-gray-100 rounded-lg" />
                       ))}
                     </div>

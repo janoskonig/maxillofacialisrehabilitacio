@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { logger } from '@/lib/logger';
+import { getStepSelectColumns, getToothTreatmentJoin, getToothTreatmentSelectCols } from '@/lib/episode-step-select';
 
 export const dynamic = 'force-dynamic';
 
@@ -80,22 +81,17 @@ export const DELETE = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'
 
 /**
  * PATCH /api/episodes/:id/steps/:stepId
- * Update episode step status. Primary use case: skip/unskip a step manually.
+ * Update episode step: status (skip/unskip), timing (defaultDaysOffset, durationMinutes), or customLabel.
  */
 export const PATCH = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'], async (req, { auth, params }) => {
   const episodeId = params.id;
   const stepId = params.stepId;
   const body = await req.json();
-  const { status: newStatus, reason } = body;
-
-  const validTransitions: Record<string, string[]> = {
-    pending: ['skipped'],
-    scheduled: ['skipped'],
-    skipped: ['pending'],
-    completed: [],
-  };
+  const { status: newStatus, reason, defaultDaysOffset, durationMinutes, customLabel } = body;
 
   const pool = getDbPool();
+
+  const isTimingOnly = newStatus === undefined && (defaultDaysOffset !== undefined || durationMinutes !== undefined || customLabel !== undefined);
 
   await pool.query('BEGIN');
   try {
@@ -121,55 +117,72 @@ export const PATCH = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász']
       return NextResponse.json({ error: 'Csak aktív epizód lépései módosíthatók' }, { status: 400 });
     }
 
-    const allowed = validTransitions[step.status];
-    if (!allowed || !allowed.includes(newStatus)) {
-      await pool.query('ROLLBACK');
-      return NextResponse.json(
-        {
-          error: `Nem lehetséges: ${step.status} → ${newStatus}`,
-          currentStatus: step.status,
-          allowedTransitions: allowed ?? [],
-        },
-        { status: 400 }
+    if (isTimingOnly) {
+      const sets: string[] = [];
+      const vals: unknown[] = [];
+      let pi = 1;
+
+      if (typeof defaultDaysOffset === 'number' && defaultDaysOffset >= 0) {
+        sets.push(`default_days_offset = $${pi++}`);
+        vals.push(defaultDaysOffset);
+      }
+      if (typeof durationMinutes === 'number' && durationMinutes > 0) {
+        sets.push(`duration_minutes = $${pi++}`);
+        vals.push(durationMinutes);
+      }
+      if (typeof customLabel === 'string') {
+        sets.push(`custom_label = $${pi++}`);
+        vals.push(customLabel.trim() || null);
+      }
+
+      if (sets.length > 0) {
+        vals.push(stepId);
+        await pool.query(`UPDATE episode_steps SET ${sets.join(', ')} WHERE id = $${pi}`, vals);
+      }
+
+      await pool.query('COMMIT');
+
+      try { await emitSchedulingEvent('episode', episodeId, 'step_timing_updated'); } catch { /* non-blocking */ }
+    } else {
+      const validTransitions: Record<string, string[]> = {
+        pending: ['skipped'],
+        scheduled: ['skipped'],
+        skipped: ['pending'],
+        completed: [],
+      };
+
+      const allowed = validTransitions[step.status];
+      if (!allowed || !allowed.includes(newStatus)) {
+        await pool.query('ROLLBACK');
+        return NextResponse.json(
+          { error: `Nem lehetséges: ${step.status} → ${newStatus}`, currentStatus: step.status, allowedTransitions: allowed ?? [] },
+          { status: 400 }
+        );
+      }
+
+      const completedAt = newStatus === 'skipped' ? new Date().toISOString() : null;
+
+      await pool.query(
+        `UPDATE episode_steps SET status = $1, completed_at = $2 WHERE id = $3`,
+        [newStatus, completedAt, stepId]
       );
+
+      await pool.query(
+        `INSERT INTO episode_step_audit (episode_step_id, episode_id, old_status, new_status, changed_by, reason)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [stepId, episodeId, step.status, newStatus, auth.email ?? auth.userId ?? 'unknown', reason ?? null]
+      );
+
+      await pool.query('COMMIT');
+
+      try { await emitSchedulingEvent('episode', episodeId, 'step_skipped'); } catch { /* non-blocking */ }
     }
 
-    const completedAt = newStatus === 'skipped' ? new Date().toISOString() : null;
-
-    await pool.query(
-      `UPDATE episode_steps SET status = $1, completed_at = $2 WHERE id = $3`,
-      [newStatus, completedAt, stepId]
-    );
-
-    await pool.query(
-      `INSERT INTO episode_step_audit (episode_step_id, episode_id, old_status, new_status, changed_by, reason)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [stepId, episodeId, step.status, newStatus, auth.email ?? auth.userId ?? 'unknown', reason ?? null]
-    );
-
-    await pool.query('COMMIT');
-
-    try {
-      await emitSchedulingEvent('episode', episodeId, 'step_skipped');
-    } catch { /* non-blocking */ }
-
-    let customLabelCol = '';
-    try {
-      const colCheck = await pool.query(
-        `SELECT 1 FROM information_schema.columns WHERE table_name = 'episode_steps' AND column_name = 'custom_label' LIMIT 1`
-      );
-      if (colCheck.rows.length > 0) customLabelCol = `, custom_label as "customLabel"`;
-    } catch { /* column may not exist */ }
-
+    const cols = await getStepSelectColumns(pool);
+    const ttJoin = getToothTreatmentJoin();
+    const ttCols = getToothTreatmentSelectCols();
     const updated = await pool.query(
-      `SELECT id, episode_id as "episodeId", step_code as "stepCode",
-              pathway_order_index as "pathwayOrderIndex", pool,
-              duration_minutes as "durationMinutes",
-              default_days_offset as "defaultDaysOffset",
-              status, appointment_id as "appointmentId",
-              created_at as "createdAt", completed_at as "completedAt",
-              source_episode_pathway_id as "sourceEpisodePathwayId", seq${customLabelCol}
-       FROM episode_steps WHERE id = $1`,
+      `SELECT ${cols}${ttCols} FROM episode_steps es ${ttJoin} WHERE es.id = $1`,
       [stepId]
     );
 

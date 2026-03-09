@@ -3,15 +3,9 @@ import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { logger } from '@/lib/logger';
+import { getFullStepQuery } from '@/lib/episode-step-select';
 
 export const dynamic = 'force-dynamic';
-
-const STEP_SELECT_BASE = `id, episode_id as "episodeId", step_code as "stepCode",
-  pathway_order_index as "pathwayOrderIndex", pool, duration_minutes as "durationMinutes",
-  default_days_offset as "defaultDaysOffset", status,
-  appointment_id as "appointmentId", created_at as "createdAt",
-  completed_at as "completedAt", source_episode_pathway_id as "sourceEpisodePathwayId",
-  seq`;
 
 let _hasCustomLabel: boolean | null = null;
 async function hasCustomLabelColumn(pool: ReturnType<typeof getDbPool>): Promise<boolean> {
@@ -95,24 +89,26 @@ export const POST = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'],
   const nextIdx = (maxIdxRow.rows[0].max_idx ?? -1) + 1;
 
   const hasCol = await hasCustomLabelColumn(pool);
-  const stepSelect = hasCol ? STEP_SELECT_BASE + `, custom_label as "customLabel"` : STEP_SELECT_BASE;
-  const result = hasCol
-    ? await pool.query(
-        `INSERT INTO episode_steps (episode_id, step_code, pathway_order_index, pool, duration_minutes, default_days_offset, seq, custom_label, source_episode_pathway_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL)
-         RETURNING ${stepSelect}`,
-        [episodeId, stepCode, nextIdx, stepPool, durationMinutes, defaultDaysOffset, nextSeq, customLabel]
-      )
-    : await pool.query(
-        `INSERT INTO episode_steps (episode_id, step_code, pathway_order_index, pool, duration_minutes, default_days_offset, seq, source_episode_pathway_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, NULL)
-         RETURNING ${stepSelect}`,
-        [episodeId, stepCode, nextIdx, stepPool, durationMinutes, defaultDaysOffset, nextSeq]
-      );
+  if (hasCol) {
+    await pool.query(
+      `INSERT INTO episode_steps (episode_id, step_code, pathway_order_index, pool, duration_minutes, default_days_offset, seq, custom_label, source_episode_pathway_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL)`,
+      [episodeId, stepCode, nextIdx, stepPool, durationMinutes, defaultDaysOffset, nextSeq, customLabel]
+    );
+  } else {
+    await pool.query(
+      `INSERT INTO episode_steps (episode_id, step_code, pathway_order_index, pool, duration_minutes, default_days_offset, seq, source_episode_pathway_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NULL)`,
+      [episodeId, stepCode, nextIdx, stepPool, durationMinutes, defaultDaysOffset, nextSeq]
+    );
+  }
 
   try {
     await emitSchedulingEvent('episode', episodeId, 'step_added');
   } catch { /* non-blocking */ }
 
-  return NextResponse.json({ step: result.rows[0] }, { status: 201 });
+  const allSteps = await getFullStepQuery(pool, episodeId);
+  const addedStep = allSteps.rows[allSteps.rows.length - 1];
+
+  return NextResponse.json({ step: addedStep }, { status: 201 });
 });

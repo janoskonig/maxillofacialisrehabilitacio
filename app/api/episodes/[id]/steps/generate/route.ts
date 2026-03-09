@@ -2,25 +2,9 @@ import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
 import { logger } from '@/lib/logger';
+import { getFullStepQuery } from '@/lib/episode-step-select';
 
 export const dynamic = 'force-dynamic';
-
-const STEP_SELECT_BASE = `id, episode_id as "episodeId", step_code as "stepCode",
-  pathway_order_index as "pathwayOrderIndex", pool, duration_minutes as "durationMinutes",
-  default_days_offset as "defaultDaysOffset", status,
-  appointment_id as "appointmentId", created_at as "createdAt",
-  completed_at as "completedAt", source_episode_pathway_id as "sourceEpisodePathwayId",
-  seq`;
-
-async function getStepSelect(pool: ReturnType<typeof getDbPool>): Promise<string> {
-  try {
-    const colCheck = await pool.query(
-      `SELECT 1 FROM information_schema.columns WHERE table_name = 'episode_steps' AND column_name = 'custom_label' LIMIT 1`
-    );
-    if (colCheck.rows.length > 0) return STEP_SELECT_BASE + `, custom_label as "customLabel"`;
-  } catch { /* column doesn't exist */ }
-  return STEP_SELECT_BASE;
-}
 
 /**
  * POST /api/episodes/:id/steps/generate — idempotent episode_steps generation.
@@ -153,11 +137,7 @@ export const POST = authedHandler(async (req, { auth, params }) => {
 
     await client.query('COMMIT');
 
-    const stepSelect = await getStepSelect(pool);
-    const allSteps = await pool.query(
-      `SELECT ${stepSelect} FROM episode_steps WHERE episode_id = $1 ORDER BY COALESCE(seq, pathway_order_index)`,
-      [episodeId]
-    );
+    const allSteps = await getFullStepQuery(pool, episodeId);
 
     return NextResponse.json({
       steps: allSteps.rows,

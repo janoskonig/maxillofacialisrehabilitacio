@@ -111,17 +111,28 @@ export interface EpisodeStepRow {
   seq: number | null;
   status: 'pending' | 'scheduled' | 'completed' | 'skipped';
   completed_at: Date | null;
+  merged_into_episode_step_id: string | null;
 }
 
 /** Get episode_steps if they've been generated. Returns null when no rows exist (legacy fallback).
- *  Ordered by seq (multi-pathway merged order) with pathway_order_index as fallback. */
+ *  Ordered by seq (multi-pathway merged order) with pathway_order_index as fallback.
+ *  Excludes merged (child) steps — they are handled as part of their primary step's appointment. */
 async function getEpisodeSteps(
   pool: Awaited<ReturnType<typeof getDbPool>>,
   episodeId: string
 ): Promise<EpisodeStepRow[] | null> {
+  let mergedFilter = '';
+  try {
+    const col = await pool.query(
+      `SELECT 1 FROM information_schema.columns WHERE table_name = 'episode_steps' AND column_name = 'merged_into_episode_step_id' LIMIT 1`
+    );
+    if (col.rows.length > 0) mergedFilter = 'AND merged_into_episode_step_id IS NULL';
+  } catch { /* column may not exist */ }
+
   const r = await pool.query(
     `SELECT step_code, pathway_order_index, seq, status, completed_at
-     FROM episode_steps WHERE episode_id = $1 ORDER BY COALESCE(seq, pathway_order_index), pathway_order_index`,
+     FROM episode_steps WHERE episode_id = $1 ${mergedFilter}
+     ORDER BY COALESCE(seq, pathway_order_index), pathway_order_index`,
     [episodeId]
   );
   if (r.rows.length === 0) return null;
