@@ -114,7 +114,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
           ordinal: r.ordinal as number,
           pathwayName: r.pathwayName as string,
           stepCount: r.stepCount as number,
-          jaw: (r.jaw as string) || null,
+          jaw: (r.jaw as "felso" | "also" | null) || null,
         }));
       }
     }
