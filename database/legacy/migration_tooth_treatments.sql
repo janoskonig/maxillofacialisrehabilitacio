@@ -45,11 +45,12 @@ INSERT INTO tooth_treatment_catalog (code, label_hu, sort_order) VALUES
   ('tomes',              'Tömés',               1),
   ('gyokerkezeles',      'Gyökérkezelés',       2),
   ('huzas',              'Húzás',               3),
-  ('korona',             'Korona',              4),
-  ('csiszolas',          'Csiszolás',           5),
-  ('hid_pillerkezeles',  'Híd pillerkezelés',   6),
-  ('devitalizalas',      'Devitalizálás',       7),
-  ('csonk_felepites',    'Csonkfelépítés',      8)
+  ('implantacio',        'Implantáció',         4),
+  ('korona',             'Korona',              5),
+  ('csiszolas',          'Csiszolás',           6),
+  ('hid_pillerkezeles',  'Híd pillerkezelés',   7),
+  ('devitalizalas',      'Devitalizálás',       8),
+  ('csonk_felepites',    'Csonkfelépítés',      9)
 ON CONFLICT (code) DO UPDATE SET
   label_hu   = EXCLUDED.label_hu,
   sort_order = EXCLUDED.sort_order;
