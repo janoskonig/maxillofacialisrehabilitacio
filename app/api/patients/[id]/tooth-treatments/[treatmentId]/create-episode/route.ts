@@ -10,8 +10,11 @@ const REASON_VALUES = ['traumás sérülés', 'veleszületett rendellenesség', 
 
 /**
  * POST /api/patients/:id/tooth-treatments/:treatmentId/create-episode
- * Creates a new episode from a pending tooth treatment need.
- * Optionally auto-assigns pathway if tooth treatment type has a default_care_pathway_id.
+ *
+ * Links a pending tooth treatment to an episode:
+ *  - If the patient already has an open episode, the treatment is linked to it.
+ *  - If no open episode exists, a new one is created.
+ * Optionally auto-assigns the default pathway from the tooth treatment catalog.
  */
 export const POST = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'], async (req, { auth, params }) => {
   const pool = getDbPool();
@@ -28,10 +31,8 @@ export const POST = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'],
   try {
     await client.query('BEGIN');
 
-    // Lock patient row
     await client.query('SELECT id FROM patients WHERE id = $1 FOR UPDATE', [patientId]);
 
-    // Get tooth treatment with catalog info
     const ttResult = await client.query(
       `SELECT tt.id, tt.tooth_number, tt.treatment_code, tt.status, tt.episode_id,
               tc.label_hu, tc.default_care_pathway_id
@@ -56,55 +57,48 @@ export const POST = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'],
       );
     }
 
-    // Close existing open episodes for this patient
-    const closingResult = await client.query(
-      `SELECT id FROM patient_episodes WHERE patient_id = $1 AND status = 'open'`,
+    // Check for existing open episode
+    const existingEpisode = await client.query(
+      `SELECT id, chief_complaint FROM patient_episodes WHERE patient_id = $1 AND status = 'open' LIMIT 1`,
       [patientId]
     );
-    const closingIds = closingResult.rows.map((r: { id: string }) => r.id);
-    if (closingIds.length > 0) {
-      try {
-        const { invalidateIntentsForEpisodes } = await import('@/lib/intent-invalidation');
-        await invalidateIntentsForEpisodes(closingIds, 'episode_closed');
-      } catch (e) {
-        logger.error('Failed to invalidate intents for closed episodes:', e);
+
+    let episodeId: string;
+    let linkedToExisting = false;
+
+    if (existingEpisode.rows.length > 0) {
+      // Link to existing active episode
+      episodeId = existingEpisode.rows[0].id;
+      linkedToExisting = true;
+    } else {
+      // No active episode — create a new one
+      const chiefComplaint = `Fog ${tt.tooth_number} — ${tt.label_hu}`;
+      const insertResult = await client.query(
+        `INSERT INTO patient_episodes (
+          patient_id, reason, chief_complaint, status, opened_at, created_by
+        ) VALUES ($1, $2, $3, 'open', CURRENT_TIMESTAMP, $4)
+        RETURNING id`,
+        [patientId, reason, chiefComplaint, auth.email]
+      );
+      episodeId = insertResult.rows[0]?.id;
+      if (!episodeId) {
+        await client.query('ROLLBACK');
+        return NextResponse.json({ error: 'Epizód létrehozása sikertelen' }, { status: 500 });
+      }
+
+      const stageEventsExists = await client.query(
+        `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'stage_events'`
+      );
+      if (stageEventsExists.rows.length > 0) {
+        await client.query(
+          `INSERT INTO stage_events (patient_id, episode_id, stage_code, at, created_by)
+           VALUES ($1, $2, 'STAGE_0', CURRENT_TIMESTAMP, $3)`,
+          [patientId, episodeId, auth.email]
+        );
       }
     }
-    await client.query(
-      `UPDATE patient_episodes SET status = 'closed', closed_at = CURRENT_TIMESTAMP
-       WHERE patient_id = $1 AND status = 'open'`,
-      [patientId]
-    );
 
-    const chiefComplaint = `Fog ${tt.tooth_number} — ${tt.label_hu}`;
-
-    // Create new episode
-    const insertResult = await client.query(
-      `INSERT INTO patient_episodes (
-        patient_id, reason, chief_complaint, status, opened_at, created_by
-      ) VALUES ($1, $2, $3, 'open', CURRENT_TIMESTAMP, $4)
-      RETURNING id`,
-      [patientId, reason, chiefComplaint, auth.email]
-    );
-    const episodeId = insertResult.rows[0]?.id;
-    if (!episodeId) {
-      await client.query('ROLLBACK');
-      return NextResponse.json({ error: 'Epizód létrehozása sikertelen' }, { status: 500 });
-    }
-
-    // Create STAGE_0 event if table exists
-    const stageEventsExists = await client.query(
-      `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'stage_events'`
-    );
-    if (stageEventsExists.rows.length > 0) {
-      await client.query(
-        `INSERT INTO stage_events (patient_id, episode_id, stage_code, at, created_by)
-         VALUES ($1, $2, 'STAGE_0', CURRENT_TIMESTAMP, $3)`,
-        [patientId, episodeId, auth.email]
-      );
-    }
-
-    // Auto-assign pathway if available
+    // Auto-assign pathway if the tooth treatment type has a default and it's not already on the episode
     let pathwayAssigned = false;
     if (tt.default_care_pathway_id) {
       const pathwayCheck = await client.query(
@@ -112,48 +106,65 @@ export const POST = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'],
         [tt.default_care_pathway_id]
       );
       if (pathwayCheck.rows.length > 0) {
-        // Try multi-pathway (episode_pathways table)
         const epPwExists = await client.query(
           `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'episode_pathways'`
         );
         if (epPwExists.rows.length > 0) {
-          await client.query(
-            `INSERT INTO episode_pathways (episode_id, care_pathway_id, ordinal) VALUES ($1, $2, 0)`,
+          // Only add if not already assigned to this episode
+          const alreadyAssigned = await client.query(
+            `SELECT 1 FROM episode_pathways WHERE episode_id = $1 AND care_pathway_id = $2`,
             [episodeId, tt.default_care_pathway_id]
           );
-        }
-        // Also set legacy field
-        await client.query(
-          `UPDATE patient_episodes SET care_pathway_id = $1 WHERE id = $2`,
-          [tt.default_care_pathway_id, episodeId]
-        );
+          if (alreadyAssigned.rows.length === 0) {
+            const ordRow = await client.query(
+              `SELECT COALESCE(MAX(ordinal), -1) + 1 as next_ord FROM episode_pathways WHERE episode_id = $1`,
+              [episodeId]
+            );
+            const ordinal = ordRow.rows[0].next_ord;
+            await client.query(
+              `INSERT INTO episode_pathways (episode_id, care_pathway_id, ordinal) VALUES ($1, $2, $3)`,
+              [episodeId, tt.default_care_pathway_id, ordinal]
+            );
 
-        // Generate episode_steps from pathway
-        const stepsJson = pathwayCheck.rows[0].steps_json;
-        if (Array.isArray(stepsJson) && stepsJson.length > 0) {
-          const epStepsExists = await client.query(
-            `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'episode_steps'`
-          );
-          if (epStepsExists.rows.length > 0) {
-            for (let i = 0; i < stepsJson.length; i++) {
-              const step = stepsJson[i];
+            if (ordinal === 0) {
               await client.query(
-                `INSERT INTO episode_steps (episode_id, step_code, pathway_order_index, seq, pool, duration_minutes, default_days_offset, status)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')`,
-                [
-                  episodeId,
-                  step.step_code,
-                  i,
-                  i,
-                  step.pool || 'work',
-                  step.duration_minutes || 30,
-                  step.default_days_offset || 0,
-                ]
+                `UPDATE patient_episodes SET care_pathway_id = $1 WHERE id = $2 AND care_pathway_id IS NULL`,
+                [tt.default_care_pathway_id, episodeId]
               );
             }
+
+            const stepsJson = pathwayCheck.rows[0].steps_json;
+            if (Array.isArray(stepsJson) && stepsJson.length > 0) {
+              const epStepsExists = await client.query(
+                `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'episode_steps'`
+              );
+              if (epStepsExists.rows.length > 0) {
+                const maxSeqRow = await client.query(
+                  `SELECT COALESCE(MAX(seq), -1) as max_seq FROM episode_steps WHERE episode_id = $1`,
+                  [episodeId]
+                );
+                const nextSeq: number = (maxSeqRow.rows[0].max_seq ?? -1) + 1;
+                for (let i = 0; i < stepsJson.length; i++) {
+                  const step = stepsJson[i];
+                  await client.query(
+                    `INSERT INTO episode_steps (episode_id, step_code, pathway_order_index, seq, pool, duration_minutes, default_days_offset, status)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')`,
+                    [
+                      episodeId,
+                      step.step_code,
+                      i,
+                      nextSeq + i,
+                      step.pool || 'work',
+                      step.duration_minutes || 30,
+                      step.default_days_offset || 0,
+                    ]
+                  );
+                }
+              }
+            }
+            pathwayAssigned = true;
           }
         }
-        pathwayAssigned = true;
       }
     }
 
@@ -168,7 +179,7 @@ export const POST = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'],
     await logActivity(
       req,
       auth.email,
-      'tooth_treatment_episode_created',
+      linkedToExisting ? 'tooth_treatment_episode_linked' : 'tooth_treatment_episode_created',
       JSON.stringify({
         patientId,
         treatmentId,
@@ -176,17 +187,18 @@ export const POST = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'],
         toothNumber: tt.tooth_number,
         treatmentCode: tt.treatment_code,
         pathwayAssigned,
+        linkedToExisting,
       })
     );
 
     return NextResponse.json(
       {
         episodeId,
-        chiefComplaint,
         pathwayAssigned,
         treatmentId,
+        linkedToExisting,
       },
-      { status: 201 }
+      { status: linkedToExisting ? 200 : 201 }
     );
   } catch (txError) {
     await client.query('ROLLBACK');

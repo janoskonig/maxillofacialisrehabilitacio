@@ -188,7 +188,7 @@ export function ToothTreatmentInline({ toothNumber, isViewOnly }: ToothTreatment
                       onClick={() => handleCreateEpisode(t)}
                       disabled={creatingEpisodeId === t.id}
                       className="px-1.5 py-0.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1"
-                      title="Epizód létrehozása"
+                      title="Epizódhoz kapcsolás (ha van aktív) vagy új epizód létrehozása"
                     >
                       {creatingEpisodeId === t.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <ExternalLink className="w-3 h-3" />}
                       Epizód
