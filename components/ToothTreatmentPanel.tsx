@@ -153,6 +153,7 @@ export function ToothTreatmentInline({ toothNumber, isViewOnly }: ToothTreatment
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? `Hiba (${res.status})`); return; }
       await reload();
+      window.dispatchEvent(new CustomEvent('episode-created'));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Hiba');
     } finally {

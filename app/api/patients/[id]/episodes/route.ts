@@ -93,7 +93,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
     if (episodeIds.length > 0) {
       const epPathRows = await pool.query(
         `SELECT ep.id, ep.episode_id, ep.care_pathway_id as "carePathwayId", ep.ordinal,
-                cp.name as "pathwayName",
+                ep.jaw, cp.name as "pathwayName",
                 (SELECT COUNT(*)::int FROM episode_steps es WHERE es.source_episode_pathway_id = ep.id) as "stepCount"
          FROM episode_pathways ep
          JOIN care_pathways cp ON ep.care_pathway_id = cp.id
@@ -114,6 +114,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
           ordinal: r.ordinal as number,
           pathwayName: r.pathwayName as string,
           stepCount: r.stepCount as number,
+          jaw: (r.jaw as string) || null,
         }));
       }
     }

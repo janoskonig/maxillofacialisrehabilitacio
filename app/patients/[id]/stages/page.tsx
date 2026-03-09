@@ -48,6 +48,12 @@ export default function PatientStagesPage() {
   }, [patientId]);
 
   useEffect(() => {
+    const handler = () => refreshStagesAndEpisodes();
+    window.addEventListener('episode-created', handler);
+    return () => window.removeEventListener('episode-created', handler);
+  }, [refreshStagesAndEpisodes]);
+
+  useEffect(() => {
     const checkAuth = async () => {
       try {
         const user = await getCurrentUser();
@@ -213,8 +219,8 @@ export default function PatientStagesPage() {
             />
           )}
 
-          {/* Admin: kezelési utak és felelős orvos (epizód szerkesztése) — csak admin látja */}
-          {userRole === 'admin' && activeEpisode && (
+          {/* Kezelési utak és felelős orvos (epizód szerkesztése) */}
+          {(userRole === 'admin' || userRole === 'fogpótlástanász') && activeEpisode && (
             <div className="rounded-lg border border-amber-200 bg-amber-50/50">
               <p className="text-xs font-medium text-amber-800 px-4 pt-3 pb-1">
                 Aktív epizód beállításai — Kezelési utak és felelős orvos itt választható ehhez az epizódhoz
