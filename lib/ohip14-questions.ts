@@ -40,7 +40,7 @@ export const ohip14Questions: OHIP14Question[] = [
   {
     id: 'q5',
     questionNumber: 5,
-    question: 'Érezte magát az elmúl hónapokban zavarban a fogai, szája, vagy a protézise miatt?',
+    question: 'Érezte magát az elmúlt hónapokban zavarban a fogai, szája, vagy a protézise miatt?',
     dimension: 'psychological_discomfort',
     dimensionHungarian: 'Pszichológiai kellemetlenség',
   },

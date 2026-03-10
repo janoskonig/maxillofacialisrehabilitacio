@@ -135,6 +135,38 @@ export const POST = authedHandler(async (req, { auth, params }) => {
       totalGenerated += stepsJson.length;
     }
 
+    // Sync linked tooth treatments into steps (automatic: all episode_linked treatments become steps)
+    const hasToothCol = await client.query(
+      `SELECT 1 FROM information_schema.columns WHERE table_name = 'episode_steps' AND column_name = 'tooth_treatment_id' LIMIT 1`
+    );
+    if (hasToothCol.rows.length > 0) {
+      const missing = await client.query(
+        `SELECT tt.id, tt.treatment_code, tt.tooth_number, ttc.label_hu as "label_hu"
+         FROM tooth_treatments tt
+         JOIN tooth_treatment_catalog ttc ON tt.treatment_code = ttc.code
+         WHERE tt.episode_id = $1 AND tt.status = 'episode_linked'
+           AND NOT EXISTS (SELECT 1 FROM episode_steps es WHERE es.episode_id = tt.episode_id AND es.tooth_treatment_id = tt.id)
+         ORDER BY tt.tooth_number, ttc.sort_order`,
+        [episodeId]
+      );
+      for (const row of missing.rows) {
+        const stepCode = `tooth_${row.treatment_code}`;
+        const customLabel = `${row.label_hu} – ${row.tooth_number}`;
+        const maxIdxRow = await client.query(
+          `SELECT COALESCE(MAX(pathway_order_index), -1) as max_idx FROM episode_steps WHERE episode_id = $1`,
+          [episodeId]
+        );
+        const nextIdx = (maxIdxRow.rows[0].max_idx ?? -1) + 1;
+        await client.query(
+          `INSERT INTO episode_steps (episode_id, step_code, pathway_order_index, pool, duration_minutes, default_days_offset, seq, tooth_treatment_id, custom_label)
+           VALUES ($1, $2, $3, 'work', 30, 7, $4, $5, $6)`,
+          [episodeId, stepCode, nextIdx, nextSeq, row.id, customLabel]
+        );
+        nextSeq += 1;
+        totalGenerated += 1;
+      }
+    }
+
     await client.query('COMMIT');
 
     const allSteps = await getFullStepQuery(pool, episodeId);
