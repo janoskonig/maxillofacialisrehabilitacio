@@ -72,10 +72,9 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
     if (selectedPatient && activeTab === 'send') {
       fetchConversation(selectedPatient.id);
       
-      // Periodikus frissítés az üzenetek státuszának követéséhez
       const interval = setInterval(() => {
         fetchConversation(selectedPatient.id);
-      }, 5000); // 5 másodpercenként
+      }, 15_000);
       
       return () => clearInterval(interval);
     }

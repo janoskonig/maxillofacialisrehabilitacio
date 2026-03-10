@@ -79,8 +79,7 @@ export default function MessagesPage() {
     };
 
     fetchUnreadCounts();
-    // Refresh every 5 seconds
-    const interval = setInterval(fetchUnreadCounts, 5000);
+    const interval = setInterval(fetchUnreadCounts, 30_000);
     return () => clearInterval(interval);
   }, [authorized]);
 

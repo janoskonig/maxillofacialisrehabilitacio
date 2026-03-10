@@ -161,13 +161,12 @@ export function PatientMessagesList() {
   useEffect(() => {
     fetchConversations();
     
-    // Refresh conversations periodically
     const interval = setInterval(() => {
       fetchConversations();
       if (selectedPatientId) {
         fetchMessages(selectedPatientId);
       }
-    }, 5000);
+    }, 15_000);
     
     return () => clearInterval(interval);
   }, [fetchConversations]);

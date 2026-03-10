@@ -114,14 +114,14 @@ function isRetryableError(err: any): boolean {
 
   if (err instanceof ApiError || err.name === 'ApiError') {
     const status = (err as ApiError).status;
-    if (status === 409) return false;
-    return status === 429 || status >= 500;
+    if (status === 409 || status === 429) return false;
+    return status >= 500;
   }
 
   if (err.name === 'ApiError' && typeof (err as any).status === 'number') {
     const status = (err as any).status;
-    if (status === 409) return false;
-    return status === 429 || status >= 500;
+    if (status === 409 || status === 429) return false;
+    return status >= 500;
   }
 
   return false;

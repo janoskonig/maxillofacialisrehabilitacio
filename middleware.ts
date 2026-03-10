@@ -39,7 +39,7 @@ function isPublicRoute(pathname: string): boolean {
 const AUTH_PREFIXES = ['/api/auth/login', '/api/auth/register', '/api/auth/forgot-password', '/api/auth/reset-password'];
 const AUTH_RATE_LIMIT = 10;
 const AUTH_RATE_WINDOW = 60_000;
-const API_RATE_LIMIT = 100;
+const API_RATE_LIMIT = 300;
 const API_RATE_WINDOW = 60_000;
 
 function getClientIp(req: NextRequest): string {

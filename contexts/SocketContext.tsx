@@ -33,7 +33,8 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     if (isPublicPath()) return;
 
     let newSocket: Socket | null = null;
-    let checkInterval: NodeJS.Timeout | null = null;
+    let retryTimeout: NodeJS.Timeout | null = null;
+    let cancelled = false;
     
     const initializeSocket = async () => {
       const user = await getCurrentUser();
@@ -41,15 +42,12 @@ export function SocketProvider({ children }: { children: ReactNode }) {
         return null;
       }
 
-      // Ha már van kapcsolat, ne hozzunk létre újat
       if (newSocket && newSocket.connected) {
         return newSocket;
       }
 
-      // Initialize socket connection
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || window.location.origin;
       
-      // Socket.io client automatically handles ws:// or wss:// based on http/https
       const socket = io(baseUrl, {
         path: '/socket.io',
         transports: ['websocket', 'polling'],
@@ -59,11 +57,6 @@ export function SocketProvider({ children }: { children: ReactNode }) {
 
       socket.on('connect', () => {
         setIsConnected(true);
-        // Töröljük az ellenőrzési intervallumot, ha sikeresen csatlakoztunk
-        if (checkInterval) {
-          clearInterval(checkInterval);
-          checkInterval = null;
-        }
       });
 
       socket.on('disconnect', () => {
@@ -78,31 +71,38 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       return socket;
     };
 
-    // Próbáljuk meg inicializálni azonnal
+    const scheduleRetry = (attempt: number) => {
+      if (cancelled) return;
+      const delay = Math.min(10_000 * Math.pow(2, attempt), 60_000);
+      retryTimeout = setTimeout(async () => {
+        if (cancelled) return;
+        const socket = await initializeSocket();
+        if (socket) {
+          newSocket = socket;
+          setSocket(socket);
+        } else {
+          scheduleRetry(attempt + 1);
+        }
+      }, delay);
+    };
+
     initializeSocket().then(socket => {
+      if (cancelled) {
+        socket?.close();
+        return;
+      }
       if (socket) {
         newSocket = socket;
         setSocket(socket);
       } else {
-        // Ha nincs bejelentkezett felhasználó, ellenőrizzük periodikusan
-        checkInterval = setInterval(async () => {
-          const socket = await initializeSocket();
-          if (socket) {
-            newSocket = socket;
-            setSocket(socket);
-            if (checkInterval) {
-              clearInterval(checkInterval);
-              checkInterval = null;
-            }
-          }
-        }, 2000); // 2 másodpercenként ellenőrizzük
+        scheduleRetry(0);
       }
     });
 
-    // Cleanup on unmount
     return () => {
-      if (checkInterval) {
-        clearInterval(checkInterval);
+      cancelled = true;
+      if (retryTimeout) {
+        clearTimeout(retryTimeout);
       }
       if (newSocket) {
         newSocket.close();

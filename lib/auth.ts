@@ -16,6 +16,10 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     const response = await fetch('/api/auth/me', {
       credentials: 'include',
     });
+
+    if (response.status === 429) {
+      return cachedUser;
+    }
     
     if (!response.ok) {
       cachedUser = null;
@@ -27,8 +31,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     return data.user;
   } catch (error) {
     console.error('Auth check error:', error);
-    cachedUser = null;
-    return null;
+    return cachedUser;
   }
 }
 

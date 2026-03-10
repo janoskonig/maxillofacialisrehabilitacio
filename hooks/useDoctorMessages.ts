@@ -318,7 +318,7 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
 
   // ── Effects ─────────────────────────────────────────────────────────
 
-  // Initial load + 5-second polling
+  // Initial load + 30-second polling
   useEffect(() => {
     const loadData = async () => {
       const user = await getCurrentUser();
@@ -334,9 +334,6 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
     loadData();
 
     const interval = setInterval(async () => {
-      const user = await getCurrentUser();
-      if (!user || !user.id) return;
-
       fetchConversations();
       fetchUnreadCount();
       if (selectedDoctorId) {
@@ -344,7 +341,7 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
       } else if (selectedGroupId) {
         fetchGroupMessages();
       }
-    }, 5000);
+    }, 30_000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDoctorId, selectedGroupId]);
