@@ -42,7 +42,7 @@ export class UserRepository {
 
   async findDoctors(): Promise<Array<{ id: string; email: string; doktor_neve: string | null; intezmeny: string | null }>> {
     const result = await this.pool.query(
-      `SELECT id, email, doktor_neve, intezmeny FROM users WHERE role IN ('sebészorvos', 'fogpótlástanász') AND active = true ORDER BY doktor_neve ASC`
+      `SELECT id, email, doktor_neve, intezmeny FROM users WHERE role IN ('beutalo_orvos', 'fogpótlástanász') AND active = true ORDER BY doktor_neve ASC`
     );
     return result.rows;
   }

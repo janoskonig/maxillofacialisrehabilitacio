@@ -10,7 +10,7 @@ export const GET = authedHandler(async (req, { auth }) => {
 
   const roleCondition = forSlotPicker
     ? `AND role IN ('admin', 'fogpótlástanász')`
-    : `AND (role IN ('sebészorvos', 'fogpótlástanász', 'admin', 'technikus') OR doktor_neve IS NOT NULL)`;
+    : `AND (role IN ('beutalo_orvos', 'fogpótlástanász', 'admin', 'technikus') OR doktor_neve IS NOT NULL)`;
   const result = await pool.query(
     `SELECT DISTINCT id, email, doktor_neve, intezmeny
      FROM users

@@ -7,7 +7,7 @@ import { checkOneHardNext, getAppointmentRiskSettings } from '@/lib/scheduling-s
  * POST /api/slot-intents/:id/convert — convert soft intent to hard appointment
  * Body: { timeSlotId } — picks a free slot within the window
  */
-export const POST = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'], async (req, { auth, params }) => {
+export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'], async (req, { auth, params }) => {
   const intentId = params.id;
   const body = await req.json().catch(() => ({}));
   const { timeSlotId } = body;

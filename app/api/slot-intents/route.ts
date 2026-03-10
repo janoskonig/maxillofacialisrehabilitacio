@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
 
-export const POST = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'], async (req, { auth }) => {
+export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'], async (req, { auth }) => {
   const body = await req.json();
   const {
     episodeId,

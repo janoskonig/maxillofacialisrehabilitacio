@@ -21,7 +21,7 @@ export interface PatientWorklistWidgetProps {
 
 /**
  * Beteg profilra szűrt munkalista – a beteg aktív kezeléseinek következő lépései.
- * Csak admin, sebészorvos, fogpótlástanász látja.
+ * Csak admin, beutaló orvos, fogpótlástanász látja.
  */
 export function PatientWorklistWidget({ patientId, patientName, visible = true }: PatientWorklistWidgetProps) {
   const [items, setItems] = useState<WorklistItemBackend[]>([]);

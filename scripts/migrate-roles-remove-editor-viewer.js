@@ -63,9 +63,9 @@ async function main() {
     // 4. Update CHECK constraint
     await pool.query('ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check');
     await pool.query(
-      "ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'fogpótlástanász', 'technikus', 'sebészorvos'))"
+      "ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'fogpótlástanász', 'technikus', 'beutalo_orvos'))"
     );
-    console.log('\nCHECK constraint frissítve: admin, fogpótlástanász, technikus, sebészorvos');
+    console.log('\nCHECK constraint frissítve: admin, fogpótlástanász, technikus, beutalo_orvos');
 
     // 5. Show final state
     const after = await pool.query(

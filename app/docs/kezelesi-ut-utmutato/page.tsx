@@ -64,7 +64,7 @@ export default function KezelesiUtUtmutatoPage() {
                 A beteg a rendelőben van, és szeretné a következő időpontot is (pl. próbabehelyezésre). <strong>Egy aktív kezelésben lévő betegnek egyszerre legfeljebb egy jövőbeli munkafázisú időpontja lehet.</strong> Tehát most nem foglalhatsz neki rögtön a próbabehelyezésre is — előbb le kell zajlania a lenyomatvételnek.
               </p>
               <p className="mt-2">
-                <strong>Mit csinálj:</strong> A lenyomatvétel napján, amikor megcsináltátok, a rendszer frissül — a következő lépés (próbabehelyezés) lesz a worklisten. Akkor foglalhatod a következő időpontot. Ha azonban klinikai indok miatt már most kell mindkettőt lefoglalni, admin vagy sebészorvos <strong>override</strong>-tal megteheti (min. 10 karakteres indoklás, audit alatt).
+                <strong>Mit csinálj:</strong> A lenyomatvétel napján, amikor megcsináltátok, a rendszer frissül — a következő lépés (próbabehelyezés) lesz a worklisten. Akkor foglalhatod a következő időpontot. Ha azonban klinikai indok miatt már most kell mindkettőt lefoglalni, admin vagy beutaló orvos <strong>override</strong>-tal megteheti (min. 10 karakteres indoklás, audit alatt).
               </p>
             </section>
 
@@ -87,7 +87,7 @@ export default function KezelesiUtUtmutatoPage() {
               <ul className="space-y-2">
                 <li><strong>Worklist</strong> — következő lépést váró betegek listája. Innen foglalsz.</li>
                 <li><strong>One-hard-next</strong> — egyszerre max 1 jövőbeli munkafázisú időpont / beteg (kivéve átadásnál: 2).</li>
-                <li><strong>Override</strong> — admin/sebészorvos felülírja a szabályt, indoklás kötelező.</li>
+                <li><strong>Override</strong> — admin/beutaló orvos felülírja a szabályt, indoklás kötelező.</li>
                 <li><strong>Blokk</strong> — pl. laborra várunk: addig nem foglalható következő lépés.</li>
               </ul>
             </section>

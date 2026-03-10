@@ -49,7 +49,7 @@ export default function StagesGanttPage() {
           router.push('/login');
           return;
         }
-        if (user.role !== 'admin' && user.role !== 'sebészorvos' && user.role !== 'fogpótlástanász') {
+        if (user.role !== 'admin' && user.role !== 'beutalo_orvos' && user.role !== 'fogpótlástanász') {
           showToast('Nincs jogosultsága az oldal megtekintéséhez', 'error');
           router.push('/');
           return;

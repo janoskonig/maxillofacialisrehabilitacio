@@ -5,7 +5,7 @@ import { canConsumeSlot } from '@/lib/scheduling-service';
 
 export const dynamic = 'force-dynamic';
 
-export const GET = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'], async (req, { auth }) => {
+export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'], async (req, { auth }) => {
   const searchParams = req.nextUrl.searchParams;
   const pool = searchParams.get('pool') || 'work';
   const durationMinutes = parseInt(searchParams.get('durationMinutes') || '30', 10);

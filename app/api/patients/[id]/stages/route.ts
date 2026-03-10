@@ -169,7 +169,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
  * New model: body { episodeId, stageCode, at?, note? }
  * Legacy: body { stage, notes?, stageDate?, startNewEpisode? }
  */
-export const POST = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'], async (req, { auth, params }) => {
+export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'], async (req, { auth, params }) => {
   const pool = getDbPool();
   const patientId = params.id;
 

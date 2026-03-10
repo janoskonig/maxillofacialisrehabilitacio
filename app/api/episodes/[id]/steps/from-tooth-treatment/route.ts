@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
  * Add a linked tooth treatment as a step in the episode's pathway.
  * Body: { toothTreatmentId: string }
  */
-export const POST = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'], async (req, { auth, params }) => {
+export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'], async (req, { auth, params }) => {
   const episodeId = params.id;
   const body = await req.json();
   const { toothTreatmentId } = body;

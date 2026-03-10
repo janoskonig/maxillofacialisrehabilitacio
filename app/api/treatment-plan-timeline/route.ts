@@ -38,7 +38,7 @@ interface TimelineEpisode {
 
 const PROTETIKAI_STAGE_CODES = ['STAGE_5', 'STAGE_6', 'STAGE_7'] as const;
 
-export const GET = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'], async (req, { auth }) => {
+export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'], async (req, { auth }) => {
   const searchParams = req.nextUrl.searchParams;
   const episodeStatus = searchParams.get('status') ?? 'open';
   const providerId = searchParams.get('providerId');

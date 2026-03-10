@@ -5,7 +5,7 @@ import { emitSchedulingEvent } from '@/lib/scheduling-events';
 
 export const dynamic = 'force-dynamic';
 
-export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'sebészorvos'], async (req, { auth, params }) => {
+export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'], async (req, { auth, params }) => {
   const appointmentId = params.id;
   const body = await req.json();
   const { appointmentStatus, completionNotes, isLate, appointmentType } = body;

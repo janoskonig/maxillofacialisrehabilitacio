@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { MessageCircle, ChevronDown, ChevronUp, AlertCircle, Bug, Lightbulb, Mail, Send, ArrowUp, ArrowDown, User, LogIn, Search, UserCircle } from 'lucide-react';
 
-type UserRole = 'admin' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
+type UserRole = 'admin' | 'fogpótlástanász' | 'technikus' | 'beutalo_orvos';
 
 type UserRow = {
   id: string;
@@ -357,7 +357,7 @@ export function UserManagementTab() {
                     <td className="px-4 py-3 text-sm text-gray-900">{user.email}</td>
                     <td className="px-4 py-3">
                       <select className="form-input" value={user.role} onChange={e => updateRole(user.id, e.target.value as UserRole)}>
-                        <option value="admin">admin</option><option value="fogpótlástanász">fogpótlástanász</option><option value="technikus">technikus</option><option value="sebészorvos">sebészorvos</option>
+                        <option value="admin">admin</option><option value="fogpótlástanász">fogpótlástanász</option><option value="technikus">technikus</option><option value="beutalo_orvos">beutaló orvos</option>
                       </select>
                     </td>
                     <td className="px-4 py-3 text-sm">{user.active ? <span className="text-green-600">Aktív</span> : <span className="text-red-600">Inaktív</span>}</td>
@@ -378,10 +378,10 @@ export function UserManagementTab() {
         <div className="mb-4">
           <label className="block text-sm font-medium text-gray-700 mb-2">Szerepkörök (több választható)</label>
           <div className="flex flex-wrap gap-3">
-            {['sebészorvos', 'fogpótlástanász', 'technikus', 'admin'].map(role => (
+            {['beutalo_orvos', 'fogpótlástanász', 'technikus', 'admin'].map(role => (
               <label key={role} className="flex items-center">
                 <input type="checkbox" checked={emailRoles.includes(role)} onChange={e => { if (e.target.checked) setEmailRoles([...emailRoles, role]); else setEmailRoles(emailRoles.filter(r => r !== role)); }} className="mr-2 h-4 w-4 text-medical-primary focus:ring-medical-primary border-gray-300 rounded" />
-                <span className="text-sm text-gray-700">{role === 'sebészorvos' ? 'Sebészorvos' : role === 'fogpótlástanász' ? 'Fogpótlástanász' : role === 'technikus' ? 'Technikus' : 'Adminisztrátor'}</span>
+                <span className="text-sm text-gray-700">{role === 'beutalo_orvos' ? 'Beutaló orvos' : role === 'fogpótlástanász' ? 'Fogpótlástanász' : role === 'technikus' ? 'Technikus' : 'Adminisztrátor'}</span>
               </label>
             ))}
           </div>

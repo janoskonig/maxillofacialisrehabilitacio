@@ -336,7 +336,7 @@ export const POST = authedHandler(async (req, { auth }) => {
   const userEmail = auth.email;
   const role = auth.role;
   
-  if (role === 'sebészorvos' && !validatedPatient.beutaloOrvos) {
+  if (role === 'beutalo_orvos' && !validatedPatient.beutaloOrvos) {
     const userResult = await pool.query(
       'SELECT doktor_neve FROM users WHERE id = $1',
       [auth.userId]
@@ -429,7 +429,7 @@ export const POST = authedHandler(async (req, { auth }) => {
     `Patient ID: ${result.rows[0].id}, Name: ${result.rows[0].nev || 'N/A'}`
   );
 
-  if (role === 'sebészorvos') {
+  if (role === 'beutalo_orvos') {
     try {
       const adminResult = await pool.query(
         `SELECT email FROM users WHERE role = 'admin' AND active = true`

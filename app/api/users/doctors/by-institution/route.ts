@@ -24,7 +24,7 @@ export const GET = authedHandler(async (req, { auth }) => {
        AND doktor_neve IS NOT NULL 
        AND doktor_neve != ''
        AND active = true
-       AND (role IN ('sebészorvos', 'fogpótlástanász', 'admin') OR doktor_neve IS NOT NULL)
+       AND (role IN ('beutalo_orvos', 'fogpótlástanász', 'admin') OR doktor_neve IS NOT NULL)
      ORDER BY doktor_neve ASC`,
     [institution]
   );

@@ -131,7 +131,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
  * Body: { reason, chiefComplaint, caseTitle?, parentEpisodeId?, triggerType? }
  */
 export const POST = roleHandler(
-  ['admin', 'sebészorvos', 'fogpótlástanász'],
+  ['admin', 'beutalo_orvos', 'fogpótlástanász'],
   async (req, { auth, params }) => {
     const pool = getDbPool();
     const patientId = params.id;

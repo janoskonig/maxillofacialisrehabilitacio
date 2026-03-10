@@ -28,7 +28,7 @@ interface PatientCardProps {
   onViewFoto?: (patient: Patient) => void;
   canEdit?: boolean;
   canDelete?: boolean;
-  userRole?: 'admin' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
+  userRole?: 'admin' | 'fogpótlástanász' | 'technikus' | 'beutalo_orvos';
 }
 
 function PatientCardComponent({

@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
  * PATCH /api/patients/:id/tooth-treatments/:treatmentId — update status, notes, mark completed
  */
 export const PATCH = authedHandler(async (req, { auth, params }) => {
-  if (!['admin', 'sebészorvos', 'fogpótlástanász'].includes(auth.role)) {
+  if (!['admin', 'beutalo_orvos', 'fogpótlástanász'].includes(auth.role)) {
     return NextResponse.json({ error: 'Nincs jogosultság' }, { status: 403 });
   }
 
@@ -68,7 +68,7 @@ export const PATCH = authedHandler(async (req, { auth, params }) => {
  * DELETE /api/patients/:id/tooth-treatments/:treatmentId — delete (only pending)
  */
 export const DELETE = authedHandler(async (req, { auth, params }) => {
-  if (!['admin', 'sebészorvos', 'fogpótlástanász'].includes(auth.role)) {
+  if (!['admin', 'beutalo_orvos', 'fogpótlástanász'].includes(auth.role)) {
     return NextResponse.json({ error: 'Nincs jogosultság' }, { status: 403 });
   }
 

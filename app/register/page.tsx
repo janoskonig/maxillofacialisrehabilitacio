@@ -318,7 +318,7 @@ export default function Register() {
                   className="form-input w-full"
                 >
                   <option value="">-- Válasszon szerepkört --</option>
-                  <option value="sebész">Sebész</option>
+                  <option value="sebész">Beutaló orvos</option>
                   <option value="fogpótos">Fogpótos</option>
                   <option value="technikus">Technikus</option>
                 </select>

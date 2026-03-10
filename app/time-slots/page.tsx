@@ -11,7 +11,7 @@ import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
 
 export default function TimeSlotsPage() {
   const router = useRouter();
-  const [userRole, setUserRole] = useState<'admin' | 'fogpótlástanász' | 'technikus' | 'sebészorvos'>('admin');
+  const [userRole, setUserRole] = useState<'admin' | 'fogpótlástanász' | 'technikus' | 'beutalo_orvos'>('admin');
   const [authorized, setAuthorized] = useState(false);
 
   useEffect(() => {

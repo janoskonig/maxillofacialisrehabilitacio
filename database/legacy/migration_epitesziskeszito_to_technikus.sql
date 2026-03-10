@@ -12,10 +12,10 @@ DROP CONSTRAINT IF EXISTS users_role_check;
 
 ALTER TABLE users 
 ADD CONSTRAINT users_role_check 
-CHECK (role IN ('admin', 'editor', 'viewer', 'fogpótlástanász', 'technikus', 'sebészorvos'));
+CHECK (role IN ('admin', 'editor', 'viewer', 'fogpótlástanász', 'technikus', 'beutalo_orvos'));
 
 -- Kommentek frissítése
-COMMENT ON COLUMN users.role IS 'Felhasználó szerepköre: admin, editor, viewer, fogpótlástanász, technikus, vagy sebészorvos';
+COMMENT ON COLUMN users.role IS 'Felhasználó szerepköre: admin, editor, viewer, fogpótlástanász, technikus, vagy beutalo_orvos';
 
 
 

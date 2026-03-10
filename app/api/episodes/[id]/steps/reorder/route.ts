@@ -17,7 +17,7 @@ export const dynamic = 'force-dynamic';
  * pending step in the new order, the appointment is reassigned to the
  * new first pending step (same pool).
  */
-export const PATCH = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'], async (req, { auth, params }) => {
+export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'], async (req, { auth, params }) => {
   const episodeId = params.id;
   const body = await req.json();
   const { stepIds } = body;

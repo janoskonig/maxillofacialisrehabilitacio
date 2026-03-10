@@ -1,6 +1,6 @@
 'use client';
 
-export type UserRole = 'admin' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
+export type UserRole = 'admin' | 'fogpótlástanász' | 'technikus' | 'beutalo_orvos';
 
 const ROLES_STORAGE_KEY = 'userRoles';
 

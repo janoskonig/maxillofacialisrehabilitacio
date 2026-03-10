@@ -82,97 +82,92 @@ CREATE TABLE IF NOT EXISTS patient_treatment_plans (
 );
 
 -- ══════════════════════════════════════════════════════════════════════════════
--- 2. Migrate existing data into child tables
--- ══════════════════════════════════════════════════════════════════════════════
-
-INSERT INTO patient_referral (patient_id, beutalo_orvos, beutalo_intezmeny, beutalo_indokolas, primer_mutet_leirasa, mutet_ideje, szovettani_diagnozis, nyaki_blokkdisszekcio)
-SELECT id, beutalo_orvos, beutalo_intezmeny, beutalo_indokolas, primer_mutet_leirasa, mutet_ideje, szovettani_diagnozis, nyaki_blokkdisszekcio
-FROM patients
-ON CONFLICT (patient_id) DO NOTHING;
-
-INSERT INTO patient_anamnesis (patient_id, kezelesre_erkezes_indoka, alkoholfogyasztas, dohanyzas_szam, maxilladefektus_van, brown_fuggoleges_osztaly, brown_vizszintes_komponens, mandibuladefektus_van, kovacs_dobak_osztaly, nyelvmozgasok_akadalyozottak, gombocos_beszed, nyalmirigy_allapot, fabian_fejerdy_protetikai_osztaly, fabian_fejerdy_protetikai_osztaly_felso, fabian_fejerdy_protetikai_osztaly_also, radioterapia, radioterapia_dozis, radioterapia_datum_intervallum, chemoterapia, chemoterapia_leiras, tnm_staging, bno, diagnozis, baleset_idopont, baleset_etiologiaja, baleset_egyeb, veleszuletett_rendellenessegek, veleszuletett_mutetek_leirasa)
-SELECT id, kezelesre_erkezes_indoka, alkoholfogyasztas, dohanyzas_szam, COALESCE(maxilladefektus_van, false), brown_fuggoleges_osztaly, brown_vizszintes_komponens, COALESCE(mandibuladefektus_van, false), kovacs_dobak_osztaly, COALESCE(nyelvmozgasok_akadalyozottak, false), COALESCE(gombocos_beszed, false), nyalmirigy_allapot, fabian_fejerdy_protetikai_osztaly, fabian_fejerdy_protetikai_osztaly_felso, fabian_fejerdy_protetikai_osztaly_also, COALESCE(radioterapia, false), radioterapia_dozis, radioterapia_datum_intervallum, COALESCE(chemoterapia, false), chemoterapia_leiras, tnm_staging, bno, diagnozis, baleset_idopont, baleset_etiologiaja, baleset_egyeb, COALESCE(veleszuletett_rendellenessegek, '[]'::jsonb), veleszuletett_mutetek_leirasa
-FROM patients
-ON CONFLICT (patient_id) DO NOTHING;
-
-INSERT INTO patient_dental_status (patient_id, meglevo_fogak, meglevo_implantatumok, nem_ismert_poziciokban_implantatum, nem_ismert_poziciokban_implantatum_reszletek, felso_fogpotlas_van, felso_fogpotlas_mikor, felso_fogpotlas_keszito, felso_fogpotlas_elegedett, felso_fogpotlas_problema, felso_fogpotlas_tipus, also_fogpotlas_van, also_fogpotlas_mikor, also_fogpotlas_keszito, also_fogpotlas_elegedett, also_fogpotlas_problema, also_fogpotlas_tipus)
-SELECT id, COALESCE(meglevo_fogak, '{}'::jsonb), COALESCE(meglevo_implantatumok, '{}'::jsonb), COALESCE(nem_ismert_poziciokban_implantatum, false), nem_ismert_poziciokban_implantatum_reszletek, COALESCE(felso_fogpotlas_van, false), felso_fogpotlas_mikor, felso_fogpotlas_keszito, COALESCE(felso_fogpotlas_elegedett, true), felso_fogpotlas_problema, felso_fogpotlas_tipus, COALESCE(also_fogpotlas_van, false), also_fogpotlas_mikor, also_fogpotlas_keszito, COALESCE(also_fogpotlas_elegedett, true), also_fogpotlas_problema, also_fogpotlas_tipus
-FROM patients
-ON CONFLICT (patient_id) DO NOTHING;
-
-INSERT INTO patient_treatment_plans (patient_id, kezelesi_terv_felso, kezelesi_terv_also, kezelesi_terv_arcot_erinto, kortorteneti_osszefoglalo, kezelesi_terv_melleklet, szakorvosi_velemeny)
-SELECT id, COALESCE(kezelesi_terv_felso, '[]'::jsonb), COALESCE(kezelesi_terv_also, '[]'::jsonb), COALESCE(kezelesi_terv_arcot_erinto, '[]'::jsonb), kortorteneti_osszefoglalo, kezelesi_terv_melleklet, szakorvosi_velemeny
-FROM patients
-ON CONFLICT (patient_id) DO NOTHING;
-
--- ══════════════════════════════════════════════════════════════════════════════
+-- 2. Migrate existing data into child tables (only if patients has legacy columns)
 -- 3. Drop migrated columns from patients table
 -- ══════════════════════════════════════════════════════════════════════════════
 
--- Referral columns
-ALTER TABLE patients DROP COLUMN IF EXISTS beutalo_orvos;
-ALTER TABLE patients DROP COLUMN IF EXISTS beutalo_intezmeny;
-ALTER TABLE patients DROP COLUMN IF EXISTS beutalo_indokolas;
-ALTER TABLE patients DROP COLUMN IF EXISTS mutet_rovid_leirasa;
-ALTER TABLE patients DROP COLUMN IF EXISTS primer_mutet_leirasa;
-ALTER TABLE patients DROP COLUMN IF EXISTS mutet_ideje;
-ALTER TABLE patients DROP COLUMN IF EXISTS szovettani_diagnozis;
-ALTER TABLE patients DROP COLUMN IF EXISTS nyaki_blokkdisszekcio;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'patients' AND column_name = 'beutalo_orvos') THEN
+    INSERT INTO patient_referral (patient_id, beutalo_orvos, beutalo_intezmeny, beutalo_indokolas, primer_mutet_leirasa, mutet_ideje, szovettani_diagnozis, nyaki_blokkdisszekcio)
+    SELECT id, beutalo_orvos, beutalo_intezmeny, beutalo_indokolas, primer_mutet_leirasa, mutet_ideje, szovettani_diagnozis, nyaki_blokkdisszekcio
+    FROM patients
+    ON CONFLICT (patient_id) DO NOTHING;
 
--- Anamnesis columns
-ALTER TABLE patients DROP COLUMN IF EXISTS kezelesre_erkezes_indoka;
-ALTER TABLE patients DROP COLUMN IF EXISTS alkoholfogyasztas;
-ALTER TABLE patients DROP COLUMN IF EXISTS dohanyzas_szam;
-ALTER TABLE patients DROP COLUMN IF EXISTS maxilladefektus_van;
-ALTER TABLE patients DROP COLUMN IF EXISTS brown_fuggoleges_osztaly;
-ALTER TABLE patients DROP COLUMN IF EXISTS brown_vizszintes_komponens;
-ALTER TABLE patients DROP COLUMN IF EXISTS mandibuladefektus_van;
-ALTER TABLE patients DROP COLUMN IF EXISTS kovacs_dobak_osztaly;
-ALTER TABLE patients DROP COLUMN IF EXISTS nyelvmozgasok_akadalyozottak;
-ALTER TABLE patients DROP COLUMN IF EXISTS gombocos_beszed;
-ALTER TABLE patients DROP COLUMN IF EXISTS nyalmirigy_allapot;
-ALTER TABLE patients DROP COLUMN IF EXISTS fabian_fejerdy_protetikai_osztaly;
-ALTER TABLE patients DROP COLUMN IF EXISTS fabian_fejerdy_protetikai_osztaly_felso;
-ALTER TABLE patients DROP COLUMN IF EXISTS fabian_fejerdy_protetikai_osztaly_also;
-ALTER TABLE patients DROP COLUMN IF EXISTS radioterapia;
-ALTER TABLE patients DROP COLUMN IF EXISTS radioterapia_dozis;
-ALTER TABLE patients DROP COLUMN IF EXISTS radioterapia_datum_intervallum;
-ALTER TABLE patients DROP COLUMN IF EXISTS chemoterapia;
-ALTER TABLE patients DROP COLUMN IF EXISTS chemoterapia_leiras;
-ALTER TABLE patients DROP COLUMN IF EXISTS tnm_staging;
-ALTER TABLE patients DROP COLUMN IF EXISTS bno;
-ALTER TABLE patients DROP COLUMN IF EXISTS diagnozis;
-ALTER TABLE patients DROP COLUMN IF EXISTS baleset_idopont;
-ALTER TABLE patients DROP COLUMN IF EXISTS baleset_etiologiaja;
-ALTER TABLE patients DROP COLUMN IF EXISTS baleset_egyeb;
-ALTER TABLE patients DROP COLUMN IF EXISTS veleszuletett_rendellenessegek;
-ALTER TABLE patients DROP COLUMN IF EXISTS veleszuletett_mutetek_leirasa;
+    INSERT INTO patient_anamnesis (patient_id, kezelesre_erkezes_indoka, alkoholfogyasztas, dohanyzas_szam, maxilladefektus_van, brown_fuggoleges_osztaly, brown_vizszintes_komponens, mandibuladefektus_van, kovacs_dobak_osztaly, nyelvmozgasok_akadalyozottak, gombocos_beszed, nyalmirigy_allapot, fabian_fejerdy_protetikai_osztaly, fabian_fejerdy_protetikai_osztaly_felso, fabian_fejerdy_protetikai_osztaly_also, radioterapia, radioterapia_dozis, radioterapia_datum_intervallum, chemoterapia, chemoterapia_leiras, tnm_staging, bno, diagnozis, baleset_idopont, baleset_etiologiaja, baleset_egyeb, veleszuletett_rendellenessegek, veleszuletett_mutetek_leirasa)
+    SELECT id, kezelesre_erkezes_indoka, alkoholfogyasztas, dohanyzas_szam, COALESCE(maxilladefektus_van, false), brown_fuggoleges_osztaly, brown_vizszintes_komponens, COALESCE(mandibuladefektus_van, false), kovacs_dobak_osztaly, COALESCE(nyelvmozgasok_akadalyozottak, false), COALESCE(gombocos_beszed, false), nyalmirigy_allapot, fabian_fejerdy_protetikai_osztaly, fabian_fejerdy_protetikai_osztaly_felso, fabian_fejerdy_protetikai_osztaly_also, COALESCE(radioterapia, false), radioterapia_dozis, radioterapia_datum_intervallum, COALESCE(chemoterapia, false), chemoterapia_leiras, tnm_staging, bno, diagnozis, baleset_idopont, baleset_etiologiaja, baleset_egyeb, COALESCE(veleszuletett_rendellenessegek, '[]'::jsonb), veleszuletett_mutetek_leirasa
+    FROM patients
+    ON CONFLICT (patient_id) DO NOTHING;
 
--- Dental status columns
-ALTER TABLE patients DROP COLUMN IF EXISTS meglevo_fogak;
-ALTER TABLE patients DROP COLUMN IF EXISTS meglevo_implantatumok;
-ALTER TABLE patients DROP COLUMN IF EXISTS nem_ismert_poziciokban_implantatum;
-ALTER TABLE patients DROP COLUMN IF EXISTS nem_ismert_poziciokban_implantatum_reszletek;
-ALTER TABLE patients DROP COLUMN IF EXISTS felso_fogpotlas_van;
-ALTER TABLE patients DROP COLUMN IF EXISTS felso_fogpotlas_mikor;
-ALTER TABLE patients DROP COLUMN IF EXISTS felso_fogpotlas_keszito;
-ALTER TABLE patients DROP COLUMN IF EXISTS felso_fogpotlas_elegedett;
-ALTER TABLE patients DROP COLUMN IF EXISTS felso_fogpotlas_problema;
-ALTER TABLE patients DROP COLUMN IF EXISTS felso_fogpotlas_tipus;
-ALTER TABLE patients DROP COLUMN IF EXISTS also_fogpotlas_van;
-ALTER TABLE patients DROP COLUMN IF EXISTS also_fogpotlas_mikor;
-ALTER TABLE patients DROP COLUMN IF EXISTS also_fogpotlas_keszito;
-ALTER TABLE patients DROP COLUMN IF EXISTS also_fogpotlas_elegedett;
-ALTER TABLE patients DROP COLUMN IF EXISTS also_fogpotlas_problema;
-ALTER TABLE patients DROP COLUMN IF EXISTS also_fogpotlas_tipus;
+    INSERT INTO patient_dental_status (patient_id, meglevo_fogak, meglevo_implantatumok, nem_ismert_poziciokban_implantatum, nem_ismert_poziciokban_implantatum_reszletek, felso_fogpotlas_van, felso_fogpotlas_mikor, felso_fogpotlas_keszito, felso_fogpotlas_elegedett, felso_fogpotlas_problema, felso_fogpotlas_tipus, also_fogpotlas_van, also_fogpotlas_mikor, also_fogpotlas_keszito, also_fogpotlas_elegedett, also_fogpotlas_problema, also_fogpotlas_tipus)
+    SELECT id, COALESCE(meglevo_fogak, '{}'::jsonb), COALESCE(meglevo_implantatumok, '{}'::jsonb), COALESCE(nem_ismert_poziciokban_implantatum, false), nem_ismert_poziciokban_implantatum_reszletek, COALESCE(felso_fogpotlas_van, false), felso_fogpotlas_mikor, felso_fogpotlas_keszito, COALESCE(felso_fogpotlas_elegedett, true), felso_fogpotlas_problema, felso_fogpotlas_tipus, COALESCE(also_fogpotlas_van, false), also_fogpotlas_mikor, also_fogpotlas_keszito, COALESCE(also_fogpotlas_elegedett, true), also_fogpotlas_problema, also_fogpotlas_tipus
+    FROM patients
+    ON CONFLICT (patient_id) DO NOTHING;
 
--- Treatment plan columns
-ALTER TABLE patients DROP COLUMN IF EXISTS kezelesi_terv_felso;
-ALTER TABLE patients DROP COLUMN IF EXISTS kezelesi_terv_also;
-ALTER TABLE patients DROP COLUMN IF EXISTS kezelesi_terv_arcot_erinto;
-ALTER TABLE patients DROP COLUMN IF EXISTS kortorteneti_osszefoglalo;
-ALTER TABLE patients DROP COLUMN IF EXISTS kezelesi_terv_melleklet;
-ALTER TABLE patients DROP COLUMN IF EXISTS szakorvosi_velemeny;
+    INSERT INTO patient_treatment_plans (patient_id, kezelesi_terv_felso, kezelesi_terv_also, kezelesi_terv_arcot_erinto, kortorteneti_osszefoglalo, kezelesi_terv_melleklet, szakorvosi_velemeny)
+    SELECT id, COALESCE(kezelesi_terv_felso, '[]'::jsonb), COALESCE(kezelesi_terv_also, '[]'::jsonb), COALESCE(kezelesi_terv_arcot_erinto, '[]'::jsonb), kortorteneti_osszefoglalo, kezelesi_terv_melleklet, szakorvosi_velemeny
+    FROM patients
+    ON CONFLICT (patient_id) DO NOTHING;
+
+    ALTER TABLE patients DROP COLUMN IF EXISTS beutalo_orvos;
+    ALTER TABLE patients DROP COLUMN IF EXISTS beutalo_intezmeny;
+    ALTER TABLE patients DROP COLUMN IF EXISTS beutalo_indokolas;
+    ALTER TABLE patients DROP COLUMN IF EXISTS mutet_rovid_leirasa;
+    ALTER TABLE patients DROP COLUMN IF EXISTS primer_mutet_leirasa;
+    ALTER TABLE patients DROP COLUMN IF EXISTS mutet_ideje;
+    ALTER TABLE patients DROP COLUMN IF EXISTS szovettani_diagnozis;
+    ALTER TABLE patients DROP COLUMN IF EXISTS nyaki_blokkdisszekcio;
+    ALTER TABLE patients DROP COLUMN IF EXISTS kezelesre_erkezes_indoka;
+    ALTER TABLE patients DROP COLUMN IF EXISTS alkoholfogyasztas;
+    ALTER TABLE patients DROP COLUMN IF EXISTS dohanyzas_szam;
+    ALTER TABLE patients DROP COLUMN IF EXISTS maxilladefektus_van;
+    ALTER TABLE patients DROP COLUMN IF EXISTS brown_fuggoleges_osztaly;
+    ALTER TABLE patients DROP COLUMN IF EXISTS brown_vizszintes_komponens;
+    ALTER TABLE patients DROP COLUMN IF EXISTS mandibuladefektus_van;
+    ALTER TABLE patients DROP COLUMN IF EXISTS kovacs_dobak_osztaly;
+    ALTER TABLE patients DROP COLUMN IF EXISTS nyelvmozgasok_akadalyozottak;
+    ALTER TABLE patients DROP COLUMN IF EXISTS gombocos_beszed;
+    ALTER TABLE patients DROP COLUMN IF EXISTS nyalmirigy_allapot;
+    ALTER TABLE patients DROP COLUMN IF EXISTS fabian_fejerdy_protetikai_osztaly;
+    ALTER TABLE patients DROP COLUMN IF EXISTS fabian_fejerdy_protetikai_osztaly_felso;
+    ALTER TABLE patients DROP COLUMN IF EXISTS fabian_fejerdy_protetikai_osztaly_also;
+    ALTER TABLE patients DROP COLUMN IF EXISTS radioterapia;
+    ALTER TABLE patients DROP COLUMN IF EXISTS radioterapia_dozis;
+    ALTER TABLE patients DROP COLUMN IF EXISTS radioterapia_datum_intervallum;
+    ALTER TABLE patients DROP COLUMN IF EXISTS chemoterapia;
+    ALTER TABLE patients DROP COLUMN IF EXISTS chemoterapia_leiras;
+    ALTER TABLE patients DROP COLUMN IF EXISTS tnm_staging;
+    ALTER TABLE patients DROP COLUMN IF EXISTS bno;
+    ALTER TABLE patients DROP COLUMN IF EXISTS diagnozis;
+    ALTER TABLE patients DROP COLUMN IF EXISTS baleset_idopont;
+    ALTER TABLE patients DROP COLUMN IF EXISTS baleset_etiologiaja;
+    ALTER TABLE patients DROP COLUMN IF EXISTS baleset_egyeb;
+    ALTER TABLE patients DROP COLUMN IF EXISTS veleszuletett_rendellenessegek;
+    ALTER TABLE patients DROP COLUMN IF EXISTS veleszuletett_mutetek_leirasa;
+    ALTER TABLE patients DROP COLUMN IF EXISTS meglevo_fogak;
+    ALTER TABLE patients DROP COLUMN IF EXISTS meglevo_implantatumok;
+    ALTER TABLE patients DROP COLUMN IF EXISTS nem_ismert_poziciokban_implantatum;
+    ALTER TABLE patients DROP COLUMN IF EXISTS nem_ismert_poziciokban_implantatum_reszletek;
+    ALTER TABLE patients DROP COLUMN IF EXISTS felso_fogpotlas_van;
+    ALTER TABLE patients DROP COLUMN IF EXISTS felso_fogpotlas_mikor;
+    ALTER TABLE patients DROP COLUMN IF EXISTS felso_fogpotlas_keszito;
+    ALTER TABLE patients DROP COLUMN IF EXISTS felso_fogpotlas_elegedett;
+    ALTER TABLE patients DROP COLUMN IF EXISTS felso_fogpotlas_problema;
+    ALTER TABLE patients DROP COLUMN IF EXISTS felso_fogpotlas_tipus;
+    ALTER TABLE patients DROP COLUMN IF EXISTS also_fogpotlas_van;
+    ALTER TABLE patients DROP COLUMN IF EXISTS also_fogpotlas_mikor;
+    ALTER TABLE patients DROP COLUMN IF EXISTS also_fogpotlas_keszito;
+    ALTER TABLE patients DROP COLUMN IF EXISTS also_fogpotlas_elegedett;
+    ALTER TABLE patients DROP COLUMN IF EXISTS also_fogpotlas_problema;
+    ALTER TABLE patients DROP COLUMN IF EXISTS also_fogpotlas_tipus;
+    ALTER TABLE patients DROP COLUMN IF EXISTS kezelesi_terv_felso;
+    ALTER TABLE patients DROP COLUMN IF EXISTS kezelesi_terv_also;
+    ALTER TABLE patients DROP COLUMN IF EXISTS kezelesi_terv_arcot_erinto;
+    ALTER TABLE patients DROP COLUMN IF EXISTS kortorteneti_osszefoglalo;
+    ALTER TABLE patients DROP COLUMN IF EXISTS kezelesi_terv_melleklet;
+    ALTER TABLE patients DROP COLUMN IF EXISTS szakorvosi_velemeny;
+  END IF;
+END $$;
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- 4. Create patients_full VIEW (backward-compatible shape)
@@ -244,9 +239,10 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE TRIGGER patients_full_insert
+DROP TRIGGER IF EXISTS patients_full_insert ON patients_full;
+CREATE TRIGGER patients_full_insert
   INSTEAD OF INSERT ON patients_full
-  FOR EACH ROW EXECUTE FUNCTION patients_full_insert_fn();
+  FOR EACH ROW EXECUTE PROCEDURE patients_full_insert_fn();
 
 -- UPDATE trigger
 CREATE OR REPLACE FUNCTION patients_full_update_fn() RETURNS TRIGGER AS $$
@@ -328,9 +324,10 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE TRIGGER patients_full_update
+DROP TRIGGER IF EXISTS patients_full_update ON patients_full;
+CREATE TRIGGER patients_full_update
   INSTEAD OF UPDATE ON patients_full
-  FOR EACH ROW EXECUTE FUNCTION patients_full_update_fn();
+  FOR EACH ROW EXECUTE PROCEDURE patients_full_update_fn();
 
 -- DELETE trigger
 CREATE OR REPLACE FUNCTION patients_full_delete_fn() RETURNS TRIGGER AS $$
@@ -340,9 +337,10 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE TRIGGER patients_full_delete
+DROP TRIGGER IF EXISTS patients_full_delete ON patients_full;
+CREATE TRIGGER patients_full_delete
   INSTEAD OF DELETE ON patients_full
-  FOR EACH ROW EXECUTE FUNCTION patients_full_delete_fn();
+  FOR EACH ROW EXECUTE PROCEDURE patients_full_delete_fn();
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- 6. Indexes on child tables

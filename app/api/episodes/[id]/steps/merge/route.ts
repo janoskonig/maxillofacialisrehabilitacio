@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
  * Merge multiple steps into one group (same appointment slot).
  * Body: { stepIds: string[] } — at least 2. First ID becomes the "primary" step.
  */
-export const POST = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'], async (req, { auth, params }) => {
+export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'], async (req, { auth, params }) => {
   const episodeId = params.id;
   const body = await req.json();
   const { stepIds } = body;

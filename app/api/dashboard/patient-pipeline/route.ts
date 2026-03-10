@@ -32,7 +32,7 @@ export const GET = authedHandler(async (req, { auth }) => {
     // stage_catalog may not exist yet
   }
 
-  const allowedRoles = ['admin', 'sebészorvos', 'fogpótlástanász'];
+  const allowedRoles = ['admin', 'beutalo_orvos', 'fogpótlástanász'];
   const canSeeStages = allowedRoles.includes(auth.role);
 
   let stagePatients: Record<string, Array<{ patientId: string; patientName: string; stageSince: string }>> = {};

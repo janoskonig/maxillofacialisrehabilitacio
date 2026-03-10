@@ -152,7 +152,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
       if (user) {
         setUserRole(user.role);
         // If surgeon role and new patient, set vanBeutalo to true
-        if (user.role === 'sebészorvos' && isNewPatient && !initialVanBeutalo) {
+        if (user.role === 'beutalo_orvos' && isNewPatient && !initialVanBeutalo) {
           setVanBeutalo(true);
         }
       }
@@ -1825,7 +1825,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
           <PatientDocuments
             patientId={patientId}
             isViewOnly={isViewOnly}
-            canUpload={userRole === 'admin' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos'}
+            canUpload={userRole === 'admin' || userRole === 'fogpótlástanász' || userRole === 'beutalo_orvos'}
             canDelete={userRole === 'admin'}
             onSavePatientBeforeUpload={!isViewOnly ? savePatientSilently : undefined}
             isPatientDirty={!isViewOnly && hasUnsavedChanges()}
@@ -1867,7 +1867,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
         {/* For surgeons, always allow editing appointments even if form is view-only */}
         {shouldShowSection('idopont') && (
         <div id="section-idopont" className="scroll-mt-20 sm:scroll-mt-24">
-          {activeEpisodeId && (userRole === 'admin' || userRole === 'sebészorvos' || userRole === 'fogpótlástanász') && (
+          {activeEpisodeId && (userRole === 'admin' || userRole === 'beutalo_orvos' || userRole === 'fogpótlástanász') && (
             <div className="mb-4">
               <ContextBanner
                 variant="info"
@@ -1882,7 +1882,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
             patientId={patientId} 
             episodeId={activeEpisodeId}
             pool={activeEpisodeId ? 'work' : undefined}
-            isViewOnly={userRole === 'sebészorvos' ? false : isViewOnly}
+            isViewOnly={userRole === 'beutalo_orvos' ? false : isViewOnly}
             onSavePatientBeforeBooking={!isViewOnly ? savePatientForBooking : undefined}
             isPatientDirty={!isViewOnly && hasUnsavedChanges()}
             isNewPatient={isNewPatient}

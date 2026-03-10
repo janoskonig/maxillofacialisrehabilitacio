@@ -23,7 +23,7 @@ export default function NewPatientPage() {
         router.push('/login');
         return;
       }
-      if (user.role !== 'admin' && user.role !== 'fogpótlástanász' && user.role !== 'sebészorvos') {
+      if (user.role !== 'admin' && user.role !== 'fogpótlástanász' && user.role !== 'beutalo_orvos') {
         router.push('/');
         return;
       }

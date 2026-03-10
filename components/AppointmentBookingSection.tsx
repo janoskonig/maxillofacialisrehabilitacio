@@ -266,7 +266,7 @@ export function AppointmentBookingSection({
     return null;
   }
   
-  if (userRole !== 'sebészorvos' && userRole !== 'admin' && userRole !== 'fogpótlástanász') {
+  if (userRole !== 'beutalo_orvos' && userRole !== 'admin' && userRole !== 'fogpótlástanász') {
     return null;
   }
   
@@ -649,7 +649,7 @@ export function AppointmentBookingSection({
                     <Download className="w-4 h-4" />
                     .ics
                   </button>
-                  {!isViewOnly && (userRole === 'sebészorvos' || userRole === 'admin' || userRole === 'fogpótlástanász') && (
+                  {!isViewOnly && (userRole === 'beutalo_orvos' || userRole === 'admin' || userRole === 'fogpótlástanász') && (
                     <>
                       <button
                         onClick={() => handleModifyAppointment(appointment)}

@@ -199,7 +199,7 @@ export async function createAppointment(
           const strictOneHardNext = await getSchedulingFeatureFlag('strict_one_hard_next');
           const mayOverride =
             !strictOneHardNext &&
-            (auth.role === 'admin' || auth.role === 'sebészorvos' || auth.role === 'fogpótlástanász') &&
+            (auth.role === 'admin' || auth.role === 'beutalo_orvos' || auth.role === 'fogpótlástanász') &&
             overrideReason &&
             typeof overrideReason === 'string' &&
             overrideReason.trim().length >= 10;
@@ -216,7 +216,7 @@ export async function createAppointment(
               validationError: {
                 error: oneHardNext.reason ?? 'Episode already has a future work appointment (one-hard-next)',
                 code: 'ONE_HARD_NEXT_VIOLATION',
-                overrideHint: 'Provide overrideReason (min 10 chars) to bypass. Admin/sebészorvos/fogpótlástanász only.',
+                overrideHint: 'Provide overrideReason (min 10 chars) to bypass. Admin/beutaló orvos/fogpótlástanász only.',
                 status: 409,
               },
             };

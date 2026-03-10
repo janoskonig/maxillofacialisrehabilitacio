@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 export const PUT = authedHandler(async (req, { auth, params }) => {
     const { id } = params;
 
-    if (auth.role !== 'sebészorvos' && auth.role !== 'fogpótlástanász' && auth.role !== 'admin') {
+    if (auth.role !== 'beutalo_orvos' && auth.role !== 'fogpótlástanász' && auth.role !== 'admin') {
       return NextResponse.json(
         { error: 'Nincs jogosultsága az időpont módosításához' },
         { status: 403 }
@@ -353,7 +353,7 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
 export const DELETE = authedHandler(async (req, { auth, params }) => {
     const { id } = params;
 
-    if (auth.role !== 'sebészorvos' && auth.role !== 'fogpótlástanász' && auth.role !== 'admin') {
+    if (auth.role !== 'beutalo_orvos' && auth.role !== 'fogpótlástanász' && auth.role !== 'admin') {
       return NextResponse.json(
         { error: 'Nincs jogosultsága az időpont lemondásához' },
         { status: 403 }

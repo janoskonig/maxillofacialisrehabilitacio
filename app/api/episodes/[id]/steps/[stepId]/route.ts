@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
  * DELETE /api/episodes/:id/steps/:stepId
  * Remove a pending step from the episode. Only pending steps can be deleted.
  */
-export const DELETE = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'], async (req, { auth, params }) => {
+export const DELETE = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'], async (req, { auth, params }) => {
   const episodeId = params.id;
   const stepId = params.stepId;
   const pool = getDbPool();
@@ -83,7 +83,7 @@ export const DELETE = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'
  * PATCH /api/episodes/:id/steps/:stepId
  * Update episode step: status (skip/unskip), timing (defaultDaysOffset, durationMinutes), or customLabel.
  */
-export const PATCH = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'], async (req, { auth, params }) => {
+export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'], async (req, { auth, params }) => {
   const episodeId = params.id;
   const stepId = params.stepId;
   const body = await req.json();

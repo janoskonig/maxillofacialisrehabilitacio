@@ -1,6 +1,6 @@
 -- Migration: Add jaw designation to episode_pathways
 -- Allows the same care_pathway to be assigned twice to an episode (once per jaw).
--- Run with: psql -d <db> -f database/migrations/006_episode_pathway_jaw.sql
+-- Run with: npm run migrate  (or node scripts/run-all-migrations.js)
 
 BEGIN;
 

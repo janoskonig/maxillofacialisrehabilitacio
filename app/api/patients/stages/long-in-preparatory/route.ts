@@ -6,7 +6,7 @@ const PREPARATORY_STAGES = ['STAGE_0', 'STAGE_1', 'STAGE_2', 'STAGE_3', 'STAGE_4
 
 export const dynamic = 'force-dynamic';
 
-export const GET = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'], async (req, { auth }) => {
+export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'], async (req, { auth }) => {
   const pool = getDbPool();
 
   const tablesExist = await pool.query(`

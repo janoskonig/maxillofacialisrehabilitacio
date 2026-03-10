@@ -22,7 +22,7 @@ export default function TreatmentPlansPage() {
           router.push('/login');
           return;
         }
-        if (!['admin', 'sebészorvos', 'fogpótlástanász'].includes(u.role)) {
+        if (!['admin', 'beutalo_orvos', 'fogpótlástanász'].includes(u.role)) {
           router.push('/');
           return;
         }

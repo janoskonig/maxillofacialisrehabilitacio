@@ -25,7 +25,7 @@ async function hasCustomLabelColumn(pool: ReturnType<typeof getDbPool>): Promise
  * POST /api/episodes/:id/steps — add an individual step (from catalog or ad-hoc).
  * Body: { stepCode?, pool?, durationMinutes?, defaultDaysOffset?, label? }
  */
-export const POST = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'], async (req, { auth, params }) => {
+export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'], async (req, { auth, params }) => {
   const episodeId = params.id;
   const body = await req.json();
   const {

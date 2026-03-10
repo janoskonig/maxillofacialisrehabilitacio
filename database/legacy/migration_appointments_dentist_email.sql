@@ -21,7 +21,7 @@ CREATE INDEX IF NOT EXISTS idx_appointments_dentist_email ON appointments(dentis
 
 -- Update comment
 COMMENT ON COLUMN appointments.dentist_email IS 'A fogpótlástanász email címe, aki kiírta az időpontot';
-COMMENT ON COLUMN appointments.created_by IS 'A sebészorvos vagy admin email címe, aki lefoglalta az időpontot';
+COMMENT ON COLUMN appointments.created_by IS 'A beutaló orvos vagy admin email címe, aki lefoglalta az időpontot';
 
 COMMIT;
 

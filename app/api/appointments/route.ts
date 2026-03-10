@@ -90,7 +90,7 @@ export const GET = authedHandler(async (req, { auth }) => {
   });
 });
 
-export const POST = roleHandler(['sebészorvos', 'admin', 'fogpótlástanász'], async (req, { auth }) => {
+export const POST = roleHandler(['beutalo_orvos', 'admin', 'fogpótlástanász'], async (req, { auth }) => {
   const body = await req.json();
   const { patientId, timeSlotId, cim, teremszam, appointmentType, episodeId, pool = 'work', overrideReason, stepCode, createdVia: createdViaParam, slotIntentId, stepSeq } = body;
   const bodyRequiresPrecommit = body.requiresPrecommit === true;

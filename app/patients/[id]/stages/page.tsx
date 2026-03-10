@@ -64,7 +64,7 @@ export default function PatientStagesPage() {
 
         setUserRole(user.role);
 
-        if (user.role !== 'admin' && user.role !== 'sebészorvos' && user.role !== 'fogpótlástanász') {
+        if (user.role !== 'admin' && user.role !== 'beutalo_orvos' && user.role !== 'fogpótlástanász') {
           showToast('Nincs jogosultsága az oldal megtekintéséhez', 'error');
           router.push('/');
           return;
@@ -211,7 +211,7 @@ export default function PatientStagesPage() {
           <ZsigmondyCrossStages patientId={patientId} patientName={patient.nev || undefined} meglevoFogak={patient.meglevoFogak} />
 
           {/* Új ellátási epizód indítása */}
-          {(userRole === 'admin' || userRole === 'sebészorvos' || userRole === 'fogpótlástanász') && (
+          {(userRole === 'admin' || userRole === 'beutalo_orvos' || userRole === 'fogpótlástanász') && (
             <PatientEpisodeForm
               patientId={patientId}
               patientReason={patientReason}
@@ -262,7 +262,7 @@ export default function PatientStagesPage() {
           )}
 
           {/* Stage Selector */}
-          {(userRole === 'admin' || userRole === 'sebészorvos' || userRole === 'fogpótlástanász') && (
+          {(userRole === 'admin' || userRole === 'beutalo_orvos' || userRole === 'fogpótlástanász') && (
             <PatientStageSelector
               patientId={patientId}
               currentStage={currentStage}

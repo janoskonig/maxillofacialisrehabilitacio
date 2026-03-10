@@ -12,7 +12,7 @@ import { logActivity } from '@/lib/activity';
 export const dynamic = 'force-dynamic';
 
 export const POST = roleHandler(
-  ['admin', 'sebészorvos', 'fogpótlástanász'],
+  ['admin', 'beutalo_orvos', 'fogpótlástanász'],
   async (req, { auth, params }) => {
     const pool = getDbPool();
     const patientId = params.id;

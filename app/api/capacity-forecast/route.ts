@@ -16,7 +16,7 @@ interface WeekBucket {
  * GET /api/capacity-forecast
  * Query: pool (consult|work|control), weeks (default 12)
  */
-export const GET = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'], async (req, { auth }) => {
+export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'], async (req, { auth }) => {
   const searchParams = req.nextUrl.searchParams;
   const poolFilter = searchParams.get('pool') ?? 'work';
   const weeksAhead = Math.min(parseInt(searchParams.get('weeks') ?? '12', 10), 52);

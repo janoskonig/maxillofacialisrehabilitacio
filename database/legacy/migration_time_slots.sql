@@ -51,10 +51,10 @@ COMMENT ON COLUMN available_time_slots.user_id IS 'A fogpótlástanász felhaszn
 COMMENT ON COLUMN available_time_slots.start_time IS 'Az időpont kezdete (csak jövőbeli dátumok)';
 COMMENT ON COLUMN available_time_slots.status IS 'Az időpont státusza: available vagy booked';
 
-COMMENT ON TABLE appointments IS 'Időpont foglalások, amelyeket a sebészorvosok hozhatnak létre';
+COMMENT ON TABLE appointments IS 'Időpont foglalások, amelyeket a beutaló orvosok hozhatnak létre';
 COMMENT ON COLUMN appointments.patient_id IS 'A beteg ID-ja';
 COMMENT ON COLUMN appointments.time_slot_id IS 'A lefoglalt időpont ID-ja';
-COMMENT ON COLUMN appointments.created_by IS 'A sebészorvos email címe, aki lefoglalta az időpontot';
+COMMENT ON COLUMN appointments.created_by IS 'A beutaló orvos email címe, aki lefoglalta az időpontot';
 
 COMMIT;
 

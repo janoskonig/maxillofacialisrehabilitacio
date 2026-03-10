@@ -120,7 +120,7 @@ export function Dashboard({ userRole }: DashboardProps) {
     fetchDashboardData();
   }, []);
 
-  const canSeeStages = userRole === 'admin' || userRole === 'sebészorvos' || userRole === 'fogpótlástanász';
+  const canSeeStages = userRole === 'admin' || userRole === 'beutalo_orvos' || userRole === 'fogpótlástanász';
 
   // GANTT adatok (összes beteg) – csak az utolsó 3 hónap, ha a GANTT fül aktív
   useEffect(() => {

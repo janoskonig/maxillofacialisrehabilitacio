@@ -27,7 +27,7 @@ function isValidPassword(password: string): { valid: boolean; error?: string } {
 
 function mapRoleToDatabaseRole(role: string): string | null {
   const roleMap: Record<string, string> = {
-    'sebész': 'sebészorvos',
+    'sebész': 'beutalo_orvos',
     'fogpótos': 'fogpótlástanász',
     'technikus': 'technikus',
   };

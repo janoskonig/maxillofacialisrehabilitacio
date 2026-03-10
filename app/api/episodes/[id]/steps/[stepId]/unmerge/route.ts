@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
  * Unmerge: remove all steps merged into the given primary step,
  * making them independent steps again.
  */
-export const POST = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'], async (req, { auth, params }) => {
+export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'], async (req, { auth, params }) => {
   const episodeId = params.id;
   const stepId = params.stepId;
 

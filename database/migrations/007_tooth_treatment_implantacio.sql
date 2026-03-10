@@ -1,6 +1,6 @@
 -- Migration: Add Implantáció to tooth_treatment_catalog
 -- Fogak helyére implantáció lehetőség a tömés, gyökérkezelés, húzás mellett.
--- Run with: psql -d <db> -f database/migrations/007_tooth_treatment_implantacio.sql
+-- Run with: npm run migrate  (or node scripts/run-all-migrations.js 007_tooth_treatment_implantacio.sql)
 
 DO $$
 BEGIN

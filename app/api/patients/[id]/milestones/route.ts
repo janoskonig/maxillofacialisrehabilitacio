@@ -63,7 +63,7 @@ export const GET = authedHandler(async (req, { params }) => {
  * Body: { episodeId, code, at?, params?, note? }
  */
 export const POST = roleHandler(
-  ['admin', 'sebészorvos', 'fogpótlástanász'],
+  ['admin', 'beutalo_orvos', 'fogpótlástanász'],
   async (req, { auth, params }) => {
     const pool = getDbPool();
     const patientId = params.id;

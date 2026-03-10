@@ -14,7 +14,7 @@ import { SlotPickerModal } from '../SlotPickerModal';
 import { OverrideModal } from '../OverrideModal';
 import { BookingQueueModal } from '../BookingQueueModal';
 
-const CAN_SEE_WORKLIST_ROLES = ['admin', 'sebészorvos', 'fogpótlástanász'];
+const CAN_SEE_WORKLIST_ROLES = ['admin', 'beutalo_orvos', 'fogpótlástanász'];
 
 export function WorklistWidget() {
   const [items, setItems] = useState<WorklistItemBackend[]>([]);

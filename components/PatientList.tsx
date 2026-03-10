@@ -18,7 +18,7 @@ interface PatientListProps {
   onViewFoto?: (patient: Patient) => void;
   canEdit?: boolean;
   canDelete?: boolean;
-  userRole?: 'admin' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
+  userRole?: 'admin' | 'fogpótlástanász' | 'technikus' | 'beutalo_orvos';
   sortField?: 'nev' | 'idopont' | 'createdAt' | null;
   sortDirection?: 'asc' | 'desc';
   onSort?: (field: 'nev' | 'idopont' | 'createdAt') => void;

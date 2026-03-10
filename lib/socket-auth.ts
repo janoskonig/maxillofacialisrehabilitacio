@@ -8,7 +8,7 @@ const JWT_SECRET = new TextEncoder().encode(
 export interface SocketAuthPayload {
   userId: string;
   email: string;
-  role?: 'admin' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
+  role?: 'admin' | 'fogpótlástanász' | 'technikus' | 'beutalo_orvos';
   userType: 'doctor' | 'patient';
   patientId?: string; // Ha beteg, akkor a beteg ID-ja
 }
@@ -28,7 +28,7 @@ export async function verifySocketAuth(
         const { payload } = await jwtVerify(authToken, JWT_SECRET);
         const userId = payload.userId as string;
         const email = payload.email as string;
-        const role = payload.role as 'admin' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
+        const role = payload.role as 'admin' | 'fogpótlástanász' | 'technikus' | 'beutalo_orvos';
 
         // Ellenőrizzük, hogy a felhasználó aktív-e
         const pool = getDbPool();

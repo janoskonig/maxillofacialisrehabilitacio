@@ -46,7 +46,7 @@ export const POST = roleHandler(['admin'], async (req, { auth }) => {
     throw new HttpError(400, 'Email cím és jelszó megadása kötelező');
   }
 
-  if (!['admin', 'fogpótlástanász', 'technikus', 'sebészorvos'].includes(role)) {
+  if (!['admin', 'fogpótlástanász', 'technikus', 'beutalo_orvos'].includes(role)) {
     throw new HttpError(400, 'Érvénytelen szerepkör');
   }
 

@@ -15,7 +15,7 @@ const REPLY_TO_EMAIL = 'konig.janos@semmelweis.hu';
 export const dynamic = 'force-dynamic';
 
 export const POST = authedHandler(async (req, { auth, params }) => {
-  if (auth.role !== 'admin' && auth.role !== 'fogpótlástanász' && auth.role !== 'sebészorvos' && auth.role !== 'technikus') {
+  if (auth.role !== 'admin' && auth.role !== 'fogpótlástanász' && auth.role !== 'beutalo_orvos' && auth.role !== 'technikus') {
     return NextResponse.json(
       { error: 'Nincs jogosultsága email küldéséhez' },
       { status: 403 }

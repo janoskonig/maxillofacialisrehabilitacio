@@ -16,7 +16,7 @@ const REASON_VALUES = ['traumás sérülés', 'veleszületett rendellenesség', 
  *  - If no open episode exists, a new one is created.
  * Optionally auto-assigns the default pathway from the tooth treatment catalog.
  */
-export const POST = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'], async (req, { auth, params }) => {
+export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'], async (req, { auth, params }) => {
   const pool = getDbPool();
   const patientId = params.id;
   const treatmentId = params.treatmentId;

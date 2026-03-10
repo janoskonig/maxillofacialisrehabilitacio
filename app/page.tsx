@@ -29,7 +29,7 @@ const SendMessageModal = dynamic(() => import('@/components/SendMessageModal').t
   ssr: false
 });
 
-type UserRoleType = 'admin' | 'fogpótlástanász' | 'technikus' | 'sebészorvos';
+type UserRoleType = 'admin' | 'fogpótlástanász' | 'technikus' | 'beutalo_orvos';
 
 interface ListState {
   patients: Patient[];
@@ -352,7 +352,7 @@ export default function Home() {
                 <p className="text-xs text-gray-500 hidden sm:block font-medium mt-0.5">
                   BETEGREGISZTER ÉS IDŐPONTKEZELŐ
                 </p>
-                {false && userRole === 'sebészorvos' && userInstitution && (
+                {false && userRole === 'beutalo_orvos' && userInstitution && (
                   <p className="text-xs font-semibold text-medical-error mt-0.5 truncate badge badge-error inline-block px-2 py-0.5 mt-1">
                     SEBÉSZ MÓD (csak a {userInstitution} páciensei)
                   </p>
@@ -419,7 +419,7 @@ export default function Home() {
               )}
             </div>
             <div className="flex gap-1.5">
-              {(userRole === 'admin' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos') && (
+              {(userRole === 'admin' || userRole === 'fogpótlástanász' || userRole === 'beutalo_orvos') && (
                 <button
                   onClick={handleNewPatient}
                   className="btn-primary flex items-center gap-1.5 text-sm px-3 py-1.5"
@@ -529,7 +529,7 @@ export default function Home() {
                 onDelete={userRole === 'admin' ? handleDeletePatient : undefined}
                 onViewOP={handleViewOP}
                 onViewFoto={handleViewFoto}
-                canEdit={userRole === 'admin' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos'}
+                canEdit={userRole === 'admin' || userRole === 'fogpótlástanász' || userRole === 'beutalo_orvos'}
                 canDelete={userRole === 'admin'}
                 userRole={userRole}
                 sortField={sortField}
@@ -623,7 +623,7 @@ export default function Home() {
       </main>
 
       {/* Mobile FAB for new patient */}
-      {(userRole === 'admin' || userRole === 'fogpótlástanász' || userRole === 'sebészorvos') && (
+      {(userRole === 'admin' || userRole === 'fogpótlástanász' || userRole === 'beutalo_orvos') && (
         <button
           onClick={handleNewPatient}
           className="md:hidden fixed bottom-20 right-5 z-30 w-14 h-14 rounded-full bg-gradient-to-r from-medical-primary to-medical-primary-light text-white shadow-lg flex items-center justify-center active:scale-95 transition-transform"

@@ -1,5 +1,5 @@
 -- Add surgeon_override to created_via for audit trail accuracy
--- When sebészorvos users bypass one-hard-next with overrideReason, created_via should reflect their role.
+-- When beutalo_orvos (beutaló orvos) users bypass one-hard-next with overrideReason, created_via should reflect their role.
 -- Run with: psql -d <db> -f database/migration_created_via_surgeon_override.sql
 
 BEGIN;

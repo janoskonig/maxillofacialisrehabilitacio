@@ -68,7 +68,7 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
         { status: 403 }
       );
     }
-    if (!['admin', 'fogpótlástanász', 'technikus', 'sebészorvos'].includes(role)) {
+    if (!['admin', 'fogpótlástanász', 'technikus', 'beutalo_orvos'].includes(role)) {
       return NextResponse.json(
         { error: 'Érvénytelen szerepkör' },
         { status: 400 }

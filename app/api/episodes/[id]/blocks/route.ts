@@ -30,7 +30,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
  * Create a new episode block.
  * Body: { key, reason?, expectedUnblockDate?, note? }
  */
-export const POST = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'], async (req, { auth, params }) => {
+export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'], async (req, { auth, params }) => {
   const episodeId = params.id;
   const body = await req.json().catch(() => ({}));
   const { key, reason, expectedUnblockDate, note } = body;

@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic';
  * This is the ONLY way to change an episode's stage. Never automatic.
  * Body: { stageCode, note?, expectedStageVersion? }
  */
-export const POST = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'], async (req, { auth, params }) => {
+export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'], async (req, { auth, params }) => {
   const episodeId = params.id;
   const body = await req.json();
   const stageCode = (body.stageCode as string)?.trim?.();

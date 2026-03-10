@@ -24,7 +24,7 @@ export const POST = roleHandler(['admin'], async (req, { auth }) => {
     );
   }
 
-  const validRoles = ['sebészorvos', 'fogpótlástanász', 'technikus', 'admin'];
+  const validRoles = ['beutalo_orvos', 'fogpótlástanász', 'technikus', 'admin'];
   const invalidRoles = roles.filter((role: string) => !validRoles.includes(role));
   if (invalidRoles.length > 0) {
     return NextResponse.json(
@@ -131,7 +131,7 @@ export const GET = roleHandler(['admin'], async (req, { auth }) => {
   }
 
   const roles = rolesParam.split(',').map((r) => r.trim());
-  const validRoles = ['sebészorvos', 'fogpótlástanász', 'technikus', 'admin'];
+  const validRoles = ['beutalo_orvos', 'fogpótlástanász', 'technikus', 'admin'];
   const invalidRoles = roles.filter((role) => !validRoles.includes(role));
   
   if (invalidRoles.length > 0) {

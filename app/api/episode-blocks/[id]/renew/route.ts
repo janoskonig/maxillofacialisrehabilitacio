@@ -10,7 +10,7 @@ import { RENEWAL_ESCALATION_THRESHOLD } from '@/lib/episode-block-taxonomy';
  * Escalation if renewal_count > 2.
  * Body: { reason, expectedUnblockDate }
  */
-export const POST = roleHandler(['admin', 'sebészorvos', 'fogpótlástanász'], async (req, { auth, params }) => {
+export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'], async (req, { auth, params }) => {
   const blockId = params.id;
   const body = await req.json().catch(() => ({}));
   const { reason, expectedUnblockDate } = body;
