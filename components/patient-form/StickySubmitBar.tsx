@@ -1,5 +1,6 @@
 'use client';
 
+import { Loader2 } from 'lucide-react';
 import { Patient } from '@/lib/types';
 import { Section } from '../mobile/PatientFormSectionNavigation';
 
@@ -10,6 +11,7 @@ interface StickySubmitBarProps {
   activeSectionId: string | null;
   setActiveSectionId: (id: string) => void;
   handleCancel: () => void;
+  isSaving?: boolean;
 }
 
 export function StickySubmitBar({
@@ -19,6 +21,7 @@ export function StickySubmitBar({
   activeSectionId,
   setActiveSectionId,
   handleCancel,
+  isSaving = false,
 }: StickySubmitBarProps) {
   return (
     <div className="mobile-cta-bar absolute bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 px-3 sm:px-6 md:px-8">
@@ -68,9 +71,18 @@ export function StickySubmitBar({
           <button
             type="submit"
             form="patient-form"
-            className="btn-primary text-xs sm:text-sm px-3 sm:px-5 py-2 sm:py-2.5 mobile-touch-target flex-1 sm:flex-none"
+            disabled={isSaving}
+            aria-busy={isSaving}
+            className="btn-primary text-xs sm:text-sm px-3 sm:px-5 py-2 sm:py-2.5 mobile-touch-target flex-1 sm:flex-none flex items-center justify-center gap-2 min-h-[44px] disabled:opacity-60 disabled:pointer-events-none select-none"
           >
-            {patient ? 'Beteg frissítése' : 'Beteg mentése'}
+            {isSaving ? (
+              <>
+                <Loader2 className="w-4 h-4 shrink-0 animate-spin" aria-hidden />
+                <span>Mentés...</span>
+              </>
+            ) : (
+              patient ? 'Beteg frissítése' : 'Beteg mentése'
+            )}
           </button>
         </div>
       </div>

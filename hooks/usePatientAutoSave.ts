@@ -511,6 +511,7 @@ export function usePatientAutoSave(
 
   useEffect(() => {
     if (isViewOnly) return;
+    if (!patientId) return;
     if (!isDirty) return;
     if (!dirtyHash) return;
 
@@ -525,7 +526,7 @@ export function usePatientAutoSave(
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [dirtyHash, fogak, implantatumok, vanBeutalo, isViewOnly, isDirty, performSave, getValues]);
+  }, [patientId, dirtyHash, fogak, implantatumok, vanBeutalo, isViewOnly, isDirty, performSave, getValues]);
 
   // ----- Cleanup on unmount -----
   useEffect(() => {

@@ -1579,7 +1579,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
   }, [errors, fieldToSectionMap, breakpoint]);
 
   return (
-    <div className="p-3 sm:p-6 relative pb-20 sm:pb-24">
+    <div className="p-3 sm:p-6 relative pb-[max(5rem,calc(5rem+env(safe-area-inset-bottom)))] sm:pb-24">
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-4">
           <h3 className="text-2xl font-bold text-gray-900">
@@ -1992,6 +1992,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
           activeSectionId={activeSectionId}
           setActiveSectionId={setActiveSectionId}
           handleCancel={handleCancel}
+          isSaving={savingSource === 'manual'}
         />
       )}
     </div>
