@@ -377,7 +377,7 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
               const newEventId = await createGoogleCalendarEvent(
                 timeSlot.dentist_user_id,
                 {
-                  summary: `Betegfogadás - ${patient.nev || 'Név nélküli beteg'}`,
+                  summary: `${patient.nev || 'Név nélküli beteg'} - Betegfogadás`,
                   description: `Beteg: ${patient.nev || 'Név nélküli'}\nTAJ: ${patient.taj || 'Nincs megadva'}\nBeutaló orvos: Páciens portál`,
                   startTime: startTime,
                   endTime: endTime,
@@ -397,7 +397,7 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
               const newEventId = await createGoogleCalendarEvent(
                 timeSlot.dentist_user_id,
                 {
-                  summary: `Betegfogadás - ${patient.nev || 'Név nélküli beteg'}`,
+                  summary: `${patient.nev || 'Név nélküli beteg'} - Betegfogadás`,
                   description: `Beteg: ${patient.nev || 'Név nélküli'}\nTAJ: ${patient.taj || 'Nincs megadva'}\nBeutaló orvos: Páciens portál`,
                   startTime: startTime,
                   endTime: endTime,

@@ -93,7 +93,7 @@ export const POST = roleHandler(['admin'], async (req, { correlationId, auth }) 
       const newEventId = await createGoogleCalendarEvent(
         dentistUserId,
         {
-          summary: `Betegfogadás - ${patientName}`,
+          summary: `${patientName} - Betegfogadás`,
           description: `Beteg: ${patientName}\nTAJ: ${patientTaj}\nBeutaló orvos: ${createdBy}`,
           startTime: startTime,
           endTime: endTime,

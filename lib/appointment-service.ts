@@ -521,7 +521,7 @@ export async function syncAppointmentToGoogleCalendar(
   const targetCalendarId = userCalendarResult.rows[0]?.google_calendar_target_calendar_id || 'primary';
 
   const eventPayload = {
-    summary: `Betegfogadás - ${patientName || 'Név nélküli beteg'}`,
+    summary: `${patientName || 'Név nélküli beteg'} - Betegfogadás`,
     description: `Beteg: ${patientName || 'Név nélküli'}\nTAJ: ${patientTaj || 'Nincs megadva'}\nBeutaló orvos: ${bookerEmail}`,
     startTime,
     endTime,

@@ -289,7 +289,7 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
               const newEventId = await createGoogleCalendarEvent(
                 newTimeSlot.dentist_user_id,
                 {
-                  summary: `Betegfogadás - ${appointment.patient_name || 'Név nélküli beteg'}`,
+                  summary: `${appointment.patient_name || 'Név nélküli beteg'} - Betegfogadás`,
                   description: `Beteg: ${appointment.patient_name || 'Név nélküli'}\nTAJ: ${appointment.patient_taj || 'Nincs megadva'}\nBeutaló orvos: ${appointment.created_by}`,
                   startTime: newStartTime,
                   endTime: newEndTime,

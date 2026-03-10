@@ -31,7 +31,7 @@ export async function generateIcsFile(data: AppointmentData): Promise<Buffer> {
       endDate.getHours(),
       endDate.getMinutes(),
     ],
-    title: `Betegfogadás - ${data.patientName || 'Név nélküli beteg'}`,
+    title: `${data.patientName || 'Név nélküli beteg'} - Betegfogadás`,
     description: `Beteg: ${data.patientName || 'Név nélküli'}\nTAJ: ${data.patientTaj || 'Nincs megadva'}\nBeutaló orvos: ${data.surgeonName}`,
     location: 'Maxillofaciális Rehabilitáció',
     status: 'CONFIRMED',

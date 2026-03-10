@@ -313,7 +313,7 @@ export async function syncMissingAppointmentsToGoogleCalendar(userId: string): P
       }
 
       const newEventId = await createGoogleCalendarEvent(userId, {
-        summary: `Betegfogadás - ${patientName}`,
+        summary: `${patientName} - Betegfogadás`,
         description: `Beteg: ${patientName}\nTAJ: ${patientTaj}\nBeutaló orvos: ${createdBy}`,
         startTime,
         endTime,
