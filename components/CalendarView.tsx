@@ -121,18 +121,18 @@ export function CalendarView({ onAppointmentClick }: CalendarViewProps) {
     fetchAppointments();
   }, [dateRange.start, dateRange.end, selectedDentist, selectedStatus, includeVirtual]);
 
-  // Fetch dentists list
+  // Orvosok listája (fogpótlástanász + sebész is), hogy mindenki láthassa a naptárt és szűrhessen orvosra
   useEffect(() => {
     const fetchDentists = async () => {
       try {
-        const response = await fetch('/api/users/fogpotlastanasz', {
+        const response = await fetch('/api/users/doctors', {
           credentials: 'include',
         });
         if (response.ok) {
           const data = await response.json();
-          const dentistList = (data.users || []).map((user: any) => ({
-            email: user.email,
-            name: user.doktor_neve || user.displayName || null,
+          const dentistList = (data.doctors || []).map((d: { email: string; name: string | null }) => ({
+            email: d.email,
+            name: d.name || d.email || null,
           }));
           setDentists(dentistList);
         }

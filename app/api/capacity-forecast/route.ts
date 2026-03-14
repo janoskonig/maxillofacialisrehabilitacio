@@ -35,7 +35,7 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
     `SELECT date_trunc('week', start_time) as week_start, COUNT(*)::int as cnt
      FROM available_time_slots
      WHERE state = 'free'
-       AND (slot_purpose = $1 OR slot_purpose IS NULL)
+       AND (slot_purpose = $1 OR slot_purpose IS NULL OR slot_purpose = 'flexible')
        AND start_time >= $2
        AND start_time < $3
      GROUP BY week_start

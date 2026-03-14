@@ -32,6 +32,7 @@ export interface Appointment {
   isLate?: boolean;
   appointmentType?: AppointmentType | null;
   stepCode?: string | null;
+  stepSeq?: number | null;
   stepLabel?: string | null;
   pool?: Pool | null;
   createdVia?: string | null;

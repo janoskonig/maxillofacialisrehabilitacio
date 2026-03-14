@@ -6,6 +6,8 @@
 export interface StepWindow {
   windowStart: Date;
   windowEnd: Date;
+  /** Anchor + offset; use this to chain the next step's anchor (not windowEnd). */
+  expectedDate: Date;
 }
 
 /**
@@ -18,5 +20,7 @@ export function computeStepWindow(anchor: Date, defaultDaysOffset: number): Step
   windowStart.setDate(windowStart.getDate() + Math.max(0, defaultDaysOffset - 7));
   const windowEnd = new Date(anchor);
   windowEnd.setDate(windowEnd.getDate() + defaultDaysOffset + 14);
-  return { windowStart, windowEnd };
+  const expectedDate = new Date(anchor);
+  expectedDate.setDate(expectedDate.getDate() + defaultDaysOffset);
+  return { windowStart, windowEnd, expectedDate };
 }

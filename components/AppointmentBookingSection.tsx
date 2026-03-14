@@ -10,6 +10,7 @@ import {
   type Appointment,
   type AppointmentType,
 } from '@/hooks/useAppointmentBooking';
+import { CascadeIntentsModal, type SlotIntentForCascade } from './CascadeIntentsModal';
 
 interface AppointmentBookingSectionProps {
   patientId: string | null | undefined;
@@ -46,6 +47,7 @@ export function AppointmentBookingSection({
     updateAppointmentStatus,
     createAndBookSlot,
     downloadCalendar,
+    refreshData,
   } = useAppointmentBooking(patientId);
 
   // UI form state
@@ -63,6 +65,11 @@ export function AppointmentBookingSection({
   const [newModifyTeremszam, setNewModifyTeremszam] = useState<string>('');
   const [newModifyAppointmentType, setNewModifyAppointmentType] = useState<AppointmentType | null>(null);
   const [editingStatus, setEditingStatus] = useState<Appointment | null>(null);
+  const [cascadeAfterModify, setCascadeAfterModify] = useState<{
+    episodeId: string;
+    deltaMs: number;
+    intents: SlotIntentForCascade[];
+  } | null>(null);
   const [statusForm, setStatusForm] = useState<{
     appointmentStatus: 'cancelled_by_doctor' | 'cancelled_by_patient' | 'completed' | 'no_show' | null;
     completionNotes: string;
@@ -175,13 +182,62 @@ export function AppointmentBookingSection({
     });
 
     if (result.success) {
+      const episodeId = editingAppointment.episodeId ?? null;
+      const stepSeq = editingAppointment.stepSeq ?? -1;
+      const oldStart = new Date(editingAppointment.startTime);
+      const deltaMs = newModifyDateTime.getTime() - oldStart.getTime();
+
       setEditingAppointment(null);
       setNewModifyDateTime(null);
       setNewModifyTeremszam('');
+      setNewModifyAppointmentType(null);
       alert('Időpont sikeresen módosítva! A fogpótlástanász és a beteg (ha van email-címe) értesítést kapott.');
+
+      if (episodeId && deltaMs !== 0) {
+        try {
+          const r = await fetch(`/api/episodes/${episodeId}/slot-intents`, { credentials: 'include' });
+          const data = await r.json();
+          const all = (data.intents || []) as SlotIntentForCascade[];
+          const subsequent = all.filter((i) => (i.stepSeq ?? -1) > stepSeq);
+          if (subsequent.length > 0) {
+            setCascadeAfterModify({ episodeId, deltaMs, intents: subsequent });
+          }
+        } catch {
+          // non-blocking
+        }
+      }
     } else {
       alert(result.error || 'Hiba történt az időpont módosításakor');
     }
+  };
+
+  const handleCascadeConfirm = async (selectedIntentIds: string[]) => {
+    if (!cascadeAfterModify || selectedIntentIds.length === 0) return;
+    const { episodeId, deltaMs } = cascadeAfterModify;
+    const sign = deltaMs >= 0 ? 1 : -1;
+    const abs = Math.abs(deltaMs);
+    const days = Math.floor(abs / (24 * 60 * 60 * 1000));
+    let rest = abs % (24 * 60 * 60 * 1000);
+    const hours = Math.floor(rest / (60 * 60 * 1000));
+    rest %= 60 * 60 * 1000;
+    const minutes = Math.round(rest / (60 * 1000));
+    const res = await fetch(`/api/episodes/${episodeId}/cascade-intents`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        delta: { days: sign * days, hours: sign * hours, minutes: sign * minutes },
+        intentIds: selectedIntentIds,
+      }),
+    });
+    if (res.ok) {
+      await refreshData();
+      alert(`Eltolva: ${selectedIntentIds.length} tervezett lépés.`);
+    } else {
+      const err = await res.json().catch(() => ({}));
+      alert(err?.error || 'Hiba történt a tervezett lépések eltolásakor.');
+    }
+    setCascadeAfterModify(null);
   };
 
   const handleEditStatus = (appointment: Appointment) => {
@@ -366,6 +422,16 @@ export function AppointmentBookingSection({
             </div>
           </div>
         </div>
+      )}
+      {cascadeAfterModify && (
+        <CascadeIntentsModal
+          open={!!cascadeAfterModify}
+          onClose={() => setCascadeAfterModify(null)}
+          episodeId={cascadeAfterModify.episodeId}
+          deltaMs={cascadeAfterModify.deltaMs}
+          intents={cascadeAfterModify.intents}
+          onConfirm={handleCascadeConfirm}
+        />
       )}
       {/* Status Edit Modal */}
       {editingStatus && (

@@ -18,7 +18,8 @@ export function getDbPool(): Pool {
       connectionString.includes('amazonaws.com') ||
       process.env.NODE_ENV === 'production';
 
-    const maxConnections = parseInt(process.env.DB_POOL_MAX || '10', 10);
+    // Keep per-process pool small so (workers × DB_POOL_MAX) stays under PostgreSQL max_connections (often 100)
+    const maxConnections = parseInt(process.env.DB_POOL_MAX || '5', 10);
     const connectionTimeout = parseInt(process.env.DB_POOL_CONNECTION_TIMEOUT || '10000', 10);
     const idleTimeout = parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000', 10);
     const minConnections = parseInt(process.env.DB_POOL_MIN || '1', 10);

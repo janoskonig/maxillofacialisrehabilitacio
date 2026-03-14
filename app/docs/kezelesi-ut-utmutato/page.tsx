@@ -163,7 +163,7 @@ export default function KezelesiUtUtmutatoPage() {
 
               <h3 className="text-lg font-medium text-gray-800 mt-4 mb-2">Puha szűrés</h3>
               <p>
-                A <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">flexible</code> és a <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">NULL</code> (nem címkézett) slotokból bármelyik pool foglalhat — ezek „puhán" szűrtek.
+                A <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">flexible</code> (rugalmas) és a <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">NULL</code> (nem címkézett) slotok mindenhol bármire foglalhatók: konzultációra, munkafázisra és kontrollra is. A Google naptárból importált slotok rugalmasnak számítanak; egyelőre a slotok irányultságát a rendszer nem szigorúan használja.
               </p>
 
               <h3 className="text-lg font-medium text-gray-800 mt-4 mb-2">Páciens portál korlátozás</h3>

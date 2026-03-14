@@ -29,7 +29,7 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
   let paramIndex = 1;
 
   if (pool) {
-    whereClause += ` AND (ats.slot_purpose = $${paramIndex} OR ats.slot_purpose IS NULL)`;
+    whereClause += ` AND (ats.slot_purpose = $${paramIndex} OR ats.slot_purpose IS NULL OR ats.slot_purpose = 'flexible')`;
     params.push(pool);
     paramIndex++;
   }

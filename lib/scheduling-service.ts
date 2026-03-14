@@ -38,7 +38,7 @@ export async function hasFreeSlotInWindow(
     `SELECT 1 FROM available_time_slots ats
      WHERE ats.state = 'free' AND ats.start_time > CURRENT_TIMESTAMP
        AND ats.start_time >= $1 AND ats.start_time <= $2
-       AND (ats.slot_purpose = $3 OR ats.slot_purpose IS NULL)
+       AND (ats.slot_purpose = $3 OR ats.slot_purpose IS NULL OR ats.slot_purpose = 'flexible')
        AND (ats.duration_minutes >= $4 OR ats.duration_minutes IS NULL)
      LIMIT 1`,
     [windowStart.toISOString(), windowEnd.toISOString(), pool, durationMinutes]

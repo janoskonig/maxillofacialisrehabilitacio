@@ -41,6 +41,7 @@ export const GET = authedHandler(async (req, { auth }) => {
     paramIndex++;
   }
 
+  // Sebészek (beutalo_orvos) minden időpontot lássanak — ne szűrjünk típus (konzultáció/munka/kontroll) szerint.
   if (dentistEmail) {
     whereConditions.push(`a.dentist_email = $${paramIndex}`);
     queryParams.push(dentistEmail);

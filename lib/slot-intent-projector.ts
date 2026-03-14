@@ -5,7 +5,7 @@
 
 import { getDbPool } from './db';
 import { computeStepWindow } from './step-window';
-import type { PathwayStep } from './next-step-engine';
+import { slotPoolForStep, type PathwayStep } from './next-step-engine';
 
 export interface ProjectionResult {
   projected: number;
@@ -22,12 +22,14 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
     const [episodeRow, apptsRow] = await Promise.all([
       pool.query(`SELECT opened_at FROM patient_episodes WHERE id = $1 FOR SHARE`, [episodeId]),
       pool.query(
-        `SELECT step_code, step_seq, start_time, appointment_status
-         FROM appointments
-         WHERE episode_id = $1
-           AND step_code IS NOT NULL
-           AND (appointment_status IS NULL OR appointment_status = 'completed')
-         ORDER BY step_seq ASC`,
+        `SELECT a.step_code, a.step_seq,
+                COALESCE(a.start_time, ats.start_time) AS start_time,
+                a.appointment_status
+         FROM appointments a
+         LEFT JOIN available_time_slots ats ON a.time_slot_id = ats.id
+         WHERE a.episode_id = $1 AND a.step_code IS NOT NULL
+           AND (a.appointment_status IS NULL OR a.appointment_status = 'completed')
+         ORDER BY a.step_seq ASC`,
         [episodeId]
       ),
     ]);
@@ -89,9 +91,13 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
 
     const completedBySeq = new Map<number, Date>();
     const pendingSeqs = new Set<number>();
+    /** Anchor date per step (completed or booked); used to pick latest anchor for projecting next steps. */
+    const anchorBySeq = new Map<number, Date>();
     for (const a of apptsRow.rows) {
+      const startTime = a.start_time ? new Date(a.start_time) : null;
+      if (startTime) anchorBySeq.set(a.step_seq, startTime);
       if (a.appointment_status === 'completed') {
-        completedBySeq.set(a.step_seq, new Date(a.start_time));
+        completedBySeq.set(a.step_seq, startTime ?? new Date(0));
       } else {
         pendingSeqs.add(a.step_seq);
       }
@@ -114,11 +120,11 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
       [episodeId, pathwayHash, completedSeqArr, pendingSeqArr]
     );
 
-    // Find last hard anchor (most recent completed appointment)
+    // Last anchor: most recent appointment date (completed or booked) — next steps anchor from this
     let lastHardAnchor = openedAt;
     let lastHardAnchorSeq = -1;
-    for (const [seq, startTime] of Array.from(completedBySeq.entries())) {
-      if (seq > lastHardAnchorSeq) {
+    for (const [seq, startTime] of Array.from(anchorBySeq.entries())) {
+      if (startTime > lastHardAnchor) {
         lastHardAnchor = startTime;
         lastHardAnchorSeq = seq;
       }
@@ -127,6 +133,7 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
     interface Projection {
       stepCode: string; stepSeq: number; pool: string;
       durationMinutes: number; windowStart: Date; windowEnd: Date; expiresAt: Date;
+      suggestedStart: Date | null; suggestedEnd: Date | null;
     }
     const projections: Projection[] = [];
 
@@ -150,10 +157,17 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
       const expiresAt = new Date(windowEnd);
       expiresAt.setDate(expiresAt.getDate() + 30);
 
+      const durationMinutes = step.duration_minutes ?? 30;
+      // Same time-of-day as last anchor, date = stepAnchor (so following Tuesdays if anchor was Tuesday)
+      const suggestedStart = new Date(stepAnchor);
+      suggestedStart.setHours(lastHardAnchor.getHours(), lastHardAnchor.getMinutes(), lastHardAnchor.getSeconds(), lastHardAnchor.getMilliseconds());
+      const suggestedEnd = new Date(suggestedStart.getTime() + durationMinutes * 60 * 1000);
+
       projections.push({
-        stepCode: step.step_code, stepSeq: i, pool: step.pool,
-        durationMinutes: step.duration_minutes ?? 30,
+        stepCode: step.step_code, stepSeq: i, pool: slotPoolForStep(step),
+        durationMinutes,
         windowStart, windowEnd, expiresAt,
+        suggestedStart, suggestedEnd,
       });
     }
 
@@ -165,23 +179,25 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
 
       for (const p of projections) {
         values.push(
-          `($1, $${paramIdx}, $${paramIdx+1}, $${paramIdx+2}, $${paramIdx+3}, $${paramIdx+4}, $${paramIdx+5}, 'open', $2, $${paramIdx+6})`
+          `($1, $${paramIdx}, $${paramIdx+1}, $${paramIdx+2}, $${paramIdx+3}, $${paramIdx+4}, $${paramIdx+5}, 'open', $2, $${paramIdx+6}, $${paramIdx+7}, $${paramIdx+8})`
         );
         params.push(p.stepCode, p.stepSeq, p.pool, p.durationMinutes,
-                     p.windowStart, p.windowEnd, p.expiresAt);
-        paramIdx += 7;
+                     p.windowStart, p.windowEnd, p.expiresAt, p.suggestedStart, p.suggestedEnd);
+        paramIdx += 9;
       }
 
       await pool.query(
         `INSERT INTO slot_intents
            (episode_id, step_code, step_seq, pool, duration_minutes,
-            window_start, window_end, state, source_pathway_hash, expires_at)
+            window_start, window_end, state, source_pathway_hash, expires_at, suggested_start, suggested_end)
          VALUES ${values.join(', ')}
          ON CONFLICT (episode_id, step_code, step_seq) DO UPDATE SET
            window_start = EXCLUDED.window_start,
            window_end = EXCLUDED.window_end,
            source_pathway_hash = EXCLUDED.source_pathway_hash,
            expires_at = EXCLUDED.expires_at,
+           suggested_start = EXCLUDED.suggested_start,
+           suggested_end = EXCLUDED.suggested_end,
            state = 'open',
            updated_at = CURRENT_TIMESTAMP
          WHERE slot_intents.state IN ('open', 'expired')`,

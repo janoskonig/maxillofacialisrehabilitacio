@@ -38,6 +38,8 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
     existingAppointment?: { id: string; startTime: string; providerName?: string };
     retryData: { patientId: string; episodeId?: string; slotId: string; pool: string; durationMinutes: number; nextStep: string; stepCode?: string; requiresPrecommit?: boolean };
   } | null>(null);
+  const [convertAllEpisodeId, setConvertAllEpisodeId] = useState<string | null>(null);
+  const [convertAllMessage, setConvertAllMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const fetchWorklist = useCallback(async () => {
     if (!patientId) return;
@@ -75,6 +77,12 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
     const seqB = b.stepSeq ?? 0;
     return seqA - seqB;
   });
+
+  const episodeIdsWithReady = new Set(
+    sortedItems
+      .filter((item) => deriveWorklistRowState(item, local, getWorklistItemKey(item)).state === 'READY')
+      .map((item) => item.episodeId)
+  );
 
   const handleBookNext = (item: WorklistItemBackend) => {
     setSlotPickerItem(item);
@@ -197,6 +205,39 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
     }
   };
 
+  const handleConvertAllIntents = async (episodeId: string) => {
+    setConvertAllEpisodeId(episodeId);
+    setConvertAllMessage(null);
+    try {
+      const res = await fetch(`/api/episodes/${episodeId}/convert-all-intents`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setConvertAllMessage({ type: 'error', text: data.error ?? 'Hiba történt' });
+        return;
+      }
+      const { converted, skipped } = data;
+      if (skipped?.length > 0) {
+        setConvertAllMessage({
+          type: 'success',
+          text: `${converted} időpont lefoglalva, ${skipped.length} kihagyva (nincs szabad slot).`,
+        });
+      } else {
+        setConvertAllMessage({
+          type: 'success',
+          text: converted === 1 ? '1 időpont lefoglalva.' : `${converted} időpont lefoglalva.`,
+        });
+      }
+      fetchWorklist();
+    } catch (e) {
+      setConvertAllMessage({ type: 'error', text: 'Hálózati hiba' });
+    } finally {
+      setConvertAllEpisodeId(null);
+    }
+  };
+
   const handleOverrideConfirm = async (overrideReason: string) => {
     if (!override429) return;
     const { retryData } = override429;
@@ -285,6 +326,24 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
 
   return (
     <div className="space-y-3">
+      {convertAllMessage && (
+        <p
+          className={`text-sm px-3 py-2 rounded ${
+            convertAllMessage.type === 'success'
+              ? 'bg-green-50 text-green-800'
+              : 'bg-red-50 text-red-800'
+          }`}
+        >
+          {convertAllMessage.text}
+          <button
+            type="button"
+            onClick={() => setConvertAllMessage(null)}
+            className="ml-2 underline"
+          >
+            Elrejt
+          </button>
+        </p>
+      )}
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead>
@@ -298,9 +357,14 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
             </tr>
           </thead>
           <tbody>
-            {sortedItems.map((item) => {
+            {sortedItems.map((item, index) => {
               const key = getWorklistItemKey(item);
               const { state } = deriveWorklistRowState(item, local, key);
+              const isFirstRowOfEpisode =
+                index === 0 || sortedItems[index - 1].episodeId !== item.episodeId;
+              const showConvertAll =
+                isFirstRowOfEpisode && episodeIdsWithReady.has(item.episodeId);
+              const isConvertingAll = convertAllEpisodeId === item.episodeId;
 
               return (
                 <tr
@@ -378,29 +442,40 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                     </div>
                   </td>
                   <td className="px-3 py-2">
-                    {state === 'READY' && (
-                      <button
-                        onClick={() => handleBookNext(item)}
-                        className="text-sm text-medical-primary hover:underline font-medium"
-                      >
-                        Foglalás
-                      </button>
-                    )}
-                    {state === 'BOOKED' && (
-                      <span className="text-xs text-blue-600 font-medium">✓ Foglalva</span>
-                    )}
-                    {state === 'BLOCKED' && item.blockedCode === 'NO_CARE_PATHWAY' && (
-                      <button
-                        onClick={() => handleAssignDefaultPathway(item)}
-                        disabled={pathwayAssigningEpisodeId === item.episodeId}
-                        className="text-sm text-medical-primary hover:underline font-medium disabled:opacity-50"
-                      >
-                        {pathwayAssigningEpisodeId === item.episodeId ? 'Beállítás…' : 'Kezelési út beállítása'}
-                      </button>
-                    )}
-                    {state === 'BOOKING_IN_PROGRESS' && (
-                      <span className="text-sm text-gray-500">Foglalás…</span>
-                    )}
+                    <div className="flex flex-col gap-1">
+                      {showConvertAll && (
+                        <button
+                          onClick={() => handleConvertAllIntents(item.episodeId)}
+                          disabled={!!isConvertingAll}
+                          className="text-xs text-medical-primary hover:underline font-medium disabled:opacity-50 text-left"
+                        >
+                          {isConvertingAll ? 'Lefoglalás…' : 'Összes szükséges időpont lefoglalása'}
+                        </button>
+                      )}
+                      {state === 'READY' && (
+                        <button
+                          onClick={() => handleBookNext(item)}
+                          className="text-sm text-medical-primary hover:underline font-medium"
+                        >
+                          Foglalás
+                        </button>
+                      )}
+                      {state === 'BOOKED' && (
+                        <span className="text-xs text-blue-600 font-medium">✓ Foglalva</span>
+                      )}
+                      {state === 'BLOCKED' && item.blockedCode === 'NO_CARE_PATHWAY' && (
+                        <button
+                          onClick={() => handleAssignDefaultPathway(item)}
+                          disabled={pathwayAssigningEpisodeId === item.episodeId}
+                          className="text-sm text-medical-primary hover:underline font-medium disabled:opacity-50"
+                        >
+                          {pathwayAssigningEpisodeId === item.episodeId ? 'Beállítás…' : 'Kezelési út beállítása'}
+                        </button>
+                      )}
+                      {state === 'BOOKING_IN_PROGRESS' && (
+                        <span className="text-sm text-gray-500">Foglalás…</span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );

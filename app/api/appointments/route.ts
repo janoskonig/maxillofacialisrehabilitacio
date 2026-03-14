@@ -52,6 +52,7 @@ export const GET = authedHandler(async (req, { auth }) => {
       a.is_late as "isLate",
       a.appointment_type as "appointmentType",
       a.step_code as "stepCode",
+      a.step_seq as "stepSeq",
       a.pool,
       a.created_via as "createdVia",
       ats.start_time as "startTime",

@@ -216,7 +216,8 @@ export async function createAppointment(
               validationError: {
                 error: oneHardNext.reason ?? 'Episode already has a future work appointment (one-hard-next)',
                 code: 'ONE_HARD_NEXT_VIOLATION',
-                overrideHint: 'Provide overrideReason (min 10 chars) to bypass. Admin/beutaló orvos/fogpótlástanász only.',
+                overrideHint:
+                  "Egyszerre minden szükséges lépést az „Összes szükséges időpont lefoglalása” gombbal foglalhatod. Egyébként: overrideReason (min. 10 karakter) admin/beutaló orvos/fogpótlástanász.",
                 status: 409,
               },
             };
@@ -430,9 +431,7 @@ export async function createAppointment(
     if (episodeId) {
       try {
         await emitSchedulingEvent('appointment', appointment.id, 'created');
-        if (!effectiveIntentId) {
-          await emitSchedulingEvent('episode', episodeId, 'REPROJECT_INTENTS');
-        }
+        await emitSchedulingEvent('episode', episodeId, 'REPROJECT_INTENTS');
       } catch {
         // Non-blocking
       }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDbPool } from '@/lib/db';
+import { getDbPool, queryWithRetry } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
 import {
   allPendingStepsWithData,
@@ -19,6 +19,7 @@ import type { WorklistItemBackend } from '@/lib/worklist-types';
 export const dynamic = 'force-dynamic';
 
 export const GET = authedHandler(async (req, { auth }) => {
+  return queryWithRetry(async () => {
   const pool = getDbPool();
 
   const { searchParams } = new URL(req.url);
@@ -63,6 +64,19 @@ export const GET = authedHandler(async (req, { auth }) => {
   const allEpisodeIds = episodesResult.rows.map((r: any) => r.episodeId);
   const allPatientIds = Array.from(new Set(episodesResult.rows.map((r: any) => r.patientId))) as string[];
 
+  // Episode steps: primary-only and default_days_offset (runtime check so app runs if migration not applied)
+  let episodeStepsMergedFilter = '';
+  let episodeStepsOffsetCol = '';
+  try {
+    const epCols = await pool.query(
+      `SELECT column_name FROM information_schema.columns
+       WHERE table_name = 'episode_steps' AND column_name IN ('merged_into_episode_step_id', 'default_days_offset')`
+    );
+    const names = new Set(epCols.rows.map((r: { column_name: string }) => r.column_name));
+    if (names.has('merged_into_episode_step_id')) episodeStepsMergedFilter = 'AND merged_into_episode_step_id IS NULL';
+    if (names.has('default_days_offset')) episodeStepsOffsetCol = ', default_days_offset';
+  } catch { /* columns may not exist */ }
+
   const [
     stageRows,
     noShowRows,
@@ -106,8 +120,8 @@ export const GET = authedHandler(async (req, { auth }) => {
       [allEpisodeIds]
     ),
     pool.query(
-      `SELECT episode_id, step_code, pathway_order_index, seq, status, completed_at
-       FROM episode_steps WHERE episode_id = ANY($1)
+      `SELECT episode_id, step_code, pathway_order_index, seq, status, completed_at${episodeStepsOffsetCol}
+       FROM episode_steps WHERE episode_id = ANY($1) ${episodeStepsMergedFilter}
        ORDER BY episode_id, COALESCE(seq, pathway_order_index), pathway_order_index`,
       [allEpisodeIds]
     ),
@@ -503,5 +517,6 @@ export const GET = authedHandler(async (req, { auth }) => {
   return NextResponse.json({
     items,
     serverNowISO,
+  });
   });
 });
