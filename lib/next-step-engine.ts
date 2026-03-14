@@ -124,6 +124,9 @@ export interface EpisodeStepRow {
   completed_at: Date | null;
   merged_into_episode_step_id: string | null;
   default_days_offset?: number | null;
+  pool?: string | null;
+  duration_minutes?: number | null;
+  custom_label?: string | null;
 }
 
 /** Get episode_steps if they've been generated. Returns null when no rows exist (legacy fallback).
@@ -141,16 +144,19 @@ async function getEpisodeSteps(
     if (col.rows.length > 0) mergedFilter = 'AND merged_into_episode_step_id IS NULL';
   } catch { /* column may not exist */ }
 
-  let defaultOffsetCol = '';
+  let optionalCols = '';
   try {
-    const offsetCol = await pool.query(
-      `SELECT 1 FROM information_schema.columns WHERE table_name = 'episode_steps' AND column_name = 'default_days_offset' LIMIT 1`
+    const colCheck = await pool.query(
+      `SELECT column_name FROM information_schema.columns
+       WHERE table_name = 'episode_steps' AND column_name IN ('default_days_offset', 'custom_label')`
     );
-    if (offsetCol.rows.length > 0) defaultOffsetCol = ', default_days_offset';
-  } catch { /* column may not exist */ }
+    const colNames = new Set(colCheck.rows.map((r: { column_name: string }) => r.column_name));
+    if (colNames.has('default_days_offset')) optionalCols += ', default_days_offset';
+    if (colNames.has('custom_label')) optionalCols += ', custom_label';
+  } catch { /* columns may not exist */ }
 
   const r = await pool.query(
-    `SELECT step_code, pathway_order_index, seq, status, completed_at${defaultOffsetCol}
+    `SELECT step_code, pathway_order_index, seq, status, completed_at, pool, duration_minutes${optionalCols}
      FROM episode_steps WHERE episode_id = $1 ${mergedFilter}
      ORDER BY COALESCE(seq, pathway_order_index), pathway_order_index`,
     [episodeId]
@@ -211,6 +217,18 @@ async function getPathwaySteps(
   return stepsJson as PathwayStep[];
 }
 
+/** Synthesize a PathwayStep from an EpisodeStepRow when no matching pathway step exists
+ *  (e.g. tooth treatment steps like tooth_huzas). */
+function episodeStepAsPathway(es: EpisodeStepRow): PathwayStep {
+  return {
+    step_code: es.step_code,
+    label: es.custom_label ?? undefined,
+    pool: (es.pool as PoolType) ?? 'work',
+    duration_minutes: es.duration_minutes ?? 30,
+    default_days_offset: es.default_days_offset ?? 7,
+  };
+}
+
 /**
  * Compute next required step for an episode.
  * Returns recommended window or BLOCKED with required prereqs.
@@ -235,7 +253,62 @@ export async function nextRequiredStep(episodeId: string): Promise<NextRequiredS
     };
   }
 
-  // No pathway → default to first consultation (pathway will be assigned after consult)
+  const currentStage = await getCurrentStage(pool, episodeId);
+
+  // When episode_steps exist, use them as SSOT (handles both pathway and tooth-treatment steps).
+  if (episodeSteps) {
+    const resolvedSteps = episodeSteps.filter((s) => s.status === 'completed' || s.status === 'skipped');
+    const pendingStep = episodeSteps.find((s) => s.status === 'pending' || s.status === 'scheduled');
+    if (!pendingStep) {
+      const lastStep = pathwaySteps?.[pathwaySteps.length - 1];
+      const sentinel = lastStep ?? episodeStepAsPathway(episodeSteps[episodeSteps.length - 1]);
+      return {
+        step_code: sentinel.step_code,
+        label: sentinel.label,
+        pool: slotPoolForStep(sentinel),
+        duration_minutes: sentinel.duration_minutes ?? 30,
+        earliest_date: new Date(),
+        latest_date: new Date(),
+        reason: 'Pathway complete (all steps completed or skipped)',
+        inputs_used: { completed_count: resolvedSteps.length, mode: 'episode_steps' },
+      };
+    }
+
+    const matchingStep = pathwaySteps?.find((ps) => ps.step_code === pendingStep.step_code)
+      ?? episodeStepAsPathway(pendingStep);
+
+    const lastResolvedAt = resolvedSteps
+      .map((s) => s.completed_at)
+      .filter((d): d is Date => d !== null)
+      .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] ?? null;
+
+    const anchorDate = lastResolvedAt
+      ? new Date(lastResolvedAt)
+      : completedStats.lastCompletedAt ?? (await getEpisodeAnchorFallback(pool, episodeId));
+
+    const daysOffset = pendingStep.default_days_offset ?? matchingStep.default_days_offset ?? 14;
+    const { windowStart, windowEnd } = computeStepWindow(anchorDate, daysOffset);
+
+    return {
+      step_code: matchingStep.step_code,
+      label: matchingStep.label,
+      pool: slotPoolForStep(matchingStep),
+      duration_minutes: matchingStep.duration_minutes ?? 30,
+      earliest_date: windowStart,
+      latest_date: windowEnd,
+      reason: `Pathway step ${matchingStep.label ?? matchingStep.step_code}`,
+      anchor: anchorDate.toISOString(),
+      inputs_used: {
+        resolved_count: resolvedSteps.length,
+        last_resolved_at: lastResolvedAt ? new Date(lastResolvedAt).toISOString() : null,
+        stage: currentStage,
+        step_index: pendingStep.pathway_order_index,
+        mode: 'episode_steps',
+      },
+    };
+  }
+
+  // No pathway and no episode_steps → default to first consultation
   if (!pathwaySteps || pathwaySteps.length === 0) {
     const anchorDate =
       completedStats.lastCompletedAt ?? (await getEpisodeAnchorFallback(pool, episodeId));
@@ -250,62 +323,6 @@ export async function nextRequiredStep(episodeId: string): Promise<NextRequiredS
       reason: 'Első konzultáció (nincs pathway)',
       anchor: anchorDate.toISOString(),
       inputs_used: { mode: 'no_pathway_default_consult' },
-    };
-  }
-
-  const currentStage = await getCurrentStage(pool, episodeId);
-
-  // When episode_steps exist, use them as SSOT: find first pending step (skip over completed/skipped).
-  // Anchor: latest completed_at among resolved steps, then fallback to appointment stats, then episode.opened_at.
-  if (episodeSteps) {
-    const resolvedSteps = episodeSteps.filter((s) => s.status === 'completed' || s.status === 'skipped');
-    const pendingStep = episodeSteps.find((s) => s.status === 'pending' || s.status === 'scheduled');
-    if (!pendingStep) {
-      // All steps done or skipped — pathway complete; return last step as sentinel
-      const lastStep = pathwaySteps[pathwaySteps.length - 1];
-      return {
-        step_code: lastStep.step_code,
-        label: lastStep.label,
-        pool: slotPoolForStep(lastStep),
-        duration_minutes: lastStep.duration_minutes ?? 30,
-        earliest_date: new Date(),
-        latest_date: new Date(),
-        reason: 'Pathway complete (all steps completed or skipped)',
-        inputs_used: { completed_count: resolvedSteps.length, step_index: pathwaySteps.length, mode: 'episode_steps' },
-      };
-    }
-
-    const matchingPathwayStep = pathwaySteps.find((ps) => ps.step_code === pendingStep.step_code)
-      ?? pathwaySteps[Math.min(pendingStep.pathway_order_index, pathwaySteps.length - 1)];
-
-    const lastResolvedAt = resolvedSteps
-      .map((s) => s.completed_at)
-      .filter((d): d is Date => d !== null)
-      .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] ?? null;
-
-    const anchorDate = lastResolvedAt
-      ? new Date(lastResolvedAt)
-      : completedStats.lastCompletedAt ?? (await getEpisodeAnchorFallback(pool, episodeId));
-
-    const daysOffset = pendingStep.default_days_offset ?? matchingPathwayStep.default_days_offset ?? 14;
-    const { windowStart, windowEnd } = computeStepWindow(anchorDate, daysOffset);
-
-    return {
-      step_code: matchingPathwayStep.step_code,
-      label: matchingPathwayStep.label,
-      pool: slotPoolForStep(matchingPathwayStep),
-      duration_minutes: matchingPathwayStep.duration_minutes ?? 30,
-      earliest_date: windowStart,
-      latest_date: windowEnd,
-      reason: `Pathway step ${matchingPathwayStep.label ?? matchingPathwayStep.step_code}`,
-      anchor: anchorDate.toISOString(),
-      inputs_used: {
-        resolved_count: resolvedSteps.length,
-        last_resolved_at: lastResolvedAt ? new Date(lastResolvedAt).toISOString() : null,
-        stage: currentStage,
-        step_index: pendingStep.pathway_order_index,
-        mode: 'episode_steps',
-      },
     };
   }
 
@@ -379,24 +396,7 @@ export async function allPendingSteps(episodeId: string): Promise<AllPendingStep
     };
   }
 
-  if (!pathwaySteps || pathwaySteps.length === 0) {
-    const anchorDate =
-      completedStats.lastCompletedAt ?? (await getEpisodeAnchorFallback(pool, episodeId));
-    const { windowStart, windowEnd } = computeStepWindow(anchorDate, DEFAULT_CONSULT_STEP.default_days_offset);
-    return [{
-      step_code: DEFAULT_CONSULT_STEP.step_code,
-      label: DEFAULT_CONSULT_STEP.label,
-      pool: DEFAULT_CONSULT_STEP.pool,
-      duration_minutes: DEFAULT_CONSULT_STEP.duration_minutes,
-      earliest_date: windowStart,
-      latest_date: windowEnd,
-      reason: 'Első konzultáció (nincs pathway)',
-      anchor: anchorDate.toISOString(),
-      stepSeq: 0,
-      isFirstPending: true,
-    }];
-  }
-
+  // When episode_steps exist, use them as SSOT (handles both pathway and tooth-treatment steps).
   if (episodeSteps) {
     const resolvedSteps = episodeSteps.filter((s) => s.status === 'completed' || s.status === 'skipped');
     const pendingSteps = episodeSteps.filter((s) => s.status === 'pending' || s.status === 'scheduled');
@@ -415,8 +415,8 @@ export async function allPendingSteps(episodeId: string): Promise<AllPendingStep
     const results: PendingStep[] = [];
     for (let i = 0; i < pendingSteps.length; i++) {
       const pending = pendingSteps[i];
-      const ps = pathwaySteps.find((p) => p.step_code === pending.step_code)
-        ?? pathwaySteps[Math.min(pending.pathway_order_index, pathwaySteps.length - 1)];
+      const ps = pathwaySteps?.find((p) => p.step_code === pending.step_code)
+        ?? episodeStepAsPathway(pending);
 
       const daysOffset = (pending.default_days_offset ?? ps.default_days_offset) ?? 14;
       const { windowStart, windowEnd, expectedDate } = computeStepWindow(anchor, daysOffset);
@@ -437,6 +437,25 @@ export async function allPendingSteps(episodeId: string): Promise<AllPendingStep
       anchor = expectedDate;
     }
     return results;
+  }
+
+  // No pathway and no episode_steps → default to first consultation
+  if (!pathwaySteps || pathwaySteps.length === 0) {
+    const anchorDate =
+      completedStats.lastCompletedAt ?? (await getEpisodeAnchorFallback(pool, episodeId));
+    const { windowStart, windowEnd } = computeStepWindow(anchorDate, DEFAULT_CONSULT_STEP.default_days_offset);
+    return [{
+      step_code: DEFAULT_CONSULT_STEP.step_code,
+      label: DEFAULT_CONSULT_STEP.label,
+      pool: DEFAULT_CONSULT_STEP.pool,
+      duration_minutes: DEFAULT_CONSULT_STEP.duration_minutes,
+      earliest_date: windowStart,
+      latest_date: windowEnd,
+      reason: 'Első konzultáció (nincs pathway)',
+      anchor: anchorDate.toISOString(),
+      stepSeq: 0,
+      isFirstPending: true,
+    }];
   }
 
   // Legacy fallback: no episode_steps — return remaining pathway steps by appointment count
@@ -498,6 +517,8 @@ export interface EpisodeBatchData {
   episodeSteps: EpisodeStepRow[] | null;
   openedAt: Date;
   currentStage: string | null;
+  /** Step codes with non-cancelled appointments — used to avoid returning already-covered steps */
+  bookedStepCodes?: Set<string>;
 }
 
 /**
@@ -519,23 +540,7 @@ export function allPendingStepsWithData(
     };
   }
 
-  if (!pathwaySteps || pathwaySteps.length === 0) {
-    const anchorDate = completedStats.lastCompletedAt ?? openedAt;
-    const { windowStart, windowEnd } = computeStepWindow(anchorDate, DEFAULT_CONSULT_STEP.default_days_offset);
-    return [{
-      step_code: DEFAULT_CONSULT_STEP.step_code,
-      label: DEFAULT_CONSULT_STEP.label,
-      pool: DEFAULT_CONSULT_STEP.pool,
-      duration_minutes: DEFAULT_CONSULT_STEP.duration_minutes,
-      earliest_date: windowStart,
-      latest_date: windowEnd,
-      reason: 'Első konzultáció (nincs pathway)',
-      anchor: anchorDate.toISOString(),
-      stepSeq: 0,
-      isFirstPending: true,
-    }];
-  }
-
+  // When episode_steps exist, use them as SSOT (handles both pathway and tooth-treatment steps).
   if (episodeSteps) {
     const resolvedSteps = episodeSteps.filter((s) => s.status === 'completed' || s.status === 'skipped');
     const pendingSteps = episodeSteps.filter((s) => s.status === 'pending' || s.status === 'scheduled');
@@ -554,8 +559,8 @@ export function allPendingStepsWithData(
     const results: PendingStep[] = [];
     for (let i = 0; i < pendingSteps.length; i++) {
       const pending = pendingSteps[i];
-      const ps = pathwaySteps.find((p) => p.step_code === pending.step_code)
-        ?? pathwaySteps[Math.min(pending.pathway_order_index, pathwaySteps.length - 1)];
+      const ps = pathwaySteps?.find((p) => p.step_code === pending.step_code)
+        ?? episodeStepAsPathway(pending);
 
       const daysOffset = (pending.default_days_offset ?? ps.default_days_offset) ?? 14;
       const { windowStart, windowEnd, expectedDate } = computeStepWindow(anchor, daysOffset);
@@ -576,6 +581,24 @@ export function allPendingStepsWithData(
       anchor = expectedDate;
     }
     return results;
+  }
+
+  // No pathway and no episode_steps → default to first consultation
+  if (!pathwaySteps || pathwaySteps.length === 0) {
+    const anchorDate = completedStats.lastCompletedAt ?? openedAt;
+    const { windowStart, windowEnd } = computeStepWindow(anchorDate, DEFAULT_CONSULT_STEP.default_days_offset);
+    return [{
+      step_code: DEFAULT_CONSULT_STEP.step_code,
+      label: DEFAULT_CONSULT_STEP.label,
+      pool: DEFAULT_CONSULT_STEP.pool,
+      duration_minutes: DEFAULT_CONSULT_STEP.duration_minutes,
+      earliest_date: windowStart,
+      latest_date: windowEnd,
+      reason: 'Első konzultáció (nincs pathway)',
+      anchor: anchorDate.toISOString(),
+      stepSeq: 0,
+      isFirstPending: true,
+    }];
   }
 
   // Legacy fallback: no episode_steps — use appointment count

@@ -7,7 +7,7 @@ import { TodaysAppointmentsWidget } from './widgets/TodaysAppointmentsWidget';
 import { PendingApprovalsWidget } from './widgets/PendingApprovalsWidget';
 import { SendMessageWidget } from './widgets/SendMessageWidget';
 import { WaitingTimeWidget } from './widgets/WaitingTimeWidget';
-import { ChevronDown, ChevronUp, LayoutDashboard, Layers, BarChart3, Activity, ClipboardList, Calendar } from 'lucide-react';
+import { ChevronDown, ChevronUp, LayoutDashboard, Layers, BarChart3, Activity, Calendar } from 'lucide-react';
 import { Patient } from '@/lib/types';
 import type { GanttEpisode, GanttInterval } from './StagesGanttChart';
 import { IntakeRecommendationBadge } from './widgets/IntakeRecommendationBadge';
@@ -26,10 +26,6 @@ const PatientPipelineBoard = dynamic(
 );
 const StagesGanttChart = dynamic(
   () => import('./StagesGanttChart').then(m => ({ default: m.StagesGanttChart })),
-  { ssr: false, loading: TabSkeleton }
-);
-const WorklistWidget = dynamic(
-  () => import('./widgets/WorklistWidget').then(m => ({ default: m.WorklistWidget })),
   { ssr: false, loading: TabSkeleton }
 );
 const WipForecastWidget = dynamic(
@@ -59,7 +55,7 @@ interface DashboardProps {
   onViewFoto?: (patient: Patient) => void;
 }
 
-const VALID_TABS = ['overview', 'patient-preparation', 'gantt', 'workload', 'worklist', 'treatment-plans'] as const;
+const VALID_TABS = ['overview', 'patient-preparation', 'gantt', 'workload', 'treatment-plans'] as const;
 
 export function Dashboard({ userRole }: DashboardProps) {
   const searchParams = useSearchParams();
@@ -67,7 +63,7 @@ export function Dashboard({ userRole }: DashboardProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'patient-preparation' | 'gantt' | 'workload' | 'worklist' | 'treatment-plans'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'patient-preparation' | 'gantt' | 'workload' | 'treatment-plans'>('overview');
 
   useEffect(() => {
     const tab = searchParams.get('tab');
@@ -234,19 +230,6 @@ export function Dashboard({ userRole }: DashboardProps) {
               </button>
               {canSeeStages && (
                 <button
-                  onClick={() => setActiveTab('worklist')}
-                  className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
-                    activeTab === 'worklist'
-                      ? 'text-medical-primary border-medical-primary'
-                      : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
-                  }`}
-                >
-                  <ClipboardList className="w-4 h-4 hidden sm:block" />
-                  Munkalista
-                </button>
-              )}
-              {canSeeStages && (
-                <button
                   onClick={() => setActiveTab('treatment-plans')}
                   className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
                     activeTab === 'treatment-plans'
@@ -306,15 +289,6 @@ export function Dashboard({ userRole }: DashboardProps) {
 
               {/* Waiting Times Widget */}
               <WaitingTimeWidget />
-            </div>
-          )}
-
-          {activeTab === 'worklist' && canSeeStages && (
-            <div className="space-y-4">
-              <p className="text-sm text-gray-600">
-                Aktív kezelések következő lépései – foglalás egy kattintással.
-              </p>
-              <WorklistWidget />
             </div>
           )}
 

@@ -145,8 +145,8 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
       try { await emitSchedulingEvent('episode', episodeId, 'step_timing_updated'); } catch { /* non-blocking */ }
     } else {
       const validTransitions: Record<string, string[]> = {
-        pending: ['skipped'],
-        scheduled: ['skipped'],
+        pending: ['skipped', 'completed'],
+        scheduled: ['skipped', 'completed'],
         skipped: ['pending'],
         completed: [],
       };
@@ -160,7 +160,10 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
         );
       }
 
-      const completedAt = newStatus === 'skipped' ? new Date().toISOString() : null;
+      const completedAt =
+        newStatus === 'skipped' ? new Date().toISOString()
+        : newStatus === 'completed' ? new Date().toISOString()
+        : null;
 
       await pool.query(
         `UPDATE episode_steps SET status = $1, completed_at = $2 WHERE id = $3`,
@@ -175,7 +178,9 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
 
       await pool.query('COMMIT');
 
-      try { await emitSchedulingEvent('episode', episodeId, 'step_skipped'); } catch { /* non-blocking */ }
+      try {
+        await emitSchedulingEvent('episode', episodeId, newStatus === 'completed' ? 'step_completed' : 'step_skipped');
+      } catch { /* non-blocking */ }
     }
 
     const cols = await getStepSelectColumns(pool);

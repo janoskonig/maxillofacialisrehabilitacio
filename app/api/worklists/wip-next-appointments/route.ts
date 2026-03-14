@@ -64,17 +64,18 @@ export const GET = authedHandler(async (req, { auth }) => {
   const allEpisodeIds = episodesResult.rows.map((r: any) => r.episodeId);
   const allPatientIds = Array.from(new Set(episodesResult.rows.map((r: any) => r.patientId))) as string[];
 
-  // Episode steps: primary-only and default_days_offset (runtime check so app runs if migration not applied)
+  // Episode steps: primary-only + optional columns (runtime check so app runs if migration not applied)
   let episodeStepsMergedFilter = '';
-  let episodeStepsOffsetCol = '';
+  let episodeStepsOptionalCols = '';
   try {
     const epCols = await pool.query(
       `SELECT column_name FROM information_schema.columns
-       WHERE table_name = 'episode_steps' AND column_name IN ('merged_into_episode_step_id', 'default_days_offset')`
+       WHERE table_name = 'episode_steps' AND column_name IN ('merged_into_episode_step_id', 'default_days_offset', 'custom_label')`
     );
     const names = new Set(epCols.rows.map((r: { column_name: string }) => r.column_name));
     if (names.has('merged_into_episode_step_id')) episodeStepsMergedFilter = 'AND merged_into_episode_step_id IS NULL';
-    if (names.has('default_days_offset')) episodeStepsOffsetCol = ', default_days_offset';
+    if (names.has('default_days_offset')) episodeStepsOptionalCols += ', default_days_offset';
+    if (names.has('custom_label')) episodeStepsOptionalCols += ', custom_label';
   } catch { /* columns may not exist */ }
 
   const [
@@ -89,6 +90,8 @@ export const GET = authedHandler(async (req, { auth }) => {
     patientDataRows,
     treatmentTypesRows,
     episodeOpenedRows,
+    completedApptStepRows,
+    activeApptStepRows,
   ] = await Promise.all([
     pool.query(
       `SELECT DISTINCT ON (episode_id) episode_id, stage_code
@@ -120,7 +123,7 @@ export const GET = authedHandler(async (req, { auth }) => {
       [allEpisodeIds]
     ),
     pool.query(
-      `SELECT episode_id, step_code, pathway_order_index, seq, status, completed_at${episodeStepsOffsetCol}
+      `SELECT id, episode_id, step_code, pathway_order_index, seq, status, completed_at, pool, duration_minutes${episodeStepsOptionalCols}
        FROM episode_steps WHERE episode_id = ANY($1) ${episodeStepsMergedFilter}
        ORDER BY episode_id, COALESCE(seq, pathway_order_index), pathway_order_index`,
       [allEpisodeIds]
@@ -159,6 +162,22 @@ export const GET = authedHandler(async (req, { auth }) => {
       `SELECT id, opened_at FROM patient_episodes WHERE id = ANY($1)`,
       [allEpisodeIds]
     ),
+    pool.query(
+      `SELECT a.episode_id, a.step_code
+       FROM appointments a
+       WHERE a.episode_id = ANY($1)
+         AND a.step_code IS NOT NULL
+         AND a.appointment_status = 'completed'`,
+      [allEpisodeIds]
+    ),
+    pool.query(
+      `SELECT a.episode_id, a.step_code
+       FROM appointments a
+       WHERE a.episode_id = ANY($1)
+         AND a.step_code IS NOT NULL
+         AND (a.appointment_status IS NULL OR a.appointment_status NOT IN ('cancelled_by_doctor', 'cancelled_by_patient'))`,
+      [allEpisodeIds]
+    ),
   ]);
 
   // ── Build lookup Maps ──
@@ -185,11 +204,11 @@ export const GET = authedHandler(async (req, { auth }) => {
     ])
   );
 
-  // Episode steps grouped by episode
-  const episodeStepsMap = new Map<string, EpisodeStepRow[]>();
+  // Episode steps grouped by episode (rows include id for "mark completed")
+  const episodeStepsMap = new Map<string, (EpisodeStepRow & { id?: string })[]>();
   for (const r of episodeStepRows.rows) {
     const arr = episodeStepsMap.get(r.episode_id) ?? [];
-    arr.push(r as EpisodeStepRow);
+    arr.push(r as EpisodeStepRow & { id?: string });
     episodeStepsMap.set(r.episode_id, arr);
   }
 
@@ -241,6 +260,22 @@ export const GET = authedHandler(async (req, { auth }) => {
     episodeOpenedRows.rows.map((r: any) => [r.id, r.opened_at ? new Date(r.opened_at) : new Date()])
   );
 
+  // Completed appointment step_codes per episode — used to filter out already-done steps
+  const completedApptStepsByEpisode = new Map<string, Set<string>>();
+  for (const r of completedApptStepRows.rows) {
+    let s = completedApptStepsByEpisode.get(r.episode_id);
+    if (!s) { s = new Set(); completedApptStepsByEpisode.set(r.episode_id, s); }
+    s.add(r.step_code);
+  }
+
+  // Active (non-cancelled) appointment step_codes per episode — prevents re-showing already-booked steps
+  const activeApptStepsByEpisode = new Map<string, Set<string>>();
+  for (const r of activeApptStepRows.rows) {
+    let s = activeApptStepsByEpisode.get(r.episode_id);
+    if (!s) { s = new Set(); activeApptStepsByEpisode.set(r.episode_id, s); }
+    s.add(r.step_code);
+  }
+
   // ── Process episodes using batch data (no per-episode DB queries) ──
   const items: WorklistItemBackend[] = [];
 
@@ -255,6 +290,7 @@ export const GET = authedHandler(async (req, { auth }) => {
       episodeSteps: episodeStepsMap.get(episodeId) ?? null,
       openedAt: openedAtMap.get(episodeId) ?? new Date(),
       currentStage: stageMap.get(episodeId) ?? null,
+      bookedStepCodes: activeApptStepsByEpisode.get(episodeId),
     };
 
     const result = allPendingStepsWithData(episodeId, batchData);
@@ -350,6 +386,13 @@ export const GET = authedHandler(async (req, { auth }) => {
       const overdueByDays = windowEnd < now ? Math.ceil((now.getTime() - windowEnd.getTime()) / (24 * 60 * 60 * 1000)) : 0;
       const priorityScore = Math.min(100, 50 + overdueByDays * 5);
 
+      const stepsForEpisode = episodeStepsMap.get(episodeId) ?? [];
+      const stepRow = stepsForEpisode.find(
+        (r: { step_code: string; status: string }) =>
+          r.step_code === step.step_code && (r.status === 'pending' || r.status === 'scheduled')
+      );
+      const episodeStepId = stepRow && 'id' in stepRow ? (stepRow as { id: string }).id : null;
+
       const item: WorklistItemBackend = {
         episodeId,
         patientId: row.patientId,
@@ -368,6 +411,8 @@ export const GET = authedHandler(async (req, { auth }) => {
         stepSeq: step.stepSeq,
         requiresPrecommit: !step.isFirstPending,
         episodeOrder: epIdx,
+        ...(episodeStepId && { episodeStepId }),
+        ...(row.assignedProviderId && { assignedProviderId: row.assignedProviderId }),
       };
 
       if (treatmentTypeCode || treatmentTypeLabel || treatmentTypeSource) {
@@ -380,12 +425,26 @@ export const GET = authedHandler(async (req, { auth }) => {
     }
   }
 
+  // ── Filter out worklist items for steps already completed via appointments ──
+  const filteredItems: typeof items = [];
+  for (const item of items) {
+    if (item.status === 'blocked' || !item.stepCode) {
+      filteredItems.push(item);
+      continue;
+    }
+    const doneSteps = completedApptStepsByEpisode.get(item.episodeId);
+    if (doneSteps && doneSteps.has(item.stepCode)) continue;
+    filteredItems.push(item);
+  }
+  items.length = 0;
+  items.push(...filteredItems);
+
   // ── Booked appointments enrichment ──
   const readyItems = items.filter((i) => i.status !== 'blocked');
   if (readyItems.length > 0) {
     const episodeIds = Array.from(new Set(readyItems.map((i) => i.episodeId)));
     const bookedResult = await pool.query(
-      `SELECT a.id, a.episode_id, a.step_code,
+      `SELECT a.id, a.episode_id, a.step_code, a.step_seq,
               COALESCE(a.start_time, ats.start_time) as effective_start,
               a.dentist_email
        FROM appointments a
@@ -397,6 +456,7 @@ export const GET = authedHandler(async (req, { auth }) => {
     );
     type BookedEntry = { id: string; startTime: string; providerEmail: string | null };
     const exactMap = new Map<string, BookedEntry>();
+    const stepSeqMap = new Map<string, BookedEntry>();
     const episodeMap = new Map<string, BookedEntry>();
     for (const row of bookedResult.rows) {
       const start = new Date(row.effective_start).toISOString();
@@ -408,6 +468,13 @@ export const GET = authedHandler(async (req, { auth }) => {
           exactMap.set(exactKey, entry);
         }
       }
+      if (row.step_seq != null) {
+        const seqKey = `${row.episode_id}:${row.step_seq}`;
+        const existing = stepSeqMap.get(seqKey);
+        if (!existing || start < existing.startTime) {
+          stepSeqMap.set(seqKey, entry);
+        }
+      }
       const epExisting = episodeMap.get(row.episode_id);
       if (!epExisting || start < epExisting.startTime) {
         episodeMap.set(row.episode_id, entry);
@@ -415,7 +482,9 @@ export const GET = authedHandler(async (req, { auth }) => {
     }
     for (const item of readyItems) {
       const exactKey = item.stepCode ? `${item.episodeId}:${item.stepCode}` : null;
+      const seqKey = item.stepSeq != null ? `${item.episodeId}:${item.stepSeq}` : null;
       const booked = (exactKey && exactMap.get(exactKey))
+        || (seqKey && stepSeqMap.get(seqKey))
         || ((item.stepSeq === 0 || item.stepSeq === undefined) && episodeMap.get(item.episodeId))
         || null;
       if (booked) {
@@ -468,8 +537,10 @@ export const GET = authedHandler(async (req, { auth }) => {
       }
     }
 
-    for (const id of toRecompute) {
-      await refreshEpisodeForecastCache(id);
+    const FORECAST_CONCURRENCY = 2;
+    for (let i = 0; i < toRecompute.length; i += FORECAST_CONCURRENCY) {
+      const batch = toRecompute.slice(i, i + FORECAST_CONCURRENCY);
+      await Promise.all(batch.map((id) => refreshEpisodeForecastCache(id).catch(() => {})));
     }
 
     if (toRecompute.length > 0) {

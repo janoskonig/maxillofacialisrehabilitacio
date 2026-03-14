@@ -253,6 +253,21 @@ export async function createAppointment(
       return { ok: false, validationError: { error: 'Ez az időpont már le van foglalva', status: 400 } };
     }
 
+    if (episodeId) {
+      const epRow = await db.query(
+        'SELECT assigned_provider_id FROM patient_episodes WHERE id = $1',
+        [episodeId],
+      );
+      const assignedProviderId = epRow.rows[0]?.assigned_provider_id;
+      if (assignedProviderId && timeSlot.user_id !== assignedProviderId) {
+        await db.query('ROLLBACK');
+        return {
+          ok: false,
+          validationError: { error: 'Csak a kijelölt orvoshoz adható időpont.', status: 403 },
+        };
+      }
+    }
+
     const startTime = new Date(timeSlot.start_time);
     if (startTime <= now) {
       await db.query('ROLLBACK');

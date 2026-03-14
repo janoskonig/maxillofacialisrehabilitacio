@@ -47,6 +47,20 @@ export function getDbPool(): Pool {
       }
     });
 
+    let lastSaturationLog = 0;
+    rawPool.on('connect', () => {
+      const total = rawPool.totalCount;
+      const idle = rawPool.idleCount;
+      const waiting = rawPool.waitingCount;
+      if (waiting > 0 || (total >= maxConnections && idle === 0)) {
+        const now = Date.now();
+        if (now - lastSaturationLog > 5000) {
+          lastSaturationLog = now;
+          console.warn(`[DB_POOL] near-saturation: total=${total} idle=${idle} waiting=${waiting} max=${maxConnections}`);
+        }
+      }
+    });
+
     // Wrap pool.query with slow-query logging
     const origQuery: (...a: any[]) => any = rawPool.query.bind(rawPool);
     (rawPool as any).query = function wrappedQuery(textOrConfig: any, values?: any, callback?: any): any {
@@ -109,15 +123,14 @@ export async function queryWithRetry<T = any>(
     } catch (error: any) {
       lastError = error;
       
-      // If it's a "too many clients" error, wait and retry
       if (error?.code === '53300' && attempt < maxRetries - 1) {
-        const delay = retryDelay * (attempt + 1); // Exponential backoff
-        console.warn(`Too many clients error, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+        const jitter = Math.random() * 500;
+        const delay = retryDelay * Math.pow(2, attempt) + jitter;
+        console.warn(`[DB_POOL] 53300 retry in ${delay.toFixed(0)}ms (attempt ${attempt + 1}/${maxRetries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
       
-      // For other errors or last attempt, throw immediately
       throw error;
     }
   }

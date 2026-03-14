@@ -254,16 +254,20 @@ export function SlotPickerModal({
             <select
               value={selectedProviderId ?? ''}
               onChange={(e) => setSelectedProviderId(e.target.value || undefined)}
-              className="text-xs rounded border border-gray-300 bg-white px-2 py-1.5 min-w-[140px] focus:outline-none focus:ring-2 focus:ring-medical-primary/50"
+              disabled={!!providerId}
+              className="text-xs rounded border border-gray-300 bg-white px-2 py-1.5 min-w-[140px] focus:outline-none focus:ring-2 focus:ring-medical-primary/50 disabled:opacity-70 disabled:cursor-not-allowed"
               aria-label="Orvos szűrő"
             >
-              <option value="">Összes orvos</option>
+              {!providerId && <option value="">Összes orvos</option>}
               {doctors.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name}
                 </option>
               ))}
             </select>
+            {providerId && (
+              <span className="text-xs text-gray-500" title="Csak a kijelölt orvos slotjai foglalhatók">zárolva</span>
+            )}
           </label>
         </div>
 
@@ -283,7 +287,11 @@ export function SlotPickerModal({
             <div className="text-center py-8 text-gray-500">
               <Calendar className="w-12 h-12 mx-auto mb-3 text-gray-400" />
               <p className="font-medium">Csak a kiírt szabad időpontok jelennek meg.</p>
-              <p className="text-sm mt-1">Nincs ilyen slot az ablakban. Kiírhatsz újat alább, és rögtön lefoglalod.</p>
+              <p className="text-sm mt-1">
+                {providerId
+                  ? 'A kijelölt orvosnak nincs szabad slotja az ablakban. Kiírhatsz újat alább, és rögtön lefoglalod.'
+                  : 'Nincs ilyen slot az ablakban. Kiírhatsz újat alább, és rögtön lefoglalod.'}
+              </p>
             </div>
           )}
 

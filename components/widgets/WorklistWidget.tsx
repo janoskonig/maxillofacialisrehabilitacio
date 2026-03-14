@@ -600,6 +600,7 @@ export function WorklistWidget() {
           }
           patientId={slotPickerItem.patientId}
           episodeId={slotPickerItem.episodeId}
+          providerId={slotPickerItem.assignedProviderId ?? undefined}
           patientName={slotPickerItem.patientName ?? undefined}
           onSelectSlot={handleSelectSlot}
         />

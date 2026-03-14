@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { ClipboardList, CalendarCheck } from 'lucide-react';
+import { ClipboardList, CalendarCheck, Trash2 } from 'lucide-react';
 import {
   getWorklistItemKey,
   deriveWorklistRowState,
@@ -40,6 +40,8 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
   } | null>(null);
   const [convertAllEpisodeId, setConvertAllEpisodeId] = useState<string | null>(null);
   const [convertAllMessage, setConvertAllMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [markCompleteKey, setMarkCompleteKey] = useState<string | null>(null);
+  const [deleteAppointmentId, setDeleteAppointmentId] = useState<string | null>(null);
 
   const fetchWorklist = useCallback(async () => {
     if (!patientId) return;
@@ -162,10 +164,22 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
       if (res.status === 409 && data.code === 'ONE_HARD_NEXT_VIOLATION') {
         setLocal((prev) => ({
           ...prev,
-          overrideRequiredKeys: new Set([...Array.from(prev.overrideRequiredKeys ?? []), key]),
           bookingInProgressKeys: new Set(Array.from(prev.bookingInProgressKeys ?? []).filter((k) => k !== key)),
         }));
         setSlotPickerItem(null);
+        const episodeIdForViolation = slotPickerItem.episodeId;
+        const rowsForEpisode = items.filter((i) => i.episodeId === episodeIdForViolation);
+        if (rowsForEpisode.length > 1) {
+          setConvertAllMessage({
+            type: 'error',
+            text: 'Ehhez az epizódhoz több lépés tartozik. Az „Összes szükséges időpont lefoglalása” gombbal egyszerre foglalhatod őket.',
+          });
+          return;
+        }
+        setLocal((prev) => ({
+          ...prev,
+          overrideRequiredKeys: new Set([...Array.from(prev.overrideRequiredKeys ?? []), key]),
+        }));
         setOverride429({
           error: data.error ?? 'Epizódnak már van jövőbeli munkafoglalása',
           overrideHint: data.overrideHint,
@@ -218,11 +232,21 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
         setConvertAllMessage({ type: 'error', text: data.error ?? 'Hiba történt' });
         return;
       }
-      const { converted, skipped } = data;
+      const { converted, skipped } = data as {
+        converted: number;
+        skipped: Array<{ intentId: string; reason: string; code?: string; stepCode?: string }>;
+      };
       if (skipped?.length > 0) {
+        const reasonSummary = skipped.map((s) => {
+          const step = s.stepCode ? `${s.stepCode}: ` : '';
+          if (s.code === 'STEP_ALREADY_DONE') return `${step}már teljesítve`;
+          if (s.code === 'STEP_ALREADY_BOOKED') return `${step}már foglalva`;
+          if (s.reason?.includes('Nincs szabad')) return `${step}nincs szabad slot`;
+          return `${step}${s.reason?.slice(0, 40) ?? 'kihagyva'}`;
+        }).join('; ');
         setConvertAllMessage({
-          type: 'success',
-          text: `${converted} időpont lefoglalva, ${skipped.length} kihagyva (nincs szabad slot).`,
+          type: converted > 0 ? 'success' : 'error',
+          text: `${converted} időpont lefoglalva, ${skipped.length} kihagyva: ${reasonSummary}`,
         });
       } else {
         setConvertAllMessage({
@@ -235,6 +259,50 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
       setConvertAllMessage({ type: 'error', text: 'Hálózati hiba' });
     } finally {
       setConvertAllEpisodeId(null);
+    }
+  };
+
+  const handleDeleteAppointment = async (appointmentId: string) => {
+    if (!confirm('Biztosan törölni szeretnéd ezt az időpontot? A slot újra foglalhatóvá válik.')) return;
+    setDeleteAppointmentId(appointmentId);
+    try {
+      const res = await fetch(`/api/appointments/${appointmentId}`, { method: 'DELETE', credentials: 'include' });
+      const data = res.ok ? null : await res.json();
+      if (!res.ok) {
+        alert(data?.error ?? 'Törlés sikertelen');
+        return;
+      }
+      await fetchWorklist();
+    } catch (e) {
+      alert('Hálózati hiba');
+    } finally {
+      setDeleteAppointmentId(null);
+    }
+  };
+
+  const handleMarkStepComplete = async (item: WorklistItemBackend) => {
+    const episodeStepId = item.episodeStepId;
+    const episodeId = item.episodeId;
+    if (!episodeStepId || !episodeId) return;
+    const key = getWorklistItemKey(item);
+    setMarkCompleteKey(key);
+    try {
+      const res = await fetch(`/api/episodes/${episodeId}/steps/${episodeStepId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ status: 'completed', reason: 'Utólag jelölve késznek (nem itt foglalt)' }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error ?? 'Hiba történt');
+        return;
+      }
+      await fetchWorklist();
+    } catch (e) {
+      alert('Hálózati hiba');
+    } finally {
+      setMarkCompleteKey(null);
     }
   };
 
@@ -453,15 +521,53 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                         </button>
                       )}
                       {state === 'READY' && (
-                        <button
-                          onClick={() => handleBookNext(item)}
-                          className="text-sm text-medical-primary hover:underline font-medium"
-                        >
-                          Foglalás
-                        </button>
+                        <>
+                          <button
+                            onClick={() => handleBookNext(item)}
+                            className="text-sm text-medical-primary hover:underline font-medium"
+                          >
+                            Foglalás
+                          </button>
+                          {item.episodeStepId && (
+                            <button
+                              type="button"
+                              onClick={() => handleMarkStepComplete(item)}
+                              disabled={markCompleteKey === key}
+                              className="text-xs text-gray-600 hover:underline font-medium disabled:opacity-50 text-left"
+                              title="A lépés elkészült, nem itt foglalt időponttal"
+                            >
+                              {markCompleteKey === key ? 'Mentés…' : 'Elkészült (utólag)'}
+                            </button>
+                          )}
+                        </>
                       )}
                       {state === 'BOOKED' && (
-                        <span className="text-xs text-blue-600 font-medium">✓ Foglalva</span>
+                        <>
+                          <span className="text-xs text-blue-600 font-medium">✓ Foglalva</span>
+                          {item.bookedAppointmentId && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteAppointment(item.bookedAppointmentId!)}
+                              disabled={deleteAppointmentId === item.bookedAppointmentId}
+                              className="text-xs text-red-600 hover:underline font-medium disabled:opacity-50 text-left flex items-center gap-0.5"
+                              title="Időpont törlése (slot felszabadul)"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              {deleteAppointmentId === item.bookedAppointmentId ? 'Törlés…' : 'Törlés'}
+                            </button>
+                          )}
+                          {item.episodeStepId && (
+                            <button
+                              type="button"
+                              onClick={() => handleMarkStepComplete(item)}
+                              disabled={markCompleteKey === key}
+                              className="text-xs text-gray-600 hover:underline font-medium disabled:opacity-50 text-left"
+                              title="A lépés elkészült (nem itt foglalt), utólag jelölés"
+                            >
+                              {markCompleteKey === key ? 'Mentés…' : 'Elkészült (utólag)'}
+                            </button>
+                          )}
+                        </>
                       )}
                       {state === 'BLOCKED' && item.blockedCode === 'NO_CARE_PATHWAY' && (
                         <button
@@ -510,6 +616,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
           }
           patientId={slotPickerItem.patientId}
           episodeId={slotPickerItem.episodeId}
+          providerId={slotPickerItem.assignedProviderId ?? undefined}
           patientName={slotPickerItem.patientName ?? undefined}
           onSelectSlot={handleSelectSlot}
         />

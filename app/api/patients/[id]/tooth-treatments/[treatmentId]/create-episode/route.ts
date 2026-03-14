@@ -174,6 +174,31 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
       [episodeId, treatmentId]
     );
 
+    // Always create an episode_step for this tooth treatment (unless one already exists)
+    const alreadyStep = await client.query(
+      `SELECT 1 FROM episode_steps WHERE episode_id = $1 AND tooth_treatment_id = $2`,
+      [episodeId, treatmentId]
+    );
+    if (alreadyStep.rows.length === 0) {
+      const stepSeqRow = await client.query(
+        `SELECT COALESCE(MAX(seq), -1) + 1 AS next_seq,
+                COALESCE(MAX(pathway_order_index), -1) + 1 AS next_idx
+         FROM episode_steps WHERE episode_id = $1`,
+        [episodeId]
+      );
+      const nextSeq: number = stepSeqRow.rows[0].next_seq;
+      const nextIdx: number = stepSeqRow.rows[0].next_idx;
+      const stepCode = `tooth_${tt.treatment_code}`;
+      const customLabel = `${tt.label_hu} – ${tt.tooth_number}`;
+
+      await client.query(
+        `INSERT INTO episode_steps
+           (episode_id, step_code, pathway_order_index, pool, duration_minutes, default_days_offset, seq, tooth_treatment_id, custom_label, status)
+         VALUES ($1, $2, $3, 'work', 30, 7, $4, $5, $6, 'pending')`,
+        [episodeId, stepCode, nextIdx, nextSeq, treatmentId, customLabel]
+      );
+    }
+
     await client.query('COMMIT');
 
     await logActivity(

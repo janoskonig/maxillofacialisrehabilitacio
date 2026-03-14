@@ -240,6 +240,12 @@ export async function refreshEpisodeForecastCache(episodeId: string): Promise<vo
     return;
   }
 
+  // next_step column is VARCHAR(255) (migration 010). Truncate only if step_code exceeds that.
+  const nextStepMaxLen = 255;
+  const nextStep = result.stepCode != null && result.stepCode.length > nextStepMaxLen
+    ? result.stepCode.slice(0, nextStepMaxLen)
+    : result.stepCode ?? null;
+
   await pool.query(
     `INSERT INTO episode_forecast_cache (episode_id, completion_end_p50, completion_end_p80, remaining_visits_p50, remaining_visits_p80, next_step, status, inputs_hash)
      VALUES ($1, $2, $3, $4, $5, $6, 'ready', $7)
@@ -258,7 +264,7 @@ export async function refreshEpisodeForecastCache(episodeId: string): Promise<vo
       result.completionWindowEnd,
       result.remainingVisitsP50,
       result.remainingVisitsP80,
-      result.stepCode,
+      nextStep,
       inputsHash,
     ]
   );

@@ -7,6 +7,29 @@ import { getDbPool } from './db';
 import { computeStepWindow } from './step-window';
 import { slotPoolForStep, type PathwayStep } from './next-step-engine';
 
+const BUDAPEST_TZ = 'Europe/Budapest';
+
+function getBudapestHourMinute(d: Date): { hour: number; minute: number } {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: BUDAPEST_TZ, hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(d);
+  return {
+    hour: Number(parts.find((p) => p.type === 'hour')?.value ?? 0),
+    minute: Number(parts.find((p) => p.type === 'minute')?.value ?? 0),
+  };
+}
+
+/** Build a UTC Date that represents `localHour:localMinute` in Budapest on the given date. */
+function budapestLocalToUTC(dateISO: string, localHour: number, localMinute: number): Date {
+  for (const offset of [1, 2]) {
+    const utcH = localHour - offset;
+    const candidate = new Date(`${dateISO}T${String(utcH).padStart(2, '0')}:${String(localMinute).padStart(2, '0')}:00Z`);
+    const check = getBudapestHourMinute(candidate);
+    if (check.hour === localHour && check.minute === localMinute) return candidate;
+  }
+  return new Date(`${dateISO}T${String(localHour - 1).padStart(2, '0')}:${String(localMinute).padStart(2, '0')}:00Z`);
+}
+
 export interface ProjectionResult {
   projected: number;
   pathwayHash?: string;
@@ -89,45 +112,64 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
     }
     const openedAt = new Date(episodeRow.rows[0].opened_at);
 
-    const completedBySeq = new Map<number, Date>();
-    const pendingSeqs = new Set<number>();
-    /** Anchor date per step (completed or booked); used to pick latest anchor for projecting next steps. */
-    const anchorBySeq = new Map<number, Date>();
+    // Build step_code → pathway metadata lookup
+    const pathwayByCode = new Map<string, PathwayStep>();
+    for (const s of steps) pathwayByCode.set(s.step_code, s);
+
+    // Appointment coverage: keyed by step_code (not step_seq) to avoid index mismatches
+    const completedStepCodes = new Set<string>();
+    const bookedStepCodes = new Set<string>();
+    let lastHardAnchor = openedAt;
     for (const a of apptsRow.rows) {
       const startTime = a.start_time ? new Date(a.start_time) : null;
-      if (startTime) anchorBySeq.set(a.step_seq, startTime);
       if (a.appointment_status === 'completed') {
-        completedBySeq.set(a.step_seq, startTime ?? new Date(0));
+        completedStepCodes.add(a.step_code);
+        if (startTime && startTime > lastHardAnchor) lastHardAnchor = startTime;
       } else {
-        pendingSeqs.add(a.step_seq);
+        bookedStepCodes.add(a.step_code);
+        if (startTime && startTime > lastHardAnchor) lastHardAnchor = startTime;
       }
     }
 
-    const coveredSeqs = new Set([...Array.from(completedBySeq.keys()), ...Array.from(pendingSeqs)]);
+    // Episode steps: authoritative source for which steps exist, their order, and completion status
+    interface EsRow { step_code: string; step_seq: number; status: string; completed_at: Date | null; default_days_offset?: number | null; }
+    let episodeStepRows: EsRow[] | null = null;
+    try {
+      const esResult = await pool.query(
+        `SELECT step_code, COALESCE(seq, pathway_order_index) as step_seq, status, completed_at, default_days_offset
+         FROM episode_steps WHERE episode_id = $1
+         ORDER BY COALESCE(seq, pathway_order_index)`,
+        [episodeId]
+      );
+      if (esResult.rows.length > 0) episodeStepRows = esResult.rows as EsRow[];
+    } catch { /* episode_steps may not exist or lack columns */ }
 
-    // Expire stale open intents: pathway hash mismatch, completed steps, or steps with pending appointments
-    const completedSeqArr = Array.from(completedBySeq.keys());
-    const pendingSeqArr = Array.from(pendingSeqs);
-    await pool.query(
-      `UPDATE slot_intents SET state = 'expired', updated_at = CURRENT_TIMESTAMP
-       WHERE episode_id = $1
-         AND state = 'open'
-         AND (
-           (source_pathway_hash IS NOT NULL AND source_pathway_hash IS DISTINCT FROM $2)
-           OR step_seq = ANY($3::int[])
-           OR step_seq = ANY($4::int[])
-         )`,
-      [episodeId, pathwayHash, completedSeqArr, pendingSeqArr]
-    );
-
-    // Last anchor: most recent appointment date (completed or booked) — next steps anchor from this
-    let lastHardAnchor = openedAt;
-    let lastHardAnchorSeq = -1;
-    for (const [seq, startTime] of Array.from(anchorBySeq.entries())) {
-      if (startTime > lastHardAnchor) {
-        lastHardAnchor = startTime;
-        lastHardAnchorSeq = seq;
+    // Add completed/skipped episode_steps to completedStepCodes
+    if (episodeStepRows) {
+      for (const es of episodeStepRows) {
+        if (es.status === 'completed' || es.status === 'skipped') {
+          completedStepCodes.add(es.step_code);
+          if (es.completed_at) {
+            const t = new Date(es.completed_at);
+            if (t > lastHardAnchor) lastHardAnchor = t;
+          }
+        }
       }
+    }
+
+    // Expire stale intents: completed or already-booked step_codes, or pathway hash mismatch
+    const coveredCodes = [...Array.from(completedStepCodes), ...Array.from(bookedStepCodes)];
+    if (coveredCodes.length > 0 || pathwayHash) {
+      await pool.query(
+        `UPDATE slot_intents SET state = 'expired', updated_at = CURRENT_TIMESTAMP
+         WHERE episode_id = $1
+           AND state = 'open'
+           AND (
+             step_code = ANY($2::text[])
+             OR (source_pathway_hash IS NOT NULL AND source_pathway_hash IS DISTINCT FROM $3)
+           )`,
+        [episodeId, coveredCodes, pathwayHash]
+      );
     }
 
     interface Projection {
@@ -137,38 +179,64 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
     }
     const projections: Projection[] = [];
 
-    for (let i = 0; i < steps.length; i++) {
-      if (coveredSeqs.has(i)) continue;
+    // Use episode_steps when available (authoritative step list); fall back to pathway indices
+    const stepsToProject: Array<{ stepCode: string; stepSeq: number; offset: number; durationMinutes: number; pool: string }> = [];
 
-      const step = steps[i];
-      const offset = step.default_days_offset ?? 14;
-
-      // Cumulative offset from last hard anchor for uncompleted intermediate steps
-      let cumulativeOffset = 0;
-      for (let j = lastHardAnchorSeq + 1; j < i; j++) {
-        if (!completedBySeq.has(j)) {
-          cumulativeOffset += steps[j].default_days_offset ?? 14;
-        }
+    if (episodeStepRows) {
+      for (const es of episodeStepRows) {
+        if (es.status !== 'pending' && es.status !== 'scheduled') continue;
+        if (completedStepCodes.has(es.step_code)) continue;
+        if (bookedStepCodes.has(es.step_code)) continue;
+        const pw = pathwayByCode.get(es.step_code);
+        stepsToProject.push({
+          stepCode: es.step_code,
+          stepSeq: es.step_seq,
+          offset: (es.default_days_offset ?? pw?.default_days_offset) ?? 14,
+          durationMinutes: pw?.duration_minutes ?? 30,
+          pool: pw ? slotPoolForStep(pw) : 'work',
+        });
       }
-      const stepAnchor = new Date(lastHardAnchor);
-      stepAnchor.setDate(stepAnchor.getDate() + cumulativeOffset);
+    } else {
+      // Legacy: iterate over pathway indices
+      for (let i = 0; i < steps.length; i++) {
+        const step = steps[i];
+        if (completedStepCodes.has(step.step_code)) continue;
+        if (bookedStepCodes.has(step.step_code)) continue;
+        stepsToProject.push({
+          stepCode: step.step_code,
+          stepSeq: i,
+          offset: step.default_days_offset ?? 14,
+          durationMinutes: step.duration_minutes ?? 30,
+          pool: slotPoolForStep(step),
+        });
+      }
+    }
 
-      const { windowStart, windowEnd } = computeStepWindow(stepAnchor, offset);
+    // Determine the Budapest local time-of-day from the anchor (e.g. 12:30 Budapest)
+    const anchorLocal = getBudapestHourMinute(lastHardAnchor);
+
+    let anchor = lastHardAnchor;
+    for (const sp of stepsToProject) {
+      const { windowStart, windowEnd } = computeStepWindow(anchor, sp.offset);
       const expiresAt = new Date(windowEnd);
       expiresAt.setDate(expiresAt.getDate() + 30);
 
-      const durationMinutes = step.duration_minutes ?? 30;
-      // Same time-of-day as last anchor, date = stepAnchor (so following Tuesdays if anchor was Tuesday)
-      const suggestedStart = new Date(stepAnchor);
-      suggestedStart.setHours(lastHardAnchor.getHours(), lastHardAnchor.getMinutes(), lastHardAnchor.getSeconds(), lastHardAnchor.getMilliseconds());
-      const suggestedEnd = new Date(suggestedStart.getTime() + durationMinutes * 60 * 1000);
+      // Compute target date (anchor + offset days), then place at the same Budapest local time
+      const rawDate = new Date(anchor);
+      rawDate.setDate(rawDate.getDate() + sp.offset);
+      const dateISO = rawDate.toISOString().slice(0, 10);
+      const suggestedStart = budapestLocalToUTC(dateISO, anchorLocal.hour, anchorLocal.minute);
+      const suggestedEnd = new Date(suggestedStart.getTime() + sp.durationMinutes * 60 * 1000);
 
       projections.push({
-        stepCode: step.step_code, stepSeq: i, pool: slotPoolForStep(step),
-        durationMinutes,
+        stepCode: sp.stepCode, stepSeq: sp.stepSeq, pool: sp.pool,
+        durationMinutes: sp.durationMinutes,
         windowStart, windowEnd, expiresAt,
         suggestedStart, suggestedEnd,
       });
+
+      // Chain anchor: next step anchors from this step's expected date
+      anchor = suggestedStart;
     }
 
     // Batch UPSERT: reopens expired intents, does NOT touch converted or cancelled
@@ -202,6 +270,23 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
            updated_at = CURRENT_TIMESTAMP
          WHERE slot_intents.state IN ('open', 'expired')`,
         params
+      );
+    }
+
+    // Expire orphan open intents: step_codes no longer pending, or old step_seq mismatches from previous projections
+    const projectedKeys = new Set(projections.map((p) => `${p.stepCode}:${p.stepSeq}`));
+    const orphanExpire = await pool.query(
+      `SELECT id, step_code, step_seq FROM slot_intents
+       WHERE episode_id = $1 AND state = 'open'`,
+      [episodeId]
+    );
+    const orphanIds = orphanExpire.rows
+      .filter((r: { step_code: string; step_seq: number }) => !projectedKeys.has(`${r.step_code}:${r.step_seq}`))
+      .map((r: { id: string }) => r.id);
+    if (orphanIds.length > 0) {
+      await pool.query(
+        `UPDATE slot_intents SET state = 'expired', updated_at = CURRENT_TIMESTAMP WHERE id = ANY($1::uuid[])`,
+        [orphanIds]
       );
     }
 

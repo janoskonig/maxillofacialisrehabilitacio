@@ -82,6 +82,10 @@ export interface WorklistItemBackend {
   requiresPrecommit?: boolean;
   /** 0-based position of the episode in the patient's treatment plan (opened_at order) */
   episodeOrder?: number;
+  /** Episode step DB id – present when step exists as pending/scheduled; used for "mark completed" */
+  episodeStepId?: string | null;
+  /** Epizódhoz kijelölt orvos (user id); csak az ő slotjai jöhetnek szóba foglaláskor */
+  assignedProviderId?: string | null;
 }
 
 export interface WorklistLocalState {
