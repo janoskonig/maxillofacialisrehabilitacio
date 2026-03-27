@@ -11,7 +11,9 @@ export type WorklistRowState =
   | 'BLOCKED'
   | 'NEEDS_REVIEW'
   | 'BOOKING_IN_PROGRESS'
-  | 'OVERRIDE_REQUIRED';
+  | 'OVERRIDE_REQUIRED'
+  | 'COMPLETED'
+  | 'SKIPPED';
 
 export type BatchState = 'IDLE' | 'RUNNING' | 'PAUSED' | 'COMPLETED' | 'ABORTED';
 
@@ -86,6 +88,8 @@ export interface WorklistItemBackend {
   episodeStepId?: string | null;
   /** Epizódhoz kijelölt orvos (user id); csak az ő slotjai jöhetnek szóba foglaláskor */
   assignedProviderId?: string | null;
+  /** Episode step status: completed/skipped/pending/scheduled */
+  stepStatus?: 'completed' | 'skipped' | 'pending' | 'scheduled';
 }
 
 export interface WorklistLocalState {
@@ -140,6 +144,13 @@ export function deriveWorklistRowState(
   }
   if (isOverrideRequired) {
     return { state: 'OVERRIDE_REQUIRED' };
+  }
+
+  if (item.stepStatus === 'completed') {
+    return { state: 'COMPLETED' };
+  }
+  if (item.stepStatus === 'skipped') {
+    return { state: 'SKIPPED' };
   }
 
   if (item.bookedAppointmentId) {

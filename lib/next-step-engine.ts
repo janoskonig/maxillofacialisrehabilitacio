@@ -49,6 +49,8 @@ export function isBlocked(r: NextRequiredStepResult): r is BlockedResult {
 export interface PendingStep extends NextStepResult {
   stepSeq: number;
   isFirstPending: boolean;
+  /** Episode step status — 'completed'/'skipped' for resolved steps, 'pending'/'scheduled' for upcoming */
+  stepStatus?: 'pending' | 'scheduled' | 'completed' | 'skipped';
 }
 
 export type AllPendingStepsResult = PendingStep[] | BlockedResult;
@@ -541,11 +543,10 @@ export function allPendingStepsWithData(
   }
 
   // When episode_steps exist, use them as SSOT (handles both pathway and tooth-treatment steps).
+  // Returns ALL steps (completed, skipped, pending, scheduled) so the UI can display the full timeline.
   if (episodeSteps) {
     const resolvedSteps = episodeSteps.filter((s) => s.status === 'completed' || s.status === 'skipped');
     const pendingSteps = episodeSteps.filter((s) => s.status === 'pending' || s.status === 'scheduled');
-
-    if (pendingSteps.length === 0) return [];
 
     const lastResolvedAt = resolvedSteps
       .map((s) => s.completed_at)
@@ -557,8 +558,30 @@ export function allPendingStepsWithData(
       : completedStats.lastCompletedAt ?? openedAt;
 
     const results: PendingStep[] = [];
-    for (let i = 0; i < pendingSteps.length; i++) {
-      const pending = pendingSteps[i];
+
+    // First: resolved (completed/skipped) steps — shown as history
+    for (let i = 0; i < resolvedSteps.length; i++) {
+      const step = resolvedSteps[i];
+      const ps = pathwaySteps?.find((p) => p.step_code === step.step_code)
+        ?? episodeStepAsPathway(step);
+      const completedDate = step.completed_at ? new Date(step.completed_at) : openedAt;
+      results.push({
+        step_code: ps.step_code,
+        label: ps.label,
+        pool: slotPoolForStep(ps),
+        duration_minutes: ps.duration_minutes ?? 30,
+        earliest_date: completedDate,
+        latest_date: completedDate,
+        reason: step.status === 'completed' ? 'Teljesítve' : 'Kihagyva',
+        stepSeq: -(resolvedSteps.length - i),
+        isFirstPending: false,
+        stepStatus: step.status as 'completed' | 'skipped',
+      });
+    }
+
+    // Then: pending/scheduled steps — shown for booking
+    let pendingIdx = 0;
+    for (const pending of pendingSteps) {
       const ps = pathwaySteps?.find((p) => p.step_code === pending.step_code)
         ?? episodeStepAsPathway(pending);
 
@@ -574,11 +597,13 @@ export function allPendingStepsWithData(
         latest_date: windowEnd,
         reason: `Pathway step ${ps.label ?? ps.step_code}`,
         anchor: anchor.toISOString(),
-        stepSeq: i,
-        isFirstPending: i === 0,
+        stepSeq: pendingIdx,
+        isFirstPending: pendingIdx === 0,
+        stepStatus: pending.status as 'pending' | 'scheduled',
       });
 
       anchor = expectedDate;
+      pendingIdx++;
     }
     return results;
   }

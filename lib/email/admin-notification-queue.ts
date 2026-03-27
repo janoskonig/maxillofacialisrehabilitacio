@@ -54,12 +54,45 @@ const NOTIFICATION_TYPE_LABELS: Record<string, string> = {
   communication_log_created: 'Érintkezési napló bejegyzés',
 };
 
+let queueSchemaReady: Promise<void> | null = null;
+
+async function ensureAdminNotificationQueueSchema(): Promise<void> {
+  if (!queueSchemaReady) {
+    queueSchemaReady = (async () => {
+      const pool = getDbPool();
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS admin_notification_queue (
+          id SERIAL PRIMARY KEY,
+          notification_type VARCHAR(50) NOT NULL,
+          summary_text TEXT NOT NULL,
+          detail_json JSONB NOT NULL DEFAULT '{}',
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          processed BOOLEAN NOT NULL DEFAULT FALSE,
+          processed_at TIMESTAMPTZ
+        )
+      `);
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_admin_notif_queue_unprocessed
+          ON admin_notification_queue (processed, created_at)
+          WHERE processed = FALSE
+      `);
+    })().catch((error) => {
+      // Allow retry on next call if initialization fails once.
+      queueSchemaReady = null;
+      throw error;
+    });
+  }
+
+  await queueSchemaReady;
+}
+
 export async function queueAdminNotification(
   notificationType: string,
   summaryText: string,
   detailJson: Record<string, any> = {}
 ): Promise<void> {
   try {
+    await ensureAdminNotificationQueueSchema();
     const pool = getDbPool();
     await pool.query(
       `INSERT INTO admin_notification_queue (notification_type, summary_text, detail_json)
@@ -94,6 +127,7 @@ function renderNotificationGroup(type: string, items: NotificationRow[]): string
 }
 
 export async function sendAdminDailySummary(): Promise<{ sent: boolean; count: number }> {
+  await ensureAdminNotificationQueueSchema();
   const pool = getDbPool();
 
   const { rows: notifications } = await pool.query<NotificationRow>(

@@ -437,7 +437,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
               return (
                 <tr
                   key={key}
-                  className={`border-b ${item.overdueByDays > 0 ? 'bg-red-50/50' : ''} ${state === 'BLOCKED' ? 'opacity-70' : ''}`}
+                  className={`border-b ${item.overdueByDays > 0 && state !== 'COMPLETED' && state !== 'SKIPPED' ? 'bg-red-50/50' : ''} ${state === 'BLOCKED' ? 'opacity-70' : ''} ${state === 'COMPLETED' ? 'opacity-60' : ''} ${state === 'SKIPPED' ? 'opacity-40' : ''}`}
                 >
                   <td className="px-3 py-2 text-sm text-gray-600">
                     {item.currentStage}
@@ -465,26 +465,39 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                     <div className="flex flex-col gap-0.5">
                       <span
                         className={`text-xs px-2 py-0.5 rounded w-fit ${
-                          state === 'BOOKED'
-                            ? 'bg-blue-100 text-blue-800'
-                            : state === 'READY'
-                              ? 'bg-green-100 text-green-800'
-                              : state === 'BLOCKED'
-                                ? 'bg-gray-200 text-gray-700'
-                                : state === 'NEEDS_REVIEW'
-                                  ? 'bg-amber-100 text-amber-800'
-                                  : state === 'BOOKING_IN_PROGRESS'
-                                    ? 'bg-blue-100 text-blue-800'
-                                    : 'bg-orange-100 text-orange-800'
+                          state === 'COMPLETED'
+                            ? 'bg-gray-100 text-gray-600'
+                            : state === 'SKIPPED'
+                              ? 'bg-gray-100 text-gray-500 line-through'
+                              : state === 'BOOKED'
+                                ? 'bg-blue-100 text-blue-800'
+                                : state === 'READY'
+                                  ? 'bg-green-100 text-green-800'
+                                  : state === 'BLOCKED'
+                                    ? 'bg-gray-200 text-gray-700'
+                                    : state === 'NEEDS_REVIEW'
+                                      ? 'bg-amber-100 text-amber-800'
+                                      : state === 'BOOKING_IN_PROGRESS'
+                                        ? 'bg-blue-100 text-blue-800'
+                                        : 'bg-orange-100 text-orange-800'
                         }`}
                       >
-                        {state === 'BOOKED' ? 'LEFOGLALVA' : state}
+                        {state === 'COMPLETED' ? '✓ KÉSZ' : state === 'SKIPPED' ? 'KIHAGYVA' : state === 'BOOKED' ? 'LEFOGLALVA' : state}
                         {state === 'BLOCKED' && item.blockedReason && (
                           <span className="ml-1 truncate max-w-[100px] inline-block" title={item.blockedReason}>
                             {item.blockedReason.slice(0, 15)}…
                           </span>
                         )}
                       </span>
+                      {state === 'COMPLETED' && item.windowStart && (
+                        <span className="text-xs text-gray-500 flex items-center gap-1">
+                          <CalendarCheck className="w-3 h-3" />
+                          {new Date(item.windowStart).toLocaleString('hu-HU', {
+                            month: 'short',
+                            day: 'numeric',
+                          })}
+                        </span>
+                      )}
                       {state === 'BOOKED' && item.bookedAppointmentStartTime && (
                         <span className="text-xs text-blue-700 flex items-center gap-1">
                           <CalendarCheck className="w-3 h-3" />
@@ -511,6 +524,9 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex flex-col gap-1">
+                      {(state === 'COMPLETED' || state === 'SKIPPED') && (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
                       {showConvertAll && (
                         <button
                           onClick={() => handleConvertAllIntents(item.episodeId)}

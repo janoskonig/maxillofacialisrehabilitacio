@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
+import { getStepLabelMap } from '@/lib/step-labels';
 
 export const dynamic = 'force-dynamic';
 
@@ -120,7 +121,7 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
     }
   }
 
-  const [apptsResult, intentsResult, stagesResult] = await Promise.all([
+  const [apptsResult, intentsResult, stagesResult, episodeStepsResult, stepLabelMap] = await Promise.all([
     pool.query(
       `SELECT a.id, a.episode_id, a.step_code,
               COALESCE(a.step_seq, si.step_seq) as step_seq,
@@ -149,6 +150,17 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
        ORDER BY episode_id, at DESC`,
       [episodeIds]
     ),
+    pool.query(
+      `SELECT es.episode_id, es.step_code,
+              COALESCE(es.seq, es.pathway_order_index) as step_seq,
+              es.pool, es.duration_minutes, es.custom_label
+       FROM episode_steps es
+       WHERE es.episode_id = ANY($1)
+         AND (es.merged_into_episode_step_id IS NULL)
+       ORDER BY es.episode_id, COALESCE(es.seq, es.pathway_order_index)`,
+      [episodeIds]
+    ),
+    getStepLabelMap(),
   ]);
 
   const stageByEpisode = new Map<string, string>();
@@ -169,15 +181,51 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
     intentsByEpisode.set(i.episode_id, arr);
   }
 
+  const stepsByEpisode = new Map<string, typeof episodeStepsResult.rows>();
+  for (const row of episodeStepsResult.rows) {
+    const arr = stepsByEpisode.get(row.episode_id) ?? [];
+    arr.push(row);
+    stepsByEpisode.set(row.episode_id, arr);
+  }
+
+  interface StepSource {
+    stepCode: string;
+    stepSeq: number;
+    label: string;
+    pool: string;
+    durationMinutes: number;
+  }
+
   const episodes: TimelineEpisode[] = [];
   for (const ep of episodesResult.rows) {
-    const steps: TimelineStep[] = [];
-    const pathwaySteps = (ep.steps_json as Array<{
-      step_code: string; label?: string; pool: string; duration_minutes?: number;
-    }>) ?? multiPathwayStepsMap.get(ep.episode_id);
-    if (!pathwaySteps || !Array.isArray(pathwaySteps) || pathwaySteps.length === 0) continue;
     const resolvedPathwayName = ep.care_pathway_name ?? multiPathwayNamesMap.get(ep.episode_id) ?? null;
 
+    const esRows = stepsByEpisode.get(ep.episode_id);
+    let stepSources: StepSource[];
+
+    if (esRows && esRows.length > 0) {
+      stepSources = esRows.map((r: Record<string, unknown>) => ({
+        stepCode: r.step_code as string,
+        stepSeq: Number(r.step_seq),
+        label: (r.custom_label as string) || stepLabelMap.get(r.step_code as string) || (r.step_code as string),
+        pool: r.pool as string,
+        durationMinutes: (r.duration_minutes as number) ?? 30,
+      }));
+    } else {
+      const pathwaySteps = (ep.steps_json as Array<{
+        step_code: string; label?: string; pool: string; duration_minutes?: number;
+      }>) ?? multiPathwayStepsMap.get(ep.episode_id);
+      if (!pathwaySteps || !Array.isArray(pathwaySteps) || pathwaySteps.length === 0) continue;
+      stepSources = pathwaySteps.map((ps, idx) => ({
+        stepCode: ps.step_code,
+        stepSeq: idx,
+        label: ps.label ?? stepLabelMap.get(ps.step_code) ?? ps.step_code,
+        pool: ps.pool,
+        durationMinutes: ps.duration_minutes ?? 30,
+      }));
+    }
+
+    const steps: TimelineStep[] = [];
     const appts = apptsByEpisode.get(ep.episode_id) ?? [];
     const intents = intentsByEpisode.get(ep.episode_id) ?? [];
     const currentStage = stageByEpisode.get(ep.episode_id) ?? null;
@@ -199,14 +247,13 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
 
     let etaHeuristic: string | null = null;
 
-    for (let seq = 0; seq < pathwaySteps.length; seq++) {
-      const ps = pathwaySteps[seq];
-      let appt = apptBySeq.get(seq) ?? null;
-      if (!appt && apptByCodeOnly.has(ps.step_code)) {
-        appt = apptByCodeOnly.get(ps.step_code)!;
-        apptByCodeOnly.delete(ps.step_code);
+    for (const src of stepSources) {
+      let appt = apptBySeq.get(src.stepSeq) ?? null;
+      if (!appt && apptByCodeOnly.has(src.stepCode)) {
+        appt = apptByCodeOnly.get(src.stepCode)!;
+        apptByCodeOnly.delete(src.stepCode);
       }
-      const intent = intentBySeq.get(seq);
+      const intent = intentBySeq.get(src.stepSeq);
 
       let status: TimelineStepStatus;
       let windowStart: string | null = null;
@@ -248,11 +295,11 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
       }
 
       steps.push({
-        stepCode: ps.step_code,
-        stepSeq: seq,
-        label: ps.label ?? ps.step_code,
-        pool: ps.pool,
-        durationMinutes: ps.duration_minutes ?? 30,
+        stepCode: src.stepCode,
+        stepSeq: src.stepSeq,
+        label: src.label,
+        pool: src.pool,
+        durationMinutes: src.durationMinutes,
         status,
         windowStart,
         windowEnd,

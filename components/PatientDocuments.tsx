@@ -807,6 +807,35 @@ export function PatientDocuments({
                       </span>
                     ))}
                   </div>
+                  {availableTags.length > 0 && (
+                    <div className="mb-3">
+                      <p className="text-xs text-gray-500 mb-2">Gyors címkék</p>
+                      <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto pr-1">
+                        {availableTags.map((availableTag) => {
+                          const isSelected = tags.some(
+                            (selectedTag) =>
+                              selectedTag.toLowerCase() === availableTag.toLowerCase()
+                          );
+                          return (
+                            <button
+                              key={availableTag}
+                              type="button"
+                              onClick={() => addTag(availableTag)}
+                              disabled={isSelected}
+                              className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                                isSelected
+                                  ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
+                              }`}
+                              title={`${availableTag} címke hozzáadása`}
+                            >
+                              {availableTag}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                   <div className="relative flex gap-2">
                     <div className="flex-1 relative">
                       <input

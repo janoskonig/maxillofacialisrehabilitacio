@@ -411,6 +411,7 @@ export const GET = authedHandler(async (req, { auth }) => {
         stepSeq: step.stepSeq,
         requiresPrecommit: !step.isFirstPending,
         episodeOrder: epIdx,
+        stepStatus: step.stepStatus,
         ...(episodeStepId && { episodeStepId }),
         ...(row.assignedProviderId && { assignedProviderId: row.assignedProviderId }),
       };
@@ -425,19 +426,8 @@ export const GET = authedHandler(async (req, { auth }) => {
     }
   }
 
-  // ── Filter out worklist items for steps already completed via appointments ──
-  const filteredItems: typeof items = [];
-  for (const item of items) {
-    if (item.status === 'blocked' || !item.stepCode) {
-      filteredItems.push(item);
-      continue;
-    }
-    const doneSteps = completedApptStepsByEpisode.get(item.episodeId);
-    if (doneSteps && doneSteps.has(item.stepCode)) continue;
-    filteredItems.push(item);
-  }
-  items.length = 0;
-  items.push(...filteredItems);
+  // Completed steps are now returned with stepStatus='completed' and shown in the UI timeline —
+  // no longer filtered out here.
 
   // ── Booked appointments enrichment ──
   const readyItems = items.filter((i) => i.status !== 'blocked');

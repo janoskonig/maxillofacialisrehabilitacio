@@ -151,45 +151,48 @@ async function shiftAppointmentsAfterReorder(
 
   // For each future appointment, check if it needs reassignment.
   // Group by pool since different pools are independent (work, consult, control).
+  // Track claimed step IDs so multiple appointments in the same pool each get
+  // a distinct pending step (avoids unique-constraint violation on appointments).
+  const claimedStepIds = new Set<string>();
+
   for (const appt of apptResult.rows) {
     const newNextStep = steps.find(
-      (s) => (s.status === 'pending' || s.status === 'scheduled') && s.pool === appt.pool
+      (s) =>
+        (s.status === 'pending' || s.status === 'scheduled') &&
+        s.pool === appt.pool &&
+        !claimedStepIds.has(s.id)
     );
 
     if (!newNextStep) continue;
 
-    // If the appointment's step_code already matches the first pending step, no change needed
+    claimedStepIds.add(newNextStep.id);
+
+    // If the appointment's step_code already matches the target step, no change needed
     if (appt.stepCode === newNextStep.stepCode && appt.stepSeq === newNextStep.pathwayOrderIndex) {
       continue;
     }
 
-    // The next pending step changed — reassign the appointment
     logger.info(
       `[reorder] Shifting appointment ${appt.id}: ${appt.stepCode}(seq=${appt.stepSeq}) → ${newNextStep.stepCode}(idx=${newNextStep.pathwayOrderIndex})`
     );
 
-    // Update appointment to point to the new step
     await client.query(
       `UPDATE appointments SET step_code = $1, step_seq = $2 WHERE id = $3`,
       [newNextStep.stepCode, newNextStep.pathwayOrderIndex, appt.id]
     );
 
-    // Clear appointment_id from old step (whichever step previously held this appointment)
     await client.query(
       `UPDATE episode_steps SET appointment_id = NULL
        WHERE episode_id = $1 AND appointment_id = $2`,
       [episodeId, appt.id]
     );
 
-    // Set appointment_id on the new target step and mark it as scheduled
     await client.query(
       `UPDATE episode_steps SET appointment_id = $1, status = 'scheduled'
        WHERE id = $2`,
       [appt.id, newNextStep.id]
     );
 
-    // Revert the old step (the one that lost the appointment) back to pending
-    // — find it by matching the original step_code/step_seq
     const oldStep = steps.find(
       (s) => s.stepCode === appt.stepCode && s.pathwayOrderIndex === appt.stepSeq && s.id !== newNextStep.id
     );
@@ -198,9 +201,11 @@ async function shiftAppointmentsAfterReorder(
         `UPDATE episode_steps SET status = 'pending', appointment_id = NULL WHERE id = $1`,
         [oldStep.id]
       );
+      oldStep.status = 'pending';
     }
 
-    // Update linked slot_intent if present
+    newNextStep.status = 'scheduled';
+
     if (appt.slotIntentId) {
       await client.query(
         `UPDATE slot_intents SET step_code = $1, step_seq = $2, updated_at = CURRENT_TIMESTAMP
