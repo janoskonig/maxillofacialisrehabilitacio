@@ -1,16 +1,19 @@
 'use client';
 
-import { useState, useCallback, useMemo, useRef } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { PatientDocument } from '@/lib/types';
-import { File, Download, Trash2, Tag, Image as ImageIcon, AlertCircle } from 'lucide-react';
+import { File, Download, Trash2, Tag, Pencil, X, Plus, Check } from 'lucide-react';
 import { formatDateForDisplay } from '@/lib/dateUtils';
 
 interface DocumentCardProps {
   document: PatientDocument;
   patientId: string;
   canDelete?: boolean;
+  canEditTags?: boolean;
+  availableTags?: string[];
   onDownload: (doc: PatientDocument) => void;
   onDelete: (doc: PatientDocument) => void;
+  onUpdateTags?: (doc: PatientDocument, tags: string[]) => Promise<void>;
   onPreview?: (doc: PatientDocument) => void;
   formatFileSize: (bytes: number) => string;
 }
@@ -19,17 +22,30 @@ export function DocumentCard({
   document,
   patientId,
   canDelete = false,
+  canEditTags = false,
+  availableTags = [],
   onDownload,
   onDelete,
+  onUpdateTags,
   onPreview,
   formatFileSize,
 }: DocumentCardProps) {
   const [imageError, setImageError] = useState(false);
+  const [isEditingTags, setIsEditingTags] = useState(false);
+  const [draftTags, setDraftTags] = useState<string[]>(Array.isArray(document.tags) ? document.tags : []);
+  const [newTag, setNewTag] = useState('');
+  const [savingTags, setSavingTags] = useState(false);
 
   // Fontos: onError többször is lefuthat (pl. cache / retry / dev), fogjuk le
   const errorLatchedRef = useRef(false);
 
   const isImage = document.mimeType?.startsWith('image/');
+
+  useEffect(() => {
+    setDraftTags(Array.isArray(document.tags) ? document.tags : []);
+    setIsEditingTags(false);
+    setNewTag('');
+  }, [document.id, document.tags]);
   
   // Stabil URL számítás - ne számolódjon újra feleslegesen
   const thumbnailUrl = useMemo(() => {
@@ -60,6 +76,43 @@ export function DocumentCard({
     errorLatchedRef.current = true;
     setImageError(true);
   }, []);
+
+  const addTag = (tagToAdd?: string) => {
+    const value = (tagToAdd ?? newTag).trim();
+    if (!value) return;
+
+    const isDuplicate = draftTags.some((tag) => tag.toLowerCase() === value.toLowerCase());
+    if (isDuplicate) {
+      setNewTag('');
+      return;
+    }
+
+    setDraftTags([...draftTags, value]);
+    setNewTag('');
+  };
+
+  const removeTag = (tagToRemove: string) => {
+    setDraftTags(draftTags.filter((tag) => tag !== tagToRemove));
+  };
+
+  const handleSaveTags = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onUpdateTags) return;
+    try {
+      setSavingTags(true);
+      await onUpdateTags(document, draftTags);
+      setIsEditingTags(false);
+    } finally {
+      setSavingTags(false);
+    }
+  };
+
+  const handleCancelEditTags = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDraftTags(Array.isArray(document.tags) ? document.tags : []);
+    setNewTag('');
+    setIsEditingTags(false);
+  };
 
   return (
     <div
@@ -119,7 +172,7 @@ export function DocumentCard({
           )}
         </div>
 
-        {document.tags && Array.isArray(document.tags) && document.tags.length > 0 && (
+        {!isEditingTags && document.tags && Array.isArray(document.tags) && document.tags.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-2">
             {document.tags.map((tag: string) => (
               <span
@@ -130,6 +183,111 @@ export function DocumentCard({
                 {tag}
               </span>
             ))}
+          </div>
+        )}
+
+        {canEditTags && (
+          <div className="mb-2">
+            {isEditingTags ? (
+              <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+                <div className="flex flex-wrap gap-1">
+                  {draftTags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-medical-primary text-white"
+                    >
+                      {tag}
+                      <button
+                        type="button"
+                        onClick={() => removeTag(tag)}
+                        className="ml-1 hover:text-gray-200"
+                        title={`${tag} törlése`}
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                {availableTags.length > 0 && (
+                  <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
+                    {availableTags.map((tag) => {
+                      const isSelected = draftTags.some((t) => t.toLowerCase() === tag.toLowerCase());
+                      return (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => addTag(tag)}
+                          disabled={isSelected}
+                          className={`px-2 py-0.5 rounded text-xs border ${
+                            isSelected
+                              ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
+                          }`}
+                        >
+                          {tag}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="flex items-center gap-1">
+                  <input
+                    value={newTag}
+                    onChange={(e) => setNewTag(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addTag();
+                      }
+                    }}
+                    className="flex-1 form-input text-xs py-1"
+                    placeholder="Új címke"
+                  />
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      addTag();
+                    }}
+                    className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded"
+                    title="Címke hozzáadása"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCancelEditTags}
+                    disabled={savingTags}
+                    className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded disabled:opacity-50"
+                    title="Mégse"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveTags}
+                    disabled={savingTags}
+                    className="p-1 text-green-700 hover:text-green-800 hover:bg-green-50 rounded disabled:opacity-50"
+                    title="Mentés"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsEditingTags(true);
+                }}
+                className="inline-flex items-center gap-1 text-xs text-medical-primary hover:underline"
+              >
+                <Pencil className="w-3 h-3" />
+                Címkék szerkesztése
+              </button>
+            )}
           </div>
         )}
 

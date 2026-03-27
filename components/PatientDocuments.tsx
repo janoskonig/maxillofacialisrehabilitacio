@@ -419,6 +419,29 @@ export function PatientDocuments({
     }
   };
 
+  const handleUpdateDocumentTags = async (doc: PatientDocument, nextTags: string[]) => {
+    if (!patientId) return;
+
+    const response = await fetch(`/api/patients/${patientId}/documents/${doc.id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ tags: nextTags }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Ismeretlen hiba' }));
+      throw new Error(errorData.error || 'Címkék mentése sikertelen');
+    }
+
+    const data = await response.json();
+    const updatedDoc: PatientDocument = data.document;
+    setDocuments((prev) => prev.map((d) => (d.id === updatedDoc.id ? { ...d, ...updatedDoc } : d)));
+    loadAvailableTags();
+    showToast('Címkék sikeresen mentve', 'success');
+  };
+
   const addTag = (tagToAdd?: string) => {
     const tag = tagToAdd || newTag.trim();
     if (tag && !tags.includes(tag)) {
@@ -941,8 +964,11 @@ export function PatientDocuments({
               document={doc}
               patientId={patientId}
               canDelete={canDelete}
+              canEditTags={canUpload && !isViewOnly}
+              availableTags={availableTags}
               onDownload={handleDownload}
               onDelete={handleDelete}
+              onUpdateTags={handleUpdateDocumentTags}
               onPreview={(d) => setPreviewDocument(d)}
               formatFileSize={formatFileSize}
             />
