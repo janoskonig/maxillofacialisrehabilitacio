@@ -154,10 +154,18 @@ async function callEndpoint(path, label) {
     const nowBudapest = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Budapest' }));
     const isMonday = nowBudapest.getDay() === 1;
     const hour = nowBudapest.getHours();
+    const minute = nowBudapest.getMinutes();
+
+    console.log(
+      `[${new Date().toISOString()}] Cron timing: budapest=${nowBudapest.toISOString()} day=${nowBudapest.getDay()} hour=${hour} minute=${minute}`
+    );
 
     // Daily admin summary — run between 06:00-06:59 Budapest time.
     if (hour === 6) {
+      console.log(`[${new Date().toISOString()}] Daily summary window active (06:00-06:59 Budapest), triggering endpoint.`);
       await callEndpoint('/api/admin/daily-summary', 'Admin daily summary');
+    } else {
+      console.log(`[${new Date().toISOString()}] Daily summary skipped (Budapest hour=${hour}, expected 6).`);
     }
 
     // Weekly OHIP-14 reminders — run on Mondays between 08:00-08:59 Budapest time.
@@ -165,6 +173,10 @@ async function callEndpoint(path, label) {
     // so a wider window is safe and avoids missing the slot due to cold-start / sync delays.
     if (isMonday && hour === 8) {
       await callEndpoint('/api/ohip14/reminders', 'OHIP-14 reminders');
+    } else {
+      console.log(
+        `[${new Date().toISOString()}] OHIP-14 reminders skipped (isMonday=${isMonday}, hour=${hour}, expected Monday 8).`
+      );
     }
 
     await syncCalendar();

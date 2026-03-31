@@ -215,9 +215,23 @@ export async function sendAdminDailySummary(): Promise<{ sent: boolean; count: n
   `;
 
   const adminEmails = admins.map((a) => a.email);
+  const fallbackRecipient = process.env.SMTP_REPLY_TO?.trim().toLowerCase();
+  const recipients = Array.from(
+    new Set(
+      [
+        ...adminEmails.map((e) => e.trim().toLowerCase()).filter(Boolean),
+        ...(fallbackRecipient ? [fallbackRecipient] : []),
+      ]
+    )
+  );
+
+  if (recipients.length === 0) {
+    console.warn('[DailySummary] No recipients found (admin or SMTP_REPLY_TO), skipping.');
+    return { sent: false, count: notifications.length };
+  }
 
   await sendEmail({
-    to: adminEmails,
+    to: recipients,
     subject: `Napi összefoglaló (${notifications.length} esemény) - Maxillofaciális Rehabilitáció`,
     html,
   });
