@@ -3,6 +3,8 @@ import { logger } from '@/lib/logger';
 import { getBnoKodToNevMap, resolveBnoFieldToHungarianLabels } from '@/lib/bno-codes-data';
 import { normalizeChecklist, normalizeSessionAttendees, type ChecklistEntry } from '@/lib/consilium';
 import { patientStageOptions } from '@/lib/types/episode';
+import { legacyPatientStageToCode, LEGACY_MERGED_STAGE_EVENT_ID_PREFIX } from '@/lib/legacy-patient-stage-map';
+import { stageTimelineDedupeKey } from '@/lib/stage-timeline-merge';
 
 const OP_TAG_FILTER = `(
   tags @> '["orthopantomogram"]'::jsonb
@@ -42,6 +44,8 @@ type MediaBucketSummary = {
 };
 
 const MAX_TIMELINE_STAGE_ROWS = 500;
+/** Vetítés: ennyi fotó meta + URL kerülhet egy payloadba (thumbnail inline URL). */
+const MAX_PHOTO_PREVIEWS_IN_PRESENTATION = 800;
 
 export type PresentationTimelineStage = {
   id: string;
@@ -50,7 +54,6 @@ export type PresentationTimelineStage = {
   at: string;
   note: string | null;
   authorDisplay: string | null;
-  source: 'stage_events' | 'patient_stages';
 };
 
 export type PresentationTimelineEpisode = {
@@ -128,9 +131,9 @@ function ageFromBirthDate(birth: Date | null | undefined): number | null {
   return age;
 }
 
-function legacyHungarianStageLabel(code: string): string {
-  const o = patientStageOptions.find((x) => x.value === code);
-  return o?.label ?? code;
+function legacyHungarianStageLabel(stageSlug: string): string {
+  const o = patientStageOptions.find((x) => (x.value as string) === stageSlug);
+  return o?.label ?? stageSlug;
 }
 
 function isoDate(d: Date | string | null | undefined): string | null {
@@ -150,6 +153,7 @@ async function loadPatientCareTimeline(patientId: string): Promise<PresentationT
     );
     const names = new Set(tCheck.rows.map((r) => r.table_name));
     if (!names.has('patient_episodes')) return [];
+    if (!names.has('stage_events')) return [];
 
     const epResult = await pool.query(
       `SELECT id, reason, status,
@@ -172,45 +176,39 @@ async function loadPatientCareTimeline(patientId: string): Promise<PresentationT
       at: Date;
       note: string | null;
       authorDisplay: string | null;
-      source: 'stage_events' | 'patient_stages';
     };
 
-    const newEvents: RawEv[] = [];
-    const episodeIdsWithNew = new Set<string>();
+    const se = await pool.query(
+      `SELECT se.id, se.episode_id as "episodeId", se.stage_code as "stageCode",
+              se.at, se.note,
+              sc.label_hu as "stageLabel",
+              COALESCE(NULLIF(btrim(u.doktor_neve), ''), NULLIF(btrim(se.created_by), '')) as "authorDisplay"
+       FROM stage_events se
+       JOIN patient_episodes e ON e.id = se.episode_id
+       LEFT JOIN stage_catalog sc ON sc.code = se.stage_code AND sc.reason = e.reason
+       LEFT JOIN users u ON lower(btrim(u.email)) = lower(btrim(se.created_by))
+       WHERE se.patient_id = $1::uuid
+       ORDER BY se.at ASC`,
+      [patientId],
+    );
 
-    if (names.has('stage_events')) {
-      const se = await pool.query(
-        `SELECT se.id, se.episode_id as "episodeId", se.stage_code as "stageCode",
-                se.at, se.note,
-                sc.label_hu as "stageLabel",
-                COALESCE(NULLIF(btrim(u.doktor_neve), ''), NULLIF(btrim(se.created_by), '')) as "authorDisplay"
-         FROM stage_events se
-         JOIN patient_episodes e ON e.id = se.episode_id
-         LEFT JOIN stage_catalog sc ON sc.code = se.stage_code AND sc.reason = e.reason
-         LEFT JOIN users u ON lower(btrim(u.email)) = lower(btrim(se.created_by))
-         WHERE se.patient_id = $1::uuid
-         ORDER BY se.at ASC`,
-        [patientId],
-      );
-      for (const row of se.rows) {
-        episodeIdsWithNew.add(row.episodeId);
-        newEvents.push({
-          id: String(row.id),
-          episodeId: row.episodeId,
-          stageCode: String(row.stageCode),
-          stageLabel: row.stageLabel ? String(row.stageLabel) : null,
-          at: row.at instanceof Date ? row.at : new Date(row.at),
-          note: row.note != null ? String(row.note) : null,
-          authorDisplay: row.authorDisplay != null ? String(row.authorDisplay) : null,
-          source: 'stage_events',
-        });
-      }
-    }
+    const combined: RawEv[] = se.rows.map((row) => ({
+      id: String(row.id),
+      episodeId: row.episodeId,
+      stageCode: String(row.stageCode),
+      stageLabel: row.stageLabel ? String(row.stageLabel) : null,
+      at: row.at instanceof Date ? row.at : new Date(row.at),
+      note: row.note != null ? String(row.note) : null,
+      authorDisplay: row.authorDisplay != null ? String(row.authorDisplay) : null,
+    }));
 
-    const legacyEvents: RawEv[] = [];
+    const migratedKeys = new Set(
+      combined.map((ev) => stageTimelineDedupeKey(ev.episodeId, ev.stageCode, ev.at)),
+    );
+
     if (names.has('patient_stages')) {
       const ps = await pool.query(
-        `SELECT ps.id, ps.episode_id as "episodeId", ps.stage as "stageCode",
+        `SELECT ps.id, ps.episode_id as "episodeId", ps.stage,
                 ps.stage_date as "at", ps.notes as "note",
                 COALESCE(NULLIF(btrim(u.doktor_neve), ''), NULLIF(btrim(ps.created_by), '')) as "authorDisplay"
          FROM patient_stages ps
@@ -222,34 +220,36 @@ async function loadPatientCareTimeline(patientId: string): Promise<PresentationT
       );
       for (const row of ps.rows) {
         const eid = row.episodeId as string;
-        if (episodeIdsWithNew.has(eid)) continue;
         const at = row.at instanceof Date ? row.at : new Date(row.at);
-        legacyEvents.push({
-          id: String(row.id),
+        const legacyStage = String(row.stage);
+        const mappedCode = legacyPatientStageToCode(legacyStage);
+        const key = stageTimelineDedupeKey(eid, mappedCode, at);
+        if (migratedKeys.has(key)) continue;
+        combined.push({
+          id: `${LEGACY_MERGED_STAGE_EVENT_ID_PREFIX}${row.id}`,
           episodeId: eid,
-          stageCode: String(row.stageCode),
-          stageLabel: legacyHungarianStageLabel(String(row.stageCode)),
+          stageCode: mappedCode,
+          stageLabel: legacyHungarianStageLabel(legacyStage),
           at,
           note: row.note != null ? String(row.note) : null,
           authorDisplay: row.authorDisplay != null ? String(row.authorDisplay) : null,
-          source: 'patient_stages',
         });
       }
     }
 
-    let combined = [...newEvents, ...legacyEvents];
-    if (combined.length > MAX_TIMELINE_STAGE_ROWS) {
-      combined.sort((a, b) => b.at.getTime() - a.at.getTime());
-      combined = combined.slice(0, MAX_TIMELINE_STAGE_ROWS);
+    let merged = combined;
+    if (merged.length > MAX_TIMELINE_STAGE_ROWS) {
+      merged.sort((a, b) => b.at.getTime() - a.at.getTime());
+      merged = merged.slice(0, MAX_TIMELINE_STAGE_ROWS);
       logger.warn('[consilium-presentation] timeline truncated', {
         patientId,
         kept: MAX_TIMELINE_STAGE_ROWS,
       });
     }
-    combined.sort((a, b) => a.at.getTime() - b.at.getTime());
+    merged.sort((a, b) => a.at.getTime() - b.at.getTime());
 
     const byEp = new Map<string, RawEv[]>();
-    for (const ev of combined) {
+    for (const ev of merged) {
       const list = byEp.get(ev.episodeId) ?? [];
       list.push(ev);
       byEp.set(ev.episodeId, list);
@@ -262,7 +262,6 @@ async function loadPatientCareTimeline(patientId: string): Promise<PresentationT
       at: isoDate(ev.at) ?? new Date(0).toISOString(),
       note: ev.note,
       authorDisplay: ev.authorDisplay,
-      source: ev.source,
     });
 
     const episodeRows: PresentationTimelineEpisode[] = [];
@@ -339,10 +338,24 @@ async function latestStageSummary(patientId: string): Promise<{
 }> {
   const pool = getDbPool();
   try {
-    const hasTable = await pool.query(
+    const hasEvents = await pool.query(
       `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'stage_events'`,
     );
-    if (hasTable.rows.length > 0) {
+    const hasPs = await pool.query(
+      `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'patient_stages'`,
+    );
+
+    type SeRow = {
+      stageCode: string;
+      stageDate: Date;
+      notes: string | null;
+      episodeId: string;
+      stageLabel: string | null;
+    };
+    let bestSe: SeRow | null = null;
+    const eventDedupeKeys = new Set<string>();
+
+    if (hasEvents.rows.length > 0) {
       const r = await pool.query(
         `SELECT
            se.stage_code as "stageCode",
@@ -352,25 +365,83 @@ async function latestStageSummary(patientId: string): Promise<{
            sc.label_hu as "stageLabel"
          FROM stage_events se
          JOIN patient_episodes e ON e.id = se.episode_id
-         JOIN stage_catalog sc ON sc.code = se.stage_code AND sc.reason = e.reason
-         WHERE se.patient_id = $1
-         ORDER BY se.at DESC
-         LIMIT 1`,
+         LEFT JOIN stage_catalog sc ON sc.code = se.stage_code AND sc.reason = e.reason
+         WHERE se.patient_id = $1`,
         [patientId],
       );
-      if (r.rows.length > 0) {
-        const row = r.rows[0];
-        return {
-          stageCode: row.stageCode ?? null,
-          stageLabel: row.stageLabel ?? null,
-          stageDate: row.stageDate?.toISOString?.() ?? null,
-          notes: row.notes ?? null,
-          episodeId: row.episodeId ?? null,
-        };
+      for (const row of r.rows) {
+        const at = row.stageDate instanceof Date ? row.stageDate : new Date(row.stageDate);
+        const code = String(row.stageCode);
+        const eid = String(row.episodeId);
+        eventDedupeKeys.add(stageTimelineDedupeKey(eid, code, at));
+        if (!bestSe || at.getTime() > bestSe.stageDate.getTime()) {
+          bestSe = {
+            stageCode: code,
+            stageDate: at,
+            notes: row.notes ?? null,
+            episodeId: eid,
+            stageLabel: row.stageLabel != null ? String(row.stageLabel) : null,
+          };
+        }
       }
     }
+
+    let bestPs: {
+      stageCode: string;
+      stageDate: Date;
+      notes: string | null;
+      episodeId: string;
+      stageLabel: string;
+    } | null = null;
+
+    if (hasPs.rows.length > 0) {
+      const pr = await pool.query(
+        `SELECT episode_id as "episodeId", stage, stage_date as "stageDate", notes
+         FROM patient_stages
+         WHERE patient_id = $1 AND episode_id IS NOT NULL`,
+        [patientId],
+      );
+      for (const row of pr.rows) {
+        const at = row.stageDate instanceof Date ? row.stageDate : new Date(row.stageDate);
+        const legacyStage = String(row.stage);
+        const code = legacyPatientStageToCode(legacyStage);
+        const eid = String(row.episodeId);
+        const key = stageTimelineDedupeKey(eid, code, at);
+        if (eventDedupeKeys.has(key)) continue;
+        const label = legacyHungarianStageLabel(legacyStage);
+        if (!bestPs || at.getTime() > bestPs.stageDate.getTime()) {
+          bestPs = {
+            stageCode: code,
+            stageDate: at,
+            notes: row.notes ?? null,
+            episodeId: eid,
+            stageLabel: label,
+          };
+        }
+      }
+    }
+
+    const pickPs = bestPs && (!bestSe || bestPs.stageDate.getTime() > bestSe.stageDate.getTime());
+    if (pickPs && bestPs) {
+      return {
+        stageCode: bestPs.stageCode,
+        stageLabel: bestPs.stageLabel,
+        stageDate: bestPs.stageDate.toISOString(),
+        notes: bestPs.notes,
+        episodeId: bestPs.episodeId,
+      };
+    }
+    if (bestSe) {
+      return {
+        stageCode: bestSe.stageCode,
+        stageLabel: bestSe.stageLabel,
+        stageDate: bestSe.stageDate.toISOString(),
+        notes: bestSe.notes,
+        episodeId: bestSe.episodeId,
+      };
+    }
   } catch (e) {
-    logger.warn('[consilium-presentation] stage_events lookup failed', { patientId, error: String(e) });
+    logger.warn('[consilium-presentation] latestStageSummary failed', { patientId, error: String(e) });
   }
 
   try {
@@ -401,7 +472,7 @@ async function latestStageSummary(patientId: string): Promise<{
 async function mediaSummaryForPatient(patientId: string) {
   const pool = getDbPool();
   const imageClause = `mime_type IS NOT NULL AND mime_type ILIKE 'image/%'`;
-  const [opList, fotoList] = await Promise.all([
+  const [opList, fotoList, fotoCountRow] = await Promise.all([
     pool.query(
       `SELECT id, mime_type as "mimeType", filename, uploaded_at as "uploadedAt"
        FROM patient_documents
@@ -415,12 +486,18 @@ async function mediaSummaryForPatient(patientId: string) {
        FROM patient_documents
        WHERE patient_id = $1 AND ${imageClause} AND ${FOTO_TAG_FILTER}
        ORDER BY uploaded_at DESC
-       LIMIT 50`,
+       LIMIT $2`,
+      [patientId, MAX_PHOTO_PREVIEWS_IN_PRESENTATION],
+    ),
+    pool.query<{ c: string }>(
+      `SELECT COUNT(*)::text as c
+       FROM patient_documents
+       WHERE patient_id = $1::uuid AND ${imageClause} AND ${FOTO_TAG_FILTER}`,
       [patientId],
     ),
   ]);
 
-  const mapPreview = (rows: PatientDocRow[]) =>
+  const mapOpPreviews = (rows: PatientDocRow[]) =>
     rows
       .filter((r) => isImageMime(r.mimeType))
       .slice(0, 4)
@@ -431,16 +508,29 @@ async function mediaSummaryForPatient(patientId: string) {
         uploadedAt: r.uploadedAt?.toISOString?.() ?? null,
       }));
 
+  const mapFotoPreviews = (rows: PatientDocRow[]) =>
+    rows
+      .filter((r) => isImageMime(r.mimeType))
+      .map((r) => ({
+        documentId: r.id,
+        previewUrl: `/api/patients/${patientId}/documents/${r.id}?inline=true`,
+        filename: r.filename,
+        uploadedAt: r.uploadedAt?.toISOString?.() ?? null,
+      }));
+
+  const fotoImageRows = fotoList.rows.filter((r) => isImageMime(r.mimeType));
+  const fotoTotalImages = Number.parseInt(fotoCountRow.rows[0]?.c ?? '0', 10) || fotoImageRows.length;
+
   return {
     op: {
       totalCount: opList.rows.length,
       imageCount: opList.rows.filter((r) => isImageMime(r.mimeType)).length,
-      previews: mapPreview(opList.rows),
+      previews: mapOpPreviews(opList.rows),
     },
     foto: {
-      totalCount: fotoList.rows.length,
-      imageCount: fotoList.rows.filter((r) => isImageMime(r.mimeType)).length,
-      previews: mapPreview(fotoList.rows),
+      totalCount: fotoTotalImages,
+      imageCount: fotoImageRows.length,
+      previews: mapFotoPreviews(fotoList.rows),
     },
   };
 }

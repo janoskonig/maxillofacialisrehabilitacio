@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Users, X } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Users, X } from 'lucide-react';
 import { getCurrentUser, type AuthUser } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
 import { OPInlinePreview } from '@/components/OPInlinePreview';
@@ -173,7 +173,7 @@ export default function ConsiliumPresentPage() {
 
   const [index, setIndex] = useState(0);
   const indexRef = useRef(0);
-  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [photoLightbox, setPhotoLightbox] = useState<{ previews: MediaPreviewItem[]; index: number } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -211,6 +211,10 @@ export default function ConsiliumPresentPage() {
     indexRef.current = index;
   }, [index]);
 
+  useEffect(() => {
+    setPhotoLightbox(null);
+  }, [index]);
+
   const items = payload?.items || [];
   const current = items[index] || null;
   const summaryForTimeline = current?.patientSummary;
@@ -239,17 +243,34 @@ export default function ConsiliumPresentPage() {
       const it = items[i];
       if (!it) continue;
       for (const p of it.mediaSummary?.opPreview?.previews || []) urls.add(p.previewUrl);
-      for (const p of it.mediaSummary?.photoPreview?.previews || []) urls.add(p.previewUrl);
+      for (const p of (it.mediaSummary?.photoPreview?.previews || []).slice(0, 24)) urls.add(p.previewUrl);
     }
     return Array.from(urls);
   }, [items, neighborIndexes]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (lightboxUrl) {
+      if (photoLightbox) {
         if (e.key === 'Escape') {
           e.preventDefault();
-          setLightboxUrl(null);
+          setPhotoLightbox(null);
+          return;
+        }
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          setPhotoLightbox((lb) => {
+            if (!lb || lb.previews.length === 0) return null;
+            return { ...lb, index: Math.max(0, lb.index - 1) };
+          });
+          return;
+        }
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          setPhotoLightbox((lb) => {
+            if (!lb || lb.previews.length === 0) return null;
+            return { ...lb, index: Math.min(lb.previews.length - 1, lb.index + 1) };
+          });
+          return;
         }
         return;
       }
@@ -264,7 +285,7 @@ export default function ConsiliumPresentPage() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [items.length, lightboxUrl]);
+  }, [items.length, photoLightbox]);
 
   const readonly = payload?.session.status === 'closed';
 
@@ -464,9 +485,6 @@ export default function ConsiliumPresentPage() {
                                     {row.st.note}
                                   </p>
                                 ) : null}
-                                {row.st.source === 'patient_stages' ? (
-                                  <p className="text-xs text-white/40">Régi napló</p>
-                                ) : null}
                               </div>
                             </div>
                           );
@@ -537,32 +555,40 @@ export default function ConsiliumPresentPage() {
               </div>
 
               <div className="col-span-12 lg:col-span-3 flex flex-col gap-3 lg:gap-4 min-w-0">
-                <div className="rounded-lg bg-black/30 border border-white/10 p-3 lg:p-4 flex-shrink-0">
+                <div className="rounded-lg bg-black/30 border border-white/10 p-3 lg:p-4 flex-shrink-0 flex flex-col min-h-0">
                   <p className="text-xs lg:text-sm text-white/50 mb-2">Fotó mellékletek</p>
                   {ms.error && <p className="text-xs text-amber-300 mb-2">Média összegzés részben hibás</p>}
                   {(ms.photoPreview?.previews || []).length === 0 ? (
                     <p className="text-xs text-white/45">Nincs fotó előnézet.</p>
                   ) : (
-                    <div className="grid grid-cols-2 gap-2">
-                      {(ms.photoPreview?.previews || []).map((p: MediaPreviewItem) => (
-                        <button
-                          key={p.documentId}
-                          type="button"
-                          onClick={() => setLightboxUrl(p.previewUrl)}
-                          className="rounded-md overflow-hidden border border-white/10 bg-black/40 text-left focus:outline-none focus:ring-2 focus:ring-white/40"
-                        >
-                          <img
-                            src={p.previewUrl}
-                            alt={p.filename || 'foto'}
-                            className="w-full h-28 lg:h-36 object-cover"
-                            loading="lazy"
-                          />
-                        </button>
-                      ))}
+                    <div className="max-h-[min(55vh,520px)] overflow-y-auto overscroll-contain pr-1 -mr-0.5">
+                      <div className="grid grid-cols-2 gap-2">
+                        {(ms.photoPreview?.previews || []).map((p: MediaPreviewItem, pi: number) => (
+                          <button
+                            key={p.documentId}
+                            type="button"
+                            onClick={() =>
+                              setPhotoLightbox({ previews: ms.photoPreview?.previews ?? [], index: pi })
+                            }
+                            className="rounded-md overflow-hidden border border-white/10 bg-black/40 text-left focus:outline-none focus:ring-2 focus:ring-white/40 shrink-0"
+                          >
+                            <img
+                              src={p.previewUrl}
+                              alt={p.filename || 'foto'}
+                              className="w-full h-24 lg:h-28 object-cover"
+                              loading="lazy"
+                            />
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
-                  <p className="text-xs text-white/50 mt-2">
-                    {ms.photoPreview?.imageCount ?? 0}/{ms.photoPreview?.totalCount ?? 0} kép
+                  <p className="text-xs text-white/50 mt-2 shrink-0">
+                    {(ms.photoPreview?.previews || []).length > 0
+                      ? (ms.photoPreview?.imageCount ?? 0) < (ms.photoPreview?.totalCount ?? 0)
+                        ? `${ms.photoPreview?.imageCount ?? 0} / ${ms.photoPreview?.totalCount ?? 0} kép (többi nem töltődik be a vetítésre)`
+                        : `${ms.photoPreview?.totalCount ?? ms.photoPreview?.imageCount ?? 0} kép · nagyítás: katt, ← →`
+                      : `${ms.photoPreview?.totalCount ?? 0} kép`}
                   </p>
                 </div>
 
@@ -680,30 +706,69 @@ export default function ConsiliumPresentPage() {
         </p>
       </main>
 
-      {lightboxUrl && (
+      {photoLightbox && photoLightbox.previews.length > 0 && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
           role="dialog"
           aria-modal="true"
-          onClick={() => setLightboxUrl(null)}
+          onClick={() => setPhotoLightbox(null)}
         >
           <button
             type="button"
-            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white"
+            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white z-[110]"
             aria-label="Bezárás"
             onClick={(e) => {
               e.stopPropagation();
-              setLightboxUrl(null);
+              setPhotoLightbox(null);
             }}
           >
             <X className="w-6 h-6" />
           </button>
-          <img
-            src={lightboxUrl}
-            alt=""
-            className="max-h-[90vh] max-w-full w-auto object-contain"
-            onClick={(e) => e.stopPropagation()}
-          />
+          {photoLightbox.previews.length > 1 && (
+            <>
+              <button
+                type="button"
+                className="absolute left-2 md:left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white z-[110] disabled:opacity-30"
+                aria-label="Előző kép"
+                disabled={photoLightbox.index <= 0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPhotoLightbox((lb) =>
+                    lb && lb.index > 0 ? { ...lb, index: lb.index - 1 } : lb,
+                  );
+                }}
+              >
+                <ChevronLeft className="w-8 h-8" />
+              </button>
+              <button
+                type="button"
+                className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white z-[110] disabled:opacity-30"
+                aria-label="Következő kép"
+                disabled={photoLightbox.index >= photoLightbox.previews.length - 1}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPhotoLightbox((lb) =>
+                    lb && lb.index < lb.previews.length - 1 ? { ...lb, index: lb.index + 1 } : lb,
+                  );
+                }}
+              >
+                <ChevronRight className="w-8 h-8" />
+              </button>
+            </>
+          )}
+          <div className="max-w-[min(100vw-2rem,1600px)] flex flex-col items-center gap-2" onClick={(e) => e.stopPropagation()}>
+            <p className="text-sm text-white/70">
+              {photoLightbox.index + 1} / {photoLightbox.previews.length}
+              {photoLightbox.previews[photoLightbox.index]?.filename
+                ? ` · ${photoLightbox.previews[photoLightbox.index].filename}`
+                : ''}
+            </p>
+            <img
+              src={photoLightbox.previews[photoLightbox.index]?.previewUrl}
+              alt={photoLightbox.previews[photoLightbox.index]?.filename || ''}
+              className="max-h-[min(85vh,900px)] max-w-full w-auto object-contain"
+            />
+          </div>
         </div>
       )}
     </div>
