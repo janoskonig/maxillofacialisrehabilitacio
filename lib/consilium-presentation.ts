@@ -76,6 +76,8 @@ export type PatientPresentationSummary = {
   taj: string | null;
   birthYear: number | null;
   age: number | null;
+  /** Irányítószám, város, közterület egy sorban; üres ha nincs adat. */
+  addressDisplay: string | null;
   diagnozis: string | null;
   bnoDescription: string | null;
   beutaloOrvos: string | null;
@@ -129,6 +131,20 @@ function ageFromBirthDate(birth: Date | null | undefined): number | null {
   const m = today.getMonth() - d.getMonth();
   if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
   return age;
+}
+
+/** Irányítószám, város, utca egy sorban (vetítéshez). */
+function formatHungarianAddress(
+  zip: string | null | undefined,
+  city: string | null | undefined,
+  street: string | null | undefined,
+): string | null {
+  const z = zip?.trim() || '';
+  const c = city?.trim() || '';
+  const s = street?.trim() || '';
+  const head = [z, c].filter(Boolean).join(' ');
+  const parts = [head, s].filter(Boolean);
+  return parts.length ? parts.join(', ') : null;
 }
 
 function legacyHungarianStageLabel(stageSlug: string): string {
@@ -586,6 +602,7 @@ export async function buildConsiliumPresentationPayload(sessionId: string, insti
       taj: null,
       birthYear: null,
       age: null,
+      addressDisplay: null,
       diagnozis: null,
       bnoDescription: null,
       beutaloOrvos: null,
@@ -607,6 +624,9 @@ export async function buildConsiliumPresentationPayload(sessionId: string, insti
            pf.nev,
            pf.taj,
            pf.szuletesi_datum as "szuletesiDatum",
+           pf.iranyitoszam,
+           pf.varos,
+           pf.cim,
            pf.diagnozis,
            pf.bno,
            pf.tnm_staging as "tnmStaging",
@@ -646,6 +666,7 @@ export async function buildConsiliumPresentationPayload(sessionId: string, insti
           taj: rowP.taj ?? null,
           birthYear: birth && !Number.isNaN(birth.getTime()) ? birth.getFullYear() : null,
           age: ageFromBirthDate(birth),
+          addressDisplay: formatHungarianAddress(rowP.iranyitoszam, rowP.varos, rowP.cim),
           diagnozis: rowP.diagnozis ?? null,
           bnoDescription,
           beutaloOrvos: rowP.beutaloOrvos ?? null,

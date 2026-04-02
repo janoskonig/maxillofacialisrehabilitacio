@@ -406,11 +406,23 @@ export default function ConsiliumPresentPage() {
             <div className="px-4 sm:px-6 lg:px-8 py-3 lg:py-4 border-b border-white/10 flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <p className="text-2xl md:text-3xl lg:text-4xl font-bold leading-tight truncate">{ps.name || 'Ismeretlen beteg'}</p>
-                <p className="text-sm md:text-base text-white/70 mt-1">
-                  {ps.missingPatient ? 'Beteg nem elérhető / hiányzó rekord' : `ID: ${ps.patientId}`}
-                  {typeof ps.age === 'number' ? ` · ${ps.age} éves` : ''}
-                  {ps.birthYear ? ` · szül.: ${ps.birthYear}` : ''}
-                </p>
+                {ps.missingPatient ? (
+                  <p className="text-sm md:text-base text-white/70 mt-2">Beteg nem elérhető / hiányzó rekord</p>
+                ) : (
+                  <div className="text-sm md:text-base text-white/75 mt-2 space-y-1">
+                    <p>
+                      <span className="text-white/50">TAJ:</span> {ps.taj?.trim() || '—'}
+                    </p>
+                    <p>
+                      {typeof ps.age === 'number' ? `${ps.age} éves` : 'Életkor: —'}
+                      {ps.birthYear ? <span className="text-white/55"> · szül.: {ps.birthYear}</span> : null}
+                    </p>
+                    <p className="text-white/85 whitespace-pre-wrap break-words leading-snug">
+                      <span className="text-white/50">Lakcím:</span> {ps.addressDisplay?.trim() || '—'}
+                    </p>
+                    <p className="text-xs text-white/40 pt-0.5">ID: {ps.patientId}</p>
+                  </div>
+                )}
               </div>
               <div className="text-right flex-shrink-0">
                 <p className="text-sm md:text-base text-white/70">
