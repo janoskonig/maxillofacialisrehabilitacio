@@ -1,0 +1,80 @@
+Konzilium (session) MVP
+=======================
+
+Mit old meg?
+------------
+
+- Intezmenyhez kotott (`users.intezmeny`) alkalom (`consilium_sessions`) + beteglista (`consilium_session_items`)
+- Vetiteshez egyetlen aggregalt read-model: `GET /api/consilium/sessions/[id]/presentation`
+- Live read-model: a vetites a betegadatok aktualis allapotat mutatja; teljes frissiteshez a vetites oldalon a „Frissites” gomb (explicit reload).
+
+Fontos megkulonboztetes (MVP)
+----------------------------
+
+- A betegprofilon levo regi „Konzilium” tab (orvosi uzenetek) parhuzamosan megmarad, kulon adatmodellben.
+
+Beteg hozzaadas (lathatosag)
+----------------------------
+
+- `beutalo_orvos`: csak olyan beteg, akinek a beutalo intezmenye egyezik a felhasznalo `users.intezmeny` ertekevel (referral join).
+- Egyeb szerepkorok: ha a beteg letezik a `patients` tablaban, felvetel engedelyezett (az alkalom intezmenye tovabbra is a session `institution_id`-bol jon; a `beutalo_intezmeny` szoveg nem vetjuk ossze vele, mert gyakran eltero/normaltalan).
+
+Allapotgep
+----------
+
+- `draft`: beteg hozzaadas/eltavolitas engedett; status/checklist (napirendi pontok + valasz) szerkesztheto; torles engedett
+- `active`: lista modositas tiltott; status/checklist szerkesztheto
+- `closed`: teljes read-only
+
+Atmenetek:
+
+- `draft -> active`
+- `active -> closed`
+
+API-k
+-----
+
+- `GET /api/consilium/sessions/summary`
+- `GET /api/consilium/institution-users` — osszes aktiv felhasznalo (Konzilium jelenlevok valasztashoz; intezmeny szerint nem szur)
+- `GET /api/consilium/sessions/next-upcoming-draft` — opcionalis `?patientId=` (UUID): a legkorabbi jovobeli `draft` alkalom + `alreadyOnList` ha a beteg mar rajta van
+- `POST /api/consilium/sessions/next-upcoming-draft/enroll` — `{ patientId }`: felveszi a beteget erre az alkalomra (ugyanaz a szabaly mint `POST .../items`)
+- `POST /api/consilium/sessions`
+- `PATCH /api/consilium/sessions/[id]` — `title` / `scheduledAt` / `status` / opcionalis `attendees`: `[{ id, name, present }]`
+- `DELETE /api/consilium/sessions/[id]` (csak `draft`)
+- `POST /api/consilium/sessions/[id]/items`
+- `PATCH /api/consilium/sessions/[id]/items/[itemId]` (`operation`: `update_discussed` + `discussed: boolean`)
+- `DELETE /api/consilium/sessions/[id]/items/[itemId]` (csak `draft`)
+- `PATCH /api/consilium/sessions/[id]/items/reorder` (`itemIdsInOrder` teljes lista)
+- `POST /api/consilium/sessions/[id]/items/[itemId]/checklist` — új pont: `{ label }`
+- `PATCH /api/consilium/sessions/[id]/items/[itemId]/checklist/[key]` — pontosan egy: `{ checked }` VAGY `{ label }` VAGY `{ response }` (szoveg; ures string torli a valaszt es a `respondedAt`/`respondedBy` mezoket)
+- `DELETE /api/consilium/sessions/[id]/items/[itemId]/checklist/[key]` — pont törlése
+- `GET /api/consilium/sessions/[id]/presentation`
+
+Migracio
+--------
+
+Futtatas:
+
+- `npm run migrate`
+
+Vagy egy fajl:
+
+- `node scripts/run-all-migrations.js 011_consilium_sessions.sql`
+- `node scripts/run-all-migrations.js 012_consilium_discussed_attendees.sql` (BNO szoveg a vetiteshez nem kell, de: `discussed` boolean + `attendees` JSONB)
+- `node scripts/run-all-migrations.js 013_drop_consilium_presenter_notes.sql` (előadói jegyzet oszlop eltávolítva; válaszok a checklist JSON-ban)
+
+Egyeb viselkedes
+----------------
+
+- Jelenlevok (`attendees`): `id` = `users.id`, `name` = doktor neve vagy e-mail; a Konzilium UI: cimke-szeru mezo, kezdobetu / nev / e-mail szuro a `GET .../institution-users` listan; a mar hozzaadottak nem jelennek meg ujra a talalatok kozott.
+- Beteg tetel: `discussed` = megbeszelve / nem (egyszeru boolean).
+- Napirendi pontok (checklist): Konzilium oldalon hozzaadas / atnevezes / torles, pipa es pontonkenti `response` (verdikt); vetitesen is pipa + verdikt szerkesztheto (`draft`/`active`), `closed` alatt csak olvashato.
+- BNO a vetitesen: `BNOTORZS_201807.xlsx` alapjan magyar megnevezes (kod helyett), ha a torzsben megvan; a diagnoszis szoveg es a BNO megnevezes egy mezoben jelenik meg (duplikacio nelkul).
+- Vetites: kozepen `OPInlinePreview` (OP dokumentumok), alatta fogazati mini-nezet + implant jelzes; jobb oldalon foto thumbs es konzilium; `primer_mutet_leirasa` nem kulon sav.
+
+UI belepesi pontok
+------------------
+
+- Desktop header: `Konzilium` gomb a fooldalon (`app/page.tsx`)
+- Mobil: `MobileBottomNav` „Egyeb” menuben (`components/mobile/MobileBottomNav.tsx`)
+- Beteg oldalakon: `PatientNextConsiliumSessionCard` — soron kovetkezo vazlat alkalomra felvetel (`app/patients/[id]/page.tsx`, `app/patients/[id]/view/page.tsx` Konzilium ful; technikusnak rejtve)

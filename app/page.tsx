@@ -380,6 +380,15 @@ export default function Home() {
                   <CalendarDays className="w-3.5 h-3.5" />
                   Naptár
                 </button>
+                {userRole !== 'technikus' && (
+                  <button
+                    onClick={() => router.push('/consilium')}
+                    className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2"
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    Konzílium
+                  </button>
+                )}
                 <button
                   onClick={() => router.push('/messages')}
                   className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2"

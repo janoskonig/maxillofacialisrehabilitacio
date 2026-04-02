@@ -13,6 +13,7 @@ import { PatientMessages } from '@/components/PatientMessages';
 import { DoctorMessagesForPatient } from '@/components/DoctorMessagesForPatient';
 import { PatientWorklistWidget } from '@/components/PatientWorklistWidget';
 import { EpisodeStageCard } from '@/components/EpisodeStageCard';
+import { PatientNextConsiliumSessionCard } from '@/components/PatientNextConsiliumSessionCard';
 
 type TabType = 'alapadatok' | 'anamnezis' | 'adminisztracio' | 'idopont' | 'konzilium' | 'uzenet';
 
@@ -334,7 +335,10 @@ export default function PatientViewPage() {
           )}
 
           {activeTab === 'konzilium' && loadedTabs.has('konzilium') && patient?.id && (
-            <DoctorMessagesForPatient patientId={patient.id} patientName={patient.nev || null} />
+            <div className="space-y-4">
+              {userRole !== 'technikus' && <PatientNextConsiliumSessionCard patientId={patient.id} />}
+              <DoctorMessagesForPatient patientId={patient.id} patientName={patient.nev || null} />
+            </div>
           )}
 
           {activeTab === 'uzenet' && loadedTabs.has('uzenet') && patientEmail && patient?.id && (

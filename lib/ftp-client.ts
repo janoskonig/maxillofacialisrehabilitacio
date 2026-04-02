@@ -83,7 +83,7 @@ function sanitizeFilename(filename: string): string {
 }
 
 /**
- * Generate filename in format: {cimke}_{patientId}_{datum}.{kiterjesztes}
+ * Generate filename in format: {tag}_{patientId}_{date}_{time}_{random}.{ext}
  */
 export function generateDocumentFilename(
   originalFilename: string,
@@ -127,8 +127,16 @@ export function generateDocumentFilename(
   const day = String(uploadDate.getDate()).padStart(2, '0');
   const dateStr = `${year}-${month}-${day}`;
   
-  // Build filename: {cimke}_{patientId}_{datum}.{kiterjesztes}
-  const newFilename = `${normalizedTag}_${normalizedPatientId}_${dateStr}${extension}`;
+  // Add time + random suffix to prevent same-day collisions in batch uploads.
+  const hours = String(uploadDate.getHours()).padStart(2, '0');
+  const minutes = String(uploadDate.getMinutes()).padStart(2, '0');
+  const seconds = String(uploadDate.getSeconds()).padStart(2, '0');
+  const millis = String(uploadDate.getMilliseconds()).padStart(3, '0');
+  const timeStr = `${hours}${minutes}${seconds}${millis}`;
+  const randomSuffix = Math.random().toString(36).slice(2, 8);
+
+  // Build filename: {cimke}_{patientId}_{datum}_{time}_{rand}.{kiterjesztes}
+  const newFilename = `${normalizedTag}_${normalizedPatientId}_${dateStr}_${timeStr}_${randomSuffix}${extension}`;
   
   // Sanitize the final filename (this will ensure no dangerous characters remain)
   return sanitizeFilename(newFilename);

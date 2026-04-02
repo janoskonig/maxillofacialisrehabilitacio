@@ -9,9 +9,11 @@ import { formatDateForDisplay } from '@/lib/dateUtils';
 interface OPInlinePreviewProps {
   patientId: string;
   patientName?: string;
+  /** Sötét vetítés oldalhoz: világos kártya, kompaktabb margó. */
+  variant?: 'default' | 'presentation';
 }
 
-export function OPInlinePreview({ patientId, patientName }: OPInlinePreviewProps) {
+export function OPInlinePreview({ patientId, patientName, variant = 'default' }: OPInlinePreviewProps) {
   const [documents, setDocuments] = useState<PatientDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -88,9 +90,16 @@ export function OPInlinePreview({ patientId, patientName }: OPInlinePreviewProps
     };
   }, []);
 
+  const isPresent = variant === 'presentation';
+  const cardClass = isPresent
+    ? 'border border-white/15 rounded-lg bg-gray-100 p-3 mb-0 shadow-sm'
+    : 'border rounded-lg bg-gray-50 p-3 mb-4';
+
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-sm text-gray-400 py-2">
+      <div
+        className={`flex items-center gap-2 text-sm py-2 ${isPresent ? 'text-gray-500 border border-white/10 rounded-lg bg-gray-100/80 px-3' : 'text-gray-400'}`}
+      >
         <ImageIcon className="w-4 h-4 animate-pulse" />
         <span>OP betöltése…</span>
       </div>
@@ -103,7 +112,7 @@ export function OPInlinePreview({ patientId, patientName }: OPInlinePreviewProps
 
   return (
     <>
-      <div className="border rounded-lg bg-gray-50 p-3 mb-4">
+      <div className={cardClass}>
         <div className="flex items-center gap-2 mb-2">
           <ImageIcon className="w-4 h-4 text-medical-primary" />
           <h5 className="text-sm font-semibold text-gray-700">OP felvétel</h5>
@@ -113,7 +122,7 @@ export function OPInlinePreview({ patientId, patientName }: OPInlinePreviewProps
             </span>
           )}
           {currentDoc?.uploadedAt && (
-            <span className="text-xs text-gray-400 ml-auto">
+            <span className={`text-xs ml-auto ${isPresent ? 'text-gray-500' : 'text-gray-400'}`}>
               {formatDateForDisplay(currentDoc.uploadedAt)}
             </span>
           )}
@@ -122,7 +131,7 @@ export function OPInlinePreview({ patientId, patientName }: OPInlinePreviewProps
         <div className="relative group">
           <div
             className="relative w-full overflow-hidden rounded cursor-pointer bg-black/5 flex items-center justify-center"
-            style={{ minHeight: '100px' }}
+            style={{ minHeight: isPresent ? 'min(52vh, 480px)' : '100px' }}
             onClick={() => setViewerOpen(true)}
           >
             {thumbnailLoading && (

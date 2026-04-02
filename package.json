@@ -23,7 +23,9 @@
     "migrate:implantacio": "node scripts/run-all-migrations.js 007_tooth_treatment_implantacio.sql",
     "migrate:pathway-tooth-merge": "node scripts/run-all-migrations.js 008_episode_steps_tooth_treatment_merge.sql",
     "migrate:beutalo-orvos": "node scripts/run-all-migrations.js 009_sebeszorvos_to_beutalo_orvos.sql",
-    "migrate:forecast-next-step-length": "node scripts/run-all-migrations.js 010_episode_forecast_cache_next_step_length.sql"
+    "migrate:forecast-next-step-length": "node scripts/run-all-migrations.js 010_episode_forecast_cache_next_step_length.sql",
+    "migrate:consilium-discussed": "node scripts/run-all-migrations.js 012_consilium_discussed_attendees.sql",
+    "migrate:consilium-drop-presenter-notes": "node scripts/run-all-migrations.js 013_drop_consilium_presenter_notes.sql"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

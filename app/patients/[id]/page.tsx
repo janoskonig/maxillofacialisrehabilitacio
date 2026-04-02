@@ -9,6 +9,7 @@ import { DoctorMessagesForPatient } from '@/components/DoctorMessagesForPatient'
 import { ArrowLeft, User } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
+import { PatientNextConsiliumSessionCard } from '@/components/PatientNextConsiliumSessionCard';
 
 export default function PatientDetailPage() {
   const router = useRouter();
@@ -162,7 +163,8 @@ export default function PatientDetailPage() {
             <PatientMessages patientId={patientId} patientName={patientName} />
           )}
           
-          {/* Konzílium - Orvos-orvos üzenetek */}
+          {/* Konzílium – következő alkalom + orvos-orvos üzenetek */}
+          {userRole !== 'technikus' && <PatientNextConsiliumSessionCard patientId={patientId} />}
           <DoctorMessagesForPatient patientId={patientId} patientName={patientName} />
           
           {/* Communication Log - mindig látható */}

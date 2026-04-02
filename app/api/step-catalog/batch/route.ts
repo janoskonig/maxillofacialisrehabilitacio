@@ -12,38 +12,88 @@ const STEP_CODE_REGEX = /^[a-z0-9_]+$/;
 
 export const dynamic = 'force-dynamic';
 
+function stripUtf8Bom(value: string): string {
+  return value.charCodeAt(0) === 0xfeff ? value.slice(1) : value;
+}
+
+function splitCsvLine(line: string, delimiter: string): { fields: string[]; error?: string } {
+  const fields: string[] = [];
+  let cur = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        cur += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+    if (!inQuotes && c === delimiter) {
+      fields.push(cur.trim());
+      cur = '';
+      continue;
+    }
+    cur += c;
+  }
+
+  if (inQuotes) {
+    return { fields: [], error: 'Lezáratlan idézőjel a sorban' };
+  }
+
+  fields.push(cur.trim());
+  return { fields };
+}
+
+function detectDelimiter(line: string): string {
+  let inQuotes = false;
+  let commaCount = 0;
+  let semicolonCount = 0;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+    if (inQuotes) continue;
+    if (c === ',') commaCount++;
+    if (c === ';') semicolonCount++;
+  }
+  return semicolonCount > commaCount ? ';' : ',';
+}
+
 function parseCsvToItems(csvText: string): { items: unknown[]; errors: string[] } {
   const errors: string[] = [];
-  const lines = csvText
+  const lines = stripUtf8Bom(csvText)
     .split(/\r?\n/)
-    .map((l) => l.trim())
+    .map((l) => l.trimEnd())
     .filter((l) => l.length > 0);
 
   if (lines.length === 0) {
     return { items: [], errors: ['Üres CSV'] };
   }
 
-  const delim = lines[0].includes(';') ? ';' : ',';
-  const rows: string[][] = lines.map((line) => {
-    const parts: string[] = [];
-    let cur = '';
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-      const c = line[i];
-      if (c === '"') {
-        inQuotes = !inQuotes;
-      } else if (inQuotes) {
-        cur += c;
-      } else if (c === delim) {
-        parts.push(cur.trim());
-        cur = '';
-      } else {
-        cur += c;
-      }
+  const delim = detectDelimiter(lines[0]);
+  const rows: string[][] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const parsed = splitCsvLine(lines[i], delim);
+    if (parsed.error) {
+      errors.push(`Sor ${i + 1}: ${parsed.error}`);
+      continue;
     }
-    parts.push(cur.trim());
-    return parts;
-  });
+    rows.push(parsed.fields);
+  }
+
+  if (rows.length === 0) {
+    return { items: [], errors: errors.length > 0 ? errors : ['Üres CSV'] };
+  }
 
   const first = rows[0];
   const isHeader =
