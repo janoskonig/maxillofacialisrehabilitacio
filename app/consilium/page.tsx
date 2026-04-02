@@ -151,7 +151,7 @@ function ConsiliumAttendeeTagField({
 
   return (
     <div ref={rootRef} className="relative space-y-2">
-      <label className="text-[10px] text-gray-500 uppercase tracking-wide">Jelenlévők (címkék)</label>
+      <label className="text-[10px] text-gray-500 uppercase tracking-wide">Jelenlévők</label>
       <div
         className={`flex flex-wrap gap-1.5 items-center min-h-[42px] p-2 rounded-md border border-gray-200 bg-white ${
           readonly ? '' : 'focus-within:border-medical-primary/40 focus-within:ring-1 focus-within:ring-medical-primary/20'
@@ -794,7 +794,7 @@ export default function ConsiliumPage() {
               <Logo width={32} height={37} className="md:w-[50px] md:h-[58px] flex-shrink-0" />
               <div className="min-w-0">
                 <h1 className="text-base md:text-xl font-semibold text-medical-primary truncate">Konzílium</h1>
-                <p className="text-xs text-gray-500 hidden sm:block">Új session-alapú konzílium (MVP)</p>
+                <p className="text-xs text-gray-500 hidden sm:block">Alkalmak, beteglista és vetítés (MVP)</p>
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
@@ -936,11 +936,9 @@ export default function ConsiliumPage() {
                 <div className="rounded-lg border border-gray-200 bg-gray-50/80 p-3 space-y-2">
                   <h4 className="text-sm font-semibold text-gray-900">Jelenlévők az értekezleten</h4>
                   <p className="text-xs text-gray-600">
-                    Gépelj kezdőbetűket vagy részletet a névből / e-mailből, válassz a javaslatok közül — minden résztvevő egy
-                    címke lesz. Pipáld, ki van jelen; × gombbal távolítható. (Nem a beteglista.)
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Csak aktív fiókok kereshetők; a már hozzáadottak nem jelennek meg újra a találatok között.
+                    Intézményi felhasználók (nem a beteglista): gépelj név- vagy e-mail-részletet, válassz a javaslatok közül.
+                    Minden kiválasztott címkeként látszik — pipa: jelen van, ×: eltávolítás. Csak aktív fiókok; aki már rajta van,
+                    nem jelenik meg újra a keresésben.
                   </p>
                   {loadingItems && !sessionDetail && <p className="text-xs text-gray-500">Betöltés…</p>}
                   {sessionDetail &&
@@ -1076,7 +1074,8 @@ export default function ConsiliumPage() {
         </div>
 
         <p className="text-xs text-gray-500">
-          MVP megjegyzés: a betegprofilon lévő régi „Konzílium” tab párhuzamosan megmarad; az új session-alapú modul külön adatban tárol.
+          MVP: a betegprofil régi „Konzílium” füle és tartalma megmarad; ez az oldal az alkalmakat és a hozzájuk tartozó listát
+          külön tárolja.
         </p>
       </main>
 

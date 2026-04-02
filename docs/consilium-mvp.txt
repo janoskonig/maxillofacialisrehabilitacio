@@ -11,7 +11,7 @@ Mit old meg?
 Fontos megkulonboztetes (MVP)
 ----------------------------
 
-- A betegprofilon levo regi „Konzilium” tab (orvosi uzenetek) parhuzamosan megmarad, kulon adatmodellben.
+- A betegprofil regi „Konzilium” fule es tartalma megmarad; az alkalom-alapu modul (ez az oldal) kulon adatmodellben tarol.
 
 Beteg hozzaadas (lathatosag)
 ----------------------------
@@ -66,7 +66,7 @@ Vagy egy fajl:
 Egyeb viselkedes
 ----------------
 
-- Jelenlevok (`attendees`): `id` = `users.id`, `name` = doktor neve vagy e-mail; a Konzilium UI: cimke-szeru mezo, kezdobetu / nev / e-mail szuro a `GET .../institution-users` listan; a mar hozzaadottak nem jelennek meg ujra a talalatok kozott.
+- Jelenlevok (`attendees`): `id` = `users.id`, `name` = doktor neve vagy e-mail. UI: intezmenyi felhasznalok (nem beteglista), nev/e-mail szuro a `GET .../institution-users` listan; cimkek, pipa = jelen van, x = eltavolitas; csak aktiv fiokok, mar felveettek nem duplikalodnak a keresesben.
 - Beteg tetel: `discussed` = megbeszelve / nem (egyszeru boolean).
 - Napirendi pontok (checklist): Konzilium oldalon hozzaadas / atnevezes / torles, pipa es pontonkenti `response` (verdikt); vetitesen is pipa + verdikt szerkesztheto (`draft`/`active`), `closed` alatt csak olvashato.
 - BNO a vetitesen: `BNOTORZS_201807.xlsx` alapjan magyar megnevezes (kod helyett), ha a torzsben megvan; a diagnoszis szoveg es a BNO megnevezes egy mezoben jelenik meg (duplikacio nelkul).
