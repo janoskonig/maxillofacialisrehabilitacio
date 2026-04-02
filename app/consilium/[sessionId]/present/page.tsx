@@ -409,19 +409,19 @@ export default function ConsiliumPresentPage() {
                 {ps.missingPatient ? (
                   <p className="text-sm md:text-base text-white/70 mt-2">Beteg nem elérhető / hiányzó rekord</p>
                 ) : (
-                  <div className="text-sm md:text-base text-white/75 mt-2 space-y-1">
-                    <p>
-                      <span className="text-white/50">TAJ:</span> {ps.taj?.trim() || '—'}
-                    </p>
-                    <p>
-                      {typeof ps.age === 'number' ? `${ps.age} éves` : 'Életkor: —'}
-                      {ps.birthYear ? <span className="text-white/55"> · szül.: {ps.birthYear}</span> : null}
-                    </p>
-                    <p className="text-white/85 whitespace-pre-wrap break-words leading-snug">
-                      <span className="text-white/50">Lakcím:</span> {ps.addressDisplay?.trim() || '—'}
-                    </p>
-                    <p className="text-xs text-white/40 pt-0.5">ID: {ps.patientId}</p>
-                  </div>
+                  <p className="text-sm md:text-base text-white/80 mt-2 leading-snug whitespace-pre-wrap break-words">
+                    {[
+                      `TAJ ${ps.taj?.trim() || '—'}`,
+                      typeof ps.age === 'number'
+                        ? `${ps.age} éves${ps.birthYear ? ` (szül.: ${ps.birthYear})` : ''}`
+                        : ps.birthYear
+                          ? `szül.: ${ps.birthYear}`
+                          : null,
+                      ps.addressDisplay?.trim() || null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
                 )}
               </div>
               <div className="text-right flex-shrink-0">
