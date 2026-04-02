@@ -27,12 +27,12 @@ function presentationDiagnosisText(ps: { bnoDescription?: string | null; diagnoz
   return b || d;
 }
 
-/** Vetítéshez: rövid, de olvasható dátum + idő */
+/** Vetítéshez: kompakt, de olvasható dátum + idő */
 function huPresentDateTime(iso: string | null | undefined): string {
   if (!iso) return '—';
   const t = new Date(iso).getTime();
   if (Number.isNaN(t)) return '—';
-  return new Date(iso).toLocaleString('hu-HU', { dateStyle: 'medium', timeStyle: 'short' });
+  return new Date(iso).toLocaleString('hu-HU', { dateStyle: 'short', timeStyle: 'short' });
 }
 
 /** Összes stádium egy listában, legújabb felül (egyszerű timeline). */
@@ -401,71 +401,71 @@ export default function ConsiliumPresentPage() {
 
             <div className="grid grid-cols-12 gap-4 lg:gap-5 px-4 sm:px-6 lg:px-8 py-3 lg:py-4 pb-6">
               <div className="col-span-12 lg:col-span-3">
-                <div className="rounded-lg bg-black/30 border border-white/10 p-4 lg:p-5 overflow-y-auto max-h-[min(92vh,900px)] space-y-6">
+                <div className="rounded-lg bg-black/30 border border-white/10 p-3 lg:p-4 overflow-y-auto max-h-[min(92vh,900px)] space-y-5">
                   <section>
-                    <h2 className="text-sm md:text-base font-semibold text-white/75 mb-3 tracking-wide">Páciens</h2>
-                    <div className="space-y-4">
+                    <h2 className="text-xs sm:text-sm font-semibold text-white/70 mb-2">Páciens</h2>
+                    <div className="space-y-3">
                       <div>
-                        <p className="text-sm md:text-base text-white/55 mb-1">Beküldő orvos</p>
-                        <p className="text-base md:text-lg lg:text-xl whitespace-pre-wrap break-words leading-snug">
+                        <p className="text-xs text-white/50 mb-0.5">Beküldő orvos</p>
+                        <p className="text-sm md:text-base whitespace-pre-wrap break-words leading-snug">
                           {ps.beutaloOrvos || '—'}
                         </p>
                       </div>
                       <div>
-                        <p className="text-sm md:text-base text-white/55 mb-1">Beutaló intézmény</p>
-                        <p className="text-base md:text-lg lg:text-xl whitespace-pre-wrap break-words leading-snug">
+                        <p className="text-xs text-white/50 mb-0.5">Beutaló intézmény</p>
+                        <p className="text-sm md:text-base whitespace-pre-wrap break-words leading-snug">
                           {ps.beutaloIntezmeny || '—'}
                         </p>
                       </div>
                       <div>
-                        <p className="text-sm md:text-base text-white/55 mb-1">Diagnózis</p>
-                        <p className="text-base md:text-lg whitespace-pre-wrap break-words leading-snug">
+                        <p className="text-xs text-white/50 mb-0.5">Diagnózis</p>
+                        <p className="text-sm md:text-base whitespace-pre-wrap break-words leading-snug">
                           {presentationDiagnosisText(ps) || '—'}
                         </p>
                       </div>
                       <div>
-                        <p className="text-sm md:text-base text-white/55 mb-1">TNM</p>
-                        <p className="text-base md:text-lg break-words">{ps.tnmStaging || '—'}</p>
+                        <p className="text-xs text-white/50 mb-0.5">TNM</p>
+                        <p className="text-sm md:text-base break-words">{ps.tnmStaging || '—'}</p>
                       </div>
                     </div>
                   </section>
 
-                  <section className="border-t border-white/15 pt-5">
-                    <h2 className="text-base md:text-lg lg:text-xl font-semibold text-white mb-1">Stádium napló</h2>
-                    <p className="text-sm md:text-base text-white/50 mb-4">Legfelül a legutóbbi bejegyzés</p>
+                  <section className="border-t border-white/15 pt-4">
+                    <h2 className="text-sm md:text-base font-semibold text-white mb-0.5">Stádium napló</h2>
+                    <p className="text-xs text-white/45 mb-3">Legfelül a legutóbbi bejegyzés</p>
 
                     {timelineRows.length > 0 ? (
-                      <div className="space-y-6">
+                      <div className="space-y-4">
                         {timelineRows.map((row, i) => {
                           const prev = i > 0 ? timelineRows[i - 1] : null;
                           const showEp = !prev || prev.epLabel !== row.epLabel;
                           return (
                             <div key={row.st.id}>
                               {showEp ? (
-                                <p className="text-base md:text-lg font-semibold text-amber-200/95 mb-3 pb-2 border-b border-white/25">
+                                <p className="text-sm font-semibold text-amber-200/90 mb-2 pb-1.5 border-b border-white/20">
                                   {row.epLabel}
                                 </p>
                               ) : null}
-                              <div className="space-y-2">
-                                <p className="text-xl md:text-2xl lg:text-3xl font-bold text-white leading-tight">
+                              <div className="space-y-1">
+                                <p className="text-base md:text-lg font-semibold text-white leading-snug">
                                   {row.st.stageLabel}
                                 </p>
-                                <p className="text-base md:text-lg text-white/70">
+                                <p className="text-sm text-white/65">
                                   {huPresentDateTime(row.st.at)}
                                   {row.st.authorDisplay ? (
                                     <>
-                                      <span className="text-white/40"> · </span>
+                                      <span className="text-white/35"> · </span>
                                       {row.st.authorDisplay}
                                     </>
                                   ) : null}
                                 </p>
                                 {row.st.note ? (
-                                  <p className="text-base md:text-lg text-white/90 whitespace-pre-wrap leading-snug pt-1">
+                                  <p className="text-sm md:text-base text-white/85 whitespace-pre-wrap leading-snug">
                                     {row.st.note}
                                   </p>
                                 ) : null}
                                 {row.st.source === 'patient_stages' ? (
-                                  <p className="text-sm md:text-base text-white/45">Régi napló</p>
+                                  <p className="text-xs text-white/40">Régi napló</p>
                                 ) : null}
                               </div>
                             </div>
@@ -475,10 +475,10 @@ export default function ConsiliumPresentPage() {
                     ) : null}
 
                     {episodesWithoutStages.length > 0 ? (
-                      <div className={`space-y-3 ${timelineRows.length > 0 ? 'mt-6 pt-4 border-t border-white/15' : ''}`}>
+                      <div className={`space-y-2 ${timelineRows.length > 0 ? 'mt-4 pt-3 border-t border-white/15' : ''}`}>
                         {episodesWithoutStages.map((ep) => (
-                          <p key={ep.id} className="text-base md:text-lg text-white/65 leading-snug">
-                            <span className="font-semibold text-white/85">
+                          <p key={ep.id} className="text-sm md:text-base text-white/60 leading-snug">
+                            <span className="font-medium text-white/80">
                               {[ep.reason, ep.status].filter(Boolean).join(' · ') || 'Epizód'}
                             </span>
                             {' — '}nincs stádium bejegyzés
@@ -490,13 +490,13 @@ export default function ConsiliumPresentPage() {
                     {timelineRows.length === 0 &&
                     episodesWithoutStages.length === 0 &&
                     (ps.stage?.stageLabel || ps.stage?.stageCode) ? (
-                      <div className="space-y-2">
-                        <p className="text-xl md:text-2xl font-bold text-white">
+                      <div className="space-y-1">
+                        <p className="text-base md:text-lg font-semibold text-white">
                           {ps.stage.stageLabel || ps.stage.stageCode}
                         </p>
-                        <p className="text-base md:text-lg text-white/70">{huPresentDateTime(ps.stage.stageDate)}</p>
+                        <p className="text-sm text-white/65">{huPresentDateTime(ps.stage.stageDate)}</p>
                         {ps.stage.notes ? (
-                          <p className="text-base md:text-lg text-white/90 whitespace-pre-wrap">{ps.stage.notes}</p>
+                          <p className="text-sm md:text-base text-white/85 whitespace-pre-wrap">{ps.stage.notes}</p>
                         ) : null}
                       </div>
                     ) : null}
@@ -504,7 +504,7 @@ export default function ConsiliumPresentPage() {
                     {timelineRows.length === 0 &&
                     episodesWithoutStages.length === 0 &&
                     !(ps.stage?.stageLabel || ps.stage?.stageCode) ? (
-                      <p className="text-base md:text-lg text-white/55">Nincs stádium vagy epizód adat.</p>
+                      <p className="text-sm text-white/50">Nincs stádium vagy epizód adat.</p>
                     ) : null}
                   </section>
                 </div>
