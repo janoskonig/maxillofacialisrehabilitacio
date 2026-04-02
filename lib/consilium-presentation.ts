@@ -2,6 +2,7 @@ import { getDbPool } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { getBnoKodToNevMap, resolveBnoFieldToHungarianLabels } from '@/lib/bno-codes-data';
 import { normalizeChecklist, normalizeSessionAttendees, type ChecklistEntry } from '@/lib/consilium';
+import { patientStageOptions } from '@/lib/types/episode';
 
 const OP_TAG_FILTER = `(
   tags @> '["orthopantomogram"]'::jsonb
@@ -40,6 +41,30 @@ type MediaBucketSummary = {
   previews: MediaPreviewItem[];
 };
 
+const MAX_TIMELINE_STAGE_ROWS = 500;
+
+export type PresentationTimelineStage = {
+  id: string;
+  stageCode: string;
+  stageLabel: string;
+  at: string;
+  note: string | null;
+  authorDisplay: string | null;
+  source: 'stage_events' | 'patient_stages';
+};
+
+export type PresentationTimelineEpisode = {
+  id: string;
+  reason: string | null;
+  status: string | null;
+  chiefComplaint: string | null;
+  caseTitle: string | null;
+  openedAt: string | null;
+  closedAt: string | null;
+  episodeCreatedBy: string | null;
+  stages: PresentationTimelineStage[];
+};
+
 export type PatientPresentationSummary = {
   patientId: string;
   visible: boolean;
@@ -65,6 +90,8 @@ export type PatientPresentationSummary = {
   meglevoImplantatumok: Record<string, string>;
   nemIsmertPoziciokbanImplantatum: boolean;
   nemIsmertPoziciokbanImplantatumReszletek: string | null;
+  /** Epizódok és stádium napló (vetítés bal oszlop); üres tömb, ha nincs adat vagy hiba. */
+  careTimeline: PresentationTimelineEpisode[];
 };
 
 export type ItemMediaSummary = {
@@ -101,25 +128,205 @@ function ageFromBirthDate(birth: Date | null | undefined): number | null {
   return age;
 }
 
-async function latestEpisodeLabel(patientId: string): Promise<string | null> {
+function legacyHungarianStageLabel(code: string): string {
+  const o = patientStageOptions.find((x) => x.value === code);
+  return o?.label ?? code;
+}
+
+function isoDate(d: Date | string | null | undefined): string | null {
+  if (d == null) return null;
+  const x = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(x.getTime())) return null;
+  return x.toISOString();
+}
+
+async function loadPatientCareTimeline(patientId: string): Promise<PresentationTimelineEpisode[]> {
   const pool = getDbPool();
   try {
-    const r = await pool.query(
-      `SELECT e.id, e.reason, e.status, e.created_at as "createdAt"
-       FROM patient_episodes e
-       WHERE e.patient_id = $1
-       ORDER BY e.created_at DESC
-       LIMIT 1`,
+    const tCheck = await pool.query<{ table_name: string }>(
+      `SELECT table_name FROM information_schema.tables
+       WHERE table_schema = 'public'
+         AND table_name IN ('patient_episodes', 'stage_events', 'patient_stages')`,
+    );
+    const names = new Set(tCheck.rows.map((r) => r.table_name));
+    if (!names.has('patient_episodes')) return [];
+
+    const epResult = await pool.query(
+      `SELECT id, reason, status,
+              chief_complaint as "chiefComplaint",
+              case_title as "caseTitle",
+              opened_at as "openedAt",
+              closed_at as "closedAt",
+              created_by as "createdBy"
+       FROM patient_episodes
+       WHERE patient_id = $1::uuid
+       ORDER BY COALESCE(opened_at, created_at) DESC NULLS LAST`,
       [patientId],
     );
-    if (r.rows.length === 0) return null;
-    const row = r.rows[0];
-    const reason = row.reason ? String(row.reason) : '';
-    const status = row.status ? String(row.status) : '';
-    return [reason, status].filter(Boolean).join(' · ') || null;
+
+    type RawEv = {
+      id: string;
+      episodeId: string;
+      stageCode: string;
+      stageLabel: string | null;
+      at: Date;
+      note: string | null;
+      authorDisplay: string | null;
+      source: 'stage_events' | 'patient_stages';
+    };
+
+    const newEvents: RawEv[] = [];
+    const episodeIdsWithNew = new Set<string>();
+
+    if (names.has('stage_events')) {
+      const se = await pool.query(
+        `SELECT se.id, se.episode_id as "episodeId", se.stage_code as "stageCode",
+                se.at, se.note,
+                sc.label_hu as "stageLabel",
+                COALESCE(NULLIF(btrim(u.doktor_neve), ''), NULLIF(btrim(se.created_by), '')) as "authorDisplay"
+         FROM stage_events se
+         JOIN patient_episodes e ON e.id = se.episode_id
+         LEFT JOIN stage_catalog sc ON sc.code = se.stage_code AND sc.reason = e.reason
+         LEFT JOIN users u ON lower(btrim(u.email)) = lower(btrim(se.created_by))
+         WHERE se.patient_id = $1::uuid
+         ORDER BY se.at ASC`,
+        [patientId],
+      );
+      for (const row of se.rows) {
+        episodeIdsWithNew.add(row.episodeId);
+        newEvents.push({
+          id: String(row.id),
+          episodeId: row.episodeId,
+          stageCode: String(row.stageCode),
+          stageLabel: row.stageLabel ? String(row.stageLabel) : null,
+          at: row.at instanceof Date ? row.at : new Date(row.at),
+          note: row.note != null ? String(row.note) : null,
+          authorDisplay: row.authorDisplay != null ? String(row.authorDisplay) : null,
+          source: 'stage_events',
+        });
+      }
+    }
+
+    const legacyEvents: RawEv[] = [];
+    if (names.has('patient_stages')) {
+      const ps = await pool.query(
+        `SELECT ps.id, ps.episode_id as "episodeId", ps.stage as "stageCode",
+                ps.stage_date as "at", ps.notes as "note",
+                COALESCE(NULLIF(btrim(u.doktor_neve), ''), NULLIF(btrim(ps.created_by), '')) as "authorDisplay"
+         FROM patient_stages ps
+         LEFT JOIN users u ON lower(btrim(u.email)) = lower(btrim(ps.created_by))
+         WHERE ps.patient_id = $1::uuid
+           AND ps.episode_id IS NOT NULL
+         ORDER BY ps.stage_date ASC`,
+        [patientId],
+      );
+      for (const row of ps.rows) {
+        const eid = row.episodeId as string;
+        if (episodeIdsWithNew.has(eid)) continue;
+        const at = row.at instanceof Date ? row.at : new Date(row.at);
+        legacyEvents.push({
+          id: String(row.id),
+          episodeId: eid,
+          stageCode: String(row.stageCode),
+          stageLabel: legacyHungarianStageLabel(String(row.stageCode)),
+          at,
+          note: row.note != null ? String(row.note) : null,
+          authorDisplay: row.authorDisplay != null ? String(row.authorDisplay) : null,
+          source: 'patient_stages',
+        });
+      }
+    }
+
+    let combined = [...newEvents, ...legacyEvents];
+    if (combined.length > MAX_TIMELINE_STAGE_ROWS) {
+      combined.sort((a, b) => b.at.getTime() - a.at.getTime());
+      combined = combined.slice(0, MAX_TIMELINE_STAGE_ROWS);
+      logger.warn('[consilium-presentation] timeline truncated', {
+        patientId,
+        kept: MAX_TIMELINE_STAGE_ROWS,
+      });
+    }
+    combined.sort((a, b) => a.at.getTime() - b.at.getTime());
+
+    const byEp = new Map<string, RawEv[]>();
+    for (const ev of combined) {
+      const list = byEp.get(ev.episodeId) ?? [];
+      list.push(ev);
+      byEp.set(ev.episodeId, list);
+    }
+
+    const toStage = (ev: RawEv): PresentationTimelineStage => ({
+      id: ev.id,
+      stageCode: ev.stageCode,
+      stageLabel: (ev.stageLabel && ev.stageLabel.trim()) || ev.stageCode,
+      at: isoDate(ev.at) ?? new Date(0).toISOString(),
+      note: ev.note,
+      authorDisplay: ev.authorDisplay,
+      source: ev.source,
+    });
+
+    const episodeRows: PresentationTimelineEpisode[] = [];
+    const seenEp = new Set<string>();
+
+    const pushEpisode = (
+      row: {
+        id: string;
+        reason: unknown;
+        status: unknown;
+        chiefComplaint: unknown;
+        caseTitle: unknown;
+        openedAt: unknown;
+        closedAt: unknown;
+        createdBy: unknown;
+      },
+      stages: RawEv[],
+    ) => {
+      seenEp.add(row.id);
+      episodeRows.push({
+        id: row.id,
+        reason: row.reason != null ? String(row.reason) : null,
+        status: row.status != null ? String(row.status) : null,
+        chiefComplaint: row.chiefComplaint != null ? String(row.chiefComplaint) : null,
+        caseTitle: row.caseTitle != null ? String(row.caseTitle) : null,
+        openedAt: isoDate(row.openedAt as Date | null),
+        closedAt: isoDate(row.closedAt as Date | null),
+        episodeCreatedBy: row.createdBy != null ? String(row.createdBy) : null,
+        stages: stages.map(toStage),
+      });
+    };
+
+    for (const row of epResult.rows) {
+      pushEpisode(row, byEp.get(row.id) ?? []);
+    }
+
+    for (const [eid, stages] of Array.from(byEp.entries())) {
+      if (seenEp.has(eid)) continue;
+      pushEpisode(
+        {
+          id: eid,
+          reason: null,
+          status: null,
+          chiefComplaint: 'Régi stádium napló (epizód részletei nem elérhetők)',
+          caseTitle: null,
+          openedAt: null,
+          closedAt: null,
+          createdBy: null,
+        },
+        stages,
+      );
+    }
+
+    const latestTs = (ep: PresentationTimelineEpisode) => {
+      let t = ep.openedAt ? new Date(ep.openedAt).getTime() : 0;
+      for (const s of ep.stages) t = Math.max(t, new Date(s.at).getTime());
+      return t;
+    };
+    episodeRows.sort((a, b) => latestTs(b) - latestTs(a));
+
+    return episodeRows;
   } catch (e) {
-    logger.warn('[consilium-presentation] episode lookup failed', { patientId, error: String(e) });
-    return null;
+    logger.warn('[consilium-presentation] care timeline failed', { patientId, error: String(e) });
+    return [];
   }
 }
 
@@ -300,6 +507,7 @@ export async function buildConsiliumPresentationPayload(sessionId: string, insti
       meglevoImplantatumok: {},
       nemIsmertPoziciokbanImplantatum: false,
       nemIsmertPoziciokbanImplantatumReszletek: null,
+      careTimeline: [],
     };
 
     try {
@@ -325,8 +533,14 @@ export async function buildConsiliumPresentationPayload(sessionId: string, insti
       if (p.rows.length > 0) {
         const rowP = p.rows[0];
         const birth = rowP.szuletesiDatum ? new Date(rowP.szuletesiDatum) : null;
-        const stage = await latestStageSummary(patientId);
-        const episodeLabel = await latestEpisodeLabel(patientId);
+        const [stage, careTimeline] = await Promise.all([
+          latestStageSummary(patientId),
+          loadPatientCareTimeline(patientId),
+        ]);
+        const episodeLabel =
+          careTimeline[0] != null
+            ? [careTimeline[0].reason, careTimeline[0].status].filter(Boolean).join(' · ') || null
+            : null;
         const bnoDescription = resolveBnoFieldToHungarianLabels(rowP.bno, bnoMap);
         const fogRaw = parseJsonObjectRecord(rowP.meglevoFogak);
         const implantRaw = parseJsonObjectRecord(rowP.meglevoImplantatumok);
@@ -355,6 +569,7 @@ export async function buildConsiliumPresentationPayload(sessionId: string, insti
           nemIsmertPoziciokbanImplantatumReszletek: rowP.nemIsmertPoziciokbanImplantatumReszletek
             ? String(rowP.nemIsmertPoziciokbanImplantatumReszletek)
             : null,
+          careTimeline,
         };
       }
     } catch (e) {
