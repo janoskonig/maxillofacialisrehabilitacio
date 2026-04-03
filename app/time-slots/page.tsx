@@ -110,7 +110,7 @@ export default function TimeSlotsPage() {
           </div>
         </div>
       </header>
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-20 md:pb-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-mobile-nav-staff md:pb-8">
         <div className="space-y-6">
           {/* Google Calendar Settings Info */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">

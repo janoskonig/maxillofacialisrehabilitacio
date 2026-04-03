@@ -85,7 +85,7 @@ export function CookieConsent() {
   if (!visible) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-[9999] p-4">
+    <div className="fixed bottom-0 left-0 right-0 z-[9999] p-4 max-md:bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px)+0.25rem)]">
       <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg border border-gray-200 p-4 sm:p-6">
         <div className="flex items-start gap-3">
           <Shield className="w-5 h-5 text-medical-primary flex-shrink-0 mt-0.5" />

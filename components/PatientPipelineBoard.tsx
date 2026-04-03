@@ -103,7 +103,7 @@ export function PatientPipelineBoard() {
       </div>
 
       {/* Kanban board */}
-      <div className="overflow-x-auto pb-2 -mx-2 px-2 snap-x snap-mandatory scrollbar-hide">
+      <div className="overflow-x-auto pb-2 -mx-2 px-2 snap-x snap-mandatory scrollbar-hide touch-manipulation">
         <div className="flex gap-3 min-w-max">
           {columns.map((col) => {
             const colors = COLUMN_COLORS[col.id] ?? DEFAULT_COLOR;

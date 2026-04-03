@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
-import { useBreakpoint } from '@/hooks/useBreakpoint';
 
 interface MobileBottomSheetProps {
   open: boolean;
@@ -29,8 +28,6 @@ export function MobileBottomSheet({
   type = 'dialog',
   children,
 }: MobileBottomSheetProps) {
-  const breakpoint = useBreakpoint();
-  const isMobile = breakpoint === 'mobile';
   const contentRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
@@ -135,20 +132,17 @@ export function MobileBottomSheet({
   const content = (
     <div
       ref={overlayRef}
-      className={`fixed inset-0 bg-black/50 z-50 ${
-        isMobile ? 'flex items-end justify-center' : 'flex items-center justify-center p-4'
-      }`}
+      className="fixed inset-0 bg-black/50 z-[60] flex items-end justify-center md:items-center md:justify-center md:p-4"
       onClick={handleOverlayClick}
     >
       <div
         ref={contentRef}
-        className={`
-          bg-white w-full max-w-2xl
-          ${isMobile ? 'rounded-t-lg max-h-[85vh]' : 'rounded-lg max-h-[90vh]'}
-          ${isMobile ? 'animate-slide-up' : 'animate-scale-in'}
-          flex flex-col
-          ${isMobile ? 'shadow-2xl' : 'shadow-xl'}
-        `}
+        className="
+          relative bg-white w-full max-w-2xl
+          rounded-t-lg max-h-[85vh] md:rounded-lg md:max-h-[90vh]
+          animate-slide-up md:animate-scale-in
+          flex flex-col shadow-2xl md:shadow-xl
+        "
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -156,11 +150,9 @@ export function MobileBottomSheet({
         aria-describedby={description ? 'bottomsheet-description' : undefined}
       >
         {/* Handle bar (mobile only) */}
-        {isMobile && (
-          <div className="flex justify-center pt-2 pb-1">
-            <div className="w-12 h-1 bg-gray-300 rounded-full" />
-          </div>
-        )}
+        <div className="flex justify-center pt-2 pb-1 md:hidden">
+          <div className="w-12 h-1 bg-gray-300 rounded-full" />
+        </div>
 
         {/* Header */}
         {(title || description) && (
@@ -179,25 +171,19 @@ export function MobileBottomSheet({
         )}
 
         {/* Content */}
-        <div
-          className={`
-            flex-1 overflow-y-auto
-            ${isMobile ? 'px-4 py-4 mobile-safe-bottom' : 'px-6 py-6'}
-          `}
-        >
+        <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 pb-[max(1rem,calc(1rem+env(safe-area-inset-bottom,0px)))] md:px-6 md:py-6 md:pb-6">
           {children}
         </div>
 
         {/* Close button (desktop only) */}
-        {!isMobile && (
-          <button
-            onClick={() => onOpenChange(false)}
-            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors mobile-touch-target"
-            aria-label="Bezárás"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => onOpenChange(false)}
+          className="hidden md:block absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors mobile-touch-target"
+          aria-label="Bezárás"
+        >
+          <X className="w-5 h-5" />
+        </button>
       </div>
     </div>
   );

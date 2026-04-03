@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
+import { portraitDocumentTagsSqlInList } from '@/lib/patient-portrait-tag';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,6 +14,7 @@ export const POST = authedHandler(async (req, { auth }) => {
       appointments: {},
       opDocuments: {},
       fotoDocuments: {},
+      portraitDocumentIds: {},
       stages: {},
     });
   }
@@ -20,7 +22,14 @@ export const POST = authedHandler(async (req, { auth }) => {
   const pool = getDbPool();
   const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
 
-  const [appointmentResult, opResult, fotoResult, stagesResult] = await Promise.all([
+  const portraitTagSql = `
+    EXISTS (
+      SELECT 1 FROM jsonb_array_elements_text(COALESCE(pd.tags, '[]'::jsonb)) AS elem
+      WHERE lower(elem) IN (${portraitDocumentTagsSqlInList()})
+    )
+  `;
+
+  const [appointmentResult, opResult, fotoResult, portraitResult, stagesResult] = await Promise.all([
     pool.query(
       `SELECT
          a.patient_id as "patientId",
@@ -54,6 +63,17 @@ export const POST = authedHandler(async (req, { auth }) => {
        WHERE patient_id = ANY($1::uuid[])
          AND (tags @> '["foto"]'::jsonb OR tags::text ILIKE '%"foto"%' OR tags::text ILIKE '%foto%')
        GROUP BY patient_id`,
+      [patientIds]
+    ),
+    pool.query(
+      `SELECT DISTINCT ON (patient_id)
+         patient_id as "patientId",
+         id as "documentId"
+       FROM patient_documents pd
+       WHERE patient_id = ANY($1::uuid[])
+         AND mime_type LIKE 'image/%'
+         AND ${portraitTagSql.replace(/\n/g, ' ')}
+       ORDER BY patient_id, uploaded_at DESC NULLS LAST, created_at DESC NULLS LAST`,
       [patientIds]
     ),
     (async () => {
@@ -107,6 +127,13 @@ export const POST = authedHandler(async (req, { auth }) => {
     fotoDocuments[row.patientId] = parseInt(row.count, 10);
   }
 
+  const portraitDocumentIds: Record<string, string> = {};
+  for (const row of portraitResult.rows) {
+    if (row.patientId && row.documentId) {
+      portraitDocumentIds[row.patientId] = row.documentId;
+    }
+  }
+
   // Stages
   const stages: Record<string, unknown> = {};
   for (const row of stagesResult.rows) {
@@ -144,5 +171,5 @@ export const POST = authedHandler(async (req, { auth }) => {
     }
   }
 
-  return NextResponse.json({ appointments, opDocuments, fotoDocuments, stages });
+  return NextResponse.json({ appointments, opDocuments, fotoDocuments, portraitDocumentIds, stages });
 });

@@ -11,19 +11,24 @@ export interface DocumentRequestInfo {
 }
 
 // Valid document tags (normalized)
-const VALID_TAGS = ['op', 'foto', 'zarojelentes', 'ambulans lap'];
+const VALID_TAGS = ['op', 'foto', 'zarojelentes', 'ambulans lap', 'egyeb'];
 
 /**
  * Normalize tag value to internal format
  */
 function normalizeTag(tagValue: string): string | undefined {
-  const normalized = tagValue.toLowerCase().trim();
-  
-  // Direct match
+  const trimmed = tagValue.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const normalized = trimmed.toLowerCase();
+
+  // Direct match (built-in document types)
   if (VALID_TAGS.includes(normalized)) {
     return normalized;
   }
-  
+
   // Map common variations
   const tagMap: Record<string, string> = {
     'op': 'op',
@@ -32,6 +37,8 @@ function normalizeTag(tagValue: string): string | undefined {
     'röntgen': 'op',
     'orthopantomogram': 'op',
     'foto': 'foto',
+    'portré': 'foto',
+    'portre': 'foto',
     'önarckép': 'foto',
     'arcfotó': 'foto',
     'szájfotó': 'foto',
@@ -40,9 +47,20 @@ function normalizeTag(tagValue: string): string | undefined {
     'záró jelentés': 'zarojelentes',
     'ambuláns lap': 'ambulans lap',
     'ambuláns': 'ambulans lap',
+    'ambulanslap': 'ambulans lap',
+    'ambulans': 'ambulans lap',
+    'egyeb': 'egyeb',
+    'általános': 'egyeb',
+    'altalanos': 'egyeb',
   };
-  
-  return tagMap[normalized] || undefined;
+
+  const mapped = tagMap[normalized];
+  if (mapped) {
+    return mapped;
+  }
+
+  // Egyéb, rendszerben használt címkék (patient_documents.tags) — eredeti írásmód megmarad
+  return trimmed;
 }
 
 /**
@@ -62,21 +80,23 @@ function parseRequestCommand(text: string): DocumentRequestInfo | null {
   const mentionMatch = commandBody.match(/@([a-z0-9+]+)/i);
   const patientMention = mentionMatch ? `@${mentionMatch[1]}` : undefined;
   
-  // Extract tag: tag="OP" or tag='OP' or tag=OP
-  const tagMatch = commandBody.match(/tag\s*=\s*["']?([^"'\s]+)["']?/i);
+  // Extract tag: tag="ambulans lap", tag='OP', or tag=OP
+  const tagQuoted =
+    commandBody.match(/tag\s*=\s*"([^"]+)"/i) ||
+    commandBody.match(/tag\s*=\s*'([^']+)'/i);
+  const tagBare = commandBody.match(/tag\s*=\s*([^\s"']+)/i);
+  const tagMatch = tagQuoted || tagBare;
   if (!tagMatch) {
-    // Invalid command - missing tag
     return null;
   }
-  
+
   const tagValue = tagMatch[1];
   const normalizedTag = normalizeTag(tagValue);
-  
+
   if (!normalizedTag) {
-    // Invalid tag value
     return null;
   }
-  
+
   return {
     isDocumentRequest: true,
     tag: normalizedTag,

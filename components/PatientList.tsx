@@ -8,6 +8,7 @@ import { formatDateForDisplay, calculateAge } from '@/lib/dateUtils';
 import { PatientCard } from './PatientCard';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { MobileTable } from './mobile/MobileTable';
+import { PatientListAvatar } from './PatientListAvatar';
 
 interface PatientListProps {
   patients: Patient[];
@@ -40,6 +41,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
   const [loadingAppointments, setLoadingAppointments] = useState(false);
   const [opDocuments, setOpDocuments] = useState<Record<string, number>>({});
   const [fotoDocuments, setFotoDocuments] = useState<Record<string, number>>({});
+  const [portraitDocumentIds, setPortraitDocumentIds] = useState<Record<string, string>>({});
   const [stages, setStages] = useState<Record<string, { stage: string; stageDate?: string; notes?: string; stageLabel?: string }>>({});
   const isMobile = useIsMobile();
   const router = useRouter();
@@ -65,6 +67,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
           setAppointments(data.appointments || {});
           setOpDocuments(data.opDocuments || {});
           setFotoDocuments(data.fotoDocuments || {});
+          setPortraitDocumentIds(data.portraitDocumentIds || {});
           setStages(data.stages || {});
         }
       } catch (error) {
@@ -197,13 +200,19 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
       <>
                 <td className="px-3 py-3 whitespace-nowrap">
                   <div className="flex items-center">
-                    <div className="flex-shrink-0 h-9 w-9">
-                      <div className="h-9 w-9 rounded-full bg-gradient-to-br from-medical-primary to-medical-primary-light flex items-center justify-center shadow-soft">
+                    {patient.id ? (
+                      <PatientListAvatar
+                        patientId={patient.id}
+                        patientName={patient.nev}
+                        portraitDocumentId={portraitDocumentIds[patient.id] ?? null}
+                      />
+                    ) : (
+                      <div className="flex-shrink-0 h-9 w-9 rounded-full bg-gradient-to-br from-medical-primary to-medical-primary-light flex items-center justify-center shadow-soft">
                         <span className="text-xs font-semibold text-white">
-                          {patient.nev ? patient.nev.split(' ').map(n => n.charAt(0)).join('').substring(0, 2) : '??'}
+                          {patient.nev ? patient.nev.split(' ').map((n) => n.charAt(0)).join('').substring(0, 2) : '??'}
                         </span>
                       </div>
-                    </div>
+                    )}
                     <div className="ml-3">
                       <div className="flex items-center gap-2">
                         <div
@@ -503,6 +512,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
         appointment={appointment}
         opDocumentCount={opDocuments[patient.id || ''] || 0}
         fotoDocumentCount={fotoDocuments[patient.id || ''] || 0}
+        portraitDocumentId={patient.id ? portraitDocumentIds[patient.id] ?? null : null}
         stage={patientStage}
         onView={onView}
         onEdit={canEdit ? onEdit : undefined}

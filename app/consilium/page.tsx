@@ -787,7 +787,7 @@ export default function ConsiliumPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-soft border-b border-gray-200/60 sticky top-0 z-40 backdrop-blur-sm bg-white/95">
+      <header className="bg-white shadow-soft border-b border-gray-200/60 sticky top-0 z-30 backdrop-blur-sm bg-white/95 max-md:mobile-safe-top">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-2 md:py-3 gap-3">
             <div className="flex items-center gap-3 min-w-0">
@@ -807,7 +807,7 @@ export default function ConsiliumPage() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 md:py-6 pb-24 md:pb-8 space-y-4">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 md:py-6 pb-mobile-nav-staff md:pb-8 space-y-4">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <section className="card p-4 space-y-3 lg:col-span-1">
             <div className="flex items-center justify-between gap-2">

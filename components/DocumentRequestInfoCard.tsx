@@ -17,9 +17,10 @@ interface DocumentRequestInfoCardProps {
 
 const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   'op': 'OP (máshol készített)',
-  'foto': 'Önarckép',
+  'foto': 'Önarckép / portré (foto)',
   'zarojelentes': 'Zárójelentés',
   'ambulans lap': 'Ambuláns lap',
+  'egyeb': 'Általános dokumentum',
   '': 'Általános dokumentum',
 };
 
@@ -114,21 +115,37 @@ export function DocumentRequestInfoCard({
   }, [documentRequest.patientMention, patientId, resolvedPatientId]);
 
   const handleUploaded = async (messageText: string) => {
-    // Send the message if callback provided
+    try {
+      await fetch('/api/user-tasks/complete-by-source', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(
+          chatType === 'doctor-doctor'
+            ? { sourceDoctorMessageId: messageId }
+            : { sourceMessageId: messageId }
+        ),
+      });
+    } catch (e) {
+      console.error('Feladat lezárása:', e);
+    }
+
     if (onSendMessage) {
       try {
         await onSendMessage(messageText);
       } catch (error) {
         console.error('Hiba az üzenet küldésekor:', error);
-        return; // Don't close modal if sending failed
+        return;
       }
     }
-    
-    // Close modal
+
     setShowModal(false);
   };
 
-  const documentTypeLabel = DOCUMENT_TYPE_LABELS[documentRequest.tag || ''] || 'Dokumentum';
+  const documentTypeLabel =
+    DOCUMENT_TYPE_LABELS[documentRequest.tag || ''] ||
+    documentRequest.tag ||
+    'Dokumentum';
   
   // Determine display name: prefer resolved name, then formatted mention, then patientName
   let displayPatientName: string | null = null;

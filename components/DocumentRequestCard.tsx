@@ -24,7 +24,7 @@ interface DocumentRequestCardProps {
 
 const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   'op': 'OP (máshol készített)',
-  'foto': 'Önarckép',
+  'foto': 'Önarckép / portré (foto)',
   'zarojelentes': 'Zárójelentés',
   'ambulans lap': 'Ambuláns lap',
   '': 'Általános dokumentum',

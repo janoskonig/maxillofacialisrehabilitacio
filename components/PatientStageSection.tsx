@@ -48,7 +48,9 @@ export function PatientStageSection({
 
         // Fetch catalog for new model stage labels (stageCode -> labelHu)
         if (data.useNewModel && stage && isStageEventEntry(stage)) {
-          const reason = data.timeline?.episodes?.[0]?.episode?.reason;
+          const eps = data.timeline?.episodes as { episode?: { reason?: string } }[] | undefined;
+          const reason =
+            eps?.[0]?.episode?.reason ?? eps?.map((e) => e.episode?.reason).find(Boolean);
           const catUrl = reason
             ? `/api/stage-catalog?reason=${encodeURIComponent(reason)}`
             : '/api/stage-catalog';

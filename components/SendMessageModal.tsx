@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { MessageCircle, Send, X, Search, User, Clock, Mail, ArrowLeft, Check, CheckCheck, Loader2 } from 'lucide-react';
+import { MessageCircle, Send, X, Search, User, Clock, Mail, ArrowLeft, Check, CheckCheck, Loader2, FileQuestion } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useRouter } from 'next/navigation';
 import { getMonogram, getLastName } from '@/lib/utils';
 import { MessageTextRenderer } from './MessageTextRenderer';
+import { DocumentRequestSendWizard } from './DocumentRequestSendWizard';
 
 interface Patient {
   id: string;
@@ -52,6 +53,7 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
   const [activeTab, setActiveTab] = useState<'send' | 'recent'>('send');
   const [pendingMessageId, setPendingMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [showRequestWizard, setShowRequestWizard] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -64,6 +66,7 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
       setSearchQuery('');
       setActiveTab('send');
       setConversationMessages([]);
+      setShowRequestWizard(false);
     }
   }, [isOpen]);
 
@@ -519,6 +522,15 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
                   {/* Message Input */}
                   <div className="border-t bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
                     <div className="flex items-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowRequestWizard(true)}
+                        className="flex-shrink-0 btn-secondary rounded-full w-10 h-10 sm:w-auto sm:rounded-lg sm:px-3 sm:py-2.5"
+                        title="Dokumentum bekérése"
+                      >
+                        <FileQuestion className="w-4 h-4 sm:mr-1" />
+                        <span className="hidden sm:inline text-sm">Bekérés</span>
+                      </button>
                       <textarea
                         value={message}
                         onChange={(e) => setMessage(e.target.value)}
@@ -537,6 +549,20 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
                       </button>
                     </div>
                   </div>
+
+                  {selectedPatient && (
+                    <DocumentRequestSendWizard
+                      isOpen={showRequestWizard}
+                      onClose={() => setShowRequestWizard(false)}
+                      patientId={selectedPatient.id}
+                      patientName={selectedPatient.nev}
+                      mode="chat_modal"
+                      onSent={() => {
+                        if (selectedPatient) fetchConversation(selectedPatient.id);
+                        fetchRecentMessages();
+                      }}
+                    />
+                  )}
                 </>
               )}
             </>

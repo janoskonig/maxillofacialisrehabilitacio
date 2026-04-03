@@ -239,7 +239,7 @@ export default function PatientViewPage() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-6 pb-20 md:pb-6">
+      <main className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-6 pb-mobile-nav-staff md:pb-6">
         {/* Episode & Stage Card */}
         <div className="mb-4 sm:mb-6">
           <EpisodeStageCard

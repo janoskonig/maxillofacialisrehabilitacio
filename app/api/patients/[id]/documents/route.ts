@@ -4,6 +4,7 @@ import { authedHandler } from '@/lib/api/route-handler';
 import { uploadFile, isFtpConfigured, getMaxFileSize } from '@/lib/ftp-client';
 import { logActivity, logActivityWithAuth } from '@/lib/activity';
 import { logger } from '@/lib/logger';
+import { tagStringIsPortraitTag } from '@/lib/patient-portrait-tag';
 
 // List all documents for a patient
 export const dynamic = 'force-dynamic';
@@ -192,6 +193,17 @@ export const POST = authedHandler(async (req, { auth, params }) => {
     if (!isImage) {
       return NextResponse.json(
         { error: 'Foto tag-gel csak képfájlok tölthetők fel' },
+        { status: 400 }
+      );
+    }
+  }
+
+  const hasPortraitTag = tags.some((tag) => tagStringIsPortraitTag(tag));
+  if (hasPortraitTag) {
+    const isImage = file.type && file.type.startsWith('image/');
+    if (!isImage) {
+      return NextResponse.json(
+        { error: 'Portré / önarckép címkével csak képfájlok tölthetők fel' },
         { status: 400 }
       );
     }

@@ -8,7 +8,7 @@ import { Patient } from '@/lib/types';
 import { getAllPatients, searchPatients, getPatientById } from '@/lib/storage';
 import { PatientList } from '@/components/PatientList';
 import { useToast } from '@/contexts/ToastContext';
-import { Plus, Search, Users, LogOut, Shield, Settings, Calendar, CalendarDays, MessageCircle, Filter, Download, Bell, X, BookOpen } from 'lucide-react';
+import { Plus, Search, Users, LogOut, Shield, Settings, Calendar, CalendarDays, MessageCircle, Filter, Download, Bell, X, BookOpen, ClipboardList } from 'lucide-react';
 import { getCurrentUser, getUserEmail, getUserRole, logout } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
 import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
@@ -338,7 +338,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-soft border-b border-gray-200/60 sticky top-0 z-40 backdrop-blur-sm bg-white/95">
+      <header className="bg-white shadow-soft border-b border-gray-200/60 sticky top-0 z-30 backdrop-blur-sm bg-white/95 max-md:mobile-safe-top">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-2 md:py-3">
             <div className="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
@@ -397,6 +397,13 @@ export default function Home() {
                   Üzenetek
                 </button>
                 <button
+                  onClick={() => router.push('/tasks')}
+                  className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2"
+                >
+                  <ClipboardList className="w-3.5 h-3.5" />
+                  Feladataim
+                </button>
+                <button
                   onClick={() => router.push('/settings')}
                   className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2"
                 >
@@ -415,7 +422,7 @@ export default function Home() {
           </div>
         </div>
       </header>
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 md:py-4 pb-20 md:pb-4">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 md:py-4 pb-mobile-nav-staff md:pb-4">
         <div className="space-y-2 md:space-y-3">
           {/* Header - hidden on mobile to save space */}
           <div className="hidden md:flex flex-row justify-between items-center gap-4">
@@ -635,7 +642,7 @@ export default function Home() {
       {(userRole === 'admin' || userRole === 'fogpótlástanász' || userRole === 'beutalo_orvos') && (
         <button
           onClick={handleNewPatient}
-          className="md:hidden fixed bottom-20 right-5 z-30 w-14 h-14 rounded-full bg-gradient-to-r from-medical-primary to-medical-primary-light text-white shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+          className="md:hidden fixed right-5 z-40 w-14 h-14 rounded-full bg-gradient-to-r from-medical-primary to-medical-primary-light text-white shadow-lg flex items-center justify-center active:scale-95 transition-transform bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px)+0.75rem)]"
           aria-label="Új beteg"
         >
           <Plus className="w-6 h-6" />

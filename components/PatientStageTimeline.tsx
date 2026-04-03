@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import type { PatientStageTimeline, PatientStageEntry, StageEventTimeline, StageCatalogEntry } from '@/lib/types';
 import { patientStageOptions } from '@/lib/types';
+import { LEGACY_MERGED_STAGE_EVENT_ID_PREFIX } from '@/lib/legacy-patient-stage-map';
 import { useToast } from '@/contexts/ToastContext';
 import { Calendar, Clock, ChevronDown, ChevronUp, Pencil, Check, X } from 'lucide-react';
 import { format } from 'date-fns';
@@ -65,7 +66,9 @@ export function PatientStageTimeline({
 
       if (data.timeline?.episodes?.length > 0) {
         setExpandedEpisodes(new Set([data.timeline.episodes[0].episodeId]));
-        const reason = data.timeline.episodes[0].episode?.reason;
+        const reason =
+          data.timeline.episodes[0].episode?.reason ??
+          data.timeline.episodes.map((e: { episode?: { reason?: string } }) => e.episode?.reason).find(Boolean);
         if (data.useNewModel && reason) {
           const catRes = await fetch(`/api/stage-catalog?reason=${encodeURIComponent(reason)}`, { credentials: 'include' });
           if (catRes.ok) {
@@ -81,6 +84,11 @@ export function PatientStageTimeline({
       setLoading(false);
     }
   };
+
+  const canPatchStageEventId = (id: string) =>
+    !id.startsWith(LEGACY_MERGED_STAGE_EVENT_ID_PREFIX) &&
+    !id.startsWith('stage-') &&
+    !id.startsWith('hist-');
 
   useEffect(() => {
     if (patientId) fetchTimeline();
@@ -243,7 +251,9 @@ export function PatientStageTimeline({
                 <span className="text-sm text-gray-600 flex items-center gap-1">
                   <Clock className="w-4 h-4" />
                   {format(new Date(currentStageDate), 'yyyy. MMMM d. HH:mm', { locale: hu })}
-                  {canEditStageStart && (currentStage as { id?: string }).id && (
+                  {canEditStageStart &&
+                    (currentStage as { id?: string }).id &&
+                    canPatchStageEventId((currentStage as { id: string }).id) && (
                     <button
                       type="button"
                       onClick={() => startEditStageStart((currentStage as { id: string }).id, currentStageDate)}
@@ -308,7 +318,7 @@ export function PatientStageTimeline({
                       const note = isStageEventEntry(stage) ? stage.note : isLegacyStage(stage) ? stage.notes : null;
                       const createdBy = stage && typeof stage === 'object' && 'createdBy' in stage ? (stage as { createdBy?: string }).createdBy : null;
                       const id = stage && typeof stage === 'object' && 'id' in stage ? (stage as { id: string }).id : `stage-${episodeIndex}-${stageIndex}`;
-                      const isNewModelWithId = typeof id === 'string' && id !== `stage-${episodeIndex}-${stageIndex}` && date;
+                      const isNewModelWithId = typeof id === 'string' && canPatchStageEventId(id) && !!date;
                       const isEditing = editingEventId === id;
                       return (
                         <div
@@ -392,7 +402,7 @@ export function PatientStageTimeline({
             const note = isStageEventEntry(stage) ? stage.note : isLegacyStage(stage) ? stage.notes : null;
             const createdBy = stage && typeof stage === 'object' && 'createdBy' in stage ? (stage as { createdBy?: string }).createdBy : null;
             const id = stage && typeof stage === 'object' && 'id' in stage ? (stage as { id: string }).id : `hist-${idx}`;
-            const isNewModelWithId = typeof id === 'string' && !id.startsWith('hist-') && date;
+            const isNewModelWithId = typeof id === 'string' && canPatchStageEventId(id) && !!date;
             const isEditing = editingEventId === id;
             return (
               <div key={id} className="flex items-start gap-4 pb-3 border-b border-gray-100 last:border-b-0 last:pb-0">

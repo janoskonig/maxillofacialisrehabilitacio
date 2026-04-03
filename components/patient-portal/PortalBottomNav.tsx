@@ -45,6 +45,7 @@ export function PortalBottomNav({ ohipPending = false }: PortalBottomNavProps) {
   ] as const;
 
   const moreItems = [
+    { label: 'Feladataim', icon: ClipboardList, action: () => handleNavigate('/patient-portal/tasks') },
     { label: 'Dokumentumok', icon: FileText, action: () => handleNavigate('/patient-portal/documents') },
     { label: 'OHIP-14 kérdőív', icon: ClipboardList, action: () => handleNavigate('/patient-portal/ohip14'), badge: ohipPending },
     { label: 'Adataim', icon: User, action: () => handleNavigate('/patient-portal/profile') },
@@ -53,7 +54,7 @@ export function PortalBottomNav({ ohipPending = false }: PortalBottomNavProps) {
 
   return (
     <>
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 mobile-safe-bottom">
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 mobile-safe-bottom">
         <div className="flex items-center justify-around h-14">
           {tabs.map((tab) => {
             const isActive = tab.match(pathname);

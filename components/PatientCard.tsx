@@ -5,6 +5,7 @@ import { Patient, patientStageOptions } from '@/lib/types';
 import { Phone, Mail, Calendar, Eye, Pencil, Trash2, Image, Camera, CheckCircle2, XCircle, Clock, Clock as ClockIcon, History, User } from 'lucide-react';
 import { formatDateForDisplay, calculateAge } from '@/lib/dateUtils';
 import { useRouter } from 'next/navigation';
+import { PatientListAvatar } from './PatientListAvatar';
 
 interface AppointmentInfo {
   id: string;
@@ -20,6 +21,8 @@ interface PatientCardProps {
   appointment?: AppointmentInfo;
   opDocumentCount?: number;
   fotoDocumentCount?: number;
+  /** Legfrissebb portré / önarckép dokumentum (fotodokumentáció címke) — a lista avatárja */
+  portraitDocumentId?: string | null;
   stage?: { stage: string; stageDate?: string; notes?: string; stageLabel?: string };
   onView: (patient: Patient) => void;
   onEdit?: (patient: Patient) => void;
@@ -36,6 +39,7 @@ function PatientCardComponent({
   appointment,
   opDocumentCount = 0,
   fotoDocumentCount = 0,
+  portraitDocumentId = null,
   stage,
   onView,
   onEdit,
@@ -133,8 +137,16 @@ function PatientCardComponent({
   return (
     <div className="card card-interactive space-y-3 animate-fade-in">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex-1 min-w-0">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0 flex items-start gap-2">
+          {patient.id && (
+            <PatientListAvatar
+              patientId={patient.id}
+              patientName={patient.nev}
+              portraitDocumentId={portraitDocumentId}
+            />
+          )}
+          <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="text-base font-semibold text-gray-900 truncate">
               {patient.nev || 'Név nélküli beteg'}
@@ -159,8 +171,9 @@ function PatientCardComponent({
           {userRole !== 'technikus' && patient.halalDatum && (
             <p className="text-sm text-gray-600 mt-0.5">Halál dátuma: {formatDateForDisplay(patient.halalDatum)}</p>
           )}
+          </div>
         </div>
-        <div className="flex items-center gap-1 ml-2">
+        <div className="flex items-center gap-1 flex-shrink-0">
           {patient.id && (
             <button
               onClick={handleHistoryClick}

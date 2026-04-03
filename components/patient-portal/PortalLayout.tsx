@@ -19,34 +19,39 @@ export function PortalLayout({ children }: PortalLayoutProps) {
   const [ohipPending, setOhipPending] = useState(false);
 
   useEffect(() => {
+    const ac = new AbortController();
+
     const fetchPatientInfo = async () => {
       try {
         const response = await fetch('/api/patient-portal/patient', {
           credentials: 'include',
+          signal: ac.signal,
         });
-        if (response.ok) {
-          const data = await response.json();
+        if (!response.ok || ac.signal.aborted) return;
+        const data = await response.json();
+        if (!ac.signal.aborted) {
           setPatientName(data.patient?.nev || null);
         }
       } catch (error) {
+        if ((error as Error).name === 'AbortError') return;
         console.error('Error fetching patient info:', error);
       }
     };
-    fetchPatientInfo();
 
     const checkOhipStatus = async () => {
       try {
         const [ohipRes, stagesRes] = await Promise.all([
-          fetch('/api/patient-portal/ohip14', { credentials: 'include' }),
-          fetch('/api/patient-portal/stages/current', { credentials: 'include' }),
+          fetch('/api/patient-portal/ohip14', { credentials: 'include', signal: ac.signal }),
+          fetch('/api/patient-portal/stages/current', { credentials: 'include', signal: ac.signal }),
         ]);
-        if (!ohipRes.ok || !stagesRes.ok) return;
+        if (ac.signal.aborted || !ohipRes.ok || !stagesRes.ok) return;
         const ohipData = await ohipRes.json();
         const stagesData = await stagesRes.json();
+        if (ac.signal.aborted) return;
         const cs = stagesData.currentStage;
         const stageCode = cs?.stageCode ?? null;
         const dd = cs?.deliveryDate ? new Date(cs.deliveryDate) : null;
-        const completedTps = (ohipData.responses || []).map((r: any) => r.timepoint);
+        const completedTps = (ohipData.responses || []).map((r: { timepoint: string }) => r.timepoint);
 
         const { getTimepointAvailability } = await import('@/lib/ohip14-timepoint-stage');
         const { ohip14TimepointOptions } = await import('@/lib/types');
@@ -54,10 +59,15 @@ export function PortalLayout({ children }: PortalLayoutProps) {
           const avail = getTimepointAvailability(tp.value, stageCode, dd);
           return avail.allowed && !completedTps.includes(tp.value);
         });
-        setOhipPending(pending);
-      } catch {}
+        if (!ac.signal.aborted) setOhipPending(pending);
+      } catch (e) {
+        if ((e as Error).name === 'AbortError') return;
+      }
     };
-    checkOhipStatus();
+
+    void fetchPatientInfo();
+    void checkOhipStatus();
+    return () => ac.abort();
   }, []);
 
   const handleLogout = async () => {
@@ -81,7 +91,7 @@ export function PortalLayout({ children }: PortalLayoutProps) {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
+      <header className="bg-white shadow-sm border-b sticky top-0 z-30 max-sm:mobile-safe-top">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8">
           <div className="flex items-center justify-between py-3 sm:py-4">
             <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
@@ -123,6 +133,17 @@ export function PortalLayout({ children }: PortalLayoutProps) {
               <LayoutDashboard className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               <span className="hidden xs:inline">Áttekintés</span>
               <span className="xs:hidden">Áttek.</span>
+            </a>
+            <a
+              href="/patient-portal/tasks"
+              className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
+                pathname === '/patient-portal/tasks'
+                  ? 'text-medical-primary border-medical-primary'
+                  : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
+              }`}
+            >
+              <ClipboardList className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              Feladataim
             </a>
             <a
               href="/patient-portal/appointments"
@@ -191,7 +212,7 @@ export function PortalLayout({ children }: PortalLayoutProps) {
       </nav>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-6 pb-20 sm:pb-6">
+      <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-6 pb-mobile-nav-portal sm:pb-6">
         {children}
       </main>
 

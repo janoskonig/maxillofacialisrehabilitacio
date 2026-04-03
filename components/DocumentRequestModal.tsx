@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { X, Upload, FileText, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
 import { MobileBottomSheet } from './mobile/MobileBottomSheet';
@@ -24,13 +24,42 @@ interface DocumentRequestModalProps {
   messageId?: string; // Az üzenet ID-ja, amire válaszolunk (ha van)
 }
 
-const DOCUMENT_TYPES = [
+type DocumentTypeChoice = {
+  value: string;
+  label: string;
+  icon: typeof ImageIcon;
+  description: string;
+};
+
+const DOCUMENT_TYPES: DocumentTypeChoice[] = [
   { value: 'op', label: 'OP (máshol készített)', icon: ImageIcon, description: 'Máshol készített panorámaröntgen' },
-  { value: 'foto', label: 'Önarckép', icon: ImageIcon, description: 'Arc- és szájfotó' },
+  {
+    value: 'foto',
+    label: 'Önarckép / portré',
+    icon: ImageIcon,
+    description: 'Tárolt címke: foto',
+  },
   { value: 'zarojelentes', label: 'Zárójelentés', icon: FileText, description: 'Kezelés zárójelentése' },
   { value: 'ambulans lap', label: 'Ambuláns lap', icon: FileText, description: 'Ambuláns kezelési lap' },
-  { value: '', label: 'Általános', icon: FileText, description: 'Más típusú dokumentum' },
-] as const;
+  { value: 'egyeb', label: 'Általános', icon: FileText, description: 'Más típusú dokumentum' },
+];
+
+function buildDocumentTypeChoices(requestedTag?: string | null): DocumentTypeChoice[] {
+  const choices: DocumentTypeChoice[] = [...DOCUMENT_TYPES];
+  const rt = requestedTag?.trim();
+  if (rt) {
+    const exists = choices.some((p) => p.value.toLowerCase() === rt.toLowerCase());
+    if (!exists) {
+      choices.push({
+        value: rt,
+        label: `Címke: ${rt}`,
+        icon: FileText,
+        description: 'A kérésben megadott címke',
+      });
+    }
+  }
+  return choices;
+}
 
 export function DocumentRequestModal({
   isOpen,
@@ -57,10 +86,18 @@ export function DocumentRequestModal({
   const [loadingPatients, setLoadingPatients] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const typeChoices = useMemo(() => buildDocumentTypeChoices(requestedTag), [requestedTag]);
+
   // Reset when modal opens/closes or requested values change
   useEffect(() => {
     if (isOpen) {
-      setSelectedType(requestedTag || null);
+      const tag =
+        requestedTag === undefined || requestedTag === null
+          ? null
+          : requestedTag === ''
+            ? 'egyeb'
+            : requestedTag;
+      setSelectedType(tag);
       setSelectedPatientIdLocal(requestedPatientId || selectedPatientId || null);
     } else {
       setSelectedType(null);
@@ -247,7 +284,7 @@ export function DocumentRequestModal({
           Dokumentum típusa <span className="text-red-500">*</span>
         </label>
         <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-2'} gap-3`}>
-          {DOCUMENT_TYPES.map((type) => {
+          {typeChoices.map((type) => {
             const Icon = type.icon;
             const isSelected = selectedType === type.value;
             return (

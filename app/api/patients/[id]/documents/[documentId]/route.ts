@@ -4,6 +4,7 @@ import { authedHandler, roleHandler } from '@/lib/api/route-handler';
 import { downloadFile, deleteFile } from '@/lib/ftp-client';
 import { logActivity, logActivityWithAuth } from '@/lib/activity';
 import { logger } from '@/lib/logger';
+import { tagStringIsPortraitTag } from '@/lib/patient-portrait-tag';
 
 // Download a document
 export const dynamic = 'force-dynamic';
@@ -182,11 +183,12 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
     return t === 'op' || t === 'orthopantomogram';
   });
   const hasFotoTag = tags.some((tag: string) => tag.toLowerCase() === 'foto');
+  const hasPortraitTag = tags.some((tag: string) => tagStringIsPortraitTag(tag));
   const isImage = typeof existingDoc.mime_type === 'string' && existingDoc.mime_type.startsWith('image/');
 
-  if ((hasOPTag || hasFotoTag) && !isImage) {
+  if ((hasOPTag || hasFotoTag || hasPortraitTag) && !isImage) {
     return NextResponse.json(
-      { error: 'OP/Foto tag csak képfájlhoz adható' },
+      { error: 'OP / foto / portré címke csak képfájlhoz adható' },
       { status: 400 }
     );
   }

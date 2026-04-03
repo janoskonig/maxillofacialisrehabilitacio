@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Home, CalendarDays, MessageCircle, MoreHorizontal, Shield, Settings, LogOut, BookOpen, CalendarClock, Users } from 'lucide-react';
+import { Home, CalendarDays, MessageCircle, MoreHorizontal, Shield, Settings, LogOut, BookOpen, CalendarClock, Users, ClipboardList } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { getCurrentUser, logout, type AuthUser } from '@/lib/auth';
 import { useFeedback } from '@/components/FeedbackContext';
@@ -10,15 +10,33 @@ import { MobileBottomSheet } from './MobileBottomSheet';
 export function MobileBottomNav() {
   const router = useRouter();
   const pathname = usePathname();
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<AuthUser | null | undefined>(undefined);
   const [moreOpen, setMoreOpen] = useState(false);
   const { openModal: openFeedback } = useFeedback();
 
   useEffect(() => {
-    getCurrentUser().then(setUser).catch(() => {});
+    getCurrentUser()
+      .then(setUser)
+      .catch(() => setUser(null));
   }, []);
 
-  if (!user) return null;
+  if (user === null) return null;
+
+  if (user === undefined) {
+    return (
+      <nav
+        className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 mobile-safe-bottom"
+        aria-label="Navigáció betöltése"
+        aria-busy="true"
+      >
+        <div className="flex items-center justify-around h-14">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="w-10 h-8 rounded-md bg-gray-100 animate-pulse" />
+          ))}
+        </div>
+      </nav>
+    );
+  }
 
   const handleLogout = () => {
     setMoreOpen(false);
@@ -39,6 +57,7 @@ export function MobileBottomNav() {
   ] as const;
 
   const moreItems: { label: string; icon: typeof Shield; action: () => void; show: boolean }[] = [
+    { label: 'Feladataim', icon: ClipboardList, action: () => handleNavigate('/tasks'), show: true },
     { label: 'Admin', icon: Shield, action: () => handleNavigate('/admin'), show: user.role === 'admin' },
     { label: 'Konzílium', icon: Users, action: () => handleNavigate('/consilium'), show: user.role !== 'technikus' },
     { label: 'Időpontok kezelése', icon: CalendarClock, action: () => handleNavigate('/time-slots'), show: user.role === 'admin' || user.role === 'fogpótlástanász' },
@@ -50,7 +69,7 @@ export function MobileBottomNav() {
 
   return (
     <>
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 mobile-safe-bottom">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 mobile-safe-bottom">
         <div className="flex items-center justify-around h-14">
           {tabs.map((tab) => {
             const isActive = tab.match(pathname);

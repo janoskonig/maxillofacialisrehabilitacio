@@ -89,7 +89,7 @@ export default function NewPatientPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-soft border-b border-gray-200/60 sticky top-0 z-40 backdrop-blur-sm bg-white/95">
+      <header className="bg-white shadow-soft border-b border-gray-200/60 sticky top-0 z-30 backdrop-blur-sm bg-white/95 max-md:mobile-safe-top">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-2 md:py-3">
             <div className="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
@@ -118,7 +118,7 @@ export default function NewPatientPage() {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 pb-20 md:pb-4">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 pb-mobile-nav-staff md:pb-4">
         <PatientForm
           patient={null}
           onSave={handleSave}

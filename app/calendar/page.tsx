@@ -154,7 +154,7 @@ export default function CalendarPage() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-20 md:pb-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-mobile-nav-staff md:pb-8">
         <div className="space-y-6">
           {/* Link to time slots management page for fogpótlástanász and admin */}
           {currentUser && (currentUser.role === 'fogpótlástanász' || currentUser.role === 'admin') && (

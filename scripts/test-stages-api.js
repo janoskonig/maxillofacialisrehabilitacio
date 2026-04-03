@@ -95,25 +95,35 @@ async function runTests() {
     const timelineResponse = await makeRequest('GET', `/api/patients/${PATIENT_ID}/stages`);
     console.log(`   Status: ${timelineResponse.status}`);
     if (timelineResponse.status === 200) {
-      console.log(`   ✅ Sikeres - Current stage: ${timelineResponse.data.timeline?.currentStage?.stage || 'Nincs'}`);
+      const cs = timelineResponse.data.timeline?.currentStage;
+      const stageLabel = cs?.stageCode ?? cs?.stage ?? 'Nincs';
+      console.log(`   ✅ Sikeres - Current stage: ${stageLabel}`);
+      console.log(`   useNewModel: ${timelineResponse.data.useNewModel}`);
       console.log(`   Epizódok száma: ${timelineResponse.data.timeline?.episodes?.length || 0}`);
     } else {
       console.log(`   ❌ Hiba: ${JSON.stringify(timelineResponse.data)}`);
     }
     console.log('');
 
-    // Test 2: POST new stage
-    console.log('2️⃣ POST /api/patients/[id]/stages - Új stádium létrehozása');
-    const newStageResponse = await makeRequest('POST', `/api/patients/${PATIENT_ID}/stages`, {
-      stage: 'arajanlatra_var',
-      notes: 'Teszt stádium változtatás',
-    });
-    console.log(`   Status: ${newStageResponse.status}`);
-    if (newStageResponse.status === 201) {
-      console.log(`   ✅ Sikeres - Új stádium: ${newStageResponse.data.stage?.stage}`);
-      console.log(`   Episode ID: ${newStageResponse.data.stage?.episodeId}`);
+    // Test 2: POST new stage (új modell: nyitott epizód + stageCode)
+    console.log('2️⃣ POST /api/patients/[id]/stages - Új stádium (episodeId + stageCode)');
+    const epListRes = await makeRequest('GET', `/api/patients/${PATIENT_ID}/episodes`);
+    const openEp = epListRes.data?.episodes?.find((e) => e.status === 'open');
+    if (!openEp) {
+      console.log('   ⚠️ Nincs nyitott epizód — kihagyva (előbb POST /episodes vagy new-episode)');
     } else {
-      console.log(`   ❌ Hiba: ${JSON.stringify(newStageResponse.data)}`);
+      const newStageResponse = await makeRequest('POST', `/api/patients/${PATIENT_ID}/stages`, {
+        episodeId: openEp.id,
+        stageCode: 'STAGE_2',
+        note: 'Teszt stádium változtatás',
+      });
+      console.log(`   Status: ${newStageResponse.status}`);
+      if (newStageResponse.status === 201) {
+        console.log(`   ✅ Sikeres - stageCode: ${newStageResponse.data.stage?.stageCode}`);
+        console.log(`   Episode ID: ${newStageResponse.data.stage?.episodeId}`);
+      } else {
+        console.log(`   ❌ Hiba: ${JSON.stringify(newStageResponse.data)}`);
+      }
     }
     console.log('');
 
@@ -132,15 +142,16 @@ async function runTests() {
     console.log('');
 
     // Test 4: POST new episode
-    console.log('4️⃣ POST /api/patients/[id]/stages/new-episode - Új epizód indítása');
+    console.log('4️⃣ POST /api/patients/[id]/stages/new-episode - Új epizód (patient_episodes + STAGE_0)');
     const newEpisodeResponse = await makeRequest('POST', `/api/patients/${PATIENT_ID}/stages/new-episode`, {
-      stage: 'uj_beteg',
       notes: 'Teszt új epizód',
+      chiefComplaint: 'API teszt — új epizód',
+      reason: 'onkológiai kezelés utáni állapot',
     });
     console.log(`   Status: ${newEpisodeResponse.status}`);
     if (newEpisodeResponse.status === 201) {
       console.log(`   ✅ Sikeres - Új epizód ID: ${newEpisodeResponse.data.episodeId}`);
-      console.log(`   Stádium: ${newEpisodeResponse.data.stage?.stage}`);
+      console.log(`   chiefComplaint: ${newEpisodeResponse.data.episode?.chiefComplaint}`);
     } else {
       console.log(`   ❌ Hiba: ${JSON.stringify(newEpisodeResponse.data)}`);
     }

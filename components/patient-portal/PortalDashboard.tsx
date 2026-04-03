@@ -41,6 +41,7 @@ export function PortalDashboard() {
   const [processingAppointment, setProcessingAppointment] = useState<string | null>(null);
   const [ohipPending, setOhipPending] = useState(false);
   const [ohipTimepointLabel, setOhipTimepointLabel] = useState<string | null>(null);
+  const [openTaskCount, setOpenTaskCount] = useState<number | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -91,6 +92,16 @@ export function PortalDashboard() {
         }
       } catch (error) {
         console.error('Error fetching OHIP status:', error);
+      }
+
+      try {
+        const tasksRes = await fetch('/api/patient-portal/tasks', { credentials: 'include' });
+        if (tasksRes.ok) {
+          const tasksData = await tasksRes.json();
+          setOpenTaskCount((tasksData.items || []).length);
+        }
+      } catch {
+        setOpenTaskCount(null);
       }
 
       // Fetch unread message count
@@ -260,6 +271,32 @@ export function PortalDashboard() {
         <p className="text-sm sm:text-base text-gray-600 mt-1 sm:mt-2">
           Itt találhatja az időpontjait, dokumentumait és egyéb információit.
         </p>
+      </div>
+
+      {/* Feladataim összefoglaló */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <ClipboardList className="w-4 h-4 sm:w-5 sm:h-5 text-medical-primary" />
+              Feladataim
+            </h2>
+            <p className="text-sm text-gray-600 mt-1">
+              {openTaskCount === null
+                ? 'Dokumentumkérések és OHIP teendők egy listában.'
+                : openTaskCount === 0
+                  ? 'Jelenleg nincs nyitott feladat.'
+                  : `${openTaskCount} nyitott feladat.`}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => router.push('/patient-portal/tasks')}
+            className="btn-primary text-sm sm:text-base px-4 py-2.5 w-full sm:w-auto"
+          >
+            Megnyitás
+          </button>
+        </div>
       </div>
 
       {/* Patient Basic Info */}

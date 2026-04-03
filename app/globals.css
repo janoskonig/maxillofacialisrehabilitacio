@@ -11,8 +11,9 @@
   
   body {
     @apply text-gray-900 bg-gray-50;
-    overflow-x: hidden; /* Prevent horizontal scroll */
-    overscroll-behavior-y: contain; /* Prevent overscroll bounce on mobile */
+    /* Csak a body: html+body együttes overflow-x gyakran törött lapgörgetést okoz Chrome mobilban */
+    overflow-x: clip;
+    overscroll-behavior-y: auto;
   }
 }
 
@@ -319,20 +320,11 @@
     font-size: 16px !important;
   }
   
-  /* Better scrolling on mobile */
-  * {
-    -webkit-overflow-scrolling: touch;
-  }
+  /* Ne alkalmazzunk -webkit-overflow-scrolling: touch minden elemre — Chrome mobilon megtörheti a lapgörgetést */
   
-  /* Prevent horizontal scroll on mobile */
-  body, html {
-    overflow-x: hidden;
-    max-width: 100vw;
-  }
-  
-  /* Prevent overscroll bounce */
+  /* Csak a body-n: a html + body együttes overflow-x: hidden gyakran dupla scroll konténert eredményez */
   body {
-    overscroll-behavior-y: contain;
+    max-width: 100vw;
   }
 }
 
@@ -344,6 +336,19 @@
 
 .mobile-safe-bottom {
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Fixed bottom nav is h-14 (3.5rem) + safe-area; extra ~1rem so last lines are not tight */
+@media (max-width: 767px) {
+  .pb-mobile-nav-staff {
+    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (max-width: 639px) {
+  .pb-mobile-nav-portal {
+    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 /* Touch target */

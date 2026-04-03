@@ -1,12 +1,25 @@
 'use client';
 
-import { ReactNode, memo, useRef } from 'react';
+import { ReactNode, memo, useRef, useState, useLayoutEffect, useSyncExternalStore } from 'react';
 import React from 'react';
-import { useVirtualizer } from '@tanstack/react-virtual';
-import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { useVirtualizer, useWindowVirtualizer } from '@tanstack/react-virtual';
 import { MobileSkeletonCard } from './MobileSkeletonCard';
 
 const VIRTUALIZE_THRESHOLD = 40;
+
+/** Matches Tailwind md: (768px). SSR/hydration-safe: server + first paint = desktop, then client updates. */
+function useMaxMd() {
+  return useSyncExternalStore(
+    (onStoreChange) => {
+      if (typeof window === 'undefined') return () => {};
+      const mq = window.matchMedia('(max-width: 767px)');
+      mq.addEventListener('change', onStoreChange);
+      return () => mq.removeEventListener('change', onStoreChange);
+    },
+    () => window.matchMedia('(max-width: 767px)').matches,
+    () => false
+  );
+}
 
 interface MobileTableProps<T> {
   items: T[];
@@ -39,18 +52,43 @@ function MobileTableComponent<T>({
   estimateRowHeight = 56,
   estimateCardHeight = 120,
 }: MobileTableProps<T>) {
-  const breakpoint = useBreakpoint();
-  const isMobile = breakpoint === 'mobile';
+  const isMobile = useMaxMd();
   const scrollParentRef = useRef<HTMLDivElement>(null);
+  const windowListAnchorRef = useRef<HTMLDivElement>(null);
+  const [windowScrollMargin, setWindowScrollMargin] = useState(0);
 
   const shouldVirtualize = items.length > VIRTUALIZE_THRESHOLD;
 
-  const rowVirtualizer = useVirtualizer({
-    count: shouldVirtualize ? items.length : 0,
+  const tableVirtualizer = useVirtualizer({
+    count: !isMobile && shouldVirtualize ? items.length : 0,
     getScrollElement: () => scrollParentRef.current,
-    estimateSize: () => (isMobile ? estimateCardHeight : estimateRowHeight),
+    estimateSize: () => estimateRowHeight,
     overscan: 10,
   });
+
+  const windowVirtualizer = useWindowVirtualizer({
+    count: isMobile && shouldVirtualize ? items.length : 0,
+    estimateSize: () => estimateCardHeight,
+    overscan: 10,
+    scrollMargin: windowScrollMargin,
+  });
+
+  useLayoutEffect(() => {
+    if (!isMobile || !shouldVirtualize) return;
+    const el = windowListAnchorRef.current;
+    if (!el) return;
+    const update = () => {
+      setWindowScrollMargin(el.getBoundingClientRect().top + window.scrollY);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    window.addEventListener('resize', update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, [isMobile, shouldVirtualize, items.length]);
 
   if (loading) {
     if (isMobile) {
@@ -105,15 +143,18 @@ function MobileTableComponent<T>({
       );
     }
     return (
-      <div ref={scrollParentRef} className={`overflow-auto ${className}`} style={{ maxHeight: '80vh' }}>
-        <div style={{ height: rowVirtualizer.getTotalSize(), position: 'relative' }}>
-          {rowVirtualizer.getVirtualItems().map((virtualItem) => {
+      <div ref={windowListAnchorRef} className={className}>
+        <div
+          className="relative w-full"
+          style={{ height: windowVirtualizer.getTotalSize() }}
+        >
+          {windowVirtualizer.getVirtualItems().map((virtualItem) => {
             const item = items[virtualItem.index];
             return (
               <div
                 key={keyExtractor(item, virtualItem.index)}
                 data-index={virtualItem.index}
-                ref={rowVirtualizer.measureElement}
+                ref={windowVirtualizer.measureElement}
                 style={{
                   position: 'absolute',
                   top: 0,
@@ -148,7 +189,7 @@ function MobileTableComponent<T>({
             <tbody className="bg-white divide-y divide-gray-200">
               {items.map((item, index) => {
                 const rowContent = renderRow(item, index);
-                const defaultClassName = "hover:bg-gray-50";
+                const defaultClassName = 'hover:bg-gray-50';
                 const customClassName = rowClassName ? rowClassName(item, index) : '';
                 const finalClassName = customClassName ? `${defaultClassName} ${customClassName}` : defaultClassName;
                 return (
@@ -177,34 +218,34 @@ function MobileTableComponent<T>({
             </thead>
           )}
           <tbody className="bg-white divide-y divide-gray-200">
-            {/* spacer row for virtual offset */}
-            {rowVirtualizer.getVirtualItems().length > 0 && rowVirtualizer.getVirtualItems()[0].start > 0 && (
-              <tr><td colSpan={100} style={{ height: rowVirtualizer.getVirtualItems()[0].start, padding: 0 }} /></tr>
+            {tableVirtualizer.getVirtualItems().length > 0 && tableVirtualizer.getVirtualItems()[0].start > 0 && (
+              <tr>
+                <td colSpan={100} style={{ height: tableVirtualizer.getVirtualItems()[0].start, padding: 0 }} />
+              </tr>
             )}
-            {rowVirtualizer.getVirtualItems().map((virtualItem) => {
+            {tableVirtualizer.getVirtualItems().map((virtualItem) => {
               const item = items[virtualItem.index];
-              const defaultClassName = "hover:bg-gray-50";
+              const defaultClassName = 'hover:bg-gray-50';
               const customClassName = rowClassName ? rowClassName(item, virtualItem.index) : '';
               const finalClassName = customClassName ? `${defaultClassName} ${customClassName}` : defaultClassName;
               return (
                 <tr
                   key={keyExtractor(item, virtualItem.index)}
                   data-index={virtualItem.index}
-                  ref={rowVirtualizer.measureElement}
+                  ref={tableVirtualizer.measureElement}
                   className={finalClassName}
                 >
                   {renderRow(item, virtualItem.index)}
                 </tr>
               );
             })}
-            {/* spacer row for bottom padding */}
-            {rowVirtualizer.getVirtualItems().length > 0 && (
+            {tableVirtualizer.getVirtualItems().length > 0 && (
               <tr>
                 <td
                   colSpan={100}
                   style={{
-                    height: rowVirtualizer.getTotalSize() -
-                      (rowVirtualizer.getVirtualItems().at(-1)?.end ?? 0),
+                    height:
+                      tableVirtualizer.getTotalSize() - (tableVirtualizer.getVirtualItems().at(-1)?.end ?? 0),
                     padding: 0,
                   }}
                 />

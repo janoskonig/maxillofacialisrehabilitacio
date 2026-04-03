@@ -1824,6 +1824,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
         <div id="section-adminisztracio" className="scroll-mt-20 sm:scroll-mt-24">
           <PatientDocuments
             patientId={patientId}
+            patientName={currentPatient?.nev ?? null}
             isViewOnly={isViewOnly}
             canUpload={userRole === 'admin' || userRole === 'fogpótlástanász' || userRole === 'beutalo_orvos'}
             canDelete={userRole === 'admin'}

@@ -2,16 +2,19 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { PatientDocument } from '@/lib/types';
-import { Upload, File, Download, Trash2, X, Tag, Plus, Package, AlertTriangle, Loader2 } from 'lucide-react';
+import { Upload, File, Download, Trash2, X, Tag, Plus, Package, AlertTriangle, Loader2, FileQuestion } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth';
 import { formatDateForDisplay } from '@/lib/dateUtils';
 import { useToast } from '@/contexts/ToastContext';
 import { logEvent } from '@/lib/event-logger';
 import { DocumentCard } from './DocumentCard';
 import { LightboxModal } from './LightboxModal';
+import { DocumentRequestSendWizard } from './DocumentRequestSendWizard';
+import { tagStringIsPortraitTag } from '@/lib/patient-portrait-tag';
 
 interface PatientDocumentsProps {
   patientId: string | null;
+  patientName?: string | null;
   isViewOnly?: boolean;
   canUpload?: boolean;
   canDelete?: boolean;
@@ -21,6 +24,7 @@ interface PatientDocumentsProps {
 
 export function PatientDocuments({ 
   patientId, 
+  patientName = null,
   isViewOnly = false, 
   canUpload = false, 
   canDelete = false,
@@ -54,6 +58,7 @@ export function PatientDocuments({
     missingDocTags: string[];
   } | null>(null);
   const [previewDocument, setPreviewDocument] = useState<PatientDocument | null>(null);
+  const [showRequestWizard, setShowRequestWizard] = useState(false);
 
   useEffect(() => {
     const checkRole = async () => {
@@ -94,11 +99,15 @@ export function PatientDocuments({
       tag.toLowerCase() === 'op' || 
       tag.toLowerCase() === 'orthopantomogram'
     );
-    setFileAccept(hasOPTag ? 'image/*' : undefined);
+    const needsImageOnly =
+      hasOPTag ||
+      tags.some((tag) => tag.toLowerCase() === 'foto') ||
+      tags.some((tag) => tagStringIsPortraitTag(tag));
+    setFileAccept(needsImageOnly ? 'image/*' : undefined);
     
     // Also update the input element's accept attribute if ref is available
     if (fileInputRef.current) {
-      if (hasOPTag) {
+      if (needsImageOnly) {
         fileInputRef.current.setAttribute('accept', 'image/*');
       } else {
         fileInputRef.current.removeAttribute('accept');
@@ -184,6 +193,18 @@ export function PatientDocuments({
         return;
       }
     }
+
+    const hasPortraitTag = tags.some((tag) => tagStringIsPortraitTag(tag));
+    if (hasPortraitTag) {
+      const invalidFiles = fileArray.filter((file) => !file.type.startsWith('image/'));
+      if (invalidFiles.length > 0) {
+        showToast(
+          'Portré / önarckép címkével csak képfájlok tölthetők fel. Kérjük, válasszon képet, vagy távolítsa el a címkét.',
+          'error'
+        );
+        return;
+      }
+    }
     
     setSelectedFiles(fileArray);
     setShowUploadForm(true);
@@ -249,6 +270,18 @@ export function PatientDocuments({
       const invalidFiles = selectedFiles.filter(file => !file.type.startsWith('image/'));
       if (invalidFiles.length > 0) {
         showToast('Foto tag-gel csak képfájlok tölthetők fel. Kérjük, válasszon ki képfájlokat vagy távolítsa el a foto tag-et.', 'error');
+        return;
+      }
+    }
+
+    const hasPortraitTag = tags.some((tag) => tagStringIsPortraitTag(tag));
+    if (hasPortraitTag) {
+      const invalidFiles = selectedFiles.filter((file) => !file.type.startsWith('image/'));
+      if (invalidFiles.length > 0) {
+        showToast(
+          'Portré / önarckép címkével csak képfájlok tölthetők fel. Kérjük, válasszon képet, vagy távolítsa el a címkét.',
+          'error'
+        );
         return;
       }
     }
@@ -464,6 +497,17 @@ export function PatientDocuments({
           return;
         }
       }
+
+      if (tagStringIsPortraitTag(tag) && selectedFiles.length > 0) {
+        const invalidFiles = selectedFiles.filter((file) => !file.type.startsWith('image/'));
+        if (invalidFiles.length > 0) {
+          showToast(
+            'Portré / önarckép címkével csak képfájlok tölthetők fel. Kérjük, válasszon képet, vagy távolítsa el a nem képfájlokat.',
+            'error'
+          );
+          return;
+        }
+      }
       
       setTags([...tags, tag]);
       setNewTag('');
@@ -676,21 +720,41 @@ export function PatientDocuments({
             </button>
           )}
           {canUpload && !isViewOnly && (
-            <button
-              onClick={() => {
-                setShowUploadForm(!showUploadForm);
-                if (!showUploadForm && fileInputRef.current) {
-                  fileInputRef.current.click();
-                }
-              }}
-              className="btn-primary text-sm"
-            >
-              <Upload className="w-4 h-4 mr-2" />
-              Feltöltés
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => setShowRequestWizard(true)}
+                className="btn-secondary text-sm"
+              >
+                <FileQuestion className="w-4 h-4 mr-2" />
+                Dokumentum bekérése
+              </button>
+              <button
+                onClick={() => {
+                  setShowUploadForm(!showUploadForm);
+                  if (!showUploadForm && fileInputRef.current) {
+                    fileInputRef.current.click();
+                  }
+                }}
+                className="btn-primary text-sm"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                Feltöltés
+              </button>
+            </>
           )}
         </div>
       </div>
+
+      {patientId && canUpload && !isViewOnly && (
+        <DocumentRequestSendWizard
+          isOpen={showRequestWizard}
+          onClose={() => setShowRequestWizard(false)}
+          patientId={patientId}
+          patientName={patientName}
+          mode="admin"
+        />
+      )}
 
       {/* NEAK Export Status */}
       {neakExportStatus && !neakExportStatus.isReady && (

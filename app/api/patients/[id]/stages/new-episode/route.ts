@@ -1,12 +1,17 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
-import { PatientStageEntry } from '@/lib/types';
 import { logActivity } from '@/lib/activity';
+import {
+  createOpenEpisodeWithInitialStageZero,
+  EPISODE_REASON_VALUES,
+} from '@/lib/patient-episode-create';
 
 /**
- * Start new episode for patient
+ * Új ellátási epizód (ugyanaz, mint POST /api/patients/[id]/episodes).
  * POST /api/patients/[id]/stages/new-episode
+ * Body: { reason?, chiefComplaint?, caseTitle?, notes?, parentEpisodeId?, triggerType?, treatmentTypeId? }
+ * Ha reason/chiefComplaint hiányzik: anamnesis + notes alapú feltöltés (API-kompatibilitás).
  */
 export const dynamic = 'force-dynamic';
 
@@ -14,99 +19,76 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
   const pool = getDbPool();
   const patientId = params.id;
 
-  // Check if patient exists
-  const patientCheck = await pool.query(
-    'SELECT id FROM patients WHERE id = $1',
-    [patientId]
-  );
-
+  const patientCheck = await pool.query('SELECT id FROM patients WHERE id = $1', [patientId]);
   if (patientCheck.rows.length === 0) {
-    return NextResponse.json(
-      { error: 'Beteg nem található' },
-      { status: 404 }
-    );
+    return NextResponse.json({ error: 'Beteg nem található' }, { status: 404 });
+  }
+
+  const tableExists = await pool.query(
+    `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'patient_episodes'`,
+  );
+  if (tableExists.rows.length === 0) {
+    return NextResponse.json({ error: 'patient_episodes tábla nem létezik – futtasd a migrációt' }, { status: 503 });
   }
 
   const body = await req.json();
-  const { stage, notes, stageDate } = body;
+  const allowedReasons = new Set<string>(EPISODE_REASON_VALUES);
+  let reason = body.reason as string | undefined;
+  let chiefComplaint = (body.chiefComplaint as string)?.trim?.() || '';
 
-  // Default to 'uj_beteg' if not specified
-  const newStage = stage || 'uj_beteg';
+  const anamnesis = await pool.query(
+    `SELECT kezelesre_erkezes_indoka as reason FROM patient_anamnesis WHERE patient_id = $1`,
+    [patientId],
+  );
+  const anReason = anamnesis.rows[0]?.reason as string | undefined;
 
-  // Validate stage
-  const validStages = [
-    'uj_beteg',
-    'onkologiai_kezeles_kesz',
-    'arajanlatra_var',
-    'implantacios_sebeszi_tervezesre_var',
-    'fogpotlasra_var',
-    'fogpotlas_keszul',
-    'fogpotlas_kesz',
-    'gondozas_alatt',
-  ];
-
-  if (!validStages.includes(newStage)) {
-    return NextResponse.json(
-      { error: 'Érvénytelen stádium' },
-      { status: 400 }
-    );
+  if (!reason || !allowedReasons.has(reason)) {
+    const r = anReason?.trim?.();
+    if (r && allowedReasons.has(r)) {
+      reason = r;
+    } else {
+      reason = 'onkológiai kezelés utáni állapot';
+    }
   }
 
-  // Generate new episode_id
-  const newEpisodeResult = await pool.query('SELECT generate_uuid() as id');
-  const episodeId = newEpisodeResult.rows[0].id;
+  if (!chiefComplaint) {
+    const fromNotes = (body.notes as string)?.trim?.();
+    chiefComplaint = fromNotes || 'Új ellátási epizód (API)';
+  }
 
-  // Insert new stage with new episode
-  const insertResult = await pool.query(
-    `INSERT INTO patient_stages (
-      patient_id,
-      episode_id,
-      stage,
-      stage_date,
-      notes,
-      created_by
-    ) VALUES ($1, $2, $3, $4, $5, $6)
-    RETURNING 
-      id,
-      patient_id as "patientId",
-      episode_id as "episodeId",
-      stage,
-      stage_date as "stageDate",
-      notes,
-      created_at as "createdAt",
-      created_by as "createdBy"`,
-    [
+  const caseTitle = (body.caseTitle as string)?.trim?.() || null;
+  const parentEpisodeId = (body.parentEpisodeId as string) || null;
+  const triggerType = (body.triggerType as string) || null;
+  const treatmentTypeId = (body.treatmentTypeId as string)?.trim?.() || null;
+
+  try {
+    const episode = await createOpenEpisodeWithInitialStageZero(pool, {
       patientId,
-      episodeId,
-      newStage,
-      stageDate ? new Date(stageDate) : new Date(),
-      notes || null,
+      reason,
+      chiefComplaint,
+      caseTitle,
+      parentEpisodeId,
+      triggerType,
+      treatmentTypeId,
+      createdBy: auth.email,
+    });
+
+    await logActivity(
+      req,
       auth.email,
-    ]
-  );
+      'patient_episode_started',
+      JSON.stringify({ patientId, episodeId: episode.id, reason }),
+    );
 
-  const stageEntry: PatientStageEntry = {
-    id: insertResult.rows[0].id,
-    patientId: insertResult.rows[0].patientId,
-    episodeId: insertResult.rows[0].episodeId,
-    stage: insertResult.rows[0].stage,
-    stageDate: insertResult.rows[0].stageDate.toISOString(),
-    notes: insertResult.rows[0].notes,
-    createdAt: insertResult.rows[0].createdAt.toISOString(),
-    createdBy: insertResult.rows[0].createdBy,
-  };
-
-  // Log activity
-  await logActivity(
-    req,
-    auth.email,
-    'patient_episode_started',
-    JSON.stringify({ patientId, episodeId, stage: newStage })
-  );
-
-  return NextResponse.json({ 
-    stage: stageEntry,
-    episodeId,
-    message: 'Új epizód sikeresen elindítva'
-  }, { status: 201 });
+    return NextResponse.json(
+      {
+        episode,
+        episodeId: episode.id,
+        message: 'Új epizód sikeresen elindítva',
+      },
+      { status: 201 },
+    );
+  } catch {
+    return NextResponse.json({ error: 'Epizód létrehozása sikertelen' }, { status: 500 });
+  }
 });

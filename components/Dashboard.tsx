@@ -204,7 +204,7 @@ export function Dashboard({ userRole }: DashboardProps) {
       {!isCollapsed && (
         <>
           {/* Tabs */}
-          <div className="border-b border-gray-200 overflow-x-auto scrollbar-hide scroll-smooth">
+          <div className="border-b border-gray-200 overflow-x-auto scrollbar-hide scroll-smooth touch-manipulation">
             <nav className="flex gap-1 w-max" aria-label="Dashboard tabs">
               <button
                 onClick={() => setActiveTab('overview')}

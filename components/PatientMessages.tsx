@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { MessageCircle, Send, Check, CheckCheck, Loader2, User, ArrowRight } from 'lucide-react';
+import { MessageCircle, Send, Check, CheckCheck, Loader2, User, ArrowRight, FileQuestion } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import { getMonogram, getLastName } from '@/lib/utils';
 import { MessageTextRenderer } from './MessageTextRenderer';
 import { useSocket } from '@/contexts/SocketContext';
+import { DocumentRequestSendWizard } from './DocumentRequestSendWizard';
 
 interface Message {
   id: string;
@@ -43,6 +44,7 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesLoadedRef = useRef<Set<string>>(new Set());
+  const [showRequestWizard, setShowRequestWizard] = useState(false);
 
   // Get current user
   useEffect(() => {
@@ -424,6 +426,15 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
       {/* Message Input */}
       <div className="border-t bg-white p-2 sm:p-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-4">
         <div className="flex items-end gap-2">
+          <button
+            type="button"
+            onClick={() => setShowRequestWizard(true)}
+            className="flex-shrink-0 btn-secondary rounded-full w-10 h-10 sm:w-auto sm:rounded-lg sm:px-3 sm:py-2.5 p-0 sm:p-2"
+            title="Dokumentum bekérése"
+          >
+            <FileQuestion className="w-4 h-4 sm:mr-1" />
+            <span className="hidden sm:inline text-sm">Bekérés</span>
+          </button>
           <textarea
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
@@ -442,6 +453,15 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
           </button>
         </div>
       </div>
+
+      <DocumentRequestSendWizard
+        isOpen={showRequestWizard}
+        onClose={() => setShowRequestWizard(false)}
+        patientId={patientId}
+        patientName={patientName}
+        mode="chat_patient"
+        onSent={() => fetchMessages()}
+      />
     </div>
   );
 }

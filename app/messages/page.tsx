@@ -45,7 +45,7 @@ export default function MessagesPage() {
     if (tab === 'doctor-patient' || tab === 'doctor-doctor') {
       setActiveTab(tab);
     }
-  }, [searchParams, activeTab]);
+  }, [searchParams]);
 
   // Fetch unread counts
   useEffect(() => {
@@ -128,7 +128,7 @@ export default function MessagesPage() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-20 md:pb-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-mobile-nav-staff md:pb-6">
         {/* Tabs */}
         <div className="mb-4 border-b border-gray-200">
           <nav className="flex gap-1" aria-label="Üzenetek fülök">

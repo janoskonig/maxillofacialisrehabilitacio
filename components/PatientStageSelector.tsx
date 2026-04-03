@@ -35,7 +35,6 @@ export function PatientStageSelector({
   const [catalog, setCatalog] = useState<StageCatalogEntry[]>([]);
   const [notes, setNotes] = useState<string>('');
   const [note, setNote] = useState<string>('');
-  const [startNewEpisode, setStartNewEpisode] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -91,30 +90,21 @@ export function PatientStageSelector({
 
     try {
       setSaving(true);
-      const endpoint = startNewEpisode
-        ? `/api/patients/${patientId}/stages/new-episode`
-        : `/api/patients/${patientId}/stages`;
-
-      const response = await fetch(endpoint, {
+      const response = await fetch(`/api/patients/${patientId}/stages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
           stage: selectedStage,
           notes: notes.trim() || null,
-          startNewEpisode: startNewEpisode ? true : undefined,
         }),
       });
 
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Hiba történt a stádium mentésekor');
 
-      showToast(
-        startNewEpisode ? 'Új epizód sikeresen elindítva' : 'Stádium sikeresen frissítve',
-        'success'
-      );
+      showToast('Stádium sikeresen frissítve', 'success');
       setNotes('');
-      setStartNewEpisode(false);
       onStageChanged?.();
     } catch (error) {
       console.error('Error saving stage:', error);
@@ -222,22 +212,6 @@ export function PatientStageSelector({
             disabled={saving}
           />
         </div>
-
-        {!useNewModel && (
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="new-episode"
-              checked={startNewEpisode}
-              onChange={(e) => setStartNewEpisode(e.target.checked)}
-              className="h-4 w-4 text-medical-primary focus:ring-medical-primary border-gray-300 rounded"
-              disabled={saving}
-            />
-            <label htmlFor="new-episode" className="ml-2 block text-sm text-gray-700">
-              Új kezelési epizód indítása (új episode_id generálása)
-            </label>
-          </div>
-        )}
 
         <div className="flex justify-end">
           <button

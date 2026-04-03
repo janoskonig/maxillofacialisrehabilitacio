@@ -11,6 +11,7 @@ import { validateUUID, validateMessageText, validateSubject, validateLimit, vali
 import { sendPushNotification } from '@/lib/push-notifications';
 import { logger } from '@/lib/logger';
 import { apiHandler } from '@/lib/api/route-handler';
+import { detectDocumentRequest } from '@/lib/document-request-detector';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,6 +46,14 @@ export const POST = apiHandler(async (req) => {
   let recipientDoctorIdFinal: string | null = null;
 
   if (patientSessionId && patientSessionId === finalPatientId) {
+    const docReq = detectDocumentRequest(finalMessage);
+    if (docReq.isDocumentRequest) {
+      return NextResponse.json(
+        { error: 'A dokumentum bekérése csak az orvosi rendszerből indítható' },
+        { status: 403 }
+      );
+    }
+
     senderType = 'patient';
     senderId = patientSessionId;
     
