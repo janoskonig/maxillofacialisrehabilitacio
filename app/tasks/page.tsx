@@ -103,7 +103,17 @@ export default function StaffTasksPage() {
                         </Link>
                       </div>
                     )}
-                    {t.taskType === 'document_upload' && (
+                    {t.taskType === 'meeting_action' &&
+                      typeof t.metadata?.presentationPath === 'string' &&
+                      t.metadata.presentationPath.length > 0 && (
+                        <Link
+                          href={t.metadata.presentationPath as string}
+                          className="mt-3 inline-block text-sm text-medical-primary font-medium hover:underline"
+                        >
+                          Vetítés megnyitása
+                        </Link>
+                      )}
+                    {(t.taskType === 'document_upload' || t.taskType === 'meeting_action') && (
                       <button
                         type="button"
                         className="mt-3 text-sm btn-secondary px-3 py-1"

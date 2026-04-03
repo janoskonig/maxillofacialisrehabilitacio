@@ -97,7 +97,7 @@ export const GET = apiHandler(async (req) => {
         exportDate: new Date().toISOString(),
         format: 'GDPR Art. 20 Data Portability Export',
         dataController: 'Maxillofacialis Rehabilitációs Rendszer',
-        contact: 'janos.koenig@gmail.com',
+        contact: 'konig.janos@semmelweis.hu',
       },
       personalData: patientResult.rows[0],
       referralData: referralResult.rows[0] || null,

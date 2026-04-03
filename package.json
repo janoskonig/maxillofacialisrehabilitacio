@@ -59,7 +59,6 @@
     "next": "14.0.4",
     "node-pg-migrate": "^8.0.4",
     "nodemailer": "^7.0.10",
-    "openai": "^4.0.0",
     "pdf-lib": "^1.17.1",
     "pg": "^8.11.3",
     "pizzip": "^3.2.0",

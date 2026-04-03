@@ -7,8 +7,8 @@ import { patientSelectSql, normalizePatientRow } from '@/lib/patient-select';
 import { downloadFile } from '@/lib/ftp-client';
 import archiver from 'archiver';
 import { Readable } from 'stream';
-import { generateAnamnesisSummary } from '@/lib/openai-client';
-import { shouldCallAI, normalizeTags, safeFilename, ExportLimiter, ExportLimits } from '@/lib/utils';
+import { buildStructuredAnamnesisSummary } from '@/lib/anamnesis-summary';
+import { normalizeTags, safeFilename, ExportLimiter, ExportLimits } from '@/lib/utils';
 import { hasTag } from '@/lib/doc-tags';
 import { generateDentalStatusPDF } from '@/lib/pdf/generateDentalStatusPDF';
 import { markdownToPDF, generatePatientSummaryMarkdown, generateMedicalHistoryMarkdown } from '@/lib/pdf/markdown-to-pdf';
@@ -130,7 +130,6 @@ function formatQuoteRequests(quoteRequests: LabQuoteRequest[]): string {
 function generateReadme(
   exportDate: Date,
   files: Array<{ name: string; size: number }>,
-  aiGenerated: boolean,
   documentCount?: number,
   dentalPdfFailed?: boolean,
   missingFields?: string[]
@@ -154,10 +153,6 @@ function generateReadme(
   }
 
   lines.push('');
-  if (aiGenerated) {
-    lines.push('MEGJEGYZES:');
-    lines.push('A medical_history.pdf tartalmazhat AI-generált összefoglalót — ellenőrzendő.');
-  }
   if (dentalPdfFailed) {
     lines.push('');
     lines.push('MEGJEGYZES: A fogazati státusz PDF generálása sikertelen volt. A dental_status.pdf placeholder tartalmat tartalmaz.');
@@ -409,7 +404,6 @@ export const GET = authedHandler(async (req, { auth, params, correlationId }) =>
     // Initialize export limiter
     const limiter = new ExportLimiter(EXPORT_LIMITS);
 
-    // Prepare anamnesis input for AI
     const anamnesisInput = {
       patientId: patient.id || patientId,
       referralReason: patient.kezelesreErkezesIndoka || null,
@@ -441,33 +435,7 @@ export const GET = authedHandler(async (req, { auth, params, correlationId }) =>
       historySummary: patient.kortortenetiOsszefoglalo || null,
     };
 
-    // Check GDPR consent for AI processing before calling OpenAI
-    let hasAiConsent = false;
-    try {
-      const consentResult = await pool.query(
-        `SELECT id FROM gdpr_consents 
-         WHERE patient_id = $1 AND purpose = 'ai_processing' AND withdrawn_at IS NULL
-         LIMIT 1`,
-        [patientId]
-      );
-      hasAiConsent = consentResult.rows.length > 0;
-    } catch (e) {
-      logger.warn('Could not check AI consent, falling back to non-AI summary');
-    }
-
-    // Generate anamnesis summary (AI vagy fallback)
-    let anamnesisSummary: string;
-    let aiGenerated = false;
-    
-    if (hasAiConsent && shouldCallAI(patient)) {
-      const result = await generateAnamnesisSummary(anamnesisInput);
-      anamnesisSummary = result.text;
-      aiGenerated = result.aiGenerated;
-    } else {
-      const result = await generateAnamnesisSummary(anamnesisInput);
-      anamnesisSummary = result.text;
-      aiGenerated = false;
-    }
+    const anamnesisSummary = buildStructuredAnamnesisSummary(anamnesisInput);
 
     // Generate PDFs and text files
     // 1. PDF-ek (determinisztikus sorrend) - Markdown alapú generálás
@@ -617,7 +585,6 @@ export const GET = authedHandler(async (req, { auth, params, correlationId }) =>
     const readmeText = generateReadme(
       exportDate,
       files,
-      aiGenerated,
       sortedDocuments.length,
       dentalPdfFailed,
       equityPatientMissingFields.length > 0 ? equityPatientMissingFields : undefined

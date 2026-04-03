@@ -162,7 +162,7 @@ export default function Register() {
           institution,
           accessReason: accessReason.trim(),
           privacyConsent: true,
-          privacyPolicyVersion: '1.0',
+          privacyPolicyVersion: '1.1',
         }),
       });
 

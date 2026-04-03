@@ -149,7 +149,7 @@ export const POST = apiHandler(async (req) => {
        VALUES ($1, 'data_processing', $2, $3::inet, $4)`,
       [
         user.id,
-        privacyPolicyVersion || '1.0',
+        privacyPolicyVersion || '1.1',
         ipAddress,
         req.headers.get('user-agent') || null,
       ]

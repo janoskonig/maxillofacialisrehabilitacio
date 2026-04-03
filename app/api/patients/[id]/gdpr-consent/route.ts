@@ -39,7 +39,7 @@ export const POST = authedHandler(async (req, { params, auth }) => {
   const body = await req.json();
   const { purpose } = body;
 
-  const validPurposes = ['ai_processing', 'google_calendar', 'error_tracking'];
+  const validPurposes = ['google_calendar', 'error_tracking'];
   if (!purpose || !validPurposes.includes(purpose)) {
     return NextResponse.json(
       { error: `Invalid purpose. Must be one of: ${validPurposes.join(', ')}` },

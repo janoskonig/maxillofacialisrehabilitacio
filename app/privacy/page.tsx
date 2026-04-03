@@ -29,7 +29,7 @@ export default function PrivacyPolicy() {
 
           <div className="prose prose-sm max-w-none text-gray-700 space-y-6">
             <p className="text-sm text-gray-600">
-              <strong>Policy Version:</strong> 1.0 &middot; <strong>Effective Date:</strong> March 2, 2026
+              <strong>Policy Version:</strong> 1.1 &middot; <strong>Effective Date:</strong> April 3, 2026
             </p>
 
             <section>
@@ -39,7 +39,7 @@ export default function PrivacyPolicy() {
               </p>
               <ul className="list-none pl-0 space-y-1">
                 <li><strong>Name:</strong> König János</li>
-                <li><strong>Email:</strong> <a href="mailto:janos.koenig@gmail.com" className="text-medical-primary hover:underline">janos.koenig@gmail.com</a></li>
+                <li><strong>Email:</strong> <a href="mailto:konig.janos@semmelweis.hu" className="text-medical-primary hover:underline">konig.janos@semmelweis.hu</a></li>
               </ul>
               <p className="mt-3">
                 Given the nature and scale of our data processing, we are not required to appoint a Data Protection Officer (DPO)
@@ -111,10 +111,6 @@ export default function PrivacyPolicy() {
                       <td className="border border-gray-200 px-3 py-2">Art. 6(1)(a) &ndash; Consent</td>
                     </tr>
                     <tr>
-                      <td className="border border-gray-200 px-3 py-2">AI-generated anamnesis summaries (OpenAI)</td>
-                      <td className="border border-gray-200 px-3 py-2">Art. 6(1)(a) &ndash; Consent</td>
-                    </tr>
-                    <tr>
                       <td className="border border-gray-200 px-3 py-2">Error tracking (Sentry, when enabled)</td>
                       <td className="border border-gray-200 px-3 py-2">Art. 6(1)(a) &ndash; Consent</td>
                     </tr>
@@ -139,7 +135,6 @@ export default function PrivacyPolicy() {
                 <li>Scheduling and coordinating appointments between healthcare providers</li>
                 <li>Sending appointment notifications via email</li>
                 <li>Synchronizing appointments with Google Calendar (if enabled)</li>
-                <li>Generating AI-assisted clinical summaries (if consented; see Section 10)</li>
                 <li>Maintaining security and preventing unauthorized access</li>
                 <li>Complying with legal and regulatory requirements</li>
               </ul>
@@ -196,7 +191,7 @@ export default function PrivacyPolicy() {
               <p className="mt-3">
                 Patients can exercise their data portability and erasure rights directly through the 
                 patient portal (Profile section). For all other requests, please contact us at{' '}
-                <a href="mailto:janos.koenig@gmail.com" className="text-medical-primary hover:underline">janos.koenig@gmail.com</a>.
+                <a href="mailto:konig.janos@semmelweis.hu" className="text-medical-primary hover:underline">konig.janos@semmelweis.hu</a>.
                 We will respond within 30 days.
               </p>
               <p className="mt-3">
@@ -232,11 +227,6 @@ export default function PrivacyPolicy() {
                       <td className="border border-gray-200 px-3 py-2">EU/US (Google SCCs)</td>
                     </tr>
                     <tr>
-                      <td className="border border-gray-200 px-3 py-2">OpenAI API</td>
-                      <td className="border border-gray-200 px-3 py-2">AI anamnesis summary generation (optional, consent-based)</td>
-                      <td className="border border-gray-200 px-3 py-2">US (OpenAI DPA + SCCs)</td>
-                    </tr>
-                    <tr>
                       <td className="border border-gray-200 px-3 py-2">Sentry</td>
                       <td className="border border-gray-200 px-3 py-2">Error monitoring (optional, consent-based, PII scrubbed)</td>
                       <td className="border border-gray-200 px-3 py-2">US (Sentry DPA + SCCs)</td>
@@ -262,25 +252,7 @@ export default function PrivacyPolicy() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">10. AI Processing and Automated Decisions</h2>
-              <p>
-                Our system may use OpenAI&apos;s API to generate clinical anamnesis summaries from structured patient data. 
-                This processing:
-              </p>
-              <ul className="list-disc pl-6 space-y-1">
-                <li>Is only performed when the AI feature is enabled and a healthcare provider initiates a NEAK export</li>
-                <li>Does not make autonomous medical decisions &ndash; summaries are always reviewed by a healthcare professional</li>
-                <li>Uses anonymized/pseudonymized data where possible (patient IDs, not names, are sent)</li>
-                <li>All AI-generated content is clearly labeled as &ldquo;AI-generated summary &ndash; requires verification&rdquo;</li>
-              </ul>
-              <p className="mt-3">
-                This does not constitute automated decision-making with legal effects under GDPR Art. 22, 
-                as outputs are advisory and always subject to human review.
-              </p>
-            </section>
-
-            <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">11. Cookies and Local Storage</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">10. Cookies and Local Storage</h2>
               <p>
                 We use the following cookies and browser storage:
               </p>
@@ -297,7 +269,7 @@ export default function PrivacyPolicy() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">12. Children&apos;s Privacy</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">11. Children&apos;s Privacy</h2>
               <p>
                 Our system is designed for use by healthcare providers and may contain information about patients of all ages, 
                 including minors. All patient information, including data of minors, is handled in accordance with GDPR and 
@@ -307,7 +279,7 @@ export default function PrivacyPolicy() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">13. Data Breach Notification</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">12. Data Breach Notification</h2>
               <p>
                 In the event of a personal data breach that is likely to result in a risk to your rights and freedoms, 
                 we will notify the NAIH within 72 hours of becoming aware of the breach (Art. 33). If the breach is likely 
@@ -316,7 +288,7 @@ export default function PrivacyPolicy() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">14. Changes to This Privacy Policy</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">13. Changes to This Privacy Policy</h2>
               <p>
                 We may update this Privacy Policy from time to time. Material changes will be communicated via email 
                 or in-app notification. The policy version and effective date are displayed at the top of this page. 
@@ -326,12 +298,12 @@ export default function PrivacyPolicy() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">15. Contact Us</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">14. Contact Us</h2>
               <p>
                 If you have any questions or concerns about this Privacy Policy or our data practices, please contact us at:
               </p>
               <p className="mt-2">
-                <strong>Email:</strong> <a href="mailto:janos.koenig@gmail.com" className="text-medical-primary hover:underline">janos.koenig@gmail.com</a>
+                <strong>Email:</strong> <a href="mailto:konig.janos@semmelweis.hu" className="text-medical-primary hover:underline">konig.janos@semmelweis.hu</a>
               </p>
             </section>
           </div>

@@ -61,7 +61,7 @@ export function PortalRegister() {
           beutaloOrvos: beutaloOrvos.trim() || undefined,
           beutaloIndokolas: beutaloIndokolas.trim() || undefined,
           privacyConsent: true,
-          privacyPolicyVersion: '1.0',
+          privacyPolicyVersion: '1.1',
         }),
       });
 

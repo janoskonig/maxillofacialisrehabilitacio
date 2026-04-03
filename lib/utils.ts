@@ -66,64 +66,6 @@ export function safeFilename(name: string): string {
 }
 
 /**
- * AI-generált anamnézis összefoglaló validálása
- * Ellenőrzi, hogy megfelel-e a séma-kényszernek (8-12 bullet, disclaimer)
- */
-export function isValidAnamnesisSummary(text: string): boolean {
-  const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
-  const bullets = lines.filter(l => l.startsWith("•"));
-  const hasDisclaimer = text.includes("AI-generált összefoglaló — ellenőrzendő");
-  return bullets.length >= 8 && bullets.length <= 12 && hasDisclaimer;
-}
-
-/**
- * Segédfüggvény: számolja a truthy értékeket
- */
-function countTruthy(...vals: Array<unknown>): number {
-  return vals.filter(v => typeof v === "string" ? v.trim().length > 0 : Boolean(v)).length;
-}
-
-/**
- * Döntés: hívjuk-e az AI-t az anamnézis összefoglalóhoz
- * Csak akkor, ha van elég releváns adat vagy van kézi összefoglaló
- */
-export function shouldCallAI(patient: {
-  kezelesreErkezesIndoka?: string | null;
-  balesetIdopont?: string | null;
-  balesetEtiologiaja?: string | null;
-  primerMutetLeirasa?: string | null;
-  bno?: string | null;
-  szovettaniDiagnozis?: string | null;
-  tnmStaging?: string | null;
-  radioterapia?: boolean | string | null;
-  chemoterapia?: boolean | string | null;
-  dohanyzasSzam?: string | null;
-  alkoholfogyasztas?: string | null;
-  kortortenetiOsszefoglalo?: string | null;
-}): boolean {
-  // Ha van kézi összefoglaló, mindig hívjuk az AI-t (javíthatja/kiegészítheti)
-  if (patient.kortortenetiOsszefoglalo?.trim()) return true;
-
-  // Számoljuk a releváns mezőket
-  const score = countTruthy(
-    patient.kezelesreErkezesIndoka,
-    patient.balesetIdopont,
-    patient.balesetEtiologiaja,
-    patient.primerMutetLeirasa,
-    patient.bno,
-    patient.szovettaniDiagnozis,
-    patient.tnmStaging,
-    patient.radioterapia, // boolean vagy string
-    patient.chemoterapia, // boolean vagy string
-    patient.dohanyzasSzam,
-    patient.alkoholfogyasztas
-  );
-
-  // Minimum 3 releváns mező kell
-  return score >= 3;
-}
-
-/**
  * Export limit kezelő osztály
  * Determinista limit enforcement ZIP generálásnál
  */

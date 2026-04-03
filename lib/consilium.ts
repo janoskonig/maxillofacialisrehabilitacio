@@ -66,6 +66,12 @@ export const checklistRenameSchema = z.object({
   label: z.string().trim().min(1).max(500),
 });
 
+/** Vetítés / konzílium: napirendi pontból staff feladat létrehozása. */
+export const checklistDelegateTaskSchema = z.object({
+  assigneeUserId: z.string().uuid(),
+  note: z.string().trim().max(2000).optional(),
+});
+
 export const reorderItemsSchema = z.object({
   itemIdsInOrder: z.array(z.string().uuid()).min(1),
 });

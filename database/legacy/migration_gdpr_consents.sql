@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS gdpr_consents (
     purpose VARCHAR(100) NOT NULL CHECK (purpose IN (
         'data_processing',        -- General data processing consent (registration)
         'health_data_processing', -- Special category health data (Art. 9)
-        'ai_processing',          -- OpenAI anamnesis summary
+        'ai_processing',          -- legacy (no longer offered in app)
         'error_tracking',         -- Sentry error tracking
         'google_calendar'         -- Google Calendar integration
     )),

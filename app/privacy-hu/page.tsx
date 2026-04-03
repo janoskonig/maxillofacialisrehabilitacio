@@ -29,7 +29,7 @@ export default function PrivacyPolicyHu() {
 
           <div className="prose prose-sm max-w-none text-gray-700 space-y-6">
             <p className="text-sm text-gray-600">
-              <strong>Irányelv verzió:</strong> 1.0 &middot; <strong>Hatályba lépés:</strong> 2026. március 2.
+              <strong>Irányelv verzió:</strong> 1.1 &middot; <strong>Hatályba lépés:</strong> 2026. április 3.
             </p>
 
             <section>
@@ -39,7 +39,7 @@ export default function PrivacyPolicyHu() {
               </p>
               <ul className="list-none pl-0 space-y-1">
                 <li><strong>Név:</strong> König János</li>
-                <li><strong>Email:</strong> <a href="mailto:janos.koenig@gmail.com" className="text-medical-primary hover:underline">janos.koenig@gmail.com</a></li>
+                <li><strong>Email:</strong> <a href="mailto:konig.janos@semmelweis.hu" className="text-medical-primary hover:underline">konig.janos@semmelweis.hu</a></li>
               </ul>
               <p className="mt-3">
                 Az adatkezelés jellege és mértéke alapján a GDPR 37. cikke szerint nem szükséges adatvédelmi tisztviselő (DPO) 
@@ -110,10 +110,6 @@ export default function PrivacyPolicyHu() {
                       <td className="border border-gray-200 px-3 py-2">6. cikk (1)(a) &ndash; Hozzájárulás</td>
                     </tr>
                     <tr>
-                      <td className="border border-gray-200 px-3 py-2">AI-generált anamnézis összefoglalók (OpenAI)</td>
-                      <td className="border border-gray-200 px-3 py-2">6. cikk (1)(a) &ndash; Hozzájárulás</td>
-                    </tr>
-                    <tr>
                       <td className="border border-gray-200 px-3 py-2">Hibakövetés (Sentry, ha engedélyezve)</td>
                       <td className="border border-gray-200 px-3 py-2">6. cikk (1)(a) &ndash; Hozzájárulás</td>
                     </tr>
@@ -138,7 +134,6 @@ export default function PrivacyPolicyHu() {
                 <li>Időpontok ütemezése és koordinálása az egészségügyi szakemberek között</li>
                 <li>Időpontértesítések küldése emailben</li>
                 <li>Időpontok szinkronizálása a Google Calendar-rel (ha engedélyezve)</li>
-                <li>AI-támogatott klinikai összefoglalók generálása (ha hozzájárult; lásd 10. fejezet)</li>
                 <li>Biztonság fenntartása és jogosulatlan hozzáférés megelőzése</li>
                 <li>Jogi és szabályozási követelmények betartása</li>
               </ul>
@@ -195,7 +190,7 @@ export default function PrivacyPolicyHu() {
               <p className="mt-3">
                 A betegek az adathordozhatósági és törlési jogaikat közvetlenül a páciens portálon keresztül gyakorolhatják 
                 (Profil rész). Minden egyéb kéréssel kapcsolatban kérjük, forduljon hozzánk:{' '}
-                <a href="mailto:janos.koenig@gmail.com" className="text-medical-primary hover:underline">janos.koenig@gmail.com</a>.
+                <a href="mailto:konig.janos@semmelweis.hu" className="text-medical-primary hover:underline">konig.janos@semmelweis.hu</a>.
                 30 napon belül válaszolunk.
               </p>
               <p className="mt-3">
@@ -231,11 +226,6 @@ export default function PrivacyPolicyHu() {
                       <td className="border border-gray-200 px-3 py-2">EU/US (Google SCC-k)</td>
                     </tr>
                     <tr>
-                      <td className="border border-gray-200 px-3 py-2">OpenAI API</td>
-                      <td className="border border-gray-200 px-3 py-2">AI anamnézis összefoglaló generálás (opcionális, hozzájárulás alapú)</td>
-                      <td className="border border-gray-200 px-3 py-2">US (OpenAI DPA + SCC-k)</td>
-                    </tr>
-                    <tr>
                       <td className="border border-gray-200 px-3 py-2">Sentry</td>
                       <td className="border border-gray-200 px-3 py-2">Hibamonitorozás (opcionális, hozzájárulás alapú, PII törlésével)</td>
                       <td className="border border-gray-200 px-3 py-2">US (Sentry DPA + SCC-k)</td>
@@ -261,25 +251,7 @@ export default function PrivacyPolicyHu() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">10. AI Adatkezelés és Automatizált Döntéshozatal</h2>
-              <p>
-                Rendszerünk az OpenAI API-ját használhatja klinikai anamnézis összefoglalók generálásához strukturált betegadatokból.
-                Ez az adatkezelés:
-              </p>
-              <ul className="list-disc pl-6 space-y-1">
-                <li>Csak akkor történik, ha az AI funkció engedélyezve van és egészségügyi szakember kezdeményezi a NEAK exportot</li>
-                <li>Nem hoz önálló orvosi döntéseket &ndash; az összefoglalókat mindig egészségügyi szakember ellenőrzi</li>
-                <li>Ahol lehetséges, anonimizált/pszeudonimizált adatokat használ</li>
-                <li>Minden AI-generált tartalom egyértelműen &bdquo;AI-generált összefoglaló &ndash; ellenőrzendő&rdquo; megjelöléssel van ellátva</li>
-              </ul>
-              <p className="mt-3">
-                Ez nem minősül a GDPR 22. cikke szerinti, jogi hatással járó automatizált döntéshozatalnak, 
-                mivel a kimenetek tájékoztató jellegűek és mindig emberi felülvizsgálat tárgyát képezik.
-              </p>
-            </section>
-
-            <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">11. Sütik és Helyi Tárolás</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">10. Sütik és Helyi Tárolás</h2>
               <p>A következő sütiket és böngésző-tárolási lehetőségeket használjuk:</p>
               <ul className="list-disc pl-6 space-y-1">
                 <li><strong>auth-token</strong> (süti): Munkamenet-hitelesítés egészségügyi dolgozók számára. Elengedhetetlen, kijelentkezéskor törlődik.</li>
@@ -294,7 +266,7 @@ export default function PrivacyPolicyHu() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">12. Gyermekek Adatvédelme</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">11. Gyermekek Adatvédelme</h2>
               <p>
                 Rendszerünk egészségügyi szakemberek általi használatra készült, és minden korosztály betegadatait tartalmazhatja, 
                 beleértve a kiskorúakat is. Minden betegadatot, beleértve a kiskorúak adatait, a GDPR és az alkalmazandó magyar 
@@ -304,7 +276,7 @@ export default function PrivacyPolicyHu() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">13. Adatvédelmi Incidens Értesítés</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">12. Adatvédelmi Incidens Értesítés</h2>
               <p>
                 Személyes adatok megsértése esetén, amely valószínűleg kockázatot jelent az Ön jogaira és szabadságaira nézve, 
                 az incidensről való tudomásszerzéstől számított 72 órán belül értesítjük a NAIH-ot (33. cikk). Ha az incidens 
@@ -313,7 +285,7 @@ export default function PrivacyPolicyHu() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">14. Az Adatvédelmi Irányelv Módosításai</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">13. Az Adatvédelmi Irányelv Módosításai</h2>
               <p>
                 Időnként frissíthetjük ezt az Adatvédelmi Irányelvet. A lényeges változásokról emailben vagy alkalmazáson 
                 belüli értesítéssel tájékoztatjuk. Az irányelv verziószáma és hatályba lépési dátuma az oldal tetején látható. 
@@ -323,13 +295,13 @@ export default function PrivacyPolicyHu() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">15. Kapcsolatfelvétel</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">14. Kapcsolatfelvétel</h2>
               <p>
                 Ha bármilyen kérdése vagy észrevétele van ezzel az Adatvédelmi Irányelvvel vagy adatkezelési gyakorlatunkkal 
                 kapcsolatban, kérjük, lépjen kapcsolatba velünk:
               </p>
               <p className="mt-2">
-                <strong>Email:</strong> <a href="mailto:janos.koenig@gmail.com" className="text-medical-primary hover:underline">janos.koenig@gmail.com</a>
+                <strong>Email:</strong> <a href="mailto:konig.janos@semmelweis.hu" className="text-medical-primary hover:underline">konig.janos@semmelweis.hu</a>
               </p>
             </section>
           </div>

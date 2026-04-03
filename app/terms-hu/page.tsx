@@ -212,7 +212,7 @@ export default function TermsOfServiceHu() {
                 Ha bármilyen kérdése van ezekkel a Felhasználási Feltételekkel kapcsolatban, kérjük, lépjen kapcsolatba velünk:
               </p>
               <p className="mt-2">
-                <strong>Email:</strong> <a href="mailto:janos.koenig@gmail.com" className="text-medical-primary hover:underline">janos.koenig@gmail.com</a>
+                <strong>Email:</strong> <a href="mailto:konig.janos@semmelweis.hu" className="text-medical-primary hover:underline">konig.janos@semmelweis.hu</a>
               </p>
             </section>
           </div>

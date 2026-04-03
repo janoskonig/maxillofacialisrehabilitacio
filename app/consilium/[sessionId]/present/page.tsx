@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, ChevronLeft, ChevronRight, Users, X } from 'lucide-react';
@@ -78,6 +78,252 @@ type ChecklistRowPresent = {
   respondedAt?: string | null;
   respondedBy?: string | null;
 };
+
+type InstitutionUserRow = {
+  id: string;
+  email: string;
+  doktorNeve: string | null;
+  role: string;
+  intezmeny?: string | null;
+};
+
+function presentInstitutionUserLabel(u: InstitutionUserRow) {
+  const n = u.doktorNeve?.trim();
+  return n || u.email;
+}
+
+function normalizeForUserSearch(s: string) {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function institutionUserMatchesQuery(u: InstitutionUserRow, rawQuery: string) {
+  const q = normalizeForUserSearch(rawQuery);
+  if (q.length === 0) return false;
+  const label = normalizeForUserSearch(presentInstitutionUserLabel(u));
+  const email = normalizeForUserSearch(u.email);
+  return label.includes(q) || email.includes(q);
+}
+
+const DELEGATE_SUGGESTIONS_MAX = 14;
+
+function PresentChecklistDelegate({
+  sessionId,
+  itemId,
+  checklistKey,
+  readonly,
+  institutionUsers,
+  institutionUsersLoading,
+}: {
+  sessionId: string;
+  itemId: string;
+  checklistKey: string;
+  readonly: boolean;
+  institutionUsers: InstitutionUserRow[];
+  institutionUsersLoading: boolean;
+}) {
+  const [inputValue, setInputValue] = useState('');
+  const [assigneeId, setAssigneeId] = useState('');
+  const [listOpen, setListOpen] = useState(false);
+  const [highlightIdx, setHighlightIdx] = useState(0);
+  const blurCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const [note, setNote] = useState('');
+  const [sending, setSending] = useState(false);
+  const [feedback, setFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  const suggestions = useMemo(() => {
+    if (institutionUsersLoading || institutionUsers.length === 0) return [];
+    const q = inputValue.trim();
+    if (q.length === 0) return [];
+    const hits = institutionUsers.filter((u) => institutionUserMatchesQuery(u, q));
+    return hits.slice(0, DELEGATE_SUGGESTIONS_MAX);
+  }, [institutionUsers, institutionUsersLoading, inputValue]);
+
+  useEffect(() => {
+    setHighlightIdx(0);
+  }, [inputValue, suggestions.length]);
+
+  useEffect(() => {
+    return () => {
+      if (blurCloseTimer.current) clearTimeout(blurCloseTimer.current);
+    };
+  }, []);
+
+  const pickUser = useCallback((u: InstitutionUserRow) => {
+    setAssigneeId(u.id);
+    setInputValue(presentInstitutionUserLabel(u));
+    setListOpen(false);
+    setFeedback(null);
+  }, []);
+
+  const clearBlurTimer = () => {
+    if (blurCloseTimer.current) {
+      clearTimeout(blurCloseTimer.current);
+      blurCloseTimer.current = null;
+    }
+  };
+
+  if (readonly) return null;
+
+  const send = async () => {
+    if (!assigneeId) {
+      setFeedback({ ok: false, msg: 'Válassz címzettet a listából (kezd el gépelni a nevet vagy e-mailt).' });
+      return;
+    }
+    setSending(true);
+    setFeedback(null);
+    try {
+      const res = await fetch(
+        `/api/consilium/sessions/${sessionId}/items/${itemId}/checklist/${encodeURIComponent(checklistKey)}/delegate-task`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            assigneeUserId: assigneeId,
+            ...(note.trim() ? { note: note.trim() } : {}),
+          }),
+        },
+      );
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setFeedback({
+          ok: false,
+          msg: typeof data.error === 'string' ? data.error : 'Sikertelen küldés',
+        });
+        return;
+      }
+      setFeedback({
+        ok: true,
+        msg: 'Feladat elküldve — a címzettnek a Feladataim oldalon jelenik meg.',
+      });
+      setNote('');
+      setAssigneeId('');
+      setInputValue('');
+    } catch {
+      setFeedback({ ok: false, msg: 'Hálózati hiba' });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="mt-2 pt-2 border-t border-white/10">
+      <p className="text-[10px] text-white/45 uppercase tracking-wide mb-1">Feladat delegálása</p>
+      <p className="text-[11px] text-white/35 mb-2">
+        Kezdd el gépelni a nevet vagy e-mailt, majd válassz a listából — a feladat a kijelölt felhasználó nyitott feladatai közé kerül.
+      </p>
+      <div className="flex flex-col gap-2 relative">
+        <input
+          ref={inputRef}
+          type="text"
+          role="combobox"
+          aria-expanded={listOpen && suggestions.length > 0}
+          aria-autocomplete="list"
+          aria-controls={`delegate-suggest-${checklistKey}`}
+          autoComplete="off"
+          disabled={institutionUsersLoading || sending}
+          placeholder={
+            institutionUsersLoading ? 'Felhasználók betöltése…' : 'Név vagy e-mail kezdete…'
+          }
+          className="w-full text-sm rounded-md border border-white/20 bg-black/50 text-white/90 placeholder:text-white/35 px-2 py-1.5 outline-none focus:border-white/40"
+          value={inputValue}
+          onChange={(e) => {
+            setInputValue(e.target.value);
+            setAssigneeId('');
+            setFeedback(null);
+            setListOpen(true);
+          }}
+          onFocus={(e) => {
+            clearBlurTimer();
+            setListOpen(true);
+            if (assigneeId) e.target.select();
+          }}
+          onBlur={() => {
+            blurCloseTimer.current = setTimeout(() => setListOpen(false), 180);
+          }}
+          onKeyDown={(e: ReactKeyboardEvent<HTMLInputElement>) => {
+            if (!listOpen || suggestions.length === 0) {
+              if (e.key === 'Escape') setListOpen(false);
+              return;
+            }
+            if (e.key === 'ArrowDown') {
+              e.preventDefault();
+              setHighlightIdx((i) => Math.min(suggestions.length - 1, i + 1));
+            } else if (e.key === 'ArrowUp') {
+              e.preventDefault();
+              setHighlightIdx((i) => Math.max(0, i - 1));
+            } else if (e.key === 'Enter') {
+              e.preventDefault();
+              const u = suggestions[highlightIdx];
+              if (u) pickUser(u);
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              setListOpen(false);
+            }
+          }}
+        />
+        {listOpen && inputValue.trim().length > 0 && !institutionUsersLoading && (
+          <ul
+            id={`delegate-suggest-${checklistKey}`}
+            role="listbox"
+            className="absolute left-0 right-0 top-full z-30 mt-0.5 max-h-52 overflow-y-auto rounded-md border border-white/20 bg-zinc-950 shadow-lg py-1"
+          >
+            {suggestions.length === 0 ? (
+              <li className="px-2 py-2 text-xs text-white/50">Nincs találat.</li>
+            ) : (
+              suggestions.map((u, idx) => (
+                <li key={u.id} role="presentation">
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={idx === highlightIdx}
+                    className={`w-full text-left px-2 py-1.5 text-sm ${
+                      idx === highlightIdx ? 'bg-white/15 text-white' : 'text-white/85 hover:bg-white/10'
+                    }`}
+                    onMouseDown={(ev) => ev.preventDefault()}
+                    onMouseEnter={() => setHighlightIdx(idx)}
+                    onClick={() => pickUser(u)}
+                  >
+                    {presentInstitutionUserLabel(u)}
+                    {u.role === 'technikus' ? (
+                      <span className="text-white/40 text-xs ml-1">(technikus)</span>
+                    ) : null}
+                    <span className="block text-[10px] text-white/40 truncate">{u.email}</span>
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+        )}
+        <textarea
+          className="w-full min-h-[48px] rounded-md border border-white/15 bg-black/40 text-xs text-white/85 placeholder:text-white/30 px-2 py-1.5 outline-none focus:border-white/35"
+          placeholder="Opcionális megjegyzés a címzettnek…"
+          value={note}
+          disabled={sending}
+          onChange={(e) => setNote(e.target.value)}
+          autoComplete="off"
+        />
+        <button
+          type="button"
+          disabled={sending || institutionUsersLoading || !assigneeId}
+          className="text-xs px-2 py-1.5 rounded-md bg-amber-600/90 hover:bg-amber-600 text-white disabled:opacity-40 disabled:pointer-events-none w-fit"
+          onClick={() => void send()}
+        >
+          {sending ? 'Küldés…' : 'Feladat küldése'}
+        </button>
+        {feedback && (
+          <p className={`text-[11px] ${feedback.ok ? 'text-emerald-300/90' : 'text-red-300/90'}`}>{feedback.msg}</p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function PresentChecklistVerdictField({
   sessionId,
@@ -174,6 +420,8 @@ export default function ConsiliumPresentPage() {
   const [index, setIndex] = useState(0);
   const indexRef = useRef(0);
   const [photoLightbox, setPhotoLightbox] = useState<{ previews: MediaPreviewItem[]; index: number } | null>(null);
+  const [institutionUsers, setInstitutionUsers] = useState<InstitutionUserRow[]>([]);
+  const [institutionUsersLoading, setInstitutionUsersLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -206,6 +454,33 @@ export default function ConsiliumPresentPage() {
     if (!user || user.role === 'technikus') return;
     load();
   }, [user, load]);
+
+  useEffect(() => {
+    if (!user || user.role === 'technikus') return;
+    let cancelled = false;
+    setInstitutionUsersLoading(true);
+    fetch('/api/consilium/institution-users', { credentials: 'include' })
+      .then((res) => (res.ok ? res.json() : Promise.resolve({ users: [] })))
+      .then((data: { users?: InstitutionUserRow[] }) => {
+        if (cancelled) return;
+        const raw = Array.isArray(data.users) ? data.users : [];
+        const mine = (user.intezmeny ?? '').trim();
+        const scoped =
+          mine.length > 0
+            ? raw.filter((u) => (u.intezmeny ?? '').trim() === mine)
+            : [];
+        setInstitutionUsers(scoped);
+      })
+      .catch(() => {
+        if (!cancelled) setInstitutionUsers([]);
+      })
+      .finally(() => {
+        if (!cancelled) setInstitutionUsersLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   useEffect(() => {
     indexRef.current = index;
@@ -638,8 +913,8 @@ export default function ConsiliumPresentPage() {
                     <div>
                       <p className="text-xs text-white/50 mb-1">Napirendi pontok</p>
                       <p className="text-[11px] text-white/40 mb-2">
-                        Pipálás és verdikt (válasz) — vázlat és aktív alkalom alatt itt is szerkeszthető; lezárt alkalomnál csak
-                        olvasható.
+                        Pipálás, verdikt és felhasználónak delegálható feladat — vázlat és aktív alkalom alatt szerkeszthető; lezárt
+                        alkalomnál csak olvasható.
                       </p>
                       <div className="space-y-3">
                         {(ds.checklist || []).length === 0 && <p className="text-xs text-white/60">Üres</p>}
@@ -699,6 +974,14 @@ export default function ConsiliumPresentPage() {
                                       };
                                     });
                                   }}
+                                />
+                                <PresentChecklistDelegate
+                                  sessionId={sessionId}
+                                  itemId={current.id}
+                                  checklistKey={c.key}
+                                  readonly={readonly}
+                                  institutionUsers={institutionUsers}
+                                  institutionUsersLoading={institutionUsersLoading}
                                 />
                               </div>
                             </label>
