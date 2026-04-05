@@ -1,0 +1,69 @@
+import { randomUUID } from 'crypto';
+import { NextResponse } from 'next/server';
+import { authedHandler } from '@/lib/api/route-handler';
+import { getDbPool } from '@/lib/db';
+import { HttpError } from '@/lib/auth-server';
+import { assertPrepTokenOrThrow } from '@/lib/consilium-prep-share';
+import {
+  assertSessionWritableForItemFields,
+  checklistAddSchema,
+  getScopedSessionOrThrow,
+  getUserInstitution,
+  normalizeChecklist,
+} from '@/lib/consilium';
+
+export const dynamic = 'force-dynamic';
+
+export const POST = authedHandler(async (req, { auth, params }) => {
+  const rawToken = decodeURIComponent(params.token ?? '');
+  if (!rawToken) {
+    return NextResponse.json({ error: 'Hiányzó token' }, { status: 400 });
+  }
+
+  const institutionId = await getUserInstitution(auth);
+  const prep = await assertPrepTokenOrThrow(rawToken, institutionId);
+
+  const session = await getScopedSessionOrThrow(prep.sessionId, institutionId);
+  assertSessionWritableForItemFields(session.status);
+
+  const body = checklistAddSchema.parse(await req.json());
+
+  const pool = getDbPool();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const existing = await client.query(
+      `SELECT checklist FROM consilium_session_items WHERE id = $1 AND session_id = $2 FOR UPDATE`,
+      [prep.itemId, prep.sessionId],
+    );
+    if (existing.rows.length === 0) {
+      throw new HttpError(404, 'Elem nem található ebben az alkalomban', 'ITEM_NOT_FOUND');
+    }
+
+    const checklist = normalizeChecklist(existing.rows[0].checklist);
+    const key = `pt-${randomUUID()}`;
+    checklist.push({
+      key,
+      label: body.label.trim(),
+      checked: false,
+    });
+
+    const result = await client.query(
+      `UPDATE consilium_session_items
+       SET checklist = $3::jsonb,
+           updated_by = $4,
+           updated_at = NOW()
+       WHERE id = $1 AND session_id = $2
+       RETURNING id, checklist`,
+      [prep.itemId, prep.sessionId, JSON.stringify(checklist), auth.email],
+    );
+
+    await client.query('COMMIT');
+    return NextResponse.json({ item: result.rows[0] }, { status: 201 });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+});

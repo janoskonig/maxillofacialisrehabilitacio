@@ -4,15 +4,25 @@ import { useState, useEffect, useRef } from 'react';
 import { PatientDocument } from '@/lib/types';
 import { X, ChevronLeft, ChevronRight, Download, ZoomIn, ZoomOut, RotateCw } from 'lucide-react';
 import { formatDateForDisplay } from '@/lib/dateUtils';
+import { DocumentAnnotationsOverlay } from '@/components/DocumentAnnotationsOverlay';
 
 interface OPImageViewerProps {
   patientId: string;
   patientName?: string;
   isOpen: boolean;
   onClose: () => void;
+  canAnnotate?: boolean;
+  onAnnotationsUpdated?: () => void;
 }
 
-export function OPImageViewer({ patientId, patientName, isOpen, onClose }: OPImageViewerProps) {
+export function OPImageViewer({
+  patientId,
+  patientName,
+  isOpen,
+  onClose,
+  canAnnotate = false,
+  onAnnotationsUpdated,
+}: OPImageViewerProps) {
   const [documents, setDocuments] = useState<PatientDocument[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -261,24 +271,33 @@ export function OPImageViewer({ patientId, patientName, isOpen, onClose }: OPIma
                 <div className="text-white text-lg absolute">Kép betöltése...</div>
               )}
               {imageUrl && !imageLoading && (
-                <img
-                  src={imageUrl}
-                  alt={currentDocument.filename}
-                  className="max-w-full max-h-full object-contain"
+                <div
                   style={{
                     transform: `scale(${zoom}) rotate(${rotation}deg)`,
                     transition: 'transform 0.2s ease-out',
                   }}
-                  onError={(e) => {
-                    console.error('Image load error:', e);
-                    setImageError(true);
-                    setImageLoading(false);
-                  }}
-                  onLoad={() => {
-                    setImageError(false);
-                    setImageLoading(false);
-                  }}
-                />
+                  className="max-w-full max-h-full flex items-center justify-center"
+                >
+                  <DocumentAnnotationsOverlay
+                    patientId={patientId}
+                    documentId={currentDocument.id!}
+                    imageUrl={imageUrl}
+                    mode={canAnnotate ? 'edit' : 'view'}
+                    canEdit={canAnnotate}
+                    compact
+                    imgClassName="max-w-full max-h-full object-contain block"
+                    onImageLoad={() => {
+                      setImageError(false);
+                      setImageLoading(false);
+                    }}
+                    onImageError={() => {
+                      console.error('Image load error');
+                      setImageError(true);
+                      setImageLoading(false);
+                    }}
+                    onAnnotationsUpdated={onAnnotationsUpdated}
+                  />
+                </div>
               )}
               {imageError && !imageLoading && (
                 <div className="text-white text-center p-8">

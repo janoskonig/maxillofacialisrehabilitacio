@@ -2,8 +2,10 @@
 
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { PatientDocument } from '@/lib/types';
+import type { PatientDocumentAnnotation } from '@/lib/types/document-annotation';
 import { File, Download, Trash2, Tag, Pencil, X, Plus, Check } from 'lucide-react';
 import { formatDateForDisplay } from '@/lib/dateUtils';
+import { DocumentAnnotationThumbnail } from './DocumentAnnotationThumbnail';
 
 interface DocumentCardProps {
   document: PatientDocument;
@@ -16,6 +18,9 @@ interface DocumentCardProps {
   onUpdateTags?: (doc: PatientDocument, tags: string[]) => Promise<void>;
   onPreview?: (doc: PatientDocument) => void;
   formatFileSize: (bytes: number) => string;
+  /** Batch annotációk betöltve — miniatűr rajzokhoz. */
+  annotationsBatchReady?: boolean;
+  thumbnailAnnotations?: PatientDocumentAnnotation[];
 }
 
 export function DocumentCard({
@@ -29,6 +34,8 @@ export function DocumentCard({
   onUpdateTags,
   onPreview,
   formatFileSize,
+  annotationsBatchReady = false,
+  thumbnailAnnotations = [],
 }: DocumentCardProps) {
   const [imageError, setImageError] = useState(false);
   const [isEditingTags, setIsEditingTags] = useState(false);
@@ -122,15 +129,28 @@ export function DocumentCard({
       {/* Thumbnail */}
       <div className="relative aspect-square bg-gray-100 group">
         {thumbnailUrl ? (
-          <img
-            src={thumbnailUrl}
-            alt={document.filename}
-            className="w-full h-full object-cover group-hover:opacity-75 transition-opacity"
-            loading="lazy"
-            decoding="async"
-            onError={handleImageError}
-            style={{ display: 'block' }}
-          />
+          annotationsBatchReady && document.id ? (
+            <DocumentAnnotationThumbnail
+              patientId={patientId}
+              documentId={document.id}
+              imageUrl={thumbnailUrl}
+              annotations={thumbnailAnnotations}
+              objectFit="cover"
+              className="w-full h-full"
+              imgClassName="w-full h-full object-cover group-hover:opacity-75 transition-opacity"
+              onImageError={handleImageError}
+            />
+          ) : (
+            <img
+              src={thumbnailUrl}
+              alt={document.filename}
+              className="w-full h-full object-cover group-hover:opacity-75 transition-opacity"
+              loading="lazy"
+              decoding="async"
+              onError={handleImageError}
+              style={{ display: 'block' }}
+            />
+          )
         ) : imageError ? (
           <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 p-4">
             <File className="w-12 h-12 text-gray-400 mb-2" />

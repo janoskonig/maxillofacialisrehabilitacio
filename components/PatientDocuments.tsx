@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { PatientDocument } from '@/lib/types';
+import type { PatientDocumentAnnotation } from '@/lib/types/document-annotation';
+import { fetchAnnotationsBatchForPatient } from '@/lib/document-annotations-batch-client';
 import { Upload, File, Download, Trash2, X, Tag, Plus, Package, AlertTriangle, Loader2, FileQuestion } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth';
 import { formatDateForDisplay } from '@/lib/dateUtils';
@@ -59,6 +61,10 @@ export function PatientDocuments({
   } | null>(null);
   const [previewDocument, setPreviewDocument] = useState<PatientDocument | null>(null);
   const [showRequestWizard, setShowRequestWizard] = useState(false);
+  const [annotationByDocId, setAnnotationByDocId] = useState<Record<
+    string,
+    PatientDocumentAnnotation[]
+  > | null>(null);
 
   useEffect(() => {
     const checkRole = async () => {
@@ -162,6 +168,32 @@ export function PatientDocuments({
       setLoading(false);
     }
   };
+
+  const loadAnnotationBatch = useCallback(async () => {
+    if (!patientId) return;
+    const imageIds = documents
+      .filter((d) => d.mimeType?.startsWith('image/'))
+      .map((d) => d.id)
+      .filter((id): id is string => Boolean(id));
+    if (imageIds.length === 0) {
+      setAnnotationByDocId({});
+      return;
+    }
+    try {
+      const merged = await fetchAnnotationsBatchForPatient(patientId, imageIds);
+      setAnnotationByDocId(merged);
+    } catch {
+      setAnnotationByDocId({});
+    }
+  }, [patientId, documents]);
+
+  useEffect(() => {
+    if (!patientId) {
+      setAnnotationByDocId(null);
+      return;
+    }
+    void loadAnnotationBatch();
+  }, [patientId, loadAnnotationBatch]);
 
   const handleFileSelect = (files: FileList | File[]) => {
     const fileArray = Array.from(files);
@@ -1035,6 +1067,10 @@ export function PatientDocuments({
               onUpdateTags={handleUpdateDocumentTags}
               onPreview={(d) => setPreviewDocument(d)}
               formatFileSize={formatFileSize}
+              annotationsBatchReady={annotationByDocId !== null}
+              thumbnailAnnotations={
+                doc.id && annotationByDocId ? annotationByDocId[doc.id] ?? [] : []
+              }
             />
           ))}
         </div>
@@ -1048,6 +1084,8 @@ export function PatientDocuments({
           patientId={patientId}
           onClose={() => setPreviewDocument(null)}
           onDownload={handleDownload}
+          canAnnotate={canUpload && !isViewOnly}
+          onAnnotationsUpdated={() => void loadAnnotationBatch()}
         />
       )}
     </div>

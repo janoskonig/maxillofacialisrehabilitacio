@@ -48,7 +48,14 @@ API-k
 - `POST /api/consilium/sessions/[id]/items/[itemId]/checklist` — új pont: `{ label }`
 - `PATCH /api/consilium/sessions/[id]/items/[itemId]/checklist/[key]` — pontosan egy: `{ checked }` VAGY `{ label }` VAGY `{ response }` (szoveg; ures string torli a valaszt es a `respondedAt`/`respondedBy` mezoket)
 - `DELETE /api/consilium/sessions/[id]/items/[itemId]/checklist/[key]` — pont törlése
-- `GET /api/consilium/sessions/[id]/presentation`
+- `GET /api/consilium/sessions/[id]/presentation` — minden tételhez `prepComments`: linkes előkészítőből írt hozzászólások (az éles vetítés UI-n cián zónában jelennek meg)
+- Előkészítő megosztás (egy beteg-tétel, bejelentkezett intézményi felhasználó + titkos token az URL-ben):
+  - `POST /api/consilium/sessions/[id]/items/[itemId]/prep-link` — új token (a korábbi linkek visszavonva); válasz: `token`, `expiresAt`, `prepPath`
+  - `DELETE .../prep-link` — minden aktív prep-token visszavonása az adott tételhez
+  - `GET /api/consilium/prep/[token]/presentation` — egy tétel vetítés-payload + `prepComments` + `prepMeta`
+  - `GET|POST /api/consilium/prep/[token]/comments` — lista, illetve új hozzászólás napirendi ponthoz (`checklistKey`, `body`)
+  - `POST /api/consilium/prep/[token]/checklist` — új napirendi pont (mint a session checklist POST)
+- Checklist `response` mező: továbbra is a konzílium / vetítés „verdiktje” (élő ülés); az előkészítő nézetben külön táblában (`consilium_prep_comments`) gyűlnek a többszörös megjegyzések.
 
 Migracio
 --------
@@ -62,6 +69,7 @@ Vagy egy fajl:
 - `node scripts/run-all-migrations.js 011_consilium_sessions.sql`
 - `node scripts/run-all-migrations.js 012_consilium_discussed_attendees.sql` (BNO szoveg a vetiteshez nem kell, de: `discussed` boolean + `attendees` JSONB)
 - `node scripts/run-all-migrations.js 013_drop_consilium_presenter_notes.sql` (előadói jegyzet oszlop eltávolítva; válaszok a checklist JSON-ban)
+- `node scripts/run-all-migrations.js 015_consilium_prep_share.sql` (prep-token + előkészítő kommentek)
 
 Egyeb viselkedes
 ----------------
@@ -69,6 +77,7 @@ Egyeb viselkedes
 - Jelenlevok (`attendees`): `id` = `users.id`, `name` = doktor neve vagy e-mail. UI: intezmenyi felhasznalok (nem beteglista), nev/e-mail szuro a `GET .../institution-users` listan; cimkek, pipa = jelen van, x = eltavolitas; csak aktiv fiokok, mar felveettek nem duplikalodnak a keresesben.
 - Beteg tetel: `discussed` = megbeszelve / nem (egyszeru boolean).
 - Napirendi pontok (checklist): Konzilium oldalon hozzaadas / atnevezes / torles, pipa es pontonkenti `response` (verdikt); vetitesen is pipa + verdikt szerkesztheto (`draft`/`active`), `closed` alatt csak olvashato.
+- Előkészítő link: Konzílium oldalról másolható URL (`/consilium/prep/<token>`); `closed` alkalomnál a prep oldal csak olvasható (nincs új komment / új pont).
 - BNO a vetitesen: `BNOTORZS_201807.xlsx` alapjan magyar megnevezes (kod helyett), ha a torzsben megvan; a diagnoszis szoveg es a BNO megnevezes egy mezoben jelenik meg (duplikacio nelkul).
 - Vetites: kozepen `OPInlinePreview` (OP dokumentumok), alatta fogazati mini-nezet + implant jelzes; jobb oldalon foto thumbs es konzilium; `primer_mutet_leirasa` nem kulon sav.
 

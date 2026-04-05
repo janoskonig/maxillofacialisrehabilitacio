@@ -2,7 +2,10 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { PatientDocument } from '@/lib/types';
+import type { PatientDocumentAnnotation } from '@/lib/types/document-annotation';
+import { fetchAnnotationsBatchForPatient } from '@/lib/document-annotations-batch-client';
 import { OPImageViewer } from './OPImageViewer';
+import { DocumentAnnotationThumbnail } from './DocumentAnnotationThumbnail';
 import { Image as ImageIcon, ChevronLeft, ChevronRight, ZoomIn } from 'lucide-react';
 import { formatDateForDisplay } from '@/lib/dateUtils';
 
@@ -11,9 +14,16 @@ interface OPInlinePreviewProps {
   patientName?: string;
   /** Sötét vetítés oldalhoz: világos kártya, kompaktabb margó. */
   variant?: 'default' | 'presentation';
+  /** Beteg dokumentum annotáció (szerepkör + nem readonly). */
+  canAnnotate?: boolean;
 }
 
-export function OPInlinePreview({ patientId, patientName, variant = 'default' }: OPInlinePreviewProps) {
+export function OPInlinePreview({
+  patientId,
+  patientName,
+  variant = 'default',
+  canAnnotate = false,
+}: OPInlinePreviewProps) {
   const [documents, setDocuments] = useState<PatientDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -22,6 +32,29 @@ export function OPInlinePreview({ patientId, patientName, variant = 'default' }:
   const [thumbnailError, setThumbnailError] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
   const prevUrlRef = useRef<string | null>(null);
+  const [annByDoc, setAnnByDoc] = useState<Record<string, PatientDocumentAnnotation[]>>({});
+
+  const loadAnnotationBatch = useCallback(async () => {
+    if (!patientId || documents.length === 0) {
+      setAnnByDoc({});
+      return;
+    }
+    const ids = documents.map((d) => d.id).filter((id): id is string => Boolean(id));
+    if (ids.length === 0) {
+      setAnnByDoc({});
+      return;
+    }
+    try {
+      const merged = await fetchAnnotationsBatchForPatient(patientId, ids);
+      setAnnByDoc(merged);
+    } catch {
+      setAnnByDoc({});
+    }
+  }, [patientId, documents]);
+
+  useEffect(() => {
+    void loadAnnotationBatch();
+  }, [loadAnnotationBatch]);
 
   useEffect(() => {
     if (!patientId) return;
@@ -137,12 +170,16 @@ export function OPInlinePreview({ patientId, patientName, variant = 'default' }:
             {thumbnailLoading && (
               <span className="text-sm text-gray-400 py-8">Kép betöltése…</span>
             )}
-            {thumbnailUrl && !thumbnailLoading && (
-              <img
-                src={thumbnailUrl}
-                alt={currentDoc?.filename || 'OP'}
-                className="w-full object-contain"
-                onError={() => setThumbnailError(true)}
+            {thumbnailUrl && !thumbnailLoading && currentDoc?.id && (
+              <DocumentAnnotationThumbnail
+                patientId={patientId}
+                documentId={currentDoc.id}
+                imageUrl={thumbnailUrl}
+                annotations={annByDoc[currentDoc.id] ?? []}
+                objectFit="contain"
+                className="w-full"
+                imgClassName="w-full object-contain"
+                onImageError={() => setThumbnailError(true)}
               />
             )}
             {thumbnailError && !thumbnailLoading && (
@@ -188,6 +225,8 @@ export function OPInlinePreview({ patientId, patientName, variant = 'default' }:
         patientName={patientName}
         isOpen={viewerOpen}
         onClose={() => setViewerOpen(false)}
+        canAnnotate={canAnnotate}
+        onAnnotationsUpdated={() => void loadAnnotationBatch()}
       />
     </>
   );

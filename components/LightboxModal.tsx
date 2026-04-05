@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState, useCallback, useReducer } from 'react';
 import { PatientDocument } from '@/lib/types';
-import { X, ChevronLeft, ChevronRight, Download, ExternalLink, AlertCircle, File } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Download, ExternalLink, File } from 'lucide-react';
+import { DocumentAnnotationsOverlay } from './DocumentAnnotationsOverlay';
 
 type ImgState = {
   src: string | null;        // ami ténylegesen ki van téve
@@ -62,6 +63,9 @@ interface LightboxModalProps {
   patientId: string;
   onClose: () => void;
   onDownload?: (doc: PatientDocument) => void;
+  /** Szabadkézi / szöveg annotáció (admin, fogpótlástanász, beutaló orvos). */
+  canAnnotate?: boolean;
+  onAnnotationsUpdated?: () => void;
 }
 
 export function LightboxModal({
@@ -71,6 +75,8 @@ export function LightboxModal({
   patientId,
   onClose,
   onDownload,
+  canAnnotate = false,
+  onAnnotationsUpdated,
 }: LightboxModalProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [state, dispatch] = useReducer(imgReducer, initialImgState);
@@ -279,19 +285,21 @@ export function LightboxModal({
           </button>
         )}
 
-        {/* Image container */}
-        <div className="relative w-full h-full flex items-center justify-center p-4">
-          {state.src ? (
-            <img
-              src={state.src}
-              alt={currentDoc?.filename || 'Kép'}
-              className="max-w-full max-h-full object-contain"
-              draggable={false}
-              style={{ display: 'block' }}
+        {/* Image + annotációk */}
+        <div className="relative w-full h-full flex items-center justify-center p-4 overflow-auto">
+          {state.src && currentDoc && !state.error ? (
+            <DocumentAnnotationsOverlay
+              patientId={patientId}
+              documentId={currentDoc.id!}
+              imageUrl={state.src}
+              mode={canAnnotate ? 'edit' : 'view'}
+              canEdit={canAnnotate}
+              imgClassName="max-w-full max-h-[min(85vh,900px)] object-contain block"
+              onAnnotationsUpdated={onAnnotationsUpdated}
             />
-          ) : (
-            <div style={{ width: 800, height: 600 }} /> // stabil placeholder, ne ugráljon a layout
-          )}
+          ) : !state.error ? (
+            <div style={{ width: 800, height: 600 }} />
+          ) : null}
 
           {state.loading && (
             <div className="absolute inset-0 flex items-center justify-center">

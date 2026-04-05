@@ -2,6 +2,9 @@ import { getDbPool } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { getBnoKodToNevMap, resolveBnoFieldToHungarianLabels } from '@/lib/bno-codes-data';
 import { normalizeChecklist, normalizeSessionAttendees, type ChecklistEntry } from '@/lib/consilium';
+import type { ConsiliumPrepCommentSnapshot } from '@/lib/consilium-view-helpers';
+
+export type { ConsiliumPrepCommentSnapshot } from '@/lib/consilium-view-helpers';
 import { patientStageOptions } from '@/lib/types/episode';
 import { legacyPatientStageToCode, LEGACY_MERGED_STAGE_EVENT_ID_PREFIX } from '@/lib/legacy-patient-stage-map';
 import { stageTimelineDedupeKey } from '@/lib/stage-timeline-merge';
@@ -103,6 +106,18 @@ export type ItemMediaSummary = {
   opPreview: MediaBucketSummary;
   photoPreview: MediaBucketSummary;
   error: string | null;
+};
+
+/** Egy konzílium-tétel a vetítés / előkészítő API válaszában. */
+export type ConsiliumPresentationItem = {
+  id: string;
+  sortOrder: number;
+  patientId: string;
+  discussionState: { discussed: boolean; checklist: ChecklistEntry[] };
+  patientSummary: PatientPresentationSummary;
+  mediaSummary: ItemMediaSummary;
+  /** Linkes előkészítőből; az éles vetítésen megjelenítve, nem írható felül a verdiktet. */
+  prepComments: ConsiliumPrepCommentSnapshot[];
 };
 
 function parseJsonObjectRecord(raw: unknown): Record<string, unknown> {
@@ -551,10 +566,194 @@ async function mediaSummaryForPatient(patientId: string) {
   };
 }
 
-export async function buildConsiliumPresentationPayload(sessionId: string, institutionId: string) {
-  const pool = getDbPool();
-  const bnoMap = getBnoKodToNevMap();
+type ItemRow = {
+  id: string;
+  patientId: string;
+  sortOrder: number;
+  discussed: boolean;
+  checklist: unknown;
+};
 
+async function buildConsiliumPresentationItemFromRow(
+  pool: ReturnType<typeof getDbPool>,
+  bnoMap: ReturnType<typeof getBnoKodToNevMap>,
+  row: ItemRow,
+): Promise<ConsiliumPresentationItem> {
+  const patientId = row.patientId as string;
+  let patientSummary: PatientPresentationSummary = {
+    patientId,
+    visible: false,
+    missingPatient: true,
+    name: null,
+    taj: null,
+    birthYear: null,
+    age: null,
+    addressDisplay: null,
+    diagnozis: null,
+    bnoDescription: null,
+    beutaloOrvos: null,
+    beutaloIntezmeny: null,
+    tnmStaging: null,
+    episodeLabel: null,
+    stage: null,
+    meglevoFogak: {},
+    meglevoImplantatumok: {},
+    nemIsmertPoziciokbanImplantatum: false,
+    nemIsmertPoziciokbanImplantatumReszletek: null,
+    careTimeline: [],
+  };
+
+  try {
+    const p = await pool.query(
+      `SELECT
+         pf.id,
+         pf.nev,
+         pf.taj,
+         pf.szuletesi_datum as "szuletesiDatum",
+         pf.iranyitoszam,
+         pf.varos,
+         pf.cim,
+         pf.diagnozis,
+         pf.bno,
+         pf.tnm_staging as "tnmStaging",
+         pf.beutalo_orvos as "beutaloOrvos",
+         pf.beutalo_intezmeny as "beutaloIntezmeny",
+         pf.meglevo_fogak as "meglevoFogak",
+         pf.meglevo_implantatumok as "meglevoImplantatumok",
+         pf.nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
+         pf.nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumReszletek"
+       FROM patients_full pf
+       WHERE pf.id = $1`,
+      [patientId],
+    );
+    if (p.rows.length > 0) {
+      const rowP = p.rows[0];
+      const birth = rowP.szuletesiDatum ? new Date(rowP.szuletesiDatum) : null;
+      const [stage, careTimeline] = await Promise.all([
+        latestStageSummary(patientId),
+        loadPatientCareTimeline(patientId),
+      ]);
+      const episodeLabel =
+        careTimeline[0] != null
+          ? [careTimeline[0].reason, careTimeline[0].status].filter(Boolean).join(' · ') || null
+          : null;
+      const bnoDescription = resolveBnoFieldToHungarianLabels(rowP.bno, bnoMap);
+      const fogRaw = parseJsonObjectRecord(rowP.meglevoFogak);
+      const implantRaw = parseJsonObjectRecord(rowP.meglevoImplantatumok);
+      const meglevoImplantatumok: Record<string, string> = {};
+      for (const [k, v] of Object.entries(implantRaw)) {
+        meglevoImplantatumok[k] = typeof v === 'string' ? v : v != null ? String(v) : '';
+      }
+      patientSummary = {
+        patientId,
+        visible: true,
+        missingPatient: false,
+        name: rowP.nev ?? null,
+        taj: rowP.taj ?? null,
+        birthYear: birth && !Number.isNaN(birth.getTime()) ? birth.getFullYear() : null,
+        age: ageFromBirthDate(birth),
+        addressDisplay: formatHungarianAddress(rowP.iranyitoszam, rowP.varos, rowP.cim),
+        diagnozis: rowP.diagnozis ?? null,
+        bnoDescription,
+        beutaloOrvos: rowP.beutaloOrvos ?? null,
+        beutaloIntezmeny: rowP.beutaloIntezmeny ?? null,
+        tnmStaging: rowP.tnmStaging ?? null,
+        episodeLabel,
+        stage,
+        meglevoFogak: fogRaw,
+        meglevoImplantatumok,
+        nemIsmertPoziciokbanImplantatum: !!rowP.nemIsmertPoziciokbanImplantatum,
+        nemIsmertPoziciokbanImplantatumReszletek: rowP.nemIsmertPoziciokbanImplantatumReszletek
+          ? String(rowP.nemIsmertPoziciokbanImplantatumReszletek)
+          : null,
+        careTimeline,
+      };
+    }
+  } catch (e) {
+    logger.warn('[consilium-presentation] patient summary failed', { patientId, error: String(e) });
+  }
+
+  let mediaSummary: ItemMediaSummary = {
+    opPreview: { totalCount: 0, imageCount: 0, previews: [] },
+    photoPreview: { totalCount: 0, imageCount: 0, previews: [] },
+    error: null,
+  };
+  try {
+    const m = await mediaSummaryForPatient(patientId);
+    mediaSummary = {
+      opPreview: m.op,
+      photoPreview: m.foto,
+      error: null,
+    };
+  } catch (e) {
+    logger.warn('[consilium-presentation] media summary failed', { patientId, error: String(e) });
+    mediaSummary.error = 'media_summary_failed';
+  }
+
+  const checklist: ChecklistEntry[] = normalizeChecklist(row.checklist);
+
+  return {
+    id: row.id,
+    sortOrder: row.sortOrder,
+    patientId,
+    discussionState: {
+      discussed: !!row.discussed,
+      checklist,
+    },
+    patientSummary,
+    mediaSummary,
+    prepComments: [],
+  };
+}
+
+async function loadPrepCommentsByItemIds(
+  pool: ReturnType<typeof getDbPool>,
+  itemIds: string[],
+): Promise<Map<string, ConsiliumPrepCommentSnapshot[]>> {
+  const out = new Map<string, ConsiliumPrepCommentSnapshot[]>();
+  if (itemIds.length === 0) return out;
+  const r = await pool.query<{
+    id: string;
+    itemId: string;
+    checklistKey: string;
+    body: string;
+    authorDisplay: string;
+    createdAt: Date;
+  }>(
+    `SELECT id, item_id as "itemId", checklist_key as "checklistKey", body, author_display as "authorDisplay", created_at as "createdAt"
+     FROM consilium_prep_comments
+     WHERE item_id = ANY($1::uuid[])
+     ORDER BY item_id, checklist_key, created_at ASC`,
+    [itemIds],
+  );
+  for (const row of r.rows) {
+    const list = out.get(row.itemId) ?? [];
+    list.push({
+      id: row.id,
+      checklistKey: row.checklistKey,
+      body: row.body,
+      authorDisplay: row.authorDisplay,
+      createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
+    });
+    out.set(row.itemId, list);
+  }
+  return out;
+}
+
+export type ConsiliumPresentationSession = {
+  id: string;
+  institutionId: string;
+  title: string;
+  scheduledAt: string;
+  status: string;
+  attendees: ReturnType<typeof normalizeSessionAttendees>;
+};
+
+async function loadConsiliumSessionForPresentation(
+  pool: ReturnType<typeof getDbPool>,
+  sessionId: string,
+  institutionId: string,
+): Promise<ConsiliumPresentationSession | null> {
   const sessionResult = await pool.query(
     `SELECT id, title, institution_id as "institutionId", scheduled_at as "scheduledAt", status, attendees
      FROM consilium_sessions
@@ -565,10 +764,75 @@ export async function buildConsiliumPresentationPayload(sessionId: string, insti
   if (sessionResult.rows.length === 0) {
     return null;
   }
-  const session = {
+  return {
     ...sessionResult.rows[0],
     attendees: normalizeSessionAttendees(sessionResult.rows[0].attendees),
   };
+}
+
+/** Egy tétel vetítés-payloadja (előkészítő link), vagy null ha nincs ilyen tétel az intézményben. */
+export async function buildConsiliumPresentationItemPayload(
+  sessionId: string,
+  institutionId: string,
+  itemId: string,
+): Promise<{ session: ConsiliumPresentationSession; items: ConsiliumPresentationItem[] } | null> {
+  const pool = getDbPool();
+  const bnoMap = getBnoKodToNevMap();
+  const session = await loadConsiliumSessionForPresentation(pool, sessionId, institutionId);
+  if (!session) {
+    return null;
+  }
+
+  const itemsResult = await pool.query(
+    `SELECT
+       i.id,
+       i.session_id as "sessionId",
+       i.patient_id as "patientId",
+       i.sort_order as "sortOrder",
+       i.discussed,
+       i.checklist
+     FROM consilium_session_items i
+     WHERE i.session_id = $1::uuid AND i.id = $2::uuid`,
+    [sessionId, itemId],
+  );
+  if (itemsResult.rows.length === 0) {
+    return null;
+  }
+
+  const row = itemsResult.rows[0];
+  const itemBase = await buildConsiliumPresentationItemFromRow(pool, bnoMap, {
+    id: row.id,
+    patientId: row.patientId,
+    sortOrder: row.sortOrder,
+    discussed: !!row.discussed,
+    checklist: row.checklist,
+  });
+  const prepMap = await loadPrepCommentsByItemIds(pool, [row.id]);
+  const item: ConsiliumPresentationItem = {
+    ...itemBase,
+    prepComments: prepMap.get(row.id) ?? [],
+  };
+
+  const payloadString = JSON.stringify({ session, items: [item] });
+  if (payloadString.length > 1_500_000) {
+    logger.warn('[consilium-presentation] large single-item payload', {
+      sessionId,
+      itemId,
+      bytes: payloadString.length,
+    });
+  }
+
+  return { session, items: [item] };
+}
+
+export async function buildConsiliumPresentationPayload(sessionId: string, institutionId: string) {
+  const pool = getDbPool();
+  const bnoMap = getBnoKodToNevMap();
+
+  const session = await loadConsiliumSessionForPresentation(pool, sessionId, institutionId);
+  if (!session) {
+    return null;
+  }
 
   const itemsResult = await pool.query(
     `SELECT
@@ -584,138 +848,21 @@ export async function buildConsiliumPresentationPayload(sessionId: string, insti
     [sessionId],
   );
 
-  const items: {
-    id: string;
-    sortOrder: number;
-    patientId: string;
-    discussionState: { discussed: boolean; checklist: ChecklistEntry[] };
-    patientSummary: PatientPresentationSummary;
-    mediaSummary: ItemMediaSummary;
-  }[] = [];
+  const itemIds = itemsResult.rows.map((r) => r.id as string);
+  const prepByItem = await loadPrepCommentsByItemIds(pool, itemIds);
+
+  const items: ConsiliumPresentationItem[] = [];
   for (const row of itemsResult.rows) {
-    const patientId = row.patientId as string;
-    let patientSummary: PatientPresentationSummary = {
-      patientId,
-      visible: false,
-      missingPatient: true,
-      name: null,
-      taj: null,
-      birthYear: null,
-      age: null,
-      addressDisplay: null,
-      diagnozis: null,
-      bnoDescription: null,
-      beutaloOrvos: null,
-      beutaloIntezmeny: null,
-      tnmStaging: null,
-      episodeLabel: null,
-      stage: null,
-      meglevoFogak: {},
-      meglevoImplantatumok: {},
-      nemIsmertPoziciokbanImplantatum: false,
-      nemIsmertPoziciokbanImplantatumReszletek: null,
-      careTimeline: [],
-    };
-
-    try {
-      const p = await pool.query(
-        `SELECT
-           pf.id,
-           pf.nev,
-           pf.taj,
-           pf.szuletesi_datum as "szuletesiDatum",
-           pf.iranyitoszam,
-           pf.varos,
-           pf.cim,
-           pf.diagnozis,
-           pf.bno,
-           pf.tnm_staging as "tnmStaging",
-           pf.beutalo_orvos as "beutaloOrvos",
-           pf.beutalo_intezmeny as "beutaloIntezmeny",
-           pf.meglevo_fogak as "meglevoFogak",
-           pf.meglevo_implantatumok as "meglevoImplantatumok",
-           pf.nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum",
-           pf.nem_ismert_poziciokban_implantatum_reszletek as "nemIsmertPoziciokbanImplantatumReszletek"
-         FROM patients_full pf
-         WHERE pf.id = $1`,
-        [patientId],
-      );
-      if (p.rows.length > 0) {
-        const rowP = p.rows[0];
-        const birth = rowP.szuletesiDatum ? new Date(rowP.szuletesiDatum) : null;
-        const [stage, careTimeline] = await Promise.all([
-          latestStageSummary(patientId),
-          loadPatientCareTimeline(patientId),
-        ]);
-        const episodeLabel =
-          careTimeline[0] != null
-            ? [careTimeline[0].reason, careTimeline[0].status].filter(Boolean).join(' · ') || null
-            : null;
-        const bnoDescription = resolveBnoFieldToHungarianLabels(rowP.bno, bnoMap);
-        const fogRaw = parseJsonObjectRecord(rowP.meglevoFogak);
-        const implantRaw = parseJsonObjectRecord(rowP.meglevoImplantatumok);
-        const meglevoImplantatumok: Record<string, string> = {};
-        for (const [k, v] of Object.entries(implantRaw)) {
-          meglevoImplantatumok[k] = typeof v === 'string' ? v : v != null ? String(v) : '';
-        }
-        patientSummary = {
-          patientId,
-          visible: true,
-          missingPatient: false,
-          name: rowP.nev ?? null,
-          taj: rowP.taj ?? null,
-          birthYear: birth && !Number.isNaN(birth.getTime()) ? birth.getFullYear() : null,
-          age: ageFromBirthDate(birth),
-          addressDisplay: formatHungarianAddress(rowP.iranyitoszam, rowP.varos, rowP.cim),
-          diagnozis: rowP.diagnozis ?? null,
-          bnoDescription,
-          beutaloOrvos: rowP.beutaloOrvos ?? null,
-          beutaloIntezmeny: rowP.beutaloIntezmeny ?? null,
-          tnmStaging: rowP.tnmStaging ?? null,
-          episodeLabel,
-          stage,
-          meglevoFogak: fogRaw,
-          meglevoImplantatumok,
-          nemIsmertPoziciokbanImplantatum: !!rowP.nemIsmertPoziciokbanImplantatum,
-          nemIsmertPoziciokbanImplantatumReszletek: rowP.nemIsmertPoziciokbanImplantatumReszletek
-            ? String(rowP.nemIsmertPoziciokbanImplantatumReszletek)
-            : null,
-          careTimeline,
-        };
-      }
-    } catch (e) {
-      logger.warn('[consilium-presentation] patient summary failed', { patientId, error: String(e) });
-    }
-
-    let mediaSummary: ItemMediaSummary = {
-      opPreview: { totalCount: 0, imageCount: 0, previews: [] },
-      photoPreview: { totalCount: 0, imageCount: 0, previews: [] },
-      error: null,
-    };
-    try {
-      const m = await mediaSummaryForPatient(patientId);
-      mediaSummary = {
-        opPreview: m.op,
-        photoPreview: m.foto,
-        error: null,
-      };
-    } catch (e) {
-      logger.warn('[consilium-presentation] media summary failed', { patientId, error: String(e) });
-      mediaSummary.error = 'media_summary_failed';
-    }
-
-    const checklist: ChecklistEntry[] = normalizeChecklist(row.checklist);
-
-    items.push({
+    const base = await buildConsiliumPresentationItemFromRow(pool, bnoMap, {
       id: row.id,
+      patientId: row.patientId,
       sortOrder: row.sortOrder,
-      patientId,
-      discussionState: {
-        discussed: !!row.discussed,
-        checklist,
-      },
-      patientSummary,
-      mediaSummary,
+      discussed: !!row.discussed,
+      checklist: row.checklist,
+    });
+    items.push({
+      ...base,
+      prepComments: prepByItem.get(row.id) ?? [],
     });
   }
 

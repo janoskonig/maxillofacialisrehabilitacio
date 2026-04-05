@@ -8,6 +8,13 @@ import { getCurrentUser, type AuthUser } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
 import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
 import { useToast } from '@/contexts/ToastContext';
+import type { ConsiliumPresentationItem } from '@/lib/consilium-presentation';
+import {
+  type ConsiliumPrepCommentSnapshot,
+  formatConsiliumHuDateTime,
+  orphanPrepCommentsByKey,
+  prepCommentsGroupedByKey,
+} from '@/lib/consilium-view-helpers';
 
 type SessionSummary = {
   id: string;
@@ -252,6 +259,83 @@ type ChecklistEntryRow = {
   respondedAt?: string | null;
   respondedBy?: string | null;
 };
+
+function ConsiliumItemPrepCommentsReadonly({
+  checklist,
+  prepComments,
+}: {
+  checklist: ChecklistEntryRow[];
+  prepComments?: ConsiliumPrepCommentSnapshot[] | null;
+}) {
+  const byKey = useMemo(() => prepCommentsGroupedByKey(prepComments), [prepComments]);
+  const checklistKeySet = useMemo(() => new Set(checklist.map((c) => c.key)), [checklist]);
+  const orphanByKey = useMemo(
+    () => orphanPrepCommentsByKey(prepComments, checklistKeySet),
+    [prepComments, checklistKeySet],
+  );
+
+  const keysWithComments = checklist.filter((row) => (byKey.get(row.key) ?? []).length > 0);
+
+  const hasAny = (prepComments?.length ?? 0) > 0;
+
+  return (
+    <div className="rounded-lg border border-cyan-200 bg-gradient-to-b from-cyan-50/90 to-white px-3 py-2.5 space-y-2">
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-cyan-900/85">Előkészítő megjegyzések</p>
+        <p className="text-[11px] text-cyan-800/55 mt-0.5">
+          Linken írt hozzászólások — az élő ülésen rögzített verdiktet nem váltják ki.
+        </p>
+      </div>
+      {!hasAny ? (
+        <p className="text-xs text-cyan-800/45">Még nincs előkészítő hozzászólás.</p>
+      ) : (
+        <div className="space-y-3">
+          {keysWithComments.map((row) => {
+            const list = byKey.get(row.key) ?? [];
+            return (
+              <div key={row.key} className="border-b border-cyan-100 pb-2 last:border-0 last:pb-0 space-y-1.5">
+                <p className="text-xs font-medium text-cyan-950">{row.label}</p>
+                <ul className="space-y-1.5">
+                  {list.map((cm) => (
+                    <li
+                      key={cm.id}
+                      className="text-xs text-gray-800 bg-white border border-cyan-100/80 rounded-md px-2 py-1.5 shadow-sm"
+                    >
+                      <span className="text-[10px] text-cyan-700/75">
+                        {formatConsiliumHuDateTime(cm.createdAt)} · {cm.authorDisplay}
+                      </span>
+                      <p className="whitespace-pre-wrap mt-0.5 leading-snug">{cm.body}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+          {Array.from(orphanByKey.entries()).map(([key, list]) => (
+            <div key={`orphan-${key}`} className="border-b border-amber-100 pb-2 last:border-0 space-y-1.5">
+              <p className="text-xs font-medium text-amber-900">
+                Törölt vagy átnevezett pont <span className="font-mono text-[10px] opacity-70">({key})</span>
+              </p>
+              <ul className="space-y-1.5">
+                {list.map((cm) => (
+                  <li
+                    key={cm.id}
+                    className="text-xs text-gray-800 bg-amber-50/80 border border-amber-100 rounded-md px-2 py-1.5"
+                  >
+                    <span className="text-[10px] text-amber-800/70">
+                      {formatConsiliumHuDateTime(cm.createdAt)} · {cm.authorDisplay}
+                    </span>
+                    <p className="whitespace-pre-wrap mt-0.5 leading-snug">{cm.body}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ConsiliumItemChecklist({
   sessionId,
@@ -501,7 +585,7 @@ export default function ConsiliumPage() {
     [sessions, selectedSessionId],
   );
 
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<ConsiliumPresentationItem[]>([]);
   const [sessionDetail, setSessionDetail] = useState<{
     id: string;
     title: string;
@@ -537,8 +621,8 @@ export default function ConsiliumPage() {
       try {
         const res = await fetch(`/api/consilium/sessions/${sessionId}/presentation`, { credentials: 'include' });
         if (!res.ok) throw new Error('presentation_failed');
-        const data = await res.json();
-        setItems(data.items || []);
+        const data = (await res.json()) as { items?: ConsiliumPresentationItem[]; session?: Record<string, unknown> };
+        setItems(data.items ?? []);
         if (data.session) {
           const att = Array.isArray(data.session.attendees) ? data.session.attendees : [];
           setSessionDetail({
@@ -760,6 +844,63 @@ export default function ConsiliumPage() {
     if (!res.ok) throw new Error('patch_item_failed');
     return res.json();
   };
+
+  const copyPrepLinkForItem = useCallback(
+    async (itemId: string) => {
+      if (!selectedSessionId) return;
+      try {
+        const res = await fetch(
+          `/api/consilium/sessions/${selectedSessionId}/items/${itemId}/prep-link`,
+          {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          },
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error('prep_link_failed');
+        const path = typeof data.prepPath === 'string' ? data.prepPath : '';
+        const fullUrl = `${window.location.origin}${path}`;
+        await navigator.clipboard.writeText(fullUrl);
+        const exp =
+          typeof data.expiresAt === 'string'
+            ? new Date(data.expiresAt).toLocaleString('hu-HU')
+            : '';
+        showToast(
+          exp ? `Előkészítő link a vágólapon (lejárat: ${exp})` : 'Előkészítő link a vágólapon',
+          'success',
+        );
+      } catch {
+        showToast('Előkészítő link létrehozása sikertelen', 'error');
+      }
+    },
+    [selectedSessionId, showToast],
+  );
+
+  const revokePrepLinksForItem = useCallback(
+    async (itemId: string) => {
+      if (!selectedSessionId) return;
+      if (
+        !confirm(
+          'Visszavonod az előkészítő linkeket ehhez a beteghez? A korábban kiküldött linkek többé nem működnek.',
+        )
+      ) {
+        return;
+      }
+      try {
+        const res = await fetch(
+          `/api/consilium/sessions/${selectedSessionId}/items/${itemId}/prep-link`,
+          { method: 'DELETE', credentials: 'include' },
+        );
+        if (!res.ok) throw new Error('revoke_failed');
+        showToast('Előkészítő linkek visszavonva', 'success');
+      } catch {
+        showToast('Visszavonás sikertelen', 'error');
+      }
+    },
+    [selectedSessionId, showToast],
+  );
 
   if (loadingUser) {
     return (
@@ -1001,7 +1142,7 @@ export default function ConsiliumPage() {
                   {loadingItems && <p className="text-sm text-gray-500">Elemek betöltése...</p>}
                   {!loadingItems && items.length === 0 && <p className="text-sm text-gray-500">Még nincs beteg az alkalmon.</p>}
                   <div className="space-y-3">
-                    {items.map((it: any) => {
+                    {items.map((it) => {
                       const name = it.patientSummary?.name || 'Ismeretlen beteg';
                       const readonly = selectedSession.status === 'closed';
                       const listLocked = selectedSession.status !== 'draft';
@@ -1055,6 +1196,11 @@ export default function ConsiliumPage() {
                             </div>
                           </div>
 
+                          <ConsiliumItemPrepCommentsReadonly
+                            checklist={(it.discussionState?.checklist || []) as ChecklistEntryRow[]}
+                            prepComments={it.prepComments ?? []}
+                          />
+
                           <ConsiliumItemChecklist
                             sessionId={selectedSession.id}
                             itemId={it.id}
@@ -1063,6 +1209,25 @@ export default function ConsiliumPage() {
                             onRefresh={() => loadItems(selectedSession.id)}
                             showToast={showToast}
                           />
+
+                          {selectedSession.status !== 'closed' && (
+                            <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
+                              <button
+                                type="button"
+                                className="text-xs px-2 py-1 rounded-md border border-gray-200 bg-white text-gray-800 hover:bg-gray-50"
+                                onClick={() => void copyPrepLinkForItem(it.id)}
+                              >
+                                Előkészítő link másolása
+                              </button>
+                              <button
+                                type="button"
+                                className="text-xs px-2 py-1 rounded-md text-red-700 hover:bg-red-50"
+                                onClick={() => void revokePrepLinksForItem(it.id)}
+                              >
+                                Előkészítő linkek visszavonása
+                              </button>
+                            </div>
+                          )}
                         </div>
                       );
                     })}

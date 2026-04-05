@@ -8,6 +8,11 @@ import { getCurrentUser, type AuthUser } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
 import { OPInlinePreview } from '@/components/OPInlinePreview';
 import { PresentationDentalMiniViewer } from '@/components/PresentationDentalMiniViewer';
+import { DocumentAnnotationsOverlay } from '@/components/DocumentAnnotationsOverlay';
+import { DocumentAnnotationThumbnail } from '@/components/DocumentAnnotationThumbnail';
+import { userCanAnnotatePatientDocuments } from '@/lib/patient-document-annotate';
+import type { PatientDocumentAnnotation } from '@/lib/types/document-annotation';
+import { fetchAnnotationsBatchForPatient } from '@/lib/document-annotations-batch-client';
 import type { ToothStatus } from '@/hooks/usePatientAutoSave';
 import type { ChecklistEntry } from '@/lib/consilium';
 import type {
@@ -17,23 +22,12 @@ import type {
   PresentationTimelineEpisode,
   PresentationTimelineStage,
 } from '@/lib/consilium-presentation';
-
-function presentationDiagnosisText(ps: { bnoDescription?: string | null; diagnozis?: string | null }): string | null {
-  const b = (ps.bnoDescription || '').trim();
-  const d = (ps.diagnozis || '').trim();
-  if (!b && !d) return null;
-  if (b && d && b === d) return b;
-  if (b && d) return `${b}\n\n${d}`;
-  return b || d;
-}
-
-/** Vetítéshez: kompakt, de olvasható dátum + idő */
-function huPresentDateTime(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return '—';
-  return new Date(iso).toLocaleString('hu-HU', { dateStyle: 'short', timeStyle: 'short' });
-}
+import {
+  type ConsiliumPrepCommentSnapshot,
+  consiliumPresentationDiagnosisText,
+  formatConsiliumHuDateTime,
+  prepCommentsGroupedByKey,
+} from '@/lib/consilium-view-helpers';
 
 /** Összes stádium egy listában, legújabb felül (egyszerű timeline). */
 function flattenCareTimelineNewestFirst(
@@ -56,6 +50,7 @@ type PresentationItem = {
   patientSummary: PatientPresentationSummary;
   mediaSummary: ItemMediaSummary;
   discussionState: { discussed: boolean; checklist: ChecklistEntry[] };
+  prepComments?: ConsiliumPrepCommentSnapshot[];
 };
 
 type PresentationPayload = {
@@ -213,9 +208,9 @@ function PresentChecklistDelegate({
   };
 
   return (
-    <div className="mt-2 pt-2 border-t border-white/10">
-      <p className="text-[10px] text-white/45 uppercase tracking-wide mb-1">Feladat delegálása</p>
-      <p className="text-[11px] text-white/35 mb-2">
+    <div className="mt-2 pt-2 border-t border-amber-500/25">
+      <p className="text-[10px] text-amber-100/50 uppercase tracking-wide mb-1">Feladat delegálása</p>
+      <p className="text-[11px] text-amber-100/35 mb-2">
         Kezdd el gépelni a nevet vagy e-mailt, majd válassz a listából — a feladat a kijelölt felhasználó nyitott feladatai közé kerül.
       </p>
       <div className="flex flex-col gap-2 relative">
@@ -231,7 +226,7 @@ function PresentChecklistDelegate({
           placeholder={
             institutionUsersLoading ? 'Felhasználók betöltése…' : 'Név vagy e-mail kezdete…'
           }
-          className="w-full text-sm rounded-md border border-white/20 bg-black/50 text-white/90 placeholder:text-white/35 px-2 py-1.5 outline-none focus:border-white/40"
+          className="w-full text-sm rounded-md border border-amber-500/30 bg-black/45 text-amber-50/95 placeholder:text-amber-200/30 px-2 py-1.5 outline-none focus:border-amber-400/50"
           value={inputValue}
           onChange={(e) => {
             setInputValue(e.target.value);
@@ -272,10 +267,10 @@ function PresentChecklistDelegate({
           <ul
             id={`delegate-suggest-${checklistKey}`}
             role="listbox"
-            className="absolute left-0 right-0 top-full z-30 mt-0.5 max-h-52 overflow-y-auto rounded-md border border-white/20 bg-zinc-950 shadow-lg py-1"
+            className="absolute left-0 right-0 top-full z-30 mt-0.5 max-h-52 overflow-y-auto rounded-md border border-amber-500/35 bg-zinc-950 shadow-lg py-1"
           >
             {suggestions.length === 0 ? (
-              <li className="px-2 py-2 text-xs text-white/50">Nincs találat.</li>
+              <li className="px-2 py-2 text-xs text-amber-100/45">Nincs találat.</li>
             ) : (
               suggestions.map((u, idx) => (
                 <li key={u.id} role="presentation">
@@ -284,7 +279,7 @@ function PresentChecklistDelegate({
                     role="option"
                     aria-selected={idx === highlightIdx}
                     className={`w-full text-left px-2 py-1.5 text-sm ${
-                      idx === highlightIdx ? 'bg-white/15 text-white' : 'text-white/85 hover:bg-white/10'
+                      idx === highlightIdx ? 'bg-amber-500/20 text-amber-50' : 'text-amber-50/90 hover:bg-amber-500/10'
                     }`}
                     onMouseDown={(ev) => ev.preventDefault()}
                     onMouseEnter={() => setHighlightIdx(idx)}
@@ -292,9 +287,9 @@ function PresentChecklistDelegate({
                   >
                     {presentInstitutionUserLabel(u)}
                     {u.role === 'technikus' ? (
-                      <span className="text-white/40 text-xs ml-1">(technikus)</span>
+                      <span className="text-amber-200/40 text-xs ml-1">(technikus)</span>
                     ) : null}
-                    <span className="block text-[10px] text-white/40 truncate">{u.email}</span>
+                    <span className="block text-[10px] text-amber-100/40 truncate">{u.email}</span>
                   </button>
                 </li>
               ))
@@ -302,7 +297,7 @@ function PresentChecklistDelegate({
           </ul>
         )}
         <textarea
-          className="w-full min-h-[48px] rounded-md border border-white/15 bg-black/40 text-xs text-white/85 placeholder:text-white/30 px-2 py-1.5 outline-none focus:border-white/35"
+          className="w-full min-h-[48px] rounded-md border border-amber-500/25 bg-black/40 text-xs text-amber-50/90 placeholder:text-amber-200/25 px-2 py-1.5 outline-none focus:border-amber-400/45"
           placeholder="Opcionális megjegyzés a címzettnek…"
           value={note}
           disabled={sending}
@@ -346,7 +341,7 @@ function PresentChecklistVerdictField({
 
   const meta =
     (entry.respondedBy || entry.respondedAt) && (
-      <p className="text-[10px] text-white/35 mt-1">
+      <p className="text-[10px] text-amber-100/40 mt-1">
         {[entry.respondedBy, entry.respondedAt ? new Date(entry.respondedAt).toLocaleString('hu-HU') : '']
           .filter(Boolean)
           .join(' · ')}
@@ -380,9 +375,9 @@ function PresentChecklistVerdictField({
     return (
       <div className="mt-1.5">
         {entry.response ? (
-          <p className="text-xs text-white/70 whitespace-pre-wrap">{entry.response}</p>
+          <p className="text-xs text-amber-50/90 whitespace-pre-wrap">{entry.response}</p>
         ) : (
-          <p className="text-[11px] text-white/35">Nincs rögzített verdikt</p>
+          <p className="text-[11px] text-amber-100/35">Nincs rögzített verdikt</p>
         )}
         {meta}
       </div>
@@ -391,9 +386,9 @@ function PresentChecklistVerdictField({
 
   return (
     <div className="mt-1.5">
-      <label className="text-[10px] text-white/45 uppercase tracking-wide">Verdikt</label>
+      <label className="text-[10px] text-amber-100/50 uppercase tracking-wide">Verdikt (élő ülés)</label>
       <textarea
-        className="mt-0.5 w-full min-h-[72px] rounded-md border border-white/20 bg-black/50 text-sm text-white/90 placeholder:text-white/30 p-2 outline-none focus:border-white/40 focus:ring-1 focus:ring-white/20"
+        className="mt-0.5 w-full min-h-[72px] rounded-md border border-amber-500/35 bg-black/45 text-sm text-amber-50/95 placeholder:text-amber-200/25 p-2 outline-none focus:border-amber-400/55 focus:ring-1 focus:ring-amber-400/20"
         placeholder="Megállapodás, döntés, teendő…"
         value={text}
         onChange={(e) => setText(e.target.value)}
@@ -419,7 +414,12 @@ export default function ConsiliumPresentPage() {
 
   const [index, setIndex] = useState(0);
   const indexRef = useRef(0);
-  const [photoLightbox, setPhotoLightbox] = useState<{ previews: MediaPreviewItem[]; index: number } | null>(null);
+  const [photoLightbox, setPhotoLightbox] = useState<{
+    patientId: string;
+    previews: MediaPreviewItem[];
+    index: number;
+  } | null>(null);
+  const [photoAnnByDoc, setPhotoAnnByDoc] = useState<Record<string, PatientDocumentAnnotation[]>>({});
   const [institutionUsers, setInstitutionUsers] = useState<InstitutionUserRow[]>([]);
   const [institutionUsersLoading, setInstitutionUsersLoading] = useState(false);
 
@@ -503,6 +503,45 @@ export default function ConsiliumPresentPage() {
     [summaryForTimeline?.careTimeline],
   );
 
+  const prepCommentsByKey = useMemo(
+    () => prepCommentsGroupedByKey(current?.prepComments),
+    [current?.id, current?.prepComments],
+  );
+
+  const photoDocIds = useMemo(() => {
+    if (!current) return [] as string[];
+    return (current.mediaSummary?.photoPreview?.previews ?? [])
+      .map((p) => p.documentId)
+      .filter(Boolean);
+  }, [current?.id, current?.mediaSummary?.photoPreview?.previews]);
+
+  useEffect(() => {
+    const pid = current?.patientSummary?.patientId;
+    if (!pid || photoDocIds.length === 0) {
+      setPhotoAnnByDoc({});
+      return;
+    }
+    let cancelled = false;
+    fetchAnnotationsBatchForPatient(pid, photoDocIds)
+      .then((m) => {
+        if (!cancelled) setPhotoAnnByDoc(m);
+      })
+      .catch(() => {
+        if (!cancelled) setPhotoAnnByDoc({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [current?.patientSummary?.patientId, photoDocIds]);
+
+  const refreshPhotoAnnotations = useCallback(() => {
+    const pid = current?.patientSummary?.patientId;
+    if (!pid || photoDocIds.length === 0) return;
+    void fetchAnnotationsBatchForPatient(pid, photoDocIds)
+      .then(setPhotoAnnByDoc)
+      .catch(() => setPhotoAnnByDoc({}));
+  }, [current?.patientSummary?.patientId, photoDocIds]);
+
   const neighborIndexes = useMemo(() => {
     const out: number[] = [];
     for (let d = -2; d <= 2; d++) {
@@ -563,6 +602,7 @@ export default function ConsiliumPresentPage() {
   }, [items.length, photoLightbox]);
 
   const readonly = payload?.session.status === 'closed';
+  const canAnnotatePatientDocs = userCanAnnotatePatientDocuments(user) && !readonly;
 
   const patchItem = async (itemId: string, body: PatchItemBody) => {
     const res = await fetch(`/api/consilium/sessions/${sessionId}/items/${itemId}`, {
@@ -647,8 +687,11 @@ export default function ConsiliumPresentPage() {
             <Logo width={34} height={39} />
             <div className="min-w-0">
               <p className="text-xs text-white/60 truncate">{payload.session.title}</p>
-              <p className="text-sm font-semibold truncate">
-                Konzílium vetítés · {new Date(payload.session.scheduledAt).toLocaleString('hu-HU')}
+              <p className="text-sm font-semibold truncate flex flex-wrap items-center gap-2">
+                <span>Konzílium vetítés · {new Date(payload.session.scheduledAt).toLocaleString('hu-HU')}</span>
+                <span className="inline-flex shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/20 text-amber-100 border border-amber-400/35">
+                  Élő megbeszélés
+                </span>
               </p>
               <p className="text-xs text-white/45 mt-0.5 line-clamp-2">
                 Jelen vannak:{' '}
@@ -728,7 +771,7 @@ export default function ConsiliumPresentPage() {
                       <div>
                         <p className="text-xs text-white/50 mb-0.5">Diagnózis</p>
                         <p className="text-sm md:text-base whitespace-pre-wrap break-words leading-snug">
-                          {presentationDiagnosisText(ps) || '—'}
+                          {consiliumPresentationDiagnosisText(ps) || '—'}
                         </p>
                       </div>
                       <div>
@@ -759,7 +802,7 @@ export default function ConsiliumPresentPage() {
                                   {row.st.stageLabel}
                                 </p>
                                 <p className="text-sm text-white/65">
-                                  {huPresentDateTime(row.st.at)}
+                                  {formatConsiliumHuDateTime(row.st.at)}
                                   {row.st.authorDisplay ? (
                                     <>
                                       <span className="text-white/35"> · </span>
@@ -799,7 +842,7 @@ export default function ConsiliumPresentPage() {
                         <p className="text-base md:text-lg font-semibold text-white">
                           {ps.stage.stageLabel || ps.stage.stageCode}
                         </p>
-                        <p className="text-sm text-white/65">{huPresentDateTime(ps.stage.stageDate)}</p>
+                        <p className="text-sm text-white/65">{formatConsiliumHuDateTime(ps.stage.stageDate)}</p>
                         {ps.stage.notes ? (
                           <p className="text-sm md:text-base text-white/85 whitespace-pre-wrap">{ps.stage.notes}</p>
                         ) : null}
@@ -823,6 +866,7 @@ export default function ConsiliumPresentPage() {
                       variant="presentation"
                       patientId={ps.patientId}
                       patientName={ps.name || undefined}
+                      canAnnotate={canAnnotatePatientDocs}
                     />
                   ) : (
                     <p className="text-xs text-white/50 px-2 py-4">Nincs betegazonosító az OP megjelenítéséhez.</p>
@@ -855,16 +899,32 @@ export default function ConsiliumPresentPage() {
                             key={p.documentId}
                             type="button"
                             onClick={() =>
-                              setPhotoLightbox({ previews: ms.photoPreview?.previews ?? [], index: pi })
+                              setPhotoLightbox({
+                                patientId: ps.patientId || '',
+                                previews: ms.photoPreview?.previews ?? [],
+                                index: pi,
+                              })
                             }
                             className="rounded-md overflow-hidden border border-white/10 bg-black/40 text-left focus:outline-none focus:ring-2 focus:ring-white/40 shrink-0"
                           >
-                            <img
-                              src={p.previewUrl}
-                              alt={p.filename || 'foto'}
-                              className="w-full h-24 lg:h-28 object-cover"
-                              loading="lazy"
-                            />
+                            {ps.patientId ? (
+                              <DocumentAnnotationThumbnail
+                                patientId={ps.patientId}
+                                documentId={p.documentId}
+                                imageUrl={p.previewUrl}
+                                annotations={photoAnnByDoc[p.documentId] ?? []}
+                                objectFit="cover"
+                                className="w-full h-24 lg:h-28"
+                                imgClassName="w-full h-24 lg:h-28 object-cover"
+                              />
+                            ) : (
+                              <img
+                                src={p.previewUrl}
+                                alt={p.filename || 'foto'}
+                                className="w-full h-24 lg:h-28 object-cover"
+                                loading="lazy"
+                              />
+                            )}
                           </button>
                         ))}
                       </div>
@@ -879,114 +939,157 @@ export default function ConsiliumPresentPage() {
                   </p>
                 </div>
 
-                <div className="min-h-[12rem] rounded-lg bg-black/30 border border-white/10 p-3 lg:p-4">
-                  <p className="text-xs lg:text-sm text-white/50 mb-2">Konzílium állapot</p>
-                  <div className="space-y-2">
-                    <div>
-                      <label className="flex items-center gap-2 text-sm text-white/90">
-                        <input
-                          type="checkbox"
-                          className="mt-0.5 rounded border-white/30"
-                          checked={!!ds.discussed}
-                          disabled={readonly}
-                          onChange={async (e) => {
-                            const discussed = e.target.checked;
-                            const prev = payload;
-                            setPayload((p) => {
-                              if (!p) return p;
-                              const nextItems = p.items.map((it) =>
-                                it.id === current.id ? { ...it, discussionState: { ...it.discussionState, discussed } } : it,
-                              );
-                              return { ...p, items: nextItems };
-                            });
-                            try {
-                              await patchItem(current.id, { operation: 'update_discussed', discussed });
-                            } catch {
-                              setPayload(prev);
-                            }
-                          }}
-                        />
-                        Megbeszélve
-                      </label>
+                <div className="flex flex-col gap-3 min-h-[12rem]">
+                  <div className="rounded-lg border border-cyan-500/40 bg-gradient-to-b from-cyan-950/55 via-cyan-950/25 to-black/40 p-3 lg:p-4 ring-1 ring-cyan-400/10">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-cyan-200/90 mb-0.5">
+                      Előkészítő megjegyzések
+                    </p>
+                    <p className="text-[10px] text-cyan-100/45 mb-3">
+                      A linken keresztül írt hozzászólások (nem helyettesítik az élő verdiktet).
+                    </p>
+                    <div className="space-y-3">
+                      {(ds.checklist || []).length === 0 && <p className="text-xs text-cyan-100/50">Nincs napirendi pont.</p>}
+                      {(ds.checklist || []).map((c: ChecklistEntry) => {
+                        const prepList = prepCommentsByKey.get(c.key) ?? [];
+                        return (
+                          <div
+                            key={`prep-${c.key}`}
+                            className="border-b border-cyan-500/20 pb-2 last:border-0 last:pb-0 space-y-1.5"
+                          >
+                            <p className="text-sm font-medium text-cyan-50/95">{c.label}</p>
+                            {prepList.length === 0 ? (
+                              <p className="text-[11px] text-cyan-100/40">Nincs előkészítő hozzászólás.</p>
+                            ) : (
+                              <ul className="space-y-1.5">
+                                {prepList.map((cm) => (
+                                  <li
+                                    key={cm.id}
+                                    className="text-xs text-cyan-50/90 bg-black/35 rounded-md px-2 py-1.5 border border-cyan-500/15"
+                                  >
+                                    <span className="text-cyan-200/50">
+                                      {formatConsiliumHuDateTime(cm.createdAt)} · {cm.authorDisplay}
+                                    </span>
+                                    <p className="whitespace-pre-wrap mt-0.5 leading-snug">{cm.body}</p>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
+                  </div>
 
-                    <div>
-                      <p className="text-xs text-white/50 mb-1">Napirendi pontok</p>
-                      <p className="text-[11px] text-white/40 mb-2">
-                        Pipálás, verdikt és felhasználónak delegálható feladat — vázlat és aktív alkalom alatt szerkeszthető; lezárt
-                        alkalomnál csak olvasható.
-                      </p>
-                      <div className="space-y-3">
-                        {(ds.checklist || []).length === 0 && <p className="text-xs text-white/60">Üres</p>}
-                        {(ds.checklist || []).map((c: ChecklistEntry) => (
-                          <div key={c.key} className="border-b border-white/10 pb-2 last:border-0 last:pb-0">
-                            <label className="flex items-start gap-2 text-sm">
-                              <input
-                                type="checkbox"
-                                className="mt-1"
-                                checked={!!c.checked}
-                                disabled={readonly}
-                                onChange={async (e) => {
-                                  const checked = e.target.checked;
-                                  const snapshot = payload;
-                                  setPayload((p) => {
-                                    if (!p) return p;
-                                    const nextItems = p.items.map((it) => {
-                                      if (it.id !== current.id) return it;
-                                      const nextChecklist = (it.discussionState.checklist || []).map((cc: ChecklistEntry) =>
-                                        cc.key === c.key
-                                          ? {
-                                              ...cc,
-                                              checked,
-                                              checkedAt: checked ? new Date().toISOString() : null,
-                                              checkedBy: checked ? user.email : null,
-                                            }
-                                          : cc,
-                                      );
-                                      return { ...it, discussionState: { ...it.discussionState, checklist: nextChecklist } };
-                                    });
-                                    return { ...p, items: nextItems };
-                                  });
-                                  try {
-                                    await toggleChecklist(current.id, c.key, checked);
-                                  } catch {
-                                    setPayload(snapshot);
-                                  }
-                                }}
-                              />
-                              <div className="min-w-0 flex-1">
-                                <span className="text-white/90">{c.label}</span>
-                                <PresentChecklistVerdictField
-                                  sessionId={sessionId}
-                                  itemId={current.id}
-                                  entry={c}
-                                  readonly={readonly}
-                                  onChecklistReplaced={(checklist) => {
+                  <div className="rounded-lg border border-amber-500/45 bg-gradient-to-b from-amber-950/45 via-amber-950/20 to-black/40 p-3 lg:p-4 ring-1 ring-amber-400/10">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-200/90 mb-0.5">
+                      Élő megbeszélés — konzílium
+                    </p>
+                    <p className="text-[10px] text-amber-100/45 mb-3">
+                      Pipálás, verdikt és delegálás — az ülésen rögzített döntés.
+                    </p>
+                    <div className="space-y-2">
+                      <div>
+                        <label className="flex items-center gap-2 text-sm text-amber-50/95">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 rounded border-amber-400/40 bg-black/30"
+                            checked={!!ds.discussed}
+                            disabled={readonly}
+                            onChange={async (e) => {
+                              const discussed = e.target.checked;
+                              const prev = payload;
+                              setPayload((p) => {
+                                if (!p) return p;
+                                const nextItems = p.items.map((it) =>
+                                  it.id === current.id ? { ...it, discussionState: { ...it.discussionState, discussed } } : it,
+                                );
+                                return { ...p, items: nextItems };
+                              });
+                              try {
+                                await patchItem(current.id, { operation: 'update_discussed', discussed });
+                              } catch {
+                                setPayload(prev);
+                              }
+                            }}
+                          />
+                          Megbeszélve
+                        </label>
+                      </div>
+
+                      <div>
+                        <p className="text-xs text-amber-100/55 mb-1">Napirendi pontok</p>
+                        <div className="space-y-3">
+                          {(ds.checklist || []).length === 0 && <p className="text-xs text-amber-100/50">Üres</p>}
+                          {(ds.checklist || []).map((c: ChecklistEntry) => (
+                            <div key={c.key} className="border-b border-amber-500/20 pb-2 last:border-0 last:pb-0">
+                              <label className="flex items-start gap-2 text-sm">
+                                <input
+                                  type="checkbox"
+                                  className="mt-1 border-amber-400/40 bg-black/30"
+                                  checked={!!c.checked}
+                                  disabled={readonly}
+                                  onChange={async (e) => {
+                                    const checked = e.target.checked;
+                                    const snapshot = payload;
                                     setPayload((p) => {
                                       if (!p) return p;
-                                      return {
-                                        ...p,
-                                        items: p.items.map((it) =>
-                                          it.id === current.id
-                                            ? { ...it, discussionState: { ...it.discussionState, checklist } }
-                                            : it,
-                                        ),
-                                      };
+                                      const nextItems = p.items.map((it) => {
+                                        if (it.id !== current.id) return it;
+                                        const nextChecklist = (it.discussionState.checklist || []).map((cc: ChecklistEntry) =>
+                                          cc.key === c.key
+                                            ? {
+                                                ...cc,
+                                                checked,
+                                                checkedAt: checked ? new Date().toISOString() : null,
+                                                checkedBy: checked ? user.email : null,
+                                              }
+                                            : cc,
+                                        );
+                                        return { ...it, discussionState: { ...it.discussionState, checklist: nextChecklist } };
+                                      });
+                                      return { ...p, items: nextItems };
                                     });
+                                    try {
+                                      await toggleChecklist(current.id, c.key, checked);
+                                    } catch {
+                                      setPayload(snapshot);
+                                    }
                                   }}
                                 />
-                                <PresentChecklistDelegate
-                                  sessionId={sessionId}
-                                  itemId={current.id}
-                                  checklistKey={c.key}
-                                  readonly={readonly}
-                                  institutionUsers={institutionUsers}
-                                  institutionUsersLoading={institutionUsersLoading}
-                                />
-                              </div>
-                            </label>
-                          </div>
-                        ))}
+                                <div className="min-w-0 flex-1">
+                                  <span className="text-amber-50/95">{c.label}</span>
+                                  <PresentChecklistVerdictField
+                                    sessionId={sessionId}
+                                    itemId={current.id}
+                                    entry={c}
+                                    readonly={readonly}
+                                    onChecklistReplaced={(checklist) => {
+                                      setPayload((p) => {
+                                        if (!p) return p;
+                                        return {
+                                          ...p,
+                                          items: p.items.map((it) =>
+                                            it.id === current.id
+                                              ? { ...it, discussionState: { ...it.discussionState, checklist } }
+                                              : it,
+                                          ),
+                                        };
+                                      });
+                                    }}
+                                  />
+                                  <PresentChecklistDelegate
+                                    sessionId={sessionId}
+                                    itemId={current.id}
+                                    checklistKey={c.key}
+                                    readonly={readonly}
+                                    institutionUsers={institutionUsers}
+                                    institutionUsersLoading={institutionUsersLoading}
+                                  />
+                                </div>
+                              </label>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1058,11 +1161,26 @@ export default function ConsiliumPresentPage() {
                 ? ` · ${photoLightbox.previews[photoLightbox.index].filename}`
                 : ''}
             </p>
-            <img
-              src={photoLightbox.previews[photoLightbox.index]?.previewUrl}
-              alt={photoLightbox.previews[photoLightbox.index]?.filename || ''}
-              className="max-h-[min(85vh,900px)] max-w-full w-auto object-contain"
-            />
+            {photoLightbox.patientId &&
+            photoLightbox.previews[photoLightbox.index]?.documentId &&
+            photoLightbox.previews[photoLightbox.index]?.previewUrl ? (
+              <DocumentAnnotationsOverlay
+                patientId={photoLightbox.patientId}
+                documentId={photoLightbox.previews[photoLightbox.index].documentId}
+                imageUrl={photoLightbox.previews[photoLightbox.index].previewUrl}
+                mode={canAnnotatePatientDocs ? 'edit' : 'view'}
+                canEdit={canAnnotatePatientDocs}
+                compact
+                imgClassName="max-h-[min(85vh,900px)] max-w-full w-auto object-contain block"
+                onAnnotationsUpdated={refreshPhotoAnnotations}
+              />
+            ) : (
+              <img
+                src={photoLightbox.previews[photoLightbox.index]?.previewUrl}
+                alt={photoLightbox.previews[photoLightbox.index]?.filename || ''}
+                className="max-h-[min(85vh,900px)] max-w-full w-auto object-contain"
+              />
+            )}
           </div>
         </div>
       )}
