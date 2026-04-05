@@ -915,52 +915,12 @@ export default function ConsiliumPresentPage() {
                 </div>
 
                 <div className="flex flex-col gap-3 min-h-[12rem]">
-                  <div className="rounded-lg border border-cyan-500/40 bg-gradient-to-b from-cyan-950/55 via-cyan-950/25 to-black/40 p-3 lg:p-4 ring-1 ring-cyan-400/10">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-cyan-200/90 mb-0.5">
-                      Előkészítő megjegyzések
-                    </p>
-                    <p className="text-[10px] text-cyan-100/45 mb-3">
-                      A linken keresztül írt hozzászólások (nem helyettesítik az élő verdiktet).
-                    </p>
-                    <div className="space-y-3">
-                      {(ds.checklist || []).length === 0 && <p className="text-xs text-cyan-100/50">Nincs napirendi pont.</p>}
-                      {(ds.checklist || []).map((c: ChecklistEntry) => {
-                        const prepList = prepCommentsByKey.get(c.key) ?? [];
-                        return (
-                          <div
-                            key={`prep-${c.key}`}
-                            className="border-b border-cyan-500/20 pb-2 last:border-0 last:pb-0 space-y-1.5"
-                          >
-                            <p className="text-sm font-medium text-cyan-50/95">{c.label}</p>
-                            {prepList.length === 0 ? (
-                              <p className="text-[11px] text-cyan-100/40">Nincs előkészítő hozzászólás.</p>
-                            ) : (
-                              <ul className="space-y-1.5">
-                                {prepList.map((cm) => (
-                                  <li
-                                    key={cm.id}
-                                    className="text-xs text-cyan-50/90 bg-black/35 rounded-md px-2 py-1.5 border border-cyan-500/15"
-                                  >
-                                    <span className="text-cyan-200/50">
-                                      {formatConsiliumHuDateTime(cm.createdAt)} · {cm.authorDisplay}
-                                    </span>
-                                    <p className="whitespace-pre-wrap mt-0.5 leading-snug">{cm.body}</p>
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
                   <div className="rounded-lg border border-amber-500/45 bg-gradient-to-b from-amber-950/45 via-amber-950/20 to-black/40 p-3 lg:p-4 ring-1 ring-amber-400/10">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-200/90 mb-0.5">
                       Élő megbeszélés — konzílium
                     </p>
                     <p className="text-[10px] text-amber-100/45 mb-3">
-                      Pipálás, verdikt és delegálás — az ülésen rögzített döntés.
+                      Napirendi pontonként: balra az előkészítő hozzászólások, jobbra a pipa, verdikt és delegálás.
                     </p>
                     <div className="space-y-2">
                       <div>
@@ -992,78 +952,115 @@ export default function ConsiliumPresentPage() {
                       </div>
 
                       <div>
-                        <p className="text-xs text-amber-100/55 mb-1">Napirendi pontok</p>
-                        <div className="space-y-3">
+                        <p className="text-xs text-amber-100/55 mb-2">Napirendi pontok</p>
+                        <div className="space-y-4">
                           {(ds.checklist || []).length === 0 && <p className="text-xs text-amber-100/50">Üres</p>}
-                          {(ds.checklist || []).map((c: ChecklistEntry) => (
-                            <div key={c.key} className="border-b border-amber-500/20 pb-2 last:border-0 last:pb-0">
-                              <label className="flex items-start gap-2 text-sm">
-                                <input
-                                  type="checkbox"
-                                  className="mt-1 border-amber-400/40 bg-black/30"
-                                  checked={!!c.checked}
-                                  disabled={readonly}
-                                  onChange={async (e) => {
-                                    const checked = e.target.checked;
-                                    const snapshot = payload;
-                                    setPayload((p) => {
-                                      if (!p) return p;
-                                      const nextItems = p.items.map((it) => {
-                                        if (it.id !== current.id) return it;
-                                        const nextChecklist = (it.discussionState.checklist || []).map((cc: ChecklistEntry) =>
-                                          cc.key === c.key
-                                            ? {
-                                                ...cc,
-                                                checked,
-                                                checkedAt: checked ? new Date().toISOString() : null,
-                                                checkedBy: checked ? user.email : null,
-                                              }
-                                            : cc,
-                                        );
-                                        return { ...it, discussionState: { ...it.discussionState, checklist: nextChecklist } };
-                                      });
-                                      return { ...p, items: nextItems };
-                                    });
-                                    try {
-                                      await toggleChecklist(current.id, c.key, checked);
-                                    } catch {
-                                      setPayload(snapshot);
-                                    }
-                                  }}
-                                />
-                                <div className="min-w-0 flex-1">
-                                  <span className="text-amber-50/95">{c.label}</span>
-                                  <PresentChecklistVerdictField
-                                    sessionId={sessionId}
-                                    itemId={current.id}
-                                    entry={c}
-                                    readonly={readonly}
-                                    onChecklistReplaced={(checklist) => {
+                          {(ds.checklist || []).map((c: ChecklistEntry) => {
+                            const prepList = prepCommentsByKey.get(c.key) ?? [];
+                            return (
+                              <div
+                                key={c.key}
+                                className="rounded-lg border border-white/10 bg-black/25 overflow-hidden"
+                              >
+                                <label className="flex items-start gap-2 text-sm px-3 pt-3 pb-2 border-b border-white/10">
+                                  <input
+                                    type="checkbox"
+                                    className="mt-1 border-amber-400/40 bg-black/30 shrink-0"
+                                    checked={!!c.checked}
+                                    disabled={readonly}
+                                    onChange={async (e) => {
+                                      const checked = e.target.checked;
+                                      const snapshot = payload;
                                       setPayload((p) => {
                                         if (!p) return p;
-                                        return {
-                                          ...p,
-                                          items: p.items.map((it) =>
-                                            it.id === current.id
-                                              ? { ...it, discussionState: { ...it.discussionState, checklist } }
-                                              : it,
-                                          ),
-                                        };
+                                        const nextItems = p.items.map((it) => {
+                                          if (it.id !== current.id) return it;
+                                          const nextChecklist = (it.discussionState.checklist || []).map((cc: ChecklistEntry) =>
+                                            cc.key === c.key
+                                              ? {
+                                                  ...cc,
+                                                  checked,
+                                                  checkedAt: checked ? new Date().toISOString() : null,
+                                                  checkedBy: checked ? user.email : null,
+                                                }
+                                              : cc,
+                                          );
+                                          return { ...it, discussionState: { ...it.discussionState, checklist: nextChecklist } };
+                                        });
+                                        return { ...p, items: nextItems };
                                       });
+                                      try {
+                                        await toggleChecklist(current.id, c.key, checked);
+                                      } catch {
+                                        setPayload(snapshot);
+                                      }
                                     }}
                                   />
-                                  <PresentChecklistDelegate
-                                    sessionId={sessionId}
-                                    itemId={current.id}
-                                    checklistKey={c.key}
-                                    readonly={readonly}
-                                    institutionUsers={institutionUsers}
-                                    institutionUsersLoading={institutionUsersLoading}
-                                  />
+                                  <span className="text-amber-50/95 font-medium min-w-0">{c.label}</span>
+                                </label>
+
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 lg:divide-x lg:divide-white/10">
+                                  <div className="p-3 bg-cyan-950/20 border-b border-white/10 lg:border-b-0 min-w-0">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-cyan-200/80 mb-2">
+                                      Előkészítő hozzászólások
+                                    </p>
+                                    {prepList.length === 0 ? (
+                                      <p className="text-[11px] text-cyan-100/40">Nincs előkészítő hozzászólás.</p>
+                                    ) : (
+                                      <ul className="space-y-1.5">
+                                        {prepList.map((cm) => (
+                                          <li
+                                            key={cm.id}
+                                            className="text-xs text-cyan-50/90 bg-black/35 rounded-md px-2 py-1.5 border border-cyan-500/15"
+                                          >
+                                            <span className="text-cyan-200/50">
+                                              {formatConsiliumHuDateTime(cm.createdAt)} · {cm.authorDisplay}
+                                            </span>
+                                            <p className="whitespace-pre-wrap mt-0.5 leading-snug">{cm.body}</p>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    )}
+                                  </div>
+
+                                  <div className="p-3 min-w-0">
+                                    {readonly ? (
+                                      <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/80 mb-2">
+                                        Verdikt
+                                      </p>
+                                    ) : null}
+                                    <PresentChecklistVerdictField
+                                      sessionId={sessionId}
+                                      itemId={current.id}
+                                      entry={c}
+                                      readonly={readonly}
+                                      onChecklistReplaced={(checklist) => {
+                                        setPayload((p) => {
+                                          if (!p) return p;
+                                          return {
+                                            ...p,
+                                            items: p.items.map((it) =>
+                                              it.id === current.id
+                                                ? { ...it, discussionState: { ...it.discussionState, checklist } }
+                                                : it,
+                                            ),
+                                          };
+                                        });
+                                      }}
+                                    />
+                                    <PresentChecklistDelegate
+                                      sessionId={sessionId}
+                                      itemId={current.id}
+                                      checklistKey={c.key}
+                                      readonly={readonly}
+                                      institutionUsers={institutionUsers}
+                                      institutionUsersLoading={institutionUsersLoading}
+                                    />
+                                  </div>
                                 </div>
-                              </label>
-                            </div>
-                          ))}
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     </div>
