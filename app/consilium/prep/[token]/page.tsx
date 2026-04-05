@@ -273,7 +273,7 @@ export default function ConsiliumPrepPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-black text-white overflow-x-hidden">
       {error && (
         <div className="bg-amber-900/40 text-amber-100 text-sm px-4 py-2 text-center">{error}</div>
       )}
@@ -546,61 +546,86 @@ export default function ConsiliumPrepPage() {
                     </div>
                   )}
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
-                <div className="rounded-lg border border-cyan-500/40 bg-gradient-to-b from-cyan-950/55 via-cyan-950/25 to-black/40 p-3 space-y-3 ring-1 ring-cyan-400/10">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-cyan-200/90">Napirend — előkészítő</p>
-                  <p className="text-[11px] text-cyan-100/45">
-                    A „Konzílium verdikt” mezőt az élő ülésen rögzítjük; itt többszörös hozzászólások gyűlnek össze.
-                  </p>
+        {/* Teljes képernyő szélességű sáv, tartalom a vetítés max szélességén középen — mint a vetítés nézetben */}
+        <section
+          className="relative w-screen max-w-[100vw] left-1/2 -translate-x-1/2 border-y border-white/10 bg-gradient-to-b from-white/[0.04] to-black/50 py-4 lg:py-5"
+          aria-label="Napirend és előkészítő hozzászólások"
+        >
+          <div className={`${presentMaxW} w-full mx-auto px-3 sm:px-5 lg:px-8`}>
+            <div className="rounded-lg border border-cyan-500/40 bg-gradient-to-b from-cyan-950/55 via-cyan-950/25 to-black/40 p-3 lg:p-4 ring-1 ring-cyan-400/10">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-cyan-200/90 mb-0.5">
+                Napirend — előkészítő
+              </p>
+              <p className="text-[10px] text-cyan-100/45 mb-3">
+                Pontonként balra az előkészítő hozzászólások, jobbra az élő ülésen rögzített verdikt (csak olvasható).
+              </p>
 
-                  {!readonly && (
-                    <div className="flex flex-col gap-2">
-                      <input
-                        className="w-full rounded-md bg-black/40 border border-cyan-500/35 px-2 py-1.5 text-sm text-cyan-50 placeholder:text-cyan-200/30"
-                        placeholder="Új napirendi kérdés / pont"
-                        value={newPointLabel}
-                        onChange={(e) => setNewPointLabel(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            void addChecklistPoint();
-                          }
-                        }}
-                      />
-                      <button
-                        type="button"
-                        className="text-xs px-3 py-1.5 rounded-md bg-cyan-600/80 hover:bg-cyan-600 text-white w-fit"
-                        onClick={() => void addChecklistPoint()}
-                      >
-                        Új pont felvétele
-                      </button>
+              {!readonly && (
+                <div className="flex flex-col gap-2 mb-4 pb-4 border-b border-cyan-500/25">
+                  <input
+                    className="w-full rounded-md bg-black/40 border border-cyan-500/35 px-2 py-1.5 text-sm text-cyan-50 placeholder:text-cyan-200/30"
+                    placeholder="Új napirendi kérdés / pont"
+                    value={newPointLabel}
+                    onChange={(e) => setNewPointLabel(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        void addChecklistPoint();
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="text-xs px-3 py-1.5 rounded-md bg-cyan-600/80 hover:bg-cyan-600 text-white w-fit"
+                    onClick={() => void addChecklistPoint()}
+                  >
+                    Új pont felvétele
+                  </button>
+                </div>
+              )}
+
+              <div className="space-y-4">
+                {(ds.checklist || []).length === 0 && (
+                  <p className="text-xs text-cyan-100/50">Még nincs napirendi pont.</p>
+                )}
+                {(ds.checklist || []).map((c: ChecklistEntry) => (
+                  <div
+                    key={c.key}
+                    className="rounded-lg border border-white/10 bg-black/25 overflow-hidden"
+                  >
+                    <div className="px-3 pt-3 pb-2 border-b border-white/10">
+                      <p className="text-sm font-medium text-cyan-50/95">{c.label}</p>
                     </div>
-                  )}
 
-                  <div className="space-y-4 pt-2 border-t border-cyan-500/25">
-                    {(ds.checklist || []).length === 0 && <p className="text-xs text-cyan-100/50">Még nincs napirendi pont.</p>}
-                    {(ds.checklist || []).map((c: ChecklistEntry) => (
-                      <div key={c.key} className="border-b border-cyan-500/20 pb-3 last:border-0 space-y-2">
-                        <p className="text-sm font-medium text-cyan-50/95">{c.label}</p>
-                        {c.response?.trim() ? (
-                          <div className="text-xs text-amber-100/70 bg-amber-950/35 border border-amber-500/25 rounded p-2">
-                            <span className="text-amber-200/50">Rögzített verdikt (élő ülés): </span>
-                            <span className="text-amber-50/90 whitespace-pre-wrap">{c.response}</span>
-                          </div>
-                        ) : null}
-                        <div className="space-y-1.5 pl-0">
-                          {(commentsByKey.get(c.key) || []).map((cm) => (
-                            <div
-                              key={cm.id}
-                              className="text-xs text-cyan-50/90 bg-black/35 rounded px-2 py-1.5 border border-cyan-500/15"
-                            >
-                              <span className="text-cyan-200/50">{formatConsiliumHuDateTime(cm.createdAt)} · {cm.authorDisplay}</span>
-                              <p className="whitespace-pre-wrap mt-0.5">{cm.body}</p>
-                            </div>
-                          ))}
-                        </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 lg:divide-x lg:divide-white/10">
+                      <div className="p-3 bg-cyan-950/20 border-b border-white/10 lg:border-b-0 min-w-0">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-cyan-200/80 mb-2">
+                          Előkészítő hozzászólások
+                        </p>
+                        {(commentsByKey.get(c.key) || []).length === 0 ? (
+                          <p className="text-[11px] text-cyan-100/40 mb-2">Még nincs hozzászólás.</p>
+                        ) : (
+                          <ul className="space-y-1.5 mb-3">
+                            {(commentsByKey.get(c.key) || []).map((cm) => (
+                              <li
+                                key={cm.id}
+                                className="text-xs text-cyan-50/90 bg-black/35 rounded-md px-2 py-1.5 border border-cyan-500/15"
+                              >
+                                <span className="text-cyan-200/50">
+                                  {formatConsiliumHuDateTime(cm.createdAt)} · {cm.authorDisplay}
+                                </span>
+                                <p className="whitespace-pre-wrap mt-0.5 leading-snug">{cm.body}</p>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                         {!readonly && (
-                          <div className="space-y-1">
+                          <div className="space-y-1.5 pt-2 border-t border-cyan-500/20">
                             <textarea
                               className="w-full rounded-md bg-black/40 border border-cyan-500/30 px-2 py-1.5 text-sm text-cyan-50 placeholder:text-cyan-200/30 min-h-[4rem]"
                               placeholder="Hozzászólás…"
@@ -618,13 +643,24 @@ export default function ConsiliumPrepPage() {
                           </div>
                         )}
                       </div>
-                    ))}
+
+                      <div className="p-3 min-w-0">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/80 mb-2">
+                          Verdikt (élő ülés)
+                        </p>
+                        {c.response?.trim() ? (
+                          <p className="text-xs text-amber-50/90 whitespace-pre-wrap leading-snug">{c.response}</p>
+                        ) : (
+                          <p className="text-[11px] text-amber-100/35">Nincs még rögzített verdikt.</p>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
+                ))}
               </div>
             </div>
           </div>
-        </div>
+        </section>
       </main>
     </div>
   );
