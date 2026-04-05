@@ -86,6 +86,56 @@ async function ensureAdminNotificationQueueSchema(): Promise<void> {
   await queueSchemaReady;
 }
 
+function escapeHtmlForEmail(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+async function getAdminNotificationRecipients(): Promise<string[]> {
+  const pool = getDbPool();
+  const { rows: admins } = await pool.query<{ email: string }>(
+    "SELECT email FROM users WHERE role = 'admin' AND active = true"
+  );
+  const fallbackRecipient = process.env.SMTP_REPLY_TO?.trim().toLowerCase();
+  return Array.from(
+    new Set(
+      [
+        ...admins.map((a) => a.email.trim().toLowerCase()).filter(Boolean),
+        ...(fallbackRecipient ? [fallbackRecipient] : []),
+      ]
+    )
+  );
+}
+
+function renderSingleAdminNotificationHtml(
+  notificationType: string,
+  summaryText: string,
+  createdAt: Date
+): string {
+  const label = NOTIFICATION_TYPE_LABELS[notificationType] || notificationType;
+  const time = formatDateForEmailShort(createdAt);
+  const safeSummary = escapeHtmlForEmail(summaryText);
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #2563eb; margin-bottom: 4px;">${escapeHtmlForEmail(label)}</h2>
+      <p style="color: #6b7280; font-size: 14px; margin-top: 0;">${time}</p>
+      <p>Kedves adminisztrátor,</p>
+      <p style="color: #374151; font-size: 15px;">${safeSummary}</p>
+      <p style="margin-top: 24px; color: #6b7280; font-size: 13px;">
+        Ez egy automatikus értesítés. A részletekért kérjük, jelentkezzen be a rendszerbe.
+      </p>
+    </div>
+  `;
+}
+
+/**
+ * Minden admin értesítésről azonnal email megy (nem napi összefoglalóban).
+ * Ha az email küldése sikertelen, a sor feldolgozatlan marad — kézzel hívható
+ * GET/POST /api/admin/daily-summary (összefoglaló) továbbra is kiküldi ezeket.
+ */
 export async function queueAdminNotification(
   notificationType: string,
   summaryText: string,
@@ -94,11 +144,48 @@ export async function queueAdminNotification(
   try {
     await ensureAdminNotificationQueueSchema();
     const pool = getDbPool();
-    await pool.query(
+    const { rows } = await pool.query<{ id: number; created_at: Date }>(
       `INSERT INTO admin_notification_queue (notification_type, summary_text, detail_json)
-       VALUES ($1, $2, $3)`,
+       VALUES ($1, $2, $3)
+       RETURNING id, created_at`,
       [notificationType, summaryText, JSON.stringify(detailJson)]
     );
+    const row = rows[0];
+    if (!row) {
+      return;
+    }
+
+    const recipients = await getAdminNotificationRecipients();
+    if (recipients.length === 0) {
+      console.warn('[AdminNotifQueue] No admin recipients; notification left unprocessed for later batch.');
+      return;
+    }
+
+    const label = NOTIFICATION_TYPE_LABELS[notificationType] || notificationType;
+    const html = renderSingleAdminNotificationHtml(
+      notificationType,
+      summaryText,
+      new Date(row.created_at)
+    );
+
+    try {
+      await sendEmail({
+        to: recipients,
+        subject: `${label} — Maxillofaciális Rehabilitáció`,
+        html,
+      });
+      await pool.query(
+        `UPDATE admin_notification_queue
+         SET processed = TRUE, processed_at = NOW()
+         WHERE id = $1`,
+        [row.id]
+      );
+    } catch (sendErr) {
+      console.error(
+        '[AdminNotifQueue] Immediate email failed; row stays unprocessed for optional batch summary:',
+        sendErr
+      );
+    }
   } catch (error) {
     console.error('[AdminNotifQueue] Failed to queue notification:', error);
   }
@@ -141,12 +228,10 @@ export async function sendAdminDailySummary(): Promise<{ sent: boolean; count: n
     return { sent: false, count: 0 };
   }
 
-  const { rows: admins } = await pool.query<{ email: string }>(
-    "SELECT email FROM users WHERE role = 'admin' AND active = true"
-  );
+  const recipients = await getAdminNotificationRecipients();
 
-  if (admins.length === 0) {
-    console.warn('[DailySummary] No active admins found, skipping.');
+  if (recipients.length === 0) {
+    console.warn('[DailySummary] No recipients (admin or SMTP_REPLY_TO), skipping.');
     return { sent: false, count: notifications.length };
   }
 
@@ -203,8 +288,12 @@ export async function sendAdminDailySummary(): Promise<{ sent: boolean; count: n
 
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #2563eb; margin-bottom: 4px;">Napi összefoglaló</h2>
+      <h2 style="color: #2563eb; margin-bottom: 4px;">Napi összefoglaló (összegyűjtött események)</h2>
       <p style="color: #6b7280; font-size: 14px; margin-top: 0;">${periodText}</p>
+      <p style="color: #374151; font-size: 14px; background: #eff6ff; padding: 12px 14px; border-radius: 6px;">
+        <strong>Megjegyzés:</strong> Az új eseményekről ettől kezdve külön email érkezik. Ezt az összefoglalót csak a korábban sorba került,
+        még kiküldetlen tételekre használjuk (pl. egyszeri lezárás vagy hálózati hiba után).
+      </p>
       <p>Kedves adminisztrátor,</p>
       <p>Az elmúlt időszakban <strong>${notifications.length}</strong> esemény történt a rendszerben:</p>
       ${sectionsHtml}
@@ -213,22 +302,6 @@ export async function sendAdminDailySummary(): Promise<{ sent: boolean; count: n
       </p>
     </div>
   `;
-
-  const adminEmails = admins.map((a) => a.email);
-  const fallbackRecipient = process.env.SMTP_REPLY_TO?.trim().toLowerCase();
-  const recipients = Array.from(
-    new Set(
-      [
-        ...adminEmails.map((e) => e.trim().toLowerCase()).filter(Boolean),
-        ...(fallbackRecipient ? [fallbackRecipient] : []),
-      ]
-    )
-  );
-
-  if (recipients.length === 0) {
-    console.warn('[DailySummary] No recipients found (admin or SMTP_REPLY_TO), skipping.');
-    return { sent: false, count: notifications.length };
-  }
 
   await sendEmail({
     to: recipients,

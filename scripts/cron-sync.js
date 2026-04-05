@@ -160,13 +160,7 @@ async function callEndpoint(path, label) {
       `[${new Date().toISOString()}] Cron timing: budapest=${nowBudapest.toISOString()} day=${nowBudapest.getDay()} hour=${hour} minute=${minute}`
     );
 
-    // Daily admin summary — run between 06:00-06:59 Budapest time.
-    if (hour === 6) {
-      console.log(`[${new Date().toISOString()}] Daily summary window active (06:00-06:59 Budapest), triggering endpoint.`);
-      await callEndpoint('/api/admin/daily-summary', 'Admin daily summary');
-    } else {
-      console.log(`[${new Date().toISOString()}] Daily summary skipped (Budapest hour=${hour}, expected 6).`);
-    }
+    // Admin notifications: immediate per-event emails (see queueAdminNotification). Batch daily summary removed from cron.
 
     // Weekly OHIP-14 reminders — run on Mondays between 08:00-08:59 Budapest time.
     // The ohip_reminder_log table guarantees at most one email per patient per 7 days,
