@@ -1,9 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { PatientDocumentAnnotation } from '@/lib/types/document-annotation';
-import { fetchAnnotationsBatchForPatient } from '@/lib/document-annotations-batch-client';
-import { DocumentAnnotationThumbnail } from '@/components/DocumentAnnotationThumbnail';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, ChevronLeft, ChevronRight, X } from 'lucide-react';
@@ -13,6 +10,8 @@ import { OPInlinePreview } from '@/components/OPInlinePreview';
 import { PresentationDentalMiniViewer } from '@/components/PresentationDentalMiniViewer';
 import { DocumentAnnotationsOverlay } from '@/components/DocumentAnnotationsOverlay';
 import { userCanAnnotatePatientDocuments } from '@/lib/patient-document-annotate';
+import { DocumentAnnotationThumbnail } from '@/components/DocumentAnnotationThumbnail';
+import { usePatientDocumentAnnotationsMap } from '@/hooks/usePatientDocumentAnnotationsMap';
 import type { ToothStatus } from '@/hooks/usePatientAutoSave';
 import type { ChecklistEntry } from '@/lib/consilium';
 import type {
@@ -108,7 +107,6 @@ export default function ConsiliumPrepPage() {
     previews: MediaPreviewItem[];
     index: number;
   } | null>(null);
-  const [photoAnnByDoc, setPhotoAnnByDoc] = useState<Record<string, PatientDocumentAnnotation[]>>({});
   const [newPointLabel, setNewPointLabel] = useState('');
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [submittingKey, setSubmittingKey] = useState<string | null>(null);
@@ -163,32 +161,8 @@ export default function ConsiliumPrepPage() {
     return (ms.photoPreview?.previews ?? []).map((p) => p.documentId).filter(Boolean);
   }, [ms.photoPreview?.previews]);
 
-  useEffect(() => {
-    const pid = ps.patientId;
-    if (!pid || photoDocIds.length === 0) {
-      setPhotoAnnByDoc({});
-      return;
-    }
-    let cancelled = false;
-    fetchAnnotationsBatchForPatient(pid, photoDocIds)
-      .then((m) => {
-        if (!cancelled) setPhotoAnnByDoc(m);
-      })
-      .catch(() => {
-        if (!cancelled) setPhotoAnnByDoc({});
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [ps.patientId, photoDocIds]);
-
-  const refreshPhotoAnnotations = useCallback(() => {
-    const pid = ps.patientId;
-    if (!pid || photoDocIds.length === 0) return;
-    void fetchAnnotationsBatchForPatient(pid, photoDocIds)
-      .then(setPhotoAnnByDoc)
-      .catch(() => setPhotoAnnByDoc({}));
-  }, [ps.patientId, photoDocIds]);
+  const { byDocumentId: photoAnnByDoc, refresh: refreshPhotoAnnotations } =
+    usePatientDocumentAnnotationsMap(ps.patientId || null, photoDocIds);
 
   const timelineRows = useMemo(
     () => flattenCareTimelineNewestFirst(ps.careTimeline),
@@ -404,6 +378,7 @@ export default function ConsiliumPrepPage() {
                 canEdit={canAnnotatePatientDocs}
                 compact
                 imgClassName="max-h-[min(85vh,900px)] max-w-full w-auto object-contain block"
+                onAnnotationsUpdated={refreshPhotoAnnotations}
               />
             ) : (
               <img
@@ -553,7 +528,19 @@ export default function ConsiliumPrepPage() {
                           }
                           className="rounded-md overflow-hidden border border-white/10 bg-black/40"
                         >
-                          <img src={p.previewUrl} alt="" className="w-full h-24 object-cover" loading="lazy" />
+                          {ps.patientId ? (
+                            <DocumentAnnotationThumbnail
+                              patientId={ps.patientId}
+                              documentId={p.documentId}
+                              imageUrl={p.previewUrl}
+                              annotations={photoAnnByDoc[p.documentId] ?? []}
+                              objectFit="cover"
+                              className="w-full h-24"
+                              imgClassName="w-full h-24 object-cover"
+                            />
+                          ) : (
+                            <img src={p.previewUrl} alt="" className="w-full h-24 object-cover" loading="lazy" />
+                          )}
                         </button>
                       ))}
                     </div>

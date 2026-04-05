@@ -621,7 +621,16 @@ export default function ConsiliumPage() {
       try {
         const res = await fetch(`/api/consilium/sessions/${sessionId}/presentation`, { credentials: 'include' });
         if (!res.ok) throw new Error('presentation_failed');
-        const data = (await res.json()) as { items?: ConsiliumPresentationItem[]; session?: Record<string, unknown> };
+        const data = (await res.json()) as {
+          items?: ConsiliumPresentationItem[];
+          session?: {
+            id: string;
+            title: string;
+            scheduledAt: string;
+            status: string;
+            attendees?: unknown;
+          };
+        };
         setItems(data.items ?? []);
         if (data.session) {
           const att = Array.isArray(data.session.attendees) ? data.session.attendees : [];
@@ -631,7 +640,12 @@ export default function ConsiliumPage() {
             scheduledAt: data.session.scheduledAt,
             status: data.session.status,
             attendees: att.filter(
-              (a: any) => a && typeof a.id === 'string' && typeof a.name === 'string' && typeof a.present === 'boolean',
+              (a): a is SessionAttendee =>
+                !!a &&
+                typeof a === 'object' &&
+                typeof (a as SessionAttendee).id === 'string' &&
+                typeof (a as SessionAttendee).name === 'string' &&
+                typeof (a as SessionAttendee).present === 'boolean',
             ),
           });
         }

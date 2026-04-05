@@ -1,14 +1,46 @@
 import { getDbPool } from '../db';
 import { sendEmail } from './config';
-import { formatDateForEmail, formatDateForEmailShort } from './templates';
+import { formatDateForEmailShort } from './templates';
 
 interface NotificationRow {
   id: number;
   notification_type: string;
   summary_text: string;
-  detail_json: Record<string, any>;
   created_at: Date;
 }
+
+/** Batch summary email: section order (unknown types append at end). */
+const NOTIFICATION_SUMMARY_DISPLAY_ORDER: string[] = [
+  'register',
+  'login',
+  'impersonate',
+  'impersonate_patient',
+  'patient_created',
+  'patient_updated',
+  'patient_stage_created',
+  'appointment_approved',
+  'appointment_rejected',
+  'appointment_modified',
+  'appointment_cancelled',
+  'appointment_cancelled_by_patient',
+  'conditional_appointment',
+  'new_appointment_request',
+  'time_slot_freed',
+  'message_sent',
+  'message_sent_impersonated',
+  'doctor_message_sent',
+  'doctor_group_message_sent',
+  'ohip14_created',
+  'ohip14_updated',
+  'communication_log_created',
+  'patient_portal_registered',
+  'patient_login',
+  'patient_document_deleted',
+  'password_change',
+  'password_reset_requested',
+  'password_reset_completed',
+  'password_reset_failed',
+];
 
 const NOTIFICATION_TYPE_LABELS: Record<string, string> = {
   // Auth & user management
@@ -86,6 +118,10 @@ async function ensureAdminNotificationQueueSchema(): Promise<void> {
   await queueSchemaReady;
 }
 
+function notificationTypeLabel(type: string): string {
+  return NOTIFICATION_TYPE_LABELS[type] || type;
+}
+
 function escapeHtmlForEmail(text: string): string {
   return text
     .replace(/&/g, '&amp;')
@@ -115,7 +151,7 @@ function renderSingleAdminNotificationHtml(
   summaryText: string,
   createdAt: Date
 ): string {
-  const label = NOTIFICATION_TYPE_LABELS[notificationType] || notificationType;
+  const label = notificationTypeLabel(notificationType);
   const time = formatDateForEmailShort(createdAt);
   const safeSummary = escapeHtmlForEmail(summaryText);
   return `
@@ -131,11 +167,7 @@ function renderSingleAdminNotificationHtml(
   `;
 }
 
-/**
- * Minden admin értesítésről azonnal email megy (nem napi összefoglalóban).
- * Ha az email küldése sikertelen, a sor feldolgozatlan marad — kézzel hívható
- * GET/POST /api/admin/daily-summary (összefoglaló) továbbra is kiküldi ezeket.
- */
+/** Sorba írás + azonnali email; sikertelen küldésnél a sor marad (batch: /api/admin/daily-summary). */
 export async function queueAdminNotification(
   notificationType: string,
   summaryText: string,
@@ -161,7 +193,7 @@ export async function queueAdminNotification(
       return;
     }
 
-    const label = NOTIFICATION_TYPE_LABELS[notificationType] || notificationType;
+    const label = notificationTypeLabel(notificationType);
     const html = renderSingleAdminNotificationHtml(
       notificationType,
       summaryText,
@@ -192,19 +224,20 @@ export async function queueAdminNotification(
 }
 
 function renderNotificationGroup(type: string, items: NotificationRow[]): string {
-  const label = NOTIFICATION_TYPE_LABELS[type] || type;
+  const label = notificationTypeLabel(type);
   const rows = items.map((item) => {
     const time = formatDateForEmailShort(new Date(item.created_at));
+    const safeText = escapeHtmlForEmail(item.summary_text);
     return `<tr>
       <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb; color: #6b7280; font-size: 13px; white-space: nowrap; vertical-align: top;">${time}</td>
-      <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb; color: #374151; font-size: 14px;">${item.summary_text}</td>
+      <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb; color: #374151; font-size: 14px;">${safeText}</td>
     </tr>`;
   }).join('');
 
   return `
     <div style="margin-bottom: 28px;">
       <h3 style="color: #1e40af; font-size: 16px; margin: 0 0 10px 0; padding-bottom: 6px; border-bottom: 2px solid #2563eb;">
-        ${label} <span style="color: #6b7280; font-weight: normal; font-size: 14px;">(${items.length})</span>
+        ${escapeHtmlForEmail(label)} <span style="color: #6b7280; font-weight: normal; font-size: 14px;">(${items.length})</span>
       </h3>
       <table style="width: 100%; border-collapse: collapse;">
         ${rows}
@@ -218,7 +251,7 @@ export async function sendAdminDailySummary(): Promise<{ sent: boolean; count: n
   const pool = getDbPool();
 
   const { rows: notifications } = await pool.query<NotificationRow>(
-    `SELECT id, notification_type, summary_text, detail_json, created_at
+    `SELECT id, notification_type, summary_text, created_at
      FROM admin_notification_queue
      WHERE processed = FALSE
      ORDER BY created_at ASC`
@@ -243,41 +276,9 @@ export async function sendAdminDailySummary(): Promise<{ sent: boolean; count: n
     grouped[n.notification_type].push(n);
   }
 
-  const displayOrder = [
-    'register',
-    'login',
-    'impersonate',
-    'impersonate_patient',
-    'patient_created',
-    'patient_updated',
-    'patient_stage_created',
-    'appointment_approved',
-    'appointment_rejected',
-    'appointment_modified',
-    'appointment_cancelled',
-    'appointment_cancelled_by_patient',
-    'conditional_appointment',
-    'new_appointment_request',
-    'time_slot_freed',
-    'message_sent',
-    'message_sent_impersonated',
-    'doctor_message_sent',
-    'doctor_group_message_sent',
-    'ohip14_created',
-    'ohip14_updated',
-    'communication_log_created',
-    'patient_portal_registered',
-    'patient_login',
-    'patient_document_deleted',
-    'password_change',
-    'password_reset_requested',
-    'password_reset_completed',
-    'password_reset_failed',
-  ];
-
   const sortedTypes = [
-    ...displayOrder.filter((t) => grouped[t]),
-    ...Object.keys(grouped).filter((t) => !displayOrder.includes(t)),
+    ...NOTIFICATION_SUMMARY_DISPLAY_ORDER.filter((t) => grouped[t]),
+    ...Object.keys(grouped).filter((t) => !NOTIFICATION_SUMMARY_DISPLAY_ORDER.includes(t)),
   ];
 
   const sectionsHtml = sortedTypes.map((type) => renderNotificationGroup(type, grouped[type])).join('');

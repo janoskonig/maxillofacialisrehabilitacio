@@ -46,14 +46,11 @@ export type DocumentAnnotationsOverlayProps = {
   documentId: string;
   imageUrl: string | null;
   mode: 'view' | 'edit';
-  /** Szerkesztéshez: ugyanaz a jogosultság, mint dokumentum feltöltés / címkézés. */
   canEdit?: boolean;
   imgClassName?: string;
-  /** Vetítés / csak olvasás: nincs eszközsor és kapcsoló. */
   compact?: boolean;
   onImageLoad?: () => void;
   onImageError?: () => void;
-  /** Mentés / törlés után (pl. miniatűr batch frissítése). */
   onAnnotationsUpdated?: () => void;
 };
 
@@ -117,10 +114,10 @@ export function DocumentAnnotationsOverlay({
     const valid = new Set(annotations.map((a) => a.id));
     setHiddenAnnotationIds((prev) => {
       const next = new Set<string>();
-      for (const id of prev) {
+      prev.forEach((id) => {
         if (valid.has(id)) next.add(id);
-      }
-      if (next.size === prev.size && [...prev].every((id) => next.has(id))) return prev;
+      });
+      if (next.size === prev.size && Array.from(prev).every((id) => next.has(id))) return prev;
       return next;
     });
   }, [annotations]);
@@ -133,9 +130,11 @@ export function DocumentAnnotationsOverlay({
       list.push(a);
       m.set(k, list);
     }
-    for (const list of m.values()) {
-      list.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
-    }
+    m.forEach((list) => {
+      list.sort((a: PatientDocumentAnnotation, b: PatientDocumentAnnotation) =>
+        (a.createdAt || '').localeCompare(b.createdAt || ''),
+      );
+    });
     return m;
   }, [annotations]);
 
@@ -179,7 +178,6 @@ export function DocumentAnnotationsOverlay({
     setLayout(next);
   }, []);
 
-  /** Vetítés / flex elrendezés: annotáció megérkezése után újramérés (canvas méret és rajz). */
   useEffect(() => {
     if (annotations.length === 0) return;
     let id1 = 0;
@@ -594,11 +592,8 @@ export function DocumentAnnotationsOverlay({
                 : 'w-full lg:w-56 shrink-0 rounded-lg border border-gray-200 bg-white p-2 text-xs text-gray-900 max-h-64 lg:max-h-[min(85vh,900px)] overflow-y-auto'
             }
           >
-            <p className={`font-semibold mb-1 ${compact ? 'text-white' : 'text-gray-700'}`}>
+            <p className={`font-semibold mb-2 ${compact ? 'text-white' : 'text-gray-700'}`}>
               Jegyzetek / rajzok
-            </p>
-            <p className={`text-[10px] mb-2 leading-snug ${compact ? 'text-zinc-400' : 'text-gray-500'}`}>
-              Szem: egy réteg vagy szerző összes rétege ki/be.
             </p>
             {draftPaths.length > 0 && (
               <div

@@ -90,7 +90,6 @@ export function PatientDocuments({
       if (response.ok) {
         const data = await response.json();
         setAvailableTags(data.tags || []);
-        console.log('Loaded available tags:', data.tags);
       } else {
         console.error('Failed to load tags:', response.status, response.statusText);
       }

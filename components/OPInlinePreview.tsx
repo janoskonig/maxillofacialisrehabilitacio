@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { PatientDocument } from '@/lib/types';
-import type { PatientDocumentAnnotation } from '@/lib/types/document-annotation';
-import { fetchAnnotationsBatchForPatient } from '@/lib/document-annotations-batch-client';
+import { usePatientDocumentAnnotationsMap } from '@/hooks/usePatientDocumentAnnotationsMap';
 import { OPImageViewer } from './OPImageViewer';
 import { DocumentAnnotationThumbnail } from './DocumentAnnotationThumbnail';
 import { Image as ImageIcon, ChevronLeft, ChevronRight, ZoomIn } from 'lucide-react';
@@ -12,9 +11,7 @@ import { formatDateForDisplay } from '@/lib/dateUtils';
 interface OPInlinePreviewProps {
   patientId: string;
   patientName?: string;
-  /** Sötét vetítés oldalhoz: világos kártya, kompaktabb margó. */
   variant?: 'default' | 'presentation';
-  /** Beteg dokumentum annotáció (szerepkör + nem readonly). */
   canAnnotate?: boolean;
 }
 
@@ -32,29 +29,12 @@ export function OPInlinePreview({
   const [thumbnailError, setThumbnailError] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
   const prevUrlRef = useRef<string | null>(null);
-  const [annByDoc, setAnnByDoc] = useState<Record<string, PatientDocumentAnnotation[]>>({});
-
-  const loadAnnotationBatch = useCallback(async () => {
-    if (!patientId || documents.length === 0) {
-      setAnnByDoc({});
-      return;
-    }
-    const ids = documents.map((d) => d.id).filter((id): id is string => Boolean(id));
-    if (ids.length === 0) {
-      setAnnByDoc({});
-      return;
-    }
-    try {
-      const merged = await fetchAnnotationsBatchForPatient(patientId, ids);
-      setAnnByDoc(merged);
-    } catch {
-      setAnnByDoc({});
-    }
-  }, [patientId, documents]);
-
-  useEffect(() => {
-    void loadAnnotationBatch();
-  }, [loadAnnotationBatch]);
+  const opDocIds = useMemo(
+    () => documents.map((d) => d.id).filter((id): id is string => Boolean(id)),
+    [documents],
+  );
+  const { byDocumentId: annByDoc, refresh: refreshOpAnnotations } =
+    usePatientDocumentAnnotationsMap(patientId, opDocIds);
 
   useEffect(() => {
     if (!patientId) return;
@@ -226,7 +206,7 @@ export function OPInlinePreview({
         isOpen={viewerOpen}
         onClose={() => setViewerOpen(false)}
         canAnnotate={canAnnotate}
-        onAnnotationsUpdated={() => void loadAnnotationBatch()}
+        onAnnotationsUpdated={refreshOpAnnotations}
       />
     </>
   );

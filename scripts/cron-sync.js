@@ -160,8 +160,6 @@ async function callEndpoint(path, label) {
       `[${new Date().toISOString()}] Cron timing: budapest=${nowBudapest.toISOString()} day=${nowBudapest.getDay()} hour=${hour} minute=${minute}`
     );
 
-    // Admin notifications: immediate per-event emails (see queueAdminNotification). Batch daily summary removed from cron.
-
     // Weekly OHIP-14 reminders — run on Mondays between 08:00-08:59 Budapest time.
     // The ohip_reminder_log table guarantees at most one email per patient per 7 days,
     // so a wider window is safe and avoids missing the slot due to cold-start / sync delays.

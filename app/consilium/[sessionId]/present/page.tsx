@@ -11,9 +11,8 @@ import { PresentationDentalMiniViewer } from '@/components/PresentationDentalMin
 import { DocumentAnnotationsOverlay } from '@/components/DocumentAnnotationsOverlay';
 import { DocumentAnnotationThumbnail } from '@/components/DocumentAnnotationThumbnail';
 import { userCanAnnotatePatientDocuments } from '@/lib/patient-document-annotate';
-import type { PatientDocumentAnnotation } from '@/lib/types/document-annotation';
-import { fetchAnnotationsBatchForPatient } from '@/lib/document-annotations-batch-client';
 import type { ToothStatus } from '@/hooks/usePatientAutoSave';
+import { usePatientDocumentAnnotationsMap } from '@/hooks/usePatientDocumentAnnotationsMap';
 import type { ChecklistEntry } from '@/lib/consilium';
 import type {
   ItemMediaSummary,
@@ -419,7 +418,6 @@ export default function ConsiliumPresentPage() {
     previews: MediaPreviewItem[];
     index: number;
   } | null>(null);
-  const [photoAnnByDoc, setPhotoAnnByDoc] = useState<Record<string, PatientDocumentAnnotation[]>>({});
   const [institutionUsers, setInstitutionUsers] = useState<InstitutionUserRow[]>([]);
   const [institutionUsersLoading, setInstitutionUsersLoading] = useState(false);
 
@@ -515,32 +513,9 @@ export default function ConsiliumPresentPage() {
       .filter(Boolean);
   }, [current?.id, current?.mediaSummary?.photoPreview?.previews]);
 
-  useEffect(() => {
-    const pid = current?.patientSummary?.patientId;
-    if (!pid || photoDocIds.length === 0) {
-      setPhotoAnnByDoc({});
-      return;
-    }
-    let cancelled = false;
-    fetchAnnotationsBatchForPatient(pid, photoDocIds)
-      .then((m) => {
-        if (!cancelled) setPhotoAnnByDoc(m);
-      })
-      .catch(() => {
-        if (!cancelled) setPhotoAnnByDoc({});
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [current?.patientSummary?.patientId, photoDocIds]);
-
-  const refreshPhotoAnnotations = useCallback(() => {
-    const pid = current?.patientSummary?.patientId;
-    if (!pid || photoDocIds.length === 0) return;
-    void fetchAnnotationsBatchForPatient(pid, photoDocIds)
-      .then(setPhotoAnnByDoc)
-      .catch(() => setPhotoAnnByDoc({}));
-  }, [current?.patientSummary?.patientId, photoDocIds]);
+  const photoPatientId = current?.patientSummary?.patientId ?? null;
+  const { byDocumentId: photoAnnByDoc, refresh: refreshPhotoAnnotations } =
+    usePatientDocumentAnnotationsMap(photoPatientId, photoDocIds);
 
   const neighborIndexes = useMemo(() => {
     const out: number[] = [];

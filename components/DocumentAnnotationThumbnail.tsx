@@ -5,11 +5,12 @@ import type { PatientDocumentAnnotation } from '@/lib/types/document-annotation'
 import type { TextPayloadV1 } from '@/lib/document-annotations-schema';
 import { drawFreehandAnnotationsFiltered, normToPixel } from '@/lib/document-annotation-canvas';
 
+const EMPTY_HIDDEN = new Set<string>();
+
 type Props = {
   patientId: string;
   documentId: string;
   imageUrl: string;
-  /** Ha megvan, nem töltünk GET-et. */
   annotations?: PatientDocumentAnnotation[] | null;
   objectFit?: 'contain' | 'cover';
   className?: string;
@@ -35,7 +36,7 @@ export function DocumentAnnotationThumbnail({
   const [nh, setNH] = useState(1);
 
   useEffect(() => {
-    if (annotationsProp !== undefined && annotationsProp !== null) {
+    if (annotationsProp != null) {
       setAnnotations(annotationsProp);
       return;
     }
@@ -82,7 +83,7 @@ export function DocumentAnnotationThumbnail({
     if (inw < 1 || inh < 1) return;
 
     drawFreehandAnnotationsFiltered(ctx, cw, ch, inw, inh, objectFit, annotations, {
-      hiddenIds: new Set(),
+      hiddenIds: EMPTY_HIDDEN,
       minStrokePx: 1.5,
     });
   }, [annotations, nw, nh, objectFit]);

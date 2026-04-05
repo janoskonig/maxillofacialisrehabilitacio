@@ -2,15 +2,12 @@ import type { PatientDocumentAnnotation } from '@/lib/types/document-annotation'
 
 const BATCH_MAX = 80;
 
-/**
- * Összesített annotációk több dokumentumhoz (chunkolt GET).
- * Minden kért `documentId` kulcs szerepel a mapben (üres tömb, ha nincs annotáció).
- */
 export async function fetchAnnotationsBatchForPatient(
   patientId: string,
   documentIds: string[],
 ): Promise<Record<string, PatientDocumentAnnotation[]>> {
-  const unique = [...new Set(documentIds.filter(Boolean))];
+  const raw = documentIds.filter(Boolean);
+  const unique = raw.filter((id, i) => raw.indexOf(id) === i);
   const merged: Record<string, PatientDocumentAnnotation[]> = {};
   for (const id of unique) merged[id] = [];
 
