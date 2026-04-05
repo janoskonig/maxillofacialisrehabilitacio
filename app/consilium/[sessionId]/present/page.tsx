@@ -655,7 +655,7 @@ export default function ConsiliumPresentPage() {
   const presentMaxW = 'max-w-[min(1920px,calc(100vw-1.5rem))]';
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-black text-white overflow-x-hidden">
       <div className="border-b border-white/10 bg-black/40 backdrop-blur sticky top-0 z-20">
         <div className={`${presentMaxW} w-full mx-auto px-3 sm:px-5 lg:px-8 py-2 flex items-center justify-between gap-3`}>
           <div className="flex items-center gap-3 min-w-0">
@@ -913,163 +913,169 @@ export default function ConsiliumPresentPage() {
                       : `${ms.photoPreview?.totalCount ?? 0} kép`}
                   </p>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
-                <div className="flex flex-col gap-3 min-h-[12rem]">
-                  <div className="rounded-lg border border-amber-500/45 bg-gradient-to-b from-amber-950/45 via-amber-950/20 to-black/40 p-3 lg:p-4 ring-1 ring-amber-400/10">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-200/90 mb-0.5">
-                      Élő megbeszélés — konzílium
-                    </p>
-                    <p className="text-[10px] text-amber-100/45 mb-3">
-                      Napirendi pontonként: balra az előkészítő hozzászólások, jobbra a pipa, verdikt és delegálás.
-                    </p>
-                    <div className="space-y-2">
-                      <div>
-                        <label className="flex items-center gap-2 text-sm text-amber-50/95">
-                          <input
-                            type="checkbox"
-                            className="mt-0.5 rounded border-amber-400/40 bg-black/30"
-                            checked={!!ds.discussed}
-                            disabled={readonly}
-                            onChange={async (e) => {
-                              const discussed = e.target.checked;
-                              const prev = payload;
-                              setPayload((p) => {
-                                if (!p) return p;
-                                const nextItems = p.items.map((it) =>
-                                  it.id === current.id ? { ...it, discussionState: { ...it.discussionState, discussed } } : it,
-                                );
-                                return { ...p, items: nextItems };
-                              });
-                              try {
-                                await patchItem(current.id, { operation: 'update_discussed', discussed });
-                              } catch {
-                                setPayload(prev);
-                              }
-                            }}
-                          />
-                          Megbeszélve
-                        </label>
-                      </div>
+        {/* Teljes képernyő szélességű sáv, tartalom a vetítés max szélességén középen */}
+        <section
+          className="relative w-screen max-w-[100vw] left-1/2 -translate-x-1/2 border-y border-white/10 bg-gradient-to-b from-white/[0.04] to-black/50 py-4 lg:py-5"
+          aria-label="Élő megbeszélés"
+        >
+          <div className={`${presentMaxW} w-full mx-auto px-3 sm:px-5 lg:px-8`}>
+            <div className="rounded-lg border border-amber-500/45 bg-gradient-to-b from-amber-950/45 via-amber-950/20 to-black/40 p-3 lg:p-4 ring-1 ring-amber-400/10">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-200/90 mb-0.5">
+                Élő megbeszélés — konzílium
+              </p>
+              <p className="text-[10px] text-amber-100/45 mb-3">
+                Napirendi pontonként: balra az előkészítő hozzászólások, jobbra a pipa, verdikt és delegálás.
+              </p>
+              <div className="space-y-2">
+                <div>
+                  <label className="flex items-center gap-2 text-sm text-amber-50/95">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 rounded border-amber-400/40 bg-black/30"
+                      checked={!!ds.discussed}
+                      disabled={readonly}
+                      onChange={async (e) => {
+                        const discussed = e.target.checked;
+                        const prev = payload;
+                        setPayload((p) => {
+                          if (!p) return p;
+                          const nextItems = p.items.map((it) =>
+                            it.id === current.id ? { ...it, discussionState: { ...it.discussionState, discussed } } : it,
+                          );
+                          return { ...p, items: nextItems };
+                        });
+                        try {
+                          await patchItem(current.id, { operation: 'update_discussed', discussed });
+                        } catch {
+                          setPayload(prev);
+                        }
+                      }}
+                    />
+                    Megbeszélve
+                  </label>
+                </div>
 
-                      <div>
-                        <p className="text-xs text-amber-100/55 mb-2">Napirendi pontok</p>
-                        <div className="space-y-4">
-                          {(ds.checklist || []).length === 0 && <p className="text-xs text-amber-100/50">Üres</p>}
-                          {(ds.checklist || []).map((c: ChecklistEntry) => {
-                            const prepList = prepCommentsByKey.get(c.key) ?? [];
-                            return (
-                              <div
-                                key={c.key}
-                                className="rounded-lg border border-white/10 bg-black/25 overflow-hidden"
-                              >
-                                <label className="flex items-start gap-2 text-sm px-3 pt-3 pb-2 border-b border-white/10">
-                                  <input
-                                    type="checkbox"
-                                    className="mt-1 border-amber-400/40 bg-black/30 shrink-0"
-                                    checked={!!c.checked}
-                                    disabled={readonly}
-                                    onChange={async (e) => {
-                                      const checked = e.target.checked;
-                                      const snapshot = payload;
-                                      setPayload((p) => {
-                                        if (!p) return p;
-                                        const nextItems = p.items.map((it) => {
-                                          if (it.id !== current.id) return it;
-                                          const nextChecklist = (it.discussionState.checklist || []).map((cc: ChecklistEntry) =>
-                                            cc.key === c.key
-                                              ? {
-                                                  ...cc,
-                                                  checked,
-                                                  checkedAt: checked ? new Date().toISOString() : null,
-                                                  checkedBy: checked ? user.email : null,
-                                                }
-                                              : cc,
-                                          );
-                                          return { ...it, discussionState: { ...it.discussionState, checklist: nextChecklist } };
-                                        });
-                                        return { ...p, items: nextItems };
-                                      });
-                                      try {
-                                        await toggleChecklist(current.id, c.key, checked);
-                                      } catch {
-                                        setPayload(snapshot);
-                                      }
-                                    }}
-                                  />
-                                  <span className="text-amber-50/95 font-medium min-w-0">{c.label}</span>
-                                </label>
+                <div>
+                  <p className="text-xs text-amber-100/55 mb-2">Napirendi pontok</p>
+                  <div className="space-y-4">
+                    {(ds.checklist || []).length === 0 && <p className="text-xs text-amber-100/50">Üres</p>}
+                    {(ds.checklist || []).map((c: ChecklistEntry) => {
+                      const prepList = prepCommentsByKey.get(c.key) ?? [];
+                      return (
+                        <div
+                          key={c.key}
+                          className="rounded-lg border border-white/10 bg-black/25 overflow-hidden"
+                        >
+                          <label className="flex items-start gap-2 text-sm px-3 pt-3 pb-2 border-b border-white/10">
+                            <input
+                              type="checkbox"
+                              className="mt-1 border-amber-400/40 bg-black/30 shrink-0"
+                              checked={!!c.checked}
+                              disabled={readonly}
+                              onChange={async (e) => {
+                                const checked = e.target.checked;
+                                const snapshot = payload;
+                                setPayload((p) => {
+                                  if (!p) return p;
+                                  const nextItems = p.items.map((it) => {
+                                    if (it.id !== current.id) return it;
+                                    const nextChecklist = (it.discussionState.checklist || []).map((cc: ChecklistEntry) =>
+                                      cc.key === c.key
+                                        ? {
+                                            ...cc,
+                                            checked,
+                                            checkedAt: checked ? new Date().toISOString() : null,
+                                            checkedBy: checked ? user.email : null,
+                                          }
+                                        : cc,
+                                    );
+                                    return { ...it, discussionState: { ...it.discussionState, checklist: nextChecklist } };
+                                  });
+                                  return { ...p, items: nextItems };
+                                });
+                                try {
+                                  await toggleChecklist(current.id, c.key, checked);
+                                } catch {
+                                  setPayload(snapshot);
+                                }
+                              }}
+                            />
+                            <span className="text-amber-50/95 font-medium min-w-0">{c.label}</span>
+                          </label>
 
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 lg:divide-x lg:divide-white/10">
-                                  <div className="p-3 bg-cyan-950/20 border-b border-white/10 lg:border-b-0 min-w-0">
-                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-cyan-200/80 mb-2">
-                                      Előkészítő hozzászólások
-                                    </p>
-                                    {prepList.length === 0 ? (
-                                      <p className="text-[11px] text-cyan-100/40">Nincs előkészítő hozzászólás.</p>
-                                    ) : (
-                                      <ul className="space-y-1.5">
-                                        {prepList.map((cm) => (
-                                          <li
-                                            key={cm.id}
-                                            className="text-xs text-cyan-50/90 bg-black/35 rounded-md px-2 py-1.5 border border-cyan-500/15"
-                                          >
-                                            <span className="text-cyan-200/50">
-                                              {formatConsiliumHuDateTime(cm.createdAt)} · {cm.authorDisplay}
-                                            </span>
-                                            <p className="whitespace-pre-wrap mt-0.5 leading-snug">{cm.body}</p>
-                                          </li>
-                                        ))}
-                                      </ul>
-                                    )}
-                                  </div>
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 lg:divide-x lg:divide-white/10">
+                            <div className="p-3 bg-cyan-950/20 border-b border-white/10 lg:border-b-0 min-w-0">
+                              <p className="text-[10px] font-semibold uppercase tracking-wide text-cyan-200/80 mb-2">
+                                Előkészítő hozzászólások
+                              </p>
+                              {prepList.length === 0 ? (
+                                <p className="text-[11px] text-cyan-100/40">Nincs előkészítő hozzászólás.</p>
+                              ) : (
+                                <ul className="space-y-1.5">
+                                  {prepList.map((cm) => (
+                                    <li
+                                      key={cm.id}
+                                      className="text-xs text-cyan-50/90 bg-black/35 rounded-md px-2 py-1.5 border border-cyan-500/15"
+                                    >
+                                      <span className="text-cyan-200/50">
+                                        {formatConsiliumHuDateTime(cm.createdAt)} · {cm.authorDisplay}
+                                      </span>
+                                      <p className="whitespace-pre-wrap mt-0.5 leading-snug">{cm.body}</p>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
 
-                                  <div className="p-3 min-w-0">
-                                    {readonly ? (
-                                      <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/80 mb-2">
-                                        Verdikt
-                                      </p>
-                                    ) : null}
-                                    <PresentChecklistVerdictField
-                                      sessionId={sessionId}
-                                      itemId={current.id}
-                                      entry={c}
-                                      readonly={readonly}
-                                      onChecklistReplaced={(checklist) => {
-                                        setPayload((p) => {
-                                          if (!p) return p;
-                                          return {
-                                            ...p,
-                                            items: p.items.map((it) =>
-                                              it.id === current.id
-                                                ? { ...it, discussionState: { ...it.discussionState, checklist } }
-                                                : it,
-                                            ),
-                                          };
-                                        });
-                                      }}
-                                    />
-                                    <PresentChecklistDelegate
-                                      sessionId={sessionId}
-                                      itemId={current.id}
-                                      checklistKey={c.key}
-                                      readonly={readonly}
-                                      institutionUsers={institutionUsers}
-                                      institutionUsersLoading={institutionUsersLoading}
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
+                            <div className="p-3 min-w-0">
+                              {readonly ? (
+                                <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/80 mb-2">
+                                  Verdikt
+                                </p>
+                              ) : null}
+                              <PresentChecklistVerdictField
+                                sessionId={sessionId}
+                                itemId={current.id}
+                                entry={c}
+                                readonly={readonly}
+                                onChecklistReplaced={(checklist) => {
+                                  setPayload((p) => {
+                                    if (!p) return p;
+                                    return {
+                                      ...p,
+                                      items: p.items.map((it) =>
+                                        it.id === current.id
+                                          ? { ...it, discussionState: { ...it.discussionState, checklist } }
+                                          : it,
+                                      ),
+                                    };
+                                  });
+                                }}
+                              />
+                              <PresentChecklistDelegate
+                                sessionId={sessionId}
+                                itemId={current.id}
+                                checklistKey={c.key}
+                                readonly={readonly}
+                                institutionUsers={institutionUsers}
+                                institutionUsersLoading={institutionUsersLoading}
+                              />
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        </section>
 
         <p className="text-xs text-white/40 mt-3">
           Live read-model: a vetítés adatok a backend aggregátorból jönnek; a betegadat változása frissítésre / újratöltésre látszik.
