@@ -1,6 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { createPortal } from 'react-dom';
 import type { PatientDocumentAnnotation } from '@/lib/types/document-annotation';
 import type { TextPayloadV1 } from '@/lib/document-annotations-schema';
@@ -89,10 +97,24 @@ export function DocumentAnnotationsOverlay({
   const [mobileNotesExpanded, setMobileNotesExpanded] = useState(false);
   const pendingTextPanelRef = useRef<HTMLDivElement>(null);
   const [portalReady, setPortalReady] = useState(false);
+  const textDialogTitleId = useId();
 
   useEffect(() => {
     setPortalReady(true);
   }, []);
+
+  useEffect(() => {
+    if (!pendingText || mode !== 'edit' || !canEdit) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      setPendingText(null);
+      setPendingTextValue('');
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [pendingText, mode, canEdit]);
 
   const loadAnnotations = useCallback(async () => {
     if (!patientId || !documentId) return;
@@ -461,58 +483,58 @@ export function DocumentAnnotationsOverlay({
           }`}
         >
           <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setTool('pen')}
-            className={`flex items-center gap-1 px-2 py-1 rounded border ${
-              tool === 'pen'
-                ? 'bg-medical-primary text-white border-medical-primary'
-                : toolbarOnDark
-                  ? 'bg-white/10 border-white/30 text-white hover:bg-white/15'
-                  : 'bg-white border-gray-300 text-gray-900'
-            }`}
-          >
-            <Pencil className="w-4 h-4" />
-            Szabadkézi
-          </button>
-          <button
-            type="button"
-            onClick={() => setTool('text')}
-            className={`flex items-center gap-1 px-2 py-1 rounded border ${
-              tool === 'text'
-                ? 'bg-medical-primary text-white border-medical-primary'
-                : toolbarOnDark
-                  ? 'bg-white/10 border-white/30 text-white hover:bg-white/15'
-                  : 'bg-white border-gray-300 text-gray-900'
-            }`}
-          >
-            <Type className="w-4 h-4" />
-            Szöveg
-          </button>
-          {tool === 'pen' && draftPaths.length > 0 && (
             <button
               type="button"
-              disabled={saving}
-              onClick={saveFreehand}
-              className="flex items-center gap-1 px-2 py-1 rounded bg-emerald-600 text-white disabled:opacity-50"
+              onClick={() => setTool('pen')}
+              className={`flex items-center gap-1 px-2 py-1 rounded border ${
+                tool === 'pen'
+                  ? 'bg-medical-primary text-white border-medical-primary'
+                  : toolbarOnDark
+                    ? 'bg-white/10 border-white/30 text-white hover:bg-white/15'
+                    : 'bg-white border-gray-300 text-gray-900'
+              }`}
             >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              Szabadkézi mentése
+              <Pencil className="w-4 h-4" />
+              Szabadkézi
             </button>
-          )}
-          {tool === 'pen' && draftPaths.length > 0 && (
             <button
               type="button"
-              onClick={() => setDraftPaths([])}
-              className={
-                toolbarOnDark
-                  ? 'px-2 py-1 rounded border border-white/30 bg-white/10 text-white hover:bg-white/15'
-                  : 'px-2 py-1 rounded border border-gray-300 bg-white text-gray-900'
-              }
+              onClick={() => setTool('text')}
+              className={`flex items-center gap-1 px-2 py-1 rounded border ${
+                tool === 'text'
+                  ? 'bg-medical-primary text-white border-medical-primary'
+                  : toolbarOnDark
+                    ? 'bg-white/10 border-white/30 text-white hover:bg-white/15'
+                    : 'bg-white border-gray-300 text-gray-900'
+              }`}
             >
-              Vázlat törlése
+              <Type className="w-4 h-4" />
+              Szöveg
             </button>
-          )}
+            {tool === 'pen' && draftPaths.length > 0 && (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={saveFreehand}
+                className="flex items-center gap-1 px-2 py-1 rounded bg-emerald-600 text-white disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                Szabadkézi mentése
+              </button>
+            )}
+            {tool === 'pen' && draftPaths.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setDraftPaths([])}
+                className={
+                  toolbarOnDark
+                    ? 'px-2 py-1 rounded border border-white/30 bg-white/10 text-white hover:bg-white/15'
+                    : 'px-2 py-1 rounded border border-gray-300 bg-white text-gray-900'
+                }
+              >
+                Vázlat törlése
+              </button>
+            )}
           </div>
           <button
             type="button"
@@ -524,7 +546,9 @@ export function DocumentAnnotationsOverlay({
             }`}
           >
             {showAnnotations ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-            Annotációk {showAnnotations ? 'látszanak' : 'rejtve'}
+            <span className="whitespace-normal text-center sm:text-left">
+              Rajzok és szövegek: {showAnnotations ? 'láthatók' : 'rejtve'}
+            </span>
           </button>
         </div>
       )}
@@ -628,7 +652,9 @@ export function DocumentAnnotationsOverlay({
               }`}
               onClick={() => setMobileNotesExpanded((o) => !o)}
             >
-              {mobileNotesExpanded ? 'Jegyzetek elrejtése' : `Jegyzetek / rajzok megnyitása (${notesCount})`}
+              {mobileNotesExpanded
+              ? 'Lista bezárása'
+              : `Jegyzetek / rajzok (${notesCount})`}
             </button>
             <div
               className={`min-w-0 w-full lg:w-56 shrink-0 rounded-lg border p-2 text-xs overflow-y-auto ${
@@ -637,7 +663,11 @@ export function DocumentAnnotationsOverlay({
                   : 'border-gray-200 bg-white text-gray-900 max-h-[42vh] lg:max-h-[min(85dvh,900px)]'
               } ${mobileNotesExpanded ? '' : 'max-lg:hidden'} lg:block`}
             >
-            <p className={`font-semibold mb-2 ${compact ? 'text-white' : 'text-gray-700'}`}>
+            <p
+              className={`font-semibold mb-2 ${mobileNotesExpanded ? 'max-lg:hidden' : ''} ${
+                compact ? 'text-white' : 'text-gray-700'
+              }`}
+            >
               Jegyzetek / rajzok
             </p>
             {draftPaths.length > 0 && (
@@ -765,11 +795,8 @@ export function DocumentAnnotationsOverlay({
             }}
             role="dialog"
             aria-modal="true"
-            aria-labelledby="annotation-text-title"
-            onClick={() => {
-              setPendingText(null);
-              setPendingTextValue('');
-            }}
+            aria-labelledby={textDialogTitleId}
+            aria-describedby={`${textDialogTitleId}-hint`}
           >
             <div
               ref={pendingTextPanelRef}
@@ -778,15 +805,19 @@ export function DocumentAnnotationsOverlay({
                   ? 'border-white/25 bg-zinc-900 text-zinc-100'
                   : 'border-gray-300 bg-white text-gray-900'
               }`}
-              onClick={(e) => e.stopPropagation()}
             >
               <label
-                id="annotation-text-title"
+                id={textDialogTitleId}
+                htmlFor={`${textDialogTitleId}-input`}
                 className={`block text-sm font-medium mb-1 ${compact ? 'text-zinc-200' : 'text-gray-700'}`}
               >
                 Szöveg a képen
               </label>
+              <p id={`${textDialogTitleId}-hint`} className="sr-only">
+                A Mégse gomb vagy az Escape bezárja a párbeszédet; a be nem mentett szöveg törlődik.
+              </p>
               <textarea
+                id={`${textDialogTitleId}-input`}
                 className={`w-full border rounded p-2 text-sm min-h-[80px] ${
                   compact
                     ? 'border-white/25 bg-black/40 text-zinc-100 placeholder:text-zinc-500'
@@ -795,7 +826,7 @@ export function DocumentAnnotationsOverlay({
                 value={pendingTextValue}
                 onChange={(e) => setPendingTextValue(e.target.value)}
               />
-              <div className="flex flex-col-reverse sm:flex-row gap-2 mt-2 sm:justify-end">
+              <div className="flex flex-col gap-2 mt-3 sm:flex-row sm:justify-end">
                 <button
                   type="button"
                   className={
