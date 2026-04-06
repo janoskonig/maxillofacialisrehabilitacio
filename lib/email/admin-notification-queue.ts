@@ -167,7 +167,16 @@ function renderSingleAdminNotificationHtml(
   `;
 }
 
-/** Sorba írás + azonnali email; sikertelen küldésnél a sor marad (batch: /api/admin/daily-summary). */
+function adminNotificationImmediateEnabled(): boolean {
+  const v = process.env.ADMIN_NOTIFICATION_IMMEDIATE?.trim().toLowerCase();
+  return v === '1' || v === 'true' || v === 'yes';
+}
+
+/**
+ * Sorba írja az eseményt. Alapértelmezés: nincs azonnali email — a napi összegyűjtött, típus szerint
+ * csoportosított digest küldi ki (/api/admin/daily-summary, pl. cron). Azonnali mód:
+ * ADMIN_NOTIFICATION_IMMEDIATE=true|1|yes. Sikertelen azonnali küldésnél a sor marad feldolgozatlanul.
+ */
 export async function queueAdminNotification(
   notificationType: string,
   summaryText: string,
@@ -184,6 +193,10 @@ export async function queueAdminNotification(
     );
     const row = rows[0];
     if (!row) {
+      return;
+    }
+
+    if (!adminNotificationImmediateEnabled()) {
       return;
     }
 
@@ -292,8 +305,9 @@ export async function sendAdminDailySummary(): Promise<{ sent: boolean; count: n
       <h2 style="color: #2563eb; margin-bottom: 4px;">Napi összefoglaló (összegyűjtött események)</h2>
       <p style="color: #6b7280; font-size: 14px; margin-top: 0;">${periodText}</p>
       <p style="color: #374151; font-size: 14px; background: #eff6ff; padding: 12px 14px; border-radius: 6px;">
-        <strong>Megjegyzés:</strong> Az új eseményekről ettől kezdve külön email érkezik. Ezt az összefoglalót csak a korábban sorba került,
-        még kiküldetlen tételekre használjuk (pl. egyszeri lezárás vagy hálózati hiba után).
+        <strong>Megjegyzés:</strong> Az események típusonként vannak csoportosítva. Ha az azonnali admin email be van kapcsolva
+        (<code>ADMIN_NOTIFICATION_IMMEDIATE</code>), a sikeresen kiküldött tételek nem szerepelnek itt; ez az összefoglaló a feldolgozatlan
+        sorban maradt tételeket is magában foglalja (pl. hálózati hiba után).
       </p>
       <p>Kedves adminisztrátor,</p>
       <p>Az elmúlt időszakban <strong>${notifications.length}</strong> esemény történt a rendszerben:</p>

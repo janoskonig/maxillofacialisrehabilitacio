@@ -1,10 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PatientDocumentAnnotation } from '@/lib/types/document-annotation';
 import { fetchAnnotationsBatchForPatient } from '@/lib/document-annotations-batch-client';
 
-/** `documentIds`: lehetőleg `useMemo` — stabil referencia elkerüli a felesleges fetch-et. */
+const IDS_SEP = '\u0001';
+
+/** `documentIds`: stabil tartalom elég; új tömbreferencia ugyanazzal a tartalommal nem indít felesleges fetch-et. */
 export function usePatientDocumentAnnotationsMap(
   patientId: string | null | undefined,
   documentIds: readonly string[],
@@ -14,15 +16,31 @@ export function usePatientDocumentAnnotationsMap(
 } {
   const [byDocumentId, setByDocumentId] = useState<Record<string, PatientDocumentAnnotation[]>>({});
 
+  const documentIdsKey = useMemo(
+    () =>
+      Array.from(new Set((documentIds as string[]).filter(Boolean)))
+        .sort()
+        .join(IDS_SEP),
+    [documentIds],
+  );
+
+  const fetchGenRef = useRef(0);
+
   const refresh = useCallback(() => {
-    if (!patientId || documentIds.length === 0) {
+    if (!patientId || documentIdsKey.length === 0) {
       setByDocumentId({});
       return;
     }
-    void fetchAnnotationsBatchForPatient(patientId, [...documentIds])
-      .then(setByDocumentId)
-      .catch(() => setByDocumentId({}));
-  }, [patientId, documentIds]);
+    const ids = documentIdsKey.split(IDS_SEP);
+    const gen = ++fetchGenRef.current;
+    void fetchAnnotationsBatchForPatient(patientId, ids)
+      .then((data) => {
+        if (fetchGenRef.current === gen) setByDocumentId(data);
+      })
+      .catch(() => {
+        if (fetchGenRef.current === gen) setByDocumentId({});
+      });
+  }, [patientId, documentIdsKey]);
 
   useEffect(() => {
     refresh();

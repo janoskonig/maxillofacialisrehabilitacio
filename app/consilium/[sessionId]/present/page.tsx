@@ -488,7 +488,10 @@ export default function ConsiliumPresentPage() {
     setPhotoLightbox(null);
   }, [index]);
 
-  const items = payload?.items || [];
+  const items = useMemo(
+    () => payload?.items ?? [],
+    [payload?.items],
+  );
   const current = items[index] || null;
   const summaryForTimeline = current?.patientSummary;
 
@@ -503,7 +506,7 @@ export default function ConsiliumPresentPage() {
 
   const prepCommentsByKey = useMemo(
     () => prepCommentsGroupedByKey(current?.prepComments),
-    [current?.id, current?.prepComments],
+    [current],
   );
 
   const photoDocIds = useMemo(() => {
@@ -511,7 +514,7 @@ export default function ConsiliumPresentPage() {
     return (current.mediaSummary?.photoPreview?.previews ?? [])
       .map((p) => p.documentId)
       .filter(Boolean);
-  }, [current?.id, current?.mediaSummary?.photoPreview?.previews]);
+  }, [current]);
 
   const photoPatientId = current?.patientSummary?.patientId ?? null;
   const { byDocumentId: photoAnnByDoc, refresh: refreshPhotoAnnotations } =

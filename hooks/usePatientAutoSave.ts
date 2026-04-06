@@ -445,21 +445,17 @@ export function usePatientAutoSave(
           logEvent(failEventType, errorMetadata);
         }
 
-        // Sentry capture for unexpected errors
+        // Sentry: skip expected client failures (4xx ApiError); capture everything else
         if (
           Sentry &&
           !(err instanceof ApiError && err.status >= 400 && err.status < 500)
         ) {
-          if (
-            err instanceof TimeoutError ||
-            err instanceof ApiError ||
-            !(err instanceof Error)
-          ) {
-            if (err instanceof ApiError && err.correlationId) {
-              Sentry.setTag('correlation_id', err.correlationId);
-            }
-            Sentry.captureException(err);
+          if (err instanceof ApiError && err.correlationId) {
+            Sentry.setTag('correlation_id', err.correlationId);
           }
+          Sentry.captureException(
+            err instanceof Error ? err : new Error(String(err)),
+          );
         }
 
         if (source === 'manual') {

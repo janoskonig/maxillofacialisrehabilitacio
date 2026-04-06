@@ -171,6 +171,11 @@ async function callEndpoint(path, label) {
       );
     }
 
+    // Admin notification digest: one grouped email per day (types as sections). Fires at 06:45 Europe/Budapest.
+    if (hour === 6 && minute === 45) {
+      await callEndpoint('/api/admin/daily-summary', 'Admin daily notification digest');
+    }
+
     await syncCalendar();
 
     console.log(`[${new Date().toISOString()}] Cron job completed successfully`);
