@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { PatientDocumentAnnotation } from '@/lib/types/document-annotation';
 import type { TextPayloadV1 } from '@/lib/document-annotations-schema';
 import { Pencil, Type, Save, Trash2, Eye, EyeOff, Loader2 } from 'lucide-react';
@@ -84,6 +85,14 @@ export function DocumentAnnotationsOverlay({
   const [pendingTextValue, setPendingTextValue] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hiddenAnnotationIds, setHiddenAnnotationIds] = useState<Set<string>>(new Set());
+  /** Kisebb képernyőn a jegyzék alapból zárva — több hely a képnek és kevesebb véletlen görgetés. */
+  const [mobileNotesExpanded, setMobileNotesExpanded] = useState(false);
+  const pendingTextPanelRef = useRef<HTMLDivElement>(null);
+  const [portalReady, setPortalReady] = useState(false);
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
 
   const loadAnnotations = useCallback(async () => {
     if (!patientId || !documentId) return;
@@ -109,6 +118,19 @@ export function DocumentAnnotationsOverlay({
   useEffect(() => {
     loadAnnotations();
   }, [loadAnnotations]);
+
+  useEffect(() => {
+    setMobileNotesExpanded(false);
+  }, [documentId]);
+
+  useEffect(() => {
+    if (!pendingText || mode !== 'edit' || !canEdit) return;
+    const el = pendingTextPanelRef.current?.querySelector('textarea');
+    requestAnimationFrame(() => {
+      el?.focus({ preventScroll: true });
+      pendingTextPanelRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+  }, [pendingText, mode, canEdit]);
 
   useEffect(() => {
     const valid = new Set(annotations.map((a) => a.id));
@@ -424,6 +446,8 @@ export function DocumentAnnotationsOverlay({
     (a) => a.kind === 'text' && !hiddenAnnotationIds.has(a.id),
   );
 
+  const notesCount = annotations.length + draftPaths.length;
+
   const editChrome = mode === 'edit' && canEdit;
   /** Vetítés / előkészítő: sötét háttérhez igazított eszközsor. */
   const toolbarOnDark = compact && editChrome;
@@ -432,10 +456,11 @@ export function DocumentAnnotationsOverlay({
     <div className="flex flex-col gap-2 w-full max-w-full">
       {editChrome && (
         <div
-          className={`flex flex-wrap items-center gap-2 text-sm ${
+          className={`flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center text-sm ${
             toolbarOnDark ? 'text-white' : ''
           }`}
         >
+          <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => setTool('pen')}
@@ -488,10 +513,11 @@ export function DocumentAnnotationsOverlay({
               Vázlat törlése
             </button>
           )}
+          </div>
           <button
             type="button"
             onClick={() => setShowAnnotations((s) => !s)}
-            className={`flex items-center gap-1 px-2 py-1 rounded border ml-auto ${
+            className={`flex items-center justify-center gap-1 px-2 py-1.5 rounded border w-full sm:w-auto sm:ml-auto ${
               toolbarOnDark
                 ? 'border-white/30 bg-white/10 text-white hover:bg-white/15'
                 : 'border-gray-300 bg-white text-gray-900'
@@ -503,8 +529,8 @@ export function DocumentAnnotationsOverlay({
         </div>
       )}
 
-      <div className="flex flex-col lg:flex-row gap-3 min-h-0 items-start">
-        <div ref={wrapRef} className="relative inline-block max-w-full max-h-[min(85vh,900px)] mx-auto">
+      <div className="flex flex-col lg:flex-row gap-3 min-h-0 items-start w-full min-w-0">
+        <div ref={wrapRef} className="relative inline-block max-w-full max-h-[min(85dvh,900px)] mx-auto shrink-0">
           <img
             ref={imgRef}
             src={imageUrl}
@@ -519,7 +545,7 @@ export function DocumentAnnotationsOverlay({
           />
           {layout && (
             <div
-              className="absolute overflow-visible"
+              className="absolute overflow-visible [-webkit-touch-callout:none]"
               style={{
                 left: layout.ox,
                 top: layout.oy,
@@ -530,12 +556,18 @@ export function DocumentAnnotationsOverlay({
                     ? 'auto'
                     : 'none',
                 cursor: mode === 'edit' && canEdit && showAnnotations && tool === 'text' ? 'crosshair' : 'default',
+                touchAction:
+                  mode === 'edit' && canEdit && showAnnotations
+                    ? tool === 'pen'
+                      ? 'none'
+                      : 'manipulation'
+                    : 'auto',
               }}
             >
               <canvas
                 ref={canvasRef}
-                className="absolute inset-0 z-[1]"
-                style={{ touchAction: mode === 'edit' && canEdit && tool === 'pen' ? 'none' : 'auto' }}
+                className="absolute inset-0 z-[1] select-none"
+                style={{ touchAction: mode === 'edit' && canEdit && tool === 'pen' ? 'none' : 'inherit' }}
                 onPointerDown={onPointerDown}
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUp}
@@ -547,6 +579,7 @@ export function DocumentAnnotationsOverlay({
                   if (Number(p.v) !== 1) return null;
                   const hue = hueFromString(ann.createdBy);
                   const border = selectedId === ann.id ? '2px solid #fbbf24' : `2px solid hsl(${hue}, 60%, 45%)`;
+                  const anchorRight = typeof p.x === 'number' && p.x > 0.55;
                   return (
                     <div
                       key={ann.id}
@@ -554,8 +587,8 @@ export function DocumentAnnotationsOverlay({
                       style={{
                         left: `${p.x * 100}%`,
                         top: `${p.y * 100}%`,
-                        transform: 'translate(0, -100%)',
-                        maxWidth: 'min(240px, 80%)',
+                        transform: anchorRight ? 'translate(-100%, -100%)' : 'translate(0, -100%)',
+                        maxWidth: 'min(18rem, 92%)',
                       }}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -563,7 +596,7 @@ export function DocumentAnnotationsOverlay({
                       }}
                     >
                       <div
-                        className="rounded-md px-2 py-1 text-left shadow-md bg-white/95 text-gray-900 text-sm"
+                        className="rounded-md px-2 py-1 text-left shadow-md bg-white/95 text-gray-900 text-sm select-text"
                         style={{ border }}
                       >
                         <p className="whitespace-pre-wrap break-words">{p.text}</p>
@@ -584,14 +617,26 @@ export function DocumentAnnotationsOverlay({
           )}
         </div>
 
-        {showAnnotations && (annotations.length > 0 || draftPaths.length > 0) && (
-          <div
-            className={
-              compact
-                ? 'w-full lg:w-52 shrink-0 rounded-lg border border-white/25 bg-zinc-900 p-2.5 text-xs text-zinc-100 max-h-64 lg:max-h-[min(85vh,900px)] overflow-y-auto shadow-lg shadow-black/50'
-                : 'w-full lg:w-56 shrink-0 rounded-lg border border-gray-200 bg-white p-2 text-xs text-gray-900 max-h-64 lg:max-h-[min(85vh,900px)] overflow-y-auto'
-            }
-          >
+        {showAnnotations && notesCount > 0 && (
+          <>
+            <button
+              type="button"
+              className={`lg:hidden w-full shrink-0 rounded-lg border px-3 py-2 text-left text-sm font-medium ${
+                compact
+                  ? 'border-white/25 bg-zinc-900 text-zinc-100'
+                  : 'border-gray-200 bg-white text-gray-800'
+              }`}
+              onClick={() => setMobileNotesExpanded((o) => !o)}
+            >
+              {mobileNotesExpanded ? 'Jegyzetek elrejtése' : `Jegyzetek / rajzok megnyitása (${notesCount})`}
+            </button>
+            <div
+              className={`min-w-0 w-full lg:w-56 shrink-0 rounded-lg border p-2 text-xs overflow-y-auto ${
+                compact
+                  ? 'border-white/25 bg-zinc-900 text-zinc-100 max-h-[42vh] lg:max-h-[min(85dvh,900px)] lg:w-52 shadow-lg shadow-black/50 p-2.5'
+                  : 'border-gray-200 bg-white text-gray-900 max-h-[42vh] lg:max-h-[min(85dvh,900px)]'
+              } ${mobileNotesExpanded ? '' : 'max-lg:hidden'} lg:block`}
+            >
             <p className={`font-semibold mb-2 ${compact ? 'text-white' : 'text-gray-700'}`}>
               Jegyzetek / rajzok
             </p>
@@ -704,58 +749,80 @@ export function DocumentAnnotationsOverlay({
               })}
             </div>
           </div>
+          </>
         )}
       </div>
 
-      {pendingText && editChrome && (
-        <div
-          className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-[60] w-[min(90vw,400px)] rounded-lg border p-3 shadow-xl ${
-            compact
-              ? 'border-white/25 bg-zinc-900 text-zinc-100'
-              : 'border-gray-300 bg-white text-gray-900'
-          }`}
-        >
-          <label
-            className={`block text-sm font-medium mb-1 ${compact ? 'text-zinc-200' : 'text-gray-700'}`}
+      {portalReady &&
+        pendingText &&
+        editChrome &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[200] flex items-center justify-center overscroll-contain bg-black/50 p-4"
+            style={{
+              paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))',
+              paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 0px))',
+            }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="annotation-text-title"
+            onClick={() => {
+              setPendingText(null);
+              setPendingTextValue('');
+            }}
           >
-            Szöveg a képen
-          </label>
-          <textarea
-            className={`w-full border rounded p-2 text-sm min-h-[80px] ${
-              compact
-                ? 'border-white/25 bg-black/40 text-zinc-100 placeholder:text-zinc-500'
-                : 'border-gray-300 bg-white text-gray-900'
-            }`}
-            value={pendingTextValue}
-            onChange={(e) => setPendingTextValue(e.target.value)}
-            autoFocus
-          />
-          <div className="flex gap-2 mt-2 justify-end">
-            <button
-              type="button"
-              className={
+            <div
+              ref={pendingTextPanelRef}
+              className={`w-full max-w-[400px] max-h-[min(85dvh,520px)] overflow-y-auto rounded-lg border p-3 shadow-xl ${
                 compact
-                  ? 'px-3 py-1 rounded border border-white/30 text-white hover:bg-white/10'
-                  : 'px-3 py-1 border border-gray-300 rounded text-gray-900'
-              }
-              onClick={() => {
-                setPendingText(null);
-                setPendingTextValue('');
-              }}
+                  ? 'border-white/25 bg-zinc-900 text-zinc-100'
+                  : 'border-gray-300 bg-white text-gray-900'
+              }`}
+              onClick={(e) => e.stopPropagation()}
             >
-              Mégse
-            </button>
-            <button
-              type="button"
-              disabled={saving || !pendingTextValue.trim()}
-              className="px-3 py-1 bg-medical-primary text-white rounded disabled:opacity-50"
-              onClick={saveTextAnnotation}
-            >
-              Mentés
-            </button>
-          </div>
-        </div>
-      )}
+              <label
+                id="annotation-text-title"
+                className={`block text-sm font-medium mb-1 ${compact ? 'text-zinc-200' : 'text-gray-700'}`}
+              >
+                Szöveg a képen
+              </label>
+              <textarea
+                className={`w-full border rounded p-2 text-sm min-h-[80px] ${
+                  compact
+                    ? 'border-white/25 bg-black/40 text-zinc-100 placeholder:text-zinc-500'
+                    : 'border-gray-300 bg-white text-gray-900'
+                }`}
+                value={pendingTextValue}
+                onChange={(e) => setPendingTextValue(e.target.value)}
+              />
+              <div className="flex flex-col-reverse sm:flex-row gap-2 mt-2 sm:justify-end">
+                <button
+                  type="button"
+                  className={
+                    compact
+                      ? 'px-3 py-2 rounded border border-white/30 text-white hover:bg-white/10 w-full sm:w-auto'
+                      : 'px-3 py-2 border border-gray-300 rounded text-gray-900 w-full sm:w-auto'
+                  }
+                  onClick={() => {
+                    setPendingText(null);
+                    setPendingTextValue('');
+                  }}
+                >
+                  Mégse
+                </button>
+                <button
+                  type="button"
+                  disabled={saving || !pendingTextValue.trim()}
+                  className="px-3 py-2 bg-medical-primary text-white rounded disabled:opacity-50 w-full sm:w-auto"
+                  onClick={saveTextAnnotation}
+                >
+                  Mentés
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

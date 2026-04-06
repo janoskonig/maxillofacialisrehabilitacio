@@ -258,7 +258,7 @@ export function OPImageViewer({
         </div>
 
         {/* Image Container */}
-        <div className="flex-1 flex items-center justify-center p-4 pt-20 pb-20">
+        <div className="flex-1 flex min-h-0 items-center justify-center overflow-y-auto p-4 pt-20 pb-20">
           {loading ? (
             <div className="text-white text-lg">OP dokumentumok betöltése...</div>
           ) : documents.length === 0 ? (
