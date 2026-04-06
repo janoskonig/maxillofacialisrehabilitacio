@@ -259,7 +259,14 @@ function renderNotificationGroup(type: string, items: NotificationRow[]): string
   `;
 }
 
-export async function sendAdminDailySummary(): Promise<{ sent: boolean; count: number }> {
+export type AdminDailySummaryResult = {
+  sent: boolean;
+  count: number;
+  /** Üres sor, nincs címzett, vagy sikeres küldés — cron / manuális hívásnál diagnosztika */
+  reason?: 'queue_empty' | 'no_recipients' | 'sent';
+};
+
+export async function sendAdminDailySummary(): Promise<AdminDailySummaryResult> {
   await ensureAdminNotificationQueueSchema();
   const pool = getDbPool();
 
@@ -271,14 +278,15 @@ export async function sendAdminDailySummary(): Promise<{ sent: boolean; count: n
   );
 
   if (notifications.length === 0) {
-    return { sent: false, count: 0 };
+    console.info('[DailySummary] No pending notifications (queue empty).');
+    return { sent: false, count: 0, reason: 'queue_empty' };
   }
 
   const recipients = await getAdminNotificationRecipients();
 
   if (recipients.length === 0) {
     console.warn('[DailySummary] No recipients (admin or SMTP_REPLY_TO), skipping.');
-    return { sent: false, count: notifications.length };
+    return { sent: false, count: notifications.length, reason: 'no_recipients' };
   }
 
   const grouped: Record<string, NotificationRow[]> = {};
@@ -332,5 +340,5 @@ export async function sendAdminDailySummary(): Promise<{ sent: boolean; count: n
     [ids]
   );
 
-  return { sent: true, count: notifications.length };
+  return { sent: true, count: notifications.length, reason: 'sent' };
 }

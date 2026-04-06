@@ -30,5 +30,6 @@ async function handle(request: NextRequest) {
     success: true,
     sent: result.sent,
     notificationCount: result.count,
+    reason: result.reason,
   });
 }

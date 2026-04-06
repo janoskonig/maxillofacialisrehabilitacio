@@ -6,6 +6,29 @@
 const https = require('https');
 const http = require('http');
 
+/**
+ * Europe/Budapest óra és perc — ne használj new Date(toLocaleString(...))-t: a szerver TZ-jében
+ * újraértelmezi a stringet, és eltérő környezetben rossz időpontra futhat a cron.
+ */
+function getBudapestWallClock(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Budapest',
+    hour: 'numeric',
+    minute: 'numeric',
+    weekday: 'short',
+    hour12: false,
+  }).formatToParts(date);
+  const map = {};
+  for (const p of parts) {
+    if (p.type !== 'literal') map[p.type] = p.value;
+  }
+  return {
+    hour: Number.parseInt(map.hour, 10),
+    minute: Number.parseInt(map.minute, 10),
+    isMonday: map.weekday === 'Mon',
+  };
+}
+
 const API_URL = process.env.APP_URL || process.env.RENDER_EXTERNAL_URL;
 const API_KEY = process.env.GOOGLE_CALENDAR_SYNC_API_KEY;
 const ENDPOINT = '/api/google-calendar/sync/cron';
@@ -19,6 +42,9 @@ if (!API_URL) {
 async function attemptSync() {
   return new Promise((resolve, reject) => {
     const url = new URL(`${API_URL}${ENDPOINT}`);
+    if (API_KEY) {
+      url.searchParams.set('api_key', API_KEY);
+    }
     const isHttps = url.protocol === 'https:';
     const client = isHttps ? https : http;
     
@@ -118,6 +144,9 @@ async function syncCalendar(retries = 3, delayMs = 5000) {
 async function callEndpoint(path, label) {
   return new Promise((resolve) => {
     const url = new URL(`${API_URL}${path}`);
+    if (API_KEY) {
+      url.searchParams.set('api_key', API_KEY);
+    }
     const isHttps = url.protocol === 'https:';
     const client = isHttps ? https : http;
     const options = {
@@ -150,14 +179,10 @@ async function callEndpoint(path, label) {
       console.warn(`[${new Date().toISOString()}] WARNING: GOOGLE_CALENDAR_SYNC_API_KEY is not set. The sync may fail if the endpoint requires authentication.`);
     }
 
-    // Capture Budapest time at startup (before any async work eats time)
-    const nowBudapest = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Budapest' }));
-    const isMonday = nowBudapest.getDay() === 1;
-    const hour = nowBudapest.getHours();
-    const minute = nowBudapest.getMinutes();
+    const { hour, minute, isMonday } = getBudapestWallClock();
 
     console.log(
-      `[${new Date().toISOString()}] Cron timing: budapest=${nowBudapest.toISOString()} day=${nowBudapest.getDay()} hour=${hour} minute=${minute}`
+      `[${new Date().toISOString()}] Cron timing (Europe/Budapest): hour=${hour} minute=${minute} isMonday=${isMonday}`
     );
 
     // Weekly OHIP-14 reminders — run on Mondays between 08:00-08:59 Budapest time.
