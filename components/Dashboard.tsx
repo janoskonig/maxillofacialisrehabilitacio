@@ -295,7 +295,7 @@ export function Dashboard({ userRole }: DashboardProps) {
           {activeTab === 'workload' && canSeeStages && (
             <div className="space-y-4">
               <p className="text-sm text-gray-600">
-                Fogpótlástanász és admin kihasználtság a következő 30 napra.
+                Összefoglaló orvosi terhelési kép a következő időszakra.
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <BusynessOMeter />

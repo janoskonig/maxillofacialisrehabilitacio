@@ -40,16 +40,14 @@ const BADGE_CONFIG = {
 } as const;
 
 function humanizeReason(code: string): string {
-  if (code === 'OK') return 'Normál terhelés, van szabad kapacitás';
+  if (code === 'OK') return 'Megfelelő kapacitás';
   if (code === 'NEAR_CRITICAL_IF_NEW_STARTS')
-    return 'Új beteg felvétele kritikus szintre emelné a terhelést';
+    return 'Új beteg felvétele jelenleg nem ajánlott';
 
-  const busynessMatch = code.match(/^BUSYNESS_(\d+)$/);
-  if (busynessMatch) return `Magas leterheltség (${busynessMatch[1]}%)`;
+  if (/^BUSYNESS_\d+$/.test(code)) return 'Magas orvosi terhelés';
 
-  const wipP80Match = code.match(/^WIP_P80_END_\+(\d+)D$/);
-  if (wipP80Match)
-    return `Aktív kezelések becsült befejezése ~${wipP80Match[1]} nap múlva`;
+  if (/^WIP_P80_END_\+(\d+)D$/.test(code))
+    return 'A folyamatban lévő kezelések befejezése a szokásosnál távolabbra esik';
 
   return code;
 }
@@ -100,11 +98,6 @@ export function IntakeRecommendationBadge() {
                 <li key={r}>• {humanizeReason(r)}</li>
               ))}
             </ul>
-            {data.explain.wipP80DaysFromNow != null && (
-              <p className="text-xs text-gray-500 mt-2">
-                A folyamatban lévő kezelések 80%-a várhatóan {data.explain.wipP80DaysFromNow} napon belül befejeződik.
-              </p>
-            )}
             <a
               href="?tab=workload"
               className="text-xs text-medical-primary hover:underline mt-2 inline-block"

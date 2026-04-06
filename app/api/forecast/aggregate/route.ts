@@ -18,15 +18,23 @@ export const GET = authedHandler(async (req, { auth }) => {
   const wipStageList = WIP_STAGE_CODES.map((c) => `'${c}'`).join(',');
   const wipResult = await pool.query(
     `SELECT pe.id as "episodeId", pe.assigned_provider_id as "assignedProviderId",
-            u.doktor_neve as "providerName", u.email as "providerEmail"
+            u.doktor_neve as "providerName", u.email as "providerEmail",
+            NULLIF(TRIM(p.nev), '') as "patientName"
      FROM patient_episodes pe
+     LEFT JOIN patients p ON p.id = pe.patient_id
      LEFT JOIN users u ON pe.assigned_provider_id = u.id
      LEFT JOIN (SELECT DISTINCT ON (episode_id) episode_id, stage_code FROM stage_events ORDER BY episode_id, at DESC) se ON pe.id = se.episode_id
      WHERE pe.status = 'open'
      AND (se.stage_code IS NULL OR se.stage_code IN (${wipStageList}))`
   );
 
-  interface WipRow { episodeId: string; assignedProviderId: string | null; providerName: string | null; providerEmail: string | null }
+  interface WipRow {
+    episodeId: string;
+    assignedProviderId: string | null;
+    providerName: string | null;
+    providerEmail: string | null;
+    patientName: string | null;
+  }
   const wipRows: WipRow[] = wipResult.rows;
   const wipIds = wipRows.map((r) => r.episodeId);
   const wipCount = wipIds.length;
@@ -45,6 +53,7 @@ export const GET = authedHandler(async (req, { auth }) => {
     maxP80: Date | null;
     visitsP50: number;
     visitsP80: number;
+    unassignedPatientNames: Set<string> | null;
   }>();
 
   const providerByEpisode = new Map<string, WipRow>();
@@ -57,9 +66,14 @@ export const GET = authedHandler(async (req, { auth }) => {
         providerName: row.providerName,
         providerEmail: row.providerEmail,
         wipCount: 0, maxP50: null, maxP80: null, visitsP50: 0, visitsP80: 0,
+        unassignedPatientNames: key === '__unassigned__' ? new Set<string>() : null,
       });
     }
-    byDoctorMap.get(key)!.wipCount++;
+    const bucket = byDoctorMap.get(key)!;
+    bucket.wipCount++;
+    if (key === '__unassigned__' && row.patientName) {
+      bucket.unassignedPatientNames!.add(row.patientName);
+    }
   }
 
   if (wipIds.length > 0) {
@@ -106,16 +120,24 @@ export const GET = authedHandler(async (req, { auth }) => {
 
   const byDoctor: DoctorWipForecast[] = Array.from(byDoctorMap.values())
     .sort((a, b) => b.wipCount - a.wipCount)
-    .map((d) => ({
-      providerId: d.providerId,
-      providerName: d.providerName,
-      providerEmail: d.providerEmail,
-      wipCount: d.wipCount,
-      wipCompletionP50Max: d.maxP50?.toISOString() ?? null,
-      wipCompletionP80Max: d.maxP80?.toISOString() ?? null,
-      wipVisitsRemainingP50Sum: d.visitsP50,
-      wipVisitsRemainingP80Sum: d.visitsP80,
-    }));
+    .map((d) => {
+      const base: DoctorWipForecast = {
+        providerId: d.providerId,
+        providerName: d.providerName,
+        providerEmail: d.providerEmail,
+        wipCount: d.wipCount,
+        wipCompletionP50Max: d.maxP50?.toISOString() ?? null,
+        wipCompletionP80Max: d.maxP80?.toISOString() ?? null,
+        wipVisitsRemainingP50Sum: d.visitsP50,
+        wipVisitsRemainingP80Sum: d.visitsP80,
+      };
+      if (d.unassignedPatientNames && d.unassignedPatientNames.size > 0) {
+        base.unassignedPatientNames = Array.from(d.unassignedPatientNames).sort((a, b) =>
+          a.localeCompare(b, 'hu', { sensitivity: 'base' })
+        );
+      }
+      return base;
+    });
 
   const response: ForecastAggregateResponse = {
     wipCount,

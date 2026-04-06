@@ -36,6 +36,8 @@ export interface DoctorWipForecast {
   wipCompletionP80Max: string | null;
   wipVisitsRemainingP50Sum: number;
   wipVisitsRemainingP80Sum: number;
+  /** Ha nincs hozzárendelt orvos: a kapcsolódó betegek nevei (egyedi, ABC). */
+  unassignedPatientNames?: string[];
 }
 
 export interface ForecastAggregateResponse {

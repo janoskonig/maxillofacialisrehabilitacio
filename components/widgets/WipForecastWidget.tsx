@@ -13,6 +13,7 @@ interface DoctorWipForecast {
   wipCompletionP80Max: string | null;
   wipVisitsRemainingP50Sum: number;
   wipVisitsRemainingP80Sum: number;
+  unassignedPatientNames?: string[];
 }
 
 interface AggregateData {
@@ -32,9 +33,12 @@ function formatShortDate(iso: string): string {
 }
 
 function doctorDisplayName(doc: DoctorWipForecast): string {
-  if (doc.providerName) return doc.providerName;
-  if (doc.providerEmail) return doc.providerEmail.split('@')[0];
-  return 'Nem hozzárendelt';
+  if (doc.providerId != null) {
+    if (doc.providerName) return doc.providerName;
+    if (doc.providerEmail) return doc.providerEmail.split('@')[0];
+    return 'Ismeretlen orvos';
+  }
+  return 'Nincs hozzárendelt orvos';
 }
 
 export function WipForecastWidget() {
@@ -81,6 +85,19 @@ export function WipForecastWidget() {
                     <span className="text-sm font-semibold text-gray-900 truncate">{doctorDisplayName(doc)}</span>
                     <span className="ml-auto text-xs text-gray-500 whitespace-nowrap">{doc.wipCount} epizód</span>
                   </div>
+                  {doc.providerId === null && (
+                    <div className="mb-2 text-xs text-gray-800">
+                      {doc.unassignedPatientNames && doc.unassignedPatientNames.length > 0 ? (
+                        <ul className="space-y-0.5 pl-1 list-disc list-inside marker:text-medical-primary">
+                          {doc.unassignedPatientNames.map((nev) => (
+                            <li key={nev}>{nev}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-amber-800/90">A betegnév nincs kitöltve ezeknél a rekordoknál.</p>
+                      )}
+                    </div>
+                  )}
                   <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
                     <div>
                       <span className="text-gray-500">Kifutás: </span>

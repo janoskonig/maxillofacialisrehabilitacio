@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
-import { WIP_STAGE_CODES } from '@/lib/wip-stage';
+import { prostheticWorkloadStagesInSql } from '@/lib/wip-stage';
 import type { IntakeRecommendationResponse } from '@/lib/forecast-types';
+import { computeDoctorWorkloadScore } from '@/lib/doctor-clinical-target';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,12 +17,14 @@ export const GET = authedHandler(async (req, { auth }) => {
   const horizonEnd = new Date();
   horizonEnd.setDate(horizonEnd.getDate() + horizonDays);
 
+  const prostheticStagesIn = prostheticWorkloadStagesInSql();
+
   const EXCLUDED_NAME_PATTERNS = ['Déri', 'Hermann', 'Kádár', 'Kivovics', 'Pótlár'];
   const excludeClause = EXCLUDED_NAME_PATTERNS.map((_, i) => `doktor_neve NOT ILIKE $${i + 1}`).join(' AND ');
   const excludeParams = EXCLUDED_NAME_PATTERNS.map((n) => `%${n}%`);
 
   const doctorsResult = await pool.query(
-    `SELECT id FROM users
+    `SELECT id, doktor_neve, email FROM users
      WHERE active = true AND role IN ('fogpótlástanász', 'admin')
      AND doktor_neve IS NOT NULL AND doktor_neve != ''
      AND ${excludeClause}
@@ -38,12 +41,21 @@ export const GET = authedHandler(async (req, { auth }) => {
       `SELECT ats.user_id,
               COALESCE(SUM(COALESCE(ats.duration_minutes, 30)), 0)::int as available_minutes,
               COALESCE(SUM(CASE WHEN a.id IS NOT NULL AND (a.appointment_status IS NULL OR a.appointment_status = 'completed') AND a.start_time > CURRENT_TIMESTAMP
-                AND (a.hold_expires_at IS NULL OR a.hold_expires_at <= CURRENT_TIMESTAMP) THEN COALESCE(a.duration_minutes, 30) ELSE 0 END), 0)::int as booked_minutes,
-              COALESCE(SUM(CASE WHEN a.id IS NOT NULL AND a.hold_expires_at IS NOT NULL AND a.hold_expires_at > CURRENT_TIMESTAMP THEN COALESCE(a.duration_minutes, 30) ELSE 0 END), 0)::int as held_minutes
+                AND (a.hold_expires_at IS NULL OR a.hold_expires_at <= CURRENT_TIMESTAMP)
+                AND a.episode_id IS NOT NULL AND se_ep.stage_code IN (${prostheticStagesIn})
+                THEN COALESCE(a.duration_minutes, 30) ELSE 0 END), 0)::int as booked_minutes,
+              COALESCE(SUM(CASE WHEN a.id IS NOT NULL AND a.hold_expires_at IS NOT NULL AND a.hold_expires_at > CURRENT_TIMESTAMP
+                AND a.episode_id IS NOT NULL AND se_ep.stage_code IN (${prostheticStagesIn})
+                THEN COALESCE(a.duration_minutes, 30) ELSE 0 END), 0)::int as held_minutes
        FROM available_time_slots ats
        LEFT JOIN appointments a ON a.time_slot_id = ats.id
+       LEFT JOIN (
+         SELECT DISTINCT ON (episode_id) episode_id, stage_code
+         FROM stage_events ORDER BY episode_id, at DESC
+       ) se_ep ON se_ep.episode_id = a.episode_id
        WHERE ats.user_id = ANY($1) AND ats.start_time >= CURRENT_TIMESTAMP AND ats.start_time <= $2
          AND (ats.state = 'free' OR ats.state = 'booked' OR ats.state = 'held')
+         AND (ats.slot_purpose IS NULL OR ats.slot_purpose IN ('work', 'flexible'))
        GROUP BY ats.user_id`,
       [doctorIds, horizonEnd]
     ),
@@ -52,9 +64,15 @@ export const GET = authedHandler(async (req, { auth }) => {
               COALESCE(SUM(COALESCE(a.duration_minutes, 30)), 0)::int as booked
        FROM appointments a
        JOIN available_time_slots ats ON a.time_slot_id = ats.id
+       LEFT JOIN (
+         SELECT DISTINCT ON (episode_id) episode_id, stage_code
+         FROM stage_events ORDER BY episode_id, at DESC
+       ) se_ep ON se_ep.episode_id = a.episode_id
        WHERE ats.user_id = ANY($1) AND a.start_time > CURRENT_TIMESTAMP AND a.start_time <= $2
          AND (a.appointment_status IS NULL OR a.appointment_status = 'completed')
          AND (a.hold_expires_at IS NULL OR a.hold_expires_at <= CURRENT_TIMESTAMP)
+         AND a.episode_id IS NOT NULL AND se_ep.stage_code IN (${prostheticStagesIn})
+         AND (ats.slot_purpose IS NULL OR ats.slot_purpose IN ('work', 'flexible'))
        GROUP BY ats.user_id`,
       [doctorIds, horizonEnd]
     ),
@@ -63,16 +81,21 @@ export const GET = authedHandler(async (req, { auth }) => {
        FROM patient_episodes pe
        LEFT JOIN (SELECT DISTINCT ON (episode_id) episode_id, stage_code FROM stage_events ORDER BY episode_id, at DESC) se ON pe.id = se.episode_id
        LEFT JOIN episode_care_team ect ON pe.id = ect.episode_id AND ect.is_primary = true
-       WHERE pe.status = 'open' AND (se.stage_code IS NULL OR se.stage_code IN (${WIP_STAGE_CODES.map((c) => `'${c}'`).join(',')}))
+       WHERE pe.status = 'open' AND se.stage_code IN (${prostheticStagesIn})
          AND (pe.assigned_provider_id = ANY($1) OR ect.user_id = ANY($1))
        GROUP BY COALESCE(pe.assigned_provider_id, ect.user_id)`,
       [doctorIds]
     ),
     pool.query(
-      `SELECT provider_id as user_id, COUNT(*)::int as cnt
-       FROM episode_next_step_cache
-       WHERE provider_id = ANY($1) AND status = 'ready'
-       GROUP BY provider_id`,
+      `SELECT enc.provider_id as user_id, COUNT(*)::int as cnt
+       FROM episode_next_step_cache enc
+       JOIN patient_episodes pe ON pe.id = enc.episode_id
+       LEFT JOIN (
+         SELECT DISTINCT ON (episode_id) episode_id, stage_code
+         FROM stage_events ORDER BY episode_id, at DESC
+       ) se ON pe.id = se.episode_id
+       WHERE enc.provider_id = ANY($1) AND enc.status = 'ready' AND se.stage_code IN (${prostheticStagesIn})
+       GROUP BY enc.provider_id`,
       [doctorIds]
     ),
   ]);
@@ -94,24 +117,28 @@ export const GET = authedHandler(async (req, { auth }) => {
     const heldMinutes = slot?.held_minutes ?? 0;
     const wipCount = wipMap.get(doc.id) ?? 0;
     const worklistCount = worklistMap.get(doc.id) ?? 0;
+    const name = doc.doktor_neve || doc.email;
 
-    const utilization = availableMinutes > 0 ? bookedMinutes / availableMinutes : 0;
-    const holdPressure = availableMinutes > 0 ? heldMinutes / availableMinutes : 0;
-    const pipelineNorm = availableMinutes > 0 ? Math.min(1.5, (wipCount + worklistCount) * 30 / availableMinutes) : 0;
-    const raw = 0.7 * utilization + 0.1 * holdPressure + 0.2 * pipelineNorm;
-    const score = Math.round(100 * Math.min(raw, 1.5) / 1.5);
+    const { busynessScore: score } = computeDoctorWorkloadScore({
+      doktorNeve: name,
+      horizonDays,
+      bookedMinutes,
+      heldMinutes,
+      wipCount,
+      worklistCount,
+      availableMinutes,
+    });
 
     if (score > busynessScore) busynessScore = score;
     if (score >= 90) nearCriticalIfNewStarts = true;
     if (availableMinutes === 0 && (wipCount + worklistCount) > 0) nearCriticalIfNewStarts = true;
   }
 
-  const wipStageList = WIP_STAGE_CODES.map((c) => `'${c}'`).join(',');
   const [wipResult, forecastResult, stg0Result] = await Promise.all([
     pool.query(
       `SELECT pe.id FROM patient_episodes pe
        LEFT JOIN (SELECT DISTINCT ON (episode_id) episode_id, stage_code FROM stage_events ORDER BY episode_id, at DESC) se ON pe.id = se.episode_id
-       WHERE pe.status = 'open' AND (se.stage_code IS NULL OR se.stage_code IN (${wipStageList}))`
+       WHERE pe.status = 'open' AND se.stage_code IN (${prostheticStagesIn})`
     ),
     pool.query(
       `SELECT MAX(efc.completion_end_p80) as "wipP80Max"
@@ -119,7 +146,7 @@ export const GET = authedHandler(async (req, { auth }) => {
        JOIN patient_episodes pe ON pe.id = efc.episode_id
        LEFT JOIN (SELECT DISTINCT ON (episode_id) episode_id, stage_code FROM stage_events ORDER BY episode_id, at DESC) se ON pe.id = se.episode_id
        WHERE pe.status = 'open' AND efc.status = 'ready'
-       AND (se.stage_code IS NULL OR se.stage_code IN (${wipStageList}))`
+       AND se.stage_code IN (${prostheticStagesIn})`
     ),
     pool.query(
       `SELECT COUNT(*)::int as cnt FROM patient_episodes pe
@@ -171,7 +198,7 @@ export const GET = authedHandler(async (req, { auth }) => {
     meta: {
       serverNow: serverNow.toISOString(),
       fetchedAt: fetchedAt.toISOString(),
-      policyVersion: 1,
+      policyVersion: 3,
     },
   };
 
