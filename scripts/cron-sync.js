@@ -196,8 +196,8 @@ async function callEndpoint(path, label) {
       );
     }
 
-    // Admin notification digest: one grouped email per day (types as sections). Fires at 06:45 Europe/Budapest.
-    if (hour === 6 && minute === 45) {
+    // Admin notification digest: one grouped email per day (types as sections). Fires at 07:00 Europe/Budapest.
+    if (hour === 7 && minute === 0) {
       await callEndpoint('/api/admin/daily-summary', 'Admin daily notification digest');
     }
 
