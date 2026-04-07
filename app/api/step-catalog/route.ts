@@ -5,6 +5,7 @@ import { getCached, setCache, CATALOG_TTL } from '@/lib/catalog-cache';
 
 export const dynamic = 'force-dynamic';
 
+/** In-memory cache key; rows come from work_phase_catalog (API path kept as /api/step-catalog). */
 const CACHE_KEY = 'work-phase-catalog';
 
 export const GET = roleHandler(['admin', 'fogpótlástanász'], async (req, { auth }) => {

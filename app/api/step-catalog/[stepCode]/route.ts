@@ -4,13 +4,15 @@ import { roleHandler } from '@/lib/api/route-handler';
 import { stepCatalogPatchSchema } from '@/lib/admin-process-schemas';
 import { invalidateStepLabelCache } from '@/lib/step-labels';
 import { invalidateCache } from '@/lib/catalog-cache';
+import { invalidateUnmappedCache } from '@/lib/step-catalog-cache';
 
 const STEP_CODE_REGEX = /^[a-z0-9_]+$/;
 
 export const dynamic = 'force-dynamic';
 
 /**
- * PATCH /api/step-catalog/[stepCode] — update step label. Cache clear after.
+ * PATCH /api/step-catalog/[stepCode] — update catalog row (work_phase_catalog; legacy step_catalog synced).
+ * Cache clear after.
  * Auth: admin + fogpótlástanász
  */
 export const PATCH = roleHandler(['admin', 'fogpótlástanász'], async (req, { auth, params }) => {
@@ -74,8 +76,22 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász'], async (req, { 
     values
   );
 
+  await pool.query(
+    `INSERT INTO step_catalog (step_code, label_hu, label_en, is_active, updated_at, updated_by)
+     SELECT work_phase_code, label_hu, label_en, is_active, updated_at, updated_by
+     FROM work_phase_catalog WHERE work_phase_code = $1
+     ON CONFLICT (step_code) DO UPDATE SET
+       label_hu = EXCLUDED.label_hu,
+       label_en = EXCLUDED.label_en,
+       is_active = EXCLUDED.is_active,
+       updated_at = EXCLUDED.updated_at,
+       updated_by = EXCLUDED.updated_by`,
+    [stepCode]
+  );
+
   invalidateCache('work-phase-catalog');
   invalidateStepLabelCache();
+  invalidateUnmappedCache();
 
   const afterResult = await pool.query(
     `SELECT work_phase_code as "stepCode", label_hu as "labelHu", label_en as "labelEn",
