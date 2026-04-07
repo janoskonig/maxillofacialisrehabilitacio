@@ -51,12 +51,12 @@ export default function KezelesiUtUtmutatoPage() {
                 Megtörténik a vizsgálat. Utána készül a kezelési terv. A kezelési tervhez tartozik egy <strong>séma</strong> (kezelési út): pl. lenyomatvétel → próbabehelyezés → átadás → kontrollok. Ezt választod ki a rendszerben (care pathway).
               </p>
               <p className="mt-2">
-                A kezelési terv részlépéssorozata a <strong>care_pathways.work_phases_json</strong> sémájából származik (az epizódhoz rendelt kezelési út); a régi <code>steps_json</code> csak visszafelé kompatibilitásra maradt. Nem generikus stage→step mapping: a pathway determinálja a lépéseket. A stage_steps tábla megszűnt.
+                A kezelési terv <strong>munkafázis</strong>-sorozata a <strong>care_pathways.work_phases_json</strong> sémájából származik (az epizódhoz rendelt kezelési út); a régi <code>steps_json</code> csak visszafelé kompatibilitásra maradt. Nem generikus stage→step leképezés: a pathway determinálja a munkafázisokat. A stage_steps tábla megszűnt.
               </p>
 
               <h3 className="text-lg font-medium text-gray-800 mt-4 mb-2">1.3 Lefoglalom az első kezelési időpontot (pl. lenyomatvétel)</h3>
               <p>
-                A Dashboard → Worklist fülön megjelenik a beteg, következő lépés: lenyomatvétel. Kattintasz „Következő lépés foglalása” → kiválasztod az időpontot → kész. A betegnek van egy jövőbeli work időpontja.
+                A Dashboard → Worklist fülön megjelenik a beteg, következő munkafázis: lenyomatvétel. Kattintasz „Következő lépés foglalása” (gombfelirat) → kiválasztod az időpontot → kész. A betegnek van egy jövőbeli work időpontja.
               </p>
 
               <h3 className="text-lg font-medium text-gray-800 mt-4 mb-2">1.4 A beteg még ott van — következő időpontot szeretné egyeztetni</h3>
@@ -64,7 +64,7 @@ export default function KezelesiUtUtmutatoPage() {
                 A beteg a rendelőben van, és szeretné a következő időpontot is (pl. próbabehelyezésre). <strong>Egy aktív kezelésben lévő betegnek egyszerre legfeljebb egy jövőbeli munkafázisú időpontja lehet.</strong> Tehát most nem foglalhatsz neki rögtön a próbabehelyezésre is — előbb le kell zajlania a lenyomatvételnek.
               </p>
               <p className="mt-2">
-                <strong>Mit csinálj:</strong> A lenyomatvétel napján, amikor megcsináltátok, a rendszer frissül — a következő lépés (próbabehelyezés) lesz a worklisten. Akkor foglalhatod a következő időpontot. Ha azonban klinikai indok miatt már most kell mindkettőt lefoglalni, admin vagy beutaló orvos <strong>override</strong>-tal megteheti (min. 10 karakteres indoklás, audit alatt).
+                <strong>Mit csinálj:</strong> A lenyomatvétel napján, amikor megcsináltátok, a rendszer frissül — a következő munkafázis (próbabehelyezés) lesz a worklisten. Akkor foglalhatod a következő időpontot. Ha azonban klinikai indok miatt már most kell mindkettőt lefoglalni, admin vagy beutaló orvos <strong>override</strong>-tal megteheti (min. 10 karakteres indoklás, audit alatt).
               </p>
             </section>
 
@@ -85,10 +85,10 @@ export default function KezelesiUtUtmutatoPage() {
             <section>
               <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">3. Rövid fogalomtár</h2>
               <ul className="space-y-2">
-                <li><strong>Worklist</strong> — következő lépést váró betegek listája. Innen foglalsz.</li>
+                <li><strong>Worklist</strong> — következő munkafázist váró betegek listája. Innen foglalsz.</li>
                 <li><strong>One-hard-next</strong> — egyszerre max 1 jövőbeli munkafázisú időpont / beteg (kivéve átadásnál: 2).</li>
                 <li><strong>Override</strong> — admin/beutaló orvos felülírja a szabályt, indoklás kötelező.</li>
-                <li><strong>Blokk</strong> — pl. laborra várunk: addig nem foglalható következő lépés.</li>
+                <li><strong>Blokk</strong> — pl. laborra várunk: addig nem foglalható a következő munkafázis.</li>
               </ul>
             </section>
 
@@ -217,7 +217,7 @@ export default function KezelesiUtUtmutatoPage() {
               <p>Az ETA számítás három lehetséges adatforrásból származik, prioritás szerint:</p>
               <ol className="list-decimal pl-6 space-y-1 mt-2">
                 <li><strong>Analytics (történeti):</strong> korábbi hasonló kezelések tényleges időtartamaiból számol.</li>
-                <li><strong>Pathway steps:</strong> a kezelési út (care pathway) lépéseinek becsült időtartamából.</li>
+                <li><strong>Pathway munkafázisok:</strong> a kezelési út (care pathway) munkafázisainak becsült időtartamából.</li>
                 <li><strong>Fallback:</strong> ha nincs elég adat, fix alapértelmezett értékeket használ.</li>
               </ol>
 
