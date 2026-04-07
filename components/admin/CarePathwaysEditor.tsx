@@ -92,7 +92,7 @@ function StepLabelInput({
     <div ref={wrapperRef} className="relative flex-1 min-w-0">
       <input
         type="text"
-        placeholder="Lépés neve"
+        placeholder="Munkafázis megnevezése"
         value={value}
         onChange={(e) => {
           onChange(e.target.value);
@@ -396,7 +396,7 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
             <tr>
               <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Név</th>
               <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Reason / Típus</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Lépések</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Munkafázisok</th>
               <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Epizódok</th>
               <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Műveletek</th>
             </tr>
@@ -491,19 +491,19 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
 
           <div>
             <div className="flex justify-between items-center mb-2">
-              <label className="block text-sm font-medium text-gray-700">Klinikai lépések</label>
+              <label className="block text-sm font-medium text-gray-700">Klinikai munkafázisok</label>
               <button
                 onClick={addStep}
                 className="px-2 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
               >
-                + Lépés
+                + Munkafázis
               </button>
             </div>
 
             <div className="space-y-1 mb-1">
               <div className="flex gap-2 items-center px-2 text-xs text-gray-500 font-medium">
                 <span className="w-6 text-center">#</span>
-                <span className="flex-1 min-w-0">Lépés neve</span>
+                <span className="flex-1 min-w-0">Megnevezés</span>
                 <span className="w-28 text-center">Típus</span>
                 <span className="w-16 text-center">Perc</span>
                 <span className="w-20 text-center">Nap</span>
@@ -546,7 +546,7 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
                     value={step.default_days_offset ?? ''}
                     onChange={(e) => updateStep(idx, 'default_days_offset', e.target.value ? parseInt(e.target.value, 10) : null)}
                     className="form-input text-sm w-20 shrink-0"
-                    title="Napok az előző lépés után"
+                    title="Napok az előző munkafázis után"
                   />
                   <label className="flex items-center gap-1 text-sm shrink-0 w-20">
                     <input
@@ -585,7 +585,7 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
               ))}
               {formSteps.length === 0 && (
                 <p className="text-sm text-gray-400 italic px-2 py-4 text-center">
-                  Nincs lépés. Kattintson a &quot;+ Lépés&quot; gombra.
+                  Nincs munkafázis. Kattintson a &quot;+ Munkafázis&quot; gombra.
                 </p>
               )}
             </div>
