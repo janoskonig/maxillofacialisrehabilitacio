@@ -24,6 +24,7 @@ import type {
 import {
   type ConsiliumPrepCommentSnapshot,
   consiliumPresentationDiagnosisText,
+  consiliumPresentationOncologyRows,
   formatConsiliumHuDateTime,
   prepCommentsGroupedByKey,
 } from '@/lib/consilium-view-helpers';
@@ -40,6 +41,44 @@ function flattenCareTimelineNewestFirst(
   }
   rows.sort((a, b) => new Date(b.st.at).getTime() - new Date(a.st.at).getTime());
   return rows;
+}
+
+function ohipImpactLabel(score: number): string {
+  if (score <= 8) return 'alacsony';
+  if (score <= 18) return 'enyhe-közepes';
+  if (score <= 28) return 'közepes';
+  if (score <= 42) return 'jelentős';
+  return 'nagyon jelentős';
+}
+
+function topOhipDomainsForTimepoint(
+  row: PatientPresentationSummary['ohip14Summary'][keyof PatientPresentationSummary['ohip14Summary']] | undefined,
+): Array<{ label: string; score: number }> {
+  if (!row) return [];
+  const labels = {
+    functionalLimitationScore: 'Funkcionális korlátozottság',
+    physicalPainScore: 'Fizikai fájdalom',
+    psychologicalDiscomfortScore: 'Pszichés diszkomfort',
+    physicalDisabilityScore: 'Fizikai akadályozottság',
+    psychologicalDisabilityScore: 'Pszichés akadályozottság',
+    socialDisabilityScore: 'Szociális akadályozottság',
+    handicapScore: 'Hátrányérzet',
+  } as const;
+  type DomainKey = keyof typeof labels;
+  const domains: Record<DomainKey, number | null> = {
+    functionalLimitationScore: row.functionalLimitationScore,
+    physicalPainScore: row.physicalPainScore,
+    psychologicalDiscomfortScore: row.psychologicalDiscomfortScore,
+    physicalDisabilityScore: row.physicalDisabilityScore,
+    psychologicalDisabilityScore: row.psychologicalDisabilityScore,
+    socialDisabilityScore: row.socialDisabilityScore,
+    handicapScore: row.handicapScore,
+  };
+  return (Object.entries(domains) as Array<[DomainKey, number | null]>)
+    .filter(([, value]) => value != null)
+    .sort((a, b) => (b[1] as number) - (a[1] as number))
+    .slice(0, 3)
+    .map(([key, value]) => ({ label: labels[key], score: value as number }));
 }
 
 type PresentationItem = {
@@ -755,6 +794,45 @@ export default function ConsiliumPresentPage() {
                       <div>
                         <p className="text-xs text-white/50 mb-0.5">TNM</p>
                         <p className="text-sm md:text-base break-words">{ps.tnmStaging || '—'}</p>
+                      </div>
+                      {consiliumPresentationOncologyRows(ps).map((row) => (
+                        <div key={row.label}>
+                          <p className="text-xs text-white/50 mb-0.5">{row.label}</p>
+                          <p className="text-sm md:text-base whitespace-pre-wrap break-words leading-snug">
+                            {row.value || '—'}
+                          </p>
+                        </div>
+                      ))}
+                      <div className="pt-2 border-t border-white/10">
+                        <p className="text-xs text-white/50 mb-2">OHIP-14 (T0-T3)</p>
+                        <div className="flex gap-2 overflow-x-auto pb-1">
+                          {(['T0', 'T1', 'T2', 'T3'] as const).map((tp) => {
+                            const row = ps.ohip14Summary?.[tp];
+                            const top3 = topOhipDomainsForTimepoint(row);
+                            return (
+                              <div key={tp} className="rounded-md border border-white/10 bg-black/20 p-2 min-w-[180px] flex-1">
+                                <p className="text-[11px] font-semibold text-white/75">{tp}</p>
+                                <p className="text-sm md:text-base font-medium">
+                                  {row?.totalScore != null ? `${row.totalScore}/56` : '—'}
+                                </p>
+                                <p className="text-[11px] text-white/50">
+                                  {row?.totalScore != null ? ohipImpactLabel(row.totalScore) : 'nincs kitöltés'}
+                                </p>
+                                <p className="text-[10px] text-white/40 mt-0.5">
+                                  {row?.completedAt ? formatConsiliumHuDateTime(row.completedAt) : '—'}
+                                </p>
+                                <p className="text-[10px] text-white/55 mt-1">Legrosszabb 3 domén:</p>
+                                {top3.length > 0 ? (
+                                  <p className="text-[10px] text-white/75 leading-snug">
+                                    {top3.map((x) => `${x.label} (${x.score}/8)`).join(' · ')}
+                                  </p>
+                                ) : (
+                                  <p className="text-[10px] text-white/40">—</p>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
                   </section>

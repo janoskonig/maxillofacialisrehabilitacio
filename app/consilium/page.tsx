@@ -875,27 +875,16 @@ export default function ConsiliumPage() {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error('prep_link_failed');
         const path = typeof data.prepPath === 'string' ? data.prepPath : '';
-        if (!path) throw new Error('prep_path_missing');
-        const fullUrl = `${window.location.origin}${path}`;
-        const exp =
-          typeof data.expiresAt === 'string'
-            ? new Date(data.expiresAt).toLocaleString('hu-HU')
-            : '';
+        const prepUrl = typeof data.prepUrl === 'string' ? data.prepUrl : '';
+        if (!path && !prepUrl) throw new Error('prep_path_missing');
+        const fullUrl = prepUrl || `${window.location.origin}${path}`;
         try {
           await navigator.clipboard.writeText(fullUrl);
-          showToast(
-            exp ? `Előkészítő link a vágólapon (lejárat: ${exp})` : 'Előkészítő link a vágólapon',
-            'success',
-          );
+          showToast('Előkészítő link a vágólapon', 'success');
         } catch {
           // Bizonyos böngészők / környezetek tiltják a vágólap API-t, ettől még a link létrejött.
           window.prompt('A link elkészült, de a másolás nem sikerült. Másold ki kézzel:', fullUrl);
-          showToast(
-            exp
-              ? `Előkészítő link elkészült (lejárat: ${exp}), de automatikus másolás sikertelen`
-              : 'Előkészítő link elkészült, de automatikus másolás sikertelen',
-            'success',
-          );
+          showToast('Előkészítő link elkészült, de automatikus másolás sikertelen', 'success');
         }
       } catch {
         showToast('Előkészítő link létrehozása sikertelen', 'error');

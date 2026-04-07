@@ -86,6 +86,28 @@ export type PatientPresentationSummary = {
   beutaloOrvos: string | null;
   beutaloIntezmeny: string | null;
   tnmStaging: string | null;
+  primerMutetLeirasa: string | null;
+  radioterapia: boolean;
+  radioterapiaDozis: string | null;
+  radioterapiaDatumIntervallum: string | null;
+  chemoterapia: boolean;
+  chemoterapiaLeiras: string | null;
+  ohip14Summary: Partial<
+    Record<
+      'T0' | 'T1' | 'T2' | 'T3',
+      {
+        totalScore: number | null;
+        completedAt: string | null;
+        functionalLimitationScore: number | null;
+        physicalPainScore: number | null;
+        psychologicalDiscomfortScore: number | null;
+        physicalDisabilityScore: number | null;
+        psychologicalDisabilityScore: number | null;
+        socialDisabilityScore: number | null;
+        handicapScore: number | null;
+      }
+    >
+  >;
   episodeLabel: string | null;
   stage: {
     stageCode: string | null;
@@ -500,6 +522,67 @@ async function latestStageSummary(patientId: string): Promise<{
   return { stageCode: null, stageLabel: null, stageDate: null, notes: null, episodeId: null };
 }
 
+async function loadPatientOhip14Summary(
+  patientId: string,
+): Promise<PatientPresentationSummary['ohip14Summary']> {
+  const pool = getDbPool();
+  try {
+    const hasTable = await pool.query(
+      `SELECT 1
+       FROM information_schema.tables
+       WHERE table_schema = 'public' AND table_name = 'ohip14_responses'`,
+    );
+    if (hasTable.rows.length === 0) return {};
+    const result = await pool.query<{
+      timepoint: 'T0' | 'T1' | 'T2' | 'T3';
+      totalScore: number | null;
+      completedAt: Date | null;
+      functionalLimitationScore: number | null;
+      physicalPainScore: number | null;
+      psychologicalDiscomfortScore: number | null;
+      physicalDisabilityScore: number | null;
+      psychologicalDisabilityScore: number | null;
+      socialDisabilityScore: number | null;
+      handicapScore: number | null;
+    }>(
+      `SELECT DISTINCT ON (timepoint)
+         timepoint,
+         total_score as "totalScore",
+         completed_at as "completedAt",
+         functional_limitation_score as "functionalLimitationScore",
+         physical_pain_score as "physicalPainScore",
+         psychological_discomfort_score as "psychologicalDiscomfortScore",
+         physical_disability_score as "physicalDisabilityScore",
+         psychological_disability_score as "psychologicalDisabilityScore",
+         social_disability_score as "socialDisabilityScore",
+         handicap_score as "handicapScore"
+       FROM ohip14_responses
+       WHERE patient_id = $1::uuid
+         AND timepoint IN ('T0', 'T1', 'T2', 'T3')
+       ORDER BY timepoint, completed_at DESC NULLS LAST, created_at DESC`,
+      [patientId],
+    );
+    const out: PatientPresentationSummary['ohip14Summary'] = {};
+    for (const row of result.rows) {
+      out[row.timepoint] = {
+        totalScore: row.totalScore ?? null,
+        completedAt: row.completedAt instanceof Date ? row.completedAt.toISOString() : null,
+        functionalLimitationScore: row.functionalLimitationScore ?? null,
+        physicalPainScore: row.physicalPainScore ?? null,
+        psychologicalDiscomfortScore: row.psychologicalDiscomfortScore ?? null,
+        physicalDisabilityScore: row.physicalDisabilityScore ?? null,
+        psychologicalDisabilityScore: row.psychologicalDisabilityScore ?? null,
+        socialDisabilityScore: row.socialDisabilityScore ?? null,
+        handicapScore: row.handicapScore ?? null,
+      };
+    }
+    return out;
+  } catch (e) {
+    logger.warn('[consilium-presentation] ohip14 summary failed', { patientId, error: String(e) });
+    return {};
+  }
+}
+
 async function mediaSummaryForPatient(patientId: string) {
   const pool = getDbPool();
   const imageClause = `mime_type IS NOT NULL AND mime_type ILIKE 'image/%'`;
@@ -594,6 +677,13 @@ async function buildConsiliumPresentationItemFromRow(
     beutaloOrvos: null,
     beutaloIntezmeny: null,
     tnmStaging: null,
+    primerMutetLeirasa: null,
+    radioterapia: false,
+    radioterapiaDozis: null,
+    radioterapiaDatumIntervallum: null,
+    chemoterapia: false,
+    chemoterapiaLeiras: null,
+    ohip14Summary: {},
     episodeLabel: null,
     stage: null,
     meglevoFogak: {},
@@ -616,6 +706,12 @@ async function buildConsiliumPresentationItemFromRow(
          pf.diagnozis,
          pf.bno,
          pf.tnm_staging as "tnmStaging",
+         pf.primer_mutet_leirasa as "primerMutetLeirasa",
+         pf.radioterapia as "radioterapia",
+         pf.radioterapia_dozis as "radioterapiaDozis",
+         pf.radioterapia_datum_intervallum as "radioterapiaDatumIntervallum",
+         pf.chemoterapia as "chemoterapia",
+         pf.chemoterapia_leiras as "chemoterapiaLeiras",
          pf.beutalo_orvos as "beutaloOrvos",
          pf.beutalo_intezmeny as "beutaloIntezmeny",
          pf.meglevo_fogak as "meglevoFogak",
@@ -629,9 +725,10 @@ async function buildConsiliumPresentationItemFromRow(
     if (p.rows.length > 0) {
       const rowP = p.rows[0];
       const birth = rowP.szuletesiDatum ? new Date(rowP.szuletesiDatum) : null;
-      const [stage, careTimeline] = await Promise.all([
+      const [stage, careTimeline, ohip14Summary] = await Promise.all([
         latestStageSummary(patientId),
         loadPatientCareTimeline(patientId),
+        loadPatientOhip14Summary(patientId),
       ]);
       const episodeLabel =
         careTimeline[0] != null
@@ -658,6 +755,13 @@ async function buildConsiliumPresentationItemFromRow(
         beutaloOrvos: rowP.beutaloOrvos ?? null,
         beutaloIntezmeny: rowP.beutaloIntezmeny ?? null,
         tnmStaging: rowP.tnmStaging ?? null,
+        primerMutetLeirasa: rowP.primerMutetLeirasa ?? null,
+        radioterapia: !!rowP.radioterapia,
+        radioterapiaDozis: rowP.radioterapiaDozis ?? null,
+        radioterapiaDatumIntervallum: rowP.radioterapiaDatumIntervallum ?? null,
+        chemoterapia: !!rowP.chemoterapia,
+        chemoterapiaLeiras: rowP.chemoterapiaLeiras ?? null,
+        ohip14Summary,
         episodeLabel,
         stage,
         meglevoFogak: fogRaw,

@@ -8,6 +8,8 @@ import type { ConsiliumPrepCommentSnapshot } from '@/lib/consilium-view-helpers'
 
 export const PREP_LINK_DEFAULT_EXPIRY_DAYS = 14;
 export const PREP_COMMENT_MAX_LENGTH = 4000;
+/** Gyakorlatban "nem lejáró" token dátum (amíg vissza nem vonják). */
+export const PREP_LINK_NO_EXPIRY_AT_ISO = '9999-12-31T23:59:59.999Z';
 
 export function hashConsiliumPrepToken(raw: string): string {
   return createHash('sha256').update(raw, 'utf8').digest('hex');
@@ -42,7 +44,6 @@ export async function resolvePrepTokenForUser(
      JOIN consilium_session_items i ON i.id = t.item_id AND i.session_id = t.session_id
      WHERE t.token_hash = $1
        AND t.revoked_at IS NULL
-       AND t.expires_at > NOW()
        AND btrim(coalesce(s.institution_id, '')) = btrim(coalesce($2::text, ''))`,
     [hash, userInstitutionId],
   );

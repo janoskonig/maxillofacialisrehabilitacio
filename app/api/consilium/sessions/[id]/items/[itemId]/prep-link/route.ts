@@ -6,12 +6,24 @@ import {
   createPrepLinkBodySchema,
   generateConsiliumPrepTokenRaw,
   hashConsiliumPrepToken,
-  PREP_LINK_DEFAULT_EXPIRY_DAYS,
+  PREP_LINK_NO_EXPIRY_AT_ISO,
   revokePrepTokensForItem,
 } from '@/lib/consilium-prep-share';
 import { getScopedSessionOrThrow, getUserInstitution } from '@/lib/consilium';
 
 export const dynamic = 'force-dynamic';
+
+function resolvePublicBaseUrl(req: Request): string {
+  const envBase = (process.env.NEXT_PUBLIC_BASE_URL || '').trim();
+  if (envBase) return envBase.replace(/\/+$/, '');
+  const h = req.headers;
+  const xfHost = (h.get('x-forwarded-host') || '').trim();
+  const host = xfHost || (h.get('host') || '').trim();
+  const xfProto = (h.get('x-forwarded-proto') || '').trim();
+  const proto = xfProto || (host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : 'https');
+  if (host) return `${proto}://${host}`;
+  return 'https://rehabilitacios-protetika.hu';
+}
 
 export const POST = authedHandler(async (req, { auth, params }) => {
   const sessionId = params.id;
@@ -19,8 +31,8 @@ export const POST = authedHandler(async (req, { auth, params }) => {
   const institutionId = await getUserInstitution(auth);
   await getScopedSessionOrThrow(sessionId, institutionId);
 
-  const body = createPrepLinkBodySchema.safeParse(await req.json().catch(() => ({})));
-  const expiresInDays = body.success ? (body.data.expiresInDays ?? PREP_LINK_DEFAULT_EXPIRY_DAYS) : PREP_LINK_DEFAULT_EXPIRY_DAYS;
+  // Backward compatible: elfogadjuk a body-t, de az előkészítő link már nem jár le automatikusan.
+  createPrepLinkBodySchema.safeParse(await req.json().catch(() => ({})));
 
   const pool = getDbPool();
   const check = await pool.query(
@@ -33,8 +45,7 @@ export const POST = authedHandler(async (req, { auth, params }) => {
 
   const rawToken = generateConsiliumPrepTokenRaw();
   const tokenHash = hashConsiliumPrepToken(rawToken);
-  const expiresAt = new Date();
-  expiresAt.setUTCDate(expiresAt.getUTCDate() + expiresInDays);
+  const expiresAt = new Date(PREP_LINK_NO_EXPIRY_AT_ISO);
 
   const client = await pool.connect();
   try {
@@ -54,11 +65,13 @@ export const POST = authedHandler(async (req, { auth, params }) => {
   }
 
   const prepPath = `/consilium/prep/${encodeURIComponent(rawToken)}`;
+  const prepUrl = `${resolvePublicBaseUrl(req)}${prepPath}`;
   return NextResponse.json(
     {
       token: rawToken,
       expiresAt: expiresAt.toISOString(),
       prepPath,
+      prepUrl,
     },
     { status: 201 },
   );
