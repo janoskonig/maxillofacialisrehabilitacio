@@ -37,7 +37,9 @@ export interface PatientEpisode {
     carePathwayId: string;
     ordinal: number;
     pathwayName: string;
+    /** Legacy alias for workPhaseCount (episode_work_phases per pathway). */
     stepCount: number;
+    workPhaseCount: number;
     jaw?: 'felso' | 'also' | null;
   }>;
 }

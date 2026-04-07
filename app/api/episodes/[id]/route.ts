@@ -4,6 +4,7 @@ import { authedHandler, roleHandler } from '@/lib/api/route-handler';
 import { invalidateIntentsForEpisode } from '@/lib/intent-invalidation';
 import { createInitialSlotIntentsForEpisode } from '@/lib/episode-activation';
 import { normalizePathwayWorkPhaseArray } from '@/lib/pathway-work-phases-for-episode';
+import { mapEpisodePathwayRows, type EpisodePathwayApiRow } from '@/lib/map-episode-pathway-response';
 import { getCurrentSuggestion } from '@/lib/stage-suggestion-service';
 import { logger } from '@/lib/logger';
 
@@ -60,7 +61,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
 
   const currentRulesetVersion: number | null = rulesetRow.rows[0]?.version ?? null;
   const stageSuggestion = stageSuggestionResult;
-  const episodePathways = epPathsResult.rows;
+  const episodePathways = mapEpisodePathwayRows(epPathsResult.rows as EpisodePathwayApiRow[]);
 
   const episode = {
     id: row.id,
@@ -327,7 +328,10 @@ async function handleAddPathway(
 
     const epPathways = await pool.query(EPISODE_PATHWAYS_QUERY, [episodeId]);
 
-    return NextResponse.json({ episodePathways: epPathways.rows, added: true }, { status: 201 });
+    return NextResponse.json(
+      { episodePathways: mapEpisodePathwayRows(epPathways.rows as EpisodePathwayApiRow[]), added: true },
+      { status: 201 }
+    );
   } catch (txError) {
     await client.query('ROLLBACK');
     throw txError;
@@ -418,7 +422,10 @@ async function handleRemovePathway(
 
     const epPathways = await pool.query(EPISODE_PATHWAYS_QUERY, [episodeId]);
 
-    return NextResponse.json({ episodePathways: epPathways.rows, removed: true });
+    return NextResponse.json({
+      episodePathways: mapEpisodePathwayRows(epPathways.rows as EpisodePathwayApiRow[]),
+      removed: true,
+    });
   } catch (txError) {
     await client.query('ROLLBACK');
     throw txError;

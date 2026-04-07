@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
+import { mapEpisodePathwayRow, type EpisodePathwayApiRow } from '@/lib/map-episode-pathway-response';
 import { authedHandler, roleHandler } from '@/lib/api/route-handler';
 import type { PatientEpisode } from '@/lib/types';
 import { logActivity } from '@/lib/activity';
@@ -109,14 +110,9 @@ export const GET = authedHandler(async (req, { auth, params }) => {
         byEpisode.set(row.episode_id, arr);
       }
       for (const ep of episodes) {
-        ep.episodePathways = (byEpisode.get(ep.id) ?? []).map((r: Record<string, unknown>) => ({
-          id: r.id as string,
-          carePathwayId: r.carePathwayId as string,
-          ordinal: r.ordinal as number,
-          pathwayName: r.pathwayName as string,
-          stepCount: r.stepCount as number,
-          jaw: (r.jaw as "felso" | "also" | null) || null,
-        }));
+        ep.episodePathways = (byEpisode.get(ep.id) ?? []).map((r: Record<string, unknown>) =>
+          mapEpisodePathwayRow(r as unknown as EpisodePathwayApiRow)
+        );
       }
     }
   } catch {
