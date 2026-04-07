@@ -5,7 +5,8 @@
 
 import { getDbPool } from './db';
 import { computeStepWindow } from './step-window';
-import { slotPoolForStep, type PathwayStep } from './next-step-engine';
+import { slotPoolForStep, type PathwayWorkPhaseTemplate } from './next-step-engine';
+import { normalizePathwayWorkPhaseArray } from './pathway-work-phases-for-episode';
 
 const BUDAPEST_TZ = 'Europe/Budapest';
 
@@ -63,11 +64,11 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
     }
 
     // Multi-pathway: merge steps from all episode_pathways, fall back to legacy care_pathway_id
-    let steps: PathwayStep[] = [];
+    let steps: PathwayWorkPhaseTemplate[] = [];
     let pathwayHash = '';
     try {
       const multiPwRow = await pool.query(
-        `SELECT cp.steps_json
+        `SELECT cp.work_phases_json, cp.steps_json
          FROM episode_pathways ep
          JOIN care_pathways cp ON ep.care_pathway_id = cp.id
          WHERE ep.episode_id = $1 ORDER BY ep.ordinal`,
@@ -76,9 +77,12 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
       if (multiPwRow.rows.length > 0) {
         const allJson: unknown[] = [];
         for (const row of multiPwRow.rows) {
-          if (Array.isArray(row.steps_json)) {
-            steps.push(...(row.steps_json as PathwayStep[]));
-            allJson.push(row.steps_json);
+          const chunk =
+            normalizePathwayWorkPhaseArray(row.work_phases_json) ??
+            normalizePathwayWorkPhaseArray(row.steps_json);
+          if (chunk) {
+            steps.push(...chunk);
+            allJson.push(chunk);
           }
         }
         const hashRow = await pool.query(
@@ -92,7 +96,8 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
     }
     if (steps.length === 0) {
       const pathwayRow = await pool.query(
-        `SELECT cp.steps_json, encode(digest(cp.steps_json::text, 'sha256'), 'hex') as pathway_hash
+        `SELECT cp.work_phases_json, cp.steps_json,
+                encode(digest(COALESCE(cp.work_phases_json::text, cp.steps_json::text, '[]'), 'sha256'), 'hex') as pathway_hash
          FROM patient_episodes pe
          JOIN care_pathways cp ON pe.care_pathway_id = cp.id
          WHERE pe.id = $1`,
@@ -102,7 +107,11 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
         await pool.query('COMMIT');
         return { projected: 0, reason: 'NO_PATHWAY' };
       }
-      steps = pathwayRow.rows[0].steps_json as PathwayStep[];
+      const row = pathwayRow.rows[0];
+      steps =
+        normalizePathwayWorkPhaseArray(row.work_phases_json) ??
+        normalizePathwayWorkPhaseArray(row.steps_json) ??
+        [];
       pathwayHash = pathwayRow.rows[0].pathway_hash;
     }
 
@@ -112,9 +121,8 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
     }
     const openedAt = new Date(episodeRow.rows[0].opened_at);
 
-    // Build step_code → pathway metadata lookup
-    const pathwayByCode = new Map<string, PathwayStep>();
-    for (const s of steps) pathwayByCode.set(s.step_code, s);
+    const pathwayByCode = new Map<string, PathwayWorkPhaseTemplate>();
+    for (const s of steps) pathwayByCode.set(s.work_phase_code, s);
 
     // Appointment coverage: keyed by step_code (not step_seq) to avoid index mismatches
     const completedStepCodes = new Set<string>();
@@ -132,23 +140,30 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
     }
 
     // Episode steps: authoritative source for which steps exist, their order, and completion status
-    interface EsRow { step_code: string; step_seq: number; status: string; completed_at: Date | null; default_days_offset?: number | null; }
-    let episodeStepRows: EsRow[] | null = null;
+    interface EwpRow {
+      work_phase_code: string;
+      step_seq: number;
+      status: string;
+      completed_at: Date | null;
+      default_days_offset?: number | null;
+    }
+    let episodeWorkPhaseRows: EwpRow[] | null = null;
     try {
       const esResult = await pool.query(
-        `SELECT step_code, COALESCE(seq, pathway_order_index) as step_seq, status, completed_at, default_days_offset
-         FROM episode_steps WHERE episode_id = $1
+        `SELECT work_phase_code, COALESCE(seq, pathway_order_index) as step_seq, status, completed_at, default_days_offset
+         FROM episode_work_phases WHERE episode_id = $1
          ORDER BY COALESCE(seq, pathway_order_index)`,
         [episodeId]
       );
-      if (esResult.rows.length > 0) episodeStepRows = esResult.rows as EsRow[];
-    } catch { /* episode_steps may not exist or lack columns */ }
+      if (esResult.rows.length > 0) episodeWorkPhaseRows = esResult.rows as EwpRow[];
+    } catch {
+      /* table may not exist */
+    }
 
-    // Add completed/skipped episode_steps to completedStepCodes
-    if (episodeStepRows) {
-      for (const es of episodeStepRows) {
+    if (episodeWorkPhaseRows) {
+      for (const es of episodeWorkPhaseRows) {
         if (es.status === 'completed' || es.status === 'skipped') {
-          completedStepCodes.add(es.step_code);
+          completedStepCodes.add(es.work_phase_code);
           if (es.completed_at) {
             const t = new Date(es.completed_at);
             if (t > lastHardAnchor) lastHardAnchor = t;
@@ -179,17 +194,17 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
     }
     const projections: Projection[] = [];
 
-    // Use episode_steps when available (authoritative step list); fall back to pathway indices
+    // Use episode_work_phases when available (authoritative list); fall back to pathway indices
     const stepsToProject: Array<{ stepCode: string; stepSeq: number; offset: number; durationMinutes: number; pool: string }> = [];
 
-    if (episodeStepRows) {
-      for (const es of episodeStepRows) {
+    if (episodeWorkPhaseRows) {
+      for (const es of episodeWorkPhaseRows) {
         if (es.status !== 'pending' && es.status !== 'scheduled') continue;
-        if (completedStepCodes.has(es.step_code)) continue;
-        if (bookedStepCodes.has(es.step_code)) continue;
-        const pw = pathwayByCode.get(es.step_code);
+        if (completedStepCodes.has(es.work_phase_code)) continue;
+        if (bookedStepCodes.has(es.work_phase_code)) continue;
+        const pw = pathwayByCode.get(es.work_phase_code);
         stepsToProject.push({
-          stepCode: es.step_code,
+          stepCode: es.work_phase_code,
           stepSeq: es.step_seq,
           offset: (es.default_days_offset ?? pw?.default_days_offset) ?? 14,
           durationMinutes: pw?.duration_minutes ?? 30,
@@ -197,13 +212,12 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
         });
       }
     } else {
-      // Legacy: iterate over pathway indices
       for (let i = 0; i < steps.length; i++) {
         const step = steps[i];
-        if (completedStepCodes.has(step.step_code)) continue;
-        if (bookedStepCodes.has(step.step_code)) continue;
+        if (completedStepCodes.has(step.work_phase_code)) continue;
+        if (bookedStepCodes.has(step.work_phase_code)) continue;
         stepsToProject.push({
-          stepCode: step.step_code,
+          stepCode: step.work_phase_code,
           stepSeq: i,
           offset: step.default_days_offset ?? 14,
           durationMinutes: step.duration_minutes ?? 30,

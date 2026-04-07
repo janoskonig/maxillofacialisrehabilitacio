@@ -1,47 +1,13 @@
 /**
  * Episode activation: create initial slot_intents when episode is activated
  * (care_pathway_id + assigned_provider_id set).
- * Creates open slot_intents for next 2 work steps — pre-scheduling for governance.
+ * Creates open slot_intents for next 2 work phases — pre-scheduling for governance.
  */
 
 import { getDbPool } from './db';
-import type { PathwayStep } from './next-step-engine';
+import type { PathwayWorkPhaseTemplate } from './pathway-work-phases-for-episode';
+import { getPathwayWorkPhasesForEpisode } from './pathway-work-phases-for-episode';
 import { computeStepWindow } from './step-window';
-
-/** Get pathway steps for episode. Multi-pathway aware: merges all episode_pathways steps.
- *  Falls back to legacy care_pathway_id when episode_pathways absent. */
-async function getPathwaySteps(
-  pool: Awaited<ReturnType<typeof getDbPool>>,
-  episodeId: string
-): Promise<PathwayStep[] | null> {
-  try {
-    const multiRow = await pool.query(
-      `SELECT cp.steps_json FROM episode_pathways ep
-       JOIN care_pathways cp ON ep.care_pathway_id = cp.id
-       WHERE ep.episode_id = $1 ORDER BY ep.ordinal`,
-      [episodeId]
-    );
-    if (multiRow.rows.length > 0) {
-      const merged: PathwayStep[] = [];
-      for (const row of multiRow.rows) {
-        if (Array.isArray(row.steps_json)) merged.push(...(row.steps_json as PathwayStep[]));
-      }
-      return merged.length > 0 ? merged : null;
-    }
-  } catch {
-    // episode_pathways table might not exist yet
-  }
-
-  const r = await pool.query(
-    `SELECT cp.steps_json FROM patient_episodes pe
-     JOIN care_pathways cp ON pe.care_pathway_id = cp.id
-     WHERE pe.id = $1`,
-    [episodeId]
-  );
-  const stepsJson = r.rows[0]?.steps_json;
-  if (!stepsJson || !Array.isArray(stepsJson)) return null;
-  return stepsJson as PathwayStep[];
-}
 
 /** Get anchor date: last completed appointment or opened_at */
 async function getAnchor(
@@ -76,35 +42,35 @@ async function getCompletedCount(
 }
 
 /**
- * Create initial slot_intents for next 2 work steps when episode is activated.
+ * Create initial slot_intents for next 2 work phases when episode is activated.
  * Idempotent: uses UNIQUE(episode_id, step_code, step_seq) — skips if already exists.
+ * (DB column remains step_code; value is the work phase code string.)
  */
 export async function createInitialSlotIntentsForEpisode(episodeId: string): Promise<number> {
   const pool = getDbPool();
 
-  const [pathwaySteps, anchor, completedCount] = await Promise.all([
-    getPathwaySteps(pool, episodeId),
+  const [pathwayWorkPhases, anchor, completedCount] = await Promise.all([
+    getPathwayWorkPhasesForEpisode(pool, episodeId),
     getAnchor(pool, episodeId),
     getCompletedCount(pool, episodeId),
   ]);
 
-  if (!pathwaySteps || pathwaySteps.length === 0) return 0;
+  if (!pathwayWorkPhases || pathwayWorkPhases.length === 0) return 0;
 
-  // Find next 2 work steps: indices >= completedCount, pool='work'
-  const workSteps: { step: PathwayStep; stepSeq: number }[] = [];
-  for (let i = completedCount; i < pathwaySteps.length && workSteps.length < 2; i++) {
-    const step = pathwaySteps[i];
-    if (step.pool === 'work') {
-      workSteps.push({ step, stepSeq: i });
+  const workPhases: { phase: PathwayWorkPhaseTemplate; stepSeq: number }[] = [];
+  for (let i = completedCount; i < pathwayWorkPhases.length && workPhases.length < 2; i++) {
+    const phase = pathwayWorkPhases[i];
+    if (phase.pool === 'work') {
+      workPhases.push({ phase, stepSeq: i });
     }
   }
 
-  if (workSteps.length === 0) return 0;
+  if (workPhases.length === 0) return 0;
 
   let created = 0;
-  for (const { step, stepSeq } of workSteps) {
-    const offset = step.default_days_offset ?? 14;
-    const duration = step.duration_minutes ?? 30;
+  for (const { phase, stepSeq } of workPhases) {
+    const offset = phase.default_days_offset ?? 14;
+    const duration = phase.duration_minutes ?? 30;
     const { windowStart, windowEnd } = computeStepWindow(anchor, offset);
 
     try {
@@ -114,9 +80,9 @@ export async function createInitialSlotIntentsForEpisode(episodeId: string): Pro
          ON CONFLICT (episode_id, step_code, step_seq) DO NOTHING`,
         [
           episodeId,
-          step.step_code,
+          phase.work_phase_code,
           stepSeq,
-          step.pool,
+          phase.pool,
           duration,
           windowStart.toISOString(),
           windowEnd.toISOString(),
@@ -124,9 +90,8 @@ export async function createInitialSlotIntentsForEpisode(episodeId: string): Pro
       );
       if (result.rowCount && result.rowCount > 0) created++;
     } catch (e) {
-      // ON CONFLICT DO NOTHING handles duplicate; other errors propagate
       const err = e as { code?: string };
-      if (err?.code === '23505') continue; // unique_violation
+      if (err?.code === '23505') continue;
       throw e;
     }
   }

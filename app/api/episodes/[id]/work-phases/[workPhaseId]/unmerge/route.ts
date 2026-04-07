@@ -2,18 +2,18 @@ import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
-import { getFullStepQuery } from '@/lib/episode-step-select';
+import { getFullWorkPhaseQuery } from '@/lib/episode-work-phase-select';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * POST /api/episodes/:id/steps/:stepId/unmerge
+ * POST /api/episodes/:id/work-phases/:workPhaseId/unmerge
  * Unmerge: remove all steps merged into the given primary step,
  * making them independent steps again.
  */
 export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'], async (req, { auth, params }) => {
   const episodeId = params.id;
-  const stepId = params.stepId;
+  const workPhaseId = params.workPhaseId;
 
   const pool = getDbPool();
 
@@ -29,20 +29,22 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
   }
 
   const updated = await pool.query(
-    `UPDATE episode_steps SET merged_into_episode_step_id = NULL
-     WHERE merged_into_episode_step_id = $1 AND episode_id = $2
+    `UPDATE episode_work_phases SET merged_into_episode_work_phase_id = NULL
+     WHERE merged_into_episode_work_phase_id = $1 AND episode_id = $2
      RETURNING id`,
-    [stepId, episodeId]
+    [workPhaseId, episodeId]
   );
 
   if (updated.rows.length === 0) {
-    return NextResponse.json({ error: 'Nincs összevont lépés ehhez a fő lépéshez' }, { status: 404 });
+    return NextResponse.json({ error: 'Nincs összevont munkafázis ehhez a fő munkafázishoz' }, { status: 404 });
   }
 
   try {
     await emitSchedulingEvent('episode', episodeId, 'steps_unmerged');
-  } catch { /* non-blocking */ }
+  } catch {
+    /* non-blocking */
+  }
 
-  const allSteps = await getFullStepQuery(pool, episodeId);
-  return NextResponse.json({ steps: allSteps.rows });
+  const allPhases = await getFullWorkPhaseQuery(pool, episodeId);
+  return NextResponse.json({ workPhases: allPhases.rows });
 });

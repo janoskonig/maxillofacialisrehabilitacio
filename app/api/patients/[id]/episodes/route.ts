@@ -95,7 +95,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
       const epPathRows = await pool.query(
         `SELECT ep.id, ep.episode_id, ep.care_pathway_id as "carePathwayId", ep.ordinal,
                 ep.jaw, cp.name as "pathwayName",
-                (SELECT COUNT(*)::int FROM episode_steps es WHERE es.source_episode_pathway_id = ep.id) as "stepCount"
+                (SELECT COUNT(*)::int FROM episode_work_phases ewp WHERE ewp.source_episode_pathway_id = ep.id) as "stepCount"
          FROM episode_pathways ep
          JOIN care_pathways cp ON ep.care_pathway_id = cp.id
          WHERE ep.episode_id = ANY($1)

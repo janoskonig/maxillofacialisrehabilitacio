@@ -49,17 +49,16 @@ export const GET = authedHandler(async (req, { auth, params }) => {
     return NextResponse.json({ error: 'Epizód nem található' }, { status: 404 });
   }
 
-  // Fetch completed/skipped/scheduled steps from episode_steps
   const episodeStepsResult = await pool.query(
-    `SELECT es.step_code, es.seq, es.pathway_order_index, es.pool,
-            es.duration_minutes, es.status, es.completed_at, es.custom_label,
+    `SELECT ewp.work_phase_code, ewp.seq, ewp.pathway_order_index, ewp.pool,
+            ewp.duration_minutes, ewp.status, ewp.completed_at, ewp.custom_label,
             sc.label_hu,
             a.start_time as appointment_start
-     FROM episode_steps es
-     LEFT JOIN step_catalog sc ON es.step_code = sc.step_code AND sc.is_active = true
-     LEFT JOIN appointments a ON es.appointment_id = a.id
-     WHERE es.episode_id = $1
-     ORDER BY COALESCE(es.seq, es.pathway_order_index)`,
+     FROM episode_work_phases ewp
+     LEFT JOIN work_phase_catalog sc ON ewp.work_phase_code = sc.work_phase_code AND sc.is_active = true
+     LEFT JOIN appointments a ON ewp.appointment_id = a.id
+     WHERE ewp.episode_id = $1
+     ORDER BY COALESCE(ewp.seq, ewp.pathway_order_index)`,
     [episodeId]
   );
 
@@ -82,7 +81,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
 
   const pendingByCode = new Map<string, (typeof pendingResult)[number]>();
   for (const p of pendingResult) {
-    pendingByCode.set(p.step_code, p);
+    pendingByCode.set(p.work_phase_code, p);
   }
 
   const steps: ProjectedStep[] = [];
@@ -95,8 +94,8 @@ export const GET = authedHandler(async (req, { auth, params }) => {
   if (episodeStepsResult.rows.length > 0) {
     for (const row of episodeStepsResult.rows) {
       const status = row.status as 'completed' | 'scheduled' | 'pending' | 'skipped';
-      const label = row.custom_label || row.label_hu || row.step_code.replace(/_/g, ' ');
-      const projection = pendingByCode.get(row.step_code);
+      const label = row.custom_label || row.label_hu || row.work_phase_code.replace(/_/g, ' ');
+      const projection = pendingByCode.get(row.work_phase_code);
 
       let actualDate: string | null = null;
       let windowStart: string | null = null;
@@ -131,7 +130,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
       }
 
       steps.push({
-        stepCode: row.step_code,
+        stepCode: row.work_phase_code,
         label,
         seq: row.seq ?? row.pathway_order_index,
         pool: row.pool,
@@ -156,8 +155,8 @@ export const GET = authedHandler(async (req, { auth, params }) => {
       remainingCount++;
 
       steps.push({
-        stepCode: p.step_code,
-        label: p.label ?? p.step_code.replace(/_/g, ' '),
+        stepCode: p.work_phase_code,
+        label: p.label ?? p.work_phase_code.replace(/_/g, ' '),
         seq: p.stepSeq,
         pool: p.pool,
         durationMinutes: p.duration_minutes,

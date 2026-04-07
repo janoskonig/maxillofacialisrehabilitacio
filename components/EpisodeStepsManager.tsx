@@ -69,6 +69,38 @@ const JAW_SHORT: Record<string, string> = {
   also: 'alsó',
 };
 
+/** Map work-phase API row (camelCase) to local EpisodeStep shape (stepCode = work phase code). */
+function mapWorkPhaseApiToEpisodeStep(row: Record<string, unknown>): EpisodeStep {
+  const code = (row.workPhaseCode ?? row.stepCode) as string;
+  return {
+    id: String(row.id),
+    episodeId: String(row.episodeId),
+    stepCode: code,
+    pathwayOrderIndex: Number(row.pathwayOrderIndex),
+    pool: String(row.pool),
+    durationMinutes: Number(row.durationMinutes),
+    defaultDaysOffset: Number(row.defaultDaysOffset),
+    status: row.status as EpisodeStep['status'],
+    appointmentId: row.appointmentId != null ? String(row.appointmentId) : null,
+    createdAt: String(row.createdAt),
+    completedAt: row.completedAt != null ? String(row.completedAt) : null,
+    sourceEpisodePathwayId:
+      row.sourceEpisodePathwayId != null ? String(row.sourceEpisodePathwayId) : null,
+    seq: row.seq != null ? Number(row.seq) : null,
+    customLabel: row.customLabel != null ? String(row.customLabel) : null,
+    toothTreatmentId: row.toothTreatmentId != null ? String(row.toothTreatmentId) : null,
+    mergedIntoStepId:
+      row.mergedIntoWorkPhaseId != null ? String(row.mergedIntoWorkPhaseId) : null,
+    toothNumber: row.toothNumber != null ? Number(row.toothNumber) : null,
+    treatmentLabel: row.treatmentLabel != null ? String(row.treatmentLabel) : null,
+  };
+}
+
+function mapWorkPhasesResponse(rows: unknown[] | undefined): EpisodeStep[] {
+  if (!rows?.length) return [];
+  return rows.map((r) => mapWorkPhaseApiToEpisodeStep(r as Record<string, unknown>));
+}
+
 export interface EpisodeStepsManagerProps {
   episodeId: string;
   carePathwayId: string | null;
@@ -426,7 +458,7 @@ function TimingEditor({ step, saving, onCancel }: {
   const handleSave = async () => {
     setLocalSaving(true);
     try {
-      const res = await fetch(`/api/episodes/${step.episodeId}/steps/${step.id}`, {
+      const res = await fetch(`/api/episodes/${step.episodeId}/work-phases/${step.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -541,7 +573,7 @@ export function EpisodeStepsManager({
 
   const loadSteps = useCallback(async () => {
     try {
-      const res = await fetch(`/api/episodes/${episodeId}/steps/generate`, {
+      const res = await fetch(`/api/episodes/${episodeId}/work-phases/generate`, {
         method: 'POST',
         credentials: 'include',
       });
@@ -550,7 +582,7 @@ export function EpisodeStepsManager({
         throw new Error('Nem sikerült betölteni');
       }
       const data = await res.json();
-      setSteps(data.steps ?? []);
+      setSteps(mapWorkPhasesResponse(data.workPhases ?? data.steps));
     } catch (e) {
       console.error('Error loading episode steps:', e);
     }
@@ -615,7 +647,7 @@ export function EpisodeStepsManager({
   const handleSkip = async (stepId: string) => {
     setSaving(true);
     try {
-      const res = await fetch(`/api/episodes/${episodeId}/steps/${stepId}`, {
+      const res = await fetch(`/api/episodes/${episodeId}/work-phases/${stepId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -623,7 +655,8 @@ export function EpisodeStepsManager({
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Hiba');
       const data = await res.json();
-      setSteps((prev) => prev.map((s) => (s.id === stepId ? data.step : s)));
+      const row = data.workPhase ?? data.step;
+      setSteps((prev) => prev.map((s) => (s.id === stepId ? mapWorkPhaseApiToEpisodeStep(row) : s)));
       setConfirmStepId(null);
       setConfirmAction(null);
       setSkipReason('');
@@ -639,7 +672,7 @@ export function EpisodeStepsManager({
   const handleUnskip = async (stepId: string) => {
     setSaving(true);
     try {
-      const res = await fetch(`/api/episodes/${episodeId}/steps/${stepId}`, {
+      const res = await fetch(`/api/episodes/${episodeId}/work-phases/${stepId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -647,7 +680,8 @@ export function EpisodeStepsManager({
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Hiba');
       const data = await res.json();
-      setSteps((prev) => prev.map((s) => (s.id === stepId ? data.step : s)));
+      const row = data.workPhase ?? data.step;
+      setSteps((prev) => prev.map((s) => (s.id === stepId ? mapWorkPhaseApiToEpisodeStep(row) : s)));
       setConfirmStepId(null);
       setConfirmAction(null);
       showToast('Lépés visszaállítva', 'success');
@@ -662,7 +696,7 @@ export function EpisodeStepsManager({
   const handleDelete = async (stepId: string) => {
     setSaving(true);
     try {
-      const res = await fetch(`/api/episodes/${episodeId}/steps/${stepId}`, {
+      const res = await fetch(`/api/episodes/${episodeId}/work-phases/${stepId}`, {
         method: 'DELETE',
         credentials: 'include',
       });
@@ -684,7 +718,7 @@ export function EpisodeStepsManager({
   const persistReorder = async (newPrimarySteps: EpisodeStep[]) => {
     setReordering(true);
     try {
-      const res = await fetch(`/api/episodes/${episodeId}/steps/reorder`, {
+      const res = await fetch(`/api/episodes/${episodeId}/work-phases/reorder`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -692,7 +726,7 @@ export function EpisodeStepsManager({
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Hiba');
       const data = await res.json();
-      setSteps(data.steps ?? []);
+      setSteps(mapWorkPhasesResponse(data.workPhases ?? data.steps));
       onStepChanged?.();
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Hiba az átrendezésnél', 'error');
@@ -732,7 +766,7 @@ export function EpisodeStepsManager({
     if (mergeSelection.size < 2) return;
     setSaving(true);
     try {
-      const res = await fetch(`/api/episodes/${episodeId}/steps/merge`, {
+      const res = await fetch(`/api/episodes/${episodeId}/work-phases/merge`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -740,7 +774,7 @@ export function EpisodeStepsManager({
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Hiba');
       const data = await res.json();
-      setSteps(data.steps ?? []);
+      setSteps(mapWorkPhasesResponse(data.workPhases ?? data.steps));
       setMergeMode(false);
       setMergeSelection(new Set());
       showToast('Lépések összevonva', 'success');
@@ -755,13 +789,13 @@ export function EpisodeStepsManager({
   const handleUnmerge = async (primaryStepId: string) => {
     setSaving(true);
     try {
-      const res = await fetch(`/api/episodes/${episodeId}/steps/${primaryStepId}/unmerge`, {
+      const res = await fetch(`/api/episodes/${episodeId}/work-phases/${primaryStepId}/unmerge`, {
         method: 'POST',
         credentials: 'include',
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Hiba');
       const data = await res.json();
-      setSteps(data.steps ?? []);
+      setSteps(mapWorkPhasesResponse(data.workPhases ?? data.steps));
       showToast('Összevonás felbontva', 'success');
       onStepChanged?.();
     } catch (e) {
@@ -776,7 +810,7 @@ export function EpisodeStepsManager({
   const addToothTreatmentStep = async (tt: LinkedToothTreatment) => {
     setAddingStep(true);
     try {
-      const res = await fetch(`/api/episodes/${episodeId}/steps/from-tooth-treatment`, {
+      const res = await fetch(`/api/episodes/${episodeId}/work-phases/from-tooth-treatment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -784,7 +818,7 @@ export function EpisodeStepsManager({
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Hiba');
       const data = await res.json();
-      setSteps(data.steps ?? []);
+      setSteps(mapWorkPhasesResponse(data.workPhases ?? data.steps));
       await loadLinkedTreatments();
       showToast(`${tt.labelHu} – ${tt.toothNumber} hozzáadva`, 'success');
       onStepChanged?.();
@@ -800,15 +834,16 @@ export function EpisodeStepsManager({
   const addCatalogStep = async (item: StepCatalogItem) => {
     setAddingStep(true);
     try {
-      const res = await fetch(`/api/episodes/${episodeId}/steps`, {
+      const res = await fetch(`/api/episodes/${episodeId}/work-phases`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ stepCode: item.stepCode, pool: 'work' }),
+        body: JSON.stringify({ workPhaseCode: item.stepCode, pool: 'work' }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Hiba');
       const data = await res.json();
-      setSteps((prev) => [...prev, data.step]);
+      const row = data.workPhase ?? data.step;
+      setSteps((prev) => [...prev, mapWorkPhaseApiToEpisodeStep(row)]);
       showToast(`${item.labelHu} hozzáadva`, 'success');
       onStepChanged?.();
     } catch (e) {
@@ -822,7 +857,7 @@ export function EpisodeStepsManager({
     if (!freeLabel.trim()) return;
     setAddingStep(true);
     try {
-      const res = await fetch(`/api/episodes/${episodeId}/steps`, {
+      const res = await fetch(`/api/episodes/${episodeId}/work-phases`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -834,7 +869,8 @@ export function EpisodeStepsManager({
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Hiba');
       const data = await res.json();
-      setSteps((prev) => [...prev, data.step]);
+      const row = data.workPhase ?? data.step;
+      setSteps((prev) => [...prev, mapWorkPhaseApiToEpisodeStep(row)]);
       setFreeLabel('');
       setFreeDuration(30);
       showToast('Egyedi lépés hozzáadva', 'success');

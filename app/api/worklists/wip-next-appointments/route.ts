@@ -5,9 +5,10 @@ import {
   allPendingStepsWithData,
   isBlockedAll,
   type EpisodeBatchData,
-  type EpisodeStepRow,
-  type PathwayStep,
+  type EpisodeWorkPhaseRow,
+  type PathwayWorkPhaseTemplate,
 } from '@/lib/next-step-engine';
+import { normalizePathwayWorkPhaseArray } from '@/lib/pathway-work-phases-for-episode';
 import { extractSuggestedTreatmentTypeCodes } from '@/lib/treatment-type-normalize';
 import { WIP_STAGE_CODES } from '@/lib/wip-stage';
 import {
@@ -64,26 +65,29 @@ export const GET = authedHandler(async (req, { auth }) => {
   const allEpisodeIds = episodesResult.rows.map((r: any) => r.episodeId);
   const allPatientIds = Array.from(new Set(episodesResult.rows.map((r: any) => r.patientId))) as string[];
 
-  // Episode steps: primary-only + optional columns (runtime check so app runs if migration not applied)
-  let episodeStepsMergedFilter = '';
-  let episodeStepsOptionalCols = '';
+  let episodeWorkPhasesMergedFilter = '';
+  let episodeWorkPhasesOptionalCols = '';
   try {
     const epCols = await pool.query(
       `SELECT column_name FROM information_schema.columns
-       WHERE table_name = 'episode_steps' AND column_name IN ('merged_into_episode_step_id', 'default_days_offset', 'custom_label')`
+       WHERE table_name = 'episode_work_phases' AND column_name IN ('merged_into_episode_work_phase_id', 'default_days_offset', 'custom_label')`
     );
     const names = new Set(epCols.rows.map((r: { column_name: string }) => r.column_name));
-    if (names.has('merged_into_episode_step_id')) episodeStepsMergedFilter = 'AND merged_into_episode_step_id IS NULL';
-    if (names.has('default_days_offset')) episodeStepsOptionalCols += ', default_days_offset';
-    if (names.has('custom_label')) episodeStepsOptionalCols += ', custom_label';
-  } catch { /* columns may not exist */ }
+    if (names.has('merged_into_episode_work_phase_id')) {
+      episodeWorkPhasesMergedFilter = 'AND merged_into_episode_work_phase_id IS NULL';
+    }
+    if (names.has('default_days_offset')) episodeWorkPhasesOptionalCols += ', default_days_offset';
+    if (names.has('custom_label')) episodeWorkPhasesOptionalCols += ', custom_label';
+  } catch {
+    /* columns may not exist */
+  }
 
   const [
     stageRows,
     noShowRows,
     blockRows,
     completedStatsRows,
-    episodeStepRows,
+    episodeWorkPhaseRows,
     multiPathwayRows,
     legacyPathwayRows,
     episodeTreatmentRows,
@@ -123,13 +127,13 @@ export const GET = authedHandler(async (req, { auth }) => {
       [allEpisodeIds]
     ),
     pool.query(
-      `SELECT id, episode_id, step_code, pathway_order_index, seq, status, completed_at, pool, duration_minutes${episodeStepsOptionalCols}
-       FROM episode_steps WHERE episode_id = ANY($1) ${episodeStepsMergedFilter}
+      `SELECT id, episode_id, work_phase_code, pathway_order_index, seq, status, completed_at, pool, duration_minutes${episodeWorkPhasesOptionalCols}
+       FROM episode_work_phases WHERE episode_id = ANY($1) ${episodeWorkPhasesMergedFilter}
        ORDER BY episode_id, COALESCE(seq, pathway_order_index), pathway_order_index`,
       [allEpisodeIds]
     ),
     pool.query(
-      `SELECT ep.episode_id, cp.steps_json
+      `SELECT ep.episode_id, cp.work_phases_json, cp.steps_json
        FROM episode_pathways ep
        JOIN care_pathways cp ON ep.care_pathway_id = cp.id
        WHERE ep.episode_id = ANY($1)
@@ -137,7 +141,7 @@ export const GET = authedHandler(async (req, { auth }) => {
       [allEpisodeIds]
     ).catch(() => ({ rows: [] as any[] })),
     pool.query(
-      `SELECT pe.id as episode_id, cp.steps_json
+      `SELECT pe.id as episode_id, cp.work_phases_json, cp.steps_json
        FROM patient_episodes pe
        JOIN care_pathways cp ON pe.care_pathway_id = cp.id
        WHERE pe.id = ANY($1)`,
@@ -204,27 +208,28 @@ export const GET = authedHandler(async (req, { auth }) => {
     ])
   );
 
-  // Episode steps grouped by episode (rows include id for "mark completed")
-  const episodeStepsMap = new Map<string, (EpisodeStepRow & { id?: string })[]>();
-  for (const r of episodeStepRows.rows) {
-    const arr = episodeStepsMap.get(r.episode_id) ?? [];
-    arr.push(r as EpisodeStepRow & { id?: string });
-    episodeStepsMap.set(r.episode_id, arr);
+  const episodeWorkPhasesMap = new Map<string, (EpisodeWorkPhaseRow & { id?: string })[]>();
+  for (const r of episodeWorkPhaseRows.rows) {
+    const arr = episodeWorkPhasesMap.get(r.episode_id) ?? [];
+    arr.push(r as EpisodeWorkPhaseRow & { id?: string });
+    episodeWorkPhasesMap.set(r.episode_id, arr);
   }
 
-  // Pathway steps: prefer multi-pathway, fallback to legacy
-  const multiPathwayMap = new Map<string, PathwayStep[]>();
+  const multiPathwayMap = new Map<string, PathwayWorkPhaseTemplate[]>();
   for (const r of (multiPathwayRows as any).rows) {
     const existing = multiPathwayMap.get(r.episode_id) ?? [];
-    if (Array.isArray(r.steps_json)) existing.push(...(r.steps_json as PathwayStep[]));
+    const chunk =
+      normalizePathwayWorkPhaseArray(r.work_phases_json) ?? normalizePathwayWorkPhaseArray(r.steps_json);
+    if (chunk) existing.push(...chunk);
     multiPathwayMap.set(r.episode_id, existing);
   }
-  const legacyPathwayMap = new Map<string, PathwayStep[]>(
-    legacyPathwayRows.rows
-      .filter((r: any) => Array.isArray(r.steps_json))
-      .map((r: any) => [r.episode_id, r.steps_json as PathwayStep[]])
-  );
-  function getPathwayStepsForEpisode(episodeId: string): PathwayStep[] | null {
+  const legacyPathwayMap = new Map<string, PathwayWorkPhaseTemplate[]>();
+  for (const r of legacyPathwayRows.rows as any[]) {
+    const templates =
+      normalizePathwayWorkPhaseArray(r.work_phases_json) ?? normalizePathwayWorkPhaseArray(r.steps_json);
+    if (templates && templates.length > 0) legacyPathwayMap.set(r.episode_id, templates);
+  }
+  function getPathwayWorkPhasesForEpisodeBatch(episodeId: string): PathwayWorkPhaseTemplate[] | null {
     const multi = multiPathwayMap.get(episodeId);
     if (multi && multi.length > 0) return multi;
     const legacy = legacyPathwayMap.get(episodeId);
@@ -285,9 +290,9 @@ export const GET = authedHandler(async (req, { auth }) => {
 
     const batchData: EpisodeBatchData = {
       blocks: blocksMap.get(episodeId) ?? [],
-      pathwaySteps: getPathwayStepsForEpisode(episodeId),
+      pathwayWorkPhases: getPathwayWorkPhasesForEpisodeBatch(episodeId),
       completedStats: completedStatsMap.get(episodeId) ?? { completedCount: 0, lastCompletedAt: null },
-      episodeSteps: episodeStepsMap.get(episodeId) ?? null,
+      episodeWorkPhases: episodeWorkPhasesMap.get(episodeId) ?? null,
       openedAt: openedAtMap.get(episodeId) ?? new Date(),
       currentStage: stageMap.get(episodeId) ?? null,
       bookedStepCodes: activeApptStepsByEpisode.get(episodeId),
@@ -386,10 +391,10 @@ export const GET = authedHandler(async (req, { auth }) => {
       const overdueByDays = windowEnd < now ? Math.ceil((now.getTime() - windowEnd.getTime()) / (24 * 60 * 60 * 1000)) : 0;
       const priorityScore = Math.min(100, 50 + overdueByDays * 5);
 
-      const stepsForEpisode = episodeStepsMap.get(episodeId) ?? [];
-      const stepRow = stepsForEpisode.find(
-        (r: { step_code: string; status: string }) =>
-          r.step_code === step.step_code && (r.status === 'pending' || r.status === 'scheduled')
+      const phasesForEpisode = episodeWorkPhasesMap.get(episodeId) ?? [];
+      const stepRow = phasesForEpisode.find(
+        (r: { work_phase_code: string; status: string }) =>
+          r.work_phase_code === step.work_phase_code && (r.status === 'pending' || r.status === 'scheduled')
       );
       const episodeStepId = stepRow && 'id' in stepRow ? (stepRow as { id: string }).id : null;
 
@@ -398,9 +403,9 @@ export const GET = authedHandler(async (req, { auth }) => {
         patientId: row.patientId,
         patientName: row.patientName ?? null,
         currentStage,
-        nextStep: step.label ?? step.step_code,
+        nextStep: step.label ?? step.work_phase_code,
         stepLabel: step.label,
-        stepCode: step.step_code,
+        stepCode: step.work_phase_code,
         overdueByDays,
         windowStart: step.earliest_date.toISOString(),
         windowEnd: step.latest_date.toISOString(),

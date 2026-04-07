@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { authedHandler, roleHandler } from '@/lib/api/route-handler';
 import { invalidateIntentsForEpisode } from '@/lib/intent-invalidation';
 import { createInitialSlotIntentsForEpisode } from '@/lib/episode-activation';
+import { normalizePathwayWorkPhaseArray } from '@/lib/pathway-work-phases-for-episode';
 import { getCurrentSuggestion } from '@/lib/stage-suggestion-service';
 import { logger } from '@/lib/logger';
 
@@ -205,7 +206,7 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
 const EPISODE_PATHWAYS_QUERY = `
   SELECT ep.id, ep.care_pathway_id as "carePathwayId", ep.ordinal, ep.jaw,
          cp.name as "pathwayName",
-         (SELECT COUNT(*)::int FROM episode_steps es WHERE es.source_episode_pathway_id = ep.id) as "stepCount"
+         (SELECT COUNT(*)::int FROM episode_work_phases ewp WHERE ewp.source_episode_pathway_id = ep.id) as "stepCount"
   FROM episode_pathways ep
   JOIN care_pathways cp ON ep.care_pathway_id = cp.id
   WHERE ep.episode_id = $1
@@ -237,19 +238,16 @@ async function handleAddPathway(
   }
 
   const pw = await pool.query(
-    `SELECT id, name, steps_json FROM care_pathways WHERE id = $1`,
+    `SELECT id, name, work_phases_json, steps_json FROM care_pathways WHERE id = $1`,
     [carePathwayId]
   );
   if (pw.rows.length === 0) {
     return NextResponse.json({ error: 'Kezelési út nem található' }, { status: 404 });
   }
 
-  const stepsJson = pw.rows[0].steps_json as Array<{
-    step_code: string;
-    pool?: string;
-    duration_minutes?: number;
-    default_days_offset?: number;
-  }>;
+  const templates =
+    normalizePathwayWorkPhaseArray(pw.rows[0].work_phases_json) ??
+    normalizePathwayWorkPhaseArray(pw.rows[0].steps_json);
 
   const client = await pool.connect();
   try {
@@ -285,9 +283,9 @@ async function handleAddPathway(
       );
     }
 
-    if (Array.isArray(stepsJson) && stepsJson.length > 0) {
+    if (templates && templates.length > 0) {
       const maxSeqRow = await client.query(
-        `SELECT COALESCE(MAX(seq), -1) as max_seq FROM episode_steps WHERE episode_id = $1`,
+        `SELECT COALESCE(MAX(seq), -1) as max_seq FROM episode_work_phases WHERE episode_id = $1`,
         [episodeId]
       );
       let nextSeq: number = (maxSeqRow.rows[0].max_seq ?? -1) + 1;
@@ -296,18 +294,18 @@ async function handleAddPathway(
       const insertPlaceholders: string[] = [];
       let pIdx = 1;
 
-      for (let i = 0; i < stepsJson.length; i++) {
-        const step = stepsJson[i];
+      for (let i = 0; i < templates.length; i++) {
+        const ph = templates[i];
         insertPlaceholders.push(
           `($${pIdx}, $${pIdx + 1}, $${pIdx + 2}, $${pIdx + 3}, $${pIdx + 4}, $${pIdx + 5}, $${pIdx + 6}, $${pIdx + 7})`
         );
         insertValues.push(
           episodeId,
-          step.step_code,
+          ph.work_phase_code,
           i,
-          step.pool ?? 'work',
-          step.duration_minutes ?? 30,
-          step.default_days_offset ?? 7,
+          ph.pool ?? 'work',
+          ph.duration_minutes ?? 30,
+          ph.default_days_offset ?? 7,
           epPathwayId,
           nextSeq + i
         );
@@ -315,7 +313,7 @@ async function handleAddPathway(
       }
 
       await client.query(
-        `INSERT INTO episode_steps (episode_id, step_code, pathway_order_index, pool, duration_minutes, default_days_offset, source_episode_pathway_id, seq)
+        `INSERT INTO episode_work_phases (episode_id, work_phase_code, pathway_order_index, pool, duration_minutes, default_days_offset, source_episode_pathway_id, seq)
          VALUES ${insertPlaceholders.join(', ')}`,
         insertValues
       );
@@ -369,14 +367,14 @@ async function handleRemovePathway(
     epPathwayId = epPathway.rows[0].id;
   }
 
-  const activeSteps = await pool.query(
-    `SELECT COUNT(*)::int as cnt FROM episode_steps
+  const activePhases = await pool.query(
+    `SELECT COUNT(*)::int as cnt FROM episode_work_phases
      WHERE source_episode_pathway_id = $1 AND status IN ('scheduled', 'completed')`,
     [epPathwayId]
   );
-  if (activeSteps.rows[0].cnt > 0) {
+  if (activePhases.rows[0].cnt > 0) {
     return NextResponse.json(
-      { error: 'Nem távolítható el: van már időpontja vagy teljesített lépése ennek a kezelési útnak' },
+      { error: 'Nem távolítható el: van már időpontja vagy teljesített munkafázisa ennek a kezelési útnak' },
       { status: 409 }
     );
   }
@@ -385,10 +383,7 @@ async function handleRemovePathway(
   try {
     await client.query('BEGIN');
 
-    await client.query(
-      `DELETE FROM episode_steps WHERE source_episode_pathway_id = $1`,
-      [epPathwayId]
-    );
+    await client.query(`DELETE FROM episode_work_phases WHERE source_episode_pathway_id = $1`, [epPathwayId]);
 
     await client.query(
       `DELETE FROM episode_pathways WHERE id = $1`,
@@ -398,10 +393,10 @@ async function handleRemovePathway(
     await client.query(
       `WITH numbered AS (
         SELECT id, ROW_NUMBER() OVER (ORDER BY seq, pathway_order_index) - 1 as new_seq
-        FROM episode_steps WHERE episode_id = $1
+        FROM episode_work_phases WHERE episode_id = $1
       )
-      UPDATE episode_steps SET seq = numbered.new_seq
-      FROM numbered WHERE episode_steps.id = numbered.id`,
+      UPDATE episode_work_phases SET seq = numbered.new_seq
+      FROM numbered WHERE episode_work_phases.id = numbered.id`,
       [episodeId]
     );
 

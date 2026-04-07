@@ -6,6 +6,7 @@ import { invalidateStepLabelCache } from '@/lib/step-labels';
 import { invalidateUnmappedCache } from '@/lib/step-catalog-cache';
 import { logger } from '@/lib/logger';
 import { invalidateCachePrefix } from '@/lib/catalog-cache';
+import { normalizePathwayWorkPhaseArray } from '@/lib/pathway-work-phases-for-episode';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,15 +28,18 @@ export const POST = roleHandler(['admin', 'fogpótlástanász'], async (req, { a
   const reason = (data.reason as string | null) || null;
   const treatmentTypeId = (data.treatmentTypeId as string | null) || null;
 
+  const workPhasesNormalized = normalizePathwayWorkPhaseArray(data.stepsJson) ?? [];
+
   const r = await pool.query(
-    `INSERT INTO care_pathways (name, reason, treatment_type_id, steps_json, version, priority, owner_id)
-     VALUES ($1, $2, $3, $4::jsonb, 1, $5, $6)
+    `INSERT INTO care_pathways (name, reason, treatment_type_id, steps_json, work_phases_json, version, priority, owner_id)
+     VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, 1, $6, $7)
      RETURNING id, name, reason, treatment_type_id as "treatmentTypeId", steps_json as "stepsJson", version, priority, owner_id as "ownerId", created_at as "createdAt", updated_at as "updatedAt"`,
     [
       data.name,
       reason,
       treatmentTypeId,
       JSON.stringify(data.stepsJson),
+      JSON.stringify(workPhasesNormalized),
       data.priority,
       data.ownerId || null,
     ]
@@ -57,6 +61,12 @@ export const POST = roleHandler(['admin', 'fogpótlástanász'], async (req, { a
       `INSERT INTO step_catalog (step_code, label_hu)
        VALUES ($1, $2)
        ON CONFLICT (step_code) DO UPDATE SET label_hu = EXCLUDED.label_hu, updated_at = now()`,
+      [s.step_code, s.label]
+    );
+    await pool.query(
+      `INSERT INTO work_phase_catalog (work_phase_code, label_hu)
+       VALUES ($1, $2)
+       ON CONFLICT (work_phase_code) DO UPDATE SET label_hu = EXCLUDED.label_hu, updated_at = now()`,
       [s.step_code, s.label]
     );
   }

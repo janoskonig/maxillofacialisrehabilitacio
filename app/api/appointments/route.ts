@@ -68,7 +68,7 @@ export const GET = authedHandler(async (req, { auth }) => {
     JOIN available_time_slots ats ON a.time_slot_id = ats.id
     JOIN patients p ON a.patient_id = p.id
     LEFT JOIN users u ON a.dentist_email = u.email
-    LEFT JOIN step_catalog sc ON a.step_code = sc.step_code AND sc.is_active = true
+    LEFT JOIN work_phase_catalog sc ON a.step_code = sc.work_phase_code AND sc.is_active = true
     ${whereClause}
     ORDER BY ats.start_time ASC
     LIMIT $${paramIndex} OFFSET $${paramIndex + 1}

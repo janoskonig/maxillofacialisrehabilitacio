@@ -7,6 +7,7 @@
 import { Pool } from 'pg';
 import { checkOneHardNext, getAppointmentRiskSettings } from '@/lib/scheduling-service';
 import type { AuthPayload } from '@/lib/auth-server';
+import { normalizePathwayWorkPhaseArray } from '@/lib/pathway-work-phases-for-episode';
 
 export interface ConvertIntentOptions {
   /** Pre-selected time slot id; if not set, a free slot is found in the window */
@@ -81,8 +82,8 @@ export async function convertIntentToAppointment(
     // Guard: refuse to book a step that is already completed/skipped
     try {
       const stepDoneCheck = await pool.query(
-        `SELECT status FROM episode_steps
-         WHERE episode_id = $1 AND step_code = $2 AND status IN ('completed', 'skipped')
+        `SELECT status FROM episode_work_phases
+         WHERE episode_id = $1 AND work_phase_code = $2 AND status IN ('completed', 'skipped')
          LIMIT 1`,
         [intent.episode_id, intent.step_code]
       );
@@ -94,7 +95,9 @@ export async function convertIntentToAppointment(
         await pool.query('COMMIT');
         return { ok: false, status: 409, error: `Lépés már teljesítve/kihagyva: ${intent.step_code}`, code: 'STEP_ALREADY_DONE' };
       }
-    } catch { /* episode_steps may not exist */ }
+    } catch {
+      /* table may not exist */
+    }
 
     // Guard: refuse to book when same step already has a non-cancelled appointment
     const existingStepAppt = await pool.query(
@@ -116,13 +119,16 @@ export async function convertIntentToAppointment(
     let requiresPrecommit = false;
     if (intent.pool === 'work') {
       const pathwayResult = await pool.query(
-        `SELECT cp.steps_json FROM patient_episodes pe
+        `SELECT cp.work_phases_json, cp.steps_json FROM patient_episodes pe
          JOIN care_pathways cp ON pe.care_pathway_id = cp.id
          WHERE pe.id = $1`,
         [intent.episode_id]
       );
-      const steps = pathwayResult.rows[0]?.steps_json as Array<{ step_code: string; requires_precommit?: boolean }> | null;
-      const step = steps?.find((s: { step_code: string }) => s.step_code === intent.step_code);
+      const prow = pathwayResult.rows[0];
+      const steps =
+        normalizePathwayWorkPhaseArray(prow?.work_phases_json) ??
+        normalizePathwayWorkPhaseArray(prow?.steps_json);
+      const step = steps?.find((s) => s.work_phase_code === intent.step_code);
       requiresPrecommit = step?.requires_precommit === true;
 
       // Batch convert: DB partial unique index allows only one future work appt with requires_precommit=false per episode.

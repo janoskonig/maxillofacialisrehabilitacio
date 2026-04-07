@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
 import { nextRequiredStep, isBlocked } from '@/lib/next-step-engine';
+import { normalizePathwayWorkPhaseArray } from '@/lib/pathway-work-phases-for-episode';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,7 +46,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
     });
   }
 
-  let steps: Array<{ step_code: string; pool: string }> | null = null;
+  let steps: Array<{ work_phase_code: string; pool: string }> | null = null;
   let remainingVisitsP50: number;
   let remainingVisitsP80: number;
   let cadenceDays: number;
@@ -53,13 +54,16 @@ export const GET = authedHandler(async (req, { auth, params }) => {
 
   if (episode.carePathwayId) {
     const [pathwayResult, analyticsResult] = await Promise.all([
-      pool.query(`SELECT steps_json FROM care_pathways WHERE id = $1`, [episode.carePathwayId]),
+      pool.query(`SELECT work_phases_json, steps_json FROM care_pathways WHERE id = $1`, [episode.carePathwayId]),
       pool.query(
         `SELECT median_visits, p80_visits, median_cadence_days FROM care_pathway_analytics WHERE care_pathway_id = $1`,
         [episode.carePathwayId]
       ),
     ]);
-    steps = pathwayResult.rows[0]?.steps_json as Array<{ step_code: string; pool: string }> | null;
+    const row = pathwayResult.rows[0];
+    const templates =
+      normalizePathwayWorkPhaseArray(row?.work_phases_json) ?? normalizePathwayWorkPhaseArray(row?.steps_json);
+    steps = templates;
     const analytics = analyticsResult.rows[0];
 
     if (analytics?.median_visits != null && analytics?.p80_visits != null) {
@@ -89,7 +93,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
     remainingVisitsP80,
     completionWindowStart: completionWindowStart.toISOString(),
     completionWindowEnd: completionWindowEnd.toISOString(),
-    nextStep: nextStepResult.step_code,
+    nextStep: nextStepResult.work_phase_code,
     nextStepWindow: {
       start: nextStepResult.earliest_date.toISOString(),
       end: nextStepResult.latest_date.toISOString(),

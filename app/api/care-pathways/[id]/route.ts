@@ -4,6 +4,7 @@ import { authedHandler, roleHandler } from '@/lib/api/route-handler';
 import { carePathwayPatchSchema } from '@/lib/admin-process-schemas';
 import { invalidateStepLabelCache } from '@/lib/step-labels';
 import { invalidateUnmappedCache } from '@/lib/step-catalog-cache';
+import { normalizePathwayWorkPhaseArray } from '@/lib/pathway-work-phases-for-episode';
 
 export const dynamic = 'force-dynamic';
 
@@ -187,6 +188,10 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász'], async (req, { 
     updates.push(`steps_json = $${idx}`);
     values.push(JSON.stringify(data.stepsJson));
     idx++;
+    const wpNorm = normalizePathwayWorkPhaseArray(data.stepsJson) ?? [];
+    updates.push(`work_phases_json = $${idx}`);
+    values.push(JSON.stringify(wpNorm));
+    idx++;
   }
   if (data.version !== undefined) {
     updates.push(`version = $${idx}`);
@@ -242,6 +247,12 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász'], async (req, { 
         `INSERT INTO step_catalog (step_code, label_hu)
          VALUES ($1, $2)
          ON CONFLICT (step_code) DO UPDATE SET label_hu = EXCLUDED.label_hu, updated_at = now()`,
+        [s.step_code, s.label]
+      );
+      await pool.query(
+        `INSERT INTO work_phase_catalog (work_phase_code, label_hu)
+         VALUES ($1, $2)
+         ON CONFLICT (work_phase_code) DO UPDATE SET label_hu = EXCLUDED.label_hu, updated_at = now()`,
         [s.step_code, s.label]
       );
     }

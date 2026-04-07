@@ -29,8 +29,8 @@ export const POST = roleHandler(['admin', 'fogpótlástanász'], async (req, { a
     );
     const row = r.rows[0];
     await pool.query(
-      `INSERT INTO care_pathways (name, reason, treatment_type_id, steps_json, version, priority)
-       VALUES ($1, NULL, $2, '[]'::jsonb, 1, 0)`,
+      `INSERT INTO care_pathways (name, reason, treatment_type_id, steps_json, work_phases_json, version, priority)
+       VALUES ($1, NULL, $2, '[]'::jsonb, '[]'::jsonb, 1, 0)`,
       [row.labelHu, row.id]
     );
     await pool.query('COMMIT');

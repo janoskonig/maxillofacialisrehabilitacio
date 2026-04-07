@@ -61,7 +61,7 @@ export async function refreshEpisodeNextStepCache(episodeId: string): Promise<vo
           result.duration_minutes,
           result.earliest_date.toISOString(),
           result.latest_date.toISOString(),
-          result.step_code,
+          result.work_phase_code,
           'BLOCKED_CAPACITY: Nincs szabad work időpont az SLA ablakban',
         ]
       );
@@ -115,7 +115,7 @@ export async function refreshEpisodeNextStepCache(episodeId: string): Promise<vo
       result.duration_minutes,
       result.earliest_date.toISOString(),
       result.latest_date.toISOString(),
-      result.step_code,
+      result.work_phase_code,
       overdueDays,
     ]
   );

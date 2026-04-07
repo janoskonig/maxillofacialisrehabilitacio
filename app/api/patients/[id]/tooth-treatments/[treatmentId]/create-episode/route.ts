@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
 import { logActivity } from '@/lib/activity';
 import { logger } from '@/lib/logger';
+import { normalizePathwayWorkPhaseArray } from '@/lib/pathway-work-phases-for-episode';
 
 export const dynamic = 'force-dynamic';
 
@@ -102,7 +103,7 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
     let pathwayAssigned = false;
     if (tt.default_care_pathway_id) {
       const pathwayCheck = await client.query(
-        'SELECT id, steps_json FROM care_pathways WHERE id = $1',
+        'SELECT id, work_phases_json, steps_json FROM care_pathways WHERE id = $1',
         [tt.default_care_pathway_id]
       );
       if (pathwayCheck.rows.length > 0) {
@@ -133,30 +134,32 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
               );
             }
 
-            const stepsJson = pathwayCheck.rows[0].steps_json;
-            if (Array.isArray(stepsJson) && stepsJson.length > 0) {
-              const epStepsExists = await client.query(
-                `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'episode_steps'`
+            const rawPhases =
+              pathwayCheck.rows[0].work_phases_json ?? pathwayCheck.rows[0].steps_json;
+            const phases = normalizePathwayWorkPhaseArray(rawPhases) ?? [];
+            if (phases.length > 0) {
+              const ewpExists = await client.query(
+                `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'episode_work_phases'`
               );
-              if (epStepsExists.rows.length > 0) {
+              if (ewpExists.rows.length > 0) {
                 const maxSeqRow = await client.query(
-                  `SELECT COALESCE(MAX(seq), -1) as max_seq FROM episode_steps WHERE episode_id = $1`,
+                  `SELECT COALESCE(MAX(seq), -1) as max_seq FROM episode_work_phases WHERE episode_id = $1`,
                   [episodeId]
                 );
                 const nextSeq: number = (maxSeqRow.rows[0].max_seq ?? -1) + 1;
-                for (let i = 0; i < stepsJson.length; i++) {
-                  const step = stepsJson[i];
+                for (let i = 0; i < phases.length; i++) {
+                  const p = phases[i];
                   await client.query(
-                    `INSERT INTO episode_steps (episode_id, step_code, pathway_order_index, seq, pool, duration_minutes, default_days_offset, status)
+                    `INSERT INTO episode_work_phases (episode_id, work_phase_code, pathway_order_index, seq, pool, duration_minutes, default_days_offset, status)
                      VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')`,
                     [
                       episodeId,
-                      step.step_code,
+                      p.work_phase_code,
                       i,
                       nextSeq + i,
-                      step.pool || 'work',
-                      step.duration_minutes || 30,
-                      step.default_days_offset || 0,
+                      p.pool || 'work',
+                      p.duration_minutes ?? 30,
+                      p.default_days_offset ?? 0,
                     ]
                   );
                 }
@@ -174,28 +177,27 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
       [episodeId, treatmentId]
     );
 
-    // Always create an episode_step for this tooth treatment (unless one already exists)
-    const alreadyStep = await client.query(
-      `SELECT 1 FROM episode_steps WHERE episode_id = $1 AND tooth_treatment_id = $2`,
+    const alreadyPhase = await client.query(
+      `SELECT 1 FROM episode_work_phases WHERE episode_id = $1 AND tooth_treatment_id = $2`,
       [episodeId, treatmentId]
     );
-    if (alreadyStep.rows.length === 0) {
+    if (alreadyPhase.rows.length === 0) {
       const stepSeqRow = await client.query(
         `SELECT COALESCE(MAX(seq), -1) + 1 AS next_seq,
                 COALESCE(MAX(pathway_order_index), -1) + 1 AS next_idx
-         FROM episode_steps WHERE episode_id = $1`,
+         FROM episode_work_phases WHERE episode_id = $1`,
         [episodeId]
       );
       const nextSeq: number = stepSeqRow.rows[0].next_seq;
       const nextIdx: number = stepSeqRow.rows[0].next_idx;
-      const stepCode = `tooth_${tt.treatment_code}`;
+      const workPhaseCode = `tooth_${tt.treatment_code}`;
       const customLabel = `${tt.label_hu} – ${tt.tooth_number}`;
 
       await client.query(
-        `INSERT INTO episode_steps
-           (episode_id, step_code, pathway_order_index, pool, duration_minutes, default_days_offset, seq, tooth_treatment_id, custom_label, status)
+        `INSERT INTO episode_work_phases
+           (episode_id, work_phase_code, pathway_order_index, pool, duration_minutes, default_days_offset, seq, tooth_treatment_id, custom_label, status)
          VALUES ($1, $2, $3, 'work', 30, 7, $4, $5, $6, 'pending')`,
-        [episodeId, stepCode, nextIdx, nextSeq, treatmentId, customLabel]
+        [episodeId, workPhaseCode, nextIdx, nextSeq, treatmentId, customLabel]
       );
     }
 

@@ -4,12 +4,12 @@ import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { logger } from '@/lib/logger';
-import { getFullStepQuery } from '@/lib/episode-step-select';
+import { getFullWorkPhaseQuery } from '@/lib/episode-work-phase-select';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * PATCH /api/episodes/:id/steps/reorder
+ * PATCH /api/episodes/:id/work-phases/reorder
  * Reorder episode steps by providing the step IDs in the desired order.
  *
  * After reordering, implements "appointment stays, step shifts":
@@ -30,12 +30,12 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
 
   // Fetch all steps; separate primary (not merged) from merged-into
   const verification = await pool.query(
-    `SELECT id, merged_into_episode_step_id FROM episode_steps WHERE episode_id = $1`,
+    `SELECT id, merged_into_episode_work_phase_id FROM episode_work_phases WHERE episode_id = $1`,
     [episodeId]
   );
-  const allRows: Array<{ id: string; merged_into_episode_step_id: string | null }> = verification.rows;
+  const allRows: Array<{ id: string; merged_into_episode_work_phase_id: string | null }> = verification.rows;
   const existingIds = new Set(allRows.map((r) => r.id));
-  const mergedIds = new Set(allRows.filter((r) => r.merged_into_episode_step_id).map((r) => r.id));
+  const mergedIds = new Set(allRows.filter((r) => r.merged_into_episode_work_phase_id).map((r) => r.id));
 
   // stepIds should contain only primary (non-merged) steps
   const invalidIds = stepIds.filter((id: string) => !existingIds.has(id));
@@ -46,7 +46,7 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
     );
   }
 
-  const primaryIds = new Set(allRows.filter((r) => !r.merged_into_episode_step_id).map((r) => r.id));
+  const primaryIds = new Set(allRows.filter((r) => !r.merged_into_episode_work_phase_id).map((r) => r.id));
   const missingPrimaryIds = Array.from(primaryIds).filter((id) => !stepIds.includes(id));
   if (missingPrimaryIds.length > 0) {
     console.warn(`[reorder] ${missingPrimaryIds.length} primary step(s) not in stepIds — appending`);
@@ -59,7 +59,7 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
     // 1. Update seq for primary steps
     for (let i = 0; i < stepIds.length; i++) {
       await client.query(
-        `UPDATE episode_steps SET seq = $1 WHERE id = $2 AND episode_id = $3`,
+        `UPDATE episode_work_phases SET seq = $1 WHERE id = $2 AND episode_id = $3`,
         [i, stepIds[i], episodeId]
       );
     }
@@ -69,7 +69,7 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
       let nextSeq = stepIds.length;
       for (const missingId of missingPrimaryIds) {
         await client.query(
-          `UPDATE episode_steps SET seq = $1 WHERE id = $2 AND episode_id = $3`,
+          `UPDATE episode_work_phases SET seq = $1 WHERE id = $2 AND episode_id = $3`,
           [nextSeq, missingId, episodeId]
         );
         nextSeq++;
@@ -79,9 +79,9 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
     // Merged steps inherit their primary's seq
     if (mergedIds.size > 0) {
       await client.query(
-        `UPDATE episode_steps child SET seq = parent.seq
-         FROM episode_steps parent
-         WHERE child.merged_into_episode_step_id = parent.id
+        `UPDATE episode_work_phases child SET seq = parent.seq
+         FROM episode_work_phases parent
+         WHERE child.merged_into_episode_work_phase_id = parent.id
            AND child.episode_id = $1`,
         [episodeId]
       );
@@ -108,9 +108,9 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
     await emitSchedulingEvent('episode', episodeId, 'steps_reordered');
   } catch { /* non-blocking */ }
 
-  const allSteps = await getFullStepQuery(pool, episodeId);
+  const allPhases = await getFullWorkPhaseQuery(pool, episodeId);
 
-  return NextResponse.json({ steps: allSteps.rows });
+  return NextResponse.json({ workPhases: allPhases.rows });
 });
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -137,9 +137,9 @@ async function shiftAppointmentsAfterReorder(
 
   // Get all steps in new order
   const stepsResult = await client.query(
-    `SELECT id, step_code as "stepCode", pathway_order_index as "pathwayOrderIndex",
+    `SELECT id, work_phase_code as "stepCode", pathway_order_index as "pathwayOrderIndex",
             seq, status, pool
-     FROM episode_steps
+     FROM episode_work_phases
      WHERE episode_id = $1
      ORDER BY COALESCE(seq, pathway_order_index) ASC`,
     [episodeId]
@@ -182,13 +182,13 @@ async function shiftAppointmentsAfterReorder(
     );
 
     await client.query(
-      `UPDATE episode_steps SET appointment_id = NULL
+      `UPDATE episode_work_phases SET appointment_id = NULL
        WHERE episode_id = $1 AND appointment_id = $2`,
       [episodeId, appt.id]
     );
 
     await client.query(
-      `UPDATE episode_steps SET appointment_id = $1, status = 'scheduled'
+      `UPDATE episode_work_phases SET appointment_id = $1, status = 'scheduled'
        WHERE id = $2`,
       [appt.id, newNextStep.id]
     );
@@ -198,7 +198,7 @@ async function shiftAppointmentsAfterReorder(
     );
     if (oldStep && oldStep.status === 'scheduled') {
       await client.query(
-        `UPDATE episode_steps SET status = 'pending', appointment_id = NULL WHERE id = $1`,
+        `UPDATE episode_work_phases SET status = 'pending', appointment_id = NULL WHERE id = $1`,
         [oldStep.id]
       );
       oldStep.status = 'pending';

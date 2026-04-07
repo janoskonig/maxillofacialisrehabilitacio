@@ -6,6 +6,7 @@
 import { createHash } from 'crypto';
 import { getDbPool } from './db';
 import { nextRequiredStep, isBlocked } from './next-step-engine';
+import { normalizePathwayWorkPhaseArray } from './pathway-work-phases-for-episode';
 import type { EpisodeForecastItem } from './forecast-types';
 
 export interface EpisodeForecastResult {
@@ -31,7 +32,7 @@ export async function computeInputsHashBatch(episodeIds: string[]): Promise<Map<
       [episodeIds]
     ),
     pool.query(
-      `SELECT pe.id as episode_id, cp.steps_json
+      `SELECT pe.id as episode_id, cp.work_phases_json, cp.steps_json
        FROM patient_episodes pe
        LEFT JOIN care_pathways cp ON pe.care_pathway_id = cp.id
        WHERE pe.id = ANY($1)`,
@@ -79,10 +80,13 @@ export async function computeInputsHashBatch(episodeIds: string[]): Promise<Map<
     const stats = statsMap.get(id);
     const analytics = analyticsMap.get(id);
 
-    const stepsJson = pathway?.steps_json;
-    const pathwayStepsHash = stepsJson != null
-      ? createHash('sha256').update(JSON.stringify(stepsJson)).digest('hex')
-      : '';
+    const normalizedPathway =
+      normalizePathwayWorkPhaseArray(pathway?.work_phases_json) ??
+      normalizePathwayWorkPhaseArray(pathway?.steps_json);
+    const pathwayStepsHash =
+      normalizedPathway && normalizedPathway.length > 0
+        ? createHash('sha256').update(JSON.stringify(normalizedPathway)).digest('hex')
+        : '';
 
     const stageSignature = stage
       ? { stage_code: stage.stage_code, event_id: stage.eventId, changed_at: stage.changedAt?.toISOString?.() ?? null }
@@ -168,13 +172,16 @@ export async function computeEpisodeForecast(episodeId: string): Promise<Episode
 
   if (episode.carePathwayId) {
     const [pathwayResult, analyticsResult] = await Promise.all([
-      pool.query(`SELECT steps_json FROM care_pathways WHERE id = $1`, [episode.carePathwayId]),
+      pool.query(`SELECT work_phases_json, steps_json FROM care_pathways WHERE id = $1`, [episode.carePathwayId]),
       pool.query(
         `SELECT median_visits, p80_visits, median_cadence_days FROM care_pathway_analytics WHERE care_pathway_id = $1`,
         [episode.carePathwayId]
       ),
     ]);
-    const steps = pathwayResult.rows[0]?.steps_json as Array<{ step_code: string; pool: string }> | null;
+    const prow = pathwayResult.rows[0];
+    const steps =
+      normalizePathwayWorkPhaseArray(prow?.work_phases_json) ??
+      normalizePathwayWorkPhaseArray(prow?.steps_json);
     const analytics = analyticsResult.rows[0];
 
     if (analytics?.median_visits != null && analytics?.p80_visits != null) {
@@ -206,7 +213,7 @@ export async function computeEpisodeForecast(episodeId: string): Promise<Episode
     remainingVisitsP80,
     completionWindowStart: completionWindowStart.toISOString(),
     completionWindowEnd: completionWindowEnd.toISOString(),
-    stepCode: nextStepResult.step_code,
+    stepCode: nextStepResult.work_phase_code,
     nextStepWindow: {
       start: nextStepResult.earliest_date.toISOString(),
       end: nextStepResult.latest_date.toISOString(),

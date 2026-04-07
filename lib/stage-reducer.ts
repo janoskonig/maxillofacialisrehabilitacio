@@ -142,7 +142,7 @@ export async function buildSnapshot(episodeId: string): Promise<EpisodeSnapshot 
   const hasSurgery = milestones.has('SURG_IMPLANT_PLACED');
 
   // Check for delivery via completed appointment with step_code ending in _atadas
-  // Also check episode_steps for completed delivery steps as fallback
+  // Delivery milestone / appointment step_code (legacy column name) fallback above
   let deliveryDate: Date | null = null;
   if (!deliveryDone) {
     try {

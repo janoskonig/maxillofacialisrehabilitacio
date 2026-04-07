@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
 import { getStepLabelMap } from '@/lib/step-labels';
+import { normalizePathwayWorkPhaseArray } from '@/lib/pathway-work-phases-for-episode';
 
 export const dynamic = 'force-dynamic';
 
@@ -70,7 +71,7 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
   const episodesResult = await pool.query(
     `SELECT pe.id as episode_id, pe.patient_id, pe.reason, pe.status, pe.opened_at,
             p.nev as patient_name,
-            cp.name as care_pathway_name, cp.steps_json,
+            cp.name as care_pathway_name, cp.work_phases_json, cp.steps_json,
             u.doktor_neve as assigned_provider_name,
             tt.label_hu as treatment_type_label
      FROM patient_episodes pe
@@ -93,13 +94,20 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
 
   const episodeIds = episodesResult.rows.map((r: { episode_id: string }) => r.episode_id);
 
-  const multiPathwayStepsMap = new Map<string, Array<{ step_code: string; label?: string; pool: string; duration_minutes?: number }>>();
+  const multiPathwayStepsMap = new Map<
+    string,
+    NonNullable<ReturnType<typeof normalizePathwayWorkPhaseArray>>
+  >();
   const multiPathwayNamesMap = new Map<string, string>();
-  const needsMultiPathway = episodesResult.rows.filter((r: { steps_json: unknown }) => !r.steps_json || !Array.isArray(r.steps_json));
+  const rowHasPathwayPhases = (r: { work_phases_json?: unknown; steps_json?: unknown }) => {
+    const n = normalizePathwayWorkPhaseArray(r.work_phases_json ?? r.steps_json);
+    return !!(n && n.length > 0);
+  };
+  const needsMultiPathway = episodesResult.rows.filter((r) => !rowHasPathwayPhases(r));
   if (needsMultiPathway.length > 0) {
     const needsIds = needsMultiPathway.map((r: { episode_id: string }) => r.episode_id);
     const mpResult = await pool.query(
-      `SELECT ep.episode_id, cp.name, cp.steps_json
+      `SELECT ep.episode_id, cp.name, cp.work_phases_json, cp.steps_json
        FROM episode_pathways ep
        JOIN care_pathways cp ON ep.care_pathway_id = cp.id
        WHERE ep.episode_id = ANY($1)
@@ -108,10 +116,10 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
     );
     for (const row of mpResult.rows) {
       const epId = row.episode_id as string;
-      const stepsArr = row.steps_json as Array<{ step_code: string; label?: string; pool: string; duration_minutes?: number }>;
-      if (!Array.isArray(stepsArr)) continue;
+      const templates = normalizePathwayWorkPhaseArray(row.work_phases_json ?? row.steps_json);
+      if (!templates?.length) continue;
       const existing = multiPathwayStepsMap.get(epId) ?? [];
-      existing.push(...stepsArr);
+      existing.push(...templates);
       multiPathwayStepsMap.set(epId, existing);
       if (!multiPathwayNamesMap.has(epId)) {
         multiPathwayNamesMap.set(epId, row.name);
@@ -151,13 +159,13 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
       [episodeIds]
     ),
     pool.query(
-      `SELECT es.episode_id, es.step_code,
-              COALESCE(es.seq, es.pathway_order_index) as step_seq,
-              es.pool, es.duration_minutes, es.custom_label
-       FROM episode_steps es
-       WHERE es.episode_id = ANY($1)
-         AND (es.merged_into_episode_step_id IS NULL)
-       ORDER BY es.episode_id, COALESCE(es.seq, es.pathway_order_index)`,
+      `SELECT ewp.episode_id, ewp.work_phase_code as step_code,
+              COALESCE(ewp.seq, ewp.pathway_order_index) as step_seq,
+              ewp.pool, ewp.duration_minutes, ewp.custom_label
+       FROM episode_work_phases ewp
+       WHERE ewp.episode_id = ANY($1)
+         AND (ewp.merged_into_episode_work_phase_id IS NULL)
+       ORDER BY ewp.episode_id, COALESCE(ewp.seq, ewp.pathway_order_index)`,
       [episodeIds]
     ),
     getStepLabelMap(),
@@ -212,14 +220,15 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
         durationMinutes: (r.duration_minutes as number) ?? 30,
       }));
     } else {
-      const pathwaySteps = (ep.steps_json as Array<{
-        step_code: string; label?: string; pool: string; duration_minutes?: number;
-      }>) ?? multiPathwayStepsMap.get(ep.episode_id);
-      if (!pathwaySteps || !Array.isArray(pathwaySteps) || pathwaySteps.length === 0) continue;
+      const pathwaySteps =
+        multiPathwayStepsMap.get(ep.episode_id) ??
+        normalizePathwayWorkPhaseArray(ep.work_phases_json ?? ep.steps_json) ??
+        [];
+      if (pathwaySteps.length === 0) continue;
       stepSources = pathwaySteps.map((ps, idx) => ({
-        stepCode: ps.step_code,
+        stepCode: ps.work_phase_code,
         stepSeq: idx,
-        label: ps.label ?? stepLabelMap.get(ps.step_code) ?? ps.step_code,
+        label: ps.label ?? stepLabelMap.get(ps.work_phase_code) ?? ps.work_phase_code,
         pool: ps.pool,
         durationMinutes: ps.duration_minutes ?? 30,
       }));

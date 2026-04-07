@@ -1,6 +1,5 @@
 /**
- * Step catalog cache: unmapped step codes (care_pathways.steps_json - step_catalog)
- * Invalidate on care_pathways PATCH/POST.
+ * Unmapped work-phase codes: pathway JSON vs work_phase_catalog (legacy step_catalog kept in DB).
  */
 
 import { getDbPool } from './db';
@@ -17,7 +16,7 @@ export function invalidateUnmappedCache(): void {
 }
 
 /**
- * Get step_code-ok from care_pathways.steps_json that are not in step_catalog.
+ * Codes referenced in pathway JSON but missing from work_phase_catalog.
  * Cached with TTL.
  */
 export async function getUnmappedStepCodes(): Promise<string[]> {
@@ -28,22 +27,32 @@ export async function getUnmappedStepCodes(): Promise<string[]> {
 
   const pool = getDbPool();
 
-  const stepCatalogExists = await pool.query(
-    `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'step_catalog'`
+  const wpCatalogExists = await pool.query(
+    `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'work_phase_catalog'`
   );
-  if (stepCatalogExists.rows.length === 0) {
+  if (wpCatalogExists.rows.length === 0) {
     return [];
   }
 
   const result = await pool.query(`
-    WITH pathway_steps AS (
-      SELECT DISTINCT elem->>'step_code' AS step_code
-      FROM care_pathways,
-           jsonb_array_elements(steps_json) AS elem
-      WHERE elem->>'step_code' IS NOT NULL AND elem->>'step_code' != ''
+    WITH pathway_elems AS (
+      SELECT jsonb_array_elements(
+        CASE
+          WHEN work_phases_json IS NOT NULL AND jsonb_array_length(work_phases_json) > 0
+          THEN work_phases_json
+          ELSE steps_json
+        END
+      ) AS elem
+      FROM care_pathways
+    ),
+    pathway_steps AS (
+      SELECT DISTINCT COALESCE(elem->>'work_phase_code', elem->>'step_code') AS step_code
+      FROM pathway_elems
+      WHERE COALESCE(elem->>'work_phase_code', elem->>'step_code') IS NOT NULL
+        AND COALESCE(elem->>'work_phase_code', elem->>'step_code') != ''
     ),
     catalog_steps AS (
-      SELECT step_code FROM step_catalog WHERE is_active = true
+      SELECT work_phase_code AS step_code FROM work_phase_catalog WHERE is_active = true
     )
     SELECT ps.step_code
     FROM pathway_steps ps

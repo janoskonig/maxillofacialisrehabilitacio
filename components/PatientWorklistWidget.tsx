@@ -287,7 +287,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
     const key = getWorklistItemKey(item);
     setMarkCompleteKey(key);
     try {
-      const res = await fetch(`/api/episodes/${episodeId}/steps/${episodeStepId}`, {
+      const res = await fetch(`/api/episodes/${episodeId}/work-phases/${episodeStepId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

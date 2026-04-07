@@ -4,6 +4,7 @@
  */
 
 import { getDbPool } from './db';
+import { normalizePathwayWorkPhaseArray } from './pathway-work-phases-for-episode';
 
 const RECALL_SCHEDULE_DAYS = [180, 365]; // 6 months, 12 months
 
@@ -23,13 +24,18 @@ export async function ensureRecallTasksForEpisode(episodeId: string): Promise<nu
 
   const pathwayResult = episodeResult.rows[0].care_pathway_id
     ? await pool.query(
-        `SELECT steps_json FROM care_pathways WHERE id = $1`,
+        `SELECT work_phases_json, steps_json FROM care_pathways WHERE id = $1`,
         [episodeResult.rows[0].care_pathway_id]
       )
     : { rows: [] };
 
-  const steps = pathwayResult.rows[0]?.steps_json as Array<{ step_code: string; pool: string; default_days_offset?: number }> | null;
-  const controlSteps = (steps?.filter((s) => s.pool === 'control') ?? []).sort((a, b) => (a.default_days_offset ?? 0) - (b.default_days_offset ?? 0));
+  const prow = pathwayResult.rows[0];
+  const steps =
+    normalizePathwayWorkPhaseArray(prow?.work_phases_json) ??
+    normalizePathwayWorkPhaseArray(prow?.steps_json);
+  const controlSteps = (steps?.filter((s) => s.pool === 'control') ?? []).sort(
+    (a, b) => (a.default_days_offset ?? 0) - (b.default_days_offset ?? 0)
+  );
   const mapped = controlSteps.map((s) => s.default_days_offset ?? 180).slice(0, 2);
   const recallDays = mapped.length > 0 ? mapped : RECALL_SCHEDULE_DAYS;
 

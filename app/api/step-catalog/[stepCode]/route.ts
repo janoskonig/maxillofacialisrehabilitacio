@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
 import { stepCatalogPatchSchema } from '@/lib/admin-process-schemas';
 import { invalidateStepLabelCache } from '@/lib/step-labels';
+import { invalidateCache } from '@/lib/catalog-cache';
 
 const STEP_CODE_REGEX = /^[a-z0-9_]+$/;
 
@@ -32,7 +33,7 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász'], async (req, { 
   const pool = getDbPool();
 
   const exists = await pool.query(
-    `SELECT 1 FROM step_catalog WHERE step_code = $1`,
+    `SELECT 1 FROM work_phase_catalog WHERE work_phase_code = $1`,
     [stepCode]
   );
   if (exists.rows.length === 0) {
@@ -69,16 +70,17 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász'], async (req, { 
   values.push(stepCode);
 
   await pool.query(
-    `UPDATE step_catalog SET ${updates.join(', ')} WHERE step_code = $${idx}`,
+    `UPDATE work_phase_catalog SET ${updates.join(', ')} WHERE work_phase_code = $${idx}`,
     values
   );
 
+  invalidateCache('work-phase-catalog');
   invalidateStepLabelCache();
 
   const afterResult = await pool.query(
-    `SELECT step_code as "stepCode", label_hu as "labelHu", label_en as "labelEn",
+    `SELECT work_phase_code as "stepCode", label_hu as "labelHu", label_en as "labelEn",
             is_active as "isActive", updated_at as "updatedAt"
-     FROM step_catalog WHERE step_code = $1`,
+     FROM work_phase_catalog WHERE work_phase_code = $1`,
     [stepCode]
   );
 

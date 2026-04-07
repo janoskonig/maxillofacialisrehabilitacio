@@ -9,6 +9,7 @@ import { checkOneHardNext, getAppointmentRiskSettings } from '@/lib/scheduling-s
 import { getSchedulingFeatureFlag } from '@/lib/scheduling-feature-flags';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { logger } from '@/lib/logger';
+import { normalizePathwayWorkPhaseArray } from '@/lib/pathway-work-phases-for-episode';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -150,29 +151,35 @@ export async function createAppointment(
 
       if (hasAnyPathway) {
         // Derive requiresPrecommit from pathway step definition
-        let allPathwaySteps: Array<{ step_code: string; requires_precommit?: boolean }> = [];
+        let allPathwayPhases: Array<{ work_phase_code: string; requires_precommit?: boolean }> = [];
         try {
           const multiPwResult = await db.query(
-            `SELECT cp.steps_json FROM episode_pathways ep
+            `SELECT cp.work_phases_json, cp.steps_json FROM episode_pathways ep
              JOIN care_pathways cp ON ep.care_pathway_id = cp.id
              WHERE ep.episode_id = $1`,
             [episodeId],
           );
           for (const row of multiPwResult.rows) {
-            if (Array.isArray(row.steps_json)) {
-              allPathwaySteps.push(...(row.steps_json as Array<{ step_code: string; requires_precommit?: boolean }>));
-            }
+            const chunk =
+              normalizePathwayWorkPhaseArray(row.work_phases_json) ??
+              normalizePathwayWorkPhaseArray(row.steps_json);
+            if (chunk) allPathwayPhases.push(...chunk);
           }
         } catch {
           if (episodeLock.rows[0].care_pathway_id) {
             const pathwayResult = await db.query(
-              `SELECT cp.steps_json FROM care_pathways cp WHERE cp.id = $1`,
+              `SELECT cp.work_phases_json, cp.steps_json FROM care_pathways cp WHERE cp.id = $1`,
               [episodeLock.rows[0].care_pathway_id],
             );
-            allPathwaySteps = (pathwayResult.rows[0]?.steps_json as Array<{ step_code: string; requires_precommit?: boolean }>) ?? [];
+            const pr = pathwayResult.rows[0];
+            allPathwayPhases =
+              normalizePathwayWorkPhaseArray(pr?.work_phases_json) ??
+              normalizePathwayWorkPhaseArray(pr?.steps_json) ??
+              [];
           }
         }
-        const matchedStep = typeof stepCode === 'string' ? allPathwaySteps.find((s) => s.step_code === stepCode) : null;
+        const matchedStep =
+          typeof stepCode === 'string' ? allPathwayPhases.find((s) => s.work_phase_code === stepCode) : null;
         const pathwayStepRequiresPrecommit = matchedStep?.requires_precommit === true;
         requiresPrecommit = pathwayStepRequiresPrecommit || bodyRequiresPrecommit;
 

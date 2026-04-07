@@ -2,12 +2,12 @@ import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
-import { getFullStepQuery } from '@/lib/episode-step-select';
+import { getFullWorkPhaseQuery } from '@/lib/episode-work-phase-select';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * POST /api/episodes/:id/steps/from-tooth-treatment
+ * POST /api/episodes/:id/work-phases/from-tooth-treatment
  * Add a linked tooth treatment as a step in the episode's pathway.
  * Body: { toothTreatmentId: string }
  */
@@ -56,7 +56,7 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
   }
 
   const alreadyExists = await pool.query(
-    `SELECT 1 FROM episode_steps WHERE episode_id = $1 AND tooth_treatment_id = $2`,
+    `SELECT 1 FROM episode_work_phases WHERE episode_id = $1 AND tooth_treatment_id = $2`,
     [episodeId, toothTreatmentId]
   );
   if (alreadyExists.rows.length > 0) {
@@ -64,31 +64,31 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
   }
 
   const maxSeqRow = await pool.query(
-    `SELECT COALESCE(MAX(seq), -1) as max_seq FROM episode_steps WHERE episode_id = $1`,
+    `SELECT COALESCE(MAX(seq), -1) as max_seq FROM episode_work_phases WHERE episode_id = $1`,
     [episodeId]
   );
   const nextSeq = (maxSeqRow.rows[0].max_seq ?? -1) + 1;
 
   const maxIdxRow = await pool.query(
-    `SELECT COALESCE(MAX(pathway_order_index), -1) as max_idx FROM episode_steps WHERE episode_id = $1`,
+    `SELECT COALESCE(MAX(pathway_order_index), -1) as max_idx FROM episode_work_phases WHERE episode_id = $1`,
     [episodeId]
   );
   const nextIdx = (maxIdxRow.rows[0].max_idx ?? -1) + 1;
 
-  const stepCode = `tooth_${tt.treatment_code}`;
+  const workPhaseCode = `tooth_${tt.treatment_code}`;
   const customLabel = `${tt.labelHu} – ${tt.tooth_number}`;
 
   await pool.query(
-    `INSERT INTO episode_steps (episode_id, step_code, pathway_order_index, pool, duration_minutes, default_days_offset, seq, tooth_treatment_id, custom_label)
+    `INSERT INTO episode_work_phases (episode_id, work_phase_code, pathway_order_index, pool, duration_minutes, default_days_offset, seq, tooth_treatment_id, custom_label)
      VALUES ($1, $2, $3, 'work', 30, 7, $4, $5, $6)`,
-    [episodeId, stepCode, nextIdx, nextSeq, toothTreatmentId, customLabel]
+    [episodeId, workPhaseCode, nextIdx, nextSeq, toothTreatmentId, customLabel]
   );
 
   try {
     await emitSchedulingEvent('episode', episodeId, 'step_added');
   } catch { /* non-blocking */ }
 
-  const allSteps = await getFullStepQuery(pool, episodeId);
+  const allPhases = await getFullWorkPhaseQuery(pool, episodeId);
 
-  return NextResponse.json({ steps: allSteps.rows }, { status: 201 });
+  return NextResponse.json({ workPhases: allPhases.rows }, { status: 201 });
 });

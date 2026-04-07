@@ -10,8 +10,19 @@ export const GET = authedHandler(async (req, { auth }) => {
   const result = await pool.query(`
     SELECT DISTINCT label FROM (
       SELECT elem->>'label' AS label
-      FROM care_pathways, jsonb_array_elements(steps_json) elem
+      FROM care_pathways,
+           jsonb_array_elements(
+             CASE
+               WHEN work_phases_json IS NOT NULL AND jsonb_array_length(work_phases_json) > 0
+               THEN work_phases_json
+               ELSE steps_json
+             END
+           ) elem
       WHERE elem->>'label' IS NOT NULL AND elem->>'label' <> ''
+      UNION
+      SELECT label_hu AS label
+      FROM work_phase_catalog
+      WHERE is_active = true
       UNION
       SELECT label_hu AS label
       FROM step_catalog

@@ -2,12 +2,12 @@ import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
-import { getFullStepQuery } from '@/lib/episode-step-select';
+import { getFullWorkPhaseQuery } from '@/lib/episode-work-phase-select';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * POST /api/episodes/:id/steps/merge
+ * POST /api/episodes/:id/work-phases/merge
  * Merge multiple steps into one group (same appointment slot).
  * Body: { stepIds: string[] } — at least 2. First ID becomes the "primary" step.
  */
@@ -27,8 +27,8 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
     await client.query('BEGIN');
 
     const stepsResult = await client.query(
-      `SELECT es.id, es.episode_id, es.status, es.merged_into_episode_step_id, pe.status as ep_status
-       FROM episode_steps es
+      `SELECT es.id, es.episode_id, es.status, es.merged_into_episode_work_phase_id, pe.status as ep_status
+       FROM episode_work_phases es
        JOIN patient_episodes pe ON es.episode_id = pe.id
        WHERE es.episode_id = $1 AND es.id = ANY($2)
        FOR UPDATE OF es`,
@@ -51,7 +51,7 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
         await client.query('ROLLBACK');
         return NextResponse.json({ error: 'Befejezett lépés nem vonható össze' }, { status: 400 });
       }
-      if (row.merged_into_episode_step_id) {
+      if (row.merged_into_episode_work_phase_id) {
         await client.query('ROLLBACK');
         return NextResponse.json({ error: 'Már összevont lépés nem vonható újra össze' }, { status: 400 });
       }
@@ -61,7 +61,7 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
     const secondaryIds = stepIds.slice(1);
 
     await client.query(
-      `UPDATE episode_steps SET merged_into_episode_step_id = $1 WHERE id = ANY($2) AND episode_id = $3`,
+      `UPDATE episode_work_phases SET merged_into_episode_work_phase_id = $1 WHERE id = ANY($2) AND episode_id = $3`,
       [primaryId, secondaryIds, episodeId]
     );
 
@@ -71,8 +71,8 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
       await emitSchedulingEvent('episode', episodeId, 'steps_merged');
     } catch { /* non-blocking */ }
 
-    const allSteps = await getFullStepQuery(pool, episodeId);
-    return NextResponse.json({ steps: allSteps.rows, primaryStepId: primaryId });
+    const allPhases = await getFullWorkPhaseQuery(pool, episodeId);
+    return NextResponse.json({ workPhases: allPhases.rows, primaryWorkPhaseId: primaryId });
   } catch (txError) {
     await client.query('ROLLBACK');
     throw txError;

@@ -1,6 +1,5 @@
 /**
- * Step labels: step_code → megjelenítési címke (step_catalog)
- * Cache TTL, invalidation step_catalog + care_pathways PATCH/POST után.
+ * Work phase labels: code → megjelenítési címke (work_phase_catalog)
  */
 
 import { getDbPool } from './db';
@@ -10,14 +9,14 @@ const CACHE_TTL_MS = 5 * 60 * 1000; // 5 perc
 let cache: { map: Map<string, string>; expiresAt: number } | null = null;
 
 /**
- * Invalidate step label cache. Call after step_catalog PATCH or care_pathways PATCH/POST.
+ * Invalidate label cache after catalog or pathway mutations.
  */
 export function invalidateStepLabelCache(): void {
   cache = null;
 }
 
 /**
- * Fetch step_code → label_hu map from step_catalog. Cached with TTL.
+ * Fetch work phase code → label_hu from work_phase_catalog. Cached with TTL.
  */
 export async function getStepLabelMap(): Promise<Map<string, string>> {
   const now = Date.now();
@@ -27,7 +26,7 @@ export async function getStepLabelMap(): Promise<Map<string, string>> {
 
   const pool = getDbPool();
   const tableExists = await pool.query(
-    `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'step_catalog'`
+    `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'work_phase_catalog'`
   );
   if (tableExists.rows.length === 0) {
     cache = { map: new Map(), expiresAt: now + CACHE_TTL_MS };
@@ -35,12 +34,12 @@ export async function getStepLabelMap(): Promise<Map<string, string>> {
   }
 
   const result = await pool.query(
-    `SELECT step_code, label_hu FROM step_catalog WHERE is_active = true ORDER BY step_code`
+    `SELECT work_phase_code, label_hu FROM work_phase_catalog WHERE is_active = true ORDER BY work_phase_code`
   );
 
   const map = new Map<string, string>();
   for (const row of result.rows) {
-    map.set(row.step_code as string, row.label_hu as string);
+    map.set(row.work_phase_code as string, row.label_hu as string);
   }
 
   cache = { map, expiresAt: now + CACHE_TTL_MS };

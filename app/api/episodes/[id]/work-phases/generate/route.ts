@@ -2,13 +2,13 @@ import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
 import { logger } from '@/lib/logger';
-import { getFullStepQuery } from '@/lib/episode-step-select';
+import { getFullWorkPhaseQuery } from '@/lib/episode-work-phase-select';
+import { normalizePathwayWorkPhaseArray } from '@/lib/pathway-work-phases-for-episode';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * POST /api/episodes/:id/steps/generate — idempotent episode_steps generation.
- * Multi-pathway aware: generates steps from ALL episode_pathways (or falls back to legacy care_pathway_id).
+ * POST /api/episodes/:id/work-phases/generate — idempotent episode_work_phases generation.
  */
 export const POST = authedHandler(async (req, { auth, params }) => {
   const episodeId = params.id;
@@ -74,7 +74,7 @@ export const POST = authedHandler(async (req, { auth, params }) => {
     await client.query('BEGIN');
 
     const maxSeqRow = await client.query(
-      `SELECT COALESCE(MAX(seq), -1) as max_seq FROM episode_steps WHERE episode_id = $1`,
+      `SELECT COALESCE(MAX(seq), -1) as max_seq FROM episode_work_phases WHERE episode_id = $1`,
       [episodeId]
     );
     let nextSeq: number = (maxSeqRow.rows[0].max_seq ?? -1) + 1;
@@ -83,42 +83,39 @@ export const POST = authedHandler(async (req, { auth, params }) => {
     for (const epPw of epPathways) {
       const alreadyExists = await client.query(
         epPw.id === '__legacy__'
-          ? `SELECT 1 FROM episode_steps WHERE episode_id = $1 AND source_episode_pathway_id IS NULL LIMIT 1`
-          : `SELECT 1 FROM episode_steps WHERE source_episode_pathway_id = $1 LIMIT 1`,
+          ? `SELECT 1 FROM episode_work_phases WHERE episode_id = $1 AND source_episode_pathway_id IS NULL LIMIT 1`
+          : `SELECT 1 FROM episode_work_phases WHERE source_episode_pathway_id = $1 LIMIT 1`,
         epPw.id === '__legacy__' ? [episodeId] : [epPw.id]
       );
       if (alreadyExists.rows.length > 0) continue;
 
       const pathwayRow = await client.query(
-        `SELECT steps_json FROM care_pathways WHERE id = $1`,
+        `SELECT work_phases_json, steps_json FROM care_pathways WHERE id = $1`,
         [epPw.care_pathway_id]
       );
-      const stepsJson = pathwayRow.rows[0]?.steps_json as Array<{
-        step_code: string;
-        pool?: string;
-        duration_minutes?: number;
-        default_days_offset?: number;
-      }> | null;
+      const templates =
+        normalizePathwayWorkPhaseArray(pathwayRow.rows[0]?.work_phases_json) ??
+        normalizePathwayWorkPhaseArray(pathwayRow.rows[0]?.steps_json);
 
-      if (!Array.isArray(stepsJson) || stepsJson.length === 0) continue;
+      if (!templates || templates.length === 0) continue;
 
       const insertValues: unknown[] = [];
       const insertPlaceholders: string[] = [];
       let pIdx = 1;
 
-      for (let i = 0; i < stepsJson.length; i++) {
-        const step = stepsJson[i];
+      for (let i = 0; i < templates.length; i++) {
+        const ph = templates[i];
         const sourceId = epPw.id === '__legacy__' ? null : epPw.id;
         insertPlaceholders.push(
           `($${pIdx}, $${pIdx + 1}, $${pIdx + 2}, $${pIdx + 3}, $${pIdx + 4}, $${pIdx + 5}, $${pIdx + 6}, $${pIdx + 7})`
         );
         insertValues.push(
           episodeId,
-          step.step_code,
+          ph.work_phase_code,
           i,
-          step.pool ?? 'work',
-          step.duration_minutes ?? 30,
-          step.default_days_offset ?? 7,
+          ph.pool ?? 'work',
+          ph.duration_minutes ?? 30,
+          ph.default_days_offset ?? 7,
           sourceId,
           nextSeq + i
         );
@@ -126,18 +123,18 @@ export const POST = authedHandler(async (req, { auth, params }) => {
       }
 
       await client.query(
-        `INSERT INTO episode_steps (episode_id, step_code, pathway_order_index, pool, duration_minutes, default_days_offset, source_episode_pathway_id, seq)
+        `INSERT INTO episode_work_phases (episode_id, work_phase_code, pathway_order_index, pool, duration_minutes, default_days_offset, source_episode_pathway_id, seq)
          VALUES ${insertPlaceholders.join(', ')}`,
         insertValues
       );
 
-      nextSeq += stepsJson.length;
-      totalGenerated += stepsJson.length;
+      nextSeq += templates.length;
+      totalGenerated += templates.length;
     }
 
     // Sync linked tooth treatments into steps (automatic: all episode_linked treatments become steps)
     const hasToothCol = await client.query(
-      `SELECT 1 FROM information_schema.columns WHERE table_name = 'episode_steps' AND column_name = 'tooth_treatment_id' LIMIT 1`
+      `SELECT 1 FROM information_schema.columns WHERE table_name = 'episode_work_phases' AND column_name = 'tooth_treatment_id' LIMIT 1`
     );
     if (hasToothCol.rows.length > 0) {
       const missing = await client.query(
@@ -145,22 +142,22 @@ export const POST = authedHandler(async (req, { auth, params }) => {
          FROM tooth_treatments tt
          JOIN tooth_treatment_catalog ttc ON tt.treatment_code = ttc.code
          WHERE tt.episode_id = $1 AND tt.status = 'episode_linked'
-           AND NOT EXISTS (SELECT 1 FROM episode_steps es WHERE es.episode_id = tt.episode_id AND es.tooth_treatment_id = tt.id)
+           AND NOT EXISTS (SELECT 1 FROM episode_work_phases es WHERE es.episode_id = tt.episode_id AND es.tooth_treatment_id = tt.id)
          ORDER BY tt.tooth_number, ttc.sort_order`,
         [episodeId]
       );
       for (const row of missing.rows) {
-        const stepCode = `tooth_${row.treatment_code}`;
+        const workPhaseCode = `tooth_${row.treatment_code}`;
         const customLabel = `${row.label_hu} – ${row.tooth_number}`;
         const maxIdxRow = await client.query(
-          `SELECT COALESCE(MAX(pathway_order_index), -1) as max_idx FROM episode_steps WHERE episode_id = $1`,
+          `SELECT COALESCE(MAX(pathway_order_index), -1) as max_idx FROM episode_work_phases WHERE episode_id = $1`,
           [episodeId]
         );
         const nextIdx = (maxIdxRow.rows[0].max_idx ?? -1) + 1;
         await client.query(
-          `INSERT INTO episode_steps (episode_id, step_code, pathway_order_index, pool, duration_minutes, default_days_offset, seq, tooth_treatment_id, custom_label)
+          `INSERT INTO episode_work_phases (episode_id, work_phase_code, pathway_order_index, pool, duration_minutes, default_days_offset, seq, tooth_treatment_id, custom_label)
            VALUES ($1, $2, $3, 'work', 30, 7, $4, $5, $6)`,
-          [episodeId, stepCode, nextIdx, nextSeq, row.id, customLabel]
+          [episodeId, workPhaseCode, nextIdx, nextSeq, row.id, customLabel]
         );
         nextSeq += 1;
         totalGenerated += 1;
@@ -169,12 +166,12 @@ export const POST = authedHandler(async (req, { auth, params }) => {
 
     await client.query('COMMIT');
 
-    const allSteps = await getFullStepQuery(pool, episodeId);
+    const allPhases = await getFullWorkPhaseQuery(pool, episodeId);
 
     return NextResponse.json({
-      steps: allSteps.rows,
+      workPhases: allPhases.rows,
       generated: totalGenerated > 0,
-      message: totalGenerated > 0 ? `${totalGenerated} lépés generálva` : 'Lépések már léteznek',
+      message: totalGenerated > 0 ? `${totalGenerated} munkafázis generálva` : 'Munkafázisok már léteznek',
     }, { status: totalGenerated > 0 ? 201 : 200 });
   } catch (txError) {
     await client.query('ROLLBACK');

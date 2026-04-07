@@ -7,6 +7,7 @@ import {
   canonicalizeStepCode,
 } from '@/lib/admin-process-schemas';
 import { invalidateStepLabelCache } from '@/lib/step-labels';
+import { invalidateCache } from '@/lib/catalog-cache';
 
 const STEP_CODE_REGEX = /^[a-z0-9_]+$/;
 
@@ -204,9 +205,9 @@ export const POST = roleHandler(['admin', 'fogpótlástanász'], async (req, { a
 
   for (const item of validated) {
     await pool.query(
-      `INSERT INTO step_catalog (step_code, label_hu, label_en, is_active, updated_at, updated_by)
+      `INSERT INTO work_phase_catalog (work_phase_code, label_hu, label_en, is_active, updated_at, updated_by)
        VALUES ($1, $2, $3, $4, now(), $5)
-       ON CONFLICT (step_code) DO UPDATE SET
+       ON CONFLICT (work_phase_code) DO UPDATE SET
          label_hu = EXCLUDED.label_hu,
          label_en = EXCLUDED.label_en,
          is_active = EXCLUDED.is_active,
@@ -216,6 +217,7 @@ export const POST = roleHandler(['admin', 'fogpótlástanász'], async (req, { a
     );
   }
 
+  invalidateCache('work-phase-catalog');
   invalidateStepLabelCache();
 
   return NextResponse.json({
