@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { normalizePathwayWorkPhaseArray } from '@/lib/pathway-work-phases-for-episode';
 
 const REASONS = ['traumás sérülés', 'veleszületett rendellenesség', 'onkológiai kezelés utáni állapot'] as const;
 const POOLS = ['consult', 'work', 'control'] as const;
@@ -22,8 +23,36 @@ type Pathway = {
   reason: string | null;
   treatmentTypeId: string | null;
   stepsJson: PathwayStep[];
+  /** Canonical template JSON when present (preferred over stepsJson for editing). */
+  workPhasesJson?: unknown;
   governance?: { episodeCount: number };
 };
+
+function pathwayStepCount(p: Pathway): number {
+  const fromWp = normalizePathwayWorkPhaseArray(p.workPhasesJson);
+  if (fromWp && fromWp.length > 0) return fromWp.length;
+  return Array.isArray(p.stepsJson) ? p.stepsJson.length : 0;
+}
+
+function pathwayToFormSteps(p: Pathway): PathwayStep[] {
+  const fromWp = normalizePathwayWorkPhaseArray(p.workPhasesJson);
+  if (fromWp && fromWp.length > 0) {
+    return fromWp.map((t) => ({
+      label: t.label || '',
+      step_code: t.work_phase_code,
+      pool: t.pool,
+      duration_minutes: t.duration_minutes,
+      default_days_offset: t.default_days_offset,
+      requires_precommit: t.requires_precommit,
+    }));
+  }
+  return Array.isArray(p.stepsJson)
+    ? p.stepsJson.map((s) => ({
+        ...s,
+        label: s.label || '',
+      }))
+    : [];
+}
 
 type TreatmentType = { id: string; code: string; labelHu: string };
 
@@ -194,11 +223,7 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
     setFormName(p.name);
     setFormReason(p.reason);
     setFormTreatmentTypeId(p.treatmentTypeId);
-    const steps: PathwayStep[] = Array.isArray(p.stepsJson) ? p.stepsJson.map((s) => ({
-      ...s,
-      label: s.label || '',
-    })) : [];
-    setFormSteps(steps);
+    setFormSteps(pathwayToFormSteps(p));
     setFormUpdatedAt((p as { updatedAt?: string }).updatedAt ?? null);
     setAuditReason('');
   };
@@ -384,8 +409,8 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
                   {p.reason ?? (treatmentTypes.find((t) => t.id === p.treatmentTypeId)?.labelHu ?? p.treatmentTypeId ?? '—')}
                 </td>
                 <td className="px-4 py-2 text-sm">
-                  <span title={(p.stepsJson ?? []).map((s, i) => `${i + 1}. ${stepToLabel(s)}`).join('\n')}>
-                    {(p.stepsJson ?? []).length}
+                  <span title={pathwayToFormSteps(p).map((s, i) => `${i + 1}. ${stepToLabel(s)}`).join('\n')}>
+                    {pathwayStepCount(p)}
                   </span>
                 </td>
                 <td className="px-4 py-2 text-sm">{p.governance?.episodeCount ?? 0}</td>

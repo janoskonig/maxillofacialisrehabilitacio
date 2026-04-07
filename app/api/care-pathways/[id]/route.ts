@@ -17,7 +17,8 @@ export const GET = authedHandler(async (req, { auth, params }) => {
 
   const pathwayResult = await pool.query(
     `SELECT cp.id, cp.name, cp.reason, cp.treatment_type_id as "treatmentTypeId",
-            cp.steps_json, cp.version, cp.priority,
+            cp.steps_json as "stepsJson", cp.work_phases_json as "workPhasesJson",
+            cp.version, cp.priority,
             cp.owner_id as "ownerId",
             u.doktor_neve as "ownerName",
             cp.created_at as "createdAt", cp.updated_at as "updatedAt"
@@ -269,7 +270,8 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász'], async (req, { 
 
   const afterResult = await pool.query(
     `SELECT cp.id, cp.name, cp.reason, cp.treatment_type_id as "treatmentTypeId",
-            cp.steps_json, cp.version, cp.priority,
+            cp.steps_json as "stepsJson", cp.work_phases_json as "workPhasesJson",
+            cp.version, cp.priority,
             cp.owner_id as "ownerId",
             u.doktor_neve as "ownerName",
             cp.updated_at as "updatedAt"

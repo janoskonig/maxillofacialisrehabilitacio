@@ -3,7 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
 import { getStepLabelMap } from '@/lib/step-labels';
 import { getEffectiveTreatmentType } from '@/lib/effective-treatment-type';
-import { normalizePathwayWorkPhaseArray } from '@/lib/pathway-work-phases-for-episode';
+import { getPathwayWorkPhasesForEpisode } from '@/lib/pathway-work-phases-for-episode';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +19,6 @@ export const GET = authedHandler(async (req, { auth, params }) => {
   const episodeResult = await pool.query(
     `SELECT pe.id, pe.patient_id as "patientId", pe.care_pathway_id as "carePathwayId",
             pe.treatment_type_id as "episodeTreatmentTypeId",
-            cp.work_phases_json as "workPhasesJson", cp.steps_json as "stepsJson",
             cp.treatment_type_id as "pathwayTreatmentTypeId"
      FROM patient_episodes pe
      LEFT JOIN care_pathways cp ON pe.care_pathway_id = cp.id
@@ -57,7 +56,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
     kezelesiTervAlso,
   });
 
-  const pathwayPhases = normalizePathwayWorkPhaseArray(row.workPhasesJson ?? row.stepsJson) ?? [];
+  const pathwayPhases = (await getPathwayWorkPhasesForEpisode(pool, episodeId)) ?? [];
 
   const currentStageResult = await pool.query(
     `SELECT stage_code as "stageCode" FROM stage_events
@@ -91,7 +90,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
     currentStageCode,
     steps,
     meta: {
-      source: 'care_pathways.work_phases_json',
+      source: 'getPathwayWorkPhasesForEpisode',
       prostheticFilter: 'NONE',
     },
   });

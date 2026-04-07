@@ -33,7 +33,9 @@ export const POST = roleHandler(['admin', 'fogpótlástanász'], async (req, { a
   const r = await pool.query(
     `INSERT INTO care_pathways (name, reason, treatment_type_id, steps_json, work_phases_json, version, priority, owner_id)
      VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, 1, $6, $7)
-     RETURNING id, name, reason, treatment_type_id as "treatmentTypeId", steps_json as "stepsJson", version, priority, owner_id as "ownerId", created_at as "createdAt", updated_at as "updatedAt"`,
+     RETURNING id, name, reason, treatment_type_id as "treatmentTypeId",
+            steps_json as "stepsJson", work_phases_json as "workPhasesJson",
+            version, priority, owner_id as "ownerId", created_at as "createdAt", updated_at as "updatedAt"`,
     [
       data.name,
       reason,
@@ -95,7 +97,8 @@ export const GET = authedHandler(async (req, { auth }) => {
   const pathwaysResult = await pool.query(
     `SELECT cp.id, cp.name, cp.reason, cp.treatment_type_id as "treatmentTypeId",
             tt.code as "treatmentTypeCode",
-            cp.steps_json as "stepsJson", cp.version, cp.priority,
+            cp.steps_json as "stepsJson", cp.work_phases_json as "workPhasesJson",
+            cp.version, cp.priority,
             cp.owner_id as "ownerId",
             u.doktor_neve as "ownerName",
             cp.created_at as "createdAt", cp.updated_at as "updatedAt"

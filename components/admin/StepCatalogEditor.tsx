@@ -196,7 +196,7 @@ export function StepCatalogEditor() {
           <p className="text-sm font-medium text-amber-900 mb-1">Unmapped step_code-ok (nincs címke a katalógusban):</p>
           <p className="text-sm text-amber-800 font-mono">{unmapped.join(', ')}</p>
           <p className="text-xs text-amber-700 mt-1">
-            Ezek a care_pathways.steps_json-ból jönnek. Adjon hozzá címkét a katalógushoz vagy módosítsa a pathway-t.
+            Ezek a kezelési utak JSON-jából jönnek (work_phases_json / steps_json). Adjon címkét a katalógushoz vagy módosítsa a pathway-t.
           </p>
         </div>
       )}
