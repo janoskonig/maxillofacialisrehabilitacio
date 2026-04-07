@@ -17,9 +17,8 @@ import type { ChecklistEntry } from '@/lib/consilium';
 import type { ItemMediaSummary, MediaPreviewItem, PatientPresentationSummary } from '@/lib/consilium-presentation';
 import {
   type ConsiliumPrepCommentSnapshot,
+  careTimelineAuthorNameClass,
   careTimelineEpisodeAccent,
-  careTimelineRoleBadgeClass,
-  careTimelineRoleHu,
   consiliumPresentationDiagnosisText,
   consiliumPresentationOncologyRows,
   consiliumShortDisplay,
@@ -839,40 +838,28 @@ export default function ConsiliumPresentPage() {
                                   <p className={`text-sm font-semibold leading-snug ${accent.episodeTitleClass}`}>
                                     {row.epLabel}
                                   </p>
-                                  {(row.episodeCreatedBy || row.episodeCreatedByRole) && (
+                                  {row.episodeCreatedBy ? (
                                     <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] text-white/55">
                                       <span className="text-white/45">Epizód rögzítő:</span>
-                                      {row.episodeCreatedByRole ? (
-                                        <span
-                                          className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 font-medium border ${careTimelineRoleBadgeClass(row.episodeCreatedByRole)}`}
-                                          title={careTimelineRoleHu(row.episodeCreatedByRole)}
-                                        >
-                                          {careTimelineRoleHu(row.episodeCreatedByRole)}
-                                        </span>
-                                      ) : null}
-                                      {row.episodeCreatedBy ? (
-                                        <span className="text-white/70 truncate max-w-[min(100%,16rem)]" title={row.episodeCreatedBy}>
-                                          {consiliumShortDisplay(row.episodeCreatedBy)}
-                                        </span>
-                                      ) : null}
+                                      <span
+                                        className={`truncate max-w-[min(100%,16rem)] ${careTimelineAuthorNameClass(row.episodeCreatedByRole)}`}
+                                        title={row.episodeCreatedBy}
+                                      >
+                                        {consiliumShortDisplay(row.episodeCreatedBy)}
+                                      </span>
                                     </p>
-                                  )}
+                                  ) : null}
                                 </div>
                               ) : null}
                               <div className={`px-2.5 py-2 ${accent.stageCardClass}`}>
                                 <p className="text-base md:text-lg font-semibold text-white leading-snug">{row.st.stageLabel}</p>
                                 <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-white/65">
                                   <span>{formatConsiliumHuDateTime(row.st.at)}</span>
-                                  {row.st.authorRole ? (
-                                    <span
-                                      className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-medium border ${careTimelineRoleBadgeClass(row.st.authorRole)}`}
-                                      title={careTimelineRoleHu(row.st.authorRole)}
-                                    >
-                                      {careTimelineRoleHu(row.st.authorRole)}
-                                    </span>
-                                  ) : null}
                                   {row.st.authorDisplay ? (
-                                    <span className="text-white/75 truncate max-w-[min(100%,16rem)]" title={row.st.authorDisplay}>
+                                    <span
+                                      className={`truncate max-w-[min(100%,16rem)] ${careTimelineAuthorNameClass(row.st.authorRole)}`}
+                                      title={row.st.authorDisplay}
+                                    >
                                       {consiliumShortDisplay(row.st.authorDisplay)}
                                     </span>
                                   ) : null}
@@ -898,19 +885,15 @@ export default function ConsiliumPresentPage() {
                             <div key={ep.id} className={`rounded-md px-2.5 py-2 text-sm md:text-base ${accent.episodeBlockClass}`}>
                               <p className={`font-semibold leading-snug ${accent.episodeTitleClass}`}>{epLabel}</p>
                               <p className="mt-1 text-white/55">Nincs stádium bejegyzés.</p>
-                              {(ep.episodeCreatedBy || ep.episodeCreatedByRole) ? (
+                              {ep.episodeCreatedBy ? (
                                 <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] text-white/55">
                                   <span className="text-white/40">Rögzítő:</span>
-                                  {ep.episodeCreatedByRole ? (
-                                    <span
-                                      className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 font-medium border ${careTimelineRoleBadgeClass(ep.episodeCreatedByRole)}`}
-                                    >
-                                      {careTimelineRoleHu(ep.episodeCreatedByRole)}
-                                    </span>
-                                  ) : null}
-                                  {ep.episodeCreatedBy ? (
-                                    <span className="text-white/65">{consiliumShortDisplay(ep.episodeCreatedBy)}</span>
-                                  ) : null}
+                                  <span
+                                    className={`truncate max-w-[min(100%,16rem)] ${careTimelineAuthorNameClass(ep.episodeCreatedByRole)}`}
+                                    title={ep.episodeCreatedBy}
+                                  >
+                                    {consiliumShortDisplay(ep.episodeCreatedBy)}
+                                  </span>
                                 </p>
                               ) : null}
                             </div>

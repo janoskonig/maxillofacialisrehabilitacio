@@ -239,34 +239,20 @@ export function careTimelineEpisodeAccent(episodeId: string): CareTimelineAccent
   return CARE_TIMELINE_PALETTES[h % CARE_TIMELINE_PALETTES.length]!;
 }
 
-export function careTimelineRoleHu(role: string | null | undefined): string {
-  if (role == null || role.trim() === '') return 'Ismeretlen szerep';
+/**
+ * Sötét UI (vetítés / előkészítő): a szerző megjelenített nevének színe a users.role alapján.
+ * Beutaló orvos — piros; fogpótlástanász és admin — kék; technikus — zöld.
+ */
+export function careTimelineAuthorNameClass(role: string | null | undefined): string {
   switch (role) {
-    case 'admin':
-      return 'Adminisztrátor';
     case 'beutalo_orvos':
-      return 'Beutaló orvos';
-    case 'fogpótlástanász':
-      return 'Fogpótlástanász';
-    case 'technikus':
-      return 'Technikus';
-    default:
-      return role.replace(/_/g, ' ');
-  }
-}
-
-/** Sötét UI-hoz (vetítés / előkészítő): jelvény Tailwind osztályok (használat: `border` + `inline-flex …`). */
-export function careTimelineRoleBadgeClass(role: string | null | undefined): string {
-  switch (role) {
+      return 'font-medium text-rose-300';
     case 'admin':
-      return 'bg-violet-500/25 text-violet-50 border-violet-300/40';
-    case 'beutalo_orvos':
-      return 'bg-emerald-500/25 text-emerald-50 border-emerald-300/40';
     case 'fogpótlástanász':
-      return 'bg-cyan-500/25 text-cyan-50 border-cyan-300/40';
+      return 'font-medium text-sky-300';
     case 'technikus':
-      return 'bg-amber-500/25 text-amber-50 border-amber-300/35';
+      return 'font-medium text-emerald-300';
     default:
-      return 'bg-white/10 text-white/80 border-white/20';
+      return 'font-medium text-white/80';
   }
 }
