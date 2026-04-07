@@ -3,13 +3,19 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
-import { Patient, patientSchema } from '@/lib/types';
+import { Patient, patientQuickIntakeSchema } from '@/lib/types';
 import { savePatient } from '@/lib/storage';
 import { PatientForm } from '@/components/PatientForm';
 import { useToast } from '@/contexts/ToastContext';
 import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
 import { ArrowLeft } from 'lucide-react';
 import { Logo } from '@/components/Logo';
+
+/** Gyors felvétel: csak alap- és szűkített személyes mezők; a többi a beteg lapon. */
+const NEW_PATIENT_INTAKE_SECTIONS = ['alapadatok', 'szemelyes'] as const;
+
+/** Kis szünet, hogy a „mentés + átirányítás” üzenet elolvasható legyen a lapváltás előtt */
+const REDIRECT_AFTER_SAVE_MS = 950;
 
 export default function NewPatientPage() {
   const router = useRouter();
@@ -36,22 +42,42 @@ export default function NewPatientPage() {
     const source = options?.source || 'manual';
 
     try {
+      // A PatientForm már elvégezte a POST/PUT-ot (usePatientAutoSave.performSave), és id-val hív vissza.
+      // Itt nem szabad csak return-elni: akkor a /patients/new URL és az „Új beteg” fejléc maradna,
+      // miközben már létezik patient ID (ellentmondó UX).
       if (patientData.id) {
         if (source === 'manual') {
-          showToast('Betegadat sikeresen mentve', 'success');
+          showToast(
+            'Beteg adatai elmentve. Következik: átirányítás a beteg megtekintő oldalára.',
+            'info',
+            4500
+          );
+          window.setTimeout(() => {
+            router.replace(`/patients/${patientData.id}/view`);
+          }, REDIRECT_AFTER_SAVE_MS);
         }
+        // Automatikus mentés: ne navigáljunk el gépelés közben; a user kézi mentéssel vagy további
+        // művelettel (pl. időpont) kerülhet a beteg lapra.
         return;
       }
 
-      const validatedPatient = patientSchema.parse(patientData);
+      // Védőút: ha valaki mentés nélküli adattal hívná (ritka, régi hívások)
+      const validatedPatient = patientQuickIntakeSchema.parse(patientData);
       const savedPatient = await savePatient(validatedPatient);
 
       if (source === 'manual') {
-        showToast('Új beteg sikeresen létrehozva', 'success');
         if (savedPatient?.id) {
-          router.push(`/patients/${savedPatient.id}/view`);
+          showToast(
+            'Beteg adatai elmentve. Következik: átirányítás a beteg megtekintő oldalára.',
+            'info',
+            4500
+          );
+          window.setTimeout(() => {
+            router.replace(`/patients/${savedPatient.id}/view`);
+          }, REDIRECT_AFTER_SAVE_MS);
         } else {
-          router.push('/');
+          showToast('Beteg adatai elmentve, de nem kaptunk azonosítót — vissza a főoldalra.', 'info');
+          router.replace('/');
         }
       }
     } catch (error: any) {
@@ -100,8 +126,8 @@ export default function NewPatientPage() {
                 <h1 className="text-base md:text-xl font-semibold text-medical-primary truncate tracking-tight">
                   Új beteg
                 </h1>
-                <p className="text-xs text-gray-500 hidden sm:block font-medium mt-0.5">
-                  ÚJ BETEG FELVÉTELE
+                <p className="text-xs text-gray-500 font-medium mt-0.5 line-clamp-2">
+                  Gyors rögzítés: alapadatok és személyes minimum — részletek a beteg lapon.
                 </p>
               </div>
             </div>
@@ -124,6 +150,8 @@ export default function NewPatientPage() {
           onSave={handleSave}
           onCancel={handleCancel}
           isViewOnly={false}
+          showOnlySections={[...NEW_PATIENT_INTAKE_SECTIONS]}
+          minimalNewPatient
         />
       </main>
 

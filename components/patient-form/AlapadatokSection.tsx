@@ -14,6 +14,8 @@ interface AlapadatokSectionProps {
   sectionErrors: Record<string, number>;
   userRole?: string;
   tajChecksumWarning?: boolean;
+  /** Gyors új beteg: kötelező név+TAJ; telefon és email opcionális (nem NEAK lista) */
+  minimalNewPatient?: boolean;
 }
 
 export function AlapadatokSection({
@@ -25,8 +27,13 @@ export function AlapadatokSection({
   sectionErrors,
   userRole,
   tajChecksumWarning,
+  minimalNewPatient = false,
 }: AlapadatokSectionProps) {
   const isTechnikus = userRole === 'technikus';
+  const req = (key: keyof Patient) =>
+    minimalNewPatient
+      ? key === 'nev' || key === 'taj'
+      : REQUIRED_FIELDS.some(f => f.key === key);
 
   return (
     <div id="section-alapadatok" className="card scroll-mt-20 sm:scroll-mt-24">
@@ -41,7 +48,7 @@ export function AlapadatokSection({
       </h4>
       <div className="space-y-4">
         <div>
-          <label className={`form-label ${REQUIRED_FIELDS.some(f => f.key === 'nev') ? 'form-label-required' : ''}`}>
+          <label className={`form-label ${req('nev') ? 'form-label-required' : ''}`}>
             NÉV
           </label>
           <input
@@ -57,7 +64,7 @@ export function AlapadatokSection({
         {!isTechnikus && (
         <>
         <div>
-          <label className={`form-label ${REQUIRED_FIELDS.some(f => f.key === 'taj') ? 'form-label-required' : ''}`}>
+          <label className={`form-label ${req('taj') ? 'form-label-required' : ''}`}>
             TAJ
           </label>
           <input
@@ -81,6 +88,9 @@ export function AlapadatokSection({
         <div>
           <label className="form-label">
             TELEFONSZÁM
+            {minimalNewPatient && (
+              <span className="font-normal text-gray-500"> (opcionális)</span>
+            )}
           </label>
           <input
             {...register('telefonszam')}
@@ -96,8 +106,11 @@ export function AlapadatokSection({
           )}
         </div>
         <div>
-          <label className={`form-label ${REQUIRED_FIELDS.some(f => f.key === 'email') ? 'form-label-required' : ''}`}>
+          <label className={`form-label ${req('email') ? 'form-label-required' : ''}`}>
             EMAIL
+            {minimalNewPatient && (
+              <span className="font-normal text-gray-500"> (opcionális)</span>
+            )}
           </label>
           <input
             {...register('email')}

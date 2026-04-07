@@ -14,6 +14,8 @@ interface SzemelyesAdatokSectionProps {
   isViewOnly: boolean;
   sectionErrors: Record<string, number>;
   userRole?: string;
+  /** Csak születési dátum + nem (gyors új beteg rögzítés) */
+  compactPersonalFields?: boolean;
 }
 
 export function SzemelyesAdatokSection({
@@ -24,6 +26,7 @@ export function SzemelyesAdatokSection({
   isViewOnly,
   sectionErrors,
   userRole,
+  compactPersonalFields = false,
 }: SzemelyesAdatokSectionProps) {
   if (userRole === 'technikus') return null;
 
@@ -40,7 +43,9 @@ export function SzemelyesAdatokSection({
       </h4>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className="form-label">Születési dátum</label>
+          <label className={`form-label ${compactPersonalFields ? 'form-label-required' : ''}`}>
+            Születési dátum
+          </label>
           <DatePicker
             selected={watch('szuletesiDatum') ? new Date(watch('szuletesiDatum') || '') : null}
             onChange={(date: Date | null) => {
@@ -51,15 +56,25 @@ export function SzemelyesAdatokSection({
             disabled={isViewOnly}
             maxDate={new Date()}
           />
+          {errors.szuletesiDatum && (
+            <p className="text-red-500 text-sm mt-1">{errors.szuletesiDatum.message as string}</p>
+          )}
         </div>
         <div>
-          <label className="form-label">Nem</label>
-          <select {...register('nem')} className="form-input">
+          <label className={`form-label ${compactPersonalFields ? 'form-label-required' : ''}`}>
+            Nem
+          </label>
+          <select {...register('nem')} className={`form-input ${errors.nem ? 'border-red-500' : ''}`}>
             <option value="">Válasszon...</option>
             <option value="ferfi">Férfi</option>
             <option value="no">Nő</option>
           </select>
+          {errors.nem && (
+            <p className="text-red-500 text-sm mt-1">{errors.nem.message as string}</p>
+          )}
         </div>
+        {!compactPersonalFields && (
+          <>
         <div>
           <label className="form-label">Halál dátuma</label>
           <DatePicker
@@ -100,6 +115,8 @@ export function SzemelyesAdatokSection({
             placeholder="Irányítószám"
           />
         </div>
+          </>
+        )}
       </div>
     </div>
   );

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { MobileBottomSheet } from './MobileBottomSheet';
 
 export interface Section {
@@ -35,6 +35,7 @@ export function PatientFormSectionNavigation({
   const isMobile = breakpoint === 'mobile';
   const [showMobileSelector, setShowMobileSelector] = useState(false);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const stepperScrollRef = useRef<HTMLDivElement | null>(null);
 
   const activeIndex = sections.findIndex(s => s.id === activeSectionId);
   const activeSection = activeIndex >= 0 ? sections[activeIndex] : null;
@@ -51,7 +52,7 @@ export function PatientFormSectionNavigation({
       setTimeout(() => {
         const retryElement = document.getElementById(`section-${sectionId}`);
         if (retryElement) {
-          const headerOffset = isMobile ? 80 : 100;
+          const headerOffset = breakpoint === 'mobile' ? 80 : 100;
           const elementPosition = retryElement.getBoundingClientRect().top;
           const offsetPosition = elementPosition + (window.scrollY || window.pageYOffset) - headerOffset;
           window.scrollTo({
@@ -63,7 +64,7 @@ export function PatientFormSectionNavigation({
       return;
     }
     
-    const headerOffset = isMobile ? 80 : 100; // Account for sticky header
+    const headerOffset = breakpoint === 'mobile' ? 80 : 100; // Account for sticky header
     const elementPosition = element.getBoundingClientRect().top;
     const offsetPosition = elementPosition + (window.scrollY || window.pageYOffset) - headerOffset;
 
@@ -81,6 +82,15 @@ export function PatientFormSectionNavigation({
       }
     };
   }, []);
+
+  // Asztali stepper: aktív lépés vízszintesen középre (a rejtett lépések elérhetők maradnak)
+  useEffect(() => {
+    if (isMobile || !activeSectionId || !stepperScrollRef.current) return;
+    const btn = stepperScrollRef.current.querySelector<HTMLElement>(
+      `[data-section-step="${activeSectionId}"]`
+    );
+    btn?.scrollIntoView({ inline: 'center', behavior: 'smooth', block: 'nearest' });
+  }, [activeSectionId, isMobile]);
 
   if (sections.length === 0) {
     return null;
@@ -102,16 +112,16 @@ export function PatientFormSectionNavigation({
     }, 100);
   };
 
-  // Mobile: Sticky top selector
+  // Mobil: sticky választó + lap
   if (isMobile) {
     return (
       <>
-        <div className="mobile-header sticky top-0 z-30 bg-white border-b">
+        <div className="mobile-header sticky top-16 z-30 bg-white border-b sm:top-[4.5rem]">
           <div className="px-4 py-3">
             {/* Progress indicator */}
             {activeSection && (
-              <div className="text-xs text-gray-500 mb-2">
-                {activeSection.label} / {currentSectionNumber} / {totalSections}
+              <div className="text-xs text-gray-600 mb-3 font-medium">
+                Szekció {currentSectionNumber}/{totalSections} — {activeSection.label}
               </div>
             )}
             
@@ -191,63 +201,78 @@ export function PatientFormSectionNavigation({
     );
   }
 
-  // Desktop: Stepper
+  // Desktop (≥1024): vízszintes stepper — külön scroll konténer, hogy ne vágódjon le a szélén
   return (
-    <div className="mb-6 sticky top-0 z-40 bg-white pt-4 pb-2 border-b border-gray-200">
-      {/* Progress indicator */}
+    <div className="mb-8 sticky top-16 z-30 bg-white pt-3 pb-3 border-b border-gray-200 -mx-3 sm:-mx-6 px-3 sm:px-6 sm:top-[4.5rem] md:top-[4.75rem] md:pt-4 lg:top-20">
       {activeSection && (
-        <div className="text-sm text-gray-600 mb-4">
-          {activeSection.label} / {currentSectionNumber} / {totalSections}
+        <div className="text-sm text-gray-600 mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+          <span>
+            Szekció <span className="font-semibold text-gray-800">{currentSectionNumber}</span> /{' '}
+            {totalSections}: {activeSection.label}
+          </span>
+          {sections.length > 6 && (
+            <span className="text-xs text-gray-500 flex items-center gap-0.5">
+              <ChevronRight className="w-3.5 h-3.5" aria-hidden />
+              Görgessen, ha nem lát minden lépést
+            </span>
+          )}
         </div>
       )}
 
-      {/* Stepper */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2">
-        {sections.map((section, index) => {
-          const errorCount = sectionErrors[section.id] || 0;
-          const isActive = section.id === activeSectionId;
-          const isCompleted = activeIndex > index;
-          const isClickable = true;
+      <div
+        ref={stepperScrollRef}
+        className="w-full max-w-full min-w-0 overflow-x-auto overflow-y-visible overscroll-x-contain pb-2 scroll-smooth [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300"
+      >
+        <div className="flex w-max items-center gap-1 sm:gap-2 pr-2">
+          {sections.map((section, index) => {
+            const errorCount = sectionErrors[section.id] || 0;
+            const isActive = section.id === activeSectionId;
+            const isCompleted = activeIndex > index;
 
-          return (
-            <div key={section.id} className="flex items-center flex-shrink-0">
-              <button
-                type="button"
-                onClick={() => handleSectionSelect(section.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                  isActive
-                    ? 'bg-medical-primary text-white'
-                    : isCompleted
-                      ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {section.icon && (
-                  <div className="flex-shrink-0">
-                    {section.icon}
-                  </div>
-                )}
-                <span className="text-sm font-medium whitespace-nowrap">
-                  {section.label}
-                </span>
-                {errorCount > 0 && (
-                  <span className={`flex-shrink-0 px-2 py-0.5 text-xs font-semibold rounded-full ${
+            return (
+              <div key={section.id} className="flex items-center flex-shrink-0">
+                <button
+                  type="button"
+                  data-section-step={section.id}
+                  onClick={() => handleSectionSelect(section.id)}
+                  className={`flex items-center gap-2 px-3 py-2 sm:px-4 rounded-lg transition-colors ${
                     isActive
-                      ? 'bg-white/20 text-white'
-                      : 'bg-red-500 text-white'
-                  }`}>
-                    {errorCount}
+                      ? 'bg-medical-primary text-white shadow-sm'
+                      : isCompleted
+                        ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {section.icon && (
+                    <div className="flex-shrink-0 [&_svg]:w-4 [&_svg]:h-4">
+                      {section.icon}
+                    </div>
+                  )}
+                  <span className="text-sm font-medium whitespace-nowrap">
+                    {section.label}
                   </span>
+                  {errorCount > 0 && (
+                    <span
+                      className={`flex-shrink-0 px-2 py-0.5 text-xs font-semibold rounded-full ${
+                        isActive ? 'bg-white/20 text-white' : 'bg-red-500 text-white'
+                      }`}
+                    >
+                      {errorCount}
+                    </span>
+                  )}
+                </button>
+                {index < sections.length - 1 && (
+                  <div
+                    className={`w-6 sm:w-8 h-1 shrink-0 mx-0.5 sm:mx-1 rounded-full ${
+                      activeIndex > index ? 'bg-green-500' : 'bg-gray-200'
+                    }`}
+                    aria-hidden
+                  />
                 )}
-              </button>
-              {index < sections.length - 1 && (
-                <div className={`w-8 h-0.5 mx-1 ${
-                  isCompleted ? 'bg-green-500' : 'bg-gray-300'
-                }`} />
-              )}
-            </div>
-          );
-        })}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

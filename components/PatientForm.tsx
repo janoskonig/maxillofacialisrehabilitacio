@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Patient, patientSchema } from '@/lib/types';
+import { Patient, patientQuickIntakeSchema, patientSchema } from '@/lib/types';
 import { formatDateForInput } from '@/lib/dateUtils';
 import { X, Calendar, User, MapPin, FileText, AlertTriangle, History } from 'lucide-react';
 import {
@@ -101,9 +101,18 @@ interface PatientFormProps {
   onCancel: () => void;
   isViewOnly?: boolean;
   showOnlySections?: string[]; // Array of section IDs to show: 'alapadatok', 'szemelyes', 'beutalo', 'kezeloorvos', 'anamnezis', 'betegvizsgalat', 'adminisztracio', 'idopont'
+  /** Gyors új beteg: rejtett NEAK-hiánylista; személyes szekció szűkített */
+  minimalNewPatient?: boolean;
 }
 
-export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, showOnlySections }: PatientFormProps) {
+export function PatientForm({
+  patient,
+  onSave,
+  onCancel,
+  isViewOnly = false,
+  showOnlySections,
+  minimalNewPatient = false,
+}: PatientFormProps) {
   const router = useRouter();
   const { confirm: confirmDialog, showToast } = useToast();
   
@@ -282,6 +291,10 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
     loadLabQuoteRequests();
   }, [patientId]);
 
+  const patientValidationSchema = useMemo(
+    () => (minimalNewPatient ? patientQuickIntakeSchema : patientSchema),
+    [minimalNewPatient]
+  );
 
   const {
     register,
@@ -295,7 +308,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
     trigger,
     control,
   } = useForm<Patient>({
-    resolver: zodResolver(patientSchema),
+    resolver: zodResolver(patientValidationSchema),
     defaultValues: patient ? {
       ...patient,
       szuletesiDatum: formatDateForInput(patient.szuletesiDatum),
@@ -386,7 +399,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
     implantatumokRef,
     vanBeutaloRef,
   } = usePatientAutoSave({
-    patientId: patient?.id,
+    patientId: patient?.id ?? currentPatient?.id,
     currentPatientRef,
     isViewOnly,
     getValues,
@@ -407,6 +420,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
     lastSaveErrorRef: conflict.lastSaveErrorRef,
     onAutoSaveConflict: conflict.handleAutoSaveConflict,
     onManualSaveConflict: conflict.handleManualSaveConflict,
+    saveValidator: patientValidationSchema,
   });
 
   // Sync patient prop -> form + currentPatient (skip during auto-save)
@@ -1438,12 +1452,11 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
     { id: 'alapadatok', label: 'Alapadatok', icon: <User className="w-4 h-4" /> },
     { id: 'szemelyes', label: 'Személyes adatok', icon: <MapPin className="w-4 h-4" /> },
     { id: 'beutalo', label: 'Beutaló', icon: <FileText className="w-4 h-4" /> },
-    { id: 'stadium', label: 'Stádium', icon: <Calendar className="w-4 h-4" /> },
     { id: 'anamnezis', label: 'Anamnézis', icon: <Calendar className="w-4 h-4" /> },
     { id: 'betegvizsgalat', label: 'Betegvizsgálat', icon: <Calendar className="w-4 h-4" /> },
-    { id: 'ohip14', label: 'OHIP-14', icon: <FileText className="w-4 h-4" /> },
     { id: 'adminisztracio', label: 'Adminisztráció', icon: <FileText className="w-4 h-4" /> },
     { id: 'idopont', label: 'Időpont', icon: <Calendar className="w-4 h-4" /> },
+    { id: 'stadium', label: 'Stádium', icon: <Calendar className="w-4 h-4" /> },
   ];
 
   // Filter sections based on showOnlySections
@@ -1497,7 +1510,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
     // szemelyes
     szuletesiDatum: 'szemelyes',
     nem: 'szemelyes',
-    email: 'szemelyes',
+    email: 'alapadatok',
     cim: 'szemelyes',
     varos: 'szemelyes',
     iranyitoszam: 'szemelyes',
@@ -1579,7 +1592,14 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
   }, [errors, fieldToSectionMap, breakpoint]);
 
   return (
-    <div className="p-3 sm:p-6 relative pb-[max(5rem,calc(5rem+env(safe-area-inset-bottom)))] sm:pb-24">
+    <div
+      className={`p-3 sm:p-6 relative ${
+        isViewOnly
+          ? 'pb-[max(5rem,calc(5rem+env(safe-area-inset-bottom)))] sm:pb-24'
+          : /* Mobil: alsó nav + fix CTA (akár 2 soros „Következő szekció”); desktop: egy soros CTA + lélegző tér */
+          'max-md:pb-[calc(12rem+env(safe-area-inset-bottom,0px))] md:pb-40'
+      }`}
+    >
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-4">
           <h3 className="text-2xl font-bold text-gray-900">
@@ -1652,8 +1672,8 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
         </div>
       )}
 
-      {/* Missing Required Fields Banner */}
-      {(() => {
+      {/* Missing Required Fields Banner (teljes protokoll — gyors új betegnél rejtve) */}
+      {!minimalNewPatient && (() => {
         const missingFields = getMissingRequiredFields(currentPatient);
         if (missingFields.length === 0) return null;
 
@@ -1714,6 +1734,34 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
       )}
 
       <form id="patient-form" onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+        {!isViewOnly && (
+          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-md">
+            <div className="flex items-start">
+              <AlertTriangle className="w-5 h-5 text-yellow-600 mr-3 mt-0.5 flex-shrink-0" />
+              <div>
+                <h4 className="text-sm font-semibold text-yellow-800 mb-1">
+                  ⚠️ FONTOS: Ne felejtse el menteni!
+                </h4>
+                <p className="text-sm text-yellow-700">
+                  {minimalNewPatient ? (
+                    <>
+                      Mentés után a beteg teljes adatait a beteg lapon folytathatja (klinikai minimum, fogazat,
+                      dokumentumok). Az adatok adatbázisba csak az alsó sáv{' '}
+                      <strong>„Beteg mentése”</strong> gombjával kerülnek.
+                    </>
+                  ) : (
+                    <>
+                      Az adatok csak akkor kerülnek az adatbázisba, ha az{' '}
+                      <strong>{patient ? 'Beteg frissítése' : 'Beteg mentése'}</strong> gombbal menti el az
+                      űrlapot (a képernyő alján mindig elérhető).
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ALAPADATOK */}
         {shouldShowSection('alapadatok') && (
           <AlapadatokSection
@@ -1725,6 +1773,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
             sectionErrors={sectionErrors}
             userRole={userRole}
             tajChecksumWarning={tajHasChecksumError(formValues.taj)}
+            minimalNewPatient={minimalNewPatient}
           />
         )}
 
@@ -1738,6 +1787,7 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
             isViewOnly={isViewOnly}
             sectionErrors={sectionErrors}
             userRole={userRole}
+            compactPersonalFields={minimalNewPatient}
           />
         )}
 
@@ -1751,13 +1801,6 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
             doctorOptions={doctorOptions}
             institutionOptions={institutionOptions}
           />
-        )}
-
-        {/* STÁDIUM */}
-        {shouldShowSection('stadium') && patientId && (
-        <div id="section-stadium" className="card scroll-mt-20 sm:scroll-mt-24">
-          <PatientStageSection patientId={patientId} patientName={currentPatient?.nev || null} />
-        </div>
         )}
 
         {/* ANAMNÉZIS */}
@@ -1904,24 +1947,34 @@ export function PatientForm({ patient, onSave, onCancel, isViewOnly = false, sho
         </div>
         )}
 
-        {/* Form Actions - Warning message only, buttons are in floating bar */}
-        {!isViewOnly && (
-          <div className="pt-6 border-t border-gray-200">
-            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-md">
-              <div className="flex items-start">
-                <AlertTriangle className="w-5 h-5 text-yellow-600 mr-3 mt-0.5 flex-shrink-0" />
-                <div>
-                  <h4 className="text-sm font-semibold text-yellow-800 mb-1">
-                    ⚠️ FONTOS: Ne felejtse el menteni!
-                  </h4>
-                  <p className="text-sm text-yellow-700">
-                    Az adatok csak akkor kerülnek az adatbázisba, ha az <strong>"{patient ? 'Beteg frissítése' : 'Beteg mentése'}"</strong> gombbal menti el az űrlapot. 
-                  </p>
-                </div>
-              </div>
+        {/* STÁDIUM — utolsó szekció a menüben; új betegnél mentés után epizód + stádium */}
+        {shouldShowSection('stadium') && (
+        <div id="section-stadium" className="card scroll-mt-20 sm:scroll-mt-24">
+          {patientId ? (
+            <PatientStageSection patientId={patientId} patientName={currentPatient?.nev || null} />
+          ) : (
+            <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2 mb-2">
+                <Calendar className="w-5 h-5 text-medical-primary" />
+                Betegstádium és ellátási epizód
+              </h3>
+              <p className="text-sm text-gray-600 mb-3">
+                Az új ellátási epizód megnyitása és a stádiumok beállítása a beteg első mentése után
+                lehetséges (ekkor jön létre a betegazonosító). Ezután itt rövid összefoglalót lát, a
+                részletes epizód- és stádiumkezeléshez nyissa meg a Stádiumok oldalt — így a beutaló
+                orvosok is ugyanazt az utat használhatják.
+              </p>
+              {!isViewOnly && (
+                <p className="text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-md px-3 py-2">
+                  Mentse az űrlapot az alsó sáv <strong>„Beteg mentése”</strong> gombjával, majd térjen vissza ide, vagy
+                  válassza a „Stádium beállítása / Részletek” lehetőséget. Ebben a szakaszban nincs másik mentés gomb.
+                </p>
+              )}
             </div>
-          </div>
+          )}
+        </div>
         )}
+
         {/* View-only mode close button */}
         {isViewOnly && (
           <div className="pt-6 border-t border-gray-200">

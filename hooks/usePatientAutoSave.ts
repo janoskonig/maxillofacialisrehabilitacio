@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import type { ZodType, ZodTypeDef } from 'zod';
 import { Patient, patientSchema } from '@/lib/types';
 import { savePatient, ApiError, TimeoutError } from '@/lib/storage';
 import { logEvent } from '@/lib/event-logger';
@@ -158,6 +159,9 @@ export interface UsePatientAutoSaveOptions {
   lastSaveErrorRef: React.MutableRefObject<Error | null>;
   onAutoSaveConflict: (error: ApiError) => void;
   onManualSaveConflict: (error: ApiError) => void;
+
+  /** Alapértelmezés: patientSchema. Gyors felvételnél: patientQuickIntakeSchema. */
+  saveValidator?: ZodType<Patient, ZodTypeDef, unknown>;
 }
 
 export interface UsePatientAutoSaveReturn {
@@ -201,6 +205,7 @@ export function usePatientAutoSave(
     lastSaveErrorRef,
     onAutoSaveConflict,
     onManualSaveConflict,
+    saveValidator = patientSchema,
   } = options;
 
   // ----- State -----
@@ -281,7 +286,7 @@ export function usePatientAutoSave(
           currentPatientIdRef.current
         );
 
-        const parsed = patientSchema.safeParse(payload);
+        const parsed = saveValidator.safeParse(payload);
         if (!parsed.success) {
           await trigger();
           if (source === 'auto') return null;
@@ -482,6 +487,7 @@ export function usePatientAutoSave(
       onManualSaveConflict,
       onSave,
       reset,
+      saveValidator,
       setFogak,
       setImplantatumok,
       setVanBeutalo,

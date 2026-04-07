@@ -977,14 +977,22 @@ export function AppointmentBookingSection({
             </div>
           )}
           {availableSlotsOnly.length > 0 && (
-            <button
-              onClick={handleBookAppointment}
-              disabled={!selectedSlot || isViewOnly || (!patientId && !onSavePatientBeforeBooking)}
-              className="btn-primary w-full flex items-center justify-center gap-2"
-            >
-              <Clock className="w-4 h-4" />
-              {isNewPatient || isPatientDirty ? 'Beteg mentése és időpont foglalása' : 'Időpont foglalása'}
-            </button>
+            <div>
+              {(isNewPatient || isPatientDirty) && (
+                <p className="text-xs text-gray-600 mb-2">
+                  A foglalás előtt elmentjük a beteg adatait (ugyanaz, mint az alsó „Beteg mentése”), majd
+                  megerősítésként lefoglaljuk a választott időpontot.
+                </p>
+              )}
+              <button
+                onClick={handleBookAppointment}
+                disabled={!selectedSlot || isViewOnly || (!patientId && !onSavePatientBeforeBooking)}
+                className="btn-primary w-full flex items-center justify-center gap-2"
+              >
+                <Clock className="w-4 h-4" />
+                Időpont foglalása
+              </button>
+            </div>
           )}
         </div>
       )}

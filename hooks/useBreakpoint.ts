@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useLayoutEffect } from 'react';
 
 export type Breakpoint = 'mobile' | 'tablet' | 'desktop';
 
@@ -16,8 +16,8 @@ export type Breakpoint = 'mobile' | 'tablet' | 'desktop';
 export function useBreakpoint(): Breakpoint {
   const [breakpoint, setBreakpoint] = useState<Breakpoint>('desktop');
 
-  useEffect(() => {
-    // Only run on client
+  useLayoutEffect(() => {
+    // Only run on client; layout effect runs before paint to avoid a desktop-flash on phones
     if (typeof window === 'undefined') return;
 
     const mobileQuery = window.matchMedia('(max-width: 767px)');

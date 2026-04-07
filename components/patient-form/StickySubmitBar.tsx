@@ -24,7 +24,11 @@ export function StickySubmitBar({
   isSaving = false,
 }: StickySubmitBarProps) {
   return (
-    <div className="mobile-cta-bar absolute bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 px-3 sm:px-6 md:px-8">
+    <div
+      className="fixed left-0 right-0 z-[55] bg-white/95 backdrop-blur-sm border-t border-gray-200 shadow-[0_-4px_12px_-2px_rgba(0,0,0,0.06)] px-3 sm:px-6 md:px-8 max-md:bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] md:bottom-0 pb-[env(safe-area-inset-bottom,0px)]"
+      role="region"
+      aria-label="Űrlap mentése"
+    >
       <div className="max-w-4xl mx-auto flex flex-col sm:flex-row justify-between gap-2 sm:gap-3 py-3 sm:py-4">
         {/* Left: Next section button (mobile only if not last section) */}
         {breakpoint === 'mobile' && (() => {

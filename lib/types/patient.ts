@@ -162,6 +162,38 @@ export const patientSchema = z.object({
   halalDatum: z.string().optional().nullable(),
 });
 
+/**
+ * Gyors új beteg felvétel (/patients/new): kötelező név, TAJ, születési dátum, nem;
+ * telefon és email opcionális (marad a teljes séma többi mezője alapértelmezésekkel).
+ */
+export const patientQuickIntakeSchema = patientSchema.extend({
+  nev: z.preprocess(
+    (v) => (v == null || v === undefined ? '' : String(v)),
+    z.string().trim().min(1, 'A név megadása kötelező.')
+  ),
+  taj: z.preprocess(
+    (v) => (v == null || v === undefined ? '' : String(v)),
+    z
+      .string()
+      .min(1, 'A TAJ megadása kötelező.')
+      .refine((val) => {
+        const cleaned = val.replace(/-/g, '').trim();
+        return /^\d{9}$/.test(cleaned);
+      }, { message: 'A TAJ szám formátuma: XXX-XXX-XXX (9 számjegy).' })
+  ),
+  szuletesiDatum: z.preprocess(
+    (v) => (v == null || v === undefined ? '' : String(v)),
+    z.string().min(1, 'A születési dátum megadása kötelező.')
+  ),
+  nem: z.preprocess(
+    (v) => (v === '' || v === null || v === undefined ? undefined : v),
+    z.enum(['ferfi', 'no'], {
+      required_error: 'A nem megadása kötelező.',
+      invalid_type_error: 'A nem megadása kötelező.',
+    })
+  ),
+});
+
 export type Patient = z.infer<typeof patientSchema>;
 
 /** Narrow type for patient list views (core table only, ~18 cols). */
