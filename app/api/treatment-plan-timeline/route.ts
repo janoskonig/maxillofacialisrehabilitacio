@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
 import { getStepLabelMap } from '@/lib/step-labels';
-import { normalizePathwayWorkPhaseArray } from '@/lib/pathway-work-phases-for-episode';
+import {
+  normalizePathwayWorkPhaseArray,
+  pathwayTemplatesFromCarePathwayRow,
+} from '@/lib/pathway-work-phases-for-episode';
 
 export const dynamic = 'force-dynamic';
 
@@ -100,7 +103,7 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
   >();
   const multiPathwayNamesMap = new Map<string, string>();
   const rowHasPathwayPhases = (r: { work_phases_json?: unknown; steps_json?: unknown }) => {
-    const n = normalizePathwayWorkPhaseArray(r.work_phases_json ?? r.steps_json);
+    const n = pathwayTemplatesFromCarePathwayRow(r);
     return !!(n && n.length > 0);
   };
   const needsMultiPathway = episodesResult.rows.filter((r) => !rowHasPathwayPhases(r));
@@ -116,7 +119,7 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
     );
     for (const row of mpResult.rows) {
       const epId = row.episode_id as string;
-      const templates = normalizePathwayWorkPhaseArray(row.work_phases_json ?? row.steps_json);
+      const templates = pathwayTemplatesFromCarePathwayRow(row);
       if (!templates?.length) continue;
       const existing = multiPathwayStepsMap.get(epId) ?? [];
       existing.push(...templates);
@@ -222,7 +225,7 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
     } else {
       const pathwaySteps =
         multiPathwayStepsMap.get(ep.episode_id) ??
-        normalizePathwayWorkPhaseArray(ep.work_phases_json ?? ep.steps_json) ??
+        pathwayTemplatesFromCarePathwayRow(ep) ??
         [];
       if (pathwaySteps.length === 0) continue;
       stepSources = pathwaySteps.map((ps, idx) => ({

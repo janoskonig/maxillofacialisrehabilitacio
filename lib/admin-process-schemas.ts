@@ -28,7 +28,7 @@ export function slugifyLabel(label: string): string {
     .replace(/^_|_$/g, '');
 }
 
-/** Pathway step schema — used in steps_json. label is the user-facing name; step_code is auto-generated. */
+/** Pathway step schema — API field stepsJson (dual-written to steps_json + work_phases_json). label is user-facing; step_code is auto-generated. */
 export const pathwayStepSchema = z.object({
   label: z.string().min(1, 'Lépés neve kötelező').max(255),
   step_code: z.string().optional(),

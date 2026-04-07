@@ -52,7 +52,11 @@ export function normalizePathwayWorkPhaseArray(raw: unknown): PathwayWorkPhaseTe
   return out.length > 0 ? out : null;
 }
 
-function pickTemplateArrayFromCarePathwayRow(row: {
+/**
+ * Templates from care_pathways columns: non-empty work_phases_json wins; otherwise legacy steps_json.
+ * (Using `work_phases_json ?? steps_json` before normalize is wrong when canonical column is `[]`.)
+ */
+export function pathwayTemplatesFromCarePathwayRow(row: {
   work_phases_json?: unknown;
   steps_json?: unknown;
 }): PathwayWorkPhaseTemplate[] | null {
@@ -81,7 +85,7 @@ export async function getPathwayWorkPhasesForEpisode(
     if (multiRow.rows.length > 0) {
       const merged: PathwayWorkPhaseTemplate[] = [];
       for (const row of multiRow.rows) {
-        const arr = pickTemplateArrayFromCarePathwayRow(row);
+        const arr = pathwayTemplatesFromCarePathwayRow(row);
         if (arr) merged.push(...arr);
       }
       return merged.length > 0 ? merged : null;
@@ -99,5 +103,5 @@ export async function getPathwayWorkPhasesForEpisode(
   );
   const row = r.rows[0];
   if (!row) return null;
-  return pickTemplateArrayFromCarePathwayRow(row);
+  return pathwayTemplatesFromCarePathwayRow(row);
 }
