@@ -51,7 +51,7 @@ export default function KezelesiUtUtmutatoPage() {
                 Megtörténik a vizsgálat. Utána készül a kezelési terv. A kezelési tervhez tartozik egy <strong>séma</strong> (kezelési út): pl. lenyomatvétel → próbabehelyezés → átadás → kontrollok. Ezt választod ki a rendszerben (care pathway).
               </p>
               <p className="mt-2">
-                A kezelési terv részlépéssorozata a <strong>care_pathways.steps_json</strong>-ból származik (az epizódhoz rendelt kezelési út). Nem generikus stage→step mapping: a pathway determinálja a lépéseket. A stage_steps tábla megszűnt.
+                A kezelési terv részlépéssorozata a <strong>care_pathways.work_phases_json</strong> sémájából származik (az epizódhoz rendelt kezelési út); a régi <code>steps_json</code> csak visszafelé kompatibilitásra maradt. Nem generikus stage→step mapping: a pathway determinálja a lépéseket. A stage_steps tábla megszűnt.
               </p>
 
               <h3 className="text-lg font-medium text-gray-800 mt-4 mb-2">1.3 Lefoglalom az első kezelési időpontot (pl. lenyomatvétel)</h3>
