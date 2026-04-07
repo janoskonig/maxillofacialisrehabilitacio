@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, ChevronLeft, ChevronRight, X } from 'lucide-react';
@@ -156,6 +156,18 @@ export default function ConsiliumPrepPage() {
   const [newPointLabel, setNewPointLabel] = useState('');
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [submittingKey, setSubmittingKey] = useState<string | null>(null);
+  const [showWelcomeHelp, setShowWelcomeHelp] = useState(false);
+  const [welcomeStep, setWelcomeStep] = useState(0);
+  const [spotlightRect, setSpotlightRect] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const leftPanelRef = useRef<HTMLDivElement | null>(null);
+  const centerPanelRef = useRef<HTMLDivElement | null>(null);
+  const rightPanelRef = useRef<HTMLDivElement | null>(null);
+  const agendaPanelRef = useRef<HTMLElement | null>(null);
 
   const apiTokenPath = useMemo(() => encodeURIComponent(rawToken), [rawToken]);
 
@@ -190,6 +202,91 @@ export default function ConsiliumPrepPage() {
     if (!user || !rawToken) return;
     void load();
   }, [user, rawToken, load]);
+
+  useEffect(() => {
+    if (!rawToken) return;
+    const key = `consilium-prep-welcome-seen:${rawToken}`;
+    try {
+      const seen = sessionStorage.getItem(key);
+      if (!seen) {
+        setShowWelcomeHelp(true);
+        sessionStorage.setItem(key, '1');
+      }
+    } catch {
+      // sessionStorage may be unavailable in strict browser contexts
+      setShowWelcomeHelp(true);
+    }
+  }, [rawToken]);
+
+  const welcomeSteps = useMemo(
+    () => [
+      {
+        title: '1. Általános áttekintés',
+        body: 'Ez az Előkészítő felület segít a konzíliumra felkészülni. A felület három fő oszlopra van bontva, lent pedig a Napirendi pontok részt találja.',
+      },
+      {
+        title: '2. Bal oldali oszlop',
+        body: 'Itt találja az anamnesztikus és betegadatokat: diagnózis, TNM, onkológiai adatok, OHIP eredmények és a stádium napló.',
+      },
+      {
+        title: '3. Középső oszlop',
+        body: 'Középen az OP nézet és a fogászati státusz látható. A státusznál egér ráhúzáskor (mouse hover) megjelenik az adott fog részletes információja.',
+      },
+      {
+        title: '4. Jobb oldali oszlop',
+        body: 'Itt láthatók a fényképek. A képeken jelöléseket lehet készíteni: kommentelni és rajzolni is lehet.',
+      },
+      {
+        title: '5. Napirendi pontok',
+        body: 'Az oldal alján új Napirendi pontokat vihet fel, és pontonként meglátásokat, megjegyzéseket írhat be az élő megbeszélés előkészítéséhez.',
+      },
+    ],
+    [],
+  );
+  const isLastWelcomeStep = welcomeStep >= welcomeSteps.length - 1;
+  const spotlightTarget = useMemo(() => {
+    if (welcomeStep === 1) return leftPanelRef;
+    if (welcomeStep === 2) return centerPanelRef;
+    if (welcomeStep === 3) return rightPanelRef;
+    if (welcomeStep === 4) return agendaPanelRef;
+    return null;
+  }, [welcomeStep]);
+
+  useEffect(() => {
+    if (!showWelcomeHelp) {
+      setSpotlightRect(null);
+      return;
+    }
+    const target = spotlightTarget?.current;
+    if (!target) {
+      setSpotlightRect(null);
+      return;
+    }
+    const updateRect = () => {
+      const r = target.getBoundingClientRect();
+      const pad = 8;
+      setSpotlightRect({
+        top: Math.max(4, r.top - pad),
+        left: Math.max(4, r.left - pad),
+        width: Math.max(80, r.width + pad * 2),
+        height: Math.max(80, r.height + pad * 2),
+      });
+    };
+    updateRect();
+    window.addEventListener('resize', updateRect);
+    window.addEventListener('scroll', updateRect, true);
+    return () => {
+      window.removeEventListener('resize', updateRect);
+      window.removeEventListener('scroll', updateRect, true);
+    };
+  }, [showWelcomeHelp, spotlightTarget]);
+
+  useEffect(() => {
+    if (!showWelcomeHelp) return;
+    const target = spotlightTarget?.current;
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+  }, [showWelcomeHelp, spotlightTarget]);
 
   const current = payload?.items?.[0];
   const ps: PatientPresentationSummary = current?.patientSummary ?? EMPTY_PATIENT_SUMMARY;
@@ -320,6 +417,80 @@ export default function ConsiliumPrepPage() {
 
   return (
     <div className="min-h-screen bg-black text-white overflow-x-hidden">
+      {showWelcomeHelp && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center p-3 sm:p-4">
+          {spotlightRect ? (
+            <div
+              className="fixed pointer-events-none rounded-xl border border-cyan-300/60"
+              style={{
+                top: spotlightRect.top,
+                left: spotlightRect.left,
+                width: spotlightRect.width,
+                height: spotlightRect.height,
+                boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.74)',
+                background: 'rgba(6, 182, 212, 0.08)',
+              }}
+            />
+          ) : (
+            <div className="fixed inset-0 bg-black/75" />
+          )}
+          <div className="w-full max-w-4xl rounded-xl border border-cyan-400/35 bg-gradient-to-b from-cyan-950/70 via-zinc-950/90 to-black/95 p-5 sm:p-6 shadow-2xl relative z-10">
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div>
+                <p className="text-xl sm:text-2xl font-semibold text-cyan-100">Üdvözöljük az előkészítő nézetben</p>
+                <p className="text-base sm:text-lg text-cyan-100/70 mt-1">
+                  Lépésről lépésre megmutatjuk, mit hol talál.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="rounded-md border border-white/15 bg-white/5 hover:bg-white/10 px-3 py-1.5 text-sm text-white/85"
+                onClick={() => setShowWelcomeHelp(false)}
+              >
+                Bezárás
+              </button>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-black/25 p-4 sm:p-5 min-h-[190px]">
+              <p className="text-lg sm:text-xl font-semibold text-white/95">{welcomeSteps[welcomeStep].title}</p>
+              <p className="text-base sm:text-lg text-white/80 leading-relaxed mt-3">
+                {welcomeSteps[welcomeStep].body}
+              </p>
+            </div>
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <p className="text-sm sm:text-base text-cyan-100/75">
+                {welcomeStep + 1} / {welcomeSteps.length}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="rounded-md border border-white/15 bg-white/5 hover:bg-white/10 px-3 py-1.5 text-sm text-white/90 disabled:opacity-40"
+                  disabled={welcomeStep === 0}
+                  onClick={() => setWelcomeStep((s) => Math.max(0, s - 1))}
+                >
+                  Előző
+                </button>
+                {!isLastWelcomeStep ? (
+                  <button
+                    type="button"
+                    className="rounded-md border border-cyan-300/40 bg-cyan-600/70 hover:bg-cyan-600 px-3 py-1.5 text-sm font-medium text-white"
+                    onClick={() => setWelcomeStep((s) => Math.min(welcomeSteps.length - 1, s + 1))}
+                  >
+                    Következő
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="rounded-md border border-emerald-300/40 bg-emerald-600/75 hover:bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white"
+                    onClick={() => setShowWelcomeHelp(false)}
+                  >
+                    Kezdhetjük
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {error && (
         <div className="bg-amber-900/40 text-amber-100 text-sm px-4 py-2 text-center">{error}</div>
       )}
@@ -460,7 +631,7 @@ export default function ConsiliumPrepPage() {
             </div>
 
             <div className="grid grid-cols-12 gap-4 lg:gap-5 px-4 sm:px-6 lg:px-8 py-3 lg:py-4 pb-6">
-              <div className="col-span-12 lg:col-span-3">
+              <div className="col-span-12 lg:col-span-3" ref={leftPanelRef}>
                 <div className="rounded-lg bg-black/30 border border-white/10 p-3 lg:p-4 space-y-5 max-h-[min(92vh,900px)] overflow-y-auto">
                   <section>
                     <h2 className="text-xs font-semibold text-white/70 mb-2">Páciens</h2>
@@ -563,7 +734,7 @@ export default function ConsiliumPrepPage() {
                 </div>
               </div>
 
-              <div className="col-span-12 lg:col-span-6 flex flex-col gap-3 min-w-0">
+              <div className="col-span-12 lg:col-span-6 flex flex-col gap-3 min-w-0" ref={centerPanelRef}>
                 <div className="rounded-lg bg-black/20 border border-white/10 p-2">
                   <p className="text-[10px] text-white/45 uppercase px-1 mb-1">OP</p>
                   {ps.patientId && !ps.missingPatient ? (
@@ -590,7 +761,7 @@ export default function ConsiliumPrepPage() {
                 ) : null}
               </div>
 
-              <div className="col-span-12 lg:col-span-3 flex flex-col gap-3 min-w-0">
+              <div className="col-span-12 lg:col-span-3 flex flex-col gap-3 min-w-0" ref={rightPanelRef}>
                 <div className="rounded-lg bg-black/30 border border-white/10 p-3">
                   <p className="text-xs text-white/50 mb-2">Fotó mellékletek</p>
                   {ms.error && <p className="text-xs text-amber-300 mb-2">Média összegzés részben hibás</p>}
@@ -638,6 +809,7 @@ export default function ConsiliumPrepPage() {
         <section
           className="relative w-screen max-w-[100vw] left-1/2 -translate-x-1/2 border-y border-white/10 bg-gradient-to-b from-white/[0.04] to-black/50 py-4 lg:py-5"
           aria-label="Napirend és előkészítő hozzászólások"
+          ref={agendaPanelRef}
         >
           <div className={`${presentMaxW} w-full mx-auto px-3 sm:px-5 lg:px-8`}>
             <div className="rounded-lg border border-cyan-500/40 bg-gradient-to-b from-cyan-950/55 via-cyan-950/25 to-black/40 p-3 lg:p-4 ring-1 ring-cyan-400/10">
