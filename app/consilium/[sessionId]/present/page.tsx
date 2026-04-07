@@ -17,15 +17,13 @@ import type { ChecklistEntry } from '@/lib/consilium';
 import type { ItemMediaSummary, MediaPreviewItem, PatientPresentationSummary } from '@/lib/consilium-presentation';
 import {
   type ConsiliumPrepCommentSnapshot,
-  careTimelineAuthorNameClass,
-  careTimelineEpisodeAccent,
   consiliumPresentationDiagnosisText,
   consiliumPresentationOncologyRows,
-  consiliumShortDisplay,
   flattenCareTimelineNewestFirst,
   formatConsiliumHuDateTime,
   prepCommentsGroupedByKey,
 } from '@/lib/consilium-view-helpers';
+import { CareTimelineLog } from '@/components/consilium/CareTimelineLog';
 
 function ohipImpactLabel(score: number): string {
   if (score <= 8) return 'alacsony';
@@ -823,104 +821,12 @@ export default function ConsiliumPresentPage() {
 
                   <section className="border-t border-white/15 pt-4">
                     <h2 className="text-sm md:text-base font-semibold text-white mb-0.5">Stádium napló</h2>
-                    <p className="text-xs text-white/45 mb-3">Legfelül a legutóbbi bejegyzés</p>
-
-                    {timelineRows.length > 0 ? (
-                      <div className="space-y-3">
-                        {timelineRows.map((row, i) => {
-                          const prev = i > 0 ? timelineRows[i - 1] : null;
-                          const showEp = !prev || prev.episodeId !== row.episodeId;
-                          const accent = careTimelineEpisodeAccent(row.episodeId);
-                          return (
-                            <div key={row.st.id} className="space-y-2">
-                              {showEp ? (
-                                <div className={`rounded-md px-2.5 py-2 ${accent.episodeBlockClass}`}>
-                                  <p className={`text-sm font-semibold leading-snug ${accent.episodeTitleClass}`}>
-                                    {row.epLabel}
-                                  </p>
-                                  {row.episodeCreatedBy ? (
-                                    <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] text-white/55">
-                                      <span className="text-white/45">Epizód rögzítő:</span>
-                                      <span
-                                        className={`truncate max-w-[min(100%,16rem)] ${careTimelineAuthorNameClass(row.episodeCreatedByRole)}`}
-                                        title={row.episodeCreatedBy}
-                                      >
-                                        {consiliumShortDisplay(row.episodeCreatedBy)}
-                                      </span>
-                                    </p>
-                                  ) : null}
-                                </div>
-                              ) : null}
-                              <div className={`px-2.5 py-2 ${accent.stageCardClass}`}>
-                                <p className="text-base md:text-lg font-semibold text-white leading-snug">{row.st.stageLabel}</p>
-                                <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-white/65">
-                                  <span>{formatConsiliumHuDateTime(row.st.at)}</span>
-                                  {row.st.authorDisplay ? (
-                                    <span
-                                      className={`truncate max-w-[min(100%,16rem)] ${careTimelineAuthorNameClass(row.st.authorRole)}`}
-                                      title={row.st.authorDisplay}
-                                    >
-                                      {consiliumShortDisplay(row.st.authorDisplay)}
-                                    </span>
-                                  ) : null}
-                                </p>
-                                {row.st.note ? (
-                                  <p className="mt-1.5 text-sm md:text-base text-white/85 whitespace-pre-wrap leading-snug">
-                                    {row.st.note}
-                                  </p>
-                                ) : null}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : null}
-
-                    {episodesWithoutStages.length > 0 ? (
-                      <div className={`space-y-2 ${timelineRows.length > 0 ? 'mt-4 pt-3 border-t border-white/15' : ''}`}>
-                        {episodesWithoutStages.map((ep) => {
-                          const accent = careTimelineEpisodeAccent(ep.id);
-                          const epLabel = [ep.reason, ep.status].filter(Boolean).join(' · ') || 'Epizód';
-                          return (
-                            <div key={ep.id} className={`rounded-md px-2.5 py-2 text-sm md:text-base ${accent.episodeBlockClass}`}>
-                              <p className={`font-semibold leading-snug ${accent.episodeTitleClass}`}>{epLabel}</p>
-                              <p className="mt-1 text-white/55">Nincs stádium bejegyzés.</p>
-                              {ep.episodeCreatedBy ? (
-                                <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] text-white/55">
-                                  <span className="text-white/40">Rögzítő:</span>
-                                  <span
-                                    className={`truncate max-w-[min(100%,16rem)] ${careTimelineAuthorNameClass(ep.episodeCreatedByRole)}`}
-                                    title={ep.episodeCreatedBy}
-                                  >
-                                    {consiliumShortDisplay(ep.episodeCreatedBy)}
-                                  </span>
-                                </p>
-                              ) : null}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : null}
-
-                    {timelineRows.length === 0 &&
-                    episodesWithoutStages.length === 0 &&
-                    (ps.stage?.stageLabel || ps.stage?.stageCode) ? (
-                      <div className="space-y-1">
-                        <p className="text-base md:text-lg font-semibold text-white">
-                          {ps.stage.stageLabel || ps.stage.stageCode}
-                        </p>
-                        <p className="text-sm text-white/65">{formatConsiliumHuDateTime(ps.stage.stageDate)}</p>
-                        {ps.stage.notes ? (
-                          <p className="text-sm md:text-base text-white/85 whitespace-pre-wrap">{ps.stage.notes}</p>
-                        ) : null}
-                      </div>
-                    ) : null}
-
-                    {timelineRows.length === 0 &&
-                    episodesWithoutStages.length === 0 &&
-                    !(ps.stage?.stageLabel || ps.stage?.stageCode) ? (
-                      <p className="text-sm text-white/50">Nincs stádium vagy epizód adat.</p>
-                    ) : null}
+                    <CareTimelineLog
+                      present
+                      timelineRows={timelineRows}
+                      episodesWithoutStages={episodesWithoutStages}
+                      legacyStage={ps.stage}
+                    />
                   </section>
                 </div>
               </div>

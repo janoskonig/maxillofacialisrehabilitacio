@@ -196,6 +196,10 @@ export type CareTimelineAccent = {
   episodeBlockClass: string;
   episodeTitleClass: string;
   stageCardClass: string;
+  /** Kis kitöltött pont (stádium esemény) */
+  timelineStageDotClass: string;
+  /** Nagyobb gyűrűs pont (új epizód első bejegyzése) */
+  timelineEpisodeDotClass: string;
 };
 
 const CARE_TIMELINE_PALETTES: CareTimelineAccent[] = [
@@ -203,31 +207,43 @@ const CARE_TIMELINE_PALETTES: CareTimelineAccent[] = [
     episodeBlockClass: 'border-l-4 border-amber-400/80 bg-amber-500/15 border border-white/12',
     episodeTitleClass: 'text-amber-100',
     stageCardClass: 'border-l-2 border-amber-400/50 bg-amber-500/[0.08] border border-white/10 rounded-md',
+    timelineStageDotClass: 'bg-amber-400 ring-2 ring-zinc-950',
+    timelineEpisodeDotClass: 'bg-zinc-950 ring-2 ring-amber-400',
   },
   {
     episodeBlockClass: 'border-l-4 border-cyan-400/80 bg-cyan-500/15 border border-white/12',
     episodeTitleClass: 'text-cyan-100',
     stageCardClass: 'border-l-2 border-cyan-400/50 bg-cyan-500/[0.08] border border-white/10 rounded-md',
+    timelineStageDotClass: 'bg-cyan-400 ring-2 ring-zinc-950',
+    timelineEpisodeDotClass: 'bg-zinc-950 ring-2 ring-cyan-400',
   },
   {
     episodeBlockClass: 'border-l-4 border-violet-400/80 bg-violet-500/15 border border-white/12',
     episodeTitleClass: 'text-violet-100',
     stageCardClass: 'border-l-2 border-violet-400/50 bg-violet-500/[0.08] border border-white/10 rounded-md',
+    timelineStageDotClass: 'bg-violet-400 ring-2 ring-zinc-950',
+    timelineEpisodeDotClass: 'bg-zinc-950 ring-2 ring-violet-400',
   },
   {
     episodeBlockClass: 'border-l-4 border-emerald-400/80 bg-emerald-500/15 border border-white/12',
     episodeTitleClass: 'text-emerald-100',
     stageCardClass: 'border-l-2 border-emerald-400/50 bg-emerald-500/[0.08] border border-white/10 rounded-md',
+    timelineStageDotClass: 'bg-emerald-400 ring-2 ring-zinc-950',
+    timelineEpisodeDotClass: 'bg-zinc-950 ring-2 ring-emerald-400',
   },
   {
     episodeBlockClass: 'border-l-4 border-rose-400/75 bg-rose-500/15 border border-white/12',
     episodeTitleClass: 'text-rose-100',
     stageCardClass: 'border-l-2 border-rose-400/50 bg-rose-500/[0.08] border border-white/10 rounded-md',
+    timelineStageDotClass: 'bg-rose-400 ring-2 ring-zinc-950',
+    timelineEpisodeDotClass: 'bg-zinc-950 ring-2 ring-rose-400',
   },
   {
     episodeBlockClass: 'border-l-4 border-sky-400/80 bg-sky-500/15 border border-white/12',
     episodeTitleClass: 'text-sky-100',
     stageCardClass: 'border-l-2 border-sky-400/50 bg-sky-500/[0.08] border border-white/10 rounded-md',
+    timelineStageDotClass: 'bg-sky-400 ring-2 ring-zinc-950',
+    timelineEpisodeDotClass: 'bg-zinc-950 ring-2 ring-sky-400',
   },
 ];
 
