@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
-import { portraitDocumentTagsSqlInList } from '@/lib/patient-portrait-tag';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,7 +24,7 @@ export const POST = authedHandler(async (req, { auth }) => {
   const portraitTagSql = `
     EXISTS (
       SELECT 1 FROM jsonb_array_elements_text(COALESCE(pd.tags, '[]'::jsonb)) AS elem
-      WHERE lower(elem) IN (${portraitDocumentTagsSqlInList()})
+      WHERE lower(elem) = 'portre'
     )
   `;
 
