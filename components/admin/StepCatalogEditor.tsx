@@ -184,7 +184,7 @@ export function StepCatalogEditor() {
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold">Részlépések (step_code → címke)</h3>
+      <h3 className="text-lg font-semibold">Munkafázis-katalógus (kód → címke)</h3>
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded text-red-800 text-sm">
           {error}
@@ -193,7 +193,7 @@ export function StepCatalogEditor() {
 
       {unmapped.length > 0 && (
         <div className="p-3 bg-amber-50 border border-amber-200 rounded">
-          <p className="text-sm font-medium text-amber-900 mb-1">Unmapped step_code-ok (nincs címke a katalógusban):</p>
+          <p className="text-sm font-medium text-amber-900 mb-1">Nincs címke a katalógusban (pathway-ban szereplő kódok):</p>
           <p className="text-sm text-amber-800 font-mono">{unmapped.join(', ')}</p>
           <p className="text-xs text-amber-700 mt-1">
             Ezek a kezelési utak JSON-jából jönnek (work_phases_json / steps_json). Adjon címkét a katalógushoz vagy módosítsa a pathway-t.
@@ -216,7 +216,7 @@ export function StepCatalogEditor() {
         {batchExpanded && (
           <div className="p-4 bg-white border-t border-gray-200 space-y-3">
             <p className="text-xs text-gray-600">
-              CSV formátum: <code className="bg-gray-100 px-1 rounded">step_code,label_hu,label_en,is_active</code> — fejléc opcionális. Elválasztó: vessző vagy pontosvessző.
+              CSV formátum: <code className="bg-gray-100 px-1 rounded">step_code,label_hu,label_en,is_active</code> (oszlopnév <code className="bg-gray-100 px-1 rounded">step_code</code> = work_phase_code) — fejléc opcionális. Elválasztó: vessző vagy pontosvessző.
             </p>
             <div className="flex gap-2 flex-wrap items-center">
               <input
@@ -274,7 +274,7 @@ export function StepCatalogEditor() {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">step_code</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">kód</th>
               <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">label_hu</th>
               <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">label_en</th>
               <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">aktív</th>
