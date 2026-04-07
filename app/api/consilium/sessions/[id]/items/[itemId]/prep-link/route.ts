@@ -43,20 +43,42 @@ export const POST = authedHandler(async (req, { auth, params }) => {
     throw new HttpError(404, 'Elem nem található ebben az alkalomban', 'ITEM_NOT_FOUND');
   }
 
-  const rawToken = generateConsiliumPrepTokenRaw();
-  const tokenHash = hashConsiliumPrepToken(rawToken);
-  const expiresAt = new Date(PREP_LINK_NO_EXPIRY_AT_ISO);
-
+  const expiresAtIso = new Date(PREP_LINK_NO_EXPIRY_AT_ISO).toISOString();
   const client = await pool.connect();
+  let rawToken: string;
+  let expiresAtResponse: string;
+  let created = false;
   try {
     await client.query('BEGIN');
-    await revokePrepTokensForItem(client, itemId);
-    await client.query(
-      `INSERT INTO consilium_item_prep_tokens (token_hash, session_id, item_id, created_by, expires_at)
-       VALUES ($1, $2::uuid, $3::uuid, $4, $5)`,
-      [tokenHash, sessionId, itemId, auth.email, expiresAt.toISOString()],
+    await client.query(`SELECT id FROM consilium_session_items WHERE id = $1::uuid FOR UPDATE`, [itemId]);
+    const existing = await client.query<{ rawToken: string; expiresAt: Date }>(
+      `SELECT raw_token AS "rawToken", expires_at AS "expiresAt"
+       FROM consilium_item_prep_tokens
+       WHERE item_id = $1::uuid AND revoked_at IS NULL AND raw_token IS NOT NULL
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [itemId],
     );
-    await client.query('COMMIT');
+    if (existing.rows.length > 0) {
+      rawToken = existing.rows[0].rawToken;
+      expiresAtResponse =
+        existing.rows[0].expiresAt instanceof Date
+          ? existing.rows[0].expiresAt.toISOString()
+          : String(existing.rows[0].expiresAt);
+      await client.query('COMMIT');
+    } else {
+      rawToken = generateConsiliumPrepTokenRaw();
+      const tokenHash = hashConsiliumPrepToken(rawToken);
+      await revokePrepTokensForItem(client, itemId);
+      await client.query(
+        `INSERT INTO consilium_item_prep_tokens (token_hash, raw_token, session_id, item_id, created_by, expires_at)
+         VALUES ($1, $2, $3::uuid, $4::uuid, $5, $6)`,
+        [tokenHash, rawToken, sessionId, itemId, auth.email, expiresAtIso],
+      );
+      await client.query('COMMIT');
+      expiresAtResponse = expiresAtIso;
+      created = true;
+    }
   } catch (e) {
     await client.query('ROLLBACK');
     throw e;
@@ -69,11 +91,11 @@ export const POST = authedHandler(async (req, { auth, params }) => {
   return NextResponse.json(
     {
       token: rawToken,
-      expiresAt: expiresAt.toISOString(),
+      expiresAt: expiresAtResponse,
       prepPath,
       prepUrl,
     },
-    { status: 201 },
+    { status: created ? 201 : 200 },
   );
 });
 
