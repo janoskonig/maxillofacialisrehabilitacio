@@ -84,4 +84,13 @@ describe('calculateAge', () => {
   it('returns null for invalid date', () => {
     expect(calculateAge('not-a-date')).toBeNull();
   });
+
+  it('uses reference date when provided (e.g. death date)', () => {
+    const ageAtDeath = calculateAge('1980-06-15', '2020-06-14');
+    expect(ageAtDeath).toBe(39);
+  });
+
+  it('returns null if reference date is invalid', () => {
+    expect(calculateAge('1980-06-15', 'invalid-date')).toBeNull();
+  });
 });

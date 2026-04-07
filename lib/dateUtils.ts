@@ -81,18 +81,23 @@ export const formatDateForInput = (dateString: string | null | undefined): strin
   }
 };
 
-export const calculateAge = (dateString: string | null | undefined): number | null => {
+export const calculateAge = (
+  dateString: string | null | undefined,
+  referenceDateString?: string | null
+): number | null => {
   if (!dateString) return null;
   try {
     const birthDate = new Date(dateString);
     if (isNaN(birthDate.getTime())) return null;
-    
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
+
+    const referenceDate = referenceDateString ? new Date(referenceDateString) : new Date();
+    if (isNaN(referenceDate.getTime())) return null;
+
+    let age = referenceDate.getFullYear() - birthDate.getFullYear();
+    const monthDiff = referenceDate.getMonth() - birthDate.getMonth();
     
     // Ha még nem volt a születésnapja idén, akkor csökkentjük a kort
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    if (monthDiff < 0 || (monthDiff === 0 && referenceDate.getDate() < birthDate.getDate())) {
       age--;
     }
     

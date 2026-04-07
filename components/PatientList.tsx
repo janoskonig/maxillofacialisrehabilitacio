@@ -240,7 +240,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                           <>
                             {patient.nem === 'ferfi' ? 'Férfi' : patient.nem === 'no' ? 'Nő' : ''} 
                             {patient.nem && (() => {
-                              const age = calculateAge(patient.szuletesiDatum);
+                              const age = calculateAge(patient.szuletesiDatum, patient.halalDatum);
                               return age !== null ? ` • ${age} éves` : '';
                             })()}
                             {patient.halalDatum && (
