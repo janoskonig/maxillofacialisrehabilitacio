@@ -313,9 +313,9 @@ export default function PatientViewPage() {
             <>
               {['admin', 'beutalo_orvos', 'fogpótlástanász'].includes(userRole ?? '') && patient.id && (
                 <div className="space-y-2">
-                  <h2 className="text-lg font-semibold text-gray-900">Következő lépés – munkalista</h2>
+                  <h2 className="text-lg font-semibold text-gray-900">Következő munkafázis – munkalista</h2>
                   <p className="text-sm text-gray-600">
-                    A beteg WIP epizódjainak következő lépései. Foglalás egy kattintással.
+                    A beteg WIP epizódjainak következő munkafázisai. Foglalás egy kattintással.
                   </p>
                   <PatientWorklistWidget
                     patientId={patient.id}

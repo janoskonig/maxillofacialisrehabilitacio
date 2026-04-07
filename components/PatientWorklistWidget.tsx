@@ -20,7 +20,7 @@ export interface PatientWorklistWidgetProps {
 }
 
 /**
- * Beteg profilra szűrt munkalista – a beteg aktív kezeléseinek következő lépései.
+ * Beteg profilra szűrt munkalista – a beteg aktív kezeléseinek következő munkafázisai.
  * Csak admin, beutaló orvos, fogpótlástanász látja.
  */
 export function PatientWorklistWidget({ patientId, patientName, visible = true }: PatientWorklistWidgetProps) {
@@ -172,7 +172,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
         if (rowsForEpisode.length > 1) {
           setConvertAllMessage({
             type: 'error',
-            text: 'Ehhez az epizódhoz több lépés tartozik. Az „Összes szükséges időpont lefoglalása” gombbal egyszerre foglalhatod őket.',
+            text: 'Ehhez az epizódhoz több munkafázis tartozik. Az „Összes szükséges időpont lefoglalása” gombbal egyszerre foglalhatod őket.',
           });
           return;
         }
@@ -352,7 +352,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
       <div className="card">
         <div className="flex items-center justify-center py-6">
           <div className="animate-spin rounded-full h-6 w-6 border-2 border-medical-primary/20 border-t-medical-primary" />
-          <span className="ml-2 text-sm text-gray-600">Következő lépés betöltése…</span>
+          <span className="ml-2 text-sm text-gray-600">Következő munkafázis betöltése…</span>
         </div>
       </div>
     );
@@ -381,7 +381,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
       <div className="card">
         <div className="text-center py-8">
           <ClipboardList className="w-10 h-10 text-gray-400 mx-auto mb-2" />
-          <h3 className="text-base font-medium text-gray-900 mb-1">Nincs foglalni való következő lépés</h3>
+          <h3 className="text-base font-medium text-gray-900 mb-1">Nincs foglalni való következő munkafázis</h3>
           <p className="text-sm text-gray-500">
             {patientName
               ? `${patientName} jelenleg nincs aktív kezelésben, vagy minden kezeléshez már van jövőbeli időpont.`
@@ -417,7 +417,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
           <thead>
             <tr>
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Epizód / Stage</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Következő lépés</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Következő munkafázis</th>
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">SLA / késés</th>
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Ablak</th>
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Státusz</th>
@@ -550,7 +550,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                               onClick={() => handleMarkStepComplete(item)}
                               disabled={markCompleteKey === key}
                               className="text-xs text-gray-600 hover:underline font-medium disabled:opacity-50 text-left"
-                              title="A lépés elkészült, nem itt foglalt időponttal"
+                              title="A munkafázis elkészült, nem itt foglalt időponttal"
                             >
                               {markCompleteKey === key ? 'Mentés…' : 'Elkészült (utólag)'}
                             </button>
@@ -578,7 +578,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                               onClick={() => handleMarkStepComplete(item)}
                               disabled={markCompleteKey === key}
                               className="text-xs text-gray-600 hover:underline font-medium disabled:opacity-50 text-left"
-                              title="A lépés elkészült (nem itt foglalt), utólag jelölés"
+                              title="A munkafázis elkészült (nem itt foglalt), utólag jelölés"
                             >
                               {markCompleteKey === key ? 'Mentés…' : 'Elkészült (utólag)'}
                             </button>

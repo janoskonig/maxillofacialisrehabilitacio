@@ -373,8 +373,8 @@ export function WorklistWidget() {
       <div className="card">
         <div className="text-center py-12">
           <ClipboardList className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-          <h3 className="text-lg font-medium text-gray-900 mb-1">Nincs foglalni való lépés</h3>
-          <p className="text-sm text-gray-500">Jelenleg nincs foglalni való következő lépés.</p>
+          <h3 className="text-lg font-medium text-gray-900 mb-1">Nincs foglalni való munkafázis</h3>
+          <p className="text-sm text-gray-500">Jelenleg nincs foglalni való következő munkafázis.</p>
         </div>
       </div>
     );
@@ -390,7 +390,7 @@ export function WorklistWidget() {
             {selectedReady.length} kiválasztva – Book next for selected
           </span>
           <button onClick={handleBatchBookNext} className="btn-primary text-sm">
-            Következő foglalása
+            Következő munkafázis foglalása
           </button>
         </div>
       )}
@@ -412,7 +412,7 @@ export function WorklistWidget() {
             <tr>
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Betegnév</th>
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Stage</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Next step</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Következő munkafázis</th>
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">ETA</th>
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Hátralévő</th>
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">SLA / overdue</th>
