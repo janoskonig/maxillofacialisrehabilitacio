@@ -319,7 +319,7 @@ function SortableStepRow({
             <button
               onClick={onDelete}
               className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 bg-red-50 rounded hover:bg-red-100 transition-colors"
-              title="Lépés elhagyása a tervből"
+              title="Munkafázis elhagyása a tervből"
             >
               <Trash2 className="w-3 h-3" />
               Elhagyom
@@ -329,7 +329,7 @@ function SortableStepRow({
             <button
               onClick={onSkipConfirm}
               className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-amber-700 bg-amber-100 rounded hover:bg-amber-200 transition-colors"
-              title="Lépés átugrása"
+              title="Munkafázis átugrása"
             >
               <SkipForward className="w-3 h-3" />
               Átugrom
@@ -394,7 +394,7 @@ function StepRowWithConfirm({
           {confirmAction === 'skip' && (
             <>
               <p className="text-sm text-gray-700 mb-2">
-                Biztosan átugorja a(z) <strong>{stepLabel}</strong> lépést?
+                Biztosan átugorja a(z) <strong>{stepLabel}</strong> munkafázist?
               </p>
               <input
                 type="text" value={skipReason} onChange={(e) => onSkipReasonChange(e.target.value)}
@@ -412,7 +412,7 @@ function StepRowWithConfirm({
           )}
           {confirmAction === 'unskip' && (
             <>
-              <p className="text-sm text-gray-700 mb-2">Visszaállítja a(z) <strong>{stepLabel}</strong> lépést várakozóra?</p>
+              <p className="text-sm text-gray-700 mb-2">Visszaállítja a(z) <strong>{stepLabel}</strong> munkafázist várakozóra?</p>
               <div className="flex items-center gap-2">
                 <button onClick={onUnskip} disabled={saving}
                   className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-600 text-white rounded text-xs font-medium hover:bg-gray-700 disabled:opacity-50">
@@ -425,7 +425,7 @@ function StepRowWithConfirm({
           {confirmAction === 'delete' && (
             <>
               <p className="text-sm text-gray-700 mb-2">
-                Biztosan elhagyja a(z) <strong>{stepLabel}</strong> lépést a tervből? Ez a művelet nem vonható vissza.
+                Biztosan elhagyja a(z) <strong>{stepLabel}</strong> munkafázist a tervből? Ez a művelet nem vonható vissza.
               </p>
               <div className="flex items-center gap-2">
                 <button onClick={onDeleteConfirm} disabled={saving}
@@ -467,7 +467,7 @@ function TimingEditor({ step, saving, onCancel }: {
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Hiba');
       showToast('Időzítés frissítve', 'success');
       onCancel();
-      window.dispatchEvent(new Event('episode-steps-reload'));
+      window.dispatchEvent(new Event('episode-work-phases-reload'));
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Hiba történt', 'error');
     } finally {
@@ -538,8 +538,8 @@ export function EpisodeStepsManager({
   // Reload steps on timing save
   useEffect(() => {
     const handler = () => { loadSteps(); onStepChanged?.(); };
-    window.addEventListener('episode-steps-reload', handler);
-    return () => window.removeEventListener('episode-steps-reload', handler);
+    window.addEventListener('episode-work-phases-reload', handler);
+    return () => window.removeEventListener('episode-work-phases-reload', handler);
   });
 
   // Step adder panel
@@ -636,9 +636,9 @@ export function EpisodeStepsManager({
     setGenerating(true);
     try {
       await loadSteps();
-      showToast('Lépések generálva', 'success');
+      showToast('Munkafázisok generálva', 'success');
     } catch {
-      showToast('Nem sikerült generálni a lépéseket', 'error');
+      showToast('Nem sikerült generálni a munkafázisokat', 'error');
     } finally {
       setGenerating(false);
     }
@@ -660,7 +660,7 @@ export function EpisodeStepsManager({
       setConfirmStepId(null);
       setConfirmAction(null);
       setSkipReason('');
-      showToast('Lépés átugorva', 'success');
+      showToast('Munkafázis átugorva', 'success');
       onStepChanged?.();
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Hiba történt', 'error');
@@ -684,7 +684,7 @@ export function EpisodeStepsManager({
       setSteps((prev) => prev.map((s) => (s.id === stepId ? mapWorkPhaseApiToEpisodeStep(row) : s)));
       setConfirmStepId(null);
       setConfirmAction(null);
-      showToast('Lépés visszaállítva', 'success');
+      showToast('Munkafázis visszaállítva', 'success');
       onStepChanged?.();
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Hiba történt', 'error');
@@ -704,7 +704,7 @@ export function EpisodeStepsManager({
       setSteps((prev) => prev.filter((s) => s.id !== stepId));
       setConfirmStepId(null);
       setConfirmAction(null);
-      showToast('Lépés törölve', 'success');
+      showToast('Munkafázis törölve', 'success');
       onStepChanged?.();
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Hiba a törlésnél', 'error');
@@ -777,7 +777,7 @@ export function EpisodeStepsManager({
       setSteps(mapWorkPhasesResponse(data.workPhases ?? data.steps));
       setMergeMode(false);
       setMergeSelection(new Set());
-      showToast('Lépések összevonva', 'success');
+      showToast('Munkafázisok összevonva', 'success');
       onStepChanged?.();
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Hiba az összevonásnál', 'error');
@@ -873,7 +873,7 @@ export function EpisodeStepsManager({
       setSteps((prev) => [...prev, mapWorkPhaseApiToEpisodeStep(row)]);
       setFreeLabel('');
       setFreeDuration(30);
-      showToast('Egyedi lépés hozzáadva', 'success');
+      showToast('Egyedi munkafázis hozzáadva', 'success');
       onStepChanged?.();
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Hiba a hozzáadásnál', 'error');
@@ -941,7 +941,7 @@ export function EpisodeStepsManager({
         className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
       >
         <div>
-          <h3 className="text-base font-semibold text-gray-900">Kezelési lépések</h3>
+          <h3 className="text-base font-semibold text-gray-900">Kezelési munkafázisok</h3>
           {hasMultiplePathways ? (
             <p className="text-sm text-gray-500 mt-0.5">{episodePathways.length} kezelési út összefésülve</p>
           ) : carePathwayName ? (
@@ -979,7 +979,7 @@ export function EpisodeStepsManager({
                       >
                         {generating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                         <Layers className="w-3.5 h-3.5" />
-                        Lépések generálása sablonból
+                        Munkafázisok generálása sablonból
                       </button>
                     )}
                     <button
@@ -987,7 +987,7 @@ export function EpisodeStepsManager({
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-gray-300 text-gray-600 rounded-md text-sm hover:border-medical-primary hover:text-medical-primary transition-colors"
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      Lépés hozzáadása
+                      Munkafázis hozzáadása
                     </button>
                     {primarySteps.length >= 2 && (
                       <button
@@ -1027,7 +1027,7 @@ export function EpisodeStepsManager({
                         }`}
                       >
                         <PenLine className="w-3 h-3" />
-                        Szabad lépés
+                        Egyedi megnevezés
                       </button>
                       {availableToothTreatments.length > 0 && (
                         <button
@@ -1059,7 +1059,7 @@ export function EpisodeStepsManager({
                             type="text"
                             value={catalogSearch}
                             onChange={(e) => setCatalogSearch(e.target.value)}
-                            placeholder="Lépés keresése…"
+                            placeholder="Katalógus keresése…"
                             className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-300 rounded-md"
                           />
                         </div>
@@ -1091,7 +1091,7 @@ export function EpisodeStepsManager({
                           type="text"
                           value={freeLabel}
                           onChange={(e) => setFreeLabel(e.target.value)}
-                          placeholder="Lépés megnevezése (pl. Ideiglenes korona)"
+                          placeholder="Munkafázis megnevezése (pl. Ideiglenes korona)"
                           className="w-full text-sm border border-gray-300 rounded-md px-3 py-1.5"
                         />
                         <div className="flex items-center gap-2">
@@ -1131,7 +1131,7 @@ export function EpisodeStepsManager({
                     {adderTab === 'tooth' && (
                       <div>
                         {availableToothTreatments.length === 0 ? (
-                          <p className="text-xs text-gray-500 py-2 text-center">Nincs hozzáadható fogkezelés (mindegyik már a lépéssorban van)</p>
+                          <p className="text-xs text-gray-500 py-2 text-center">Nincs hozzáadható fogkezelés (mindegyik már a munkafázis-sorban van)</p>
                         ) : (
                           <div className="max-h-48 overflow-y-auto space-y-0.5">
                             {availableToothTreatments.map((tt) => (
@@ -1158,7 +1158,7 @@ export function EpisodeStepsManager({
               {mergeMode && (
                 <div className="mb-3 flex items-center gap-2 p-2 rounded-lg bg-violet-50 border border-violet-200">
                   <Merge className="w-4 h-4 text-violet-600" />
-                  <span className="text-sm text-violet-700">Jelölje ki a lépéseket, amelyeket egy időpontra szeretne összevonni.</span>
+                  <span className="text-sm text-violet-700">Jelölje ki a munkafázisokat, amelyeket egy időpontra szeretne összevonni.</span>
                   <div className="flex-1" />
                   <button
                     onClick={handleMergeConfirm}
@@ -1179,11 +1179,11 @@ export function EpisodeStepsManager({
 
               {/* ─── Step list with DnD ──────────────────────────────── */}
               {primarySteps.length === 0 ? (
-                <p className="text-sm text-gray-500 py-2">Még nincsenek lépések. Adj hozzá lépéseket fent a tervhez.</p>
+                <p className="text-sm text-gray-500 py-2">Még nincsenek munkafázisok. Adjon hozzá a fenti űrlapon.</p>
               ) : (
                 <div className="space-y-1">
                   <p className="text-xs text-gray-500 mb-2">
-                    Húzd a lépéseket a kívánt sorrendbe, vagy használd a nyilakat. A kukával elhagyhatod a felesleges lépéseket.
+                    Húzza a munkafázisokat a kívánt sorrendbe, vagy használja a nyilakat. A kukával elhagyhatja a felesleges elemeket.
                   </p>
                   {mounted ? (
                   <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd} modifiers={[restrictToVerticalAxis]}>
