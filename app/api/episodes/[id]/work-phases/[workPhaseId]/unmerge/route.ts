@@ -25,7 +25,7 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
     return NextResponse.json({ error: 'Epizód nem található' }, { status: 404 });
   }
   if (epRow.rows[0].status !== 'open') {
-    return NextResponse.json({ error: 'Csak aktív epizód lépései bonthatók szét' }, { status: 400 });
+    return NextResponse.json({ error: 'Csak aktív epizód munkafázisai bonthatók szét' }, { status: 400 });
   }
 
   const updated = await pool.query(

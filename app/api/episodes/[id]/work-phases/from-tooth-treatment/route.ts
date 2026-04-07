@@ -30,7 +30,7 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
     return NextResponse.json({ error: 'Epizód nem található' }, { status: 404 });
   }
   if (epRow.rows[0].status !== 'open') {
-    return NextResponse.json({ error: 'Csak aktív epizódhoz adható lépés' }, { status: 400 });
+    return NextResponse.json({ error: 'Csak aktív epizódhoz adható munkafázis' }, { status: 400 });
   }
 
   const ttRow = await pool.query(
@@ -52,7 +52,7 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
     return NextResponse.json({ error: 'A fogkezelés nem ehhez az epizódhoz tartozik' }, { status: 400 });
   }
   if (tt.status !== 'episode_linked') {
-    return NextResponse.json({ error: 'Csak epizódhoz kapcsolt fogkezelés adható a lépéssorhoz' }, { status: 400 });
+    return NextResponse.json({ error: 'Csak epizódhoz kapcsolt fogkezelés adható a munkafázis-sorhoz' }, { status: 400 });
   }
 
   const alreadyExists = await pool.query(
@@ -60,7 +60,7 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
     [episodeId, toothTreatmentId]
   );
   if (alreadyExists.rows.length > 0) {
-    return NextResponse.json({ error: 'Ez a fogkezelés már a lépéssorban van' }, { status: 409 });
+    return NextResponse.json({ error: 'Ez a fogkezelés már a munkafázis-sorban van' }, { status: 409 });
   }
 
   const maxSeqRow = await pool.query(

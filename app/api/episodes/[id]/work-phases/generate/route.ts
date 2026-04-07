@@ -25,7 +25,7 @@ export const POST = authedHandler(async (req, { auth, params }) => {
 
   const ep = epRow.rows[0];
   if (ep.status !== 'open') {
-    return NextResponse.json({ error: 'Csak aktív epizódhoz generálható lépés' }, { status: 400 });
+    return NextResponse.json({ error: 'Csak aktív epizódhoz generálható munkafázis' }, { status: 400 });
   }
 
   let epPathways: Array<{ id: string; care_pathway_id: string }> = [];

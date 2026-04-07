@@ -17,7 +17,7 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
   const { stepIds } = body;
 
   if (!Array.isArray(stepIds) || stepIds.length < 2) {
-    return NextResponse.json({ error: 'Legalább 2 lépés szükséges az összevonáshoz' }, { status: 400 });
+    return NextResponse.json({ error: 'Legalább 2 munkafázis szükséges az összevonáshoz' }, { status: 400 });
   }
 
   const pool = getDbPool();
@@ -37,23 +37,23 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
 
     if (stepsResult.rows.length !== stepIds.length) {
       await client.query('ROLLBACK');
-      return NextResponse.json({ error: 'Nem minden lépés tartozik ehhez az epizódhoz' }, { status: 400 });
+      return NextResponse.json({ error: 'Nem minden munkafázis tartozik ehhez az epizódhoz' }, { status: 400 });
     }
 
     const epStatus = stepsResult.rows[0].ep_status;
     if (epStatus !== 'open') {
       await client.query('ROLLBACK');
-      return NextResponse.json({ error: 'Csak aktív epizód lépései vonhatók össze' }, { status: 400 });
+      return NextResponse.json({ error: 'Csak aktív epizód munkafázisai vonhatók össze' }, { status: 400 });
     }
 
     for (const row of stepsResult.rows) {
       if (row.status === 'completed') {
         await client.query('ROLLBACK');
-        return NextResponse.json({ error: 'Befejezett lépés nem vonható össze' }, { status: 400 });
+        return NextResponse.json({ error: 'Befejezett munkafázis nem vonható össze' }, { status: 400 });
       }
       if (row.merged_into_episode_work_phase_id) {
         await client.query('ROLLBACK');
-        return NextResponse.json({ error: 'Már összevont lépés nem vonható újra össze' }, { status: 400 });
+        return NextResponse.json({ error: 'Már összevont munkafázis nem vonható újra össze' }, { status: 400 });
       }
     }
 
