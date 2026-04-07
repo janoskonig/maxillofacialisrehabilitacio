@@ -3,7 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
 import { logActivity } from '@/lib/activity';
 import { logger } from '@/lib/logger';
-import { normalizePathwayWorkPhaseArray } from '@/lib/pathway-work-phases-for-episode';
+import { pathwayTemplatesFromCarePathwayRow } from '@/lib/pathway-work-phases-for-episode';
 
 export const dynamic = 'force-dynamic';
 
@@ -134,9 +134,7 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
               );
             }
 
-            const rawPhases =
-              pathwayCheck.rows[0].work_phases_json ?? pathwayCheck.rows[0].steps_json;
-            const phases = normalizePathwayWorkPhaseArray(rawPhases) ?? [];
+            const phases = pathwayTemplatesFromCarePathwayRow(pathwayCheck.rows[0]) ?? [];
             if (phases.length > 0) {
               const ewpExists = await client.query(
                 `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'episode_work_phases'`
