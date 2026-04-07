@@ -3,13 +3,6 @@ import { getDbPool } from './db';
 import { logger } from './logger';
 import { queueAdminNotification } from './email/admin-notification-queue';
 
-const READ_ONLY_ACTIONS = new Set([
-  'patients_list_viewed',
-  'patient_search',
-  'patient_documents_listed',
-  'patient_document_downloaded',
-]);
-
 /**
  * Központi activity logolási helper függvény
  * 
@@ -17,13 +10,15 @@ const READ_ONLY_ACTIONS = new Set([
  * @param userEmail Felhasználó email címe
  * @param action Activity action típusa (pl. 'patient_viewed', 'patient_created')
  * @param detail Opcionális részletek az activity-ről
+ * @param opts Ha skipAdminNotificationQueue: true, nem kerül sorba admin digest/azonnali értesítés (pl. dedikált email már megy).
  * @returns Promise<boolean> - true ha sikeres, false ha hiba történt
  */
 export async function logActivity(
   request: NextRequest,
   userEmail: string,
   action: string,
-  detail?: string
+  detail?: string,
+  opts?: { skipAdminNotificationQueue?: boolean }
 ): Promise<boolean> {
   try {
     const pool = getDbPool();
@@ -36,7 +31,7 @@ export async function logActivity(
       [userEmail, action, detail || null, ipAddress]
     );
 
-    if (!READ_ONLY_ACTIONS.has(action)) {
+    if (!opts?.skipAdminNotificationQueue) {
       queueAdminNotification(
         action,
         `${userEmail}: ${detail || action}`,
@@ -65,11 +60,12 @@ export async function logActivityWithAuth(
   request: NextRequest,
   auth: { email: string } | null,
   action: string,
-  detail?: string
+  detail?: string,
+  opts?: { skipAdminNotificationQueue?: boolean }
 ): Promise<boolean> {
   if (!auth) {
     return false;
   }
-  return logActivity(request, auth.email, action, detail);
+  return logActivity(request, auth.email, action, detail, opts);
 }
 

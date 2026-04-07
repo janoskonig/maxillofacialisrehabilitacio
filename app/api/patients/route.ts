@@ -427,28 +427,27 @@ export const POST = authedHandler(async (req, { auth }) => {
     req,
     userEmail,
     'patient_created',
-    `Patient ID: ${result.rows[0].id}, Name: ${result.rows[0].nev || 'N/A'}`
+    `Patient ID: ${result.rows[0].id}, Name: ${result.rows[0].nev || 'N/A'}`,
+    { skipAdminNotificationQueue: true }
   );
 
-  if (role === 'beutalo_orvos') {
-    try {
-      const adminResult = await pool.query(
-        `SELECT email FROM users WHERE role = 'admin' AND active = true`
+  try {
+    const adminResult = await pool.query(
+      `SELECT email FROM users WHERE role = 'admin' AND active = true`
+    );
+    const adminEmails = adminResult.rows.map((row: { email: string }) => row.email);
+
+    if (adminEmails.length > 0) {
+      await sendPatientCreationNotification(
+        adminEmails,
+        result.rows[0].nev,
+        result.rows[0].taj,
+        userEmail,
+        result.rows[0].createdAt || new Date().toISOString()
       );
-      const adminEmails = adminResult.rows.map((row: { email: string }) => row.email);
-      
-      if (adminEmails.length > 0) {
-        await sendPatientCreationNotification(
-          adminEmails,
-          result.rows[0].nev,
-          result.rows[0].taj,
-          userEmail,
-          result.rows[0].createdAt || new Date().toISOString()
-        );
-      }
-    } catch (emailError) {
-      logger.error('Failed to send patient creation notification email:', emailError);
     }
+  } catch (emailError) {
+    logger.error('Failed to send patient creation notification email:', emailError);
   }
   
   return NextResponse.json({ patient: result.rows[0] }, { status: 201 });

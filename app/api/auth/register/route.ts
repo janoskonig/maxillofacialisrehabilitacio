@@ -158,25 +158,25 @@ export const POST = apiHandler(async (req) => {
     logger.error('Failed to record GDPR consent:', consentError);
   }
 
-  await logActivity(req, user.email, 'register', 'pending_approval');
+  await logActivity(req, user.email, 'register', 'pending_approval', {
+    skipAdminNotificationQueue: true,
+  });
 
   try {
     const adminResult = await pool.query(
       `SELECT email FROM users WHERE role = 'admin' AND active = true`
     );
     const adminEmails = adminResult.rows.map((row: { email: string }) => row.email);
-    
-    if (adminEmails.length > 0) {
-      await sendRegistrationNotificationToAdmins(
-        adminEmails,
-        user.email,
-        user.doktor_neve || user.email,
-        user.role,
-        user.intezmeny || institution,
-        user.hozzaferes_indokolas || accessReason.trim(),
-        new Date()
-      );
-    }
+
+    await sendRegistrationNotificationToAdmins(
+      adminEmails,
+      user.email,
+      user.doktor_neve || user.email,
+      user.role,
+      user.intezmeny || institution,
+      user.hozzaferes_indokolas || accessReason.trim(),
+      new Date()
+    );
   } catch (emailError) {
     logger.error('Failed to send registration notification email to admins:', emailError);
   }

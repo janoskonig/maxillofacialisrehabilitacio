@@ -1,5 +1,6 @@
 import { getDbPool } from '@/lib/db';
 import { sendOhipReminderEmail } from '@/lib/email';
+import { getAdminNotificationRecipients } from '@/lib/email/admin-notification-queue';
 import { getTimepointAvailability, type TimepointAvailability } from '@/lib/ohip14-timepoint-stage';
 import type { OHIP14Timepoint } from '@/lib/types';
 
@@ -39,11 +40,8 @@ export async function sendOhipReminders(): Promise<ReminderResult> {
 
   if (patientsRes.rows.length === 0) return result;
 
-  // Fetch admin emails so they receive a BCC copy of every reminder
-  const adminRes = await pool.query(
-    "SELECT email FROM users WHERE role = 'admin' AND active = true"
-  );
-  const adminEmails: string[] = adminRes.rows.map((r: any) => r.email);
+  // Admin + SMTP_REPLY_TO: ugyanaz a levél BCC-ben, mint amit a páciens kap
+  const adminEmails: string[] = await getAdminNotificationRecipients();
 
   // 2) For each patient, determine pending timepoints
   for (const row of patientsRes.rows) {

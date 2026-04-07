@@ -203,15 +203,13 @@ export const POST = apiHandler(async (req, { correlationId }) => {
     );
     const adminEmails = adminResult.rows.map((row: { email: string }) => row.email);
     
-    if (adminEmails.length > 0) {
-      await sendPatientRegistrationNotificationToAdmins(
-        adminEmails,
-        newPatient.email,
-        newPatient.nev,
-        newPatient.taj,
-        new Date()
-      );
-    }
+    await sendPatientRegistrationNotificationToAdmins(
+      adminEmails,
+      newPatient.email,
+      newPatient.nev,
+      newPatient.taj,
+      new Date()
+    );
   } catch (emailError) {
     logger.error('Failed to send patient registration notification email to admins:', emailError);
   }

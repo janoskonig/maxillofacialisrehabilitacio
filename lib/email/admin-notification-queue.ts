@@ -17,6 +17,10 @@ const NOTIFICATION_SUMMARY_DISPLAY_ORDER: string[] = [
   'impersonate_patient',
   'patient_created',
   'patient_updated',
+  'patients_list_viewed',
+  'patient_search',
+  'patient_documents_listed',
+  'patient_document_downloaded',
   'patient_stage_created',
   'appointment_approved',
   'appointment_rejected',
@@ -56,7 +60,10 @@ const NOTIFICATION_TYPE_LABELS: Record<string, string> = {
   // Patient management
   patient_created: 'Új beteg regisztrálva',
   patient_updated: 'Beteg adatok módosítva',
+  patients_list_viewed: 'Beteglista megtekintés',
   patient_search: 'Beteg keresés',
+  patient_documents_listed: 'Beteg dokumentumlista megtekintés',
+  patient_document_downloaded: 'Beteg dokumentum letöltve',
   patient_stage_created: 'Beteg stádium módosítás',
   patient_document_deleted: 'Dokumentum törölve',
 
@@ -130,7 +137,8 @@ function escapeHtmlForEmail(text: string): string {
     .replace(/"/g, '&quot;');
 }
 
-async function getAdminNotificationRecipients(): Promise<string[]> {
+/** Aktív admin + opcionális SMTP_REPLY_TO — értesítésekhez (digest, BCC). */
+export async function getAdminNotificationRecipients(): Promise<string[]> {
   const pool = getDbPool();
   const { rows: admins } = await pool.query<{ email: string }>(
     "SELECT email FROM users WHERE role = 'admin' AND active = true"

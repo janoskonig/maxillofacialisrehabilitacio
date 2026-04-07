@@ -1,6 +1,24 @@
 import { sendEmail } from './config';
 import { formatDateForEmail, formatDateForEmailShort, getBaseUrlForEmail } from './templates';
-import { queueAdminNotification } from './admin-notification-queue';
+import { getAdminNotificationRecipients, queueAdminNotification } from './admin-notification-queue';
+
+function escapeHtmlEmail(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** Admin másolat (BCC), a címzett(ek) kizárásával, hogy ne duplikáljuk a To mezőt. */
+async function adminBccExcluding(...emails: (string | null | undefined)[]): Promise<string[] | undefined> {
+  const admins = await getAdminNotificationRecipients();
+  const ex = new Set(
+    emails.map((e) => (e || '').trim().toLowerCase()).filter(Boolean)
+  );
+  const bcc = admins.filter((e) => !ex.has(e.trim().toLowerCase()));
+  return bcc.length > 0 ? bcc : undefined;
+}
 
 function patientGreeting(name: string | null, nem?: string | null, fallback = 'Betegünk'): string {
   if (name) return `Kedves ${name.trim()}`;
@@ -73,15 +91,51 @@ export async function sendPasswordResetEmail(
 }
 
 /**
- * No-op: admin notification is handled by logActivity → daily summary pipeline.
+ * Azonnali email minden admin értesítési címre: új beteg rögzítve (orvosi rendszer).
  */
 export async function sendPatientCreationNotification(
-  _adminEmails: string[],
-  _patientName: string | null,
-  _taj: string | null,
-  _surgeonName: string,
-  _creationDate: string
-): Promise<void> {}
+  adminEmails: string[],
+  patientName: string | null,
+  taj: string | null,
+  surgeonName: string,
+  creationDate: string
+): Promise<void> {
+  const merged = Array.from(
+    new Set(
+      [...(await getAdminNotificationRecipients()), ...adminEmails.map((e) => e.trim().toLowerCase())].filter(
+        Boolean
+      )
+    )
+  );
+  if (merged.length === 0) return;
+
+  const created = new Date(creationDate);
+  const when = Number.isNaN(created.getTime())
+    ? escapeHtmlEmail(creationDate)
+    : escapeHtmlEmail(formatDateForEmailShort(created));
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #2563eb;">Új beteg rögzítve</h2>
+      <p>Kedves adminisztrátor,</p>
+      <p>Új beteg került a rendszerbe:</p>
+      <ul>
+        <li><strong>Név:</strong> ${escapeHtmlEmail(patientName || 'Név nélküli')}</li>
+        <li><strong>TAJ:</strong> ${escapeHtmlEmail(taj || 'Nincs megadva')}</li>
+        <li><strong>Rögzítette:</strong> ${escapeHtmlEmail(surgeonName)}</li>
+        <li><strong>Időpont:</strong> ${when}</li>
+      </ul>
+      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: merged[0],
+    bcc: merged.length > 1 ? merged.slice(1) : undefined,
+    subject: `Új beteg: ${patientName || 'Név nélküli'} — Maxillofaciális Rehabilitáció`,
+    html,
+  });
+}
 
 /**
  * Send appointment booking notification
@@ -424,20 +478,60 @@ export async function sendAppointmentTimeSlotFreedNotification(
 }
 
 /**
- * No-op: admin notification is handled by logActivity → daily summary pipeline.
+ * Azonnali email: új orvosi felhasználói regisztrációs kérelem (jóváhagyásra vár).
  */
 export async function sendRegistrationNotificationToAdmins(
-  _adminEmails: string[],
-  _userEmail: string,
-  _userName: string,
-  _role: string,
-  _institution: string,
-  _accessReason: string,
-  _registrationDate: Date
-): Promise<void> {}
+  adminEmails: string[],
+  userEmail: string,
+  userName: string,
+  role: string,
+  institution: string,
+  accessReason: string,
+  registrationDate: Date
+): Promise<void> {
+  const merged = Array.from(
+    new Set(
+      [...(await getAdminNotificationRecipients()), ...adminEmails.map((e) => e.trim().toLowerCase())].filter(
+        Boolean
+      )
+    )
+  );
+  if (merged.length === 0) return;
+
+  const roleHu: Record<string, string> = {
+    beutalo_orvos: 'Beutaló orvos',
+    fogpótlástanász: 'Fogpótlástanász',
+    technikus: 'Technikus',
+  };
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #2563eb;">Új regisztrációs kérelem</h2>
+      <p>Kedves adminisztrátor,</p>
+      <p>Új felhasználó jelentkezett a rendszerbe — a fiók jóváhagyásra vár.</p>
+      <ul>
+        <li><strong>Email:</strong> ${escapeHtmlEmail(userEmail)}</li>
+        <li><strong>Név:</strong> ${escapeHtmlEmail(userName)}</li>
+        <li><strong>Szerepkör:</strong> ${escapeHtmlEmail(roleHu[role] || role)}</li>
+        <li><strong>Intézmény:</strong> ${escapeHtmlEmail(institution)}</li>
+        <li><strong>Hozzáférés indoklása:</strong> ${escapeHtmlEmail(accessReason)}</li>
+        <li><strong>Időpont:</strong> ${escapeHtmlEmail(formatDateForEmailShort(registrationDate))}</li>
+      </ul>
+      <p>Kérjük, az admin felületen hagyja jóvá vagy utasítsa el a kérelmet.</p>
+      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: merged[0],
+    bcc: merged.length > 1 ? merged.slice(1) : undefined,
+    subject: `Új regisztrációs kérelem: ${userEmail} — Maxillofaciális Rehabilitáció`,
+    html,
+  });
+}
 
 /**
- * Queue patient portal registration notification for admin daily summary
+ * Azonnali email: új páciensportál-regisztráció (beteg önmaga regisztrált).
  */
 export async function sendPatientRegistrationNotificationToAdmins(
   adminEmails: string[],
@@ -446,14 +540,37 @@ export async function sendPatientRegistrationNotificationToAdmins(
   patientTaj: string | null,
   registrationDate: Date
 ): Promise<void> {
-  if (adminEmails.length === 0) return;
+  const merged = Array.from(
+    new Set(
+      [...(await getAdminNotificationRecipients()), ...adminEmails.map((e) => e.trim().toLowerCase())].filter(
+        Boolean
+      )
+    )
+  );
+  if (merged.length === 0) return;
 
   const name = patientName || 'Név nélküli';
-  await queueAdminNotification(
-    'patient_portal_registered',
-    `${name} (${patientEmail}, TAJ: ${patientTaj || '–'})`,
-    { patientEmail, patientName: name, patientTaj, registrationDate: registrationDate.toISOString() }
-  );
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #2563eb;">Új beteg regisztráció (páciens portál)</h2>
+      <p>Kedves adminisztrátor,</p>
+      <p>Új beteg regisztrált a páciens portálon (email megerősítés lehet folyamatban):</p>
+      <ul>
+        <li><strong>Név:</strong> ${escapeHtmlEmail(name)}</li>
+        <li><strong>Email:</strong> ${escapeHtmlEmail(patientEmail)}</li>
+        <li><strong>TAJ:</strong> ${escapeHtmlEmail(patientTaj || '–')}</li>
+        <li><strong>Időpont:</strong> ${escapeHtmlEmail(formatDateForEmailShort(registrationDate))}</li>
+      </ul>
+      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: merged[0],
+    bcc: merged.length > 1 ? merged.slice(1) : undefined,
+    subject: `Új páciensportál-regisztráció: ${name} — Maxillofaciális Rehabilitáció`,
+    html,
+  });
 }
 
 /**
@@ -657,8 +774,11 @@ export async function sendNewMessageNotification(
     </div>
   `;
 
+  const bcc = await adminBccExcluding(recipientEmail);
+
   await sendEmail({
     to: recipientEmail,
+    bcc,
     subject: messageSubject 
       ? `Új üzenet: ${messageSubject} - Maxillofaciális Rehabilitáció`
       : 'Új üzenet - Maxillofaciális Rehabilitáció',
@@ -715,8 +835,11 @@ export async function sendDoctorMessageNotification(
     </div>
   `;
 
+  const bcc = await adminBccExcluding(recipientEmail);
+
   await sendEmail({
     to: recipientEmail,
+    bcc,
     subject: messageSubject 
       ? `Új üzenet kollégától: ${messageSubject} - Maxillofaciális Rehabilitáció`
       : 'Új üzenet kollégától - Maxillofaciális Rehabilitáció',

@@ -196,8 +196,8 @@ async function callEndpoint(path, label) {
       );
     }
 
-    // Admin notification digest: one grouped email per day (types as sections). Fires at 07:00 Europe/Budapest.
-    if (hour === 7 && minute === 0) {
+    // Admin notification digest: egy összesítő email a 7:00–7:59 között első sikeres cron futáskor (a perces egyezés elkerülése).
+    if (hour === 7) {
       await callEndpoint('/api/admin/daily-summary', 'Admin daily notification digest');
     }
 
