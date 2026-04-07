@@ -220,9 +220,10 @@ export const GET = optionalAuthHandler(async (req, { auth, correlationId }) => {
   if (auth && !forMention) {
     const searchQuery = req.nextUrl.searchParams.get('q');
     const action = searchQuery ? 'patient_search' : 'patients_list_viewed';
-    const detail = searchQuery 
-      ? `Search query: "${searchQuery}", Results: ${result.rows.length}`
-      : `Total patients: ${result.rows.length}`;
+    // total = COUNT(*) (szűréssel); result.rows.length max. oldalméret (pagináció) — ne keverjük össze
+    const detail = searchQuery
+      ? `Search query: "${searchQuery}", Total matches: ${total}, Page rows: ${result.rows.length}`
+      : `Total patients: ${total}`;
     
     await logActivityWithAuth(req, auth, action, detail);
   }
