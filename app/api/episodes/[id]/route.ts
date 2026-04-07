@@ -3,7 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { authedHandler, roleHandler } from '@/lib/api/route-handler';
 import { invalidateIntentsForEpisode } from '@/lib/intent-invalidation';
 import { createInitialSlotIntentsForEpisode } from '@/lib/episode-activation';
-import { normalizePathwayWorkPhaseArray } from '@/lib/pathway-work-phases-for-episode';
+import { pathwayTemplatesFromCarePathwayRow } from '@/lib/pathway-work-phases-for-episode';
 import { mapEpisodePathwayRows, type EpisodePathwayApiRow } from '@/lib/map-episode-pathway-response';
 import { getCurrentSuggestion } from '@/lib/stage-suggestion-service';
 import { logger } from '@/lib/logger';
@@ -246,9 +246,7 @@ async function handleAddPathway(
     return NextResponse.json({ error: 'Kezelési út nem található' }, { status: 404 });
   }
 
-  const templates =
-    normalizePathwayWorkPhaseArray(pw.rows[0].work_phases_json) ??
-    normalizePathwayWorkPhaseArray(pw.rows[0].steps_json);
+  const templates = pathwayTemplatesFromCarePathwayRow(pw.rows[0]) ?? [];
 
   const client = await pool.connect();
   try {
