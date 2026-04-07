@@ -49,7 +49,9 @@ interface LinkedToothTreatment {
   treatmentCode: string;
   status: string;
   labelHu: string;
+  /** Legacy; same as inWorkPhases. */
   inSteps: boolean;
+  inWorkPhases?: boolean;
 }
 
 interface StepCatalogItem {
@@ -930,7 +932,10 @@ export function EpisodeStepsManager({
   const stepIds = useMemo(() => primarySteps.map((s) => s.id), [primarySteps]);
 
   const hasPathways = carePathwayId || (episodePathways && episodePathways.length > 0);
-  const availableToothTreatments = useMemo(() => linkedTreatments.filter((t) => !t.inSteps), [linkedTreatments]);
+  const availableToothTreatments = useMemo(
+    () => linkedTreatments.filter((t) => !(t.inWorkPhases ?? t.inSteps)),
+    [linkedTreatments]
+  );
 
   // ─── Render ──────────────────────────────────────────────────────────────
 

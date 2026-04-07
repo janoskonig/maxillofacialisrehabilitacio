@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 /**
  * GET /api/episodes/:id/linked-tooth-treatments
  * Returns tooth treatments linked to this episode, with info about whether
- * they are already in the episode work-phase pathway.
+ * they are already in the episode work-phase pathway (inWorkPhases; inSteps legacy alias).
  */
 export const GET = authedHandler(async (req, { auth, params }) => {
   const episodeId = params.id;
@@ -26,5 +26,9 @@ export const GET = authedHandler(async (req, { auth, params }) => {
     [episodeId]
   );
 
-  return NextResponse.json({ treatments: result.rows });
+  const treatments = result.rows.map((row: { inSteps: boolean }) => ({
+    ...row,
+    inWorkPhases: row.inSteps,
+  }));
+  return NextResponse.json({ treatments });
 });
