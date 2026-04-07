@@ -36,6 +36,7 @@ interface EpisodePathwayRow {
   ordinal: number;
   pathwayName: string;
   stepCount: number;
+  workPhaseCount?: number;
   jaw?: 'felso' | 'also' | null;
 }
 
@@ -278,7 +279,9 @@ export function EpisodePathwayEditor({
                         {JAW_LABELS[ep.jaw] ?? ep.jaw}
                       </span>
                     )}
-                    <span className="text-xs text-gray-500 shrink-0">{ep.stepCount} lépés</span>
+                    <span className="text-xs text-gray-500 shrink-0">
+                      {ep.workPhaseCount ?? ep.stepCount} munkafázis
+                    </span>
                   </div>
                   <button
                     onClick={() => handleRemovePathway(ep.id)}
