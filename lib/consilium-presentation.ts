@@ -57,6 +57,8 @@ export type PresentationTimelineStage = {
   at: string;
   note: string | null;
   authorDisplay: string | null;
+  /** users.role, ha a szerző emailje egyezik egy aktív felhasználóval */
+  authorRole: string | null;
 };
 
 export type PresentationTimelineEpisode = {
@@ -68,6 +70,8 @@ export type PresentationTimelineEpisode = {
   openedAt: string | null;
   closedAt: string | null;
   episodeCreatedBy: string | null;
+  /** users.role, ha az epizód created_by emailje egyezik egy aktív felhasználóval */
+  episodeCreatedByRole: string | null;
   stages: PresentationTimelineStage[];
 };
 
@@ -209,15 +213,17 @@ async function loadPatientCareTimeline(patientId: string): Promise<PresentationT
     if (!names.has('stage_events')) return [];
 
     const epResult = await pool.query(
-      `SELECT id, reason, status,
-              chief_complaint as "chiefComplaint",
-              case_title as "caseTitle",
-              opened_at as "openedAt",
-              closed_at as "closedAt",
-              created_by as "createdBy"
-       FROM patient_episodes
-       WHERE patient_id = $1::uuid
-       ORDER BY COALESCE(opened_at, created_at) DESC NULLS LAST`,
+      `SELECT e.id, e.reason, e.status,
+              e.chief_complaint as "chiefComplaint",
+              e.case_title as "caseTitle",
+              e.opened_at as "openedAt",
+              e.closed_at as "closedAt",
+              e.created_by as "createdBy",
+              u_ep.role as "episodeCreatedByRole"
+       FROM patient_episodes e
+       LEFT JOIN users u_ep ON lower(btrim(u_ep.email)) = lower(btrim(e.created_by))
+       WHERE e.patient_id = $1::uuid
+       ORDER BY COALESCE(e.opened_at, e.created_at) DESC NULLS LAST`,
       [patientId],
     );
 
@@ -229,13 +235,15 @@ async function loadPatientCareTimeline(patientId: string): Promise<PresentationT
       at: Date;
       note: string | null;
       authorDisplay: string | null;
+      authorRole: string | null;
     };
 
     const se = await pool.query(
       `SELECT se.id, se.episode_id as "episodeId", se.stage_code as "stageCode",
               se.at, se.note,
               sc.label_hu as "stageLabel",
-              COALESCE(NULLIF(btrim(u.doktor_neve), ''), NULLIF(btrim(se.created_by), '')) as "authorDisplay"
+              COALESCE(NULLIF(btrim(u.doktor_neve), ''), NULLIF(btrim(se.created_by), '')) as "authorDisplay",
+              u.role as "authorRole"
        FROM stage_events se
        JOIN patient_episodes e ON e.id = se.episode_id
        LEFT JOIN stage_catalog sc ON sc.code = se.stage_code AND sc.reason = e.reason
@@ -253,6 +261,7 @@ async function loadPatientCareTimeline(patientId: string): Promise<PresentationT
       at: row.at instanceof Date ? row.at : new Date(row.at),
       note: row.note != null ? String(row.note) : null,
       authorDisplay: row.authorDisplay != null ? String(row.authorDisplay) : null,
+      authorRole: row.authorRole != null ? String(row.authorRole) : null,
     }));
 
     const migratedKeys = new Set(
@@ -263,7 +272,8 @@ async function loadPatientCareTimeline(patientId: string): Promise<PresentationT
       const ps = await pool.query(
         `SELECT ps.id, ps.episode_id as "episodeId", ps.stage,
                 ps.stage_date as "at", ps.notes as "note",
-                COALESCE(NULLIF(btrim(u.doktor_neve), ''), NULLIF(btrim(ps.created_by), '')) as "authorDisplay"
+                COALESCE(NULLIF(btrim(u.doktor_neve), ''), NULLIF(btrim(ps.created_by), '')) as "authorDisplay",
+                u.role as "authorRole"
          FROM patient_stages ps
          LEFT JOIN users u ON lower(btrim(u.email)) = lower(btrim(ps.created_by))
          WHERE ps.patient_id = $1::uuid
@@ -286,6 +296,7 @@ async function loadPatientCareTimeline(patientId: string): Promise<PresentationT
           at,
           note: row.note != null ? String(row.note) : null,
           authorDisplay: row.authorDisplay != null ? String(row.authorDisplay) : null,
+          authorRole: row.authorRole != null ? String(row.authorRole) : null,
         });
       }
     }
@@ -315,6 +326,7 @@ async function loadPatientCareTimeline(patientId: string): Promise<PresentationT
       at: isoDate(ev.at) ?? new Date(0).toISOString(),
       note: ev.note,
       authorDisplay: ev.authorDisplay,
+      authorRole: ev.authorRole,
     });
 
     const episodeRows: PresentationTimelineEpisode[] = [];
@@ -330,6 +342,7 @@ async function loadPatientCareTimeline(patientId: string): Promise<PresentationT
         openedAt: unknown;
         closedAt: unknown;
         createdBy: unknown;
+        episodeCreatedByRole?: unknown;
       },
       stages: RawEv[],
     ) => {
@@ -343,6 +356,10 @@ async function loadPatientCareTimeline(patientId: string): Promise<PresentationT
         openedAt: isoDate(row.openedAt as Date | null),
         closedAt: isoDate(row.closedAt as Date | null),
         episodeCreatedBy: row.createdBy != null ? String(row.createdBy) : null,
+        episodeCreatedByRole:
+          row.episodeCreatedByRole != null && String(row.episodeCreatedByRole).trim() !== ''
+            ? String(row.episodeCreatedByRole)
+            : null,
         stages: stages.map(toStage),
       });
     };
@@ -363,6 +380,7 @@ async function loadPatientCareTimeline(patientId: string): Promise<PresentationT
           openedAt: null,
           closedAt: null,
           createdBy: null,
+          episodeCreatedByRole: null,
         },
         stages,
       );

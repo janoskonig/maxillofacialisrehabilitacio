@@ -19,28 +19,19 @@ import type {
   MediaPreviewItem,
   PatientPresentationSummary,
   PresentationTimelineEpisode,
-  PresentationTimelineStage,
 } from '@/lib/consilium-presentation';
 import {
   type ConsiliumPrepCommentSnapshot,
+  careTimelineEpisodeAccent,
+  careTimelineRoleBadgeClass,
+  careTimelineRoleHu,
   consiliumPresentationDiagnosisText,
   consiliumPresentationOncologyRows,
+  consiliumShortDisplay,
+  flattenCareTimelineNewestFirst,
   formatConsiliumHuDateTime,
   prepCommentsGroupedByKey,
 } from '@/lib/consilium-view-helpers';
-
-function flattenCareTimelineNewestFirst(
-  care: PresentationTimelineEpisode[] | undefined,
-): { st: PresentationTimelineStage; epLabel: string }[] {
-  if (!care?.length) return [];
-  const rows: { st: PresentationTimelineStage; epLabel: string }[] = [];
-  for (const ep of care) {
-    const epLabel = [ep.reason, ep.status].filter(Boolean).join(' · ') || 'Epizód';
-    for (const st of ep.stages) rows.push({ st, epLabel });
-  }
-  rows.sort((a, b) => new Date(b.st.at).getTime() - new Date(a.st.at).getTime());
-  return rows;
-}
 
 function ohipImpactLabel(score: number): string {
   if (score <= 8) return 'alacsony';
@@ -695,21 +686,58 @@ export default function ConsiliumPrepPage() {
                   <section className="border-t border-white/15 pt-4">
                     <h2 className="text-sm font-semibold text-white mb-2">Stádium napló</h2>
                     {timelineRows.length > 0 ? (
-                      <div className="space-y-4">
+                      <div className="space-y-3">
                         {timelineRows.map((row, i) => {
                           const prev = i > 0 ? timelineRows[i - 1] : null;
-                          const showEp = !prev || prev.epLabel !== row.epLabel;
+                          const showEp = !prev || prev.episodeId !== row.episodeId;
+                          const accent = careTimelineEpisodeAccent(row.episodeId);
                           return (
-                            <div key={row.st.id}>
+                            <div key={row.st.id} className="space-y-2">
                               {showEp ? (
-                                <p className="text-sm font-semibold text-amber-200/90 mb-2 pb-1 border-b border-white/20">{row.epLabel}</p>
+                                <div className={`rounded-md px-2.5 py-2 ${accent.episodeBlockClass}`}>
+                                  <p className={`text-sm font-semibold leading-snug ${accent.episodeTitleClass}`}>{row.epLabel}</p>
+                                  {(row.episodeCreatedBy || row.episodeCreatedByRole) && (
+                                    <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] text-white/55">
+                                      <span className="text-white/45">Epizód rögzítő:</span>
+                                      {row.episodeCreatedByRole ? (
+                                        <span
+                                          className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 font-medium border ${careTimelineRoleBadgeClass(row.episodeCreatedByRole)}`}
+                                          title={careTimelineRoleHu(row.episodeCreatedByRole)}
+                                        >
+                                          {careTimelineRoleHu(row.episodeCreatedByRole)}
+                                        </span>
+                                      ) : null}
+                                      {row.episodeCreatedBy ? (
+                                        <span className="text-white/70 truncate max-w-[min(100%,14rem)]" title={row.episodeCreatedBy}>
+                                          {consiliumShortDisplay(row.episodeCreatedBy)}
+                                        </span>
+                                      ) : null}
+                                    </p>
+                                  )}
+                                </div>
                               ) : null}
-                              <p className="text-base font-semibold">{row.st.stageLabel}</p>
-                              <p className="text-sm text-white/65">
-                                {formatConsiliumHuDateTime(row.st.at)}
-                                {row.st.authorDisplay ? ` · ${row.st.authorDisplay}` : ''}
-                              </p>
-                              {row.st.note ? <p className="text-sm text-white/85 whitespace-pre-wrap mt-1">{row.st.note}</p> : null}
+                              <div className={`px-2.5 py-2 ${accent.stageCardClass}`}>
+                                <p className="text-base font-semibold leading-snug">{row.st.stageLabel}</p>
+                                <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-white/65">
+                                  <span>{formatConsiliumHuDateTime(row.st.at)}</span>
+                                  {row.st.authorRole ? (
+                                    <span
+                                      className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-medium border ${careTimelineRoleBadgeClass(row.st.authorRole)}`}
+                                      title={careTimelineRoleHu(row.st.authorRole)}
+                                    >
+                                      {careTimelineRoleHu(row.st.authorRole)}
+                                    </span>
+                                  ) : null}
+                                  {row.st.authorDisplay ? (
+                                    <span className="text-white/75 truncate max-w-[min(100%,14rem)]" title={row.st.authorDisplay}>
+                                      {consiliumShortDisplay(row.st.authorDisplay)}
+                                    </span>
+                                  ) : null}
+                                </p>
+                                {row.st.note ? (
+                                  <p className="mt-1.5 text-sm text-white/85 whitespace-pre-wrap leading-snug">{row.st.note}</p>
+                                ) : null}
+                              </div>
                             </div>
                           );
                         })}
@@ -717,14 +745,31 @@ export default function ConsiliumPrepPage() {
                     ) : null}
                     {episodesWithoutStages.length > 0 && (
                       <div className={`space-y-2 ${timelineRows.length > 0 ? 'mt-4 pt-3 border-t border-white/15' : ''}`}>
-                        {episodesWithoutStages.map((ep: PresentationTimelineEpisode) => (
-                          <p key={ep.id} className="text-sm text-white/60">
-                            <span className="font-medium text-white/80">
-                              {[ep.reason, ep.status].filter(Boolean).join(' · ') || 'Epizód'}
-                            </span>
-                            {' — '}nincs stádium bejegyzés
-                          </p>
-                        ))}
+                        {episodesWithoutStages.map((ep: PresentationTimelineEpisode) => {
+                          const accent = careTimelineEpisodeAccent(ep.id);
+                          const epLabel = [ep.reason, ep.status].filter(Boolean).join(' · ') || 'Epizód';
+                          return (
+                            <div key={ep.id} className={`rounded-md px-2.5 py-2 text-sm ${accent.episodeBlockClass}`}>
+                              <p className={`font-semibold leading-snug ${accent.episodeTitleClass}`}>{epLabel}</p>
+                              <p className="mt-1 text-white/55">Nincs stádium bejegyzés.</p>
+                              {(ep.episodeCreatedBy || ep.episodeCreatedByRole) ? (
+                                <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] text-white/55">
+                                  <span className="text-white/40">Rögzítő:</span>
+                                  {ep.episodeCreatedByRole ? (
+                                    <span
+                                      className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 font-medium border ${careTimelineRoleBadgeClass(ep.episodeCreatedByRole)}`}
+                                    >
+                                      {careTimelineRoleHu(ep.episodeCreatedByRole)}
+                                    </span>
+                                  ) : null}
+                                  {ep.episodeCreatedBy ? (
+                                    <span className="text-white/65">{consiliumShortDisplay(ep.episodeCreatedBy)}</span>
+                                  ) : null}
+                                </p>
+                              ) : null}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                     {timelineRows.length === 0 && episodesWithoutStages.length === 0 && (

@@ -2,6 +2,8 @@
  * Közös, tiszta segédfüggvények konzílium vetítés / előkészítő UI-hoz (kliens + szerver típusok).
  */
 
+import type { PresentationTimelineEpisode, PresentationTimelineStage } from '@/lib/consilium-presentation';
+
 export type ConsiliumPrepCommentSnapshot = {
   id: string;
   checklistKey: string;
@@ -15,6 +17,14 @@ export function formatConsiliumHuDateTime(iso: string | null | undefined): strin
   const t = new Date(iso).getTime();
   if (Number.isNaN(t)) return '—';
   return new Date(iso).toLocaleString('hu-HU', { dateStyle: 'short', timeStyle: 'short' });
+}
+
+/** Sűrű UI-hoz: név vagy email levágása (ne tördelje szét a sort). */
+export function consiliumShortDisplay(text: string | null | undefined, maxLen = 42): string {
+  if (text == null) return '';
+  const t = text.trim();
+  if (t.length <= maxLen) return t;
+  return `${t.slice(0, Math.max(1, maxLen - 1))}…`;
 }
 
 export function prepCommentsGroupedByKey(
@@ -150,4 +160,113 @@ export function consiliumPresentationOhipRows(ps: {
     value: worst ? `${worst.label} (${worst.score}/8)` : null,
   });
   return rows;
+}
+
+/** Egybefűzött stádium sor: epizód azonosító + meta a színkódoláshoz és fejléchez. */
+export type CareTimelineFlatRow = {
+  episodeId: string;
+  epLabel: string;
+  episodeCreatedBy: string | null;
+  episodeCreatedByRole: string | null;
+  st: PresentationTimelineStage;
+};
+
+export function flattenCareTimelineNewestFirst(
+  care: PresentationTimelineEpisode[] | undefined,
+): CareTimelineFlatRow[] {
+  if (!care?.length) return [];
+  const rows: CareTimelineFlatRow[] = [];
+  for (const ep of care) {
+    const epLabel = [ep.reason, ep.status].filter(Boolean).join(' · ') || 'Epizód';
+    for (const st of ep.stages) {
+      rows.push({
+        episodeId: ep.id,
+        epLabel,
+        episodeCreatedBy: ep.episodeCreatedBy,
+        episodeCreatedByRole: ep.episodeCreatedByRole,
+        st,
+      });
+    }
+  }
+  rows.sort((a, b) => new Date(b.st.at).getTime() - new Date(a.st.at).getTime());
+  return rows;
+}
+
+export type CareTimelineAccent = {
+  episodeBlockClass: string;
+  episodeTitleClass: string;
+  stageCardClass: string;
+};
+
+const CARE_TIMELINE_PALETTES: CareTimelineAccent[] = [
+  {
+    episodeBlockClass: 'border-l-4 border-amber-400/80 bg-amber-500/15 border border-white/12',
+    episodeTitleClass: 'text-amber-100',
+    stageCardClass: 'border-l-2 border-amber-400/50 bg-amber-500/[0.08] border border-white/10 rounded-md',
+  },
+  {
+    episodeBlockClass: 'border-l-4 border-cyan-400/80 bg-cyan-500/15 border border-white/12',
+    episodeTitleClass: 'text-cyan-100',
+    stageCardClass: 'border-l-2 border-cyan-400/50 bg-cyan-500/[0.08] border border-white/10 rounded-md',
+  },
+  {
+    episodeBlockClass: 'border-l-4 border-violet-400/80 bg-violet-500/15 border border-white/12',
+    episodeTitleClass: 'text-violet-100',
+    stageCardClass: 'border-l-2 border-violet-400/50 bg-violet-500/[0.08] border border-white/10 rounded-md',
+  },
+  {
+    episodeBlockClass: 'border-l-4 border-emerald-400/80 bg-emerald-500/15 border border-white/12',
+    episodeTitleClass: 'text-emerald-100',
+    stageCardClass: 'border-l-2 border-emerald-400/50 bg-emerald-500/[0.08] border border-white/10 rounded-md',
+  },
+  {
+    episodeBlockClass: 'border-l-4 border-rose-400/75 bg-rose-500/15 border border-white/12',
+    episodeTitleClass: 'text-rose-100',
+    stageCardClass: 'border-l-2 border-rose-400/50 bg-rose-500/[0.08] border border-white/10 rounded-md',
+  },
+  {
+    episodeBlockClass: 'border-l-4 border-sky-400/80 bg-sky-500/15 border border-white/12',
+    episodeTitleClass: 'text-sky-100',
+    stageCardClass: 'border-l-2 border-sky-400/50 bg-sky-500/[0.08] border border-white/10 rounded-md',
+  },
+];
+
+export function careTimelineEpisodeAccent(episodeId: string): CareTimelineAccent {
+  let h = 0;
+  for (let i = 0; i < episodeId.length; i++) {
+    h = (h * 31 + episodeId.charCodeAt(i)) >>> 0;
+  }
+  return CARE_TIMELINE_PALETTES[h % CARE_TIMELINE_PALETTES.length]!;
+}
+
+export function careTimelineRoleHu(role: string | null | undefined): string {
+  if (role == null || role.trim() === '') return 'Ismeretlen szerep';
+  switch (role) {
+    case 'admin':
+      return 'Adminisztrátor';
+    case 'beutalo_orvos':
+      return 'Beutaló orvos';
+    case 'fogpótlástanász':
+      return 'Fogpótlástanász';
+    case 'technikus':
+      return 'Technikus';
+    default:
+      return role.replace(/_/g, ' ');
+  }
+}
+
+/** Sötét UI-hoz (vetítés / előkészítő): jelvény Tailwind osztályok (használat: `border` + `inline-flex …`). */
+export function careTimelineRoleBadgeClass(role: string | null | undefined): string {
+  switch (role) {
+    case 'admin':
+      return 'bg-violet-500/25 text-violet-50 border-violet-300/40';
+    case 'beutalo_orvos':
+      return 'bg-emerald-500/25 text-emerald-50 border-emerald-300/40';
+    case 'fogpótlástanász':
+      return 'bg-cyan-500/25 text-cyan-50 border-cyan-300/40';
+    case 'technikus':
+      return 'bg-amber-500/25 text-amber-50 border-amber-300/35';
+    default:
+      return 'bg-white/10 text-white/80 border-white/20';
+  }
 }
