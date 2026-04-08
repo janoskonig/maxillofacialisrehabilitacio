@@ -322,6 +322,9 @@ export async function sendAdminDailySummary(): Promise<AdminDailySummaryResult> 
 
   if (notifications.length === 0) {
     console.info('[DailySummary] No pending notifications (queue empty).');
+    // #region agent log
+    fetch('http://127.0.0.1:7480/ingest/422ab24a-0338-4af3-8664-a47d0382f7d8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fff823'},body:JSON.stringify({sessionId:'fff823',runId:'pre-fix',hypothesisId:'H3',location:'lib/email/admin-notification-queue.ts:326',message:'Daily summary invoked with empty queue',data:{reason:'queue_empty'},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     return { sent: false, count: 0, reason: 'queue_empty' };
   }
 
@@ -374,6 +377,9 @@ export async function sendAdminDailySummary(): Promise<AdminDailySummaryResult> 
     subject: `Összegyűjtött értesítések (${notifications.length} esemény) — Maxillofaciális Rehabilitáció`,
     html,
   });
+  // #region agent log
+  fetch('http://127.0.0.1:7480/ingest/422ab24a-0338-4af3-8664-a47d0382f7d8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fff823'},body:JSON.stringify({sessionId:'fff823',runId:'pre-fix',hypothesisId:'H3',location:'lib/email/admin-notification-queue.ts:377',message:'Daily summary email sent',data:{notificationCount:notifications.length,recipientCount:recipients.length},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
 
   const ids = notifications.map((n) => n.id);
   await pool.query(

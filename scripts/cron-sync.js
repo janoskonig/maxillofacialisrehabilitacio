@@ -32,6 +32,7 @@ function getBudapestWallClock(date = new Date()) {
 const API_URL = process.env.APP_URL || process.env.RENDER_EXTERNAL_URL;
 const API_KEY = process.env.GOOGLE_CALENDAR_SYNC_API_KEY;
 const ENDPOINT = '/api/google-calendar/sync/cron';
+const DEBUG_INGEST = 'http://127.0.0.1:7480/ingest/422ab24a-0338-4af3-8664-a47d0382f7d8';
 
 if (!API_URL) {
   console.error(`[${new Date().toISOString()}] ERROR: APP_URL or RENDER_EXTERNAL_URL environment variable is not set.`);
@@ -163,6 +164,9 @@ async function callEndpoint(path, label) {
       res.on('data', (c) => { data += c; });
       res.on('end', () => {
         console.log(`[${new Date().toISOString()}] ${label}: status ${res.statusCode} — ${data.slice(0, 300)}`);
+        // #region agent log
+        fetch('http://127.0.0.1:7480/ingest/422ab24a-0338-4af3-8664-a47d0382f7d8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fff823'},body:JSON.stringify({sessionId:'fff823',runId:'pre-fix',hypothesisId:'H2',location:'scripts/cron-sync.js:167',message:'Cron endpoint call finished',data:{path,label,statusCode:res.statusCode},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         resolve();
       });
     });
@@ -180,6 +184,9 @@ async function callEndpoint(path, label) {
     }
 
     const { hour, minute, isMonday } = getBudapestWallClock();
+    // #region agent log
+    fetch('http://127.0.0.1:7480/ingest/422ab24a-0338-4af3-8664-a47d0382f7d8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fff823'},body:JSON.stringify({sessionId:'fff823',runId:'pre-fix',hypothesisId:'H1',location:'scripts/cron-sync.js:184',message:'Cron wall clock tick',data:{hour,minute,isMonday},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
 
     console.log(
       `[${new Date().toISOString()}] Cron timing (Europe/Budapest): hour=${hour} minute=${minute} isMonday=${isMonday}`
@@ -200,6 +207,9 @@ async function callEndpoint(path, label) {
     // (a cron percenként fut; az adott órán belül az első sikeres hívás küldi ki a batch-et).
     const ADMIN_DIGEST_HOURS_BUDAPEST = [6, 9, 12, 14, 18];
     if (ADMIN_DIGEST_HOURS_BUDAPEST.includes(hour)) {
+      // #region agent log
+      fetch('http://127.0.0.1:7480/ingest/422ab24a-0338-4af3-8664-a47d0382f7d8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fff823'},body:JSON.stringify({sessionId:'fff823',runId:'pre-fix',hypothesisId:'H1',location:'scripts/cron-sync.js:206',message:'Digest hour matched, calling summary endpoint',data:{hour,minute},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       await callEndpoint('/api/admin/daily-summary', 'Admin notification batch summary');
     }
 
