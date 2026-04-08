@@ -181,9 +181,44 @@ function adminNotificationImmediateEnabled(): boolean {
 }
 
 /**
- * Sorba írja az eseményt. Alapértelmezés: nincs azonnali email — a napi összegyűjtött, típus szerint
- * csoportosított digest küldi ki (/api/admin/daily-summary, pl. cron). Azonnali mód:
- * ADMIN_NOTIFICATION_IMMEDIATE=true|1|yes. Sikertelen azonnali küldésnél a sor marad feldolgozatlanul.
+ * Ezek a típusok alapból azonnali emailt kapnak; a többi a cron által hívott batch összefoglalóban landol
+ * (Europe/Budapest 6, 9, 12, 14, 18 óra).
+ * ADMIN_NOTIFICATION_IMMEDIATE_EXTRA: vesszővel elválasztott típusnevek (pl. login,message_sent).
+ */
+const DEFAULT_IMMEDIATE_NOTIFICATION_TYPES = new Set([
+  'register',
+  'patient_created',
+  'patient_portal_registered',
+  'new_appointment_request',
+  'password_reset_requested',
+]);
+
+function adminNotificationTypeSendsImmediately(notificationType: string): boolean {
+  if (adminNotificationImmediateEnabled()) {
+    return true;
+  }
+  const typeNorm = notificationType.trim().toLowerCase();
+  if (DEFAULT_IMMEDIATE_NOTIFICATION_TYPES.has(typeNorm)) {
+    return true;
+  }
+  const extra = process.env.ADMIN_NOTIFICATION_IMMEDIATE_EXTRA?.trim();
+  if (!extra) {
+    return false;
+  }
+  const extraSet = new Set(
+    extra
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean)
+  );
+  return extraSet.has(typeNorm);
+}
+
+/**
+ * Sorba írja az eseményt. Egyes típusok azonnali emailt kapnak (lásd DEFAULT_IMMEDIATE_NOTIFICATION_TYPES
+ * és ADMIN_NOTIFICATION_IMMEDIATE_EXTRA); a többit a batch összefoglaló küldi (/api/admin/daily-summary, cron).
+ * ADMIN_NOTIFICATION_IMMEDIATE=true: minden típus azonnali (régi viselkedés).
+ * Sikertelen azonnali küldésnél a sor marad feldolgozatlanul a batch számára.
  */
 export async function queueAdminNotification(
   notificationType: string,
@@ -204,7 +239,7 @@ export async function queueAdminNotification(
       return;
     }
 
-    if (!adminNotificationImmediateEnabled()) {
+    if (!adminNotificationTypeSendsImmediately(notificationType)) {
       return;
     }
 
@@ -318,15 +353,15 @@ export async function sendAdminDailySummary(): Promise<AdminDailySummaryResult> 
 
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #2563eb; margin-bottom: 4px;">Napi összefoglaló (összegyűjtött események)</h2>
+      <h2 style="color: #2563eb; margin-bottom: 4px;">Összegyűjtött értesítések</h2>
       <p style="color: #6b7280; font-size: 14px; margin-top: 0;">${periodText}</p>
       <p style="color: #374151; font-size: 14px; background: #eff6ff; padding: 12px 14px; border-radius: 6px;">
-        <strong>Megjegyzés:</strong> Az események típusonként vannak csoportosítva. Ha az azonnali admin email be van kapcsolva
-        (<code>ADMIN_NOTIFICATION_IMMEDIATE</code>), a sikeresen kiküldött tételek nem szerepelnek itt; ez az összefoglaló a feldolgozatlan
-        sorban maradt tételeket is magában foglalja (pl. hálózati hiba után).
+        <strong>Megjegyzés:</strong> Az események típusonként vannak csoportosítva. Egyes típusok (pl. új regisztráció) külön azonnali emailt is kaphatnak;
+        a sikeresen kiküldött tételek nem szerepelnek itt. Ez az összefoglaló a batch-be sorolt, illetve azonnali küldés után feldolgozatlan
+        tételeket is magában foglalja (pl. hálózati hiba után). Ütemezés: naponta többször (cron, Europe/Budapest).
       </p>
       <p>Kedves adminisztrátor,</p>
-      <p>Az elmúlt időszakban <strong>${notifications.length}</strong> esemény történt a rendszerben:</p>
+      <p>Ebben az időszakban <strong>${notifications.length}</strong> esemény történt a rendszerben:</p>
       ${sectionsHtml}
       <p style="margin-top: 24px; color: #6b7280; font-size: 13px;">
         Ez egy automatikus összefoglaló. A részletekért kérjük, jelentkezzen be a rendszerbe.
@@ -336,7 +371,7 @@ export async function sendAdminDailySummary(): Promise<AdminDailySummaryResult> 
 
   await sendEmail({
     to: recipients,
-    subject: `Napi összefoglaló (${notifications.length} esemény) - Maxillofaciális Rehabilitáció`,
+    subject: `Összegyűjtött értesítések (${notifications.length} esemény) — Maxillofaciális Rehabilitáció`,
     html,
   });
 

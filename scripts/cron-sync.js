@@ -196,9 +196,11 @@ async function callEndpoint(path, label) {
       );
     }
 
-    // Admin notification digest: egy összesítő email a 7:00–7:59 között első sikeres cron futáskor (a perces egyezés elkerülése).
-    if (hour === 7) {
-      await callEndpoint('/api/admin/daily-summary', 'Admin daily notification digest');
+    // Admin notification batch: összesítő email Europe/Budapest szerint 6, 9, 12, 14, 18 órakor
+    // (a cron percenként fut; az adott órán belül az első sikeres hívás küldi ki a batch-et).
+    const ADMIN_DIGEST_HOURS_BUDAPEST = [6, 9, 12, 14, 18];
+    if (ADMIN_DIGEST_HOURS_BUDAPEST.includes(hour)) {
+      await callEndpoint('/api/admin/daily-summary', 'Admin notification batch summary');
     }
 
     await syncCalendar();

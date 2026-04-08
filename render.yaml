@@ -30,6 +30,7 @@ services:
       # - APP_URL: A web service URL-je (pl. https://maxillofacial-rehab.onrender.com)
       #   Megjegyzés: A RENDER_EXTERNAL_URL automatikusan be lesz állítva, de ha nem működik,
       #   akkor manuálisan állítsd be az APP_URL-t a web service URL-jére
+      # Admin értesítés batch: scripts/cron-sync.js Europe/Budapest 6, 9, 12, 14, 18 órában hívja /api/admin/daily-summary
 
 databases:
   - name: maxillofacial-rehab-db
