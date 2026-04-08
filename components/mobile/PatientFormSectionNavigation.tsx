@@ -203,9 +203,9 @@ export function PatientFormSectionNavigation({
 
   // Desktop (≥1024): vízszintes stepper — külön scroll konténer, hogy ne vágódjon le a szélén
   return (
-    <div className="mb-8 sticky top-16 z-30 bg-white pt-3 pb-3 border-b border-gray-200 -mx-3 sm:-mx-6 px-3 sm:px-6 sm:top-[4.5rem] md:top-[4.75rem] md:pt-4 lg:top-20">
+    <div className="mb-8 sticky top-16 z-30 bg-white pt-3 pb-1.5 border-b border-gray-200 -mx-3 sm:-mx-6 px-3 sm:px-6 sm:top-[4.5rem] md:top-[4.75rem] md:pt-4 lg:top-20">
       {activeSection && (
-        <div className="text-sm text-gray-600 mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <div className="text-sm text-gray-600 mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <span>
             Szekció <span className="font-semibold text-gray-800">{currentSectionNumber}</span> /{' '}
             {totalSections}: {activeSection.label}
@@ -221,7 +221,7 @@ export function PatientFormSectionNavigation({
 
       <div
         ref={stepperScrollRef}
-        className="w-full max-w-full min-w-0 overflow-x-auto overflow-y-visible overscroll-x-contain pb-2 scroll-smooth [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300"
+        className="w-full max-w-full min-w-0 overflow-x-auto overflow-y-visible overscroll-x-contain pb-1 scroll-smooth [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300"
       >
         <div className="flex w-max items-center gap-1 sm:gap-2 pr-2">
           {sections.map((section, index) => {
