@@ -4,7 +4,6 @@ export { formatDateForEmail, formatDateForEmailShort, getBaseUrlForEmail } from 
 export {
   sendApprovalEmail,
   sendPasswordResetEmail,
-  sendPatientCreationNotification,
   sendAppointmentBookingNotification,
   sendAppointmentBookingNotificationToPatient,
   sendAppointmentBookingNotificationToAdmins,
@@ -13,7 +12,6 @@ export {
   sendAppointmentModificationNotification,
   sendAppointmentModificationNotificationToPatient,
   sendAppointmentTimeSlotFreedNotification,
-  sendRegistrationNotificationToAdmins,
   sendPatientRegistrationNotificationToAdmins,
   sendPatientLoginNotificationToAdmins,
   sendConditionalAppointmentRequestToPatient,

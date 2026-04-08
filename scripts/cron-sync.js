@@ -184,9 +184,6 @@ async function callEndpoint(path, label) {
     }
 
     const { hour, minute, isMonday } = getBudapestWallClock();
-    // #region agent log
-    fetch('http://127.0.0.1:7480/ingest/422ab24a-0338-4af3-8664-a47d0382f7d8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fff823'},body:JSON.stringify({sessionId:'fff823',runId:'pre-fix',hypothesisId:'H1',location:'scripts/cron-sync.js:184',message:'Cron wall clock tick',data:{hour,minute,isMonday},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
 
     console.log(
       `[${new Date().toISOString()}] Cron timing (Europe/Budapest): hour=${hour} minute=${minute} isMonday=${isMonday}`
@@ -203,15 +200,8 @@ async function callEndpoint(path, label) {
       );
     }
 
-    // Admin notification batch: összesítő email Europe/Budapest szerint 6, 9, 12, 14, 18 órakor
-    // (a cron percenként fut; az adott órán belül az első sikeres hívás küldi ki a batch-et).
-    const ADMIN_DIGEST_HOURS_BUDAPEST = [6, 9, 12, 14, 18];
-    if (ADMIN_DIGEST_HOURS_BUDAPEST.includes(hour)) {
-      // #region agent log
-      fetch('http://127.0.0.1:7480/ingest/422ab24a-0338-4af3-8664-a47d0382f7d8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fff823'},body:JSON.stringify({sessionId:'fff823',runId:'pre-fix',hypothesisId:'H1',location:'scripts/cron-sync.js:206',message:'Digest hour matched, calling summary endpoint',data:{hour,minute},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-      await callEndpoint('/api/admin/daily-summary', 'Admin notification batch summary');
-    }
+    // Admin összegyűjtő email: minden cron futáskor hívjuk; a szerver max. ADMIN_NOTIFICATION_BATCH_INTERVAL_HOURS (alap 3) szerint küld.
+    await callEndpoint('/api/admin/daily-summary', 'Admin notification batch summary');
 
     await syncCalendar();
 

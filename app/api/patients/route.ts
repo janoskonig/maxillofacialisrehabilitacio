@@ -3,7 +3,6 @@ import { getDbPool } from '@/lib/db';
 import { normalizeToTreatmentTypeCode } from '@/lib/treatment-type-normalize';
 import { Patient, patientSchema } from '@/lib/types';
 import { verifyAuth } from '@/lib/auth-server';
-import { sendPatientCreationNotification } from '@/lib/email';
 import { logActivity, logActivityWithAuth } from '@/lib/activity';
 import { optionalAuthHandler, authedHandler } from '@/lib/api/route-handler';
 import { logger } from '@/lib/logger';
@@ -427,28 +426,8 @@ export const POST = authedHandler(async (req, { auth }) => {
     req,
     userEmail,
     'patient_created',
-    `Patient ID: ${result.rows[0].id}, Name: ${result.rows[0].nev || 'N/A'}`,
-    { skipAdminNotificationQueue: true }
+    `Patient ID: ${result.rows[0].id}, Name: ${result.rows[0].nev || 'N/A'}`
   );
 
-  try {
-    const adminResult = await pool.query(
-      `SELECT email FROM users WHERE role = 'admin' AND active = true`
-    );
-    const adminEmails = adminResult.rows.map((row: { email: string }) => row.email);
-
-    if (adminEmails.length > 0) {
-      await sendPatientCreationNotification(
-        adminEmails,
-        result.rows[0].nev,
-        result.rows[0].taj,
-        userEmail,
-        result.rows[0].createdAt || new Date().toISOString()
-      );
-    }
-  } catch (emailError) {
-    logger.error('Failed to send patient creation notification email:', emailError);
-  }
-  
   return NextResponse.json({ patient: result.rows[0] }, { status: 201 });
 });

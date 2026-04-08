@@ -36,6 +36,7 @@ const NOTIFICATION_SUMMARY_DISPLAY_ORDER: string[] = [
   'doctor_group_message_sent',
   'ohip14_created',
   'ohip14_updated',
+  'ohip14_reminder_sent',
   'communication_log_created',
   'patient_portal_registered',
   'patient_login',
@@ -90,6 +91,7 @@ const NOTIFICATION_TYPE_LABELS: Record<string, string> = {
   // Clinical
   ohip14_created: 'OHIP-14 kitöltve',
   ohip14_updated: 'OHIP-14 módosítva',
+  ohip14_reminder_sent: 'OHIP-14 emlékeztető (páciensnek kiküldve)',
   communication_log_created: 'Érintkezési napló bejegyzés',
 };
 
@@ -114,6 +116,17 @@ async function ensureAdminNotificationQueueSchema(): Promise<void> {
         CREATE INDEX IF NOT EXISTS idx_admin_notif_queue_unprocessed
           ON admin_notification_queue (processed, created_at)
           WHERE processed = FALSE
+      `);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS admin_notification_batch_state (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          last_sent_at TIMESTAMPTZ
+        )
+      `);
+      await pool.query(`
+        INSERT INTO admin_notification_batch_state (id, last_sent_at)
+        VALUES (1, NULL)
+        ON CONFLICT (id) DO NOTHING
       `);
     })().catch((error) => {
       // Allow retry on next call if initialization fails once.
@@ -180,18 +193,20 @@ function adminNotificationImmediateEnabled(): boolean {
   return v === '1' || v === 'true' || v === 'yes';
 }
 
+/** Minimális idő két összegyűjtő admin email között (óra). 0 = nincs szünet. */
+function adminNotificationBatchIntervalHours(): number {
+  const raw = process.env.ADMIN_NOTIFICATION_BATCH_INTERVAL_HOURS?.trim();
+  if (raw === '' || raw === undefined) return 3;
+  const n = Number.parseFloat(raw);
+  if (Number.isNaN(n) || n < 0) return 3;
+  return n;
+}
+
 /**
- * Ezek a típusok alapból azonnali emailt kapnak; a többi a cron által hívott batch összefoglalóban landol
- * (Europe/Budapest 6, 9, 12, 14, 18 óra).
- * ADMIN_NOTIFICATION_IMMEDIATE_EXTRA: vesszővel elválasztott típusnevek (pl. login,message_sent).
+ * Alapértelmezés: minden típus csak az összegyűjtő batch emailben megy ki (min. 3 óra, lásd ADMIN_NOTIFICATION_BATCH_INTERVAL_HOURS).
+ * Azonnali per-típus küldés: ADMIN_NOTIFICATION_IMMEDIATE=true (minden) vagy ADMIN_NOTIFICATION_IMMEDIATE_EXTRA (vesszővel típusok).
  */
-const DEFAULT_IMMEDIATE_NOTIFICATION_TYPES = new Set([
-  'register',
-  'patient_created',
-  'patient_portal_registered',
-  'new_appointment_request',
-  'password_reset_requested',
-]);
+const DEFAULT_IMMEDIATE_NOTIFICATION_TYPES = new Set<string>();
 
 function adminNotificationTypeSendsImmediately(notificationType: string): boolean {
   if (adminNotificationImmediateEnabled()) {
@@ -215,9 +230,8 @@ function adminNotificationTypeSendsImmediately(notificationType: string): boolea
 }
 
 /**
- * Sorba írja az eseményt. Egyes típusok azonnali emailt kapnak (lásd DEFAULT_IMMEDIATE_NOTIFICATION_TYPES
- * és ADMIN_NOTIFICATION_IMMEDIATE_EXTRA); a többit a batch összefoglaló küldi (/api/admin/daily-summary, cron).
- * ADMIN_NOTIFICATION_IMMEDIATE=true: minden típus azonnali (régi viselkedés).
+ * Sorba írja az eseményt. Alapból csak batch (/api/admin/daily-summary, min. 3 óra); azonnali:
+ * ADMIN_NOTIFICATION_IMMEDIATE vagy ADMIN_NOTIFICATION_IMMEDIATE_EXTRA.
  * Sikertelen azonnali küldésnél a sor marad feldolgozatlanul a batch számára.
  */
 export async function queueAdminNotification(
@@ -305,11 +319,13 @@ function renderNotificationGroup(type: string, items: NotificationRow[]): string
 export type AdminDailySummaryResult = {
   sent: boolean;
   count: number;
-  /** Üres sor, nincs címzett, vagy sikeres küldés — cron / manuális hívásnál diagnosztika */
-  reason?: 'queue_empty' | 'no_recipients' | 'sent';
+  /** Üres sor, nincs címzett, sikeres küldés, vagy throttle — cron / manuális hívásnál diagnosztika */
+  reason?: 'queue_empty' | 'no_recipients' | 'sent' | 'throttled';
 };
 
-export async function sendAdminDailySummary(): Promise<AdminDailySummaryResult> {
+export async function sendAdminDailySummary(
+  options?: { bypassMinInterval?: boolean }
+): Promise<AdminDailySummaryResult> {
   await ensureAdminNotificationQueueSchema();
   const pool = getDbPool();
 
@@ -322,10 +338,25 @@ export async function sendAdminDailySummary(): Promise<AdminDailySummaryResult> 
 
   if (notifications.length === 0) {
     console.info('[DailySummary] No pending notifications (queue empty).');
-    // #region agent log
-    fetch('http://127.0.0.1:7480/ingest/422ab24a-0338-4af3-8664-a47d0382f7d8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fff823'},body:JSON.stringify({sessionId:'fff823',runId:'pre-fix',hypothesisId:'H3',location:'lib/email/admin-notification-queue.ts:326',message:'Daily summary invoked with empty queue',data:{reason:'queue_empty'},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     return { sent: false, count: 0, reason: 'queue_empty' };
+  }
+
+  const intervalH = adminNotificationBatchIntervalHours();
+  if (!options?.bypassMinInterval && intervalH > 0) {
+    const { rows: stateRows } = await pool.query<{ last_sent_at: Date | null }>(
+      `SELECT last_sent_at FROM admin_notification_batch_state WHERE id = 1`
+    );
+    const lastSent = stateRows[0]?.last_sent_at;
+    if (lastSent) {
+      const minMs = intervalH * 60 * 60 * 1000;
+      const elapsed = Date.now() - new Date(lastSent).getTime();
+      if (elapsed < minMs) {
+        console.info(
+          `[DailySummary] Throttled (${intervalH}h interval): ${Math.round(elapsed / 60000)} min since last batch, pending ${notifications.length} items`
+        );
+        return { sent: false, count: notifications.length, reason: 'throttled' };
+      }
+    }
   }
 
   const recipients = await getAdminNotificationRecipients();
@@ -359,9 +390,9 @@ export async function sendAdminDailySummary(): Promise<AdminDailySummaryResult> 
       <h2 style="color: #2563eb; margin-bottom: 4px;">Összegyűjtött értesítések</h2>
       <p style="color: #6b7280; font-size: 14px; margin-top: 0;">${periodText}</p>
       <p style="color: #374151; font-size: 14px; background: #eff6ff; padding: 12px 14px; border-radius: 6px;">
-        <strong>Megjegyzés:</strong> Az események típusonként vannak csoportosítva. Egyes típusok (pl. új regisztráció) külön azonnali emailt is kaphatnak;
-        a sikeresen kiküldött tételek nem szerepelnek itt. Ez az összefoglaló a batch-be sorolt, illetve azonnali küldés után feldolgozatlan
-        tételeket is magában foglalja (pl. hálózati hiba után). Ütemezés: naponta többször (cron, Europe/Budapest).
+        <strong>Megjegyzés:</strong> Az események típusonként vannak csoportosítva. Az összegyűjtő levél legfeljebb kb. minden
+        ${adminNotificationBatchIntervalHours()} órában megy ki (cron + <code>ADMIN_NOTIFICATION_BATCH_INTERVAL_HOURS</code>).
+        Azonnali egyes típusok: <code>ADMIN_NOTIFICATION_IMMEDIATE</code> / <code>ADMIN_NOTIFICATION_IMMEDIATE_EXTRA</code>.
       </p>
       <p>Kedves adminisztrátor,</p>
       <p>Ebben az időszakban <strong>${notifications.length}</strong> esemény történt a rendszerben:</p>
@@ -377,9 +408,12 @@ export async function sendAdminDailySummary(): Promise<AdminDailySummaryResult> 
     subject: `Összegyűjtött értesítések (${notifications.length} esemény) — Maxillofaciális Rehabilitáció`,
     html,
   });
-  // #region agent log
-  fetch('http://127.0.0.1:7480/ingest/422ab24a-0338-4af3-8664-a47d0382f7d8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fff823'},body:JSON.stringify({sessionId:'fff823',runId:'pre-fix',hypothesisId:'H3',location:'lib/email/admin-notification-queue.ts:377',message:'Daily summary email sent',data:{notificationCount:notifications.length,recipientCount:recipients.length},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
+
+  await pool.query(`
+    INSERT INTO admin_notification_batch_state (id, last_sent_at)
+    VALUES (1, NOW())
+    ON CONFLICT (id) DO UPDATE SET last_sent_at = EXCLUDED.last_sent_at
+  `);
 
   const ids = notifications.map((n) => n.id);
   await pool.query(

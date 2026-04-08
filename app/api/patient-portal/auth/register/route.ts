@@ -198,20 +198,15 @@ export const POST = apiHandler(async (req, { correlationId }) => {
   );
 
   try {
-    const adminResult = await pool.query(
-      `SELECT email FROM users WHERE role = 'admin' AND active = true`
-    );
-    const adminEmails = adminResult.rows.map((row: { email: string }) => row.email);
-    
     await sendPatientRegistrationNotificationToAdmins(
-      adminEmails,
+      [],
       newPatient.email,
       newPatient.nev,
       newPatient.taj,
       new Date()
     );
   } catch (emailError) {
-    logger.error('Failed to send patient registration notification email to admins:', emailError);
+    logger.error('Failed to queue patient registration admin notification:', emailError);
   }
 
   return NextResponse.json({

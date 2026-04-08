@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { SignJWT } from 'jose';
-import { sendRegistrationNotificationToAdmins } from '@/lib/email';
 import { logActivity } from '@/lib/activity';
 import { apiHandler } from '@/lib/api/route-handler';
 import { logger } from '@/lib/logger';
@@ -158,28 +157,7 @@ export const POST = apiHandler(async (req) => {
     logger.error('Failed to record GDPR consent:', consentError);
   }
 
-  await logActivity(req, user.email, 'register', 'pending_approval', {
-    skipAdminNotificationQueue: true,
-  });
-
-  try {
-    const adminResult = await pool.query(
-      `SELECT email FROM users WHERE role = 'admin' AND active = true`
-    );
-    const adminEmails = adminResult.rows.map((row: { email: string }) => row.email);
-
-    await sendRegistrationNotificationToAdmins(
-      adminEmails,
-      user.email,
-      user.doktor_neve || user.email,
-      user.role,
-      user.intezmeny || institution,
-      user.hozzaferes_indokolas || accessReason.trim(),
-      new Date()
-    );
-  } catch (emailError) {
-    logger.error('Failed to send registration notification email to admins:', emailError);
-  }
+  await logActivity(req, user.email, 'register', 'pending_approval');
 
   return NextResponse.json({
     success: true,

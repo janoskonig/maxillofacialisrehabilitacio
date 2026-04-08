@@ -1,6 +1,6 @@
 import { getDbPool } from '@/lib/db';
 import { sendOhipReminderEmail } from '@/lib/email';
-import { getAdminNotificationRecipients } from '@/lib/email/admin-notification-queue';
+import { queueAdminNotification } from '@/lib/email/admin-notification-queue';
 import { getTimepointAvailability, type TimepointAvailability } from '@/lib/ohip14-timepoint-stage';
 import type { OHIP14Timepoint } from '@/lib/types';
 
@@ -39,9 +39,6 @@ export async function sendOhipReminders(): Promise<ReminderResult> {
   `);
 
   if (patientsRes.rows.length === 0) return result;
-
-  // Admin + SMTP_REPLY_TO: ugyanaz a levél BCC-ben, mint amit a páciens kap
-  const adminEmails: string[] = await getAdminNotificationRecipients();
 
   // 2) For each patient, determine pending timepoints
   for (const row of patientsRes.rows) {
@@ -105,7 +102,6 @@ export async function sendOhipReminders(): Promise<ReminderResult> {
         continue;
       }
 
-      // Send email (admins receive a BCC copy)
       const portalUrl = `${baseUrl}/patient-portal/ohip14`;
       await sendOhipReminderEmail(
         email,
@@ -114,10 +110,15 @@ export async function sendOhipReminders(): Promise<ReminderResult> {
         pendingTp,
         pendingAvail.closesAt ?? null,
         portalUrl,
-        adminEmails,
+        undefined
       );
 
-      // Log
+      await queueAdminNotification(
+        'ohip14_reminder_sent',
+        `${nev ?? 'Beteg'} (${email}) — ${pendingTp}`,
+        { patientId: patient_id, episodeId: episode_id, timepoint: pendingTp, emailTo: email }
+      ).catch(() => {});
+
       await pool.query(
         `INSERT INTO ohip_reminder_log (patient_id, episode_id, timepoint, email_to)
          VALUES ($1, $2, $3, $4)`,
