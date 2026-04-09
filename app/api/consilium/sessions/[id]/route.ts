@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { authedHandler } from '@/lib/api/route-handler';
 import { getDbPool } from '@/lib/db';
-import { HttpError } from '@/lib/auth-server';
 import {
   assertSessionTransition,
   getScopedSessionOrThrow,
@@ -54,11 +53,7 @@ export const PATCH = authedHandler(async (req, { auth, params }) => {
 export const DELETE = authedHandler(async (_req, { auth, params }) => {
   const sessionId = params.id;
   const institutionId = await getUserInstitution(auth);
-  const existing = await getScopedSessionOrThrow(sessionId, institutionId);
-
-  if (existing.status !== 'draft') {
-    throw new HttpError(409, 'Csak draft alkalom törölhető', 'SESSION_NOT_DRAFT');
-  }
+  await getScopedSessionOrThrow(sessionId, institutionId);
 
   const pool = getDbPool();
   await pool.query(

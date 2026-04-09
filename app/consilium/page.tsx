@@ -825,8 +825,16 @@ export default function ConsiliumPage() {
     }
   };
 
-  const deleteDraftSession = async (sessionId: string) => {
-    if (!confirm('Biztosan törli ezt a draft alkalmat?')) return;
+  const deleteSession = async (sessionId: string, status: SessionSummary['status']) => {
+    const statusLabel =
+      status === 'draft' ? 'draft' : status === 'active' ? 'aktív' : 'lezárt';
+    if (
+      !confirm(
+        `Biztosan törli ezt az ${statusLabel} konzílium alkalmat? Ez a művelet nem visszavonható.`,
+      )
+    ) {
+      return;
+    }
     try {
       const res = await fetch(`/api/consilium/sessions/${sessionId}`, { method: 'DELETE', credentials: 'include' });
       if (!res.ok) throw new Error('delete_failed');
@@ -1145,16 +1153,14 @@ export default function ConsiliumPage() {
                         Lezárás
                       </button>
                     )}
-                    {selectedSession.status === 'draft' && (
-                      <button
-                        type="button"
-                        className="btn-secondary text-xs px-3 py-1.5 inline-flex items-center gap-1 text-red-700"
-                        onClick={() => deleteDraftSession(selectedSession.id)}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        Törlés
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      className="btn-secondary text-xs px-3 py-1.5 inline-flex items-center gap-1 text-red-700"
+                      onClick={() => deleteSession(selectedSession.id, selectedSession.status)}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Törlés
+                    </button>
                   </div>
                 )}
               </div>
