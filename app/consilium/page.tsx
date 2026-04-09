@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, CalendarClock, Plus, Presentation, Trash2, Users } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowUp, CalendarClock, Plus, Presentation, Trash2, Users } from 'lucide-react';
 import { getCurrentUser, type AuthUser } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
 import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
@@ -372,6 +372,21 @@ function ConsiliumItemChecklist({
     }
   };
 
+  const movePoint = async (entryKey: string, move: 'up' | 'down') => {
+    try {
+      const res = await fetch(`/api/consilium/sessions/${sessionId}/items/${itemId}/checklist/${encodeURIComponent(entryKey)}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ move }),
+      });
+      if (!res.ok) throw new Error('move_failed');
+      onRefresh();
+    } catch {
+      showToast('Napirendi pont átrendezése sikertelen', 'error');
+    }
+  };
+
   return (
     <div className="space-y-2">
       <p className="text-xs text-gray-600">
@@ -401,13 +416,16 @@ function ConsiliumItemChecklist({
       )}
       <ul className="space-y-2">
         {entries.length === 0 && <li className="text-xs text-gray-500">Még nincs felírva pont.</li>}
-        {entries.map((c) => (
+        {entries.map((c, idx) => (
           <ChecklistRowEditor
             key={c.key}
             sessionId={sessionId}
             itemId={itemId}
             entry={c}
             readonly={readonly}
+            canMoveUp={idx > 0}
+            canMoveDown={idx < entries.length - 1}
+            onMove={(dir) => void movePoint(c.key, dir)}
             onRefresh={onRefresh}
             showToast={showToast}
           />
@@ -422,6 +440,9 @@ function ChecklistRowEditor({
   itemId,
   entry,
   readonly,
+  canMoveUp,
+  canMoveDown,
+  onMove,
   onRefresh,
   showToast,
 }: {
@@ -429,6 +450,9 @@ function ChecklistRowEditor({
   itemId: string;
   entry: ChecklistEntryRow;
   readonly: boolean;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  onMove: (direction: 'up' | 'down') => void;
   onRefresh: () => void;
   showToast: (msg: string, type?: 'error' | 'success') => void;
 }) {
@@ -558,9 +582,29 @@ function ChecklistRowEditor({
         )}
       </div>
       {!readonly && (
-        <button type="button" className="text-xs text-red-600 hover:underline shrink-0 pt-1" onClick={() => void remove()}>
-          Törlés
-        </button>
+        <div className="shrink-0 pt-1 flex items-center gap-2">
+          <button
+            type="button"
+            className="text-xs text-gray-700 hover:text-gray-900 disabled:opacity-40"
+            disabled={!canMoveUp}
+            onClick={() => onMove('up')}
+            title="Mozgatás fel"
+          >
+            <ArrowUp className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            className="text-xs text-gray-700 hover:text-gray-900 disabled:opacity-40"
+            disabled={!canMoveDown}
+            onClick={() => onMove('down')}
+            title="Mozgatás le"
+          >
+            <ArrowDown className="w-3.5 h-3.5" />
+          </button>
+          <button type="button" className="text-xs text-red-600 hover:underline" onClick={() => void remove()}>
+            Törlés
+          </button>
+        </div>
       )}
     </li>
   );
@@ -586,6 +630,7 @@ export default function ConsiliumPage() {
   );
 
   const [items, setItems] = useState<ConsiliumPresentationItem[]>([]);
+  const [moveTargetByItemId, setMoveTargetByItemId] = useState<Record<string, string>>({});
   const [sessionDetail, setSessionDetail] = useState<{
     id: string;
     title: string;
@@ -663,6 +708,10 @@ export default function ConsiliumPage() {
     const taken = new Set(sessionDetail.attendees.map((a) => a.id));
     return institutionUsers.filter((u) => !taken.has(u.id));
   }, [sessionDetail, institutionUsers]);
+
+  const draftTransferTargets = useMemo(() => {
+    return sessions.filter((s) => s.status === 'draft' && s.id !== selectedSessionId);
+  }, [sessions, selectedSessionId]);
 
   useEffect(() => {
     if (!user || user.role === 'technikus') return;
@@ -844,6 +893,36 @@ export default function ConsiliumPage() {
       showToast('Elem törölve', 'success');
     } catch {
       showToast('Elem törlése sikertelen', 'error');
+    }
+  };
+
+  const moveItemToAnotherDraftSession = async (itemId: string, patientName: string) => {
+    if (!selectedSessionId) return;
+    const preferred = moveTargetByItemId[itemId];
+    const targetSessionId = draftTransferTargets.some((x) => x.id === preferred)
+      ? preferred
+      : (draftTransferTargets[0]?.id ?? '');
+    if (!targetSessionId) {
+      showToast('Nincs másik draft alkalom, ahová át lehetne tenni', 'error');
+      return;
+    }
+    try {
+      const res = await fetch(`/api/consilium/sessions/${selectedSessionId}/items/${itemId}/move`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetSessionId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.error || 'Áthelyezés sikertelen', 'error');
+        return;
+      }
+      showToast(`Beteg áthelyezve: ${patientName}`, 'success');
+      await loadSessions();
+      await loadItems(selectedSessionId);
+    } catch {
+      showToast('Áthelyezés sikertelen', 'error');
     }
   };
 
@@ -1171,9 +1250,42 @@ export default function ConsiliumPage() {
                               </p>
                             </div>
                             {!listLocked && (
-                              <button type="button" className="text-xs text-red-700 hover:underline" onClick={() => removeItem(it.id)}>
-                                Eltávolítás
-                              </button>
+                              <div className="flex items-center gap-2">
+                                {draftTransferTargets.length > 0 && (
+                                  <>
+                                    <select
+                                      className="text-xs border border-gray-200 rounded px-1.5 py-1 bg-white"
+                                      value={moveTargetByItemId[it.id] ?? draftTransferTargets[0].id}
+                                      onChange={(e) =>
+                                        setMoveTargetByItemId((prev) => ({
+                                          ...prev,
+                                          [it.id]: e.target.value,
+                                        }))
+                                      }
+                                    >
+                                      {draftTransferTargets.map((s) => (
+                                        <option key={s.id} value={s.id}>
+                                          {s.title}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <button
+                                      type="button"
+                                      className="text-xs text-medical-primary hover:underline"
+                                      onClick={() => void moveItemToAnotherDraftSession(it.id, name)}
+                                    >
+                                      Áthelyezés
+                                    </button>
+                                  </>
+                                )}
+                                <button
+                                  type="button"
+                                  className="text-xs text-red-700 hover:underline"
+                                  onClick={() => removeItem(it.id)}
+                                >
+                                  Eltávolítás
+                                </button>
+                              </div>
                             )}
                           </div>
 

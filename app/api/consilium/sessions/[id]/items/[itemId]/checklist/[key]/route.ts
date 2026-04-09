@@ -16,17 +16,22 @@ export const dynamic = 'force-dynamic';
 
 function parseChecklistKeyPatch(
   body: unknown,
-): { mode: 'toggle'; checked: boolean } | { mode: 'rename'; label: string } | { mode: 'response'; response: string } {
+):
+  | { mode: 'toggle'; checked: boolean }
+  | { mode: 'rename'; label: string }
+  | { mode: 'response'; response: string }
+  | { mode: 'move'; move: 'up' | 'down' } {
   if (body && typeof body === 'object' && !Array.isArray(body)) {
     const o = body as Record<string, unknown>;
     const hasChecked = typeof o.checked === 'boolean';
     const hasLabel = typeof o.label === 'string' && o.label.trim().length > 0;
     const hasResponse = 'response' in o && typeof o.response === 'string';
-    const n = (hasChecked ? 1 : 0) + (hasLabel ? 1 : 0) + (hasResponse ? 1 : 0);
+    const hasMove = o.move === 'up' || o.move === 'down';
+    const n = (hasChecked ? 1 : 0) + (hasLabel ? 1 : 0) + (hasResponse ? 1 : 0) + (hasMove ? 1 : 0);
     if (n !== 1) {
       throw new HttpError(
         400,
-        'Pontosan egy mező: checked (boolean) VAGY label (szöveg) VAGY response (szöveg, üres = törlés)',
+        'Pontosan egy mező: checked VAGY label VAGY response VAGY move (up/down)',
         'INVALID_CHECKLIST_PATCH',
       );
     }
@@ -35,6 +40,9 @@ function parseChecklistKeyPatch(
     }
     if (hasLabel) {
       return { mode: 'rename', label: checklistRenameSchema.parse(o).label };
+    }
+    if (hasMove) {
+      return { mode: 'move', move: o.move as 'up' | 'down' };
     }
     return { mode: 'response', response: checklistResponseBodySchema.parse(o).response };
   }
@@ -73,6 +81,14 @@ export const PATCH = authedHandler(async (req, { auth, params }) => {
         ...checklist[idx],
         label: patch.label.trim(),
       };
+    } else if (patch.mode === 'move') {
+      const delta = patch.move === 'up' ? -1 : 1;
+      const nextIdx = idx + delta;
+      if (nextIdx >= 0 && nextIdx < checklist.length) {
+        const current = checklist[idx];
+        checklist[idx] = checklist[nextIdx];
+        checklist[nextIdx] = current;
+      }
     } else if (patch.mode === 'response') {
       const trimmed = patch.response.trim();
       const nowIso = new Date().toISOString();
