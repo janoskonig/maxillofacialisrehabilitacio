@@ -1,6 +1,6 @@
 import { getDbPool } from '../db';
 import { sendEmail } from './config';
-import { formatDateForEmailShort } from './templates';
+import { formatDateForEmail, formatDateForEmailShort } from './templates';
 
 interface NotificationRow {
   id: number;
@@ -383,19 +383,26 @@ export async function sendAdminDailySummary(
 
   const oldest = new Date(notifications[0].created_at);
   const newest = new Date(notifications[notifications.length - 1].created_at);
-  const periodText = `${formatDateForEmailShort(oldest)} – ${formatDateForEmailShort(newest)}`;
+  /** Fejléc: másodperces pontosság, hogy ugyanazon percen belüli események is megkülönböztethetők legyenek. */
+  const periodText = `${formatDateForEmail(oldest)} – ${formatDateForEmail(newest)}`;
 
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <h2 style="color: #2563eb; margin-bottom: 4px;">Összegyűjtött értesítések</h2>
-      <p style="color: #6b7280; font-size: 14px; margin-top: 0;">${periodText}</p>
+      <p style="color: #6b7280; font-size: 14px; margin-top: 0;">
+        <strong>Események ideje ebben a levélben</strong> (legrégebbi → legújabb sor a sorban):<br />
+        ${periodText}
+      </p>
+      <p style="color: #64748b; font-size: 12px; margin-top: 6px; line-height: 1.45;">
+        Ez <em>nem</em> a digest küldésének ütemezése, hanem annak az időnek a széle, amikor a most kiküldött események rögzítésre kerültek.
+        Az összegyűjtő levél legfeljebb kb. minden ${intervalH} órában indulhat (cron + <code>ADMIN_NOTIFICATION_BATCH_INTERVAL_HOURS</code>).
+      </p>
       <p style="color: #374151; font-size: 14px; background: #eff6ff; padding: 12px 14px; border-radius: 6px;">
-        <strong>Megjegyzés:</strong> Az események típusonként vannak csoportosítva. Az összegyűjtő levél legfeljebb kb. minden
-        ${adminNotificationBatchIntervalHours()} órában megy ki (cron + <code>ADMIN_NOTIFICATION_BATCH_INTERVAL_HOURS</code>).
+        <strong>Megjegyzés:</strong> Az események típusonként vannak csoportosítva.
         Azonnali egyes típusok: <code>ADMIN_NOTIFICATION_IMMEDIATE</code> / <code>ADMIN_NOTIFICATION_IMMEDIATE_EXTRA</code>.
       </p>
       <p>Kedves adminisztrátor,</p>
-      <p>Ebben az időszakban <strong>${notifications.length}</strong> esemény történt a rendszerben:</p>
+      <p>Összesen <strong>${notifications.length}</strong> esemény szerepel ebben az összefoglalóban:</p>
       ${sectionsHtml}
       <p style="margin-top: 24px; color: #6b7280; font-size: 13px;">
         Ez egy automatikus összefoglaló. A részletekért kérjük, jelentkezzen be a rendszerbe.
