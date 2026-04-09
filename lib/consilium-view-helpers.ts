@@ -39,6 +39,37 @@ export function prepCommentsGroupedByKey(
   return m;
 }
 
+/** Egyszerű, determinisztikus monogram a komment-szerzőhöz. */
+export function consiliumCommentMonogram(authorDisplay: string | null | undefined): string {
+  const cleaned = (authorDisplay ?? '').trim();
+  if (cleaned.length === 0) return '??';
+  const parts = cleaned.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0]?.charAt(0) ?? ''}${parts[1]?.charAt(0) ?? ''}`.toUpperCase();
+  }
+  const compact = parts[0] ?? cleaned;
+  const alpha = compact.replace(/[^A-Za-z0-9ÁÉÍÓÖŐÚÜŰáéíóöőúüű]/g, '');
+  return (alpha.slice(0, 2) || compact.slice(0, 2)).toUpperCase();
+}
+
+/** Sötét háttéren jól olvasható, név alapján stabil avatar-színosztály. */
+export function consiliumCommentAvatarToneClass(authorDisplay: string | null | undefined): string {
+  const palettes = [
+    'bg-cyan-700/70 text-cyan-100 border-cyan-400/35',
+    'bg-violet-700/70 text-violet-100 border-violet-400/35',
+    'bg-emerald-700/70 text-emerald-100 border-emerald-400/35',
+    'bg-sky-700/70 text-sky-100 border-sky-400/35',
+    'bg-rose-700/70 text-rose-100 border-rose-400/35',
+    'bg-amber-700/70 text-amber-100 border-amber-400/35',
+  ] as const;
+  const input = (authorDisplay ?? '').trim() || '?';
+  let hash = 0;
+  for (let i = 0; i < input.length; i++) {
+    hash = (hash * 31 + input.charCodeAt(i)) >>> 0;
+  }
+  return palettes[hash % palettes.length]!;
+}
+
 /** Kommentek olyan checklist kulcsokhoz, amik már nincsenek a napirendben. */
 export function orphanPrepCommentsByKey(
   comments: readonly ConsiliumPrepCommentSnapshot[] | null | undefined,

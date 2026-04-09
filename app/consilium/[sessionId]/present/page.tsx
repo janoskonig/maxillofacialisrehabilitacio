@@ -16,6 +16,8 @@ import { usePatientDocumentAnnotationsMap } from '@/hooks/usePatientDocumentAnno
 import type { ChecklistEntry } from '@/lib/consilium';
 import type { ItemMediaSummary, MediaPreviewItem, PatientPresentationSummary } from '@/lib/consilium-presentation';
 import {
+  consiliumCommentAvatarToneClass,
+  consiliumCommentMonogram,
   type ConsiliumPrepCommentSnapshot,
   consiliumPresentationDiagnosisText,
   consiliumPresentationOncologyRows,
@@ -1020,10 +1022,20 @@ export default function ConsiliumPresentPage() {
                                       key={cm.id}
                                       className="text-xs text-cyan-50/90 bg-black/35 rounded-md px-2 py-1.5 border border-cyan-500/15"
                                     >
-                                      <span className="text-cyan-200/50">
-                                        {formatConsiliumHuDateTime(cm.createdAt)} · {cm.authorDisplay}
-                                      </span>
-                                      <p className="whitespace-pre-wrap mt-0.5 leading-snug">{cm.body}</p>
+                                      <div className="flex items-start gap-2">
+                                        <span
+                                          className={`mt-0.5 h-6 w-6 shrink-0 rounded-full border text-[10px] font-semibold inline-flex items-center justify-center ${consiliumCommentAvatarToneClass(cm.authorDisplay)}`}
+                                          aria-hidden
+                                        >
+                                          {consiliumCommentMonogram(cm.authorDisplay)}
+                                        </span>
+                                        <div className="min-w-0">
+                                          <span className="text-cyan-200/50">
+                                            {formatConsiliumHuDateTime(cm.createdAt)} · {cm.authorDisplay}
+                                          </span>
+                                          <p className="whitespace-pre-wrap mt-0.5 leading-snug">{cm.body}</p>
+                                        </div>
+                                      </div>
                                     </li>
                                   ))}
                                 </ul>
