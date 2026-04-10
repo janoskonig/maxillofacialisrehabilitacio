@@ -294,7 +294,13 @@ export const GET = apiHandler(async (req, { params }) => {
       await queueAdminNotification(
         'appointment_approved',
         `${appointment.patient_name || 'Név nélküli'} elfogadta: ${updatedStartTime.toLocaleString('hu-HU')}, kezelőorvos: ${dentistFullName}`,
-        { patientName: appointment.patient_name, appointmentTime: updatedStartTime.toISOString(), dentistFullName }
+        {
+          patientName: appointment.patient_name,
+          patientEmail: appointment.patient_email ?? null,
+          patientTaj: appointment.patient_taj ?? null,
+          appointmentTime: updatedStartTime.toISOString(),
+          dentistFullName,
+        }
       ).catch(() => {});
 
       // Return success page HTML

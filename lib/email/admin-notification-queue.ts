@@ -7,6 +7,7 @@ interface NotificationRow {
   notification_type: string;
   summary_text: string;
   created_at: Date;
+  detail_json: Record<string, unknown>;
 }
 
 /** Batch summary email: section order (unknown types append at end). */
@@ -148,6 +149,372 @@ function escapeHtmlForEmail(text: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+function parseDetailJson(raw: unknown): Record<string, unknown> {
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    return raw as Record<string, unknown>;
+  }
+  return {};
+}
+
+function strField(detail: Record<string, unknown>, key: string): string {
+  const v = detail[key];
+  return typeof v === 'string' ? v.trim() : '';
+}
+
+type DigestActorBucket = 'staff' | 'patient' | 'other';
+
+/**
+ * Digest-mátrix sorának kulcsa, címkéje és csoportja (staff vs páciens vs egyéb).
+ */
+function extractActorForDigest(detail: Record<string, unknown>): {
+  key: string;
+  display: string;
+  bucket: DigestActorBucket;
+} {
+  const userEmail = strField(detail, 'userEmail');
+  if (userEmail) {
+    return { key: `u:${userEmail.toLowerCase()}`, display: userEmail, bucket: 'staff' };
+  }
+
+  const patientEmail = strField(detail, 'patientEmail');
+  const patientName = strField(detail, 'patientName');
+  if (patientEmail) {
+    return {
+      key: `p:${patientEmail.toLowerCase()}`,
+      display: patientName ? `${patientName} (${patientEmail})` : patientEmail,
+      bucket: 'patient',
+    };
+  }
+
+  const emailTo = strField(detail, 'emailTo');
+  if (emailTo) {
+    return {
+      key: `p:${emailTo.toLowerCase()}`,
+      display: patientName ? `${patientName} (${emailTo})` : emailTo,
+      bucket: 'patient',
+    };
+  }
+
+  for (const k of ['deletedBy', 'createdBy'] as const) {
+    const v = strField(detail, k);
+    if (v && v.includes('@')) {
+      return { key: `u:${v.toLowerCase()}`, display: v, bucket: 'staff' };
+    }
+  }
+
+  if (patientName) {
+    const norm = patientName.toLowerCase().replace(/\s+/g, ' ').trim();
+    return {
+      key: `pn:${norm}`,
+      display: `Páciens: ${patientName}`,
+      bucket: 'patient',
+    };
+  }
+
+  return { key: '__other__', display: 'Egyéb / ismeretlen forrás', bucket: 'other' };
+}
+
+function sortActivityTypesPresent(types: Set<string>): string[] {
+  const ordered = NOTIFICATION_SUMMARY_DISPLAY_ORDER.filter((t) => types.has(t));
+  const rest = Array.from(types)
+    .filter((t) => !NOTIFICATION_SUMMARY_DISPLAY_ORDER.includes(t))
+    .sort();
+  return [...ordered, ...rest];
+}
+
+type DigestMatrixCore = {
+  actorKeys: string[];
+  actorDisplay: Map<string, string>;
+  types: string[];
+  counts: Map<string, Map<string, number>>;
+};
+
+type SplitDigestResult = {
+  staff: DigestMatrixCore;
+  patient: DigestMatrixCore;
+  otherSummaries: string[];
+};
+
+function bumpCount(
+  counts: Map<string, Map<string, number>>,
+  actorKey: string,
+  notificationType: string
+): void {
+  if (!counts.has(actorKey)) {
+    counts.set(actorKey, new Map());
+  }
+  const row = counts.get(actorKey)!;
+  row.set(notificationType, (row.get(notificationType) ?? 0) + 1);
+}
+
+function finalizeDigestCore(
+  counts: Map<string, Map<string, number>>,
+  actorDisplay: Map<string, string>
+): DigestMatrixCore {
+  const types = new Set<string>();
+  for (const row of Array.from(counts.values())) {
+    for (const t of Array.from(row.keys())) {
+      types.add(t);
+    }
+  }
+
+  const actorTotals = new Map<string, number>();
+  for (const [ak, row] of Array.from(counts.entries())) {
+    let t = 0;
+    for (const c of Array.from(row.values())) {
+      t += c;
+    }
+    actorTotals.set(ak, t);
+  }
+
+  const actorKeys = Array.from(counts.keys()).sort((a, b) => {
+    const tb = actorTotals.get(b) ?? 0;
+    const ta = actorTotals.get(a) ?? 0;
+    if (tb !== ta) return tb - ta;
+    return (actorDisplay.get(a) ?? a).localeCompare(actorDisplay.get(b) ?? b, 'hu');
+  });
+
+  return {
+    actorKeys,
+    actorDisplay,
+    types: sortActivityTypesPresent(types),
+    counts,
+  };
+}
+
+function buildSplitDigest(notifications: NotificationRow[]): SplitDigestResult {
+  const staffCounts = new Map<string, Map<string, number>>();
+  const patientCounts = new Map<string, Map<string, number>>();
+  const staffDisplay = new Map<string, string>();
+  const patientDisplay = new Map<string, string>();
+  const otherSummaries: string[] = [];
+
+  for (const n of notifications) {
+    const detail = parseDetailJson(n.detail_json);
+    const { key: actorKey, display, bucket } = extractActorForDigest(detail);
+
+    if (bucket === 'other') {
+      otherSummaries.push(n.summary_text);
+      continue;
+    }
+
+    if (bucket === 'staff') {
+      if (!staffDisplay.has(actorKey)) {
+        staffDisplay.set(actorKey, display);
+      }
+      bumpCount(staffCounts, actorKey, n.notification_type);
+    } else {
+      if (!patientDisplay.has(actorKey)) {
+        patientDisplay.set(actorKey, display);
+      }
+      bumpCount(patientCounts, actorKey, n.notification_type);
+    }
+  }
+
+  return {
+    staff: finalizeDigestCore(staffCounts, staffDisplay),
+    patient: finalizeDigestCore(patientCounts, patientDisplay),
+    otherSummaries,
+  };
+}
+
+const DIGEST_TABLE_CELL =
+  'padding:6px 8px;border:1px solid #e2e8f0;text-align:center;font-size:12px;color:#334155;';
+const DIGEST_TABLE_HDR_STAFF =
+  'padding:8px 6px;border:1px solid #cbd5e1;background:#1e40af;color:#fff;font-size:11px;font-weight:600;line-height:1.25;vertical-align:bottom;';
+const DIGEST_TABLE_HDR_PATIENT =
+  'padding:8px 6px;border:1px solid #5eead4;background:#0f766e;color:#fff;font-size:11px;font-weight:600;line-height:1.25;vertical-align:bottom;';
+const DIGEST_TABLE_ROW_HDR =
+  'padding:8px 10px;border:1px solid #e2e8f0;text-align:left;font-size:12px;color:#0f172a;max-width:220px;word-break:break-word;';
+
+function renderDigestMatrixHtml(matrix: DigestMatrixCore, variant: 'staff' | 'patient'): string {
+  const { actorKeys, actorDisplay, types, counts } = matrix;
+  if (types.length === 0 || actorKeys.length === 0) {
+    return '';
+  }
+
+  const hdr = variant === 'staff' ? DIGEST_TABLE_HDR_STAFF : DIGEST_TABLE_HDR_PATIENT;
+  const title =
+    variant === 'staff'
+      ? 'Orvosi / rendszerfelhasználók aktivitása'
+      : 'Páciensek aktivitása';
+  const firstColLabel = variant === 'staff' ? 'Felhasználó' : 'Páciens';
+  const blurb =
+    variant === 'staff'
+      ? 'Bejelentkezés, betegkezelés, üzenetek és egyéb orvosi/admin műveletek (email szerint).'
+      : 'Portál, időpontválasz, OHIP-emlékeztető címzettje stb. (páciens-email vagy név szerint).';
+
+  const headerCells = types
+    .map(
+      (t) =>
+        `<th style="${hdr}">${escapeHtmlForEmail(notificationTypeLabel(t))}</th>`
+    )
+    .join('');
+  const totalHdr = `<th style="${hdr}">Összesen</th>`;
+
+  const bodyRows = actorKeys
+    .map((ak) => {
+      const row = counts.get(ak)!;
+      let rowSum = 0;
+      const cells = types
+        .map((t) => {
+          const n = row.get(t) ?? 0;
+          rowSum += n;
+          const inner =
+            n === 0
+              ? '<span style="color:#cbd5e1;">–</span>'
+              : `<strong style="color:#0f172a;">${n}</strong>`;
+          return `<td style="${DIGEST_TABLE_CELL}">${inner}</td>`;
+        })
+        .join('');
+      const label = escapeHtmlForEmail(actorDisplay.get(ak) ?? ak);
+      return `<tr>
+        <td style="${DIGEST_TABLE_ROW_HDR}">${label}</td>
+        ${cells}
+        <td style="${DIGEST_TABLE_CELL}"><strong>${rowSum}</strong></td>
+      </tr>`;
+    })
+    .join('');
+
+  const colTotals = types.map((t) => {
+    let s = 0;
+    for (const ak of actorKeys) {
+      s += counts.get(ak)?.get(t) ?? 0;
+    }
+    return `<td style="${DIGEST_TABLE_CELL}background:#f1f5f9;"><strong>${s}</strong></td>`;
+  });
+  const grandTotal = actorKeys.reduce((acc, ak) => {
+    const row = counts.get(ak)!;
+    let s = 0;
+    for (const c of Array.from(row.values())) {
+      s += c;
+    }
+    return acc + s;
+  }, 0);
+
+  const footerRow = `<tr>
+    <td style="${DIGEST_TABLE_ROW_HDR}background:#f1f5f9;"><strong>Összesen</strong></td>
+    ${colTotals.join('')}
+    <td style="${DIGEST_TABLE_CELL}background:#e2e8f0;"><strong>${grandTotal}</strong></td>
+  </tr>`;
+
+  const titleColor = variant === 'staff' ? '#1e40af' : '#0f766e';
+  return `
+    <div style="margin: 20px 0;">
+      <h3 style="color: ${titleColor}; font-size: 16px; margin: 0 0 10px 0;">${escapeHtmlForEmail(title)}</h3>
+      <p style="color: #64748b; font-size: 12px; margin: 0 0 12px 0; line-height: 1.45;">
+        ${escapeHtmlForEmail(blurb)} Oszlopok: eseménytípusok · Cellák: darabszám. Csak ebben a digestben előforduló típusok.
+      </p>
+      <div style="overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -8px;">
+        <table role="presentation" style="border-collapse: collapse; min-width: 100%; margin: 0 8px;">
+          <thead>
+            <tr>
+              <th style="${hdr} text-align:left;">${escapeHtmlForEmail(firstColLabel)}</th>
+              ${headerCells}
+              ${totalHdr}
+            </tr>
+          </thead>
+          <tbody>
+            ${bodyRows}
+            ${footerRow}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function renderOtherSummariesHtml(summaries: string[]): string {
+  if (summaries.length === 0) return '';
+  const items = summaries
+    .map((s) => `<li style="margin: 4px 0; color: #374151; font-size: 13px;">${escapeHtmlForEmail(s)}</li>`)
+    .join('');
+  return `
+    <div style="margin-bottom: 24px;">
+      <h3 style="color: #1e40af; font-size: 15px; margin: 0 0 8px 0;">Nem sorolható események (részlet)</h3>
+      <p style="color: #64748b; font-size: 12px; margin: 0 0 8px 0;">
+        Az alábbiaknál nem volt egyértelmű felhasználói vagy páciens-azonosító a naplóban — ezek nem kerültek a táblázatokba.
+      </p>
+      <ul style="margin: 0; padding-left: 20px;">${items}</ul>
+    </div>
+  `;
+}
+
+function appendMatrixPlainText(
+  lines: string[],
+  sectionTitle: string,
+  firstCol: string,
+  matrix: DigestMatrixCore
+): void {
+  const { actorKeys, actorDisplay, types, counts } = matrix;
+  if (types.length === 0 || actorKeys.length === 0) {
+    return;
+  }
+  lines.push(sectionTitle, '');
+  const header = [firstCol, ...types.map((t) => notificationTypeLabel(t)), 'Összesen'];
+  lines.push(header.join('\t'));
+  for (const ak of actorKeys) {
+    const row = counts.get(ak)!;
+    let sum = 0;
+    const cells = types.map((t) => {
+      const n = row.get(t) ?? 0;
+      sum += n;
+      return String(n);
+    });
+    lines.push([actorDisplay.get(ak) ?? ak, ...cells, String(sum)].join('\t'));
+  }
+  const colTotals = types.map((t) => {
+    let s = 0;
+    for (const ak of actorKeys) {
+      s += counts.get(ak)?.get(t) ?? 0;
+    }
+    return String(s);
+  });
+  let sectionGrand = 0;
+  for (const ak of actorKeys) {
+    const row = counts.get(ak)!;
+    for (const c of Array.from(row.values())) {
+      sectionGrand += c;
+    }
+  }
+  lines.push(['Összesen', ...colTotals, String(sectionGrand)].join('\t'), '');
+}
+
+function buildDigestPlainText(notifications: NotificationRow[], split: SplitDigestResult): string {
+  const lines: string[] = [
+    'Összegyűjtött értesítések — összesítő táblázatok (TSV: első oszlop + típusonkénti darabszám + sorösszeg)',
+    '',
+  ];
+
+  appendMatrixPlainText(
+    lines,
+    '--- Orvosi / rendszerfelhasználók ---',
+    'Felhasználó',
+    split.staff
+  );
+  appendMatrixPlainText(
+    lines,
+    '--- Páciensek ---',
+    'Páciens',
+    split.patient
+  );
+
+  if (lines[lines.length - 1] === '') {
+    lines.pop();
+  }
+
+  const grand = notifications.length;
+  lines.push('', `Összes esemény a digestben: ${grand}`);
+
+  if (split.otherSummaries.length > 0) {
+    lines.push('', 'Nem sorolható események:');
+    for (const s of split.otherSummaries) {
+      lines.push(`- ${s}`);
+    }
+  }
+  return lines.join('\n');
 }
 
 /** Aktív admin + opcionális SMTP_REPLY_TO — értesítésekhez (digest, BCC). */
@@ -293,29 +660,6 @@ export async function queueAdminNotification(
   }
 }
 
-function renderNotificationGroup(type: string, items: NotificationRow[]): string {
-  const label = notificationTypeLabel(type);
-  const rows = items.map((item) => {
-    const time = formatDateForEmailShort(new Date(item.created_at));
-    const safeText = escapeHtmlForEmail(item.summary_text);
-    return `<tr>
-      <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb; color: #6b7280; font-size: 13px; white-space: nowrap; vertical-align: top;">${time}</td>
-      <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb; color: #374151; font-size: 14px;">${safeText}</td>
-    </tr>`;
-  }).join('');
-
-  return `
-    <div style="margin-bottom: 28px;">
-      <h3 style="color: #1e40af; font-size: 16px; margin: 0 0 10px 0; padding-bottom: 6px; border-bottom: 2px solid #2563eb;">
-        ${escapeHtmlForEmail(label)} <span style="color: #6b7280; font-weight: normal; font-size: 14px;">(${items.length})</span>
-      </h3>
-      <table style="width: 100%; border-collapse: collapse;">
-        ${rows}
-      </table>
-    </div>
-  `;
-}
-
 export type AdminDailySummaryResult = {
   sent: boolean;
   count: number;
@@ -330,7 +674,7 @@ export async function sendAdminDailySummary(
   const pool = getDbPool();
 
   const { rows: notifications } = await pool.query<NotificationRow>(
-    `SELECT id, notification_type, summary_text, created_at
+    `SELECT id, notification_type, summary_text, created_at, detail_json
      FROM admin_notification_queue
      WHERE processed = FALSE
      ORDER BY created_at ASC`
@@ -366,20 +710,15 @@ export async function sendAdminDailySummary(
     return { sent: false, count: notifications.length, reason: 'no_recipients' };
   }
 
-  const grouped: Record<string, NotificationRow[]> = {};
-  for (const n of notifications) {
-    if (!grouped[n.notification_type]) {
-      grouped[n.notification_type] = [];
-    }
-    grouped[n.notification_type].push(n);
-  }
-
-  const sortedTypes = [
-    ...NOTIFICATION_SUMMARY_DISPLAY_ORDER.filter((t) => grouped[t]),
-    ...Object.keys(grouped).filter((t) => !NOTIFICATION_SUMMARY_DISPLAY_ORDER.includes(t)),
-  ];
-
-  const sectionsHtml = sortedTypes.map((type) => renderNotificationGroup(type, grouped[type])).join('');
+  const split = buildSplitDigest(notifications);
+  const staffHtml = renderDigestMatrixHtml(split.staff, 'staff');
+  const patientHtml = renderDigestMatrixHtml(split.patient, 'patient');
+  const matrixParts = [staffHtml, patientHtml].filter(Boolean);
+  const matrixHtml =
+    matrixParts.length > 0
+      ? matrixParts.join('')
+      : '<p style="color:#64748b;font-size:14px;">Nincs megjeleníthető táblázatos összesítés (minden esemény „nem sorolható” kategóriába esett).</p>';
+  const otherHtml = renderOtherSummariesHtml(split.otherSummaries);
 
   const oldest = new Date(notifications[0].created_at);
   const newest = new Date(notifications[notifications.length - 1].created_at);
@@ -398,22 +737,26 @@ export async function sendAdminDailySummary(
         Az összegyűjtő levél legfeljebb kb. minden ${intervalH} órában indulhat (cron + <code>ADMIN_NOTIFICATION_BATCH_INTERVAL_HOURS</code>).
       </p>
       <p style="color: #374151; font-size: 14px; background: #eff6ff; padding: 12px 14px; border-radius: 6px;">
-        <strong>Megjegyzés:</strong> Az események típusonként vannak csoportosítva.
+        <strong>Megjegyzés:</strong> Az események két összesítő táblázatban jelennek meg: orvosi/rendszerfelhasználók és páciensek külön (szereplő × típus).
         Azonnali egyes típusok: <code>ADMIN_NOTIFICATION_IMMEDIATE</code> / <code>ADMIN_NOTIFICATION_IMMEDIATE_EXTRA</code>.
       </p>
       <p>Kedves adminisztrátor,</p>
-      <p>Összesen <strong>${notifications.length}</strong> esemény szerepel ebben az összefoglalóban:</p>
-      ${sectionsHtml}
+      <p>Összesen <strong>${notifications.length}</strong> esemény szerepel ebben az összefoglalóban.</p>
+      ${matrixHtml}
+      ${otherHtml}
       <p style="margin-top: 24px; color: #6b7280; font-size: 13px;">
         Ez egy automatikus összefoglaló. A részletekért kérjük, jelentkezzen be a rendszerbe.
       </p>
     </div>
   `;
 
+  const plainText = buildDigestPlainText(notifications, split);
+
   await sendEmail({
     to: recipients,
     subject: `Összegyűjtött értesítések (${notifications.length} esemény) — Maxillofaciális Rehabilitáció`,
     html,
+    text: plainText,
   });
 
   await pool.query(`

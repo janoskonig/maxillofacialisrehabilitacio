@@ -107,7 +107,14 @@ export const GET = apiHandler(async (req) => {
   await queueAdminNotification(
     'appointment_rejected',
     `${appointment.patient_name || 'Név nélküli'} elvetette az időpontot: ${new Date(appointment.start_time).toLocaleString('hu-HU')}`,
-    { patientName: appointment.patient_name, appointmentTime: appointment.start_time }
+    {
+      patientName: appointment.patient_name,
+      patientEmail: appointment.patient_email ?? null,
+      appointmentTime:
+        typeof appointment.start_time === 'string'
+          ? appointment.start_time
+          : new Date(appointment.start_time).toISOString(),
+    }
   ).catch(() => {});
 
   await pool.query('BEGIN');

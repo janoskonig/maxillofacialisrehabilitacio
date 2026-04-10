@@ -116,7 +116,12 @@ export const DELETE = apiHandler(async (req, { correlationId, params }) => {
     await queueAdminNotification(
       'appointment_cancelled_by_patient',
       `${appointment.patient_name || 'Név nélküli'} lemondta az időpontot: ${startTime.toLocaleString('hu-HU')}`,
-      { patientName: appointment.patient_name, appointmentTime: startTime.toISOString() }
+      {
+        patientName: appointment.patient_name,
+        patientEmail: appointment.patient_email ?? null,
+        patientTaj: appointment.patient_taj ?? null,
+        appointmentTime: startTime.toISOString(),
+      }
     ).catch(() => {});
 
     try {
