@@ -31,10 +31,11 @@ export const GET = roleHandler(['admin'], async (req, { auth }) => {
   `);
   const patientsByEtiology = await pool.query(`
     SELECT 
-      COALESCE(kezelesre_erkezes_indoka, 'Nincs adat') as etiologia,
+      COALESCE(a.kezelesre_erkezes_indoka, 'Nincs adat') as etiologia,
       COUNT(*) as darab
-    FROM patients
-    GROUP BY kezelesre_erkezes_indoka
+    FROM patients p
+    LEFT JOIN patient_anamnesis a ON a.patient_id = p.id
+    GROUP BY a.kezelesre_erkezes_indoka
     ORDER BY darab DESC
   `);
   const patientsByDoctor = await pool.query(`
@@ -99,13 +100,21 @@ export const GET = roleHandler(['admin'], async (req, { auth }) => {
     JOIN available_time_slots ats ON a.time_slot_id = ats.id
     WHERE ats.start_time >= DATE_TRUNC('month', CURRENT_DATE)
   `);
+  // NULL approval_status = normál időpont (nincs páciens jóváhagyási folyamat), nem „függőben”
   const appointmentsByStatus = await pool.query(`
     SELECT 
-      COALESCE(a.approval_status, 'pending') as status,
+      CASE 
+        WHEN a.approval_status IS NULL THEN 'normal'
+        ELSE a.approval_status
+      END as status,
       COUNT(*) as darab
     FROM appointments a
     JOIN available_time_slots ats ON a.time_slot_id = ats.id
-    GROUP BY a.approval_status
+    GROUP BY 
+      CASE 
+        WHEN a.approval_status IS NULL THEN 'normal'
+        ELSE a.approval_status
+      END
     ORDER BY darab DESC
   `);
 

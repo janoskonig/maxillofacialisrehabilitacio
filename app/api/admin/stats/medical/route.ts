@@ -1,15 +1,16 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
 import type { MedicalStats } from '@/lib/types';
-import { logger } from '@/lib/logger';
+import { getBnoKodToNevMap } from '@/lib/bno-codes-data';
 
 export const dynamic = 'force-dynamic';
 
 export const GET = roleHandler(['admin'], async (req, { auth }) => {
   const pool = getDbPool();
 
-  // All 8 independent queries run in parallel instead of sequentially
+  const bnoMap = getBnoKodToNevMap();
+
   const [
     bnoResult,
     referringDoctorsResult,
@@ -19,7 +20,12 @@ export const GET = roleHandler(['admin'], async (req, { auth }) => {
     implantPositionsResult,
     waitingTimeResult,
     doctorWorkloadResult,
-    waitingPatientsResult,
+    ohip14ByTimepointResult,
+    ohip14TotalsResult,
+    treatmentPlanSummaryResult,
+    treatmentPlanByCodeResult,
+    treatmentPlanArcotResult,
+    treatmentTypesResult,
   ] = await Promise.all([
     // 1. BNO statisztikák (from patient_anamnesis)
     pool.query(`
@@ -189,66 +195,158 @@ export const GET = roleHandler(['admin'], async (req, { auth }) => {
       ORDER BY jovobeli_idopontok_szama DESC
     `),
 
-    // 9. Kezelőorvosra vár státuszú betegek
     pool.query(`
-      WITH betegek_idoponttal AS (
-        SELECT DISTINCT p.id
-        FROM patients p
-        JOIN appointments a ON p.id = a.patient_id
-        JOIN available_time_slots ats ON a.time_slot_id = ats.id
-        WHERE ats.start_time > NOW() 
-          AND (a.approval_status IS NULL OR a.approval_status = 'approved')
-          AND (a.appointment_status IS NULL OR a.appointment_status NOT IN ('cancelled_by_doctor', 'cancelled_by_patient'))
-          AND (a.appointment_type IS NULL OR a.appointment_type = 'elso_konzultacio')
-      ),
-      waiting_patients AS (
-        SELECT 
-          p.id,
-          p.nev,
-          p.taj,
-          p.kezeleoorvos,
-          p.created_at as beteg_letrehozva,
-          CASE 
-            WHEN EXISTS (
-              SELECT 1 FROM appointments a2 
-              JOIN available_time_slots ats2 ON a2.time_slot_id = ats2.id
-              WHERE a2.patient_id = p.id AND a2.approval_status = 'pending'
-            ) THEN 'pending'
-            ELSE 'nincs_idopont'
-          END as status
-        FROM patients p
-        WHERE (p.kezeleoorvos IS NULL OR p.kezeleoorvos = '')
-          AND p.id NOT IN (SELECT id FROM betegek_idoponttal)
-      )
-      SELECT 
-        COUNT(*) FILTER (WHERE status = 'pending') as pending_count,
-        COUNT(*) FILTER (WHERE status = 'nincs_idopont') as nincs_idopont_count,
-        COUNT(*) as total_count,
-        json_agg(
-          json_build_object(
-            'id', id,
-            'nev', nev,
-            'taj', taj,
-            'kezeleoorvos', kezeleoorvos,
-            'betegLetrehozva', beteg_letrehozva,
-            'status', status
-          )
-        ) as betegek
-      FROM waiting_patients
+      SELECT
+        o.timepoint,
+        COUNT(*)::int AS kitoltesek_szama,
+        COUNT(DISTINCT o.patient_id)::int AS betegek_szama,
+        ROUND(AVG(o.total_score)::numeric, 2) AS atlag_total,
+        (
+          SELECT ROUND((PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY i.total_score))::numeric, 2)
+          FROM ohip14_responses i
+          WHERE i.timepoint = o.timepoint AND i.total_score IS NOT NULL
+        ) AS median_total
+      FROM ohip14_responses o
+      GROUP BY o.timepoint
+      ORDER BY o.timepoint
     `),
+
+    pool.query(`
+      SELECT
+        COUNT(*)::int AS osszes_kitoltes,
+        COUNT(DISTINCT patient_id)::int AS betegek
+      FROM ohip14_responses
+    `),
+
+    pool.query(`
+      SELECT
+        COUNT(*) FILTER (
+          WHERE jsonb_array_length(COALESCE(kezelesi_terv_felso, '[]'::jsonb)) > 0
+             OR jsonb_array_length(COALESCE(kezelesi_terv_also, '[]'::jsonb)) > 0
+             OR jsonb_array_length(COALESCE(kezelesi_terv_arcot_erinto, '[]'::jsonb)) > 0
+        )::int AS betegek_tervvel,
+        COALESCE(SUM(jsonb_array_length(COALESCE(kezelesi_terv_felso, '[]'::jsonb))), 0)::bigint AS felso_sorok,
+        COALESCE(SUM(jsonb_array_length(COALESCE(kezelesi_terv_also, '[]'::jsonb))), 0)::bigint AS also_sorok,
+        COALESCE(SUM(jsonb_array_length(COALESCE(kezelesi_terv_arcot_erinto, '[]'::jsonb))), 0)::bigint AS arcot_sorok,
+        COALESCE(SUM((
+          SELECT COUNT(*)::int FROM jsonb_array_elements(COALESCE(p.kezelesi_terv_felso, '[]'::jsonb)) e
+          WHERE COALESCE((e->>'elkeszult')::boolean, false)
+        )), 0)::bigint AS felso_kesz,
+        COALESCE(SUM((
+          SELECT COUNT(*)::int FROM jsonb_array_elements(COALESCE(p.kezelesi_terv_also, '[]'::jsonb)) e
+          WHERE COALESCE((e->>'elkeszult')::boolean, false)
+        )), 0)::bigint AS also_kesz,
+        COALESCE(SUM((
+          SELECT COUNT(*)::int FROM jsonb_array_elements(COALESCE(p.kezelesi_terv_arcot_erinto, '[]'::jsonb)) e
+          WHERE COALESCE((e->>'elkeszult')::boolean, false)
+        )), 0)::bigint AS arcot_kesz
+      FROM patient_treatment_plans p
+    `),
+
+    pool.query(`
+      WITH items AS (
+        SELECT COALESCE(
+          NULLIF(TRIM(elem->>'treatmentTypeCode'), ''),
+          NULLIF(TRIM(elem->>'tipus'), ''),
+          'ismeretlen'
+        ) AS kod
+        FROM patient_treatment_plans p,
+        LATERAL jsonb_array_elements(COALESCE(p.kezelesi_terv_felso, '[]'::jsonb)) AS elem
+        UNION ALL
+        SELECT COALESCE(
+          NULLIF(TRIM(elem->>'treatmentTypeCode'), ''),
+          NULLIF(TRIM(elem->>'tipus'), ''),
+          'ismeretlen'
+        )
+        FROM patient_treatment_plans p,
+        LATERAL jsonb_array_elements(COALESCE(p.kezelesi_terv_also, '[]'::jsonb)) AS elem
+      )
+      SELECT kod, COUNT(*)::int AS darab
+      FROM items
+      GROUP BY kod
+      ORDER BY darab DESC
+    `),
+
+    pool.query(`
+      SELECT
+        COALESCE(NULLIF(TRIM(elem->>'tipus'), ''), 'nincs_tipus') AS tipus,
+        COUNT(*)::int AS darab
+      FROM patient_treatment_plans p,
+      LATERAL jsonb_array_elements(COALESCE(p.kezelesi_terv_arcot_erinto, '[]'::jsonb)) AS elem
+      GROUP BY 1
+      ORDER BY darab DESC
+    `),
+
+    pool.query(`SELECT code, label_hu FROM treatment_types ORDER BY code`),
   ]);
 
   const dmftStats = dmftStatsResult.rows[0] || {};
   const dmftDistribution = dmftDistributionResult.rows || [];
   const waitingTime = waitingTimeResult.rows[0] || {};
-  const waitingPatients = waitingPatientsResult.rows[0] || {};
+
+  const ohipTotals = ohip14TotalsResult.rows[0] || {};
+  const ohipByTp = new Map(
+    ohip14ByTimepointResult.rows.map((r: Record<string, unknown>) => [
+      String(r.timepoint),
+      {
+        kitoltesekSzama: parseInt(String(r.kitoltesek_szama), 10) || 0,
+        betegekSzama: parseInt(String(r.betegek_szama), 10) || 0,
+        atlagTotal:
+          r.atlag_total != null ? parseFloat(String(r.atlag_total)) : null,
+        medianTotal:
+          r.median_total != null ? parseFloat(String(r.median_total)) : null,
+      },
+    ])
+  );
+  const tpOrder = ['T0', 'T1', 'T2', 'T3'];
+  const ohip14Idopontok = tpOrder.map((tp) => {
+    const row = ohipByTp.get(tp);
+    return {
+      timepoint: tp,
+      kitoltesekSzama: row?.kitoltesekSzama ?? 0,
+      betegekSzama: row?.betegekSzama ?? 0,
+      atlagTotalScore: row?.atlagTotal ?? null,
+      medianTotalScore: row?.medianTotal ?? null,
+    };
+  });
+
+  const tps = treatmentPlanSummaryResult.rows[0] || {};
+  const num = (v: unknown) => {
+    if (v == null) return 0;
+    const n = typeof v === 'string' ? parseInt(v, 10) : Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  const labelByCode = new Map<string, string>(
+    treatmentTypesResult.rows.map((r: { code: string; label_hu: string }) => [
+      r.code,
+      r.label_hu,
+    ])
+  );
+  const fogpotlasTipusSzerint = treatmentPlanByCodeResult.rows.map(
+    (r: { kod: string; darab: string | number }) => {
+      const kod = String(r.kod);
+      return {
+        kod,
+        labelHu: labelByCode.get(kod) ?? null,
+        darab: parseInt(String(r.darab), 10) || 0,
+      };
+    }
+  );
 
   const response: MedicalStats = {
     bno: {
-      data: bnoResult.rows.map(row => ({
-        kod: row.bno_kod,
-        elofordulas: parseInt(row.elofordulas)
-      }))
+      data: bnoResult.rows.map((row) => {
+        const kod = String(row.bno_kod).trim();
+        const lookupKey = kod.replace(/\s+/g, '').toUpperCase();
+        const nev =
+          bnoMap.get(lookupKey) || bnoMap.get(kod.toUpperCase()) || null;
+        return {
+          kod,
+          nev,
+          elofordulas: parseInt(row.elofordulas, 10),
+        };
+      }),
     },
     referringDoctors: {
       data: referringDoctorsResult.rows.map(row => ({
@@ -302,19 +400,27 @@ export const GET = roleHandler(['admin'], async (req, { auth }) => {
         multbeliIdopontokSzama: parseInt(row.multbeli_idopontok_szama) || 0
       }))
     },
-    waitingPatients: {
-      osszes: parseInt(waitingPatients.total_count) || 0,
-      pending: parseInt(waitingPatients.pending_count) || 0,
-      nincsIdopont: parseInt(waitingPatients.nincs_idopont_count) || 0,
-      betegek: (waitingPatients.betegek || []).map((patient: any) => ({
-        id: patient.id,
-        nev: patient.nev,
-        taj: patient.taj,
-        kezeleoorvos: patient.kezeleoorvos,
-        betegLetrehozva: patient.betegLetrehozva,
-        status: patient.status
-      }))
-    }
+    ohip14: {
+      betegekLegalabbEgyKitoltessel: parseInt(String(ohipTotals.betegek), 10) || 0,
+      osszesKitoltes: parseInt(String(ohipTotals.osszes_kitoltes), 10) || 0,
+      idopontokSzerint: ohip14Idopontok,
+    },
+    treatmentPlans: {
+      betegekKiosztottTervvel: num(tps.betegek_tervvel),
+      osszesTervSorAFelson: num(tps.felso_sorok),
+      osszesTervSorAlso: num(tps.also_sorok),
+      osszesTervSorArcotErinto: num(tps.arcot_sorok),
+      elkeszultFelson: num(tps.felso_kesz),
+      elkeszultAlso: num(tps.also_kesz),
+      elkeszultArcotErinto: num(tps.arcot_kesz),
+      fogpotlasTipusSzerint,
+      arcotErintoTipusSzerint: treatmentPlanArcotResult.rows.map(
+        (r: { tipus: string; darab: string | number }) => ({
+          tipus: String(r.tipus),
+          darab: parseInt(String(r.darab), 10) || 0,
+        })
+      ),
+    },
   };
 
   return NextResponse.json(response);

@@ -1,6 +1,6 @@
 export type MedicalStats = {
   bno: {
-    data: Array<{ kod: string; elofordulas: number }>;
+    data: Array<{ kod: string; nev: string | null; elofordulas: number }>;
   };
   referringDoctors: {
     data: Array<{ orvos: string; darab: number }>;
@@ -48,17 +48,26 @@ export type MedicalStats = {
       multbeliIdopontokSzama: number;
     }>;
   };
-  waitingPatients: {
-    osszes: number;
-    pending: number;
-    nincsIdopont: number;
-    betegek: Array<{
-      id: string;
-      nev: string | null;
-      taj: string | null;
-      kezeleoorvos: string | null;
-      betegLetrehozva: string;
-      status: 'pending' | 'nincs_idopont';
+  ohip14: {
+    betegekLegalabbEgyKitoltessel: number;
+    osszesKitoltes: number;
+    idopontokSzerint: Array<{
+      timepoint: string;
+      kitoltesekSzama: number;
+      betegekSzama: number;
+      atlagTotalScore: number | null;
+      medianTotalScore: number | null;
     }>;
+  };
+  treatmentPlans: {
+    betegekKiosztottTervvel: number;
+    osszesTervSorAFelson: number;
+    osszesTervSorAlso: number;
+    osszesTervSorArcotErinto: number;
+    elkeszultFelson: number;
+    elkeszultAlso: number;
+    elkeszultArcotErinto: number;
+    fogpotlasTipusSzerint: Array<{ kod: string; labelHu: string | null; darab: number }>;
+    arcotErintoTipusSzerint: Array<{ tipus: string; darab: number }>;
   };
 };

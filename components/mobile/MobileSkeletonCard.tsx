@@ -8,7 +8,7 @@ interface MobileSkeletonCardProps {
 /**
  * Mobile skeleton card component
  * - Consistent loading state for mobile cards
- * - Used in PatientList, WaitingPatientsList, etc.
+ * - Used in PatientList, etc.
  * - Prevents different skeleton implementations everywhere
  */
 export function MobileSkeletonCard({ lines = 3, className = '' }: MobileSkeletonCardProps) {

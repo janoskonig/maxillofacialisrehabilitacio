@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { WaitingPatientsList } from './WaitingPatientsList';
 import type { MedicalStats } from '@/lib/types';
 
 // Lazy load heavy chart components (recharts is large)
@@ -31,6 +30,14 @@ const WaitingTimeChart = dynamic(() => import('./charts/WaitingTimeChart').then(
 });
 
 const DoctorWorkloadChart = dynamic(() => import('./charts/DoctorWorkloadChart').then(mod => ({ default: mod.DoctorWorkloadChart })), {
+  loading: () => <div className="h-64 flex items-center justify-center"><p className="text-gray-500">Diagram betöltése...</p></div>
+});
+
+const OHIP14StatsChart = dynamic(() => import('./charts/OHIP14StatsChart').then(mod => ({ default: mod.OHIP14StatsChart })), {
+  loading: () => <div className="h-64 flex items-center justify-center"><p className="text-gray-500">Diagram betöltése...</p></div>
+});
+
+const TreatmentPlanStatsChart = dynamic(() => import('./charts/TreatmentPlanStatsChart').then(mod => ({ default: mod.TreatmentPlanStatsChart })), {
   loading: () => <div className="h-64 flex items-center justify-center"><p className="text-gray-500">Diagram betöltése...</p></div>
 });
 
@@ -98,6 +105,24 @@ export function MedicalStatisticsSection() {
         <ReferringDoctorsChart data={stats.referringDoctors.data} />
       </div>
 
+      <div className="card">
+        <h2 className="text-xl font-semibold mb-4">OHIP-14 (minőségélet / szájhigiénés hatás)</h2>
+        <p className="text-sm text-gray-500 mb-4">
+          Kitöltések és összpontszám-statisztikák időpontonként (T0–T3). Az átlag és a medián csak olyan
+          kitöltéseknél számított, ahol a teljes pontszám rögzítve van.
+        </p>
+        <OHIP14StatsChart ohip14={stats.ohip14} />
+      </div>
+
+      <div className="card">
+        <h2 className="text-xl font-semibold mb-4">Kiosztott kezelési tervek</h2>
+        <p className="text-sm text-gray-500 mb-4">
+          A <code className="text-xs bg-gray-100 px-1 rounded">patient_treatment_plans</code> táblában tárolt
+          felső / alsó állcsonti és arcot érintő tervsorok összesítése; fogpótlás típusok a törzs alapján felcímkézve.
+        </p>
+        <TreatmentPlanStatsChart treatmentPlans={stats.treatmentPlans} />
+      </div>
+
       {/* DMF eloszlás */}
       <div className="card">
         <h2 className="text-xl font-semibold mb-4">DMF index eloszlása</h2>
@@ -136,17 +161,6 @@ export function MedicalStatisticsSection() {
       <div className="card">
         <h2 className="text-xl font-semibold mb-4">Orvosok leterheltsége</h2>
         <DoctorWorkloadChart data={stats.doctorWorkload.data} />
-      </div>
-
-      {/* Kezelőorvosra vár betegek */}
-      <div className="card">
-        <h2 className="text-xl font-semibold mb-4">Kezelőorvosra vár státuszú betegek</h2>
-        <WaitingPatientsList
-          osszes={stats.waitingPatients.osszes}
-          pending={stats.waitingPatients.pending}
-          nincsIdopont={stats.waitingPatients.nincsIdopont}
-          betegek={stats.waitingPatients.betegek}
-        />
       </div>
     </div>
   );

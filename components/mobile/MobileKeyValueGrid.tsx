@@ -15,7 +15,7 @@ interface MobileKeyValueGridProps {
 /**
  * Mobile key-value grid component
  * - 2 column layout for key-value pairs
- * - Used in mobile cards (PatientList, WaitingPatientsList, etc.)
+ * - Used in mobile cards (PatientList, etc.)
  * - Consistent styling across the app
  */
 export function MobileKeyValueGrid({ items, className = '' }: MobileKeyValueGridProps) {
