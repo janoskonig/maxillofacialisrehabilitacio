@@ -14,6 +14,10 @@ import { Logo } from '@/components/Logo';
 import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
 import { Dashboard } from '@/components/Dashboard';
 import { FeedbackButtonTrigger } from '@/components/FeedbackButton';
+import { useStaffTaskSummary } from '@/hooks/useStaffTaskSummary';
+import { useStaffInboxSummary } from '@/hooks/useStaffInboxSummary';
+import { FeladataimIndicators, feladataimTasksAriaLabel } from '@/components/staff/FeladataimIndicators';
+import { UzenetekIndicators, uzenetekAriaLabel } from '@/components/staff/UzenetekIndicators';
 
 const OPImageViewer = dynamic(() => import('@/components/OPImageViewer').then(mod => ({ default: mod.OPImageViewer })), {
   loading: () => <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"><p className="text-white">Kép betöltése...</p></div>,
@@ -104,6 +108,14 @@ export default function Home() {
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [showPWAAnnouncement, setShowPWAAnnouncement] = useState(false);
   const { showToast, confirm: confirmDialog } = useToast();
+
+  const { summary: staffTaskSummary } = useStaffTaskSummary(isAuthorized && !isCheckingAuth);
+  const taskUnviewed = staffTaskSummary?.unviewed ?? 0;
+  const taskViewedOpen = staffTaskSummary?.viewedOpen ?? 0;
+
+  const { summary: inboxSummary } = useStaffInboxSummary(isAuthorized && !isCheckingAuth);
+  const patientUnread = inboxSummary?.patientUnread ?? 0;
+  const doctorUnread = inboxSummary?.doctorUnread ?? 0;
 
   useEffect(() => {
     // Check authentication
@@ -390,18 +402,36 @@ export default function Home() {
                   </button>
                 )}
                 <button
+                  type="button"
                   onClick={() => router.push('/messages')}
-                  className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2"
+                  className={`btn-secondary flex items-center gap-1.5 text-sm px-3 py-2 relative ${
+                    patientUnread > 0
+                      ? 'ring-2 ring-red-400/55'
+                      : doctorUnread > 0
+                        ? 'ring-2 ring-amber-400/55'
+                        : ''
+                  }`}
+                  aria-label={uzenetekAriaLabel(patientUnread, doctorUnread)}
                 >
                   <MessageCircle className="w-3.5 h-3.5" />
                   Üzenetek
+                  <UzenetekIndicators patientUnread={patientUnread} doctorUnread={doctorUnread} />
                 </button>
                 <button
+                  type="button"
                   onClick={() => router.push('/tasks')}
-                  className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2"
+                  className={`btn-secondary flex items-center gap-1.5 text-sm px-3 py-2 relative ${
+                    taskUnviewed > 0
+                      ? 'ring-2 ring-red-400/55'
+                      : taskViewedOpen > 0
+                        ? 'ring-2 ring-amber-400/55'
+                        : ''
+                  }`}
+                  aria-label={feladataimTasksAriaLabel(taskUnviewed, taskViewedOpen)}
                 >
                   <ClipboardList className="w-3.5 h-3.5" />
                   Feladataim
+                  <FeladataimIndicators unviewed={taskUnviewed} viewedOpen={taskViewedOpen} />
                 </button>
                 <button
                   onClick={() => router.push('/settings')}

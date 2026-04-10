@@ -17,7 +17,14 @@ export type UserTaskRow = {
   createdByUserId: string;
   dueAt: Date | null;
   completedAt: Date | null;
+  viewedAt: Date | null;
   createdAt: Date;
+};
+
+export type StaffOpenTaskSummary = {
+  totalOpen: number;
+  unviewed: number;
+  viewedOpen: number;
 };
 
 function mapRow(row: Record<string, unknown>): UserTaskRow {
@@ -37,6 +44,7 @@ function mapRow(row: Record<string, unknown>): UserTaskRow {
     createdByUserId: row.created_by_user_id as string,
     dueAt: row.due_at ? new Date(row.due_at as string) : null,
     completedAt: row.completed_at ? new Date(row.completed_at as string) : null,
+    viewedAt: row.viewed_at ? new Date(row.viewed_at as string) : null,
     createdAt: new Date(row.created_at as string),
   };
 }
@@ -86,10 +94,40 @@ export async function listOpenTasksForStaff(userId: string): Promise<UserTaskRow
   const result = await pool.query(
     `SELECT * FROM user_tasks
      WHERE assignee_kind = 'staff' AND assignee_user_id = $1 AND status = 'open'
-     ORDER BY due_at NULLS LAST, created_at DESC`,
+     ORDER BY viewed_at NULLS FIRST, due_at NULLS LAST, created_at DESC`,
     [userId]
   );
   return result.rows.map(mapRow);
+}
+
+export async function getStaffOpenTaskSummary(userId: string): Promise<StaffOpenTaskSummary> {
+  const pool = getDbPool();
+  const result = await pool.query(
+    `SELECT
+       COUNT(*)::int AS total_open,
+       COUNT(*) FILTER (WHERE viewed_at IS NULL)::int AS unviewed,
+       COUNT(*) FILTER (WHERE viewed_at IS NOT NULL)::int AS viewed_open
+     FROM user_tasks
+     WHERE assignee_kind = 'staff' AND assignee_user_id = $1 AND status = 'open'`,
+    [userId]
+  );
+  const row = result.rows[0] as { total_open: number; unviewed: number; viewed_open: number };
+  return {
+    totalOpen: row.total_open,
+    unviewed: row.unviewed,
+    viewedOpen: row.viewed_open,
+  };
+}
+
+/** Marks all open staff tasks as seen (Feladataim list opened). */
+export async function markOpenStaffTasksViewed(userId: string): Promise<number> {
+  const pool = getDbPool();
+  const result = await pool.query(
+    `UPDATE user_tasks SET viewed_at = NOW()
+     WHERE assignee_kind = 'staff' AND assignee_user_id = $1 AND status = 'open' AND viewed_at IS NULL`,
+    [userId]
+  );
+  return result.rowCount ?? 0;
 }
 
 export async function listOpenTasksForPatient(patientId: string): Promise<UserTaskRow[]> {

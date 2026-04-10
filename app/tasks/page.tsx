@@ -37,6 +37,7 @@ export default function StaffTasksPage() {
         if (!res.ok) throw new Error('Betöltés sikertelen');
         const data = await res.json();
         setTasks(data.tasks || []);
+        await fetch('/api/user-tasks/mark-viewed', { method: 'POST', credentials: 'include' }).catch(() => {});
       } catch {
         setTasks([]);
       } finally {

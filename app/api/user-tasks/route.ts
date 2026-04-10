@@ -20,6 +20,7 @@ export const GET = authedHandler(async (_req, { auth }) => {
       sourceMessageId: t.sourceMessageId,
       sourceDoctorMessageId: t.sourceDoctorMessageId,
       dueAt: t.dueAt,
+      viewedAt: t.viewedAt,
       createdAt: t.createdAt,
     })),
   });
