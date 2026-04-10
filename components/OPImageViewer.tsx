@@ -13,6 +13,9 @@ interface OPImageViewerProps {
   onClose: () => void;
   canAnnotate?: boolean;
   onAnnotationsUpdated?: () => void;
+  /** Megnyitáskor egyszer POST /api/activity (vetítés / előkészítő napló) */
+  activityWhenOpened?: { action: string; detail: string };
+  presentationActivityContext?: string;
 }
 
 export function OPImageViewer({
@@ -22,6 +25,8 @@ export function OPImageViewer({
   onClose,
   canAnnotate = false,
   onAnnotationsUpdated,
+  activityWhenOpened,
+  presentationActivityContext,
 }: OPImageViewerProps) {
   const [documents, setDocuments] = useState<PatientDocument[]>([]);
   const [loading, setLoading] = useState(false);
@@ -32,6 +37,22 @@ export function OPImageViewer({
   const [rotation, setRotation] = useState(0);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const previousImageUrlRef = useRef<string | null>(null);
+  const prevIsOpenRef = useRef(false);
+
+  useEffect(() => {
+    if (isOpen && !prevIsOpenRef.current && activityWhenOpened) {
+      void fetch('/api/activity', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: activityWhenOpened.action,
+          detail: activityWhenOpened.detail,
+        }),
+      }).catch(() => {});
+    }
+    prevIsOpenRef.current = isOpen;
+  }, [isOpen, activityWhenOpened]);
 
   useEffect(() => {
     if (isOpen && patientId) {
@@ -285,6 +306,7 @@ export function OPImageViewer({
                     mode={canAnnotate ? 'edit' : 'view'}
                     canEdit={canAnnotate}
                     compact
+                    presentationActivityContext={presentationActivityContext}
                     imgClassName="max-w-full max-h-full object-contain block"
                     onImageLoad={() => {
                       setImageError(false);

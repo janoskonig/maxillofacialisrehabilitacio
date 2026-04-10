@@ -306,6 +306,20 @@ export default function ConsiliumPrepPage() {
     [ps.careTimeline],
   );
 
+  const prepOpViewerActivity = useMemo(() => {
+    const meta = payload?.prepMeta;
+    const pid = ps.patientId;
+    if (!meta || !pid || ps.missingPatient) return undefined;
+    return {
+      action: 'consilium_prep_op_viewer_opened',
+      detail: JSON.stringify({
+        sessionId: meta.sessionId,
+        itemId: meta.itemId,
+        patientId: pid,
+      }),
+    };
+  }, [payload?.prepMeta, ps.patientId, ps.missingPatient]);
+
   const addChecklistPoint = async () => {
     const label = newPointLabel.trim();
     if (!label || readonly) return;
@@ -584,6 +598,7 @@ export default function ConsiliumPrepPage() {
                 mode={canAnnotatePatientDocs ? 'edit' : 'view'}
                 canEdit={canAnnotatePatientDocs}
                 compact
+                presentationActivityContext="consilium_prep"
                 imgClassName="max-h-[min(85vh,900px)] max-w-full w-auto object-contain block"
                 onAnnotationsUpdated={refreshPhotoAnnotations}
               />
@@ -698,6 +713,8 @@ export default function ConsiliumPrepPage() {
                       patientId={ps.patientId}
                       patientName={ps.name || undefined}
                       canAnnotate={canAnnotatePatientDocs}
+                      activityWhenViewerOpen={prepOpViewerActivity}
+                      presentationActivityContext="consilium_prep"
                     />
                   ) : (
                     <p className="text-xs text-white/50 px-2 py-4">Nincs betegazonosító.</p>

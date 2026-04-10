@@ -11,6 +11,7 @@ import {
   getUserInstitution,
   normalizeChecklist,
 } from '@/lib/consilium';
+import { logActivity } from '@/lib/activity';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,6 +60,20 @@ export const POST = authedHandler(async (req, { auth, params }) => {
     );
 
     await client.query('COMMIT');
+
+    await logActivity(
+      req,
+      auth.email,
+      'consilium_prep_checklist_point_added',
+      JSON.stringify({
+        sessionId: prep.sessionId,
+        itemId: prep.itemId,
+        checklistKey: key,
+        labelPreview: body.label.trim().slice(0, 200),
+      }),
+      { skipAdminNotificationQueue: true },
+    );
+
     return NextResponse.json({ item: result.rows[0] }, { status: 201 });
   } catch (e) {
     await client.query('ROLLBACK');

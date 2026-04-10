@@ -3,6 +3,15 @@ import { getDbPool } from './db';
 import { logger } from './logger';
 import { queueAdminNotification } from './email/admin-notification-queue';
 
+/** Whitelist: kliens küldi (DocumentAnnotationsOverlay), részletekhez fűzve */
+const PRESENTATION_ACTIVITY_CONTEXT_RE = /^[a-z0-9_]{1,64}$/i;
+
+export function presentationActivityContextSuffix(req: NextRequest): string {
+  const raw = req.headers.get('x-presentation-activity-context')?.trim() ?? '';
+  if (!PRESENTATION_ACTIVITY_CONTEXT_RE.test(raw)) return '';
+  return `, presentationContext: ${raw}`;
+}
+
 /**
  * Központi activity logolási helper függvény
  * 

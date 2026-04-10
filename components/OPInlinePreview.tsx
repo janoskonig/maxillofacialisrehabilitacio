@@ -13,6 +13,8 @@ interface OPInlinePreviewProps {
   patientName?: string;
   variant?: 'default' | 'presentation';
   canAnnotate?: boolean;
+  activityWhenViewerOpen?: { action: string; detail: string };
+  presentationActivityContext?: string;
 }
 
 export function OPInlinePreview({
@@ -20,6 +22,8 @@ export function OPInlinePreview({
   patientName,
   variant = 'default',
   canAnnotate = false,
+  activityWhenViewerOpen,
+  presentationActivityContext,
 }: OPInlinePreviewProps) {
   const [documents, setDocuments] = useState<PatientDocument[]>([]);
   const [loading, setLoading] = useState(true);
@@ -207,6 +211,8 @@ export function OPInlinePreview({
         onClose={() => setViewerOpen(false)}
         canAnnotate={canAnnotate}
         onAnnotationsUpdated={refreshOpAnnotations}
+        activityWhenOpened={activityWhenViewerOpen}
+        presentationActivityContext={presentationActivityContext}
       />
     </>
   );

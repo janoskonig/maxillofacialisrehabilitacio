@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
-import { logActivity } from '@/lib/activity';
+import { logActivity, presentationActivityContextSuffix } from '@/lib/activity';
 import { ANNOTATION_AUTHOR_COALESCE, ANNOTATION_FROM_JOIN } from '@/lib/document-annotations-db';
 
 export const dynamic = 'force-dynamic';
@@ -64,7 +64,7 @@ export const POST = authedHandler(async (req, { auth, params }) => {
     req,
     userEmail,
     'patient_document_annotation_restored',
-    `Patient: ${patientId}, document: ${documentId}, annotation: ${annotationId}`,
+    `Patient: ${patientId}, document: ${documentId}, annotation: ${annotationId}${presentationActivityContextSuffix(req)}`,
   );
 
   return NextResponse.json({ annotation: full.rows[0] }, { status: 200 });

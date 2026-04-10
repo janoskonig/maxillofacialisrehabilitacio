@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
-import { logActivity } from '@/lib/activity';
+import { logActivity, presentationActivityContextSuffix } from '@/lib/activity';
 import { textPayloadSchema } from '@/lib/document-annotations-schema';
 import { ANNOTATION_AUTHOR_COALESCE, ANNOTATION_FROM_JOIN } from '@/lib/document-annotations-db';
 
@@ -86,7 +86,7 @@ export const PATCH = roleHandler([...ANNOTATE_ROLES], async (req, { auth, params
     req,
     userEmail,
     'patient_document_annotation_updated',
-    `Patient: ${patientId}, document: ${documentId}, annotation: ${annotationId}`,
+    `Patient: ${patientId}, document: ${documentId}, annotation: ${annotationId}${presentationActivityContextSuffix(req)}`,
   );
 
   return NextResponse.json({ annotation: full.rows[0] }, { status: 200 });
@@ -123,7 +123,7 @@ export const DELETE = roleHandler([...ANNOTATE_ROLES], async (req, { auth, param
     req,
     userEmail,
     'patient_document_annotation_deleted',
-    `Patient: ${patientId}, document: ${documentId}, annotation: ${annotationId}`,
+    `Patient: ${patientId}, document: ${documentId}, annotation: ${annotationId}${presentationActivityContextSuffix(req)}`,
   );
 
   return NextResponse.json({ ok: true }, { status: 200 });

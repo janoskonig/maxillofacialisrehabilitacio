@@ -10,6 +10,7 @@ import {
   prepCommentBodySchema,
 } from '@/lib/consilium-prep-share';
 import { getUserInstitution } from '@/lib/consilium';
+import { logActivity } from '@/lib/activity';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,6 +55,20 @@ export const POST = authedHandler(async (req, { auth, params }) => {
   const row = ins.rows[0];
   const createdAt =
     row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt);
+
+  await logActivity(
+    req,
+    auth.email,
+    'consilium_prep_comment_created',
+    JSON.stringify({
+      sessionId: prep.sessionId,
+      itemId: prep.itemId,
+      checklistKey: body.checklistKey,
+      commentId: row.id,
+      bodyLength: body.body.length,
+    }),
+    { skipAdminNotificationQueue: true },
+  );
 
   return NextResponse.json(
     {

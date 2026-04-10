@@ -58,6 +58,8 @@ export type DocumentAnnotationsOverlayProps = {
   canEdit?: boolean;
   imgClassName?: string;
   compact?: boolean;
+  /** Vetítés / előkészítő: activity_logs részletekhez (max 64 char, [a-z0-9_]) */
+  presentationActivityContext?: string;
   onImageLoad?: () => void;
   onImageError?: () => void;
   onAnnotationsUpdated?: () => void;
@@ -71,6 +73,7 @@ export function DocumentAnnotationsOverlay({
   canEdit = false,
   imgClassName = 'max-w-full max-h-full object-contain block',
   compact = false,
+  presentationActivityContext,
   onImageLoad,
   onImageError,
   onAnnotationsUpdated,
@@ -98,6 +101,12 @@ export function DocumentAnnotationsOverlay({
   const pendingTextPanelRef = useRef<HTMLDivElement>(null);
   const [portalReady, setPortalReady] = useState(false);
   const textDialogTitleId = useId();
+
+  const presentationHeaders = useMemo(() => {
+    const c = presentationActivityContext?.trim();
+    if (!c || !/^[a-z0-9_]{1,64}$/i.test(c)) return {} as Record<string, string>;
+    return { 'X-Presentation-Activity-Context': c };
+  }, [presentationActivityContext]);
 
   useEffect(() => {
     setPortalReady(true);
@@ -391,7 +400,7 @@ export function DocumentAnnotationsOverlay({
         {
           method: 'POST',
           credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...presentationHeaders },
           body: JSON.stringify({
             kind: 'freehand',
             payload: { v: 1, paths: draftPaths },
@@ -420,7 +429,7 @@ export function DocumentAnnotationsOverlay({
         {
           method: 'POST',
           credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...presentationHeaders },
           body: JSON.stringify({
             kind: 'text',
             payload: {
@@ -451,7 +460,7 @@ export function DocumentAnnotationsOverlay({
     if (!window.confirm('Biztosan törli ezt az annotációt? (Visszaállítható.)')) return;
     const res = await fetch(
       `/api/patients/${patientId}/documents/${documentId}/annotations/${id}`,
-      { method: 'DELETE', credentials: 'include' },
+      { method: 'DELETE', credentials: 'include', headers: { ...presentationHeaders } },
     );
     if (!res.ok) {
       alert('Törlés sikertelen');

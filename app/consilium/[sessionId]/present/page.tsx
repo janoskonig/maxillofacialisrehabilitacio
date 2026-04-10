@@ -518,6 +518,16 @@ export default function ConsiliumPresentPage() {
   const current = items[index] || null;
   const summaryForTimeline = current?.patientSummary;
 
+  const liveOpViewerActivity = useMemo(() => {
+    if (!sessionId || !current?.id) return undefined;
+    const pid = current.patientSummary?.patientId;
+    if (!pid || current.patientSummary?.missingPatient) return undefined;
+    return {
+      action: 'consilium_live_op_viewer_opened',
+      detail: JSON.stringify({ sessionId, itemId: current.id, patientId: pid }),
+    };
+  }, [sessionId, current?.id, current?.patientSummary?.patientId, current?.patientSummary?.missingPatient]);
+
   const timelineRows = useMemo(
     () => flattenCareTimelineNewestFirst(summaryForTimeline?.careTimeline),
     [summaryForTimeline?.careTimeline],
@@ -842,6 +852,8 @@ export default function ConsiliumPresentPage() {
                       patientId={ps.patientId}
                       patientName={ps.name || undefined}
                       canAnnotate={canAnnotatePatientDocs}
+                      activityWhenViewerOpen={liveOpViewerActivity}
+                      presentationActivityContext="consilium_live"
                     />
                   ) : (
                     <p className="text-xs text-white/50 px-2 py-4">Nincs betegazonosító az OP megjelenítéséhez.</p>
@@ -1159,6 +1171,7 @@ export default function ConsiliumPresentPage() {
                 mode={canAnnotatePatientDocs ? 'edit' : 'view'}
                 canEdit={canAnnotatePatientDocs}
                 compact
+                presentationActivityContext="consilium_live"
                 imgClassName="max-h-[min(85vh,900px)] max-w-full w-auto object-contain block"
                 onAnnotationsUpdated={refreshPhotoAnnotations}
               />

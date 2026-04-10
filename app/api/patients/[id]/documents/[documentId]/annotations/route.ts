@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler, roleHandler } from '@/lib/api/route-handler';
-import { logActivity } from '@/lib/activity';
+import { logActivity, presentationActivityContextSuffix } from '@/lib/activity';
 import {
   createAnnotationBodySchema,
   assertFreehandPointBudget,
@@ -108,7 +108,7 @@ export const POST = roleHandler([...ANNOTATE_ROLES], async (req, { auth, params 
     req,
     userEmail,
     'patient_document_annotation_created',
-    `Patient: ${patientId}, document: ${documentId}, kind: ${row.kind}`,
+    `Patient: ${patientId}, document: ${documentId}, kind: ${row.kind}${presentationActivityContextSuffix(req)}`,
   );
 
   return NextResponse.json({ annotation: full.rows[0] }, { status: 201 });
