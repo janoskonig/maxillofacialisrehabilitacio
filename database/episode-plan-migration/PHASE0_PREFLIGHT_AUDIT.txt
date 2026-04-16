@@ -1,0 +1,60 @@
+# Phase 0 — Episode plan migration preflight (repo)
+
+This document is a **repo-only** preflight. Execute the SQL blocks against production or a recent staging clone before Phase 1 cutover, and attach results to the go/no-go record.
+
+## Runner semantics (authoritative)
+
+- `scripts/run-all-migrations.js` runs **one** `pool.query(sql)` per migration file (entire file as a single statement batch).
+- There is **no** implicit outer transaction unless the file contains `BEGIN`/`COMMIT`.
+- Do **not** use `CREATE INDEX CONCURRENTLY` inside a migration file that runs inside a transaction; use a separate operator step if `CONCURRENTLY` is required.
+
+## Database — appointments triggers (run in target DB)
+
+```sql
+SELECT tgname, tgenabled
+FROM pg_trigger
+WHERE tgrelid = 'appointments'::regclass
+  AND NOT tgisinternal;
+```
+
+Document each trigger name, purpose, and whether new nullable columns (`plan_item_id`, etc.) are safe.
+
+## Repo inventory (static)
+
+### `SELECT *` usage (sample)
+
+- `lib/stage-suggestion-service.ts` — `stage_suggestions`
+- `app/api/patients/[id]/route.ts` — `patients_full`
+- `lib/user-tasks.ts` — `user_tasks`
+- `app/api/scheduling/event-retention/route.ts` — function return
+- `app/api/admin/merge-patients/route.ts` — dynamic table / `patients`
+
+None of these are `appointments` `SELECT *`; still note for schema-shape sensitivity elsewhere.
+
+### Legacy scheduling triggers (reference)
+
+- `database/legacy/migration_scheduling_v2.sql` defines `trg_appointments_1_sync_times`, `trg_appointments_2_is_future` (column-scoped `BEFORE` triggers). **Prod may differ** — reconcile with the SQL above.
+
+### High-touch code paths (appointments / work phases)
+
+- `lib/appointment-service.ts` — appointment persistence and queries
+- `lib/convert-slot-intent.ts` — booking path touches `episode_work_phases`
+- `lib/slot-intent-projector.ts` — episode work phases
+- `app/api/treatment-plan-timeline/route.ts` — timeline (plan-item read path behind `READ_PLAN_ITEMS`)
+- `app/api/episodes/[id]/work-phases/*` — work phase generation / merge
+
+## Phase 1 block conditions (from plan)
+
+Do not start Phase 1 DDL in prod while:
+
+- Any user trigger on `appointments` is undocumented vs. the query above.
+- A consumer is sensitive to new nullable columns without verification.
+- `CREATE INDEX CONCURRENTLY` is required but no operator path exists.
+
+## Go / no-go
+
+| Check                         | Operator | Date | Pass/Fail |
+|------------------------------|----------|------|-----------|
+| Trigger inventory            |          |      |           |
+| Nullable column impact       |          |      |           |
+| Runner / CONCURRENTLY path   |          |      |           |

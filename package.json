@@ -28,7 +28,12 @@
     "migrate:consilium-drop-presenter-notes": "node scripts/run-all-migrations.js 013_drop_consilium_presenter_notes.sql",
     "migrate:work-phase-canonical": "node scripts/run-all-migrations.js 016_work_phase_canonical.sql",
     "migrate:017-episode-work-phases-id": "node scripts/run-all-migrations.js 017_episode_work_phases_id_default.sql",
-    "migrate:018-episode-work-phase-audit": "node scripts/run-all-migrations.js 018_episode_work_phase_audit.sql"
+    "migrate:018-episode-work-phase-audit": "node scripts/run-all-migrations.js 018_episode_work_phase_audit.sql",
+    "migrate:021-episode-plan-phase1": "node scripts/run-all-migrations.js 021_episode_plan_migration_phase1.sql",
+    "migrate:022-plan-json-quarantine": "node scripts/run-all-migrations.js 022_patient_treatment_plan_json_quarantine.sql",
+    "migrate:023-appointment-plan-link-audit": "node scripts/run-all-migrations.js 023_appointment_plan_link_audit.sql",
+    "episode-plan:phase2-backfill": "node scripts/episode-plan-phase2-backfill.js",
+    "episode-plan:phase3-link": "node scripts/episode-plan-phase3-link-appointments.js"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

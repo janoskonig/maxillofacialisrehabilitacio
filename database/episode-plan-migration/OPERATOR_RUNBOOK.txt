@@ -1,0 +1,26 @@
+# Episode plan migration — operator runbook
+
+Each step: transactional vs not, command, verification, rollback note.
+
+| Step | Tx | Command / path | Verify | Rollback (partial / behavior) |
+|------|----|------------------|--------|-------------------------------|
+| Phase 1 DDL | Yes (file has `BEGIN`/`COMMIT`) | `node scripts/run-all-migrations.js` or `npm run migrate` | `\d episode_plan_items`; `\d appointments` shows nullable `plan_item_id` | Behavior: leave columns unused. DDL rollback only if no deps — prefer forward fix. |
+| Partial index `episode_work_phases(appointment_id)` | Yes | In `021_episode_plan_migration_phase1.sql` | `SELECT indexname FROM pg_indexes WHERE tablename = 'episode_work_phases' AND indexname = 'idx_episode_work_phases_appointment_id_nn';` | `DROP INDEX CONCURRENTLY` in maintenance window if needed (operator-only if switched to concurrent variant). |
+| Phase 2 backfill | Yes (per script txn) | `CUTOFF_AT=<ISO> node scripts/episode-plan-phase2-backfill.js` | Count new `episode_plan_items`; anomalies for `created_at IS NULL` | Re-run safe (`NOT EXISTS`); behavior rollback: ignore new rows in reads (flags off). |
+| Phase 2 dry run | N/A | `DRY_RUN=1 node scripts/episode-plan-phase2-backfill.js` | Console counts | — |
+| Phase 3 link batches | Yes (per batch) | `node scripts/episode-plan-phase3-link-appointments.js` | `SELECT count(*) FROM appointments WHERE plan_item_id IS NOT NULL` monotone while job runs | Set `plan_item_id` NULL for affected rows per behavior rollback runbook (not first response: no drop). |
+| READ_PLAN_ITEMS | Config | Set env on compatible build | Timeline + worklist smoke | Unset env → old merge behavior for appointments query. |
+| WRITE_PLAN_ITEMS | Config | Off until write authority defined | — | Off |
+| SCHEDULER_USE_PLAN_ITEMS | Config | Off until Phase 6a drain | — | Off |
+| Phase 5 quarantine | Yes | `022_patient_treatment_plan_json_quarantine.sql` via migrate | Table exists | Unused until resolver. |
+| Phase 6b audit | Yes | `023_appointment_plan_link_audit.sql` via migrate | Table exists | Append-only audit. |
+
+## Non-transactional / operator-only (when needed)
+
+- Large indexes: `CREATE INDEX CONCURRENTLY` in a **standalone** `psql` session (not inside `BEGIN`), then document in `node_migrations` manually only if you adopt a split process — default migrations here stay transactional.
+
+## Lock order (Phase 3)
+
+1. `SELECT … FOR UPDATE OF a SKIP LOCKED`
+2. `UPDATE` only selected ids
+3. Short transactions (`BATCH_SIZE`, `MAX_BATCHES`)
