@@ -3,6 +3,7 @@
  * Slot state precedence: blocked > booked > held/offered > free. Rebalance touches only free.
  */
 
+import { PoolClient } from 'pg';
 import { getDbPool } from './db';
 
 /** Slot state precedence (highest first). Rebalance only touches state='free'. */
@@ -63,13 +64,13 @@ export interface OneHardNextCheckResult {
 export async function checkOneHardNext(
   episodeId: string | null,
   pool: 'work' | 'consult' | 'control',
-  options?: { requiresPrecommit?: boolean; stepCode?: string }
+  options?: { requiresPrecommit?: boolean; stepCode?: string; dbClient?: PoolClient }
 ): Promise<OneHardNextCheckResult> {
   if (!episodeId || pool !== 'work') {
     return { allowed: true };
   }
 
-  const db = getDbPool();
+  const db = options?.dbClient ?? getDbPool();
   const futureWork = await db.query(
     `SELECT id, requires_precommit FROM appointments
      WHERE episode_id = $1 AND pool = 'work'

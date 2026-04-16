@@ -1,4 +1,4 @@
-import { Pool } from 'pg';
+import { Pool, PoolClient } from 'pg';
 import { sendAppointmentBookingNotification, sendAppointmentBookingNotificationToPatient, sendAppointmentBookingNotificationToAdmins } from '@/lib/email';
 import { generateIcsFile } from '@/lib/calendar';
 import { createGoogleCalendarEvent, deleteGoogleCalendarEvent } from '@/lib/google-calendar';
@@ -119,25 +119,26 @@ export async function createAppointment(
 
   let requiresPrecommit = bodyRequiresPrecommit;
 
-  await db.query('BEGIN');
+  const client: PoolClient = await db.connect();
+  await client.query('BEGIN');
   let committed = false;
 
   try {
     // 1) Lock episode first (consistent lock order) and enforce one-hard-next + care_pathway check
     if (episodeId && poolValue === 'work') {
-      const episodeLock = await db.query(
+      const episodeLock = await client.query(
         `SELECT id, care_pathway_id, assigned_provider_id FROM patient_episodes WHERE id = $1 FOR UPDATE`,
         [episodeId],
       );
       if (episodeLock.rows.length === 0) {
-        await db.query('ROLLBACK');
+        await client.query('ROLLBACK');
         return { ok: false, validationError: { error: 'Epizód nem található', status: 404 } };
       }
 
       let hasAnyPathway = !!episodeLock.rows[0].care_pathway_id;
       if (!hasAnyPathway) {
         try {
-          const epPwCheck = await db.query(
+          const epPwCheck = await client.query(
             `SELECT 1 FROM episode_pathways WHERE episode_id = $1 LIMIT 1`,
             [episodeId],
           );
@@ -153,7 +154,7 @@ export async function createAppointment(
         // Derive requiresPrecommit from pathway step definition
         let allPathwayPhases: Array<{ work_phase_code: string; requires_precommit?: boolean }> = [];
         try {
-          const multiPwResult = await db.query(
+          const multiPwResult = await client.query(
             `SELECT cp.work_phases_json, cp.steps_json FROM episode_pathways ep
              JOIN care_pathways cp ON ep.care_pathway_id = cp.id
              WHERE ep.episode_id = $1`,
@@ -167,7 +168,7 @@ export async function createAppointment(
           }
         } catch {
           if (episodeLock.rows[0].care_pathway_id) {
-            const pathwayResult = await db.query(
+            const pathwayResult = await client.query(
               `SELECT cp.work_phases_json, cp.steps_json FROM care_pathways cp WHERE cp.id = $1`,
               [episodeLock.rows[0].care_pathway_id],
             );
@@ -186,7 +187,7 @@ export async function createAppointment(
         const assignedProviderId = episodeLock.rows[0].assigned_provider_id;
         if (assignedProviderId && auth.role !== 'admin') {
           if (auth.userId !== assignedProviderId) {
-            await db.query('ROLLBACK');
+            await client.query('ROLLBACK');
             return {
               ok: false,
               validationError: {
@@ -201,6 +202,7 @@ export async function createAppointment(
         const oneHardNext = await checkOneHardNext(episodeId, 'work', {
           requiresPrecommit: requiresPrecommit === true,
           stepCode: typeof stepCode === 'string' ? stepCode : undefined,
+          dbClient: client,
         });
         if (!oneHardNext.allowed) {
           const strictOneHardNext = await getSchedulingFeatureFlag('strict_one_hard_next');
@@ -211,13 +213,13 @@ export async function createAppointment(
             typeof overrideReason === 'string' &&
             overrideReason.trim().length >= 10;
           if (mayOverride) {
-            await db.query(
+            await client.query(
               `INSERT INTO scheduling_override_audit (episode_id, user_id, override_reason) VALUES ($1, $2, $3)`,
               [episodeId, auth.userId, overrideReason!.trim()],
             );
             usedOverride = true;
           } else {
-            await db.query('ROLLBACK');
+            await client.query('ROLLBACK');
             return {
               ok: false,
               validationError: {
@@ -230,7 +232,7 @@ export async function createAppointment(
             };
           }
         } else if (requiresPrecommit === true && episodeId) {
-          await db.query(
+          await client.query(
             `INSERT INTO scheduling_override_audit (episode_id, user_id, override_reason) VALUES ($1, $2, $3)`,
             [episodeId, auth.userId, `precommit: ${typeof stepCode === 'string' ? stepCode : 'unknown'}`],
           );
@@ -239,7 +241,7 @@ export async function createAppointment(
     }
 
     // 2) Lock time slot and verify free
-    const timeSlotResult = await db.query(
+    const timeSlotResult = await client.query(
       `SELECT ats.*, u.email as dentist_email, u.id as dentist_user_id
        FROM available_time_slots ats
        JOIN users u ON ats.user_id = u.id
@@ -249,25 +251,25 @@ export async function createAppointment(
     );
 
     if (timeSlotResult.rows.length === 0) {
-      await db.query('ROLLBACK');
+      await client.query('ROLLBACK');
       return { ok: false, validationError: { error: 'Időpont nem található', status: 404 } };
     }
 
     const timeSlot = timeSlotResult.rows[0];
     const slotState = timeSlot.state ?? (timeSlot.status === 'available' ? 'free' : 'booked');
     if (slotState !== 'free') {
-      await db.query('ROLLBACK');
+      await client.query('ROLLBACK');
       return { ok: false, validationError: { error: 'Ez az időpont már le van foglalva', status: 400 } };
     }
 
     if (episodeId) {
-      const epRow = await db.query(
+      const epRow = await client.query(
         'SELECT assigned_provider_id FROM patient_episodes WHERE id = $1',
         [episodeId],
       );
       const assignedProviderId = epRow.rows[0]?.assigned_provider_id;
       if (assignedProviderId && timeSlot.user_id !== assignedProviderId) {
-        await db.query('ROLLBACK');
+        await client.query('ROLLBACK');
         return {
           ok: false,
           validationError: { error: 'Csak a kijelölt orvoshoz adható időpont.', status: 403 },
@@ -277,7 +279,7 @@ export async function createAppointment(
 
     const startTime = new Date(timeSlot.start_time);
     if (startTime <= now) {
-      await db.query('ROLLBACK');
+      await client.query('ROLLBACK');
       return { ok: false, validationError: { error: 'Csak jövőbeli időpontot lehet lefoglalni', status: 400 } };
     }
 
@@ -300,16 +302,16 @@ export async function createAppointment(
 
     // Validate intent belongs to this episode if provided
     if (effectiveIntentId && episodeId) {
-      const intentCheck = await db.query(
+      const intentCheck = await client.query(
         `SELECT episode_id FROM slot_intents WHERE id = $1 AND state = 'open'`,
         [effectiveIntentId],
       );
       if (intentCheck.rows.length === 0) {
-        await db.query('ROLLBACK');
+        await client.query('ROLLBACK');
         return { ok: false, validationError: { error: 'Intent nem található vagy már nem open', status: 400 } };
       }
       if (intentCheck.rows[0].episode_id !== episodeId) {
-        await db.query('ROLLBACK');
+        await client.query('ROLLBACK');
         return {
           ok: false,
           validationError: { error: 'Intent episode_id nem egyezik az appointment episode_id-jával', status: 400 },
@@ -322,7 +324,7 @@ export async function createAppointment(
     // appointment per (episode_id, step_code, step_seq). When the user picks a
     // new slot for the same step, we cancel the old one and free its slot.
     if (episodeId && effectiveStepCode != null && effectiveStepSeq != null) {
-      const existing = await db.query(
+      const existing = await client.query(
         `SELECT id, time_slot_id FROM appointments
           WHERE episode_id = $1 AND step_code = $2 AND step_seq = $3
             AND appointment_status IS NULL
@@ -331,11 +333,11 @@ export async function createAppointment(
         [episodeId, effectiveStepCode, effectiveStepSeq, timeSlotId],
       );
       for (const row of existing.rows) {
-        await db.query(
+        await client.query(
           `UPDATE appointments SET appointment_status = 'cancelled_by_doctor' WHERE id = $1`,
           [row.id],
         );
-        await db.query(
+        await client.query(
           `UPDATE available_time_slots SET status = 'available', state = 'free' WHERE id = $1`,
           [row.time_slot_id],
         );
@@ -346,7 +348,7 @@ export async function createAppointment(
       }
     }
 
-    const appointmentResult = await db.query(
+    const appointmentResult = await client.query(
       `INSERT INTO appointments (
         patient_id, episode_id, time_slot_id, created_by, dentist_email, appointment_type,
         pool, duration_minutes, no_show_risk, requires_confirmation, hold_expires_at, created_via, requires_precommit, start_time, end_time,
@@ -403,7 +405,7 @@ export async function createAppointment(
 
     // Convert intent state if we're linking an intent
     if (effectiveIntentId) {
-      await db.query(
+      await client.query(
         `UPDATE slot_intents SET state = 'converted', updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND state = 'open'`,
         [effectiveIntentId],
       );
@@ -411,7 +413,7 @@ export async function createAppointment(
 
     const appointment = appointmentResult.rows[0];
     if (!appointment) {
-      await db.query('ROLLBACK');
+      await client.query('ROLLBACK');
       return {
         ok: false,
         validationError: {
@@ -441,12 +443,12 @@ export async function createAppointment(
     }
 
     updateValues.push(timeSlotId);
-    await db.query(
+    await client.query(
       `UPDATE available_time_slots SET ${updateFields.join(', ')} WHERE id = $${paramIdx}`,
       updateValues,
     );
 
-    await db.query('COMMIT');
+    await client.query('COMMIT');
     committed = true;
 
     // Post-commit: emit scheduling events (non-blocking)
@@ -460,7 +462,7 @@ export async function createAppointment(
     }
 
     // Re-fetch time slot to get updated cim/teremszam
-    const updatedTimeSlotResult = await db.query(
+    const updatedTimeSlotResult = await client.query(
       `SELECT ats.*, u.email as dentist_email, u.id as dentist_user_id
        FROM available_time_slots ats
        JOIN users u ON ats.user_id = u.id
@@ -476,12 +478,14 @@ export async function createAppointment(
   } catch (error) {
     if (!committed) {
       try {
-        await db.query('ROLLBACK');
+        await client.query('ROLLBACK');
       } catch (rollbackError) {
         logger.error('Rollback failed:', rollbackError);
       }
     }
     throw error;
+  } finally {
+    client.release();
   }
 }
 
