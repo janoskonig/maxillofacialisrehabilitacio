@@ -27,6 +27,42 @@ import {
 } from '@/lib/consilium-view-helpers';
 import { CareTimelineLog } from '@/components/consilium/CareTimelineLog';
 
+function mergeChecklistPreservingDelegatedTasks(
+  prev: ChecklistEntry[] | undefined,
+  next: ChecklistEntry[],
+): ChecklistEntry[] {
+  const byKey = new Map((prev ?? []).map((e) => [e.key, e.delegatedTasks]));
+  return next.map((e) => ({
+    ...e,
+    delegatedTasks: (byKey.get(e.key) as ChecklistEntry['delegatedTasks']) ?? e.delegatedTasks ?? [],
+  }));
+}
+
+function delegatedTaskStatusRank(status: string): number {
+  if (status === 'open') return 0;
+  if (status === 'done') return 1;
+  return 2;
+}
+
+function delegatedTaskStatusLabelHu(status: string): string {
+  if (status === 'open') return 'Nyitott';
+  if (status === 'done') return 'Kész';
+  if (status === 'cancelled') return 'Visszavonva';
+  return status;
+}
+
+function canCancelDelegatedTask(
+  task: { status: string; assigneeUserId: string; createdByUserId?: string | null },
+  userId: string | undefined,
+  role: string | undefined,
+): boolean {
+  if (task.status !== 'open' || !userId) return false;
+  if (role === 'admin') return true;
+  if (task.assigneeUserId === userId) return true;
+  if (task.createdByUserId && task.createdByUserId === userId) return true;
+  return false;
+}
+
 function ohipImpactLabel(score: number): string {
   if (score <= 8) return 'alacsony';
   if (score <= 18) return 'enyhe-közepes';
@@ -94,6 +130,18 @@ type ChecklistRowPresent = {
   response?: string | null;
   respondedAt?: string | null;
   respondedBy?: string | null;
+  delegatedTasks?: Array<{
+    id: string;
+    title: string;
+    status: string;
+    assigneeUserId: string;
+    assigneeName: string;
+    createdByUserId?: string | null;
+    createdByName?: string | null;
+    note?: string | null;
+    createdAt: string;
+    completedAt?: string | null;
+  }>;
 };
 
 type InstitutionUserRow = {
@@ -134,6 +182,7 @@ function PresentChecklistDelegate({
   readonly,
   institutionUsers,
   institutionUsersLoading,
+  onDelegated,
 }: {
   sessionId: string;
   itemId: string;
@@ -141,6 +190,7 @@ function PresentChecklistDelegate({
   readonly: boolean;
   institutionUsers: InstitutionUserRow[];
   institutionUsersLoading: boolean;
+  onDelegated?: () => void;
 }) {
   const [inputValue, setInputValue] = useState('');
   const [assigneeId, setAssigneeId] = useState('');
@@ -160,6 +210,10 @@ function PresentChecklistDelegate({
     const hits = institutionUsers.filter((u) => institutionUserMatchesQuery(u, q));
     return hits.slice(0, DELEGATE_SUGGESTIONS_MAX);
   }, [institutionUsers, institutionUsersLoading, inputValue]);
+  const selectedUser = useMemo(
+    () => institutionUsers.find((u) => u.id === assigneeId) ?? null,
+    [institutionUsers, assigneeId],
+  );
 
   useEffect(() => {
     setHighlightIdx(0);
@@ -222,6 +276,7 @@ function PresentChecklistDelegate({
       setNote('');
       setAssigneeId('');
       setInputValue('');
+      onDelegated?.();
     } catch {
       setFeedback({ ok: false, msg: 'Hálózati hiba' });
     } finally {
@@ -248,7 +303,7 @@ function PresentChecklistDelegate({
           placeholder={
             institutionUsersLoading ? 'Felhasználók betöltése…' : 'Név vagy e-mail kezdete…'
           }
-          className="w-full text-sm rounded-md border border-amber-500/30 bg-black/45 text-amber-50/95 placeholder:text-amber-200/30 px-2 py-1.5 outline-none focus:border-amber-400/50"
+          className="w-full text-sm rounded-md border border-amber-500/30 bg-black/45 text-amber-50 placeholder:text-amber-200/35 px-2 py-1.5 outline-none focus:border-amber-400/60 selection:bg-amber-300 selection:text-black"
           value={inputValue}
           onChange={(e) => {
             setInputValue(e.target.value);
@@ -285,6 +340,12 @@ function PresentChecklistDelegate({
             }
           }}
         />
+        {selectedUser && (
+          <p className="text-[11px] text-amber-100/90">
+            Kiválasztva: <span className="font-semibold text-amber-50">{presentInstitutionUserLabel(selectedUser)}</span>{' '}
+            <span className="text-amber-200/70">({selectedUser.email})</span>
+          </p>
+        )}
         {listOpen && inputValue.trim().length > 0 && !institutionUsersLoading && (
           <ul
             id={`delegate-suggest-${checklistKey}`}
@@ -418,6 +479,115 @@ function PresentChecklistVerdictField({
         autoComplete="off"
       />
       {meta}
+    </div>
+  );
+}
+
+function PresentChecklistDelegatedTasks({
+  entry,
+  readonly,
+  currentUserId,
+  userRole,
+  onRefresh,
+}: {
+  entry: ChecklistRowPresent;
+  readonly: boolean;
+  currentUserId?: string;
+  userRole?: string;
+  onRefresh: () => void;
+}) {
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const tasks = useMemo(() => {
+    return [...(entry.delegatedTasks ?? [])].sort((a, b) => {
+      const d = delegatedTaskStatusRank(a.status) - delegatedTaskStatusRank(b.status);
+      if (d !== 0) return d;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  }, [entry.delegatedTasks]);
+
+  if (tasks.length === 0) return null;
+
+  const cancelTask = async (taskId: string) => {
+    if (!confirm('Visszavonod ezt a delegált feladatot?')) return;
+    setActionError(null);
+    setCancellingId(taskId);
+    try {
+      const res = await fetch(`/api/user-tasks/${taskId}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'cancelled' }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setActionError(typeof data.error === 'string' ? data.error : 'Visszavonás sikertelen');
+        return;
+      }
+      onRefresh();
+    } finally {
+      setCancellingId(null);
+    }
+  };
+
+  return (
+    <div className="mt-2 border-t border-amber-500/20 pt-2">
+      <p className="text-[10px] text-amber-100/55 uppercase tracking-wide mb-1">Delegált feladatok</p>
+      {actionError ? <p className="text-[11px] text-red-300/90 mb-1">{actionError}</p> : null}
+      <ul className="space-y-1.5">
+        {tasks.map((task) => {
+          const showCancel = !readonly && canCancelDelegatedTask(task, currentUserId, userRole);
+          const statusBadge =
+            task.status === 'done'
+              ? 'bg-emerald-500/25 text-emerald-100 border-emerald-400/35'
+              : task.status === 'cancelled'
+                ? 'bg-white/10 text-amber-100/55 border-white/15'
+                : 'bg-amber-500/20 text-amber-100 border-amber-400/35';
+          return (
+            <li key={task.id} className="rounded-md border border-amber-500/25 bg-black/35 px-2 py-1.5">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] text-amber-50/95 flex flex-wrap items-center gap-1.5">
+                    <span className="font-medium">{task.assigneeName}</span>
+                    <span className="text-amber-200/55">· küldve {new Date(task.createdAt).toLocaleString('hu-HU')}</span>
+                    <span
+                      className={`text-[10px] font-medium px-1.5 py-0.5 rounded border shrink-0 ${statusBadge}`}
+                    >
+                      {delegatedTaskStatusLabelHu(task.status)}
+                    </span>
+                  </p>
+                  {task.note ? (
+                    <p className="text-[10px] text-amber-100/60 mt-0.5">Megjegyzés: {task.note}</p>
+                  ) : (
+                    <p className="text-[10px] text-amber-100/45 mt-0.5 italic">Nincs megjegyzés.</p>
+                  )}
+                  {task.status === 'done' && task.completedAt ? (
+                    <p className="text-[10px] text-emerald-200/80 mt-0.5">
+                      Késznek jelölve: {new Date(task.completedAt).toLocaleString('hu-HU')}
+                    </p>
+                  ) : null}
+                  {task.status === 'cancelled' && task.completedAt ? (
+                    <p className="text-[10px] text-amber-200/45 mt-0.5">
+                      Visszavonva: {new Date(task.completedAt).toLocaleString('hu-HU')}
+                    </p>
+                  ) : null}
+                </div>
+                {showCancel ? (
+                  <button
+                    type="button"
+                    disabled={cancellingId === task.id}
+                    className="shrink-0 text-[10px] px-1.5 py-0.5 rounded border border-amber-400/40 text-amber-100/90 hover:bg-amber-500/15 disabled:opacity-40"
+                    onClick={() => void cancelTask(task.id)}
+                  >
+                    {cancellingId === task.id ? '…' : 'Visszavonás'}
+                  </button>
+                ) : null}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
@@ -1068,11 +1238,16 @@ export default function ConsiliumPresentPage() {
                                 onChecklistReplaced={(checklist) => {
                                   setPayload((p) => {
                                     if (!p) return p;
+                                    const prevItem = p.items.find((it) => it.id === current.id);
+                                    const merged = mergeChecklistPreservingDelegatedTasks(
+                                      prevItem?.discussionState?.checklist,
+                                      checklist,
+                                    );
                                     return {
                                       ...p,
                                       items: p.items.map((it) =>
                                         it.id === current.id
-                                          ? { ...it, discussionState: { ...it.discussionState, checklist } }
+                                          ? { ...it, discussionState: { ...it.discussionState, checklist: merged } }
                                           : it,
                                       ),
                                     };
@@ -1086,6 +1261,14 @@ export default function ConsiliumPresentPage() {
                                 readonly={readonly}
                                 institutionUsers={institutionUsers}
                                 institutionUsersLoading={institutionUsersLoading}
+                                onDelegated={load}
+                              />
+                              <PresentChecklistDelegatedTasks
+                                entry={c}
+                                readonly={readonly}
+                                currentUserId={user?.id}
+                                userRole={user?.role}
+                                onRefresh={load}
                               />
                             </div>
                           </div>

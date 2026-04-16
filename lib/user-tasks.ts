@@ -215,3 +215,37 @@ export async function markTaskDoneForStaff(taskId: string, staffUserId: string):
   );
   return result.rows.length > 0;
 }
+
+/**
+ * Konzílium delegált feladat visszavonása (listáról eltűnik a nyitottak közül; a történet megmarad cancelled státusszal).
+ * Csak a címzett, a létrehozó vagy admin vonhatja vissza; ugyanahhoz az intézményhez tartozó aktív felhasználó kell.
+ */
+export async function cancelConsiliumMeetingTaskForUser(
+  taskId: string,
+  actorUserId: string,
+  actorRole: string,
+  institutionId: string,
+): Promise<boolean> {
+  if (actorRole === 'technikus') return false;
+  const pool = getDbPool();
+  const result = await pool.query(
+    `UPDATE user_tasks t
+     SET status = 'cancelled', completed_at = COALESCE(t.completed_at, NOW())
+     FROM users u
+     WHERE t.id = $1::uuid
+       AND t.task_type = 'meeting_action'
+       AND COALESCE(t.metadata->>'source', '') = 'consilium_checklist'
+       AND t.status = 'open'
+       AND u.id = $2::uuid
+       AND u.active = true
+       AND btrim(coalesce(u.intezmeny, '')) = btrim(coalesce($3::text, ''))
+       AND (
+         t.assignee_user_id = u.id
+         OR t.created_by_user_id = u.id
+         OR ($4::text = 'admin')
+       )
+     RETURNING t.id`,
+    [taskId, actorUserId, institutionId, actorRole],
+  );
+  return result.rows.length > 0;
+}

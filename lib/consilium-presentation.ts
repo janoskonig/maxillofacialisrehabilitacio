@@ -675,10 +675,106 @@ type ItemRow = {
   checklist: unknown;
 };
 
+type DelegatedChecklistTaskSnapshot = {
+  id: string;
+  checklistKey: string;
+  title: string;
+  status: string;
+  assigneeUserId: string;
+  assigneeName: string;
+  createdByUserId: string | null;
+  createdByName: string | null;
+  note: string | null;
+  createdAt: string;
+  completedAt: string | null;
+};
+
+type DelegatedTasksByItem = Map<string, Map<string, DelegatedChecklistTaskSnapshot[]>>;
+
+async function loadDelegatedTasksByItemIds(
+  pool: ReturnType<typeof getDbPool>,
+  itemIds: string[],
+): Promise<DelegatedTasksByItem> {
+  const byItem: DelegatedTasksByItem = new Map();
+  if (itemIds.length === 0) return byItem;
+  const tasks = await pool.query<{
+    id: string;
+    itemId: string;
+    checklistKey: string;
+    title: string;
+    status: string;
+    assigneeUserId: string;
+    assigneeName: string;
+    createdByUserId: string | null;
+    createdByName: string | null;
+    description: string | null;
+    createdAt: Date;
+    completedAt: Date | null;
+  }>(
+    `SELECT
+       t.id,
+       t.metadata->>'consiliumItemId' as "itemId",
+       t.metadata->>'checklistKey' as "checklistKey",
+       t.title,
+       t.status,
+       t.assignee_user_id as "assigneeUserId",
+       COALESCE(NULLIF(btrim(au.doktor_neve), ''), NULLIF(btrim(au.email), ''), t.assignee_user_id::text) as "assigneeName",
+       t.created_by_user_id as "createdByUserId",
+       COALESCE(NULLIF(btrim(cu.doktor_neve), ''), NULLIF(btrim(cu.email), '')) as "createdByName",
+       t.description,
+       t.created_at as "createdAt",
+       t.completed_at as "completedAt"
+     FROM user_tasks t
+     LEFT JOIN users au ON au.id = t.assignee_user_id
+     LEFT JOIN users cu ON cu.id = t.created_by_user_id
+     WHERE t.task_type = 'meeting_action'
+       AND (t.metadata->>'source') = 'consilium_checklist'
+       AND (t.metadata->>'consiliumItemId') = ANY($1::text[])
+     ORDER BY t.created_at DESC`,
+    [itemIds],
+  );
+
+  for (const row of tasks.rows) {
+    const itemId = (row.itemId || '').trim();
+    const checklistKey = (row.checklistKey || '').trim();
+    if (!itemId || !checklistKey) continue;
+    const note = (() => {
+      const d = row.description?.trim();
+      if (!d) return null;
+      const hit = d.match(/(?:^|\n)Megjegyzés:\s*(.+)$/m);
+      return hit?.[1]?.trim() || null;
+    })();
+    const byChecklist = byItem.get(itemId) ?? new Map<string, DelegatedChecklistTaskSnapshot[]>();
+    const list = byChecklist.get(checklistKey) ?? [];
+    list.push({
+      id: row.id,
+      checklistKey,
+      title: row.title,
+      status: row.status,
+      assigneeUserId: row.assigneeUserId,
+      assigneeName: row.assigneeName,
+      createdByUserId: row.createdByUserId,
+      createdByName: row.createdByName,
+      note,
+      createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
+      completedAt:
+        row.completedAt instanceof Date
+          ? row.completedAt.toISOString()
+          : row.completedAt
+            ? String(row.completedAt)
+            : null,
+    });
+    byChecklist.set(checklistKey, list);
+    byItem.set(itemId, byChecklist);
+  }
+  return byItem;
+}
+
 async function buildConsiliumPresentationItemFromRow(
   pool: ReturnType<typeof getDbPool>,
   bnoMap: ReturnType<typeof getBnoKodToNevMap>,
   row: ItemRow,
+  delegatedTasksByChecklist?: Map<string, DelegatedChecklistTaskSnapshot[]>,
 ): Promise<ConsiliumPresentationItem> {
   const patientId = row.patientId as string;
   let patientSummary: PatientPresentationSummary = {
@@ -812,7 +908,10 @@ async function buildConsiliumPresentationItemFromRow(
     mediaSummary.error = 'media_summary_failed';
   }
 
-  const checklist: ChecklistEntry[] = normalizeChecklist(row.checklist);
+  const checklist: ChecklistEntry[] = normalizeChecklist(row.checklist).map((entry) => ({
+    ...entry,
+    delegatedTasks: delegatedTasksByChecklist?.get(entry.key) ?? [],
+  }));
 
   return {
     id: row.id,
@@ -922,13 +1021,14 @@ export async function buildConsiliumPresentationItemPayload(
   }
 
   const row = itemsResult.rows[0];
+  const delegatedByItem = await loadDelegatedTasksByItemIds(pool, [row.id]);
   const itemBase = await buildConsiliumPresentationItemFromRow(pool, bnoMap, {
     id: row.id,
     patientId: row.patientId,
     sortOrder: row.sortOrder,
     discussed: !!row.discussed,
     checklist: row.checklist,
-  });
+  }, delegatedByItem.get(row.id));
   const prepMap = await loadPrepCommentsByItemIds(pool, [row.id]);
   const item: ConsiliumPresentationItem = {
     ...itemBase,
@@ -972,6 +1072,7 @@ export async function buildConsiliumPresentationPayload(sessionId: string, insti
 
   const itemIds = itemsResult.rows.map((r) => r.id as string);
   const prepByItem = await loadPrepCommentsByItemIds(pool, itemIds);
+  const delegatedByItem = await loadDelegatedTasksByItemIds(pool, itemIds);
 
   const items: ConsiliumPresentationItem[] = [];
   for (const row of itemsResult.rows) {
@@ -981,7 +1082,7 @@ export async function buildConsiliumPresentationPayload(sessionId: string, insti
       sortOrder: row.sortOrder,
       discussed: !!row.discussed,
       checklist: row.checklist,
-    });
+    }, delegatedByItem.get(row.id));
     items.push({
       ...base,
       prepComments: prepByItem.get(row.id) ?? [],

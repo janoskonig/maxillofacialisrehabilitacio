@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { authedHandler } from '@/lib/api/route-handler';
-import { markTaskDoneForStaff } from '@/lib/user-tasks';
+import { cancelConsiliumMeetingTaskForUser, markTaskDoneForStaff } from '@/lib/user-tasks';
+import { getUserInstitution } from '@/lib/consilium';
 import { validateUUID } from '@/lib/validation';
 
 export const dynamic = 'force-dynamic';
@@ -15,14 +16,32 @@ export const PATCH = authedHandler(async (req, ctx) => {
   }
 
   const body = await req.json().catch(() => ({}));
-  if (body.status !== 'done') {
-    return NextResponse.json({ error: 'Csak status: done támogatott' }, { status: 400 });
+  const status = body?.status;
+
+  if (status === 'done') {
+    const ok = await markTaskDoneForStaff(taskId, ctx.auth.userId);
+    if (!ok) {
+      return NextResponse.json({ error: 'Feladat nem található vagy már lezárva' }, { status: 404 });
+    }
+    return NextResponse.json({ success: true });
   }
 
-  const ok = await markTaskDoneForStaff(taskId, ctx.auth.userId);
-  if (!ok) {
-    return NextResponse.json({ error: 'Feladat nem található vagy már lezárva' }, { status: 404 });
+  if (status === 'cancelled') {
+    const institutionId = await getUserInstitution(ctx.auth);
+    const ok = await cancelConsiliumMeetingTaskForUser(
+      taskId,
+      ctx.auth.userId,
+      ctx.auth.role,
+      institutionId,
+    );
+    if (!ok) {
+      return NextResponse.json(
+        { error: 'Feladat nem vonható vissza (nincs jogosultság, nem konzílium-feladat, vagy már nem nyitott)' },
+        { status: 404 },
+      );
+    }
+    return NextResponse.json({ success: true });
   }
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ error: 'Csak status: done vagy cancelled támogatott' }, { status: 400 });
 });

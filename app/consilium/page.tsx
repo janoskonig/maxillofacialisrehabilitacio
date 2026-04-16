@@ -62,6 +62,31 @@ function institutionRoleShortHu(role: string) {
   }
 }
 
+function delegatedTaskStatusRank(status: string): number {
+  if (status === 'open') return 0;
+  if (status === 'done') return 1;
+  return 2;
+}
+
+function delegatedTaskStatusLabelHu(status: string): string {
+  if (status === 'open') return 'Nyitott';
+  if (status === 'done') return 'Kész';
+  if (status === 'cancelled') return 'Visszavonva';
+  return status;
+}
+
+function canCancelDelegatedTask(
+  task: { status: string; assigneeUserId: string; createdByUserId?: string | null },
+  userId: string | undefined,
+  role: string | undefined,
+): boolean {
+  if (task.status !== 'open' || !userId) return false;
+  if (role === 'admin') return true;
+  if (task.assigneeUserId === userId) return true;
+  if (task.createdByUserId && task.createdByUserId === userId) return true;
+  return false;
+}
+
 function attendeePickerMatches(u: InstitutionUserRow, needleRaw: string): boolean {
   const needle = needleRaw.trim().toLowerCase();
   if (!needle) return false;
@@ -258,6 +283,18 @@ type ChecklistEntryRow = {
   response?: string | null;
   respondedAt?: string | null;
   respondedBy?: string | null;
+  delegatedTasks?: Array<{
+    id: string;
+    title: string;
+    status: string;
+    assigneeUserId: string;
+    assigneeName: string;
+    createdByUserId?: string | null;
+    createdByName?: string | null;
+    note?: string | null;
+    createdAt: string;
+    completedAt?: string | null;
+  }>;
 };
 
 function ConsiliumItemPrepCommentsReadonly({
@@ -344,6 +381,8 @@ function ConsiliumItemChecklist({
   readonly,
   onRefresh,
   showToast,
+  staffUserId,
+  staffRole,
 }: {
   sessionId: string;
   itemId: string;
@@ -351,6 +390,8 @@ function ConsiliumItemChecklist({
   readonly: boolean;
   onRefresh: () => void;
   showToast: (msg: string, type?: 'error' | 'success') => void;
+  staffUserId?: string;
+  staffRole?: string;
 }) {
   const [newLabel, setNewLabel] = useState('');
 
@@ -428,6 +469,8 @@ function ConsiliumItemChecklist({
             onMove={(dir) => void movePoint(c.key, dir)}
             onRefresh={onRefresh}
             showToast={showToast}
+            staffUserId={staffUserId}
+            staffRole={staffRole}
           />
         ))}
       </ul>
@@ -445,6 +488,8 @@ function ChecklistRowEditor({
   onMove,
   onRefresh,
   showToast,
+  staffUserId,
+  staffRole,
 }: {
   sessionId: string;
   itemId: string;
@@ -455,9 +500,12 @@ function ChecklistRowEditor({
   onMove: (direction: 'up' | 'down') => void;
   onRefresh: () => void;
   showToast: (msg: string, type?: 'error' | 'success') => void;
+  staffUserId?: string;
+  staffRole?: string;
 }) {
   const [text, setText] = useState(entry.label);
   const [responseText, setResponseText] = useState(entry.response ?? '');
+  const [cancellingTaskId, setCancellingTaskId] = useState<string | null>(null);
 
   useEffect(() => {
     setText(entry.label);
@@ -525,6 +573,28 @@ function ChecklistRowEditor({
     }
   };
 
+  const cancelDelegatedTask = async (taskId: string) => {
+    if (!confirm('Visszavonod ezt a delegált feladatot?')) return;
+    setCancellingTaskId(taskId);
+    try {
+      const res = await fetch(`/api/user-tasks/${taskId}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'cancelled' }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        showToast(typeof data.error === 'string' ? data.error : 'Visszavonás sikertelen', 'error');
+        return;
+      }
+      showToast('Feladat visszavonva', 'success');
+      onRefresh();
+    } finally {
+      setCancellingTaskId(null);
+    }
+  };
+
   const saveResponse = async () => {
     const next = responseText;
     const prev = entry.response ?? '';
@@ -575,6 +645,68 @@ function ChecklistRowEditor({
             onBlur={() => void saveResponse()}
           />
         </div>
+        {(entry.delegatedTasks?.length ?? 0) > 0 && (
+          <div className="rounded-md border border-amber-200 bg-amber-50/70 px-2 py-1.5">
+            <p className="text-[10px] text-amber-800/80 uppercase tracking-wide mb-1">Delegált feladatok</p>
+            <ul className="space-y-2">
+              {[...(entry.delegatedTasks ?? [])]
+                .sort((a, b) => {
+                  const d = delegatedTaskStatusRank(a.status) - delegatedTaskStatusRank(b.status);
+                  if (d !== 0) return d;
+                  return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                })
+                .map((task) => {
+                  const showCancel = !readonly && canCancelDelegatedTask(task, staffUserId, staffRole);
+                  const badgeClass =
+                    task.status === 'done'
+                      ? 'bg-emerald-100 text-emerald-900 border-emerald-200'
+                      : task.status === 'cancelled'
+                        ? 'bg-gray-100 text-gray-600 border-gray-200'
+                        : 'bg-amber-100 text-amber-900 border-amber-200';
+                  return (
+                    <li key={task.id} className="text-xs text-amber-900 border border-amber-100/80 rounded-md px-2 py-1.5 bg-white/80">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="flex flex-wrap items-center gap-1.5">
+                            <span className="font-medium">{task.assigneeName}</span>
+                            <span className="text-amber-800/70">· küldve {new Date(task.createdAt).toLocaleString('hu-HU')}</span>
+                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border shrink-0 ${badgeClass}`}>
+                              {delegatedTaskStatusLabelHu(task.status)}
+                            </span>
+                          </p>
+                          {task.note ? (
+                            <p className="text-[11px] text-amber-800/80">Megjegyzés: {task.note}</p>
+                          ) : (
+                            <p className="text-[11px] text-amber-700/65 italic">Nincs megjegyzés.</p>
+                          )}
+                          {task.status === 'done' && task.completedAt ? (
+                            <p className="text-[11px] text-emerald-800/90 mt-0.5">
+                              Késznek jelölve: {new Date(task.completedAt).toLocaleString('hu-HU')}
+                            </p>
+                          ) : null}
+                          {task.status === 'cancelled' && task.completedAt ? (
+                            <p className="text-[11px] text-gray-600 mt-0.5">
+                              Visszavonva: {new Date(task.completedAt).toLocaleString('hu-HU')}
+                            </p>
+                          ) : null}
+                        </div>
+                        {showCancel ? (
+                          <button
+                            type="button"
+                            disabled={cancellingTaskId === task.id}
+                            className="shrink-0 text-[11px] text-red-700 hover:underline disabled:opacity-40"
+                            onClick={() => void cancelDelegatedTask(task.id)}
+                          >
+                            {cancellingTaskId === task.id ? '…' : 'Visszavonás'}
+                          </button>
+                        ) : null}
+                      </div>
+                    </li>
+                  );
+                })}
+            </ul>
+          </div>
+        )}
         {!entry.key.startsWith('pt-') && (
           <p className="text-[10px] text-gray-400 truncate" title={entry.key}>
             Kulcs: {entry.key}
@@ -1341,6 +1473,8 @@ export default function ConsiliumPage() {
                             readonly={readonly}
                             onRefresh={() => loadItems(selectedSession.id)}
                             showToast={showToast}
+                            staffUserId={user?.id}
+                            staffRole={user?.role}
                           />
 
                           {selectedSession.status !== 'closed' && (

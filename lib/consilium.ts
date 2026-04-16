@@ -15,6 +15,22 @@ const checklistEntrySchema = z.object({
   response: z.string().max(5000).nullable().optional(),
   respondedAt: z.string().datetime().nullable().optional(),
   respondedBy: z.string().nullable().optional(),
+  delegatedTasks: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        title: z.string().min(1),
+        status: z.string().min(1),
+        assigneeUserId: z.string().uuid(),
+        assigneeName: z.string().min(1),
+        createdByUserId: z.string().uuid().nullable().optional(),
+        createdByName: z.string().nullable().optional(),
+        note: z.string().nullable().optional(),
+        createdAt: z.string().datetime(),
+        completedAt: z.string().datetime().nullable().optional(),
+      }),
+    )
+    .optional(),
 });
 
 export const sessionAttendeeSchema = z.object({
