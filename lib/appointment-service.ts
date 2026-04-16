@@ -151,6 +151,17 @@ export async function createAppointment(
       }
 
       if (hasAnyPathway) {
+        // Keep materialized flags in sync before one-hard-next checks.
+        // Without this, old rows can retain stale `is_future=true` and trigger
+        // idx_appointments_one_hard_next even though start_time is already past.
+        await client.query(
+          `UPDATE appointments
+              SET is_future = (start_time IS NOT NULL AND start_time > CURRENT_TIMESTAMP),
+                  is_active_status = (appointment_status IS NULL OR appointment_status = 'completed')
+            WHERE episode_id = $1`,
+          [episodeId],
+        );
+
         // Derive requiresPrecommit from pathway step definition
         let allPathwayPhases: Array<{ work_phase_code: string; requires_precommit?: boolean }> = [];
         try {
@@ -483,6 +494,19 @@ export async function createAppointment(
         logger.error('Rollback failed:', rollbackError);
       }
     }
+
+    const pgError = error as { code?: string; constraint?: string };
+    if (pgError?.code === '23505' && pgError?.constraint === 'idx_appointments_one_hard_next') {
+      return {
+        ok: false,
+        validationError: {
+          error: 'Az epizódhoz már tartozik ütköző work időpont. Frissítsen, majd próbálja újra.',
+          code: 'ONE_HARD_NEXT_VIOLATION',
+          status: 409,
+        },
+      };
+    }
+
     throw error;
   } finally {
     client.release();
