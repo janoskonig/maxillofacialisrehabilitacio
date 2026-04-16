@@ -22,7 +22,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { AppointmentBookingSection } from './AppointmentBookingSection';
 import { ConditionalAppointmentBooking } from './ConditionalAppointmentBooking';
-import { ContextBanner } from './ContextBanner';
+import { ChainBookingCallout } from './ChainBookingCallout';
 import { getCurrentUser } from '@/lib/auth';
 import { savePatient, ApiError } from '@/lib/storage';
 import { getMissingRequiredFields, REQUIRED_FIELDS } from '@/lib/clinical-rules';
@@ -1912,15 +1912,7 @@ export function PatientForm({
         {shouldShowSection('idopont') && (
         <div id="section-idopont" className="scroll-mt-20 sm:scroll-mt-24">
           {activeEpisodeId && (userRole === 'admin' || userRole === 'beutalo_orvos' || userRole === 'fogpótlástanász') && (
-            <div className="mb-4">
-              <ContextBanner
-                variant="info"
-                title="Aktív kezelés"
-                message="Aktív kezelés esetén a munkalistát használd."
-                primaryLink={{ label: 'Megnyitás', href: '/?tab=worklist' }}
-                dismissKey="wip-worklist-banner-dismissed"
-              />
-            </div>
+            <ChainBookingCallout episodeId={activeEpisodeId} />
           )}
           <AppointmentBookingSection 
             patientId={patientId} 

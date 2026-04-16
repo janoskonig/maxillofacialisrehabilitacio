@@ -1,10 +1,11 @@
 /**
  * Shared logic: convert a single open slot_intent to a hard appointment.
  * Used by POST /api/slot-intents/[id]/convert and POST /api/episodes/[id]/convert-all-intents.
- * When skipOneHardNext is true (batch), the one-hard-next check is not performed.
+ * Batch convert (skipOneHardNext) sets is_chain_reservation on work appointments so multiple future
+ * work slots are allowed without requires_precommit workarounds; one-hard-next is skipped in that path.
  */
 
-import { Pool } from 'pg';
+import { Pool, type PoolClient } from 'pg';
 import { checkOneHardNext, getAppointmentRiskSettings } from '@/lib/scheduling-service';
 import type { AuthPayload } from '@/lib/auth-server';
 import { normalizePathwayWorkPhaseArray } from '@/lib/pathway-work-phases-for-episode';
@@ -15,6 +16,11 @@ export interface ConvertIntentOptions {
   timeSlotId?: string;
   /** When true, skip one-hard-next check (used by batch convert) */
   skipOneHardNext?: boolean;
+  /**
+   * Batch chain: earliest allowed slot start (typically prevActualStart + (currSuggested - prevSuggested)).
+   * Prevents stacking all steps on the same day when pathway windows are stale (all in the past).
+   */
+  chainMinStartTime?: Date;
 }
 
 export interface ConvertIntentResult {
@@ -33,9 +39,50 @@ export interface ConvertIntentError {
 
 export type ConvertIntentOutcome = ConvertIntentResult | ConvertIntentError;
 
+function isRetriableLockError(e: unknown): boolean {
+  const err = e as { code?: string; message?: string };
+  if (err?.code === '40P01') return true;
+  if (err?.code === '40001') return true;
+  if (
+    err?.code === '57014' &&
+    typeof err?.message === 'string' &&
+    err.message.includes('while locking tuple')
+  ) {
+    return true;
+  }
+  return false;
+}
+
+async function pickNearestFreeSlot(
+  client: PoolClient,
+  args: {
+    pool: string;
+    lowerBound: Date;
+    durationMinutes: number;
+    assignedProviderId: string | null;
+  }
+): Promise<{ rows: Array<{ id: string }> }> {
+  const { pool, lowerBound, durationMinutes, assignedProviderId } = args;
+  const nearestParams: unknown[] = [pool, lowerBound.toISOString(), durationMinutes];
+  let provClause = '';
+  if (assignedProviderId) {
+    nearestParams.push(assignedProviderId);
+    provClause = ' AND ats.user_id = $4';
+  }
+  return client.query(
+    `SELECT id FROM available_time_slots ats
+     WHERE state = 'free' AND (ats.slot_purpose = $1 OR ats.slot_purpose IS NULL OR ats.slot_purpose = 'flexible')
+     AND ats.start_time >= $2::timestamptz
+     AND (ats.duration_minutes >= $3 OR ats.duration_minutes IS NULL)${provClause}
+     ORDER BY ats.start_time ASC LIMIT 1 FOR UPDATE SKIP LOCKED`,
+    nearestParams
+  );
+}
+
 /**
  * Convert one open slot_intent to an appointment. Runs in its own transaction.
- * Uses suggested_start/suggested_end for the search window when present, else window_start/window_end.
+ * Slot search lower bound uses max(now, window_start, suggested_start, optional chainMinStartTime).
+ * chainMinStartTime (batch) preserves pathway spacing when windows are stale.
  */
 export async function convertIntentToAppointment(
   pool: Pool,
@@ -43,7 +90,7 @@ export async function convertIntentToAppointment(
   auth: AuthPayload,
   options: ConvertIntentOptions = {}
 ): Promise<ConvertIntentOutcome> {
-  const { timeSlotId: providedSlotId, skipOneHardNext = false } = options;
+  const { timeSlotId: providedSlotId, skipOneHardNext = false, chainMinStartTime } = options;
 
   const intentResult = await pool.query(
     `SELECT si.*, pe.patient_id as "patientId", pe.assigned_provider_id as "assignedProviderId"
@@ -59,41 +106,44 @@ export async function convertIntentToAppointment(
 
   const intent = intentResult.rows[0];
 
-  await pool.query('BEGIN');
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
 
-  try {
-    const intentLock = await pool.query(
+    const intentLock = await client.query(
       `SELECT id FROM slot_intents WHERE id = $1 AND state = 'open' FOR UPDATE`,
       [intentId]
     );
     if (intentLock.rows.length === 0) {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK');
       return { ok: false, status: 404, error: 'Intent nem található vagy már nem open' };
     }
 
-    const episodeLock = await pool.query(
-      `SELECT id FROM patient_episodes WHERE id = $1 FOR UPDATE`,
-      [intent.episode_id]
-    );
+    // Batch convert-all: skip episode row FOR UPDATE — it contends with other requests (UI, appointment-service)
+    // and caused statement_timeout (57014) while waiting. Intent + slot rows still serialize this flow.
+    const episodeLock = skipOneHardNext
+      ? await client.query(`SELECT id FROM patient_episodes WHERE id = $1`, [intent.episode_id])
+      : await client.query(`SELECT id FROM patient_episodes WHERE id = $1 FOR UPDATE`, [intent.episode_id]);
     if (episodeLock.rows.length === 0) {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK');
       return { ok: false, status: 404, error: 'Epizód nem található' };
     }
 
     // Guard: refuse to book a step that is already completed/skipped
     try {
-      const stepDoneCheck = await pool.query(
+      const stepDoneCheck = await client.query(
         `SELECT status FROM episode_work_phases
          WHERE episode_id = $1 AND work_phase_code = $2 AND status IN ('completed', 'skipped')
          LIMIT 1`,
         [intent.episode_id, intent.step_code]
       );
       if (stepDoneCheck.rows.length > 0) {
-        await pool.query(
+        await client.query(
           `UPDATE slot_intents SET state = 'expired', updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
           [intentId]
         );
-        await pool.query('COMMIT');
+        await client.query('COMMIT');
         return { ok: false, status: 409, error: `Lépés már teljesítve/kihagyva: ${intent.step_code}`, code: 'STEP_ALREADY_DONE' };
       }
     } catch {
@@ -101,7 +151,7 @@ export async function convertIntentToAppointment(
     }
 
     // Guard: refuse to book when same step already has a non-cancelled appointment
-    const existingStepAppt = await pool.query(
+    const existingStepAppt = await client.query(
       `SELECT 1 FROM appointments
        WHERE episode_id = $1 AND step_code = $2
          AND (appointment_status IS NULL OR appointment_status NOT IN ('cancelled_by_doctor', 'cancelled_by_patient'))
@@ -109,17 +159,17 @@ export async function convertIntentToAppointment(
       [intent.episode_id, intent.step_code]
     );
     if (existingStepAppt.rows.length > 0) {
-      await pool.query(
+      await client.query(
         `UPDATE slot_intents SET state = 'expired', updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
         [intentId]
       );
-      await pool.query('COMMIT');
+      await client.query('COMMIT');
       return { ok: false, status: 409, error: `Lépéshez már van aktív foglalás: ${intent.step_code}`, code: 'STEP_ALREADY_BOOKED' };
     }
 
     let requiresPrecommit = false;
     if (intent.pool === 'work') {
-      const pathwayResult = await pool.query(
+      const pathwayResult = await client.query(
         `SELECT cp.work_phases_json, cp.steps_json FROM patient_episodes pe
          JOIN care_pathways cp ON pe.care_pathway_id = cp.id
          WHERE pe.id = $1`,
@@ -131,23 +181,9 @@ export async function convertIntentToAppointment(
         normalizePathwayWorkPhaseArray(prow?.steps_json);
       const step = steps?.find((s) => s.work_phase_code === intent.step_code);
       requiresPrecommit = step?.requires_precommit === true;
-
-      // Batch convert: DB partial unique index allows only one future work appt with requires_precommit=false per episode.
-      // Force precommit for 2nd and later appointments so the index doesn't block.
-      if (skipOneHardNext) {
-        const existingFuture = await pool.query(
-          `SELECT 1 FROM appointments
-           WHERE episode_id = $1 AND pool = 'work'
-           AND start_time > CURRENT_TIMESTAMP
-           AND (appointment_status IS NULL OR appointment_status = 'completed')
-           LIMIT 1`,
-          [intent.episode_id]
-        );
-        if (existingFuture.rows.length > 0) {
-          requiresPrecommit = true;
-        }
-      }
     }
+
+    const isChainReservation = skipOneHardNext === true && intent.pool === 'work';
 
     if (!skipOneHardNext) {
       const oneHardNext = await checkOneHardNext(intent.episode_id, intent.pool as 'work' | 'consult' | 'control', {
@@ -155,7 +191,7 @@ export async function convertIntentToAppointment(
         stepCode: intent.step_code,
       });
       if (!oneHardNext.allowed) {
-        await pool.query('ROLLBACK');
+        await client.query('ROLLBACK');
         return {
           ok: false,
           status: 409,
@@ -168,7 +204,7 @@ export async function convertIntentToAppointment(
     }
 
     if (requiresPrecommit && intent.episode_id) {
-      await pool.query(
+      await client.query(
         `INSERT INTO scheduling_override_audit (episode_id, user_id, override_reason) VALUES ($1, $2, $3)`,
         [intent.episode_id, auth.userId, `precommit: ${intent.step_code}`]
       );
@@ -185,83 +221,74 @@ export async function convertIntentToAppointment(
       const windowEnd = intent.window_end
         ? new Date(intent.window_end)
         : new Date(windowStart.getTime() + 14 * 24 * 60 * 60 * 1000);
+      const suggested = intent.suggested_start ? new Date(intent.suggested_start) : null;
+      const lowerParts = [Date.now(), windowStart.getTime()];
+      if (suggested) lowerParts.push(suggested.getTime());
+      if (chainMinStartTime) lowerParts.push(chainMinStartTime.getTime());
+      const lowerBound = new Date(Math.max(...lowerParts));
 
-      const baseParams = [intent.pool, windowStart, windowEnd, intent.duration_minutes];
-      const providerParam = assignedProviderId ? [assignedProviderId] : [];
-      const paramsWithProvider = (extra: unknown[]) => [...baseParams, ...extra, ...providerParam];
+      const baseParams: unknown[] = [intent.pool, lowerBound, windowEnd, intent.duration_minutes];
+      if (assignedProviderId) baseParams.push(assignedProviderId);
 
-      // Prefer same day-of-week and time as suggested_start (postpone by week, don't skip to another day)
-      const suggestedStart = intent.suggested_start ? new Date(intent.suggested_start) : null;
-      let slotResult: { rows: Array<{ id: string }> };
-
-      if (suggestedStart) {
-        // Use AT TIME ZONE to compare local hours/minutes — avoids DST mismatch between CET and CEST
-        const tz = `'Europe/Budapest'`;
-        const sql1 = `SELECT id FROM available_time_slots ats
+      const provClause = assignedProviderId ? ` AND ats.user_id = $5` : '';
+      const sqlInWindow = `SELECT id FROM available_time_slots ats
            WHERE state = 'free' AND (ats.slot_purpose = $1 OR ats.slot_purpose IS NULL OR ats.slot_purpose = 'flexible')
            AND ats.start_time >= $2 AND ats.start_time <= $3
-           AND (ats.duration_minutes >= $4 OR ats.duration_minutes IS NULL)
-           AND EXTRACT(DOW FROM ats.start_time AT TIME ZONE ${tz}) = EXTRACT(DOW FROM $5::timestamptz AT TIME ZONE ${tz})
-           AND EXTRACT(HOUR FROM ats.start_time AT TIME ZONE ${tz}) = EXTRACT(HOUR FROM $5::timestamptz AT TIME ZONE ${tz})
-           AND EXTRACT(MINUTE FROM ats.start_time AT TIME ZONE ${tz}) = EXTRACT(MINUTE FROM $5::timestamptz AT TIME ZONE ${tz})${assignedProviderId ? ` AND ats.user_id = $6` : ''}
+           AND (ats.duration_minutes >= $4 OR ats.duration_minutes IS NULL)${provClause}
            ORDER BY ats.start_time ASC LIMIT 1
            FOR UPDATE SKIP LOCKED`;
-        slotResult = await pool.query(sql1, paramsWithProvider([suggestedStart]));
-        if (slotResult.rows.length === 0) {
-          const sql2 = `SELECT id FROM available_time_slots ats
-             WHERE state = 'free' AND (ats.slot_purpose = $1 OR ats.slot_purpose IS NULL OR ats.slot_purpose = 'flexible')
-             AND ats.start_time >= $2 AND ats.start_time <= $3
-             AND (ats.duration_minutes >= $4 OR ats.duration_minutes IS NULL)${assignedProviderId ? ` AND ats.user_id = $5` : ''}
-             ORDER BY ats.start_time ASC LIMIT 1
-             FOR UPDATE SKIP LOCKED`;
-          slotResult = await pool.query(sql2, paramsWithProvider([]));
-        }
-      } else {
-        const sql3 = `SELECT id FROM available_time_slots ats
-           WHERE state = 'free' AND (ats.slot_purpose = $1 OR ats.slot_purpose IS NULL OR ats.slot_purpose = 'flexible')
-           AND ats.start_time >= $2 AND ats.start_time <= $3
-           AND (ats.duration_minutes >= $4 OR ats.duration_minutes IS NULL)${assignedProviderId ? ` AND ats.user_id = $5` : ''}
-           ORDER BY ats.start_time ASC LIMIT 1
-           FOR UPDATE SKIP LOCKED`;
-        slotResult = await pool.query(sql3, paramsWithProvider([]));
+
+      let slotResult: { rows: Array<{ id: string }> } = await client.query(sqlInWindow, baseParams);
+
+      if (slotResult.rows.length === 0) {
+        slotResult = await pickNearestFreeSlot(client, {
+          pool: intent.pool,
+          lowerBound,
+          durationMinutes: intent.duration_minutes,
+          assignedProviderId,
+        });
       }
 
       if (slotResult.rows.length === 0) {
-        await pool.query('ROLLBACK');
+        await client.query('ROLLBACK');
         return {
           ok: false,
           status: 404,
           error: assignedProviderId
-            ? 'Nincs szabad időpont a kijelölt orvosnál a megadott ablakban'
-            : 'Nincs szabad időpont a megadott ablakban',
+            ? skipOneHardNext
+              ? 'Nincs szabad időpont a kijelölt orvosnál a megadott ablakban'
+              : 'Nincs szabad időpont a kijelölt orvosnál (sem az ablakban, sem utána a következő elérhető időpontig)'
+            : skipOneHardNext
+              ? 'Nincs szabad időpont a megadott ablakban'
+              : 'Nincs szabad időpont a megadott ablakban, és nem található megfelelő szabad időpont az ablakon kívül sem',
         };
       }
 
       slotId = slotResult.rows[0].id;
     }
 
-    const slotCheck = await pool.query(
+    const slotCheck = await client.query(
       `SELECT id, start_time, user_id, state FROM available_time_slots WHERE id = $1 FOR UPDATE`,
       [slotId]
     );
 
     if (slotCheck.rows.length === 0) {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK');
       return { ok: false, status: 404, error: 'Időpont nem található' };
     }
 
     const slot = slotCheck.rows[0];
     if (assignedProviderId && slot.user_id !== assignedProviderId) {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK');
       return { ok: false, status: 403, error: 'Csak a kijelölt orvoshoz adható időpont.' };
     }
     if (slot.state !== 'free') {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK');
       return { ok: false, status: 400, error: 'Az időpont már nem szabad' };
     }
 
     // Reserve slot immediately so same batch won't pick it again (avoids duplicate key on time_slot_id)
-    await pool.query(
+    await client.query(
       `UPDATE available_time_slots SET state = 'booked', status = 'booked' WHERE id = $1`,
       [slotId]
     );
@@ -285,23 +312,23 @@ export async function convertIntentToAppointment(
     const appointmentType =
       intent.pool === 'consult' ? 'elso_konzultacio' : intent.pool === 'control' ? 'kontroll' : 'munkafazis';
 
-    const existingAppt = await pool.query(
+    const existingAppt = await client.query(
       `SELECT 1 FROM appointments WHERE time_slot_id = $1 LIMIT 1`,
       [slotId]
     );
     if (existingAppt.rows.length > 0) {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK');
       return { ok: false, status: 409, error: 'A slot már másik foglaláshoz tartozik (verseny); kihagyva.' };
     }
 
-    const apptResult = await pool.query(
+    const apptResult = await client.query(
       `INSERT INTO appointments (
         patient_id, episode_id, time_slot_id, created_by, dentist_email, appointment_type,
-        pool, duration_minutes, no_show_risk, requires_confirmation, hold_expires_at, created_via, requires_precommit, start_time, end_time,
+        pool, duration_minutes, no_show_risk, requires_confirmation, hold_expires_at, created_via, requires_precommit, is_chain_reservation, start_time, end_time,
         slot_intent_id, step_code, step_seq
       )
-      SELECT $1, $2, $3, $4, u.email, $5, $6, $7, $8, $9, $10, 'worklist', $11, $12, $13,
-             $14, $15, $16
+      SELECT $1, $2, $3, $4, u.email, $5, $6, $7, $8, $9, $10, 'worklist', $11, $12, $13, $14,
+             $15, $16, $17
       FROM available_time_slots ats
       JOIN users u ON ats.user_id = u.id
       WHERE ats.id = $3
@@ -318,6 +345,7 @@ export async function convertIntentToAppointment(
         requiresConfirmation,
         holdExpiresAt,
         requiresPrecommit,
+        isChainReservation,
         startTime,
         new Date(startTime.getTime() + durationMinutes * 60 * 1000),
         intentId,
@@ -329,7 +357,7 @@ export async function convertIntentToAppointment(
     const appointmentId = apptResult.rows[0].id;
 
     if (isSchedulerUsePlanItemsEnabled()) {
-      await pool.query(
+      await client.query(
         `UPDATE appointments a SET plan_item_id = pi.id
          FROM episode_plan_items pi
          INNER JOIN episode_work_phases ewp ON ewp.id = pi.legacy_episode_work_phase_id
@@ -342,16 +370,29 @@ export async function convertIntentToAppointment(
       );
     }
 
-    await pool.query(
+    await client.query(
       `UPDATE slot_intents SET state = 'converted', updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
       [intentId]
     );
 
-    await pool.query('COMMIT');
+    await client.query('COMMIT');
 
     return { ok: true, appointmentId, intentId };
-  } catch (e) {
-    await pool.query('ROLLBACK');
-    throw e;
+    } catch (e) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        /* connection may already be aborted */
+      }
+      if (isRetriableLockError(e) && attempt < 2) {
+        await new Promise((r) => setTimeout(r, 120 * 2 ** attempt));
+        continue;
+      }
+      throw e;
+    } finally {
+      client.release();
+    }
   }
+
+  return { ok: false, status: 503, error: 'Időpont-konverzió többszöri próbálkozás után sem sikerült (zárolási ütközés). Próbálja újra.' };
 }

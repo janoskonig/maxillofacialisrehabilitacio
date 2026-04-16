@@ -53,6 +53,9 @@ export interface WorklistItemBackend {
   overdueByDays: number;
   windowStart: string | null;
   windowEnd: string | null;
+  /** Legkorábbi szabad slot alapú ablak (láncolva); ha nincs, UI a pathway windowStart/windowEnd-et mutatja */
+  bookableWindowStart?: string | null;
+  bookableWindowEnd?: string | null;
   durationMinutes: number;
   pool: string;
   priorityScore: number;

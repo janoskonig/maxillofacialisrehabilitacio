@@ -149,9 +149,21 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
     }
     let episodeWorkPhaseRows: EwpRow[] | null = null;
     try {
+      // Összevont (child) sorok kihagyása — ugyanarra az időpontra tartoznak a primary-hoz; különben az anchor-lánc
+      // minden gyerekre külön lépdel, és az offsetek összeadódnának (next-step-engine / worklist már így szűr).
+      let mergedIntoFilter = '';
+      try {
+        const col = await pool.query(
+          `SELECT 1 FROM information_schema.columns
+           WHERE table_name = 'episode_work_phases' AND column_name = 'merged_into_episode_work_phase_id' LIMIT 1`
+        );
+        if (col.rows.length > 0) mergedIntoFilter = ' AND merged_into_episode_work_phase_id IS NULL';
+      } catch {
+        /* ignore */
+      }
       const esResult = await pool.query(
         `SELECT work_phase_code, COALESCE(seq, pathway_order_index) as step_seq, status, completed_at, default_days_offset
-         FROM episode_work_phases WHERE episode_id = $1
+         FROM episode_work_phases WHERE episode_id = $1${mergedIntoFilter}
          ORDER BY COALESCE(seq, pathway_order_index)`,
         [episodeId]
       );

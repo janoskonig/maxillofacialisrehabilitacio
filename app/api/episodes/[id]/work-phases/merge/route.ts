@@ -10,6 +10,8 @@ export const dynamic = 'force-dynamic';
  * POST /api/episodes/:id/work-phases/merge
  * Merge multiple steps into one group (same appointment slot).
  * Body: { stepIds: string[] } — at least 2. First ID becomes the "primary" step.
+ * Child rows keep their pathway offset in DB, but scheduling (slot-intent projector, worklist) ignores
+ * merged children so pathway anchor does not advance once per merged step.
  */
 export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'], async (req, { auth, params }) => {
   const episodeId = params.id;

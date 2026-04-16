@@ -229,7 +229,7 @@ export default function KezelesiUtUtmutatoPage() {
 
               <h3 className="text-lg font-medium text-gray-800 mt-4 mb-2">BLOCKED_CAPACITY jelzés</h3>
               <p>
-                Ha az SLA ablakban (a beteg kezelési tervéhez rendelt időkeretben) nincs szabad <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">work</code> slot, a rendszer <strong>BLOCKED_CAPACITY</strong> jelzést ad. Ez figyelmeztet, hogy a beteg kezelése akadályozott — további szabad időpontok kiírása szükséges.
+                Ha a kezelési terv szerinti időablakban (a következő lépésre megadott legkorábbi–legkésőbbi időszakban) nincs szabad <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">work</code> slot, a rendszer <strong>BLOCKED_CAPACITY</strong> jelzést ad. Ez figyelmeztet, hogy a beteg kezelése akadályozott — további szabad időpontok kiírása szükséges.
               </p>
             </section>
           </div>

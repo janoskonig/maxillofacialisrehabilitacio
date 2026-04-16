@@ -7,6 +7,7 @@ import {
   getToothTreatmentJoin,
   getToothTreatmentSelectCols,
 } from '@/lib/episode-work-phase-select';
+import { projectRemainingSteps } from '@/lib/slot-intent-projector';
 
 export const dynamic = 'force-dynamic';
 
@@ -152,6 +153,72 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
       } catch {
         /* non-blocking */
       }
+    } else if (phase.status === 'completed' && newStatus === 'pending') {
+      if (typeof reason !== 'string' || reason.trim().length < 5) {
+        await pool.query('ROLLBACK');
+        return NextResponse.json(
+          { error: 'Az újranyitáshoz indoklás szükséges (legalább 5 karakter).' },
+          { status: 400 }
+        );
+      }
+
+      const stepCode = phase.work_phase_code as string;
+
+      await pool.query(
+        `UPDATE episode_work_phases SET status = 'pending', completed_at = NULL WHERE id = $1`,
+        [workPhaseId]
+      );
+
+      await pool.query(
+        `INSERT INTO episode_work_phase_audit (episode_work_phase_id, episode_id, old_status, new_status, changed_by, reason)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [workPhaseId, episodeId, 'completed', 'pending', auth.email ?? auth.userId ?? 'unknown', reason.trim()]
+      );
+
+      const futureAppts = await pool.query(
+        `SELECT id, time_slot_id FROM appointments
+         WHERE episode_id = $1 AND step_code = $2
+         AND start_time > CURRENT_TIMESTAMP
+         AND (appointment_status IS NULL OR appointment_status NOT IN ('cancelled_by_doctor', 'cancelled_by_patient'))`,
+        [episodeId, stepCode]
+      );
+      for (const ap of futureAppts.rows as Array<{ id: string; time_slot_id: string | null }>) {
+        await pool.query(`UPDATE appointments SET appointment_status = 'cancelled_by_doctor' WHERE id = $1`, [ap.id]);
+        if (ap.time_slot_id) {
+          await pool.query(
+            `UPDATE available_time_slots SET state = 'free', status = 'available' WHERE id = $1`,
+            [ap.time_slot_id]
+          );
+        }
+      }
+
+      await pool.query(
+        `UPDATE slot_intents SET state = 'expired', updated_at = CURRENT_TIMESTAMP
+         WHERE episode_id = $1 AND step_code = $2 AND state = 'open'`,
+        [episodeId, stepCode]
+      );
+
+      await pool.query('COMMIT');
+
+      try {
+        await projectRemainingSteps(episodeId);
+      } catch {
+        /* non-blocking */
+      }
+      try {
+        await emitSchedulingEvent('episode', episodeId, 'step_reopened');
+      } catch {
+        /* non-blocking */
+      }
+
+      const ttJoin = getToothTreatmentJoin();
+      const ttCols = getToothTreatmentSelectCols();
+      const updated = await pool.query(
+        `SELECT ${EPISODE_WORK_PHASE_SELECT_COLUMNS}${ttCols} FROM episode_work_phases ewp ${ttJoin} WHERE ewp.id = $1`,
+        [workPhaseId]
+      );
+
+      return NextResponse.json({ workPhase: updated.rows[0] });
     } else {
       const validTransitions: Record<string, string[]> = {
         pending: ['skipped', 'completed'],

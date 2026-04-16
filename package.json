@@ -32,6 +32,7 @@
     "migrate:021-episode-plan-phase1": "node scripts/run-all-migrations.js 021_episode_plan_migration_phase1.sql",
     "migrate:022-plan-json-quarantine": "node scripts/run-all-migrations.js 022_patient_treatment_plan_json_quarantine.sql",
     "migrate:023-appointment-plan-link-audit": "node scripts/run-all-migrations.js 023_appointment_plan_link_audit.sql",
+    "migrate:024-chain-reservation": "node scripts/run-all-migrations.js 024_appointment_chain_reservation.sql",
     "episode-plan:phase2-backfill": "node scripts/episode-plan-phase2-backfill.js",
     "episode-plan:phase3-link": "node scripts/episode-plan-phase3-link-appointments.js"
   },

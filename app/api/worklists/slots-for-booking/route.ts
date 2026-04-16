@@ -12,6 +12,8 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
   const windowStart = searchParams.get('windowStart');
   const windowEnd = searchParams.get('windowEnd');
   const providerId = searchParams.get('providerId');
+  /** When set, list earliest free slots from max(now, windowStart) with no upper window bound (manual / one-by-one booking). */
+  const nearestFree = searchParams.get('nearestFree') === '1';
   const limit = Math.min(50, parseInt(searchParams.get('limit') || '20', 10));
 
   const validPools = ['consult', 'work', 'control'];
@@ -40,16 +42,24 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
     paramIndex++;
   }
 
-  if (windowStart) {
-    whereClause += ` AND ats.start_time >= $${paramIndex}`;
-    params.push(windowStart);
-    paramIndex++;
-  }
+  if (nearestFree) {
+    if (windowStart) {
+      whereClause += ` AND ats.start_time >= GREATEST(CURRENT_TIMESTAMP, $${paramIndex}::timestamptz)`;
+      params.push(windowStart);
+      paramIndex++;
+    }
+  } else {
+    if (windowStart) {
+      whereClause += ` AND ats.start_time >= $${paramIndex}`;
+      params.push(windowStart);
+      paramIndex++;
+    }
 
-  if (windowEnd) {
-    whereClause += ` AND ats.start_time <= $${paramIndex}`;
-    params.push(windowEnd);
-    paramIndex++;
+    if (windowEnd) {
+      whereClause += ` AND ats.start_time <= $${paramIndex}`;
+      params.push(windowEnd);
+      paramIndex++;
+    }
   }
 
   if (providerId) {
@@ -78,13 +88,14 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
     pool,
     duration: durationMinutes,
     windowStartISO: windowStart ?? null,
-    windowEndISO: windowEnd ?? null,
+    windowEndISO: nearestFree ? null : windowEnd ?? null,
+    nearestFree,
     provider: providerId ?? 'all',
   };
 
   return NextResponse.json({
     slots,
-    filters: { pool, durationMinutes, windowStart, windowEnd, providerId },
+    filters: { pool, durationMinutes, windowStart, windowEnd, providerId, nearestFree },
     queryEcho,
   });
 });

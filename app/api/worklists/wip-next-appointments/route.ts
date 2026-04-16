@@ -22,6 +22,8 @@ import {
   sqlAppointmentStepCodesCompleted,
   sqlBookedFutureAppointmentsWithEffectiveStep,
 } from '@/lib/episode-plan-read-model';
+import { chainBookingRequiredFromCounts } from '@/lib/chain-booking-status';
+import { enrichWorklistBookableWindows } from '@/lib/worklist-bookable-windows';
 
 export const dynamic = 'force-dynamic';
 
@@ -64,7 +66,7 @@ export const GET = authedHandler(async (req, { auth }) => {
   );
 
   if (episodesResult.rows.length === 0) {
-    return NextResponse.json({ items: [], serverNowISO });
+    return NextResponse.json({ items: [], serverNowISO, chainBookingRequiredByEpisodeId: {} });
   }
 
   // ── Batch pre-fetch: ~11 parallel queries instead of N×(6-13) sequential ──
@@ -103,6 +105,8 @@ export const GET = authedHandler(async (req, { auth }) => {
     episodeOpenedRows,
     completedApptStepRows,
     activeApptStepRows,
+    openWorkIntentCountRows,
+    pendingPhaseCountRows,
   ] = await Promise.all([
     pool.query(
       `SELECT DISTINCT ON (episode_id) episode_id, stage_code
@@ -175,17 +179,34 @@ export const GET = authedHandler(async (req, { auth }) => {
     ),
     pool.query(sqlAppointmentStepCodesCompleted(readPlanItems), [allEpisodeIds]),
     pool.query(sqlAppointmentStepCodesActive(readPlanItems), [allEpisodeIds]),
+    pool.query(
+      `SELECT episode_id,
+              COUNT(*) FILTER (WHERE state = 'open' AND pool = 'work')::int AS cnt
+       FROM slot_intents
+       WHERE episode_id = ANY($1)
+       GROUP BY episode_id`,
+      [allEpisodeIds]
+    ),
+    pool.query(
+      `SELECT episode_id, COUNT(*)::int AS cnt
+       FROM episode_work_phases
+       WHERE episode_id = ANY($1)
+         AND status IN ('pending', 'scheduled')
+         ${episodeWorkPhasesMergedFilter}
+       GROUP BY episode_id`,
+      [allEpisodeIds]
+    ),
   ]);
 
   let planItemByEwpId = new Map<string, string>();
   if (readPlanItems && episodeWorkPhaseRows.rows.length > 0) {
-    const ewpIds = [
-      ...new Set(
+    const ewpIds = Array.from(
+      new Set(
         (episodeWorkPhaseRows.rows as { id?: string }[])
           .map((r) => r.id)
           .filter((id): id is string => typeof id === 'string' && id.length > 0)
-      ),
-    ];
+      )
+    );
     if (ewpIds.length > 0) {
       const pip = await pool.query(
         `SELECT id, legacy_episode_work_phase_id AS "legacyEwpId"
@@ -279,6 +300,20 @@ export const GET = authedHandler(async (req, { auth }) => {
   const openedAtMap = new Map<string, Date>(
     episodeOpenedRows.rows.map((r: any) => [r.id, r.opened_at ? new Date(r.opened_at) : new Date()])
   );
+
+  const openWorkIntentByEpisode = new Map<string, number>(
+    openWorkIntentCountRows.rows.map((r: { episode_id: string; cnt: number }) => [r.episode_id, r.cnt])
+  );
+  const pendingPhaseByEpisode = new Map<string, number>(
+    pendingPhaseCountRows.rows.map((r: { episode_id: string; cnt: number }) => [r.episode_id, r.cnt])
+  );
+  const chainBookingRequiredByEpisodeId: Record<string, boolean> = {};
+  for (const id of allEpisodeIds) {
+    chainBookingRequiredByEpisodeId[id] = chainBookingRequiredFromCounts(
+      openWorkIntentByEpisode.get(id) ?? 0,
+      pendingPhaseByEpisode.get(id) ?? 0
+    );
+  }
 
   // Completed appointment step_codes per episode — used to filter out already-done steps
   const completedApptStepsByEpisode = new Map<string, Set<string>>();
@@ -500,6 +535,8 @@ export const GET = authedHandler(async (req, { auth }) => {
     }
   }
 
+  await enrichWorklistBookableWindows(pool, items, serverNow);
+
   // ── Forecast enrichment ──
   const forecastEpisodeIds = items.filter((i) => i.status !== 'blocked').map((i) => i.episodeId);
   const forecastMap: Record<string, { p50: string | null; p80: string | null; rem50: number; rem80: number }> = {};
@@ -593,6 +630,7 @@ export const GET = authedHandler(async (req, { auth }) => {
   return NextResponse.json({
     items,
     serverNowISO,
+    chainBookingRequiredByEpisodeId,
   });
   });
 });

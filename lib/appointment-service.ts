@@ -153,7 +153,7 @@ export async function createAppointment(
       if (hasAnyPathway) {
         // Keep materialized flags in sync before one-hard-next checks.
         // Without this, old rows can retain stale `is_future=true` and trigger
-        // idx_appointments_one_hard_next even though start_time is already past.
+        // idx_appointments_one_hard_next (non-chain rows) even though start_time is already past.
         await client.query(
           `UPDATE appointments
               SET is_future = (start_time IS NOT NULL AND start_time > CURRENT_TIMESTAMP),

@@ -415,8 +415,8 @@ export function WorklistWidget() {
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Következő munkafázis</th>
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">ETA</th>
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Hátralévő</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">SLA / overdue</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Window</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Késés a tervhez képest</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Ablak (terv szerint)</th>
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Status</th>
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 w-24">Művelet</th>
             </tr>
