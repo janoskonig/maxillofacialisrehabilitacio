@@ -16,6 +16,12 @@ import {
   refreshEpisodeForecastCache,
 } from '@/lib/episode-forecast';
 import type { WorklistItemBackend } from '@/lib/worklist-types';
+import { isReadPlanItemsEnabled } from '@/lib/plan-items-flags';
+import {
+  sqlAppointmentStepCodesActive,
+  sqlAppointmentStepCodesCompleted,
+  sqlBookedFutureAppointmentsWithEffectiveStep,
+} from '@/lib/episode-plan-read-model';
 
 export const dynamic = 'force-dynamic';
 
@@ -64,6 +70,7 @@ export const GET = authedHandler(async (req, { auth }) => {
   // ── Batch pre-fetch: ~11 parallel queries instead of N×(6-13) sequential ──
   const allEpisodeIds = episodesResult.rows.map((r: any) => r.episodeId);
   const allPatientIds = Array.from(new Set(episodesResult.rows.map((r: any) => r.patientId))) as string[];
+  const readPlanItems = isReadPlanItemsEnabled();
 
   let episodeWorkPhasesMergedFilter = '';
   let episodeWorkPhasesOptionalCols = '';
@@ -166,23 +173,31 @@ export const GET = authedHandler(async (req, { auth }) => {
       `SELECT id, opened_at FROM patient_episodes WHERE id = ANY($1)`,
       [allEpisodeIds]
     ),
-    pool.query(
-      `SELECT a.episode_id, a.step_code
-       FROM appointments a
-       WHERE a.episode_id = ANY($1)
-         AND a.step_code IS NOT NULL
-         AND a.appointment_status = 'completed'`,
-      [allEpisodeIds]
-    ),
-    pool.query(
-      `SELECT a.episode_id, a.step_code
-       FROM appointments a
-       WHERE a.episode_id = ANY($1)
-         AND a.step_code IS NOT NULL
-         AND (a.appointment_status IS NULL OR a.appointment_status NOT IN ('cancelled_by_doctor', 'cancelled_by_patient'))`,
-      [allEpisodeIds]
-    ),
+    pool.query(sqlAppointmentStepCodesCompleted(readPlanItems), [allEpisodeIds]),
+    pool.query(sqlAppointmentStepCodesActive(readPlanItems), [allEpisodeIds]),
   ]);
+
+  let planItemByEwpId = new Map<string, string>();
+  if (readPlanItems && episodeWorkPhaseRows.rows.length > 0) {
+    const ewpIds = [
+      ...new Set(
+        (episodeWorkPhaseRows.rows as { id?: string }[])
+          .map((r) => r.id)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0)
+      ),
+    ];
+    if (ewpIds.length > 0) {
+      const pip = await pool.query(
+        `SELECT id, legacy_episode_work_phase_id AS "legacyEwpId"
+         FROM episode_plan_items
+         WHERE legacy_episode_work_phase_id = ANY($1::uuid[]) AND archived_at IS NULL`,
+        [ewpIds]
+      );
+      for (const row of pip.rows as { id: string; legacyEwpId: string }[]) {
+        planItemByEwpId.set(row.legacyEwpId, row.id);
+      }
+    }
+  }
 
   // ── Build lookup Maps ──
   const stageMap = new Map<string, string>(
@@ -427,6 +442,11 @@ export const GET = authedHandler(async (req, { auth }) => {
         item.treatmentTypeSource = treatmentTypeSource;
       }
 
+      if (readPlanItems && episodeStepId) {
+        const pid = planItemByEwpId.get(episodeStepId);
+        if (pid) item.planItemId = pid;
+      }
+
       items.push(item);
     }
   }
@@ -438,17 +458,7 @@ export const GET = authedHandler(async (req, { auth }) => {
   const readyItems = items.filter((i) => i.status !== 'blocked');
   if (readyItems.length > 0) {
     const episodeIds = Array.from(new Set(readyItems.map((i) => i.episodeId)));
-    const bookedResult = await pool.query(
-      `SELECT a.id, a.episode_id, a.step_code, a.step_seq,
-              COALESCE(a.start_time, ats.start_time) as effective_start,
-              a.dentist_email
-       FROM appointments a
-       JOIN available_time_slots ats ON a.time_slot_id = ats.id
-       WHERE a.episode_id = ANY($1)
-         AND COALESCE(a.start_time, ats.start_time) > CURRENT_TIMESTAMP
-         AND (a.appointment_status IS NULL OR a.appointment_status NOT IN ('cancelled_by_doctor', 'cancelled_by_patient', 'no_show'))`,
-      [episodeIds]
-    );
+    const bookedResult = await pool.query(sqlBookedFutureAppointmentsWithEffectiveStep(), [episodeIds]);
     type BookedEntry = { id: string; startTime: string; providerEmail: string | null };
     const exactMap = new Map<string, BookedEntry>();
     const stepSeqMap = new Map<string, BookedEntry>();

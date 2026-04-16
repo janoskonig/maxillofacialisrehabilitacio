@@ -6,6 +6,7 @@ import { generateIcsFile } from '@/lib/calendar';
 import { createGoogleCalendarEvent, deleteGoogleCalendarEvent } from '@/lib/google-calendar';
 import { apiHandler } from '@/lib/api/route-handler';
 import { logger } from '@/lib/logger';
+import { isReadPlanItemsEnabled } from '@/lib/plan-items-flags';
 
 /**
  * Get patient's appointments
@@ -24,6 +25,7 @@ export const GET = apiHandler(async (req, { correlationId }) => {
   }
 
   const pool = getDbPool();
+  const readPlanItems = isReadPlanItemsEnabled();
 
   const result = await pool.query(
     `SELECT 
@@ -39,7 +41,7 @@ export const GET = apiHandler(async (req, { correlationId }) => {
       ats.start_time as "startTime",
       ats.cim,
       ats.teremszam,
-      u.doktor_neve as "dentistName"
+      u.doktor_neve as "dentistName"${readPlanItems ? ',\n      a.plan_item_id as "planItemId"' : ''}
     FROM appointments a
     JOIN available_time_slots ats ON a.time_slot_id = ats.id
     LEFT JOIN users u ON a.dentist_email = u.email
@@ -50,6 +52,7 @@ export const GET = apiHandler(async (req, { correlationId }) => {
 
   return NextResponse.json({
     appointments: result.rows,
+    meta: { readPlanItemsEnabled: readPlanItems },
   });
 });
 

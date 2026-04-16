@@ -13,6 +13,8 @@ Each step: transactional vs not, command, verification, rollback note.
 | WRITE_PLAN_ITEMS | Config | Off until write authority defined | — | Off |
 | SCHEDULER_USE_PLAN_ITEMS | Config | Off until Phase 6a drain | — | Off |
 | Phase 5 quarantine | Yes | `022_patient_treatment_plan_json_quarantine.sql` via migrate | Table exists | Unused until resolver. |
+| Phase 5 ingest API | Config | `POST /api/admin/treatment-plan-json-quarantine` with `WRITE_PLAN_ITEMS=on` | Row in table; 409 on duplicate fingerprint | Disable flag; delete row only per policy. |
+| Phase 5 list API | Yes | `GET /api/admin/treatment-plan-json-quarantine` (admin) | JSON `items` | — |
 | Phase 6b audit | Yes | `023_appointment_plan_link_audit.sql` via migrate | Table exists | Append-only audit. |
 
 ## Non-transactional / operator-only (when needed)

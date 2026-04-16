@@ -8,6 +8,7 @@ import { Pool } from 'pg';
 import { checkOneHardNext, getAppointmentRiskSettings } from '@/lib/scheduling-service';
 import type { AuthPayload } from '@/lib/auth-server';
 import { normalizePathwayWorkPhaseArray } from '@/lib/pathway-work-phases-for-episode';
+import { isSchedulerUsePlanItemsEnabled } from '@/lib/plan-items-flags';
 
 export interface ConvertIntentOptions {
   /** Pre-selected time slot id; if not set, a free slot is found in the window */
@@ -326,6 +327,20 @@ export async function convertIntentToAppointment(
     );
 
     const appointmentId = apptResult.rows[0].id;
+
+    if (isSchedulerUsePlanItemsEnabled()) {
+      await pool.query(
+        `UPDATE appointments a SET plan_item_id = pi.id
+         FROM episode_plan_items pi
+         INNER JOIN episode_work_phases ewp ON ewp.id = pi.legacy_episode_work_phase_id
+         WHERE a.id = $1
+           AND ewp.episode_id = $2
+           AND ewp.work_phase_code = $3
+           AND a.plan_item_id IS NULL
+           AND pi.archived_at IS NULL`,
+        [appointmentId, intent.episode_id, intent.step_code]
+      );
+    }
 
     await pool.query(
       `UPDATE slot_intents SET state = 'converted', updated_at = CURRENT_TIMESTAMP WHERE id = $1`,

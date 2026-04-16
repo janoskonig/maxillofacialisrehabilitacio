@@ -86,6 +86,8 @@ export interface WorklistItemBackend {
   episodeOrder?: number;
   /** Episode step DB id – present when step exists as pending/scheduled; used for "mark completed" */
   episodeStepId?: string | null;
+  /** Primary plan item when READ_PLAN_ITEMS and legacy ewp row exists in episode_plan_items */
+  planItemId?: string | null;
   /** Epizódhoz kijelölt orvos (user id); csak az ő slotjai jöhetnek szóba foglaláskor */
   assignedProviderId?: string | null;
   /** Episode step status: completed/skipped/pending/scheduled */
