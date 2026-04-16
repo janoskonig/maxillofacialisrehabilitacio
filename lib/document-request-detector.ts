@@ -110,8 +110,12 @@ function parseRequestCommand(text: string): DocumentRequestInfo | null {
  * Supports command syntax: /request @vezeteknev+keresztnev tag="OP"
  */
 export function detectDocumentRequest(text: string): DocumentRequestInfo {
-  // First try to parse as /request command
-  const commandResult = parseRequestCommand(text);
+  // Only the first line may contain the /request command; subsequent lines can be a human note.
+  // This keeps document request detection stable even when the message contains extra text.
+  const firstLine = (text || '').split(/\r?\n/)[0] || '';
+
+  // First try to parse as /request command (first line only)
+  const commandResult = parseRequestCommand(firstLine);
   if (commandResult) {
     return commandResult;
   }

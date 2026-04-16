@@ -32,6 +32,9 @@ export function MessageTextRenderer({
   currentUserId,
   onSendMessage,
 }: MessageTextRendererProps) {
+  const lines = (text || '').split(/\r?\n/);
+  const trailingNote = lines.slice(1).join('\n').trim();
+
   // First check for document upload format: [DOCUMENT_UPLOADED:tag:patientId?:documentId]
   const documentUploadRegex = /\[DOCUMENT_UPLOADED:([^:]*):?([^:]*):?([^\]]*)\]/g;
   const documentUploadMatch = documentUploadRegex.exec(text);
@@ -61,14 +64,22 @@ export function MessageTextRenderer({
   // If document request detected, show info card for both sender and recipient
   if (documentRequest.isDocumentRequest && messageId) {
     return (
-      <DocumentRequestInfoCard
-        documentRequest={documentRequest}
-        messageId={messageId}
-        patientId={patientId}
-        chatType={chatType}
-        isRecipient={isRecipient || false}
-        onSendMessage={onSendMessage}
-      />
+      <>
+        <DocumentRequestInfoCard
+          documentRequest={documentRequest}
+          messageId={messageId}
+          patientId={patientId}
+          chatType={chatType}
+          isRecipient={isRecipient || false}
+          onSendMessage={onSendMessage}
+        />
+
+        {trailingNote ? (
+          <div className="mt-2 whitespace-pre-wrap break-words text-sm opacity-90">
+            {trailingNote}
+          </div>
+        ) : null}
+      </>
     );
   }
 
