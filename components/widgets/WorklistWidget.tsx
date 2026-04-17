@@ -13,6 +13,7 @@ import { formatShortDateRange } from '@/lib/datetime';
 import { SlotPickerModal } from '../SlotPickerModal';
 import { OverrideModal } from '../OverrideModal';
 import { BookingQueueModal } from '../BookingQueueModal';
+import { WorklistMergedPhaseCell } from '../WorklistMergedPhaseCell';
 
 const CAN_SEE_WORKLIST_ROLES = ['admin', 'beutalo_orvos', 'fogpótlástanász'];
 
@@ -454,10 +455,7 @@ export function WorklistWidget() {
                   </td>
                   <td className="px-3 py-2 text-sm text-gray-600">{item.currentStage}</td>
                   <td className="px-3 py-2">
-                    <span className="text-sm font-medium">{item.nextStep}</span>
-                    {item.durationMinutes > 0 && (
-                      <span className="ml-1 text-xs text-gray-500">{item.durationMinutes} perc</span>
-                    )}
+                    <WorklistMergedPhaseCell item={item} />
                   </td>
                   <td className="px-3 py-2 text-sm text-gray-600">
                     {state !== 'BLOCKED' && item.forecastCompletionEndP80ISO ? (

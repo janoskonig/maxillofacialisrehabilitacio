@@ -11,6 +11,7 @@ import {
 import { formatShortDateRange } from '@/lib/datetime';
 import { SlotPickerModal } from './SlotPickerModal';
 import { OverrideModal } from './OverrideModal';
+import { WorklistMergedPhaseCell } from './WorklistMergedPhaseCell';
 
 export interface PatientWorklistWidgetProps {
   patientId: string;
@@ -464,10 +465,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                     <span className="ml-1 text-xs text-gray-400">#{item.episodeId.slice(0, 8)}</span>
                   </td>
                   <td className="px-3 py-2">
-                    <span className="text-sm font-medium">{item.nextStep}</span>
-                    {item.durationMinutes > 0 && (
-                      <span className="ml-1 text-xs text-gray-500">{item.durationMinutes} perc</span>
-                    )}
+                    <WorklistMergedPhaseCell item={item} />
                   </td>
                   <td className="px-3 py-2 text-sm">
                     {item.overdueByDays > 0 ? (

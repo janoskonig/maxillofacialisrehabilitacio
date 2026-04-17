@@ -42,6 +42,15 @@ export interface OneHardNextViolationPayload {
   };
 }
 
+export type WorklistPhaseJaw = 'felso' | 'also';
+
+/** Egy munkafázis-sor megjelenítése (összevonás összetételénél vagy önállóan). */
+export interface WorklistMergedPhasePart {
+  label: string;
+  toothNumber?: number | null;
+  jaw?: WorklistPhaseJaw | null;
+}
+
 export interface WorklistItemBackend {
   episodeId: string;
   patientId: string;
@@ -95,6 +104,14 @@ export interface WorklistItemBackend {
   assignedProviderId?: string | null;
   /** Episode step status: completed/skipped/pending/scheduled */
   stepStatus?: 'completed' | 'skipped' | 'pending' | 'scheduled';
+  /** Több munkafázis egy foglalható blokkba összevonva (primary + gyerek sorok) */
+  mergedWorkPhase?: boolean;
+  /** Első elem a fő (primary) lépés, utána az összevont gyerekek — fog / állcsont, ha ismert */
+  mergedWorkPhaseParts?: WorklistMergedPhasePart[];
+  /** Fogszám a fő sorhoz; összevont blokk esetén nincs kitöltve (részletek a mergedWorkPhaseParts-ban) */
+  phaseToothNumber?: number | null;
+  /** Állcsont a fő sorhoz (episode_pathways.jaw); összevont blokk esetén nincs kitöltve */
+  phaseJaw?: WorklistPhaseJaw | null;
 }
 
 export interface WorklistLocalState {

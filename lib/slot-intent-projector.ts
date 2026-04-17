@@ -146,6 +146,7 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
       status: string;
       completed_at: Date | null;
       default_days_offset?: number | null;
+      duration_minutes?: number | null;
     }
     let episodeWorkPhaseRows: EwpRow[] | null = null;
     try {
@@ -162,7 +163,8 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
         /* ignore */
       }
       const esResult = await pool.query(
-        `SELECT work_phase_code, COALESCE(seq, pathway_order_index) as step_seq, status, completed_at, default_days_offset
+        `SELECT work_phase_code, COALESCE(seq, pathway_order_index) as step_seq, status, completed_at,
+                default_days_offset, duration_minutes
          FROM episode_work_phases WHERE episode_id = $1${mergedIntoFilter}
          ORDER BY COALESCE(seq, pathway_order_index)`,
         [episodeId]
@@ -215,11 +217,13 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
         if (completedStepCodes.has(es.work_phase_code)) continue;
         if (bookedStepCodes.has(es.work_phase_code)) continue;
         const pw = pathwayByCode.get(es.work_phase_code);
+        const ewpDur = es.duration_minutes != null ? Number(es.duration_minutes) : null;
         stepsToProject.push({
           stepCode: es.work_phase_code,
           stepSeq: es.step_seq,
           offset: (es.default_days_offset ?? pw?.default_days_offset) ?? 14,
-          durationMinutes: pw?.duration_minutes ?? 30,
+          durationMinutes:
+            ewpDur != null && ewpDur > 0 ? ewpDur : (pw?.duration_minutes ?? 30),
           pool: pw ? slotPoolForStep(pw) : 'work',
         });
       }

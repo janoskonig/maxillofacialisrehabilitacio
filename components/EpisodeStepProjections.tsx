@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Loader2, CheckCircle2, Circle, Clock, SkipForward,
-  CalendarDays, ChevronDown, ChevronUp, AlertTriangle,
+  CalendarDays, ChevronDown, ChevronUp, AlertTriangle, Merge,
 } from 'lucide-react';
 
 interface ProjectedStep {
@@ -18,6 +18,7 @@ interface ProjectedStep {
   windowEnd: string | null;
   waitFromNowDays: number | null;
   customLabel?: string | null;
+  mergedPartLabels?: string[];
 }
 
 interface Summary {
@@ -233,11 +234,26 @@ export function EpisodeStepProjections({ episodeId, refreshTrigger }: EpisodeSte
                               Következő
                             </span>
                           )}
+                          {step.mergedPartLabels && step.mergedPartLabels.length > 0 && (
+                            <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">
+                              +{step.mergedPartLabels.length} összevonva
+                            </span>
+                          )}
                           <span className={`text-xs px-1.5 py-0.5 rounded ${poolColors[step.pool] ?? 'bg-gray-100 text-gray-600'}`}>
                             {poolLabels[step.pool] ?? step.pool}
                           </span>
                           <span className="text-xs text-gray-400">{step.durationMinutes} perc</span>
                         </div>
+                        {step.mergedPartLabels && step.mergedPartLabels.length > 0 && (
+                          <div className="mt-1 ml-0.5 space-y-0.5">
+                            {step.mergedPartLabels.map((part, i) => (
+                              <div key={`${part}-${i}`} className="flex items-center gap-1.5 text-xs text-violet-600">
+                                <Merge className="w-3 h-3 shrink-0" />
+                                <span className="min-w-0">{part}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
 
                         {/* Date/window info */}
                         <div className="mt-1">

@@ -15,7 +15,7 @@ import {
   computeInputsHashBatch,
   refreshEpisodeForecastCache,
 } from '@/lib/episode-forecast';
-import type { WorklistItemBackend } from '@/lib/worklist-types';
+import type { WorklistItemBackend, WorklistMergedPhasePart, WorklistPhaseJaw } from '@/lib/worklist-types';
 import { isReadPlanItemsEnabled } from '@/lib/plan-items-flags';
 import {
   sqlAppointmentStepCodesActive,
@@ -26,6 +26,21 @@ import { chainBookingRequiredFromCounts } from '@/lib/chain-booking-status';
 import { enrichWorklistBookableWindows } from '@/lib/worklist-bookable-windows';
 
 export const dynamic = 'force-dynamic';
+
+function worklistSiteFromRow(row: {
+  siteToothNumber?: number | string | null;
+  siteJaw?: string | null;
+}): { toothNumber: number | null; jaw: WorklistPhaseJaw | null } {
+  const raw = row.siteToothNumber;
+  let toothNumber: number | null = null;
+  if (raw != null && raw !== '') {
+    const n = typeof raw === 'number' ? raw : parseInt(String(raw), 10);
+    if (Number.isFinite(n) && n >= 11 && n <= 48) toothNumber = n;
+  }
+  const j = row.siteJaw;
+  const jaw = j === 'felso' || j === 'also' ? j : null;
+  return { toothNumber, jaw };
+}
 
 export const GET = authedHandler(async (req, { auth }) => {
   return queryWithRetry(async () => {
@@ -75,21 +90,44 @@ export const GET = authedHandler(async (req, { auth }) => {
   const readPlanItems = isReadPlanItemsEnabled();
 
   let episodeWorkPhasesMergedFilter = '';
-  let episodeWorkPhasesOptionalCols = '';
+  let episodeWorkPhasesMergedFilterEwp = '';
+  let ewpOptionalCols = '';
+  let ewpSiteJoins = '';
+  let ewpSiteSelect = '';
+  let ewpColumnNames = new Set<string>();
   try {
     const epCols = await pool.query(
       `SELECT column_name FROM information_schema.columns
-       WHERE table_name = 'episode_work_phases' AND column_name IN ('merged_into_episode_work_phase_id', 'default_days_offset', 'custom_label')`
+       WHERE table_name = 'episode_work_phases' AND column_name IN (
+         'merged_into_episode_work_phase_id', 'default_days_offset', 'custom_label',
+         'tooth_treatment_id', 'source_episode_pathway_id'
+       )`
     );
     const names = new Set(epCols.rows.map((r: { column_name: string }) => r.column_name));
+    ewpColumnNames = names;
     if (names.has('merged_into_episode_work_phase_id')) {
       episodeWorkPhasesMergedFilter = 'AND merged_into_episode_work_phase_id IS NULL';
+      episodeWorkPhasesMergedFilterEwp = 'AND ewp.merged_into_episode_work_phase_id IS NULL';
     }
-    if (names.has('default_days_offset')) episodeWorkPhasesOptionalCols += ', default_days_offset';
-    if (names.has('custom_label')) episodeWorkPhasesOptionalCols += ', custom_label';
+    if (names.has('default_days_offset')) ewpOptionalCols += ', ewp.default_days_offset';
+    if (names.has('custom_label')) ewpOptionalCols += ', ewp.custom_label';
+    if (names.has('tooth_treatment_id')) {
+      ewpSiteJoins += ' LEFT JOIN tooth_treatments ewp_tt ON ewp.tooth_treatment_id = ewp_tt.id';
+      ewpSiteSelect += ', ewp_tt.tooth_number AS "siteToothNumber"';
+    }
+    if (names.has('source_episode_pathway_id')) {
+      ewpSiteJoins += ' LEFT JOIN episode_pathways ewp_ep ON ewp.source_episode_pathway_id = ewp_ep.id';
+      ewpSiteSelect += ', ewp_ep.jaw AS "siteJaw"';
+    }
   } catch {
     /* columns may not exist */
   }
+
+  const episodeWorkPhasesSql = `SELECT ewp.id, ewp.episode_id, ewp.work_phase_code, ewp.pathway_order_index, ewp.seq, ewp.status, ewp.completed_at, ewp.pool, ewp.duration_minutes${ewpOptionalCols}${ewpSiteSelect}
+     FROM episode_work_phases ewp
+     ${ewpSiteJoins}
+     WHERE ewp.episode_id = ANY($1) ${episodeWorkPhasesMergedFilterEwp}
+     ORDER BY ewp.episode_id, COALESCE(ewp.seq, ewp.pathway_order_index), ewp.pathway_order_index`;
 
   const [
     stageRows,
@@ -137,12 +175,7 @@ export const GET = authedHandler(async (req, { auth }) => {
        GROUP BY a.episode_id`,
       [allEpisodeIds]
     ),
-    pool.query(
-      `SELECT id, episode_id, work_phase_code, pathway_order_index, seq, status, completed_at, pool, duration_minutes${episodeWorkPhasesOptionalCols}
-       FROM episode_work_phases WHERE episode_id = ANY($1) ${episodeWorkPhasesMergedFilter}
-       ORDER BY episode_id, COALESCE(seq, pathway_order_index), pathway_order_index`,
-      [allEpisodeIds]
-    ),
+    pool.query(episodeWorkPhasesSql, [allEpisodeIds]),
     pool.query(
       `SELECT ep.episode_id, cp.work_phases_json, cp.steps_json
        FROM episode_pathways ep
@@ -315,6 +348,57 @@ export const GET = authedHandler(async (req, { auth }) => {
     );
   }
 
+  /** Összevont blokk: gyerek sorok részletei primary `episode_work_phases.id` szerint. */
+  const mergedPartsByPrimaryId = new Map<string, WorklistMergedPhasePart[]>();
+  if (allEpisodeIds.length > 0 && episodeWorkPhasesMergedFilter) {
+    const hasTtCol = ewpColumnNames.has('tooth_treatment_id');
+    const hasSpCol = ewpColumnNames.has('source_episode_pathway_id');
+    const childSiteSelect =
+      (hasTtCol ? ', tt_m.tooth_number AS "siteToothNumber"' : '') +
+      (hasSpCol ? ', epw_m.jaw AS "siteJaw"' : '');
+    const ttJoin = hasTtCol
+      ? `LEFT JOIN tooth_treatments tt_m ON c.tooth_treatment_id = tt_m.id
+       LEFT JOIN tooth_treatment_catalog ttc_m ON tt_m.treatment_code = ttc_m.code`
+      : '';
+    const treatmentSelect = hasTtCol ? ', ttc_m.label_hu AS treatment_label_hu' : ', NULL::text AS treatment_label_hu';
+    const epwJoin = hasSpCol
+      ? 'LEFT JOIN episode_pathways epw_m ON c.source_episode_pathway_id = epw_m.id'
+      : '';
+    const mergedRes = await pool.query(
+      `SELECT c.merged_into_episode_work_phase_id AS primary_id,
+              c.work_phase_code, c.custom_label, sc.label_hu
+              ${treatmentSelect}
+              ${childSiteSelect}
+       FROM episode_work_phases c
+       LEFT JOIN work_phase_catalog sc ON c.work_phase_code = sc.work_phase_code AND sc.is_active = true
+       ${ttJoin}
+       ${epwJoin}
+       WHERE c.episode_id = ANY($1) AND c.merged_into_episode_work_phase_id IS NOT NULL
+       ORDER BY c.merged_into_episode_work_phase_id, COALESCE(c.seq, c.pathway_order_index), c.pathway_order_index`,
+      [allEpisodeIds]
+    );
+    for (const row of mergedRes.rows as Array<{
+      primary_id: string;
+      work_phase_code: string;
+      custom_label: string | null;
+      label_hu: string | null;
+      treatment_label_hu: string | null;
+      siteToothNumber?: number | string | null;
+      siteJaw?: string | null;
+    }>) {
+      const label =
+        (row.custom_label && String(row.custom_label).trim())
+        || (row.treatment_label_hu && String(row.treatment_label_hu).trim())
+        || (row.label_hu && String(row.label_hu).trim())
+        || String(row.work_phase_code).replace(/_/g, ' ');
+      const site = worklistSiteFromRow(row);
+      const pid = String(row.primary_id);
+      const arr = mergedPartsByPrimaryId.get(pid) ?? [];
+      arr.push({ label, toothNumber: site.toothNumber, jaw: site.jaw });
+      mergedPartsByPrimaryId.set(pid, arr);
+    }
+  }
+
   // Completed appointment step_codes per episode — used to filter out already-done steps
   const completedApptStepsByEpisode = new Map<string, Set<string>>();
   for (const r of completedApptStepRows.rows) {
@@ -442,11 +526,24 @@ export const GET = authedHandler(async (req, { auth }) => {
       const priorityScore = Math.min(100, 50 + overdueByDays * 5);
 
       const phasesForEpisode = episodeWorkPhasesMap.get(episodeId) ?? [];
-      const stepRow = phasesForEpisode.find(
+      const stepRowForBooking = phasesForEpisode.find(
         (r: { work_phase_code: string; status: string }) =>
           r.work_phase_code === step.work_phase_code && (r.status === 'pending' || r.status === 'scheduled')
       );
-      const episodeStepId = stepRow && 'id' in stepRow ? (stepRow as { id: string }).id : null;
+      const episodeStepId =
+        stepRowForBooking && 'id' in stepRowForBooking ? (stepRowForBooking as { id: string }).id : null;
+
+      const stepRowForMergeLookup =
+        stepRowForBooking ??
+        phasesForEpisode.find(
+          (r: { work_phase_code: string; status: string }) =>
+            r.work_phase_code === step.work_phase_code &&
+            (r.status === 'completed' || r.status === 'skipped')
+        );
+      const mergeLookupId =
+        stepRowForMergeLookup && 'id' in stepRowForMergeLookup
+          ? (stepRowForMergeLookup as { id: string }).id
+          : null;
 
       const item: WorklistItemBackend = {
         episodeId,
@@ -480,6 +577,29 @@ export const GET = authedHandler(async (req, { auth }) => {
       if (readPlanItems && episodeStepId) {
         const pid = planItemByEwpId.get(episodeStepId);
         if (pid) item.planItemId = pid;
+      }
+
+      const siteSource = (stepRowForBooking ?? stepRowForMergeLookup) as unknown as
+        | Record<string, unknown>
+        | undefined;
+
+      const mergedChildParts = mergeLookupId ? mergedPartsByPrimaryId.get(mergeLookupId) : undefined;
+      if (mergedChildParts && mergedChildParts.length > 0) {
+        const primaryLabel = (item.stepLabel ?? item.nextStep ?? step.work_phase_code).trim();
+        item.nextStep = primaryLabel;
+        item.stepLabel = item.stepLabel ?? primaryLabel;
+        item.mergedWorkPhase = true;
+        const primarySite = stepRowForMergeLookup
+          ? worklistSiteFromRow(stepRowForMergeLookup as unknown as Record<string, unknown>)
+          : worklistSiteFromRow(siteSource ?? {});
+        item.mergedWorkPhaseParts = [
+          { label: primaryLabel, toothNumber: primarySite.toothNumber, jaw: primarySite.jaw },
+          ...mergedChildParts,
+        ];
+      } else if (siteSource) {
+        const s = worklistSiteFromRow(siteSource);
+        if (s.toothNumber != null) item.phaseToothNumber = s.toothNumber;
+        if (s.jaw != null) item.phaseJaw = s.jaw;
       }
 
       items.push(item);
