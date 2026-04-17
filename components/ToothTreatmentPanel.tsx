@@ -13,6 +13,7 @@ import {
 import { Plus, X, ExternalLink, Check, Loader2, SendHorizontal, UserRound } from 'lucide-react';
 import type { ToothTreatment, ToothTreatmentCatalogItem } from '@/lib/types';
 import { getCurrentUser } from '@/lib/auth';
+import { isToothTreatmentPathwayDone } from '@/lib/tooth-treatment-pathway';
 
 type InstitutionUserRow = {
   id: string;
@@ -463,8 +464,8 @@ export function ToothTreatmentInline({ toothNumber, isViewOnly }: ToothTreatment
   } = ctx;
 
   const toothTreatments = treatments.filter((t) => String(t.toothNumber) === toothNumber);
-  const active = toothTreatments.filter((t) => t.status !== 'completed');
-  const completed = toothTreatments.filter((t) => t.status === 'completed');
+  const active = toothTreatments.filter((t) => !isToothTreatmentPathwayDone(t));
+  const completed = toothTreatments.filter((t) => isToothTreatmentPathwayDone(t));
 
   const handleAdd = async () => {
     if (!selectedCode) return;
@@ -638,9 +639,12 @@ export function ToothTreatmentInline({ toothNumber, isViewOnly }: ToothTreatment
           <summary className="cursor-pointer hover:text-gray-600">{completed.length} befejezett</summary>
           <div className="mt-1 space-y-0.5 pl-1">
             {completed.map((t) => (
-              <div key={t.id} className="flex gap-1 items-center">
-                <Check className="w-3 h-3 text-green-500" />
+              <div key={t.id} className="flex gap-1 items-center flex-wrap">
+                <Check className="w-3 h-3 text-green-500 shrink-0" />
                 <span>{t.labelHu ?? t.treatmentCode}</span>
+                {t.status !== 'completed' && t.pathwayClosed ? (
+                  <span className="text-gray-400">(munkafázisban lezárva)</span>
+                ) : null}
               </div>
             ))}
           </div>

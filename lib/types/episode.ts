@@ -247,6 +247,11 @@ export interface ToothTreatment {
   createdAt: string;
   completedAt: string | null;
   labelHu?: string;
+  /**
+   * True when the linked `episode_work_phases` row (primary if merged) is completed or skipped,
+   * while `status` may still be `episode_linked` until explicitly synced.
+   */
+  pathwayClosed?: boolean;
   /** Nyitott, ehhez a kezeléshez kötött Feladataim-be küldött tételek. */
   openDelegatedTasks?: ToothTreatmentDelegatedTaskSnapshot[];
 }
