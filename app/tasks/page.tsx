@@ -120,6 +120,17 @@ export default function StaffTasksPage() {
                           Vetítés megnyitása
                         </Link>
                       )}
+                    {t.taskType === 'meeting_action' &&
+                      t.metadata?.source === 'tooth_treatment' &&
+                      typeof t.metadata?.patientChartPath === 'string' &&
+                      (t.metadata.patientChartPath as string).length > 0 && (
+                        <Link
+                          href={t.metadata.patientChartPath as string}
+                          className="mt-3 inline-block text-sm text-medical-primary font-medium hover:underline"
+                        >
+                          Beteg karton (fogkezelés)
+                        </Link>
+                      )}
                     {(t.taskType === 'document_upload' || t.taskType === 'meeting_action') && (
                       <button
                         type="button"

@@ -31,7 +31,76 @@ export const GET = authedHandler(async (req, { params }) => {
     [patientId]
   );
 
-  return NextResponse.json({ items: result.rows });
+  const rows = result.rows as Array<Record<string, unknown> & { id: string }>;
+  const byTreatment = new Map<
+    string,
+    Array<{
+      id: string;
+      assigneeUserId: string;
+      assigneeDisplayName: string;
+      delegatedMode: 'staff' | 'external';
+      externalLabel: string | null;
+      createdAt: string;
+    }>
+  >();
+
+  if (rows.length > 0) {
+    const ids = rows.map((r) => r.id);
+    const delRes = await pool.query(
+      `SELECT t.id,
+              t.metadata->>'toothTreatmentId' as tooth_treatment_id,
+              t.assignee_user_id as assignee_user_id,
+              t.metadata,
+              t.created_at as created_at,
+              u.doktor_neve as assignee_doktor_neve,
+              u.email as assignee_email
+       FROM user_tasks t
+       LEFT JOIN users u ON u.id = t.assignee_user_id
+       WHERE t.task_type = 'meeting_action'
+         AND COALESCE(t.metadata->>'source', '') = 'tooth_treatment'
+         AND t.status = 'open'
+         AND t.metadata->>'toothTreatmentId' = ANY($1::text[])`,
+      [ids]
+    );
+    for (const d of delRes.rows as Array<{
+      id: string;
+      tooth_treatment_id: string;
+      assignee_user_id: string;
+      metadata: Record<string, unknown> | null;
+      created_at: Date;
+      assignee_doktor_neve: string | null;
+      assignee_email: string | null;
+    }>) {
+      const meta = d.metadata ?? {};
+      const ext = typeof meta.externalAssigneeLabel === 'string' ? meta.externalAssigneeLabel.trim() : '';
+      const modeRaw = meta.delegatedMode;
+      const delegatedMode: 'staff' | 'external' =
+        modeRaw === 'external' || ext.length > 0 ? 'external' : 'staff';
+      const assigneeDisplayName =
+        (d.assignee_doktor_neve && String(d.assignee_doktor_neve).trim()) ||
+        (d.assignee_email && String(d.assignee_email).trim()) ||
+        'Ismeretlen';
+      const entry = {
+        id: d.id,
+        assigneeUserId: d.assignee_user_id,
+        assigneeDisplayName,
+        delegatedMode,
+        externalLabel: delegatedMode === 'external' && ext ? ext : null,
+        createdAt: new Date(d.created_at).toISOString(),
+      };
+      const tid = d.tooth_treatment_id;
+      const list = byTreatment.get(tid) ?? [];
+      list.push(entry);
+      byTreatment.set(tid, list);
+    }
+  }
+
+  return NextResponse.json({
+    items: rows.map((r) => ({
+      ...r,
+      openDelegatedTasks: byTreatment.get(r.id) ?? [],
+    })),
+  });
 });
 
 /**

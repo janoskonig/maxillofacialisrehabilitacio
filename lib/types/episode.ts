@@ -226,6 +226,15 @@ export interface ToothTreatmentCatalogItem {
   isActive: boolean;
 }
 
+export interface ToothTreatmentDelegatedTaskSnapshot {
+  id: string;
+  assigneeUserId: string;
+  assigneeDisplayName: string;
+  delegatedMode: 'staff' | 'external';
+  externalLabel: string | null;
+  createdAt: string;
+}
+
 export interface ToothTreatment {
   id: string;
   patientId: string;
@@ -238,4 +247,6 @@ export interface ToothTreatment {
   createdAt: string;
   completedAt: string | null;
   labelHu?: string;
+  /** Nyitott, ehhez a kezeléshez kötött Feladataim-be küldött tételek. */
+  openDelegatedTasks?: ToothTreatmentDelegatedTaskSnapshot[];
 }
