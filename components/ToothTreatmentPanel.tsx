@@ -259,6 +259,13 @@ function ToothTreatmentDelegateBlock({
             ? 'Feladat elküldve — a címzettnek a Feladataim oldalon jelenik meg.'
             : 'Feladat rögzítve — a kiválasztott felelősnél (alapértelmezés: te) a Feladataim listán követhető a külső egyeztetés.',
       });
+      setNote('');
+      setDueLocal('');
+      setAssigneeId('');
+      setAssigneeInput('');
+      setExternalLabel('');
+      setTaskOwnerUserId('');
+      setListOpen(false);
       onDelegated();
     } catch {
       setFeedback({ ok: false, msg: 'Hálózati hiba' });
