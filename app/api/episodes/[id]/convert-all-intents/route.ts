@@ -63,18 +63,8 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
 
     if (result.ok) {
       appointmentIds.push(result.appointmentId);
-      const stRow = await pool.query<{ st: Date | string }>(
-        `SELECT COALESCE(a.start_time, ats.start_time) AS st
-         FROM appointments a
-         LEFT JOIN available_time_slots ats ON a.time_slot_id = ats.id
-         WHERE a.id = $1`,
-        [result.appointmentId]
-      );
-      const st = stRow.rows[0]?.st;
-      if (st) {
-        prevActualStart = new Date(st);
-        prevSuggestedStart = currSuggested ?? prevSuggestedStart;
-      }
+      prevActualStart = result.startTime;
+      prevSuggestedStart = currSuggested ?? prevSuggestedStart;
     } else {
       skipped.push({
         intentId: row.id,
