@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
-import { allPendingSteps, isBlockedAll } from '@/lib/next-step-engine';
+import { allPendingSteps, isBlockedAll, type PendingStep } from '@/lib/next-step-engine';
 
 export const dynamic = 'force-dynamic';
 
@@ -73,7 +73,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
      LEFT JOIN work_phase_catalog sc ON ewp.work_phase_code = sc.work_phase_code AND sc.is_active = true
      LEFT JOIN appointments a ON ewp.appointment_id = a.id
      WHERE ewp.episode_id = $1 ${mergedFilter}
-     ORDER BY COALESCE(ewp.seq, ewp.pathway_order_index)`,
+     ORDER BY COALESCE(ewp.seq, ewp.pathway_order_index), ewp.pathway_order_index`,
     [episodeId]
   );
 
@@ -126,6 +126,14 @@ export const GET = authedHandler(async (req, { auth, params }) => {
     } satisfies StepProjectionsResponse);
   }
 
+  /** FIFO per step code — matches allPendingSteps order when the same code appears more than once. */
+  const pendingByCodeQueues = new Map<string, PendingStep[]>();
+  for (const p of pendingResult) {
+    const list = pendingByCodeQueues.get(p.work_phase_code) ?? [];
+    list.push(p);
+    pendingByCodeQueues.set(p.work_phase_code, list);
+  }
+
   const steps: ProjectedStep[] = [];
   let completedCount = 0;
   let remainingCount = 0;
@@ -134,14 +142,13 @@ export const GET = authedHandler(async (req, { auth, params }) => {
   let lastWindowEnd: string | null = null;
 
   if (episodeStepsResult.rows.length > 0) {
-    let pendingProjectionIdx = 0;
     for (const row of episodeStepsResult.rows) {
       const status = row.status as 'completed' | 'scheduled' | 'pending' | 'skipped';
       const label = row.custom_label || row.label_hu || row.work_phase_code.replace(/_/g, ' ');
-      let projection: (typeof pendingResult)[number] | null = null;
+      let projection: PendingStep | null = null;
       if (status === 'pending' || status === 'scheduled') {
-        projection = pendingResult[pendingProjectionIdx] ?? null;
-        pendingProjectionIdx += 1;
+        const q = pendingByCodeQueues.get(row.work_phase_code);
+        projection = q && q.length > 0 ? (q.shift() ?? null) : null;
       }
 
       let actualDate: string | null = null;
