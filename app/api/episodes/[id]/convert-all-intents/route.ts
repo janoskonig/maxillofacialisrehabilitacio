@@ -64,11 +64,9 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
     if (result.ok) {
       appointmentIds.push(result.appointmentId);
       prevActualStart = result.startTime;
-      // Only advance the pathway suggestion anchor when this step has one; otherwise keep the last
-      // anchor so later suggested steps still get chainMinStartTime from the correct baseline.
-      if (currSuggested) {
-        prevSuggestedStart = currSuggested;
-      }
+      // Pathway anchor for the next delta: prefer suggested_start; if missing, use the actual slot
+      // start so a later intent with suggested_start can still compute chainMinStartTime.
+      prevSuggestedStart = currSuggested ?? result.startTime;
     } else {
       skipped.push({
         intentId: row.id,
