@@ -294,6 +294,7 @@ type ChecklistEntryRow = {
     note?: string | null;
     createdAt: string;
     completedAt?: string | null;
+    dueAt?: string | null;
   }>;
 };
 
@@ -679,6 +680,12 @@ function ChecklistRowEditor({
                           ) : (
                             <p className="text-[11px] text-amber-700/65 italic">Nincs megjegyzés.</p>
                           )}
+                          {task.dueAt ? (
+                            <p className="text-[11px] text-amber-900/85 mt-0.5">
+                              Határidő:{' '}
+                              {new Date(task.dueAt).toLocaleString('hu-HU', { dateStyle: 'medium', timeStyle: 'short' })}
+                            </p>
+                          ) : null}
                           {task.status === 'done' && task.completedAt ? (
                             <p className="text-[11px] text-emerald-800/90 mt-0.5">
                               Késznek jelölve: {new Date(task.completedAt).toLocaleString('hu-HU')}

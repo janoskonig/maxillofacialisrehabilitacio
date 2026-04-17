@@ -28,6 +28,7 @@ const checklistEntrySchema = z.object({
         note: z.string().nullable().optional(),
         createdAt: z.string().datetime(),
         completedAt: z.string().datetime().nullable().optional(),
+        dueAt: z.string().datetime().nullable().optional(),
       }),
     )
     .optional(),
@@ -83,10 +84,28 @@ export const checklistRenameSchema = z.object({
 });
 
 /** Vetítés / konzílium: napirendi pontból staff feladat létrehozása. */
-export const checklistDelegateTaskSchema = z.object({
-  assigneeUserId: z.string().uuid(),
-  note: z.string().trim().max(2000).optional(),
-});
+export const checklistDelegateTaskSchema = z
+  .object({
+    assigneeUserId: z.string().uuid(),
+    note: z.string().trim().max(2000).optional(),
+    /** ISO 8601 (UTC); opcionális határidő a címzett feladataihoz. */
+    dueAt: z.string().datetime().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.dueAt) return;
+    const d = new Date(data.dueAt);
+    if (Number.isNaN(d.getTime())) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Érvénytelen határidő', path: ['dueAt'] });
+      return;
+    }
+    if (d.getTime() < Date.now() - 60_000) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'A határidő nem lehet a múltban',
+        path: ['dueAt'],
+      });
+    }
+  });
 
 export const reorderItemsSchema = z.object({
   itemIdsInOrder: z.array(z.string().uuid()).min(1),

@@ -66,9 +66,15 @@ export const POST = authedHandler(async (req, { auth, params }) => {
   const patientName = (patientRow.rows[0]?.nev as string | undefined)?.trim() || null;
 
   const title = `Konzílium: ${checklistLabel}`;
+  const dueAtDate = body.dueAt ? new Date(body.dueAt) : null;
+  const dueAtHu =
+    dueAtDate && !Number.isNaN(dueAtDate.getTime())
+      ? dueAtDate.toLocaleString('hu-HU', { dateStyle: 'medium', timeStyle: 'short' })
+      : null;
   const descriptionParts = [
     patientName ? `Beteg: ${patientName}` : null,
     `Alkalom: ${sessionTitle}`,
+    dueAtHu ? `Határidő: ${dueAtHu}` : null,
     body.note && body.note.length > 0 ? `Megjegyzés: ${body.note}` : null,
   ].filter(Boolean);
   const description = descriptionParts.length > 0 ? descriptionParts.join('\n') : null;
@@ -89,9 +95,11 @@ export const POST = authedHandler(async (req, { auth, params }) => {
       sessionTitle,
       checklistLabel,
       ...(patientName && { patientName }),
+      ...(body.dueAt && { dueAt: body.dueAt }),
       presentationPath: `/consilium/${sessionId}/present`,
     },
     createdByUserId: auth.userId,
+    dueAt: dueAtDate && !Number.isNaN(dueAtDate.getTime()) ? dueAtDate : null,
   });
 
   return NextResponse.json({

@@ -18,6 +18,7 @@ type TaskItem = {
   patientId: string | null;
   metadata: Record<string, unknown>;
   createdAt: string;
+  dueAt?: string | null;
 };
 
 export default function StaffTasksPage() {
@@ -85,6 +86,11 @@ export default function StaffTasksPage() {
                     {t.description && (
                       <p className="text-sm text-gray-600 mt-1 whitespace-pre-wrap">{t.description}</p>
                     )}
+                    {t.dueAt ? (
+                      <p className="text-sm font-medium text-amber-900/90 mt-2">
+                        Határidő: {format(new Date(t.dueAt), 'yyyy.MM.dd HH:mm', { locale: hu })}
+                      </p>
+                    ) : null}
                     <p className="text-xs text-gray-400 mt-2">
                       {format(new Date(t.createdAt), 'yyyy.MM.dd HH:mm', { locale: hu })}
                     </p>
