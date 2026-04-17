@@ -86,7 +86,8 @@ export async function checkOneHardNext(
   const regular = futureWork.rows.filter(
     (r: Row) => !r.requires_precommit && !r.is_chain_reservation
   );
-  const total = futureWork.rows.length;
+  /** Futures that count toward the precommit cap (chain reservations are excluded like one-hard-next). */
+  const futureWorkNonChain = futureWork.rows.filter((r: Row) => !r.is_chain_reservation);
 
   const addingPrecommit = options?.requiresPrecommit === true;
 
@@ -98,10 +99,10 @@ export async function checkOneHardNext(
         reason: 'Episode has a non-precommit future work appointment; cannot add precommit (one-hard-next)',
       };
     }
-    if (total >= 2) {
+    if (futureWorkNonChain.length >= 2) {
       return {
         allowed: false,
-        existingAppointmentId: futureWork.rows[0].id,
+        existingAppointmentId: futureWorkNonChain[0]?.id,
         reason: 'Episode already has 2 future work appointments (precommit limit)',
       };
     }

@@ -64,7 +64,8 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
     if (result.ok) {
       appointmentIds.push(result.appointmentId);
       prevActualStart = result.startTime;
-      prevSuggestedStart = currSuggested ?? prevSuggestedStart;
+      // No suggested_start on this step: clear pathway anchor so later steps do not gap from a stale suggestion.
+      prevSuggestedStart = currSuggested;
     } else {
       skipped.push({
         intentId: row.id,
