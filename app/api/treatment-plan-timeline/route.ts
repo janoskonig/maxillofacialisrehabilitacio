@@ -6,6 +6,8 @@ import {
   normalizePathwayWorkPhaseArray,
   pathwayTemplatesFromCarePathwayRow,
 } from '@/lib/pathway-work-phases-for-episode';
+import { isReadPlanItemsEnabled } from '@/lib/plan-items-flags';
+import { loadPlanItemLinksByLegacyEwp } from '@/lib/episode-plan-read-model';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,6 +27,8 @@ interface TimelineStep {
   appointmentStatus: string | null;
   intentId: string | null;
   intentState: string | null;
+  /** Populated when READ_PLAN_ITEMS and a pathway-linked plan item exists for this work phase. */
+  planItemId?: string | null;
 }
 
 interface TimelineEpisode {
@@ -52,6 +56,8 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
 
   const pool = getDbPool();
   const now = new Date();
+  const readPlanItems = isReadPlanItemsEnabled();
+  const apptPlanItemFilter = readPlanItems ? 'AND a.plan_item_id IS NULL' : '';
 
   const whereParts: string[] = [
     `(pe.care_pathway_id IS NOT NULL OR EXISTS (SELECT 1 FROM episode_pathways ep2 WHERE ep2.episode_id = pe.id))`,
@@ -143,6 +149,7 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
          AND a.step_code IS NOT NULL
          AND a.appointment_status IS DISTINCT FROM 'cancelled_by_doctor'
          AND a.appointment_status IS DISTINCT FROM 'cancelled_by_patient'
+         ${apptPlanItemFilter}
        ORDER BY COALESCE(a.step_seq, si.step_seq) ASC NULLS LAST`,
       [episodeIds]
     ),
@@ -162,7 +169,7 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
       [episodeIds]
     ),
     pool.query(
-      `SELECT ewp.episode_id, ewp.work_phase_code as step_code,
+      `SELECT ewp.id as episode_work_phase_id, ewp.episode_id, ewp.work_phase_code as step_code,
               COALESCE(ewp.seq, ewp.pathway_order_index) as step_seq,
               ewp.pool, ewp.duration_minutes, ewp.custom_label
        FROM episode_work_phases ewp
@@ -173,6 +180,10 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
     ),
     getStepLabelMap(),
   ]);
+
+  const planLinksByLegacyEwp = readPlanItems
+    ? await loadPlanItemLinksByLegacyEwp(pool, episodeIds)
+    : new Map();
 
   const stageByEpisode = new Map<string, string>();
   for (const row of stagesResult.rows as { episode_id: string; stage_code: string }[]) {
@@ -205,6 +216,7 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
     label: string;
     pool: string;
     durationMinutes: number;
+    episodeWorkPhaseId: string;
   }
 
   const episodes: TimelineEpisode[] = [];
@@ -221,6 +233,7 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
         label: (r.custom_label as string) || stepLabelMap.get(r.step_code as string) || (r.step_code as string),
         pool: r.pool as string,
         durationMinutes: (r.duration_minutes as number) ?? 30,
+        episodeWorkPhaseId: r.episode_work_phase_id as string,
       }));
     } else {
       const pathwaySteps =
@@ -234,6 +247,7 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
         label: ps.label ?? stepLabelMap.get(ps.work_phase_code) ?? ps.work_phase_code,
         pool: ps.pool,
         durationMinutes: ps.duration_minutes ?? 30,
+        episodeWorkPhaseId: '',
       }));
     }
 
@@ -259,11 +273,35 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
 
     let etaHeuristic: string | null = null;
 
+    type ApptRow = (typeof appts)[number];
+
     for (const src of stepSources) {
-      let appt = apptBySeq.get(src.stepSeq) ?? null;
-      if (!appt && apptByCodeOnly.has(src.stepCode)) {
-        appt = apptByCodeOnly.get(src.stepCode)!;
-        apptByCodeOnly.delete(src.stepCode);
+      const planLink =
+        readPlanItems && src.episodeWorkPhaseId
+          ? planLinksByLegacyEwp.get(src.episodeWorkPhaseId)
+          : undefined;
+
+      let appt: ApptRow | null = null;
+      let planItemId: string | null = null;
+
+      if (planLink !== undefined) {
+        planItemId = planLink.planItemId;
+        if (planLink.appointmentId) {
+          appt = {
+            id: planLink.appointmentId,
+            episode_id: planLink.episodeId,
+            step_code: src.stepCode,
+            step_seq: src.stepSeq,
+            start_time: planLink.startTime,
+            appointment_status: planLink.appointmentStatus,
+          } as ApptRow;
+        }
+      } else {
+        appt = apptBySeq.get(src.stepSeq) ?? null;
+        if (!appt && apptByCodeOnly.has(src.stepCode)) {
+          appt = apptByCodeOnly.get(src.stepCode)!;
+          apptByCodeOnly.delete(src.stepCode);
+        }
       }
       const intent = intentBySeq.get(src.stepSeq);
 
@@ -320,6 +358,7 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
         appointmentStatus: appt?.appointment_status ?? null,
         intentId: intent?.id ?? null,
         intentState: intent?.state ?? null,
+        ...(readPlanItems ? { planItemId } : {}),
       });
     }
 
@@ -352,6 +391,7 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
       fetchedAt: now.toISOString(),
       timezone: 'Europe/Budapest',
       ordering: 'eta_asc',
+      readPlanItemsEnabled: readPlanItems,
     },
   });
 });

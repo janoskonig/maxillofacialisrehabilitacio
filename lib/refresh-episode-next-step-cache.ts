@@ -1,7 +1,7 @@
 /**
  * Refresh episode_next_step_cache for one or more episodes.
  * Used by scheduling-events worker.
- * G4: BLOCKED_CAPACITY when no free work slot in SLA window.
+ * G4: BLOCKED_CAPACITY when no free work slot in the plan window (earliest–latest).
  */
 
 import { getDbPool } from './db';
@@ -11,7 +11,10 @@ import { hasFreeSlotInWindow } from './scheduling-service';
 /**
  * Get provider_id for an episode (assigned_provider or primary care team member).
  */
-async function getProviderIdForEpisode(pool: Awaited<ReturnType<typeof getDbPool>>, episodeId: string): Promise<string | null> {
+export async function getProviderIdForEpisode(
+  pool: Awaited<ReturnType<typeof getDbPool>>,
+  episodeId: string
+): Promise<string | null> {
   const r = await pool.query(
     `SELECT COALESCE(pe.assigned_provider_id, ect.user_id) as provider_id
      FROM patient_episodes pe
@@ -38,7 +41,8 @@ export async function refreshEpisodeNextStepCache(episodeId: string): Promise<vo
       'work',
       result.earliest_date,
       result.latest_date,
-      result.duration_minutes
+      result.duration_minutes,
+      providerId
     );
     if (!hasSlot) {
       await pool.query(
@@ -62,7 +66,7 @@ export async function refreshEpisodeNextStepCache(episodeId: string): Promise<vo
           result.earliest_date.toISOString(),
           result.latest_date.toISOString(),
           result.work_phase_code,
-          'BLOCKED_CAPACITY: Nincs szabad work időpont az SLA ablakban',
+          'BLOCKED_CAPACITY: Nincs szabad work időpont a kezelési terv szerinti időablakban',
         ]
       );
       return;

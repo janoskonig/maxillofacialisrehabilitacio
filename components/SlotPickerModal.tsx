@@ -28,6 +28,8 @@ export interface SlotPickerModalProps {
   durationMinutes: number;
   windowStart: Date;
   windowEnd: Date;
+  /** If true (default), list earliest free slots even after the plan window end — not only in-window. */
+  useNearestFreeSlots?: boolean;
   providerId?: string;
   patientId: string;
   episodeId?: string | null;
@@ -42,6 +44,7 @@ export function SlotPickerModal({
   durationMinutes,
   windowStart,
   windowEnd,
+  useNearestFreeSlots = true,
   providerId,
   patientId,
   episodeId,
@@ -80,6 +83,7 @@ export function SlotPickerModal({
         windowEnd: windowEnd.toISOString(),
         limit: '50',
       });
+      if (useNearestFreeSlots) params.set('nearestFree', '1');
       const effectiveProviderId = selectedProviderId ?? providerId;
       if (effectiveProviderId) params.set('providerId', effectiveProviderId);
       const res = await fetch(`/api/worklists/slots-for-booking?${params}`, { credentials: 'include' });
@@ -97,7 +101,7 @@ export function SlotPickerModal({
     } finally {
       setLoading(false);
     }
-  }, [open, pool, durationMinutes, windowStart, windowEnd, providerId, selectedProviderId]);
+  }, [open, pool, durationMinutes, windowStart, windowEnd, useNearestFreeSlots, providerId, selectedProviderId]);
 
   useEffect(() => {
     if (open) {
@@ -249,6 +253,11 @@ export function SlotPickerModal({
           <span className="px-2 py-1 rounded text-xs font-medium bg-gray-200">
             {windowStartISO} – {windowEndISO}
           </span>
+          {useNearestFreeSlots && (
+            <span className="w-full text-xs text-gray-600">
+              A lista a lehető legkorábbi szabad időpontokat mutatja (nem csak az ajánlott ablak végéig).
+            </span>
+          )}
           <label className="flex items-center gap-1.5">
             <span className="text-xs font-medium text-gray-600">Orvos:</span>
             <select
@@ -289,8 +298,12 @@ export function SlotPickerModal({
               <p className="font-medium">Csak a kiírt szabad időpontok jelennek meg.</p>
               <p className="text-sm mt-1">
                 {providerId
-                  ? 'A kijelölt orvosnak nincs szabad slotja az ablakban. Kiírhatsz újat alább, és rögtön lefoglalod.'
-                  : 'Nincs ilyen slot az ablakban. Kiírhatsz újat alább, és rögtön lefoglalod.'}
+                  ? useNearestFreeSlots
+                    ? 'A kijelölt orvosnak jelenleg nincs megfelelő szabad slotja. Kiírhatsz újat alább, és rögtön lefoglalod.'
+                    : 'A kijelölt orvosnak nincs szabad slotja az ablakban. Kiírhatsz újat alább, és rögtön lefoglalod.'
+                  : useNearestFreeSlots
+                    ? 'Nincs megfelelő szabad slot a feltételekkel. Kiírhatsz újat alább, és rögtön lefoglalod.'
+                    : 'Nincs ilyen slot az ablakban. Kiírhatsz újat alább, és rögtön lefoglalod.'}
               </p>
             </div>
           )}

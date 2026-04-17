@@ -273,10 +273,13 @@ function SortableStepRow({
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2 mt-0.5">
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             <span className="text-xs text-gray-500">{poolLabels[step.pool] ?? step.pool}</span>
             <span className="text-xs text-gray-400">·</span>
-            <span className="text-xs text-gray-500">{step.durationMinutes} perc</span>
+            <span className="text-xs text-gray-500">
+              {step.durationMinutes} perc
+              {hasMerged ? ' (foglalható blokk)' : ''}
+            </span>
             <span className="text-xs text-gray-400">·</span>
             <span className="text-xs text-gray-500">{step.defaultDaysOffset} nap offset</span>
             <span className="text-xs text-gray-400">·</span>
@@ -439,7 +442,12 @@ function StepRowWithConfirm({
             </>
           )}
           {confirmAction === 'timing' && (
-            <TimingEditor step={step} saving={saving} onCancel={onCancel} />
+            <TimingEditor
+              step={step}
+              mergedChildCount={mergedChildren.length}
+              saving={saving}
+              onCancel={onCancel}
+            />
           )}
         </div>
       )}
@@ -449,8 +457,11 @@ function StepRowWithConfirm({
 
 // ─── Timing editor (inline) ───────────────────────────────────────────────────
 
-function TimingEditor({ step, saving, onCancel }: {
-  step: EpisodeStep; saving: boolean; onCancel: () => void;
+function TimingEditor({ step, mergedChildCount, saving, onCancel }: {
+  step: EpisodeStep;
+  mergedChildCount: number;
+  saving: boolean;
+  onCancel: () => void;
 }) {
   const [daysOffset, setDaysOffset] = useState(step.defaultDaysOffset);
   const [duration, setDuration] = useState(step.durationMinutes);
@@ -480,6 +491,12 @@ function TimingEditor({ step, saving, onCancel }: {
   return (
     <div>
       <p className="text-sm text-gray-700 mb-2 font-medium">Időzítés szerkesztése</p>
+      {mergedChildCount > 0 && (
+        <p className="text-xs text-violet-700 bg-violet-50 border border-violet-100 rounded-md px-2 py-1.5 mb-2">
+          Összevont csoport: ez a percszám az <strong>egész</strong> egy időpontra eső blokkra vonatkozik
+          (foglalható slot). A részlépések külön perce csak tájékoztató; szétbontás után külön állítható.
+        </p>
+      )}
       <div className="flex items-center gap-3 mb-2">
         <div className="flex items-center gap-1">
           <label className="text-xs text-gray-500 whitespace-nowrap">Nap offset:</label>

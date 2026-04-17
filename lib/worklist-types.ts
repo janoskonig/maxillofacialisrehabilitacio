@@ -42,6 +42,15 @@ export interface OneHardNextViolationPayload {
   };
 }
 
+export type WorklistPhaseJaw = 'felso' | 'also';
+
+/** Egy munkafázis-sor megjelenítése (összevonás összetételénél vagy önállóan). */
+export interface WorklistMergedPhasePart {
+  label: string;
+  toothNumber?: number | null;
+  jaw?: WorklistPhaseJaw | null;
+}
+
 export interface WorklistItemBackend {
   episodeId: string;
   patientId: string;
@@ -53,6 +62,9 @@ export interface WorklistItemBackend {
   overdueByDays: number;
   windowStart: string | null;
   windowEnd: string | null;
+  /** Legkorábbi szabad slot alapú ablak (láncolva); ha nincs, UI a pathway windowStart/windowEnd-et mutatja */
+  bookableWindowStart?: string | null;
+  bookableWindowEnd?: string | null;
   durationMinutes: number;
   pool: string;
   priorityScore: number;
@@ -86,10 +98,20 @@ export interface WorklistItemBackend {
   episodeOrder?: number;
   /** Episode step DB id – present when step exists as pending/scheduled; used for "mark completed" */
   episodeStepId?: string | null;
+  /** Primary plan item when READ_PLAN_ITEMS and legacy ewp row exists in episode_plan_items */
+  planItemId?: string | null;
   /** Epizódhoz kijelölt orvos (user id); csak az ő slotjai jöhetnek szóba foglaláskor */
   assignedProviderId?: string | null;
   /** Episode step status: completed/skipped/pending/scheduled */
   stepStatus?: 'completed' | 'skipped' | 'pending' | 'scheduled';
+  /** Több munkafázis egy foglalható blokkba összevonva (primary + gyerek sorok) */
+  mergedWorkPhase?: boolean;
+  /** Első elem a fő (primary) lépés, utána az összevont gyerekek — fog / állcsont, ha ismert */
+  mergedWorkPhaseParts?: WorklistMergedPhasePart[];
+  /** Fogszám a fő sorhoz; összevont blokk esetén nincs kitöltve (részletek a mergedWorkPhaseParts-ban) */
+  phaseToothNumber?: number | null;
+  /** Állcsont a fő sorhoz (episode_pathways.jaw); összevont blokk esetén nincs kitöltve */
+  phaseJaw?: WorklistPhaseJaw | null;
 }
 
 export interface WorklistLocalState {

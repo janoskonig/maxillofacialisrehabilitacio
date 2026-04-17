@@ -2,6 +2,7 @@
 
 import { useState, useContext, createContext, useCallback, useEffect } from 'react';
 import { normalizeToothData, type ToothStatus } from '@/hooks/usePatientAutoSave';
+import { isToothTreatmentPathwayDone } from '@/lib/tooth-treatment-pathway';
 import { ToothTreatmentProvider, ToothTreatmentInline } from './ToothTreatmentPanel';
 import { OPInlinePreview } from './OPInlinePreview';
 import type { ToothTreatment, ToothTreatmentCatalogItem } from '@/lib/types';
@@ -82,7 +83,8 @@ function ToothCell({
 
   const { treatments } = useContext(TreatmentSummaryContext);
   const toothTreatments = treatments.filter((t) => String(t.toothNumber) === toothStr);
-  const activeTreatments = toothTreatments.filter((t) => t.status !== 'completed');
+  const activeTreatments = toothTreatments.filter((t) => !isToothTreatmentPathwayDone(t));
+  const completedTreatments = toothTreatments.filter((t) => isToothTreatmentPathwayDone(t));
 
   let bgColor = 'bg-white';
   let borderColor = 'border-gray-300';
@@ -122,11 +124,26 @@ function ToothCell({
       ) : (
         <span className="text-[11px]">{toothStr}</span>
       )}
-      {activeTreatments.length > 0 && (
-        <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-amber-500 text-white text-[9px] font-bold flex items-center justify-center leading-none">
+      {activeTreatments.length > 0 ? (
+        <span
+          className="absolute -top-1.5 -right-1.5 min-w-[1rem] h-4 px-0.5 rounded-full bg-amber-500 text-white text-[9px] font-bold flex items-center justify-center leading-none"
+          title={`${activeTreatments.length} nyitott kezelési igény`}
+        >
           {activeTreatments.length}
         </span>
-      )}
+      ) : completedTreatments.length > 0 ? (
+        <span
+          className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-emerald-600 text-white text-[10px] font-bold flex items-center justify-center leading-none"
+          title={
+            completedTreatments.length > 1
+              ? `${completedTreatments.length} befejezett kezelés`
+              : 'Befejezett kezelés'
+          }
+          aria-label="Befejezett kezelés"
+        >
+          ✓
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -204,7 +221,8 @@ export function ZsigmondyCrossStages({ patientId, patientName, meglevoFogak }: Z
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-50 border border-red-300" /> Szuvas (D)</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-blue-50 border border-blue-300" /> Tömött (F)</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-gray-100 border border-gray-300" /> Hiányzik (M)</span>
-        <span className="flex items-center gap-1"><span className="relative w-3 h-3 rounded bg-white border border-gray-300"><span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-500" /></span> Kezelési igény</span>
+        <span className="flex items-center gap-1"><span className="relative w-3 h-3 rounded bg-white border border-gray-300"><span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-500" /></span> Nyitott kezelési igény</span>
+        <span className="flex items-center gap-1"><span className="relative w-3 h-3 rounded bg-white border border-gray-300"><span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-600" /></span> Befejezett kezelés (pipa a fogon)</span>
       </div>
 
       <TreatmentSummaryProvider patientId={patientId}>

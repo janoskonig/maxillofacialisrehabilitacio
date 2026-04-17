@@ -141,6 +141,7 @@ type ChecklistRowPresent = {
     note?: string | null;
     createdAt: string;
     completedAt?: string | null;
+    dueAt?: string | null;
   }>;
 };
 
@@ -200,6 +201,8 @@ function PresentChecklistDelegate({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [note, setNote] = useState('');
+  /** `datetime-local` érték (üres = nincs határidő). */
+  const [dueLocal, setDueLocal] = useState('');
   const [sending, setSending] = useState(false);
   const [feedback, setFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
 
@@ -258,6 +261,12 @@ function PresentChecklistDelegate({
           body: JSON.stringify({
             assigneeUserId: assigneeId,
             ...(note.trim() ? { note: note.trim() } : {}),
+            ...(dueLocal.trim()
+              ? (() => {
+                  const d = new Date(dueLocal);
+                  return !Number.isNaN(d.getTime()) ? { dueAt: d.toISOString() } : {};
+                })()
+              : {}),
           }),
         },
       );
@@ -274,6 +283,7 @@ function PresentChecklistDelegate({
         msg: 'Feladat elküldve — a címzettnek a Feladataim oldalon jelenik meg.',
       });
       setNote('');
+      setDueLocal('');
       setAssigneeId('');
       setInputValue('');
       onDelegated?.();
@@ -290,95 +300,114 @@ function PresentChecklistDelegate({
       <p className="text-[11px] text-amber-100/35 mb-2">
         Kezdd el gépelni a nevet vagy e-mailt, majd válassz a listából — a feladat a kijelölt felhasználó nyitott feladatai közé kerül.
       </p>
-      <div className="flex flex-col gap-2 relative">
-        <input
-          ref={inputRef}
-          type="text"
-          role="combobox"
-          aria-expanded={listOpen && suggestions.length > 0}
-          aria-autocomplete="list"
-          aria-controls={`delegate-suggest-${checklistKey}`}
-          autoComplete="off"
-          disabled={institutionUsersLoading || sending}
-          placeholder={
-            institutionUsersLoading ? 'Felhasználók betöltése…' : 'Név vagy e-mail kezdete…'
-          }
-          className="w-full text-sm rounded-md border border-amber-500/30 bg-black/45 text-amber-50 placeholder:text-amber-200/35 px-2 py-1.5 outline-none focus:border-amber-400/60 selection:bg-amber-300 selection:text-black"
-          value={inputValue}
-          onChange={(e) => {
-            setInputValue(e.target.value);
-            setAssigneeId('');
-            setFeedback(null);
-            setListOpen(true);
-          }}
-          onFocus={(e) => {
-            clearBlurTimer();
-            setListOpen(true);
-            if (assigneeId) e.target.select();
-          }}
-          onBlur={() => {
-            blurCloseTimer.current = setTimeout(() => setListOpen(false), 180);
-          }}
-          onKeyDown={(e: ReactKeyboardEvent<HTMLInputElement>) => {
-            if (!listOpen || suggestions.length === 0) {
-              if (e.key === 'Escape') setListOpen(false);
-              return;
+      <div className="flex flex-col gap-2">
+        {/* Csak az input köré `relative`, különben a `top-full` lista a textarea + gomb alá kerül (nem látszik). */}
+        <div className="relative z-[60]">
+          <input
+            ref={inputRef}
+            type="text"
+            role="combobox"
+            aria-expanded={listOpen && suggestions.length > 0}
+            aria-autocomplete="list"
+            aria-controls={`delegate-suggest-${checklistKey}`}
+            autoComplete="off"
+            disabled={institutionUsersLoading || sending}
+            placeholder={
+              institutionUsersLoading ? 'Felhasználók betöltése…' : 'Név vagy e-mail kezdete…'
             }
-            if (e.key === 'ArrowDown') {
-              e.preventDefault();
-              setHighlightIdx((i) => Math.min(suggestions.length - 1, i + 1));
-            } else if (e.key === 'ArrowUp') {
-              e.preventDefault();
-              setHighlightIdx((i) => Math.max(0, i - 1));
-            } else if (e.key === 'Enter') {
-              e.preventDefault();
-              const u = suggestions[highlightIdx];
-              if (u) pickUser(u);
-            } else if (e.key === 'Escape') {
-              e.preventDefault();
-              setListOpen(false);
-            }
-          }}
-        />
+            className="relative z-0 w-full text-sm rounded-md border border-amber-500/30 bg-black/45 text-amber-50 placeholder:text-amber-200/35 px-2 py-1.5 outline-none focus:border-amber-400/60 selection:bg-amber-300 selection:text-black"
+            value={inputValue}
+            onChange={(e) => {
+              setInputValue(e.target.value);
+              setAssigneeId('');
+              setFeedback(null);
+              setListOpen(true);
+            }}
+            onFocus={(e) => {
+              clearBlurTimer();
+              setListOpen(true);
+              if (assigneeId) e.target.select();
+            }}
+            onBlur={() => {
+              blurCloseTimer.current = setTimeout(() => setListOpen(false), 180);
+            }}
+            onKeyDown={(e: ReactKeyboardEvent<HTMLInputElement>) => {
+              if (!listOpen || suggestions.length === 0) {
+                if (e.key === 'Escape') setListOpen(false);
+                return;
+              }
+              if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setHighlightIdx((i) => Math.min(suggestions.length - 1, i + 1));
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setHighlightIdx((i) => Math.max(0, i - 1));
+              } else if (e.key === 'Enter') {
+                e.preventDefault();
+                const u = suggestions[highlightIdx];
+                if (u) pickUser(u);
+              } else if (e.key === 'Escape') {
+                e.preventDefault();
+                setListOpen(false);
+              }
+            }}
+          />
+          {listOpen && inputValue.trim().length > 0 && !institutionUsersLoading && (
+            <ul
+              id={`delegate-suggest-${checklistKey}`}
+              role="listbox"
+              className="absolute left-0 right-0 top-full z-[80] mt-0.5 max-h-52 overflow-y-auto rounded-md border border-amber-500/35 bg-zinc-950 shadow-lg py-1"
+            >
+              {suggestions.length === 0 ? (
+                <li className="px-2 py-2 text-xs text-amber-100/45">Nincs találat.</li>
+              ) : (
+                suggestions.map((u, idx) => (
+                  <li key={u.id} role="presentation">
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={idx === highlightIdx}
+                      className={`w-full text-left px-2 py-1.5 text-sm ${
+                        idx === highlightIdx ? 'bg-amber-500/20 text-amber-50' : 'text-amber-50/90 hover:bg-amber-500/10'
+                      }`}
+                      onMouseDown={(ev) => ev.preventDefault()}
+                      onMouseEnter={() => setHighlightIdx(idx)}
+                      onClick={() => pickUser(u)}
+                    >
+                      {presentInstitutionUserLabel(u)}
+                      {u.role === 'technikus' ? (
+                        <span className="text-amber-200/40 text-xs ml-1">(technikus)</span>
+                      ) : null}
+                      <span className="block text-[10px] text-amber-100/40 truncate">{u.email}</span>
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
+          )}
+        </div>
         {selectedUser && (
           <p className="text-[11px] text-amber-100/90">
             Kiválasztva: <span className="font-semibold text-amber-50">{presentInstitutionUserLabel(selectedUser)}</span>{' '}
             <span className="text-amber-200/70">({selectedUser.email})</span>
           </p>
         )}
-        {listOpen && inputValue.trim().length > 0 && !institutionUsersLoading && (
-          <ul
-            id={`delegate-suggest-${checklistKey}`}
-            role="listbox"
-            className="absolute left-0 right-0 top-full z-30 mt-0.5 max-h-52 overflow-y-auto rounded-md border border-amber-500/35 bg-zinc-950 shadow-lg py-1"
+        <div>
+          <label
+            htmlFor={`delegate-due-${checklistKey}`}
+            className="text-[10px] text-amber-100/50 uppercase tracking-wide block mb-0.5"
           >
-            {suggestions.length === 0 ? (
-              <li className="px-2 py-2 text-xs text-amber-100/45">Nincs találat.</li>
-            ) : (
-              suggestions.map((u, idx) => (
-                <li key={u.id} role="presentation">
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={idx === highlightIdx}
-                    className={`w-full text-left px-2 py-1.5 text-sm ${
-                      idx === highlightIdx ? 'bg-amber-500/20 text-amber-50' : 'text-amber-50/90 hover:bg-amber-500/10'
-                    }`}
-                    onMouseDown={(ev) => ev.preventDefault()}
-                    onMouseEnter={() => setHighlightIdx(idx)}
-                    onClick={() => pickUser(u)}
-                  >
-                    {presentInstitutionUserLabel(u)}
-                    {u.role === 'technikus' ? (
-                      <span className="text-amber-200/40 text-xs ml-1">(technikus)</span>
-                    ) : null}
-                    <span className="block text-[10px] text-amber-100/40 truncate">{u.email}</span>
-                  </button>
-                </li>
-              ))
-            )}
-          </ul>
-        )}
+            Határidő (opcionális)
+          </label>
+          <input
+            id={`delegate-due-${checklistKey}`}
+            type="datetime-local"
+            disabled={sending}
+            value={dueLocal}
+            onChange={(e) => setDueLocal(e.target.value)}
+            className="w-full max-w-[20rem] text-sm rounded-md border border-amber-500/30 bg-black/45 text-amber-50 px-2 py-1.5 outline-none focus:border-amber-400/60 [color-scheme:dark]"
+          />
+        </div>
         <textarea
           className="w-full min-h-[48px] rounded-md border border-amber-500/25 bg-black/40 text-xs text-amber-50/90 placeholder:text-amber-200/25 px-2 py-1.5 outline-none focus:border-amber-400/45"
           placeholder="Opcionális megjegyzés a címzettnek…"
@@ -562,6 +591,12 @@ function PresentChecklistDelegatedTasks({
                   ) : (
                     <p className="text-[10px] text-amber-100/45 mt-0.5 italic">Nincs megjegyzés.</p>
                   )}
+                  {task.dueAt ? (
+                    <p className="text-[10px] text-amber-200/80 mt-0.5">
+                      Határidő:{' '}
+                      {new Date(task.dueAt).toLocaleString('hu-HU', { dateStyle: 'medium', timeStyle: 'short' })}
+                    </p>
+                  ) : null}
                   {task.status === 'done' && task.completedAt ? (
                     <p className="text-[10px] text-emerald-200/80 mt-0.5">
                       Késznek jelölve: {new Date(task.completedAt).toLocaleString('hu-HU')}
@@ -1151,7 +1186,7 @@ export default function ConsiliumPresentPage() {
                       return (
                         <div
                           key={c.key}
-                          className="rounded-lg border border-white/10 bg-black/25 overflow-hidden"
+                          className="rounded-lg border border-white/10 bg-black/25"
                         >
                           <label className="flex items-start gap-2 text-sm px-3 pt-3 pb-2 border-b border-white/10">
                             <input

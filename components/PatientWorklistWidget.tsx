@@ -11,6 +11,7 @@ import {
 import { formatShortDateRange } from '@/lib/datetime';
 import { SlotPickerModal } from './SlotPickerModal';
 import { OverrideModal } from './OverrideModal';
+import { WorklistMergedPhaseCell } from './WorklistMergedPhaseCell';
 
 export interface PatientWorklistWidgetProps {
   patientId: string;
@@ -40,6 +41,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
   } | null>(null);
   const [convertAllEpisodeId, setConvertAllEpisodeId] = useState<string | null>(null);
   const [convertAllMessage, setConvertAllMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [chainBookingRequiredByEpisodeId, setChainBookingRequiredByEpisodeId] = useState<Record<string, boolean>>({});
   const [markCompleteKey, setMarkCompleteKey] = useState<string | null>(null);
   const [deleteAppointmentId, setDeleteAppointmentId] = useState<string | null>(null);
 
@@ -56,12 +58,15 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
       if (!res.ok) {
         setError(data.error ?? 'Hiba történt');
         setItems([]);
+        setChainBookingRequiredByEpisodeId({});
         return;
       }
       setItems(data.items ?? []);
+      setChainBookingRequiredByEpisodeId(data.chainBookingRequiredByEpisodeId ?? {});
     } catch (e) {
       setError('Hálózati hiba');
       setItems([]);
+      setChainBookingRequiredByEpisodeId({});
     } finally {
       setLoading(false);
     }
@@ -392,8 +397,22 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
     );
   }
 
+  const showChainMandatoryBanner = Object.keys(chainBookingRequiredByEpisodeId).some(
+    (eid) =>
+      chainBookingRequiredByEpisodeId[eid] && sortedItems.some((i) => i.episodeId === eid)
+  );
+
   return (
     <div className="space-y-3">
+      {showChainMandatoryBanner && (
+        <div className="rounded-lg border-2 border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+          <p className="font-semibold">Teljes sorozat lefoglalása kötelező lépés</p>
+          <p className="mt-1 text-amber-900/90">
+            Ha az epizódhoz több munkafázis tartozik, az első sorban az „Összes szükséges időpont lefoglalása”
+            gombbal foglald le egyszerre a szükséges időpontokat — ne csak az első lépést egyenként.
+          </p>
+        </div>
+      )}
       {convertAllMessage && (
         <p
           className={`text-sm px-3 py-2 rounded ${
@@ -418,8 +437,8 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
             <tr>
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Epizód / Stage</th>
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Következő munkafázis</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">SLA / késés</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Ablak</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Késés a tervhez képest</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Ablak (terv szerint)</th>
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Státusz</th>
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 w-24">Művelet</th>
             </tr>
@@ -433,6 +452,8 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
               const showConvertAll =
                 isFirstRowOfEpisode && episodeIdsWithReady.has(item.episodeId);
               const isConvertingAll = convertAllEpisodeId === item.episodeId;
+              const ablakStart = item.bookableWindowStart ?? item.windowStart;
+              const ablakEnd = item.bookableWindowEnd ?? item.windowEnd;
 
               return (
                 <tr
@@ -444,10 +465,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                     <span className="ml-1 text-xs text-gray-400">#{item.episodeId.slice(0, 8)}</span>
                   </td>
                   <td className="px-3 py-2">
-                    <span className="text-sm font-medium">{item.nextStep}</span>
-                    {item.durationMinutes > 0 && (
-                      <span className="ml-1 text-xs text-gray-500">{item.durationMinutes} perc</span>
-                    )}
+                    <WorklistMergedPhaseCell item={item} />
                   </td>
                   <td className="px-3 py-2 text-sm">
                     {item.overdueByDays > 0 ? (
@@ -457,9 +475,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                     )}
                   </td>
                   <td className="px-3 py-2 text-sm text-gray-600">
-                    {item.windowStart && item.windowEnd
-                      ? formatShortDateRange(item.windowStart, item.windowEnd)
-                      : '–'}
+                    {ablakStart && ablakEnd ? formatShortDateRange(ablakStart, ablakEnd) : '–'}
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex flex-col gap-0.5">
@@ -531,7 +547,11 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                         <button
                           onClick={() => handleConvertAllIntents(item.episodeId)}
                           disabled={!!isConvertingAll}
-                          className="text-xs text-medical-primary hover:underline font-medium disabled:opacity-50 text-left"
+                          className={`text-xs font-medium disabled:opacity-50 text-left ${
+                            chainBookingRequiredByEpisodeId[item.episodeId]
+                              ? 'text-amber-900 font-semibold ring-1 ring-amber-400 rounded px-1.5 py-0.5 bg-amber-50'
+                              : 'text-medical-primary hover:underline'
+                          }`}
                         >
                           {isConvertingAll ? 'Lefoglalás…' : 'Összes szükséges időpont lefoglalása'}
                         </button>

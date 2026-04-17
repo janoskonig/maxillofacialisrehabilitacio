@@ -226,6 +226,15 @@ export interface ToothTreatmentCatalogItem {
   isActive: boolean;
 }
 
+export interface ToothTreatmentDelegatedTaskSnapshot {
+  id: string;
+  assigneeUserId: string;
+  assigneeDisplayName: string;
+  delegatedMode: 'staff' | 'external';
+  externalLabel: string | null;
+  createdAt: string;
+}
+
 export interface ToothTreatment {
   id: string;
   patientId: string;
@@ -238,4 +247,11 @@ export interface ToothTreatment {
   createdAt: string;
   completedAt: string | null;
   labelHu?: string;
+  /**
+   * True when the linked `episode_work_phases` row (primary if merged) is completed or skipped,
+   * while `status` may still be `episode_linked` until explicitly synced.
+   */
+  pathwayClosed?: boolean;
+  /** Nyitott, ehhez a kezeléshez kötött Feladataim-be küldött tételek. */
+  openDelegatedTasks?: ToothTreatmentDelegatedTaskSnapshot[];
 }

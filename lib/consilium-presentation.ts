@@ -687,6 +687,7 @@ type DelegatedChecklistTaskSnapshot = {
   note: string | null;
   createdAt: string;
   completedAt: string | null;
+  dueAt: string | null;
 };
 
 type DelegatedTasksByItem = Map<string, Map<string, DelegatedChecklistTaskSnapshot[]>>;
@@ -710,6 +711,7 @@ async function loadDelegatedTasksByItemIds(
     description: string | null;
     createdAt: Date;
     completedAt: Date | null;
+    dueAt: Date | null;
   }>(
     `SELECT
        t.id,
@@ -723,7 +725,8 @@ async function loadDelegatedTasksByItemIds(
        COALESCE(NULLIF(btrim(cu.doktor_neve), ''), NULLIF(btrim(cu.email), '')) as "createdByName",
        t.description,
        t.created_at as "createdAt",
-       t.completed_at as "completedAt"
+       t.completed_at as "completedAt",
+       t.due_at as "dueAt"
      FROM user_tasks t
      LEFT JOIN users au ON au.id = t.assignee_user_id
      LEFT JOIN users cu ON cu.id = t.created_by_user_id
@@ -763,6 +766,8 @@ async function loadDelegatedTasksByItemIds(
           : row.completedAt
             ? String(row.completedAt)
             : null,
+      dueAt:
+        row.dueAt instanceof Date ? row.dueAt.toISOString() : row.dueAt ? String(row.dueAt) : null,
     });
     byChecklist.set(checklistKey, list);
     byItem.set(itemId, byChecklist);

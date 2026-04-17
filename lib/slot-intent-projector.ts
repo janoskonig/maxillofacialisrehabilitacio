@@ -146,12 +146,26 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
       status: string;
       completed_at: Date | null;
       default_days_offset?: number | null;
+      duration_minutes?: number | null;
     }
     let episodeWorkPhaseRows: EwpRow[] | null = null;
     try {
+      // Összevont (child) sorok kihagyása — ugyanarra az időpontra tartoznak a primary-hoz; különben az anchor-lánc
+      // minden gyerekre külön lépdel, és az offsetek összeadódnának (next-step-engine / worklist már így szűr).
+      let mergedIntoFilter = '';
+      try {
+        const col = await pool.query(
+          `SELECT 1 FROM information_schema.columns
+           WHERE table_name = 'episode_work_phases' AND column_name = 'merged_into_episode_work_phase_id' LIMIT 1`
+        );
+        if (col.rows.length > 0) mergedIntoFilter = ' AND merged_into_episode_work_phase_id IS NULL';
+      } catch {
+        /* ignore */
+      }
       const esResult = await pool.query(
-        `SELECT work_phase_code, COALESCE(seq, pathway_order_index) as step_seq, status, completed_at, default_days_offset
-         FROM episode_work_phases WHERE episode_id = $1
+        `SELECT work_phase_code, COALESCE(seq, pathway_order_index) as step_seq, status, completed_at,
+                default_days_offset, duration_minutes
+         FROM episode_work_phases WHERE episode_id = $1${mergedIntoFilter}
          ORDER BY COALESCE(seq, pathway_order_index)`,
         [episodeId]
       );
@@ -203,11 +217,13 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
         if (completedStepCodes.has(es.work_phase_code)) continue;
         if (bookedStepCodes.has(es.work_phase_code)) continue;
         const pw = pathwayByCode.get(es.work_phase_code);
+        const ewpDur = es.duration_minutes != null ? Number(es.duration_minutes) : null;
         stepsToProject.push({
           stepCode: es.work_phase_code,
           stepSeq: es.step_seq,
           offset: (es.default_days_offset ?? pw?.default_days_offset) ?? 14,
-          durationMinutes: pw?.duration_minutes ?? 30,
+          durationMinutes:
+            ewpDur != null && ewpDur > 0 ? ewpDur : (pw?.duration_minutes ?? 30),
           pool: pw ? slotPoolForStep(pw) : 'work',
         });
       }

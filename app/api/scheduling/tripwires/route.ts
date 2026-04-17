@@ -22,6 +22,7 @@ export const GET = roleHandler(['admin', 'fogpótlástanász'], async (req, { au
        WHERE a.pool = 'work' AND a.start_time > CURRENT_TIMESTAMP
        AND (a.appointment_status IS NULL OR a.appointment_status = 'completed')
        AND a.requires_precommit = false
+       AND a.is_chain_reservation = false
        GROUP BY pe.id, pe.patient_id
        HAVING COUNT(*) > 1`
     ),

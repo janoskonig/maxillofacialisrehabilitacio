@@ -46,7 +46,8 @@ export const GET = authedHandler(async (req, { auth, params }) => {
      WHERE episode_id = $1 AND pool = 'work'
      AND start_time > CURRENT_TIMESTAMP
      AND (appointment_status IS NULL OR appointment_status = 'completed')
-     AND requires_precommit = false`,
+     AND requires_precommit = false
+     AND is_chain_reservation = false`,
     [episodeId]
   );
 

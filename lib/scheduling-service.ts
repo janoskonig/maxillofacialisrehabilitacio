@@ -27,12 +27,14 @@ export function isRebalanceEligible(state: string | null): boolean {
 /**
  * Check if there is at least one free slot in the window for the given pool.
  * Shared by slots-for-booking and BLOCKED_CAPACITY check.
+ * When providerId is set, only that user's slots count (aligned with assigned-provider booking).
  */
 export async function hasFreeSlotInWindow(
   pool: 'consult' | 'work' | 'control',
   windowStart: Date,
   windowEnd: Date,
-  durationMinutes: number
+  durationMinutes: number,
+  providerId?: string | null
 ): Promise<boolean> {
   const db = getDbPool();
   const r = await db.query(
@@ -41,8 +43,9 @@ export async function hasFreeSlotInWindow(
        AND ats.start_time >= $1 AND ats.start_time <= $2
        AND (ats.slot_purpose = $3 OR ats.slot_purpose IS NULL OR ats.slot_purpose = 'flexible')
        AND (ats.duration_minutes >= $4 OR ats.duration_minutes IS NULL)
+       AND ($5::text IS NULL OR ats.user_id = $5)
      LIMIT 1`,
-    [windowStart.toISOString(), windowEnd.toISOString(), pool, durationMinutes]
+    [windowStart.toISOString(), windowEnd.toISOString(), pool, durationMinutes, providerId ?? null]
   );
   return (r.rowCount ?? 0) > 0;
 }
@@ -57,9 +60,9 @@ export interface OneHardNextCheckResult {
 }
 
 /**
- * Check one-hard-next: for episode in WIP, at most one future hard work appointment.
+ * Check one-hard-next: for episode in WIP, at most one future hard work appointment that is neither
+ * precommit nor chain-reservation. Batch chain bookings set is_chain_reservation and do not count here.
  * Exception: requires_precommit steps allow up to 2 future work appointments (both must be precommit).
- * Returns { allowed: false } if invariant would be violated.
  */
 export async function checkOneHardNext(
   episodeId: string | null,
@@ -72,21 +75,23 @@ export async function checkOneHardNext(
 
   const db = options?.dbClient ?? getDbPool();
   const futureWork = await db.query(
-    `SELECT id, requires_precommit FROM appointments
+    `SELECT id, requires_precommit, is_chain_reservation FROM appointments
      WHERE episode_id = $1 AND pool = 'work'
      AND start_time > CURRENT_TIMESTAMP
      AND (appointment_status IS NULL OR appointment_status = 'completed')`,
     [episodeId]
   );
 
-  const regular = futureWork.rows.filter((r: { requires_precommit: boolean }) => !r.requires_precommit);
-  const precommit = futureWork.rows.filter((r: { requires_precommit: boolean }) => r.requires_precommit);
-  const total = futureWork.rows.length;
+  type Row = { id: string; requires_precommit: boolean; is_chain_reservation: boolean };
+  const regular = futureWork.rows.filter(
+    (r: Row) => !r.requires_precommit && !r.is_chain_reservation
+  );
+  /** Futures that count toward the precommit cap (chain reservations are excluded like one-hard-next). */
+  const futureWorkNonChain = futureWork.rows.filter((r: Row) => !r.is_chain_reservation);
 
   const addingPrecommit = options?.requiresPrecommit === true;
 
   if (addingPrecommit) {
-    // Allow 2 future work appointments only when both are precommit
     if (regular.length > 0) {
       return {
         allowed: false,
@@ -94,17 +99,16 @@ export async function checkOneHardNext(
         reason: 'Episode has a non-precommit future work appointment; cannot add precommit (one-hard-next)',
       };
     }
-    if (total >= 2) {
+    if (futureWorkNonChain.length >= 2) {
       return {
         allowed: false,
-        existingAppointmentId: futureWork.rows[0].id,
+        existingAppointmentId: futureWorkNonChain[0]?.id,
         reason: 'Episode already has 2 future work appointments (precommit limit)',
       };
     }
     return { allowed: true };
   }
 
-  // Adding regular (non-precommit) work appointment
   if (regular.length > 0) {
     return {
       allowed: false,

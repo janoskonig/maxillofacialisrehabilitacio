@@ -193,6 +193,28 @@ function episodeWorkPhaseAsPathwayTemplate(es: EpisodeWorkPhaseRow): PathwayWork
   };
 }
 
+/** Per-episode sor nyer (custom_label, összevont blokk címe) a pathway sablon címével szemben. */
+function displayLabelForEpisodeWorkPhase(
+  episodeRow: EpisodeWorkPhaseRow,
+  pathwayTemplate: PathwayWorkPhaseTemplate
+): string {
+  const custom = episodeRow.custom_label?.trim();
+  if (custom) return custom;
+  const tpl = pathwayTemplate.label?.trim();
+  if (tpl) return tpl;
+  return pathwayTemplate.work_phase_code;
+}
+
+/** Prefer per-episode duration (user-edited, incl. merged-slot total on primary row) over pathway template. */
+function durationMinutesForEpisodeStep(
+  episodeRow: { duration_minutes?: number | null },
+  pathwayTemplate: PathwayWorkPhaseTemplate
+): number {
+  const fromEpisode = episodeRow.duration_minutes;
+  if (typeof fromEpisode === 'number' && fromEpisode > 0) return fromEpisode;
+  return pathwayTemplate.duration_minutes ?? 30;
+}
+
 /**
  * Compute next required step for an episode.
  * Returns recommended window or BLOCKED with required prereqs.
@@ -255,9 +277,9 @@ export async function nextRequiredStep(episodeId: string): Promise<NextRequiredS
 
     return {
       work_phase_code: matchingStep.work_phase_code,
-      label: matchingStep.label,
+      label: displayLabelForEpisodeWorkPhase(pendingStep, matchingStep),
       pool: slotPoolForStep(matchingStep),
-      duration_minutes: matchingStep.duration_minutes ?? 30,
+      duration_minutes: durationMinutesForEpisodeStep(pendingStep, matchingStep),
       earliest_date: windowStart,
       latest_date: windowEnd,
       reason: `Pathway step ${matchingStep.label ?? matchingStep.work_phase_code}`,
@@ -387,9 +409,9 @@ export async function allPendingSteps(episodeId: string): Promise<AllPendingStep
 
       results.push({
         work_phase_code: ps.work_phase_code,
-        label: ps.label,
+        label: displayLabelForEpisodeWorkPhase(pending, ps),
         pool: slotPoolForStep(ps),
-        duration_minutes: ps.duration_minutes ?? 30,
+        duration_minutes: durationMinutesForEpisodeStep(pending, ps),
         earliest_date: windowStart,
         latest_date: windowEnd,
         reason: `Pathway step ${ps.label ?? ps.work_phase_code}`,
@@ -529,9 +551,9 @@ export function allPendingStepsWithData(
       const completedDate = step.completed_at ? new Date(step.completed_at) : openedAt;
       results.push({
         work_phase_code: ps.work_phase_code,
-        label: ps.label,
+        label: displayLabelForEpisodeWorkPhase(step, ps),
         pool: slotPoolForStep(ps),
-        duration_minutes: ps.duration_minutes ?? 30,
+        duration_minutes: durationMinutesForEpisodeStep(step, ps),
         earliest_date: completedDate,
         latest_date: completedDate,
         reason: step.status === 'completed' ? 'Teljesítve' : 'Kihagyva',
@@ -552,9 +574,9 @@ export function allPendingStepsWithData(
 
       results.push({
         work_phase_code: ps.work_phase_code,
-        label: ps.label,
+        label: displayLabelForEpisodeWorkPhase(pending, ps),
         pool: slotPoolForStep(ps),
-        duration_minutes: ps.duration_minutes ?? 30,
+        duration_minutes: durationMinutesForEpisodeStep(pending, ps),
         earliest_date: windowStart,
         latest_date: windowEnd,
         reason: `Pathway step ${ps.label ?? ps.work_phase_code}`,

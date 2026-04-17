@@ -20,14 +20,18 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
   await projectRemainingSteps(episodeId);
 
   const intentsResult = await pool.query(
-    `SELECT si.id, si.step_code
+    `SELECT si.id, si.step_code, si.suggested_start
      FROM slot_intents si
      WHERE si.episode_id = $1 AND si.state = 'open'
      ORDER BY si.step_seq ASC`,
     [episodeId]
   );
 
-  const intents = intentsResult.rows as Array<{ id: string; step_code?: string }>;
+  const intents = intentsResult.rows as Array<{
+    id: string;
+    step_code?: string;
+    suggested_start?: Date | string | null;
+  }>;
 
   if (intents.length === 0) {
     return NextResponse.json(
@@ -39,13 +43,30 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
   const appointmentIds: string[] = [];
   const skipped: Array<{ intentId: string; reason: string; code?: string; stepCode?: string }> = [];
 
+  let prevActualStart: Date | null = null;
+  let prevSuggestedStart: Date | null = null;
+
   for (const row of intents) {
+    const currSuggested = row.suggested_start ? new Date(row.suggested_start) : null;
+    let chainMinStartTime: Date | undefined;
+    if (prevActualStart && prevSuggestedStart && currSuggested) {
+      const deltaMs = currSuggested.getTime() - prevSuggestedStart.getTime();
+      if (deltaMs >= 0) {
+        chainMinStartTime = new Date(prevActualStart.getTime() + deltaMs);
+      }
+    }
+
     const result = await convertIntentToAppointment(pool, row.id, auth, {
       skipOneHardNext: true,
+      ...(chainMinStartTime ? { chainMinStartTime } : {}),
     });
 
     if (result.ok) {
       appointmentIds.push(result.appointmentId);
+      prevActualStart = result.startTime;
+      // Pathway anchor for the next delta: prefer suggested_start; if missing, use the actual slot
+      // start so a later intent with suggested_start can still compute chainMinStartTime.
+      prevSuggestedStart = currSuggested ?? result.startTime;
     } else {
       skipped.push({
         intentId: row.id,
