@@ -72,6 +72,15 @@ export const GET = authedHandler(async (req, { auth, params }) => {
 
   const patientData = patientResult.rows[0];
   const quoteData = quoteResult.rows[0];
+  const senderResult = await pool.query(
+    `SELECT doktor_neve, email FROM users WHERE id = $1`,
+    [auth.userId]
+  );
+  const senderDoctorName =
+    senderResult.rows[0]?.doktor_neve ||
+    senderResult.rows[0]?.email ||
+    patientData.kezeleoorvos ||
+    auth.email;
 
   // Konvertáljuk a dátum mezőket string formátumba
   const normalizedPatientData = {
@@ -97,7 +106,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
   const quoteRequest = normalizedQuoteData as LabQuoteRequest;
 
   // PDF generálása
-  const pdfBuffer = await generateLabQuoteRequestPDF(patient, quoteRequest);
+  const pdfBuffer = await generateLabQuoteRequestPDF(patient, quoteRequest, senderDoctorName);
 
   // Fájlnév generálása
   const patientName = patient.nev || 'Beteg';

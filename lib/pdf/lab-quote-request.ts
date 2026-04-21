@@ -15,13 +15,11 @@ import {
   HeaderConfig,
 } from './layout';
 
-// Note: With DejaVu fonts, we no longer need character replacement for ő/ű
-// But we still normalize line breaks
+// Keep user-entered line breaks, only normalize CRLF/CR variants.
 function normalizeText(text: string): string {
   return String(text)
-    .replace(/\r\n/g, ' ')
-    .replace(/\n/g, ' ')
-    .replace(/\r/g, ' ');
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n');
 }
 
 /**
@@ -29,7 +27,8 @@ function normalizeText(text: string): string {
  */
 export async function generateLabQuoteRequestPDF(
   patient: Patient,
-  quoteRequest: LabQuoteRequest
+  quoteRequest: LabQuoteRequest,
+  senderDoctorName?: string | null
 ): Promise<Buffer> {
   // Új PDF dokumentum létrehozása
   const pdfDoc = await PDFDocument.create();
@@ -145,11 +144,12 @@ export async function generateLabQuoteRequestPDF(
   }
 
   // Closing
+  const doctorSignatureName = senderDoctorName || patient.kezeleoorvos || 'König János';
   addPageIfNeeded(pdfDoc, state);
   drawLeftAlignedText(state.page, 'Üdvözlettel:', state.y, TYPOGRAPHY.scale.h3, font);
   moveDown(state, TYPOGRAPHY.spacing.sm);
   addPageIfNeeded(pdfDoc, state);
-  drawLeftAlignedText(state.page, patient.kezeleoorvos || '', state.y, TYPOGRAPHY.scale.h3, boldFont);
+  drawLeftAlignedText(state.page, doctorSignatureName, state.y, TYPOGRAPHY.scale.h3, boldFont);
   moveDown(state, TYPOGRAPHY.spacing.xl);
 
   // Signature line (right-aligned)

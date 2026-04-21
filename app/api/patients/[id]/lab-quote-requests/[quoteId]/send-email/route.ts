@@ -6,8 +6,7 @@ import { generateLabQuoteRequestPDF } from '@/lib/pdf/lab-quote-request';
 import { Patient, patientSchema } from '@/lib/types';
 
 // Labor email címzett beállítások
-const LAB_EMAIL = 'idssote@gmail.com';
-const LAB_CC_EMAIL = 'janos.koenig@gmail.com';
+const LAB_EMAIL = 'konig.janos@semmelweis.hu';
 const REPLY_TO_EMAIL = 'konig.janos@semmelweis.hu';
 
 /**
@@ -69,6 +68,15 @@ export const POST = authedHandler(async (req, { auth, params }) => {
 
   const patientData = patientResult.rows[0];
   const quoteData = quoteResult.rows[0];
+  const senderResult = await pool.query(
+    `SELECT doktor_neve, email FROM users WHERE id = $1`,
+    [auth.userId]
+  );
+  const senderDoctorName =
+    senderResult.rows[0]?.doktor_neve ||
+    senderResult.rows[0]?.email ||
+    patientData.kezeleoorvos ||
+    auth.email;
 
   // Konvertáljuk a dátum mezőket string formátumba
   const normalizedPatientData = {
@@ -94,7 +102,7 @@ export const POST = authedHandler(async (req, { auth, params }) => {
   const quoteRequest = normalizedQuoteData as any;
 
   // PDF generálása
-  const pdfBuffer = await generateLabQuoteRequestPDF(patient, quoteRequest);
+  const pdfBuffer = await generateLabQuoteRequestPDF(patient, quoteRequest, senderDoctorName);
 
   // Email küldése
   const patientName = patient.nev || 'Beteg';
@@ -123,14 +131,13 @@ export const POST = authedHandler(async (req, { auth, params }) => {
             ${formattedDate ? `<li><strong>Határidő:</strong> ${formattedDate}</li>` : ''}
           </ul>
           ${quoteRequest.szoveg ? `<p style="margin-top: 20px;"><strong>Kérés részletei:</strong></p><p style="white-space: pre-wrap; line-height: 1.6;">${quoteRequest.szoveg.replace(/\n/g, '<br>')}</p>` : ''}
-          <p style="margin-top: 30px;">Üdvözlettel,<br><strong>${patient.kezeleoorvos || 'König János'}</strong></p>
+          <p style="margin-top: 30px;">Üdvözlettel,<br><strong>${senderDoctorName}</strong></p>
           <p style="margin-top: 10px; color: #6b7280; font-size: 12px;">Semmelweis Egyetem<br>Fogorvostudományi Kar<br>Fogpótlástani Klinika</p>
         </div>
       `;
 
   await sendEmail({
     to: LAB_EMAIL,
-    cc: LAB_CC_EMAIL,
     replyTo: REPLY_TO_EMAIL,
     subject: safeSubject,
     html: htmlContent,
@@ -150,7 +157,7 @@ ${formattedDate ? `Határidő: ${formattedDate}` : ''}
 ${quoteRequest.szoveg ? `Kérés részletei:\n${quoteRequest.szoveg}` : ''}
 
 Üdvözlettel,
-${patient.kezeleoorvos || 'König János'}
+${senderDoctorName}
 
 Semmelweis Egyetem
 Fogorvostudományi Kar

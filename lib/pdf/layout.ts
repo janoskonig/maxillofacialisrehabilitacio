@@ -214,28 +214,34 @@ export function drawMultilineText(
   lineHeight: number = TYPOGRAPHY.lineHeight.normal,
   color?: Color
 ): number {
-  const words = text.split(' ');
-  let currentLine = '';
   let y = startY;
   const lineSpacing = fontSize * lineHeight;
+  const inputLines = String(text)
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n');
 
-  for (const word of words) {
-    const testLine = currentLine ? `${currentLine} ${word}` : word;
-    const textWidth = font.widthOfTextAtSize(testLine, fontSize);
+  for (const inputLine of inputLines) {
+    const words = inputLine.split(' ');
+    let currentLine = '';
 
-    if (textWidth > maxWidth && currentLine) {
-      // Draw current line and start new one
-      drawText(page, currentLine, { x: margin, y, fontSize, font, color });
-      y -= lineSpacing;
-      currentLine = word;
-    } else {
-      currentLine = testLine;
+    for (const word of words) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      const textWidth = font.widthOfTextAtSize(testLine, fontSize);
+
+      if (textWidth > maxWidth && currentLine) {
+        drawText(page, currentLine, { x: margin, y, fontSize, font, color });
+        y -= lineSpacing;
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
     }
-  }
 
-  // Draw remaining line
-  if (currentLine) {
-    drawText(page, currentLine, { x: margin, y, fontSize, font, color });
+    // Draw remaining wrapped line or keep a blank line for explicit breaks.
+    if (currentLine.trim()) {
+      drawText(page, currentLine, { x: margin, y, fontSize, font, color });
+    }
     y -= lineSpacing;
   }
 
