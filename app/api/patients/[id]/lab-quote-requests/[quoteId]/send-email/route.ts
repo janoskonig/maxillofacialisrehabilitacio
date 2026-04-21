@@ -5,8 +5,9 @@ import { sendEmail } from '@/lib/email';
 import { generateLabQuoteRequestPDF } from '@/lib/pdf/lab-quote-request';
 import { Patient, patientSchema } from '@/lib/types';
 
-// Labor email címe (tesztelés miatt)
-const LAB_EMAIL = 'jancheeta876@gmail.com';
+// Labor email címzett beállítások
+const LAB_EMAIL = 'idssote@gmail.com';
+const LAB_CC_EMAIL = 'janos.koenig@gmail.com';
 const REPLY_TO_EMAIL = 'konig.janos@semmelweis.hu';
 
 /**
@@ -129,6 +130,7 @@ export const POST = authedHandler(async (req, { auth, params }) => {
 
   await sendEmail({
     to: LAB_EMAIL,
+    cc: LAB_CC_EMAIL,
     replyTo: REPLY_TO_EMAIL,
     subject: safeSubject,
     html: htmlContent,
