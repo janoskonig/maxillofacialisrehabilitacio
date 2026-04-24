@@ -6,7 +6,7 @@ import { User, Lock, Eye, EyeOff, Mail, UserCircle } from 'lucide-react';
 import Link from 'next/link';
 import { Logo } from '@/components/Logo';
 
-type RegistrationRole = 'sebész' | 'fogpótos' | 'technikus';
+type RegistrationRole = 'sebész' | 'fogszabályozó' | 'fogpótos' | 'technikus';
 
 export default function Register() {
   const [email, setEmail] = useState('');
@@ -319,6 +319,7 @@ export default function Register() {
                 >
                   <option value="">-- Válasszon szerepkört --</option>
                   <option value="sebész">Beutaló orvos</option>
+                  <option value="fogszabályozó">Fogszabályozó orvos</option>
                   <option value="fogpótos">Fogpótos</option>
                   <option value="technikus">Technikus</option>
                 </select>
