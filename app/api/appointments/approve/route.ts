@@ -9,6 +9,7 @@ import { logger } from '@/lib/logger';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { queueAdminNotification } from '@/lib/email/admin-notification-queue';
+import { recomputeKezeleoorvosSilent } from '@/lib/recompute-kezeleoorvos';
 
 /**
  * Approve a pending appointment (via email link)
@@ -130,6 +131,11 @@ export const GET = apiHandler(async (req, { params }) => {
       }
 
       await pool.query('COMMIT');
+
+      // Recompute kezelőorvos: a jóváhagyással egy 'pending' appointment
+      // 'approved' lett, ami az „A-eset" jelölés-rangsort befolyásolhatja.
+      // Fire-and-forget — egy esetleges recompute hiba ne ölje meg a fő flow-t.
+      recomputeKezeleoorvosSilent(appointment.patient_id);
 
       // Send notifications and create Google Calendar event
       const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';

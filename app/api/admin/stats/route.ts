@@ -95,11 +95,12 @@ export const GET = roleHandler(['admin'], async () => {
     `),
     pool.query(`
       SELECT
-        COALESCE(kezeleoorvos, 'Nincs adat') as orvos,
+        COALESCE(u.doktor_neve, u.email, p.kezeleoorvos, 'Nincs adat') as orvos,
         COUNT(*) as darab
-      FROM patients
-      WHERE kezeleoorvos IS NOT NULL
-      GROUP BY kezeleoorvos
+      FROM patients p
+      LEFT JOIN users u ON u.id = p.kezeleoorvos_user_id
+      WHERE p.kezeleoorvos_user_id IS NOT NULL OR p.kezeleoorvos IS NOT NULL
+      GROUP BY COALESCE(u.doktor_neve, u.email, p.kezeleoorvos)
       ORDER BY darab DESC
       LIMIT 10
     `),

@@ -5,6 +5,7 @@ import { getPatientCommunicationLogs, logCommunication, CommunicationType, Commu
 import { logActivityWithAuth } from '@/lib/activity';
 import { getDbPool } from '@/lib/db';
 import { apiHandler, authedHandler } from '@/lib/api/route-handler';
+import { hasEverTreatedPatient } from '@/lib/patient-doctor-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,7 +43,7 @@ export const GET = apiHandler(async (req) => {
   if (auth) {
     const pool = getDbPool();
     const patientResult = await pool.query(
-      `SELECT id, kezeleoorvos FROM patients WHERE id = $1`,
+      `SELECT id FROM patients WHERE id = $1`,
       [patientId]
     );
 
@@ -53,15 +54,9 @@ export const GET = apiHandler(async (req) => {
       );
     }
 
-    const patient = patientResult.rows[0];
-    if (auth.role !== 'admin' && patient.kezeleoorvos !== auth.email) {
-      const userResult = await pool.query(
-        `SELECT doktor_neve FROM users WHERE id = $1`,
-        [auth.userId]
-      );
-      const userName = userResult.rows.length > 0 ? userResult.rows[0].doktor_neve : null;
-      
-      if (patient.kezeleoorvos !== userName) {
+    if (auth.role !== 'admin') {
+      const allowed = await hasEverTreatedPatient(auth.userId, patientId);
+      if (!allowed) {
         return NextResponse.json(
           { error: 'Nincs jogosultsága az érintkezési napló megtekintéséhez' },
           { status: 403 }
@@ -95,7 +90,7 @@ export const POST = authedHandler(async (req, { auth }) => {
 
   const pool = getDbPool();
   const patientResult = await pool.query(
-    `SELECT id, kezeleoorvos FROM patients WHERE id = $1`,
+    `SELECT id FROM patients WHERE id = $1`,
     [patientId]
   );
 
@@ -106,15 +101,9 @@ export const POST = authedHandler(async (req, { auth }) => {
     );
   }
 
-  const patient = patientResult.rows[0];
-  if (auth.role !== 'admin' && patient.kezeleoorvos !== auth.email) {
-    const userResult = await pool.query(
-      `SELECT name FROM users WHERE id = $1`,
-      [auth.userId]
-    );
-    const userName = userResult.rows.length > 0 ? userResult.rows[0].name : null;
-    
-    if (patient.kezeleoorvos !== userName) {
+  if (auth.role !== 'admin') {
+    const allowed = await hasEverTreatedPatient(auth.userId, patientId);
+    if (!allowed) {
       return NextResponse.json(
         { error: 'Nincs jogosultsága érintkezési bejegyzést létrehozni ennek a betegnek' },
         { status: 403 }

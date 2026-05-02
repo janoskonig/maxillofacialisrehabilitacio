@@ -100,7 +100,7 @@ interface PatientFormProps {
   onSave: (patient: Patient, options?: { source: 'auto' | 'manual' }) => void;
   onCancel: () => void;
   isViewOnly?: boolean;
-  showOnlySections?: string[]; // Array of section IDs to show: 'alapadatok', 'szemelyes', 'beutalo', 'kezeloorvos', 'anamnezis', 'betegvizsgalat', 'adminisztracio', 'idopont'
+  showOnlySections?: string[]; // Array of section IDs to show: 'alapadatok', 'szemelyes', 'beutalo', 'anamnezis', 'betegvizsgalat', 'adminisztracio', 'idopont', 'stadium'
   /** Gyors új beteg: rejtett NEAK-hiánylista; személyes szekció szűkített */
   minimalNewPatient?: boolean;
 }
@@ -1521,8 +1521,6 @@ export function PatientForm({
     mutetIdeje: 'beutalo',
     szovettaniDiagnozis: 'beutalo',
     nyakiBlokkdisszekcio: 'beutalo',
-    // kezeloorvos
-    kezeleoorvos: 'kezeloorvos',
     // anamnezis
     alkoholfogyasztas: 'anamnezis',
     dohanyzasSzam: 'anamnezis',

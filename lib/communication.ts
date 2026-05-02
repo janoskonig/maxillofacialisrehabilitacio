@@ -1,6 +1,7 @@
 import { getDbPool } from './db';
 import { logCommunication } from './communication-logs';
 import { validateUUID, validateMessageText, validateSubject } from './validation';
+import { hasEverTreatedPatient } from './patient-doctor-access';
 
 export type MessageSenderType = 'doctor' | 'patient';
 
@@ -142,25 +143,13 @@ export async function getPatientMessages(
     validateUUID(options.doctorId, 'Orvos ID');
   }
 
-  // Ha orvos kéri az üzeneteket, először ellenőrizzük, hogy a kezelőorvos-e
+  // A `recipient_doctor_id IS NULL` (legacy, recipient nélküli) üzenetek
+  // azok az orvosok láthatóságát határozza meg, akik valaha kezelték a
+  // beteget. A 027-es migráció döntése szerint a régi kezelőorvosok is
+  // láthatják a saját korszakuk üzeneteit (lásd lib/patient-doctor-access.ts).
   let isTreatingDoctor = false;
   if (options?.doctorId && !options?.isAdmin) {
-    const patientResult = await pool.query(
-      `SELECT kezeleoorvos FROM patients WHERE id = $1`,
-      [validatedPatientId]
-    );
-    
-    if (patientResult.rows.length > 0) {
-      const kezeleoorvos = patientResult.rows[0].kezeleoorvos;
-      if (kezeleoorvos) {
-        // Ellenőrizzük, hogy az orvos a kezelőorvos-e
-        const doctorResult = await pool.query(
-          `SELECT id FROM users WHERE id = $1 AND (email = $2 OR doktor_neve = $2)`,
-          [options.doctorId, kezeleoorvos]
-        );
-        isTreatingDoctor = doctorResult.rows.length > 0;
-      }
-    }
+    isTreatingDoctor = await hasEverTreatedPatient(options.doctorId, validatedPatientId);
   }
 
   let query = `
@@ -314,38 +303,43 @@ export async function getDoctorForNotification(patientId: string): Promise<{
   // Validáció
   const validatedPatientId = validateUUID(patientId, 'Beteg ID');
 
-  // Először megkeressük a beteg kezelőorvosát
-  const patientResult = await pool.query(
-    `SELECT kezeleoorvos FROM patients WHERE id = $1`,
+  // 027 óta a `kezeleoorvos_user_id` az SSoT — közvetlenül feloldjuk JOIN-nal.
+  // Backward-compat: ha a backfill előtti betegnél még csak a régi VARCHAR
+  // mező van kitöltve, akkor email/név alapján próbálkozunk (mint régen).
+  const directResult = await pool.query(
+    `SELECT u.email, u.doktor_neve, p.kezeleoorvos
+       FROM patients p
+       LEFT JOIN users u ON u.id = p.kezeleoorvos_user_id
+      WHERE p.id = $1`,
     [validatedPatientId]
   );
 
-  if (patientResult.rows.length === 0) {
+  if (directResult.rows.length === 0) {
     console.warn(`[getDoctorForNotification] Beteg nem található: ${patientId}`);
     return null;
   }
 
-  const kezeleoorvos = patientResult.rows[0].kezeleoorvos;
+  const row = directResult.rows[0];
+  if (row.email) {
+    return { email: row.email, name: row.doktor_neve || row.email };
+  }
 
-  if (!kezeleoorvos) {
+  // Fallback: VARCHAR alapú illesztés (legacy)
+  if (!row.kezeleoorvos) {
     console.warn(`[getDoctorForNotification] Betegnek nincs kezelőorvosa: ${patientId}`);
     return null;
   }
-
-  // Megkeressük az orvos email címét
-  const doctorResult = await pool.query(
+  const fallbackResult = await pool.query(
     `SELECT email, doktor_neve FROM users WHERE email = $1 OR doktor_neve = $2 LIMIT 1`,
-    [kezeleoorvos, kezeleoorvos]
+    [row.kezeleoorvos, row.kezeleoorvos]
   );
-
-  if (doctorResult.rows.length === 0) {
-    console.warn(`[getDoctorForNotification] Orvos nem található a users táblában: ${kezeleoorvos}`);
+  if (fallbackResult.rows.length === 0) {
+    console.warn(`[getDoctorForNotification] Orvos nem található a users táblában: ${row.kezeleoorvos}`);
     return null;
   }
-
   return {
-    email: doctorResult.rows[0].email,
-    name: doctorResult.rows[0].doktor_neve || kezeleoorvos,
+    email: fallbackResult.rows[0].email,
+    name: fallbackResult.rows[0].doktor_neve || row.kezeleoorvos,
   };
 }
 

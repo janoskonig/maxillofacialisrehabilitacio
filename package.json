@@ -35,9 +35,11 @@
     "migrate:024-chain-reservation": "node scripts/run-all-migrations.js 024_appointment_chain_reservation.sql",
     "migrate:025-work-phase-link": "node scripts/run-all-migrations.js 025_appointment_work_phase_link.sql",
     "migrate:026-assert-status-check": "node scripts/run-all-migrations.js 026_assert_appointment_status_check.sql",
+    "migrate:027-kezeleoorvos": "node scripts/run-all-migrations.js 027_kezeleoorvos_user_id.sql",
     "episode-plan:phase2-backfill": "node scripts/episode-plan-phase2-backfill.js",
     "episode-plan:phase3-link": "node scripts/episode-plan-phase3-link-appointments.js",
     "migrate:025-backfill": "node scripts/migrate-025-backfill-work-phase-id.js",
+    "backfill:kezeleoorvos": "node scripts/backfill-kezeleoorvos.js",
     "report:booking-consistency": "node scripts/run-booking-consistency-report.js"
   },
   "dependencies": {

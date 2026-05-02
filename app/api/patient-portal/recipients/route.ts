@@ -17,7 +17,7 @@ export const GET = apiHandler(async (req, { correlationId }) => {
   const pool = getDbPool();
 
   const patientResult = await pool.query(
-    `SELECT kezeleoorvos FROM patients WHERE id = $1`,
+    `SELECT kezeleoorvos_user_id, kezeleoorvos FROM patients WHERE id = $1`,
     [patientId]
   );
 
@@ -28,7 +28,8 @@ export const GET = apiHandler(async (req, { correlationId }) => {
     );
   }
 
-  const kezeleoorvos = patientResult.rows[0].kezeleoorvos;
+  const kezeleoorvosUserId: string | null = patientResult.rows[0].kezeleoorvos_user_id ?? null;
+  const kezeleoorvosName: string | null = patientResult.rows[0].kezeleoorvos ?? null;
 
   const allDoctorsResult = await pool.query(
     `SELECT id, email, doktor_neve, role FROM users 
@@ -36,10 +37,20 @@ export const GET = apiHandler(async (req, { correlationId }) => {
      ORDER BY doktor_neve ASC, email ASC`
   );
 
+  // Robosztus jelölés: első helyen a `kezeleoorvos_user_id` (027-es migráció
+  // után minden új beteg ezt használja). Backward-compat fallback: a régi
+  // VARCHAR mező alapján email/név szerinti illesztés (azoknál a betegeknél,
+  // akik a backfill előtt érkeztek és még nincs user_id-juk).
   let treatingDoctorId: string | null = null;
-  if (kezeleoorvos) {
+  if (kezeleoorvosUserId) {
+    const match = allDoctorsResult.rows.find((r: any) => r.id === kezeleoorvosUserId);
+    if (match) {
+      treatingDoctorId = match.id;
+    }
+  }
+  if (!treatingDoctorId && kezeleoorvosName) {
     const match = allDoctorsResult.rows.find(
-      (r: any) => r.email === kezeleoorvos || r.doktor_neve === kezeleoorvos
+      (r: any) => r.email === kezeleoorvosName || r.doktor_neve === kezeleoorvosName
     );
     if (match) {
       treatingDoctorId = match.id;

@@ -7,6 +7,7 @@ import { pathwayTemplatesFromCarePathwayRow } from '@/lib/pathway-work-phases-fo
 import { mapEpisodePathwayRows, type EpisodePathwayApiRow } from '@/lib/map-episode-pathway-response';
 import { getCurrentSuggestion } from '@/lib/stage-suggestion-service';
 import { logger } from '@/lib/logger';
+import { recomputeKezeleoorvosSilent } from '@/lib/recompute-kezeleoorvos';
 
 export const dynamic = 'force-dynamic';
 
@@ -143,7 +144,7 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
   }
 
   const before = await pool.query(
-    `SELECT care_pathway_id, care_pathway_version, assigned_provider_id, treatment_type_id FROM patient_episodes WHERE id = $1`,
+    `SELECT patient_id, care_pathway_id, care_pathway_version, assigned_provider_id, treatment_type_id FROM patient_episodes WHERE id = $1`,
     [episodeId]
   );
   if (before.rows.length === 0) {
@@ -176,6 +177,9 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
     } catch (e) {
       logger.error('Failed to invalidate intents on provider change:', e);
     }
+    // Provider váltás → újra kell számolni a beteg kezelőorvosát (B-eset).
+    // Fire-and-forget: egy recompute hiba ne blokkolja a fő flow-t.
+    recomputeKezeleoorvosSilent(prev.patient_id);
   }
 
   const after = await pool.query(

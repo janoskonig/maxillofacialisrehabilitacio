@@ -12,6 +12,7 @@ import { sendPushNotification } from '@/lib/push-notifications';
 import { logger } from '@/lib/logger';
 import { apiHandler } from '@/lib/api/route-handler';
 import { detectDocumentRequest } from '@/lib/document-request-detector';
+import { hasEverTreatedPatient } from '@/lib/patient-doctor-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -127,7 +128,7 @@ export const POST = apiHandler(async (req) => {
     
     const pool = getDbPool();
     const patientResult = await pool.query(
-      `SELECT id, kezeleoorvos FROM patients WHERE id = $1`,
+      `SELECT id FROM patients WHERE id = $1`,
       [finalPatientId]
     );
 
@@ -138,15 +139,12 @@ export const POST = apiHandler(async (req) => {
       );
     }
 
-    const patient = patientResult.rows[0];
-    if (auth.role !== 'admin' && patient.kezeleoorvos !== auth.email) {
-      const userResult = await pool.query(
-        `SELECT doktor_neve FROM users WHERE id = $1`,
-        [auth.userId]
-      );
-      const userName = userResult.rows.length > 0 ? userResult.rows[0].doktor_neve : null;
-      
-      if (patient.kezeleoorvos !== userName) {
+    // Jogosultság: admin → szabad. Egyébként a felhasználónak valamikor
+    // kezelnie kellett a beteget (jelenlegi vagy korábbi kezelőorvos /
+    // epizód provider / volt időpontja). Lásd lib/patient-doctor-access.ts.
+    if (auth.role !== 'admin') {
+      const allowed = await hasEverTreatedPatient(auth.userId, finalPatientId);
+      if (!allowed) {
         return NextResponse.json(
           { error: 'Nincs jogosultsága üzenetet küldeni ennek a betegnek' },
           { status: 403 }
@@ -379,7 +377,7 @@ export const GET = apiHandler(async (req) => {
   if (auth) {
     const pool = getDbPool();
     const patientResult = await pool.query(
-      `SELECT id, kezeleoorvos FROM patients WHERE id = $1`,
+      `SELECT id FROM patients WHERE id = $1`,
       [validatedPatientId]
     );
 
@@ -390,15 +388,12 @@ export const GET = apiHandler(async (req) => {
       );
     }
 
-    const patient = patientResult.rows[0];
-    if (auth.role !== 'admin' && patient.kezeleoorvos !== auth.email) {
-      const userResult = await pool.query(
-        `SELECT doktor_neve FROM users WHERE id = $1`,
-        [auth.userId]
-      );
-      const userName = userResult.rows.length > 0 ? userResult.rows[0].doktor_neve : null;
-      
-      if (patient.kezeleoorvos !== userName) {
+    // Jogosultság: admin → szabad. Egyébként ha a felhasználó valaha
+    // kezelte a beteget, láthatja az üzeneteket. Lásd
+    // lib/patient-doctor-access.ts.
+    if (auth.role !== 'admin') {
+      const allowed = await hasEverTreatedPatient(auth.userId, validatedPatientId);
+      if (!allowed) {
         return NextResponse.json(
           { error: 'Nincs jogosultsága az üzenetek megtekintéséhez' },
           { status: 403 }

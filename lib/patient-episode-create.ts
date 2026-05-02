@@ -1,6 +1,7 @@
 import type { Pool } from 'pg';
 import type { PatientEpisode } from '@/lib/types';
 import { logger } from '@/lib/logger';
+import { recomputeKezeleoorvosSilent } from '@/lib/recompute-kezeleoorvos';
 
 export const EPISODE_REASON_VALUES = [
   'traumás sérülés',
@@ -131,6 +132,14 @@ export async function createOpenEpisodeWithInitialStageZero(
     }
 
     await client.query('COMMIT');
+
+    // Új epizód létrehozása lezárja a korábbi nyitottakat → a `kezeleoorvos`
+    // korábban érvényes B-eset jelölése elavulhatott. Az új epizódhoz
+    // még nincs `assigned_provider_id` (PATCH /api/episodes/:id-vel állítható
+    // be később), úgyhogy a recompute jó eséllyel A-esetre vagy „ne vonja
+    // vissza" no-opra fut. Fire-and-forget — a hiba ne ölje meg a fő flow-t.
+    recomputeKezeleoorvosSilent(input.patientId);
+
     return episode;
   } catch (e) {
     await client.query('ROLLBACK');

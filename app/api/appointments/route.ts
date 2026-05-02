@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { authedHandler, roleHandler } from '@/lib/api/route-handler';
 import { logger } from '@/lib/logger';
 import { createAppointment, sendAppointmentNotifications } from '@/lib/appointment-service';
+import { recomputeKezeleoorvosSilent } from '@/lib/recompute-kezeleoorvos';
 
 export const dynamic = 'force-dynamic';
 
@@ -186,6 +187,10 @@ export const POST = roleHandler(['beutalo_orvos', 'admin', 'fogpótlástanász']
   }).catch((err) => {
     logger.error('Unexpected error in sendAppointmentNotifications:', err);
   });
+
+  // Recompute kezelőorvos: új időpont megváltoztathatja az „A-eset" jelöltet,
+  // illetve work-pool foglalásnál az epizód aktiválás is hathat. Fire-and-forget.
+  recomputeKezeleoorvosSilent(patientId);
 
   return NextResponse.json({ appointment }, { status: 201 });
 });

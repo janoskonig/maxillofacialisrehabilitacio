@@ -75,8 +75,9 @@ export const GET = authedHandler(async (req, { auth }) => {
         p.created_by
       FROM patients p
       LEFT JOIN patient_referral r ON r.patient_id = p.id
-      WHERE (p.kezeleoorvos IS NULL OR p.kezeleoorvos = '')
-      AND p.created_by IS NULL
+      WHERE p.kezeleoorvos_user_id IS NULL
+        AND (p.kezeleoorvos IS NULL OR p.kezeleoorvos = '')
+        AND p.created_by IS NULL
       ORDER BY p.created_at ASC`
     ),
   ]);

@@ -282,8 +282,8 @@ export default function PatientViewPage() {
               onSave={handleSavePatient}
               onCancel={handleBack}
               showOnlySections={userRole === 'technikus'
-                ? ['alapadatok', 'kezeloorvos']
-                : ['alapadatok', 'szemelyes', 'beutalo', 'kezeloorvos', 'stadium']}
+                ? ['alapadatok']
+                : ['alapadatok', 'szemelyes', 'beutalo', 'stadium']}
             />
           )}
 
