@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { ClipboardList, CalendarCheck, Trash2 } from 'lucide-react';
+import { ClipboardList, CalendarCheck, Trash2, Undo2 } from 'lucide-react';
 import {
   getWorklistItemKey,
   deriveWorklistRowState,
@@ -43,6 +43,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
   const [convertAllMessage, setConvertAllMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [chainBookingRequiredByEpisodeId, setChainBookingRequiredByEpisodeId] = useState<Record<string, boolean>>({});
   const [markCompleteKey, setMarkCompleteKey] = useState<string | null>(null);
+  const [reopenKey, setReopenKey] = useState<string | null>(null);
   const [deleteAppointmentId, setDeleteAppointmentId] = useState<string | null>(null);
 
   const fetchWorklist = useCallback(async () => {
@@ -337,6 +338,42 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
     }
   };
 
+  const handleReopenStep = async (item: WorklistItemBackend) => {
+    const workPhaseId = item.workPhaseId;
+    const episodeId = item.episodeId;
+    if (!workPhaseId || !episodeId) return;
+    const rawReason = window.prompt(
+      'Miért vonod vissza a „kész” jelölést? (legalább 5 karakter)',
+      'Tévedésből jelölve késznek'
+    );
+    if (rawReason === null) return;
+    const reason = rawReason.trim();
+    if (reason.length < 5) {
+      alert('Az indoklás legalább 5 karakter kell legyen.');
+      return;
+    }
+    const key = getWorklistItemKey(item);
+    setReopenKey(key);
+    try {
+      const res = await fetch(`/api/episodes/${episodeId}/work-phases/${workPhaseId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ status: 'pending', reason }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error ?? 'Hiba történt');
+        return;
+      }
+      await fetchWorklist();
+    } catch (e) {
+      alert('Hálózati hiba');
+    } finally {
+      setReopenKey(null);
+    }
+  };
+
   const handleOverrideConfirm = async (overrideReason: string) => {
     if (!override429) return;
     const { retryData } = override429;
@@ -567,7 +604,23 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex flex-col gap-1">
-                      {(state === 'COMPLETED' || state === 'SKIPPED') && (
+                      {state === 'COMPLETED' && (
+                        item.workPhaseId ? (
+                          <button
+                            type="button"
+                            onClick={() => handleReopenStep(item)}
+                            disabled={reopenKey === key}
+                            className="text-xs text-gray-600 hover:text-gray-900 hover:underline font-medium disabled:opacity-50 text-left flex items-center gap-0.5"
+                            title="Mégsem kész — visszaállítás várakozóra (indoklás szükséges)"
+                          >
+                            <Undo2 className="w-3 h-3" />
+                            {reopenKey === key ? 'Visszaállítás…' : 'Mégsem kész'}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        )
+                      )}
+                      {state === 'SKIPPED' && (
                         <span className="text-xs text-gray-400">—</span>
                       )}
                       {showConvertAll && (

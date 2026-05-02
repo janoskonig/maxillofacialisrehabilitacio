@@ -511,8 +511,6 @@ export const GET = authedHandler(async (req, { auth }) => {
         (r: { work_phase_code: string; status: string }) =>
           r.work_phase_code === step.work_phase_code && (r.status === 'pending' || r.status === 'scheduled')
       );
-      const workPhaseId =
-        stepRowForBooking && 'id' in stepRowForBooking ? (stepRowForBooking as { id: string }).id : null;
 
       const stepRowForMergeLookup =
         stepRowForBooking ??
@@ -525,6 +523,13 @@ export const GET = authedHandler(async (req, { auth }) => {
         stepRowForMergeLookup && 'id' in stepRowForMergeLookup
           ? (stepRowForMergeLookup as { id: string }).id
           : null;
+
+      // workPhaseId-t a `completed`/`skipped` ewp-re is kitöltjük (mergeLookup-ból),
+      // hogy a UI elérhesse a "Mégsem kész" / újranyitás műveletet. A booking
+      // útvonalak (POST /api/appointments) a státuszt nem ellenőrzik, csak a
+      // létezést és az episode-egyezést, a Foglalás gomb pedig COMPLETED soron
+      // úgyse jelenik meg (state derivation a stepStatus-on alapul).
+      const workPhaseId = mergeLookupId;
 
       const item: WorklistItemBackend = {
         episodeId,
