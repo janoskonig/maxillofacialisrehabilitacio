@@ -37,7 +37,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
     overrideHint?: string;
     expectedHardNext?: { stepCode: string; earliestStart: string; latestStart: string; durationMinutes: number };
     existingAppointment?: { id: string; startTime: string; providerName?: string };
-    retryData: { patientId: string; episodeId?: string; slotId: string; pool: string; durationMinutes: number; nextStep: string; stepCode?: string; requiresPrecommit?: boolean };
+    retryData: { patientId: string; episodeId?: string; slotId: string; pool: string; durationMinutes: number; nextStep: string; stepCode?: string; workPhaseId?: string | null; requiresPrecommit?: boolean };
   } | null>(null);
   const [convertAllEpisodeId, setConvertAllEpisodeId] = useState<string | null>(null);
   const [convertAllMessage, setConvertAllMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -148,6 +148,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
           requiresPrecommit: slotPickerItem.requiresPrecommit ?? false,
           stepCode: slotPickerItem.stepCode ?? nextStep,
           stepSeq: slotPickerItem.stepSeq,
+          workPhaseId: slotPickerItem.workPhaseId ?? undefined,
           createdVia: 'worklist',
         }),
       });
@@ -198,6 +199,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
             durationMinutes: slotPickerItem.durationMinutes || 30,
             nextStep: slotPickerItem.nextStep,
             stepCode: slotPickerItem.stepCode,
+            workPhaseId: slotPickerItem.workPhaseId,
             requiresPrecommit: slotPickerItem.requiresPrecommit,
           },
         });
@@ -242,10 +244,34 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
         skipped: Array<{ intentId: string; reason: string; code?: string; stepCode?: string }>;
       };
       if (skipped?.length > 0) {
+        // Slot-gap detection: if EVERY skip is a "no free slot" outcome (window
+        // exhausted + no nearest match), treat it as a calendar-availability
+        // problem rather than per-step noise. The chain-anchor in convert-all-intents
+        // pushes lowerBound forward when an earlier step lands far past its
+        // suggested date — combined with a sparse calendar this leaves
+        // subsequent steps with nothing to choose from. Surface that as a
+        // single, actionable message so the operator knows to add slots.
+        const allNoFreeSlot = skipped.every((s) => s.reason?.includes('Nincs szabad'));
+        if (allNoFreeSlot) {
+          const stepList = skipped
+            .map((s) => s.stepCode)
+            .filter(Boolean)
+            .join(', ');
+          setConvertAllMessage({
+            type: converted > 0 ? 'success' : 'error',
+            text:
+              `${converted} időpont lefoglalva. Nem volt elég szabad időpont a sorozat lefoglalásához ` +
+              `(${skipped.length} lépés kihagyva${stepList ? `: ${stepList}` : ''}). ` +
+              `Hozz létre több szabad slotot a kijelölt orvos naptárában a hiányzó lépések ablakaiban, majd próbáld újra.`,
+          });
+          fetchWorklist();
+          return;
+        }
         const reasonSummary = skipped.map((s) => {
           const step = s.stepCode ? `${s.stepCode}: ` : '';
           if (s.code === 'STEP_ALREADY_DONE') return `${step}már teljesítve`;
           if (s.code === 'STEP_ALREADY_BOOKED') return `${step}már foglalva`;
+          if (s.code === 'SLOT_ALREADY_BOOKED') return `${step}az ajánlott slot időközben elkelt`;
           if (s.reason?.includes('Nincs szabad')) return `${step}nincs szabad slot`;
           return `${step}${s.reason?.slice(0, 40) ?? 'kihagyva'}`;
         }).join('; ');
@@ -286,13 +312,13 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
   };
 
   const handleMarkStepComplete = async (item: WorklistItemBackend) => {
-    const episodeStepId = item.episodeStepId;
+    const workPhaseId = item.workPhaseId;
     const episodeId = item.episodeId;
-    if (!episodeStepId || !episodeId) return;
+    if (!workPhaseId || !episodeId) return;
     const key = getWorklistItemKey(item);
     setMarkCompleteKey(key);
     try {
-      const res = await fetch(`/api/episodes/${episodeId}/work-phases/${episodeStepId}`, {
+      const res = await fetch(`/api/episodes/${episodeId}/work-phases/${workPhaseId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -330,6 +356,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
           overrideReason,
           requiresPrecommit: retryData.requiresPrecommit ?? false,
           stepCode: retryData.stepCode ?? retryData.nextStep,
+          workPhaseId: retryData.workPhaseId ?? undefined,
           createdVia: 'worklist',
         }),
       });
@@ -564,7 +591,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                           >
                             Foglalás
                           </button>
-                          {item.episodeStepId && (
+                          {item.workPhaseId && (
                             <button
                               type="button"
                               onClick={() => handleMarkStepComplete(item)}
@@ -592,7 +619,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                               {deleteAppointmentId === item.bookedAppointmentId ? 'Törlés…' : 'Törlés'}
                             </button>
                           )}
-                          {item.episodeStepId && (
+                          {item.workPhaseId && (
                             <button
                               type="button"
                               onClick={() => handleMarkStepComplete(item)}

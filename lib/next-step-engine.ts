@@ -503,13 +503,17 @@ export interface EpisodeBatchData {
   episodeWorkPhases: EpisodeWorkPhaseRow[] | null;
   openedAt: Date;
   currentStage: string | null;
-  /** Step codes with non-cancelled appointments — used to avoid returning already-covered steps */
-  bookedStepCodes?: Set<string>;
 }
 
 /**
  * Batch-optimized allPendingSteps: identical logic to allPendingSteps but uses
  * pre-loaded data instead of per-episode DB queries. Reduces N×4 queries to 0.
+ *
+ * Note: a step "BOOKED" jelölést nem itt csináljuk, hanem a route rétegben a
+ * `sqlBookedFutureAppointmentsWithEffectiveStep` enrichment-en keresztül
+ * (lásd `bookedAppointmentId` mezők). Itt csak a következő pending lépéseket
+ * tükrözzük; a state-derivation a UI oldalán dönti el, hogy a row READY vagy
+ * BOOKED.
  */
 export function allPendingStepsWithData(
   episodeId: string,

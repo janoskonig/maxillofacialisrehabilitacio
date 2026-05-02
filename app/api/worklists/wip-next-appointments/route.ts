@@ -17,11 +17,7 @@ import {
 } from '@/lib/episode-forecast';
 import type { WorklistItemBackend, WorklistMergedPhasePart, WorklistPhaseJaw } from '@/lib/worklist-types';
 import { isReadPlanItemsEnabled } from '@/lib/plan-items-flags';
-import {
-  sqlAppointmentStepCodesActive,
-  sqlAppointmentStepCodesCompleted,
-  sqlBookedFutureAppointmentsWithEffectiveStep,
-} from '@/lib/episode-plan-read-model';
+import { sqlBookedFutureAppointmentsWithEffectiveStep } from '@/lib/episode-plan-read-model';
 import { chainBookingRequiredFromCounts } from '@/lib/chain-booking-status';
 import { enrichWorklistBookableWindows } from '@/lib/worklist-bookable-windows';
 
@@ -141,8 +137,6 @@ export const GET = authedHandler(async (req, { auth }) => {
     patientDataRows,
     treatmentTypesRows,
     episodeOpenedRows,
-    completedApptStepRows,
-    activeApptStepRows,
     openWorkIntentCountRows,
     pendingPhaseCountRows,
   ] = await Promise.all([
@@ -210,8 +204,6 @@ export const GET = authedHandler(async (req, { auth }) => {
       `SELECT id, opened_at FROM patient_episodes WHERE id = ANY($1)`,
       [allEpisodeIds]
     ),
-    pool.query(sqlAppointmentStepCodesCompleted(readPlanItems), [allEpisodeIds]),
-    pool.query(sqlAppointmentStepCodesActive(readPlanItems), [allEpisodeIds]),
     pool.query(
       `SELECT episode_id,
               COUNT(*) FILTER (WHERE state = 'open' AND pool = 'work')::int AS cnt
@@ -399,21 +391,11 @@ export const GET = authedHandler(async (req, { auth }) => {
     }
   }
 
-  // Completed appointment step_codes per episode — used to filter out already-done steps
-  const completedApptStepsByEpisode = new Map<string, Set<string>>();
-  for (const r of completedApptStepRows.rows) {
-    let s = completedApptStepsByEpisode.get(r.episode_id);
-    if (!s) { s = new Set(); completedApptStepsByEpisode.set(r.episode_id, s); }
-    s.add(r.step_code);
-  }
-
-  // Active (non-cancelled) appointment step_codes per episode — prevents re-showing already-booked steps
-  const activeApptStepsByEpisode = new Map<string, Set<string>>();
-  for (const r of activeApptStepRows.rows) {
-    let s = activeApptStepsByEpisode.get(r.episode_id);
-    if (!s) { s = new Set(); activeApptStepsByEpisode.set(r.episode_id, s); }
-    s.add(r.step_code);
-  }
+  // BOOKED state is derived solely from the `bookedAppointmentId` enrichment
+  // below (`sqlBookedFutureAppointmentsWithEffectiveStep`). The previously
+  // computed completedApptSteps / activeApptSteps maps were unused half-protection
+  // and have been removed — see lib/active-appointment.ts for the canonical
+  // predicate now shared with the booking guards.
 
   // ── Process episodes using batch data (no per-episode DB queries) ──
   const items: WorklistItemBackend[] = [];
@@ -429,7 +411,6 @@ export const GET = authedHandler(async (req, { auth }) => {
       episodeWorkPhases: episodeWorkPhasesMap.get(episodeId) ?? null,
       openedAt: openedAtMap.get(episodeId) ?? new Date(),
       currentStage: stageMap.get(episodeId) ?? null,
-      bookedStepCodes: activeApptStepsByEpisode.get(episodeId),
     };
 
     const result = allPendingStepsWithData(episodeId, batchData);
@@ -530,7 +511,7 @@ export const GET = authedHandler(async (req, { auth }) => {
         (r: { work_phase_code: string; status: string }) =>
           r.work_phase_code === step.work_phase_code && (r.status === 'pending' || r.status === 'scheduled')
       );
-      const episodeStepId =
+      const workPhaseId =
         stepRowForBooking && 'id' in stepRowForBooking ? (stepRowForBooking as { id: string }).id : null;
 
       const stepRowForMergeLookup =
@@ -564,7 +545,7 @@ export const GET = authedHandler(async (req, { auth }) => {
         requiresPrecommit: !step.isFirstPending,
         episodeOrder: epIdx,
         stepStatus: step.stepStatus,
-        ...(episodeStepId && { episodeStepId }),
+        ...(workPhaseId && { workPhaseId }),
         ...(row.assignedProviderId && { assignedProviderId: row.assignedProviderId }),
       };
 
@@ -574,8 +555,8 @@ export const GET = authedHandler(async (req, { auth }) => {
         item.treatmentTypeSource = treatmentTypeSource;
       }
 
-      if (readPlanItems && episodeStepId) {
-        const pid = planItemByEwpId.get(episodeStepId);
+      if (readPlanItems && workPhaseId) {
+        const pid = planItemByEwpId.get(workPhaseId);
         if (pid) item.planItemId = pid;
       }
 
@@ -614,13 +595,35 @@ export const GET = authedHandler(async (req, { auth }) => {
   if (readyItems.length > 0) {
     const episodeIds = Array.from(new Set(readyItems.map((i) => i.episodeId)));
     const bookedResult = await pool.query(sqlBookedFutureAppointmentsWithEffectiveStep(), [episodeIds]);
-    type BookedEntry = { id: string; startTime: string; providerEmail: string | null };
+    /**
+     * `hasStepIdentity` is critical for the episodeMap fallback below: only
+     * appointments that lack BOTH `step_code` AND `step_seq` are true legacy
+     * rows (no way to attribute them to a specific worklist step). Such rows
+     * legitimately deserve the "first step" fallback because the user has no
+     * other way to see them. Modern appointments (with step_code/step_seq)
+     * already match via exactMap/stepSeqMap; if they don't, they belong to
+     * a DIFFERENT step than the first row, and bleeding them up to the seq=0
+     * row produces a false BOOKED display (the bug that made Anatómiai
+     * lenyomat show K2's szept. 3. 08:30 booking).
+     */
+    type BookedEntry = {
+      id: string;
+      startTime: string;
+      providerEmail: string | null;
+      hasStepIdentity: boolean;
+    };
     const exactMap = new Map<string, BookedEntry>();
     const stepSeqMap = new Map<string, BookedEntry>();
     const episodeMap = new Map<string, BookedEntry>();
     for (const row of bookedResult.rows) {
       const start = new Date(row.effective_start).toISOString();
-      const entry: BookedEntry = { id: row.id, startTime: start, providerEmail: row.dentist_email };
+      const hasStepIdentity = row.step_code != null || row.step_seq != null;
+      const entry: BookedEntry = {
+        id: row.id,
+        startTime: start,
+        providerEmail: row.dentist_email,
+        hasStepIdentity,
+      };
       if (row.step_code) {
         const exactKey = `${row.episode_id}:${row.step_code}`;
         const existing = exactMap.get(exactKey);
@@ -643,9 +646,17 @@ export const GET = authedHandler(async (req, { auth }) => {
     for (const item of readyItems) {
       const exactKey = item.stepCode ? `${item.episodeId}:${item.stepCode}` : null;
       const seqKey = item.stepSeq != null ? `${item.episodeId}:${item.stepSeq}` : null;
+      const epFallbackCandidate =
+        (item.stepSeq === 0 || item.stepSeq === undefined)
+          ? episodeMap.get(item.episodeId)
+          : null;
+      const epFallback =
+        epFallbackCandidate && !epFallbackCandidate.hasStepIdentity
+          ? epFallbackCandidate
+          : null;
       const booked = (exactKey && exactMap.get(exactKey))
         || (seqKey && stepSeqMap.get(seqKey))
-        || ((item.stepSeq === 0 || item.stepSeq === undefined) && episodeMap.get(item.episodeId))
+        || epFallback
         || null;
       if (booked) {
         item.bookedAppointmentId = booked.id;

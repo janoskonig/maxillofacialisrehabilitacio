@@ -96,8 +96,16 @@ export interface WorklistItemBackend {
   requiresPrecommit?: boolean;
   /** 0-based position of the episode in the patient's treatment plan (opened_at order) */
   episodeOrder?: number;
-  /** Episode step DB id – present when step exists as pending/scheduled; used for "mark completed" */
-  episodeStepId?: string | null;
+  /**
+   * Canonical work-phase row id (episode_work_phases.id) — present when the
+   * current pending/scheduled step has a backing row. Drives:
+   *   - "mark completed" PATCH /api/episodes/:id/work-phases/:workPhaseId
+   *   - the canonical workPhaseId payload field on POST /api/appointments
+   *     (since migration 025).
+   * Renamed from `episodeStepId` to align with the post-016 canonical
+   * vocabulary (work phase, not step).
+   */
+  workPhaseId?: string | null;
   /** Primary plan item when READ_PLAN_ITEMS and legacy ewp row exists in episode_plan_items */
   planItemId?: string | null;
   /** Epizódhoz kijelölt orvos (user id); csak az ő slotjai jöhetnek szóba foglaláskor */
@@ -148,9 +156,14 @@ export function getWorklistItemKey(item: WorklistItemBackend): string {
  * Precedence ladder (ütközések elkerülése):
  * 1. BOOKING_IN_PROGRESS – lokális lock
  * 2. OVERRIDE_REQUIRED – lokális, 409 után
- * 3. NEEDS_REVIEW – validációs hiba
- * 4. BLOCKED – backend.status === 'blocked'
- * 5. READY – backend.status === 'ready' && !localBookingLock
+ * 3. COMPLETED / SKIPPED – terminális step status (felülír mindent, ami utána jön)
+ * 4. BOOKED – létezik bookedAppointmentId
+ * 5. BLOCKED – backend.status === 'blocked'  ← előbb, mint a NEEDS_REVIEW,
+ *                                              különben a blokkolt epizód
+ *                                              hiányos window/duration miatt
+ *                                              NEEDS_REVIEW-nak látszhat.
+ * 6. NEEDS_REVIEW – hiányzó duration/window/pool/step
+ * 7. READY – minden invariáns rendben
  */
 export function deriveWorklistRowState(
   item: WorklistItemBackend,
@@ -179,7 +192,13 @@ export function deriveWorklistRowState(
     return { state: 'BOOKED' };
   }
 
-  // NEEDS_REVIEW – validation
+  // BLOCKED before NEEDS_REVIEW: a blokkolt epizód miatt a backend
+  // szándékosan nem tölt durations/windows-t (gyakran null), így a NEEDS_REVIEW
+  // előbb futtatva eltakarná a valódi BLOCKED okot.
+  if (item.status === 'blocked') {
+    return { state: 'BLOCKED' };
+  }
+
   if (!item.durationMinutes || item.durationMinutes <= 0) {
     return { state: 'NEEDS_REVIEW', reviewReason: 'MISSING_DURATION' };
   }
@@ -191,10 +210,6 @@ export function deriveWorklistRowState(
   }
   if (!item.nextStep || item.nextStep === '-') {
     return { state: 'NEEDS_REVIEW', reviewReason: 'STEP_MISSING' };
-  }
-
-  if (item.status === 'blocked') {
-    return { state: 'BLOCKED' };
   }
 
   return { state: 'READY' };

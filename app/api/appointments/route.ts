@@ -93,7 +93,21 @@ export const GET = authedHandler(async (req, { auth }) => {
 
 export const POST = roleHandler(['beutalo_orvos', 'admin', 'fogpótlástanász'], async (req, { auth }) => {
   const body = await req.json();
-  const { patientId, timeSlotId, cim, teremszam, appointmentType, episodeId, pool = 'work', overrideReason, stepCode, createdVia: createdViaParam, slotIntentId, stepSeq } = body;
+  const {
+    patientId,
+    timeSlotId,
+    cim,
+    teremszam,
+    appointmentType,
+    episodeId,
+    pool = 'work',
+    overrideReason,
+    stepCode,
+    createdVia: createdViaParam,
+    slotIntentId,
+    stepSeq,
+    workPhaseId,
+  } = body;
   const bodyRequiresPrecommit = body.requiresPrecommit === true;
 
   const validCreatedVia = ['worklist', 'patient_form', 'patient_self', 'admin_override', 'surgeon_override', 'migration', 'google_import'] as const;
@@ -148,6 +162,7 @@ export const POST = roleHandler(['beutalo_orvos', 'admin', 'fogpótlástanász']
     slotIntentId,
     stepSeq: typeof stepSeq === 'number' ? stepSeq : null,
     requiresPrecommit: bodyRequiresPrecommit,
+    workPhaseId: typeof workPhaseId === 'string' && workPhaseId.length > 0 ? workPhaseId : null,
   }, {
     email: auth.email,
     userId: auth.userId,

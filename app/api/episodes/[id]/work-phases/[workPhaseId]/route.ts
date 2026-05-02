@@ -8,6 +8,7 @@ import {
   getToothTreatmentSelectCols,
 } from '@/lib/episode-work-phase-select';
 import { projectRemainingSteps } from '@/lib/slot-intent-projector';
+import { SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT } from '@/lib/active-appointment';
 
 export const dynamic = 'force-dynamic';
 
@@ -176,10 +177,10 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
       );
 
       const futureAppts = await pool.query(
-        `SELECT id, time_slot_id FROM appointments
-         WHERE episode_id = $1 AND step_code = $2
-         AND start_time > CURRENT_TIMESTAMP
-         AND (appointment_status IS NULL OR appointment_status NOT IN ('cancelled_by_doctor', 'cancelled_by_patient'))`,
+        `SELECT a.id, a.time_slot_id FROM appointments a
+         WHERE a.episode_id = $1 AND a.step_code = $2
+           AND a.start_time > CURRENT_TIMESTAMP
+           AND ${SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT}`,
         [episodeId, stepCode]
       );
       for (const ap of futureAppts.rows as Array<{ id: string; time_slot_id: string | null }>) {

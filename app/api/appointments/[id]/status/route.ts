@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
+import {
+  APPOINTMENT_STATUS_VALUES,
+  parseAppointmentStatus,
+} from '@/lib/appointment-status';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,17 +14,22 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
   const body = await req.json();
   const { appointmentStatus, completionNotes, isLate, appointmentType } = body;
 
-  if (appointmentStatus !== null && appointmentStatus !== undefined) {
-    const validStatuses = ['cancelled_by_doctor', 'cancelled_by_patient', 'completed', 'no_show'];
-    if (!validStatuses.includes(appointmentStatus)) {
-      return NextResponse.json(
-        { error: 'Érvénytelen státusz érték' },
-        { status: 400 }
-      );
-    }
+  // Pipe through the canonical taxonomy guard so any new status value added to
+  // the SQL CHECK constraint requires updating lib/appointment-status.ts AND
+  // the test suite in lockstep — preventing drift.
+  const parsed = parseAppointmentStatus(appointmentStatus);
+  if (!parsed.ok) {
+    return NextResponse.json(
+      {
+        error: `Érvénytelen státusz érték. Engedélyezett: ${APPOINTMENT_STATUS_VALUES.join(', ')} vagy NULL.`,
+        code: 'INVALID_APPOINTMENT_STATUS',
+      },
+      { status: 400 }
+    );
   }
+  const normalisedStatus = parsed.status;
 
-  if (appointmentStatus === 'completed' && (!completionNotes || completionNotes.trim() === '')) {
+  if (normalisedStatus === 'completed' && (!completionNotes || completionNotes.trim() === '')) {
     return NextResponse.json(
       { error: 'A "mi történt?" mező kitöltése kötelező sikeresen teljesült időpont esetén' },
       { status: 400 }
@@ -52,7 +61,7 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
 
     if (appointmentStatus !== undefined) {
       updateFields.push(`appointment_status = $${paramIndex}`);
-      updateValues.push(appointmentStatus);
+      updateValues.push(normalisedStatus);
       paramIndex++;
     }
 
@@ -130,8 +139,14 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
       }
     }
 
-    const isCancelOrNoShow = appointmentStatus !== undefined &&
-      ['cancelled_by_doctor', 'cancelled_by_patient', 'no_show'].includes(appointmentStatus);
+    // "Inactive or no-show" → expire the converted slot intent and reproject
+    // remaining steps. Mirror of the canonical guard list in
+    // lib/active-appointment.ts (cancelled set + no_show, since no_show should
+    // also kick off reprojection even if it doesn't free the partial-unique slot).
+    const isCancelOrNoShow =
+      normalisedStatus === 'cancelled_by_doctor' ||
+      normalisedStatus === 'cancelled_by_patient' ||
+      normalisedStatus === 'no_show';
 
     if (isCancelOrNoShow) {
       await pool.query(
@@ -143,6 +158,27 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
            AND si.state = 'converted'`,
         [appointmentId]
       );
+
+      // Slot-state ↔ appointment_status szinkron (W: bulk-convert robustness).
+      // A cancelled_by_* megsz\u00fcntet\u00e9s mostm\u00e1r felszabad\u00edtja a slotot is, hogy a
+      // bulk-convert / individual booking flow \u00fajra haszn\u00e1lhassa. A `no_show`-ra
+      // direkt NEM nyúlunk: a kanonikus taxonómia (lib/active-appointment.ts:23-25)
+      // szerint a no_show "active" — a slotot foglaltnak tekintjük, mert az
+      // időpont valós időben "elkelt" (a beteg nem jött el, de a slot már nem
+      // adható másnak ugyanarra az időre).
+      if (
+        normalisedStatus === 'cancelled_by_doctor' ||
+        normalisedStatus === 'cancelled_by_patient'
+      ) {
+        await pool.query(
+          `UPDATE available_time_slots ats
+              SET state = 'free', status = 'available'
+              FROM appointments a
+              WHERE a.id = $1
+                AND a.time_slot_id = ats.id`,
+          [appointmentId]
+        );
+      }
 
       const epRow = await pool.query(
         'SELECT episode_id FROM appointments WHERE id = $1',

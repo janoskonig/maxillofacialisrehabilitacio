@@ -34,7 +34,7 @@ export function WorklistWidget() {
     overrideHint?: string;
     expectedHardNext?: { stepCode: string; earliestStart: string; latestStart: string; durationMinutes: number };
     existingAppointment?: { id: string; startTime: string; providerName?: string };
-    retryData: { patientId: string; episodeId?: string; slotId: string; pool: string; durationMinutes: number; nextStep: string; stepCode?: string; requiresPrecommit?: boolean };
+    retryData: { patientId: string; episodeId?: string; slotId: string; pool: string; durationMinutes: number; nextStep: string; stepCode?: string; workPhaseId?: string | null; requiresPrecommit?: boolean };
   } | null>(null);
 
   const fetchWorklist = useCallback(async () => {
@@ -152,6 +152,9 @@ export function WorklistWidget() {
         requiresPrecommit: item.requiresPrecommit ?? false,
         stepCode: item.stepCode ?? item.nextStep,
         stepSeq: item.stepSeq,
+        // Canonical work-phase identity (since migration 025). Undefined on
+        // legacy DBs / pre-migration rows; the server falls back to step_code.
+        workPhaseId: item.workPhaseId ?? undefined,
         overrideReason: overrideReason || undefined,
         createdVia: 'worklist',
       }),
@@ -220,6 +223,7 @@ export function WorklistWidget() {
           requiresPrecommit: slotPickerItem.requiresPrecommit ?? false,
           stepCode: itemStepCode ?? nextStep,
           stepSeq: slotPickerItem.stepSeq,
+          workPhaseId: slotPickerItem.workPhaseId ?? undefined,
           createdVia: 'worklist',
         }),
       });
@@ -258,6 +262,7 @@ export function WorklistWidget() {
             durationMinutes: slotPickerItem.durationMinutes || 30,
             nextStep: slotPickerItem.nextStep,
             stepCode: slotPickerItem.stepCode,
+            workPhaseId: slotPickerItem.workPhaseId,
             requiresPrecommit: slotPickerItem.requiresPrecommit,
           },
         });
@@ -301,6 +306,7 @@ export function WorklistWidget() {
           overrideReason,
           requiresPrecommit: retryData.requiresPrecommit ?? false,
           stepCode: retryData.stepCode ?? retryData.nextStep,
+          workPhaseId: retryData.workPhaseId ?? undefined,
           createdVia: 'worklist',
         }),
       });

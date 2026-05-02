@@ -1,6 +1,7 @@
 import { getDbPool } from '../db';
 import { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } from './auth';
 import { fetchGoogleCalendarEvents, createGoogleCalendarEvent, deleteGoogleCalendarEvent } from './api';
+import { SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT } from '../active-appointment';
 
 export async function syncTimeSlotsFromGoogleCalendar(userId: string): Promise<{
   created: number;
@@ -277,7 +278,7 @@ export async function syncMissingAppointmentsToGoogleCalendar(userId: string): P
     JOIN patients p ON a.patient_id = p.id
     WHERE ats.user_id = $1
       AND a.google_calendar_event_id IS NULL
-      AND (a.appointment_status IS NULL OR a.appointment_status NOT IN ('cancelled_by_patient', 'cancelled_by_doctor'))
+      AND ${SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT}
       AND ats.start_time > NOW()
     ORDER BY ats.start_time ASC`,
     [userId]

@@ -10,6 +10,8 @@ import { getSchedulingFeatureFlag } from '@/lib/scheduling-feature-flags';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { logger } from '@/lib/logger';
 import { normalizePathwayWorkPhaseArray } from '@/lib/pathway-work-phases-for-episode';
+import { translateUniqueViolation } from '@/lib/appointment-constraint-errors';
+import { probeAppointmentsWorkPhaseIdColumn } from '@/lib/active-appointment';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -29,6 +31,14 @@ export interface CreateAppointmentParams {
   slotIntentId?: string | null;
   stepSeq?: number | null;
   requiresPrecommit: boolean;
+  /**
+   * Canonical work-phase identity (since migration 025).
+   * When supplied, the booking is anchored to this `episode_work_phases.id`
+   * and the partial unique index `idx_appointments_unique_work_phase_active`
+   * enforces "one active appointment per work phase". `stepCode` / `stepSeq`
+   * are still written as legacy denormalized columns for backward compat.
+   */
+  workPhaseId?: string | null;
 }
 
 export interface CreateAppointmentAuth {
@@ -95,6 +105,7 @@ export async function createAppointment(
     slotIntentId: slotIntentIdRaw,
     stepSeq: stepSeqRaw,
     requiresPrecommit: bodyRequiresPrecommit,
+    workPhaseId: workPhaseIdRaw,
   } = params;
 
   const durationMinutes = 30;
@@ -310,6 +321,50 @@ export async function createAppointment(
     const effectiveIntentId = typeof slotIntentIdRaw === 'string' ? slotIntentIdRaw : null;
     const effectiveStepCode = typeof stepCode === 'string' ? stepCode : null;
     const effectiveStepSeq = typeof stepSeqRaw === 'number' ? stepSeqRaw : null;
+    const effectiveWorkPhaseId = typeof workPhaseIdRaw === 'string' && workPhaseIdRaw.length > 0
+      ? workPhaseIdRaw
+      : null;
+
+    // Probe once per process: if work_phase_id column exists (post migration 025),
+    // we include it in the INSERT. On older DBs the column is missing and we fall
+    // back to the legacy step_code/step_seq path automatically.
+    const hasWorkPhaseIdColumn = await probeAppointmentsWorkPhaseIdColumn(db);
+    if (effectiveWorkPhaseId && hasWorkPhaseIdColumn && episodeId) {
+      // Validate that the work phase belongs to this episode (defense in depth).
+      const ewpCheck = await client.query(
+        `SELECT episode_id, work_phase_code FROM episode_work_phases WHERE id = $1`,
+        [effectiveWorkPhaseId],
+      );
+      if (ewpCheck.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return {
+          ok: false,
+          validationError: { error: 'Munkafázis nem található (workPhaseId)', code: 'WORK_PHASE_NOT_FOUND', status: 404 },
+        };
+      }
+      if (ewpCheck.rows[0].episode_id !== episodeId) {
+        await client.query('ROLLBACK');
+        return {
+          ok: false,
+          validationError: {
+            error: 'Munkafázis episodeId nem egyezik az appointment episodeId-jával',
+            code: 'WORK_PHASE_EPISODE_MISMATCH',
+            status: 400,
+          },
+        };
+      }
+      if (effectiveStepCode != null && ewpCheck.rows[0].work_phase_code !== effectiveStepCode) {
+        await client.query('ROLLBACK');
+        return {
+          ok: false,
+          validationError: {
+            error: 'Munkafázis work_phase_code nem egyezik az appointment step_code-jával',
+            code: 'WORK_PHASE_STEP_CODE_MISMATCH',
+            status: 400,
+          },
+        };
+      }
+    }
 
     // Validate intent belongs to this episode if provided
     if (effectiveIntentId && episodeId) {
@@ -359,32 +414,37 @@ export async function createAppointment(
       }
     }
 
+    // Build INSERT dynamically so the new work_phase_id column only participates
+    // on databases that have run migration 025. Order: existing 18 params first,
+    // then optional work_phase_id as $19.
+    const baseColumns = [
+      'patient_id', 'episode_id', 'time_slot_id', 'created_by', 'dentist_email', 'appointment_type',
+      'pool', 'duration_minutes', 'no_show_risk', 'requires_confirmation', 'hold_expires_at', 'created_via',
+      'requires_precommit', 'start_time', 'end_time', 'slot_intent_id', 'step_code', 'step_seq',
+    ];
+    const baseValues: Array<string | number | boolean | Date | null> = [
+      patientId, episodeId || null, timeSlotId, auth.email, timeSlot.dentist_email, appointmentType || null,
+      effectivePool, durationMinutes, noShowRisk, requiresConfirmation, holdExpiresAt,
+      usedOverride ? (auth.role === 'admin' ? 'admin_override' : 'surgeon_override') : createdVia,
+      reqPrecommit, startTime, endTime, effectiveIntentId, effectiveStepCode, effectiveStepSeq,
+    ];
+    const includeWorkPhaseId = hasWorkPhaseIdColumn;
+    if (includeWorkPhaseId) {
+      baseColumns.push('work_phase_id');
+      baseValues.push(effectiveWorkPhaseId);
+    }
+    const placeholders = baseValues.map((_, i) => `$${i + 1}`).join(', ');
+    const updateAssignments = baseColumns
+      .filter((col) => col !== 'time_slot_id') // conflict key — never re-assign
+      .map((col) => `${col} = EXCLUDED.${col}`)
+      .join(',\n         ');
+
     const appointmentResult = await client.query(
-      `INSERT INTO appointments (
-        patient_id, episode_id, time_slot_id, created_by, dentist_email, appointment_type,
-        pool, duration_minutes, no_show_risk, requires_confirmation, hold_expires_at, created_via, requires_precommit, start_time, end_time,
-        slot_intent_id, step_code, step_seq
-      )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
-       ON CONFLICT (time_slot_id) 
+      `INSERT INTO appointments (${baseColumns.join(', ')})
+       VALUES (${placeholders})
+       ON CONFLICT (time_slot_id)
        DO UPDATE SET
-         patient_id = EXCLUDED.patient_id,
-         episode_id = EXCLUDED.episode_id,
-         created_by = EXCLUDED.created_by,
-         dentist_email = EXCLUDED.dentist_email,
-         appointment_type = EXCLUDED.appointment_type,
-         pool = EXCLUDED.pool,
-         duration_minutes = EXCLUDED.duration_minutes,
-         no_show_risk = EXCLUDED.no_show_risk,
-         requires_confirmation = EXCLUDED.requires_confirmation,
-         hold_expires_at = EXCLUDED.hold_expires_at,
-         created_via = EXCLUDED.created_via,
-         requires_precommit = EXCLUDED.requires_precommit,
-         start_time = EXCLUDED.start_time,
-         end_time = EXCLUDED.end_time,
-         slot_intent_id = EXCLUDED.slot_intent_id,
-         step_code = EXCLUDED.step_code,
-         step_seq = EXCLUDED.step_seq,
+         ${updateAssignments},
          appointment_status = NULL,
          completion_notes = NULL,
          google_calendar_event_id = NULL,
@@ -395,7 +455,7 @@ export async function createAppointment(
          current_alternative_index = NULL,
          is_late = false
        WHERE appointments.appointment_status IN ('cancelled_by_patient', 'cancelled_by_doctor')
-       RETURNING 
+       RETURNING
          id,
          patient_id as "patientId",
          episode_id as "episodeId",
@@ -406,12 +466,7 @@ export async function createAppointment(
          appointment_type as "appointmentType",
          pool,
          duration_minutes as "durationMinutes"`,
-      [
-        patientId, episodeId || null, timeSlotId, auth.email, timeSlot.dentist_email, appointmentType || null,
-        effectivePool, durationMinutes, noShowRisk, requiresConfirmation, holdExpiresAt,
-        usedOverride ? (auth.role === 'admin' ? 'admin_override' : 'surgeon_override') : createdVia,
-        reqPrecommit, startTime, endTime, effectiveIntentId, effectiveStepCode, effectiveStepSeq,
-      ],
+      baseValues,
     );
 
     // Convert intent state if we're linking an intent
@@ -495,14 +550,15 @@ export async function createAppointment(
       }
     }
 
-    const pgError = error as { code?: string; constraint?: string };
-    if (pgError?.code === '23505' && pgError?.constraint === 'idx_appointments_one_hard_next') {
+    const translation = translateUniqueViolation(error);
+    if (translation) {
       return {
         ok: false,
         validationError: {
-          error: 'Az epizódhoz már tartozik ütköző work időpont. Frissítsen, majd próbálja újra.',
-          code: 'ONE_HARD_NEXT_VIOLATION',
-          status: 409,
+          error: translation.error,
+          code: translation.code,
+          status: translation.status,
+          hint: translation.hint,
         },
       };
     }
