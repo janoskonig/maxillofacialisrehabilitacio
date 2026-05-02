@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser, type AuthUser } from '@/lib/auth';
@@ -21,10 +22,38 @@ import {
   Stethoscope,
   RefreshCw,
   BarChart3,
+  AlertTriangle,
+  XCircle,
+  CheckCircle2,
+  Timer,
+  CalendarClock,
 } from 'lucide-react';
 import { MedicalStatisticsSection } from '@/components/MedicalStatisticsSection';
 
+// Lazy-loaded chart components — recharts is heavy.
+const AppointmentOutcomeChart = dynamic(
+  () => import('@/components/charts/AppointmentOutcomeChart').then((m) => ({ default: m.AppointmentOutcomeChart })),
+  { ssr: false, loading: () => <ChartSkeleton height="h-72" /> },
+);
+const BookingHourChart = dynamic(
+  () => import('@/components/charts/BookingHourChart').then((m) => ({ default: m.BookingHourChart })),
+  { ssr: false, loading: () => <ChartSkeleton height="h-60" /> },
+);
+const BookingWeekdayChart = dynamic(
+  () => import('@/components/charts/BookingWeekdayChart').then((m) => ({ default: m.BookingWeekdayChart })),
+  { ssr: false, loading: () => <ChartSkeleton height="h-60" /> },
+);
+const ActivityTrendChart = dynamic(
+  () => import('@/components/charts/ActivityTrendChart').then((m) => ({ default: m.ActivityTrendChart })),
+  { ssr: false, loading: () => <ChartSkeleton height="h-60" /> },
+);
+const MonthlyPatientsChart = dynamic(
+  () => import('@/components/charts/MonthlyPatientsChart').then((m) => ({ default: m.MonthlyPatientsChart })),
+  { ssr: false, loading: () => <ChartSkeleton height="h-60" /> },
+);
+
 type Stats = {
+  generaltAt: string;
   betegek: {
     osszes: number;
     ebbenAHonapban: number;
@@ -32,6 +61,7 @@ type Stats = {
     nemSzerint: Array<{ nem: string; darab: number }>;
     etiologiaSzerint: Array<{ etiologia: string; darab: number }>;
     orvosSzerint: Array<{ orvos: string; darab: number }>;
+    havitTrend: Array<{ honap: string; cimke: string; darab: number }>;
   };
   felhasznalok: {
     osszes: number;
@@ -46,6 +76,13 @@ type Stats = {
     multbeli: number;
     ebbenAHonapban: number;
     statusSzerint: Array<{ status: string; darab: number }>;
+    kimenetSzerint: Array<{ kimenet: string; darab: number }>;
+    kesesekSzama: number;
+    noShowArany: number;
+    lemondasiArany: number;
+    befejezesiArany: number;
+    csucsOrak: Array<{ ora: number; cimke: string; darab: number }>;
+    napiEloszlas: Array<{ napIdx: number; napNev: string; darab: number }>;
   };
   idoslotok: {
     osszes: number;
@@ -58,6 +95,7 @@ type Stats = {
     utolso30Nap: number;
     muveletSzerint: Array<{ muvelet: string; darab: number }>;
     felhasznaloSzerint: Array<{ felhasznalo: string; darab: number }>;
+    napiTrend: Array<{ datum: string; cimke: string; darab: number }>;
   };
   visszajelzesek: {
     osszes: number;
@@ -71,6 +109,15 @@ type Stats = {
 };
 
 type StatsTab = 'overview' | 'system' | 'medical';
+
+function ChartSkeleton({ height = 'h-60' }: { height?: string }) {
+  return (
+    <div
+      className={`${height} animate-pulse rounded-xl bg-gradient-to-br from-gray-100 to-gray-50`}
+      aria-hidden
+    />
+  );
+}
 
 function maxInSeries(items: { darab: number }[]): number {
   return items.reduce((m, x) => Math.max(m, x.darab), 0);
@@ -127,12 +174,16 @@ function KpiCard({
   icon,
   accent,
   subtitle,
+  trendPct,
+  trendInverted = false,
 }: {
   title: string;
   value: number | string;
   icon: ReactNode;
-  accent: 'sky' | 'emerald' | 'violet' | 'amber' | 'rose' | 'slate';
+  accent: 'sky' | 'emerald' | 'violet' | 'amber' | 'rose' | 'slate' | 'indigo' | 'teal';
   subtitle?: string;
+  trendPct?: number;
+  trendInverted?: boolean;
 }) {
   const ring: Record<typeof accent, string> = {
     sky: 'from-sky-500/15 to-sky-400/5 ring-sky-500/20',
@@ -141,6 +192,8 @@ function KpiCard({
     amber: 'from-amber-500/15 to-amber-400/5 ring-amber-500/20',
     rose: 'from-rose-500/15 to-rose-400/5 ring-rose-500/20',
     slate: 'from-slate-500/12 to-slate-400/5 ring-slate-400/25',
+    indigo: 'from-indigo-500/15 to-indigo-400/5 ring-indigo-500/20',
+    teal: 'from-teal-500/15 to-teal-400/5 ring-teal-500/20',
   };
   const iconTint: Record<typeof accent, string> = {
     sky: 'text-sky-600 bg-sky-500/10',
@@ -149,20 +202,41 @@ function KpiCard({
     amber: 'text-amber-600 bg-amber-500/10',
     rose: 'text-rose-600 bg-rose-500/10',
     slate: 'text-slate-600 bg-slate-500/10',
+    indigo: 'text-indigo-600 bg-indigo-500/10',
+    teal: 'text-teal-600 bg-teal-500/10',
   };
+  // For inverted metrics (no-show / lemondás) lower is better.
+  const isPositive = trendInverted ? (trendPct ?? 0) <= 0 : (trendPct ?? 0) >= 0;
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl border border-gray-200/80 bg-gradient-to-br p-5 shadow-soft ring-1 ${ring[accent]}`}
+      className={`group relative overflow-hidden rounded-2xl border border-gray-200/80 bg-gradient-to-br p-5 shadow-soft ring-1 transition-shadow duration-300 hover:shadow-soft-md ${ring[accent]}`}
     >
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{title}</p>
           <p className="mt-1 text-3xl font-bold tracking-tight text-gray-900 tabular-nums">
             {value}
           </p>
-          {subtitle ? <p className="mt-1 text-xs text-gray-500">{subtitle}</p> : null}
+          {subtitle ? (
+            <p className="mt-1 truncate text-xs text-gray-500" title={subtitle}>
+              {subtitle}
+            </p>
+          ) : null}
+          {typeof trendPct === 'number' ? (
+            <div
+              className={`mt-2 inline-flex items-center gap-1 text-xs font-semibold ${
+                isPositive ? 'text-emerald-600' : 'text-rose-600'
+              }`}
+            >
+              {isPositive ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
+              {trendPct > 0 ? '+' : ''}
+              {trendPct}%
+            </div>
+          ) : null}
         </div>
-        <div className={`rounded-xl p-2.5 ${iconTint[accent]}`}>{icon}</div>
+        <div className={`shrink-0 rounded-xl p-2.5 transition-transform duration-300 group-hover:scale-105 ${iconTint[accent]}`}>
+          {icon}
+        </div>
       </div>
     </div>
   );
@@ -242,6 +316,21 @@ const TAB_CONFIG: { id: StatsTab; label: string; icon: ReactNode; anchor: string
   { id: 'medical', label: 'Szakmai', icon: <Stethoscope className="h-4 w-4" />, anchor: 'stats-medical' },
 ];
 
+function formatRelativeTime(iso: string | undefined): string {
+  if (!iso) return '—';
+  const ts = new Date(iso).getTime();
+  if (Number.isNaN(ts)) return '—';
+  const diffSec = Math.max(0, Math.round((Date.now() - ts) / 1000));
+  if (diffSec < 5) return 'most';
+  if (diffSec < 60) return `${diffSec} mp`;
+  const m = Math.round(diffSec / 60);
+  if (m < 60) return `${m} perce`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h} órája`;
+  const d = Math.round(h / 24);
+  return `${d} napja`;
+}
+
 export default function StatsPage() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
@@ -251,6 +340,7 @@ export default function StatsPage() {
   const [statsLoading, setStatsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<StatsTab>('overview');
+  const [now, setNow] = useState<number>(() => Date.now());
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -277,6 +367,7 @@ export default function StatsPage() {
       if (res.ok) {
         const data = await res.json();
         setStats(data);
+        setNow(Date.now());
       } else {
         const errorData = await res.json();
         setError(errorData.error || 'Hiba történt az adatok betöltésekor');
@@ -292,6 +383,12 @@ export default function StatsPage() {
   useEffect(() => {
     loadStats();
   }, [loadStats]);
+
+  // Tick relative-timestamp every 30s without re-fetching.
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, []);
 
   const formatActionName = (action: string): string => {
     const actionMap: Record<string, string> = {
@@ -357,6 +454,13 @@ export default function StatsPage() {
     return Math.round((stats.idoslotok.lefoglalt / stats.idoslotok.osszes) * 100);
   }, [stats]);
 
+  const lastUpdatedLabel = useMemo(() => {
+    if (!stats?.generaltAt) return '—';
+    // `now` is referenced so the relative label re-renders each tick.
+    void now;
+    return formatRelativeTime(stats.generaltAt);
+  }, [stats?.generaltAt, now]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100/80 flex items-center justify-center">
@@ -380,7 +484,7 @@ export default function StatsPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 via-gray-50 to-gray-100/90">
-      <header className="border-b border-gray-200/80 bg-white/90 shadow-sm backdrop-blur-md">
+      <header className="sticky top-0 z-20 border-b border-gray-200/80 bg-white/80 shadow-sm backdrop-blur-md">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-4">
@@ -434,18 +538,28 @@ export default function StatsPage() {
             <ArrowLeft className="h-4 w-4" />
             Vissza az admin felületre
           </Link>
-          <button
-            type="button"
-            onClick={() => loadStats()}
-            disabled={statsLoading}
-            className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-soft transition-colors hover:bg-gray-50 disabled:opacity-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${statsLoading ? 'animate-spin' : ''}`} />
-            Frissítés
-          </button>
+          <div className="flex items-center gap-3 self-start sm:self-auto">
+            <span
+              className="hidden text-xs text-gray-500 sm:inline-flex sm:items-center sm:gap-1"
+              aria-live="polite"
+              title={stats?.generaltAt ?? ''}
+            >
+              <Clock className="h-3.5 w-3.5" />
+              Frissítve: <span className="font-medium text-gray-700">{lastUpdatedLabel}</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => loadStats()}
+              disabled={statsLoading}
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-soft transition-colors hover:bg-gray-50 disabled:opacity-50"
+            >
+              <RefreshCw className={`h-4 w-4 ${statsLoading ? 'animate-spin' : ''}`} />
+              Frissítés
+            </button>
+          </div>
         </div>
 
-        {statsLoading ? (
+        {statsLoading && !stats ? (
           <StatsLoadingSkeleton />
         ) : error ? (
           <div className="card border-rose-200 bg-rose-50/80 text-center shadow-soft-md">
@@ -456,21 +570,25 @@ export default function StatsPage() {
           </div>
         ) : stats ? (
           <div className="space-y-10">
-            <div id="stats-overview" className="scroll-mt-32 space-y-4">
+            {/* ───────── Áttekintés ───────── */}
+            <div id="stats-overview" className="scroll-mt-32 space-y-6">
               <h2 className="sr-only">Áttekintés</h2>
+
+              {/* Primary KPIs */}
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <KpiCard
                   title="Betegek"
                   value={stats.betegek.osszes}
                   accent="sky"
-                  subtitle="Összes rögzített beteg"
+                  subtitle={`${stats.betegek.ebbenAHonapban} új ebben a hónapban`}
+                  trendPct={patientMonthDeltaPct}
                   icon={<Users className="h-6 w-6" />}
                 />
                 <KpiCard
                   title="Felhasználók"
                   value={stats.felhasznalok.osszes}
                   accent="emerald"
-                  subtitle={`${stats.felhasznalok.aktiv} aktív`}
+                  subtitle={`${stats.felhasznalok.aktiv} aktív · ${stats.felhasznalok.utolso30Napban} új (30 nap)`}
                   icon={<UserCheck className="h-6 w-6" />}
                 />
                 <KpiCard
@@ -484,15 +602,55 @@ export default function StatsPage() {
                   title="Aktivitás"
                   value={stats.aktivitas.osszes}
                   accent="amber"
-                  subtitle={`Utolsó 7 nap: ${stats.aktivitas.utolso7Nap}`}
+                  subtitle={`Utolsó 7 nap: ${stats.aktivitas.utolso7Nap} · 30 nap: ${stats.aktivitas.utolso30Nap}`}
                   icon={<Activity className="h-6 w-6" />}
                 />
               </div>
 
+              {/* Operational KPIs (új) */}
+              <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                <KpiCard
+                  title="No-show arány"
+                  value={`${stats.idopontfoglalasok.noShowArany}%`}
+                  accent="rose"
+                  subtitle="Nem jelent meg / megjelent + nem jelent meg"
+                  icon={<XCircle className="h-6 w-6" />}
+                />
+                <KpiCard
+                  title="Lemondási arány"
+                  value={`${stats.idopontfoglalasok.lemondasiArany}%`}
+                  accent="amber"
+                  subtitle="Lemondott / összes lezárt"
+                  icon={<AlertTriangle className="h-6 w-6" />}
+                />
+                <KpiCard
+                  title="Befejezési arány"
+                  value={`${stats.idopontfoglalasok.befejezesiArany}%`}
+                  accent="emerald"
+                  subtitle="Sikeresen teljesült"
+                  icon={<CheckCircle2 className="h-6 w-6" />}
+                />
+                <KpiCard
+                  title="Késések"
+                  value={stats.idopontfoglalasok.kesesekSzama}
+                  accent="indigo"
+                  subtitle="Késve érkezett betegek száma"
+                  icon={<Timer className="h-6 w-6" />}
+                />
+              </div>
+
+              {/* Quick glance + slot utilisation */}
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
                 <div className="card border-gray-200/80 lg:col-span-2">
-                  <h3 className="text-sm font-semibold text-gray-900">Gyors pillantás</h3>
-                  <p className="mt-1 text-xs text-gray-500">Dokumentumok, visszajelzések és időslot-kihasználtság.</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-900">Gyors pillantás</h3>
+                      <p className="mt-0.5 text-xs text-gray-500">
+                        Dokumentumok, visszajelzések és időslot-kihasználtság.
+                      </p>
+                    </div>
+                    <CalendarClock className="h-5 w-5 text-gray-400" aria-hidden />
+                  </div>
                   <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <MiniStat label="Dokumentumok" value={stats.dokumentumok.osszes} />
                     <MiniStat
@@ -506,6 +664,20 @@ export default function StatsPage() {
                       valueClassName="text-violet-700"
                     />
                   </dl>
+                  {slotUtilization != null ? (
+                    <div className="mt-4">
+                      <div className="mb-1 flex justify-between text-xs font-medium text-gray-600">
+                        <span>{stats.idoslotok.lefoglalt} lefoglalt / {stats.idoslotok.osszes} összes</span>
+                        <span className="tabular-nums">{slotUtilization}%</span>
+                      </div>
+                      <div className="h-2.5 overflow-hidden rounded-full bg-gray-100">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-violet-500 to-medical-primary transition-[width] duration-500"
+                          style={{ width: `${slotUtilization}%` }}
+                        />
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="card flex flex-col justify-center border-gray-200/80 bg-gradient-to-br from-medical-primary/5 to-transparent">
                   <p className="text-sm font-medium text-gray-700">Betegek — havi trend</p>
@@ -533,8 +705,33 @@ export default function StatsPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Trend grafikonok */}
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <div className="card border-gray-200/80">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-900">Új betegek (12 hónap)</h3>
+                      <p className="text-xs text-gray-500">Havi felvett betegek görgetett ablakban.</p>
+                    </div>
+                    <Users className="h-5 w-5 text-sky-500" aria-hidden />
+                  </div>
+                  <MonthlyPatientsChart data={stats.betegek.havitTrend} />
+                </div>
+                <div className="card border-gray-200/80">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-900">Aktivitás (utolsó 30 nap)</h3>
+                      <p className="text-xs text-gray-500">Napi aktivitás-események összesítése.</p>
+                    </div>
+                    <Activity className="h-5 w-5 text-amber-500" aria-hidden />
+                  </div>
+                  <ActivityTrendChart data={stats.aktivitas.napiTrend} />
+                </div>
+              </div>
             </div>
 
+            {/* ───────── Rendszer ───────── */}
             <div className="space-y-8">
               <SectionShell
                 id="stats-system-patients"
@@ -640,7 +837,7 @@ export default function StatsPage() {
                 id="stats-system-appointments"
                 icon={<Calendar className="h-5 w-5" />}
                 title="Időpontfoglalások"
-                description="Időbeli bontás és státusz szerinti eloszlás."
+                description="Időbeli bontás, kimenetelek és foglalási csúcsidők."
               >
                 <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
                   <MiniStat
@@ -652,15 +849,35 @@ export default function StatsPage() {
                   <MiniStat label="Ebben a hónapban" value={stats.idopontfoglalasok.ebbenAHonapban} />
                   <MiniStat label="Összes" value={stats.idopontfoglalasok.osszes} />
                 </div>
-                <h3 className="mb-3 text-sm font-semibold text-gray-800">Státusz szerint</h3>
-                <DistributionBars
-                  items={stats.idopontfoglalasok.statusSzerint.map((x) => ({
-                    ...x,
-                    label: formatStatusName(x.status),
-                  }))}
-                  labelKey="label"
-                  barClass="bg-violet-500/85"
-                />
+
+                <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+                  <div>
+                    <h3 className="mb-3 text-sm font-semibold text-gray-800">Időpontok kimenete</h3>
+                    <AppointmentOutcomeChart data={stats.idopontfoglalasok.kimenetSzerint} />
+                  </div>
+                  <div>
+                    <h3 className="mb-3 text-sm font-semibold text-gray-800">Páciens-jóváhagyás státusza</h3>
+                    <DistributionBars
+                      items={stats.idopontfoglalasok.statusSzerint.map((x) => ({
+                        ...x,
+                        label: formatStatusName(x.status),
+                      }))}
+                      labelKey="label"
+                      barClass="bg-violet-500/85"
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
+                  <div>
+                    <h3 className="mb-3 text-sm font-semibold text-gray-800">Csúcsidők (óránként)</h3>
+                    <BookingHourChart data={stats.idopontfoglalasok.csucsOrak} />
+                  </div>
+                  <div>
+                    <h3 className="mb-3 text-sm font-semibold text-gray-800">Hét napjai szerint</h3>
+                    <BookingWeekdayChart data={stats.idopontfoglalasok.napiEloszlas} />
+                  </div>
+                </div>
               </SectionShell>
 
               <SectionShell
