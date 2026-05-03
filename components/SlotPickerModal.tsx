@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Calendar, Clock, Users, Plus } from 'lucide-react';
+import { X, Calendar, Clock, Users, Plus, CalendarClock } from 'lucide-react';
 import { toBudapestStartOfDayISO } from '@/lib/datetime';
 
 interface Doctor {
@@ -34,6 +34,14 @@ export interface SlotPickerModalProps {
   patientId: string;
   episodeId?: string | null;
   patientName?: string;
+  /**
+   * Reschedule mode: ISO timestamp of the currently-booked appointment.
+   * When set, the modal title and a banner indicate that picking a new slot
+   * will MOVE the existing booking (the backend cancels the old appointment
+   * for the same step in the same transaction). Pass nothing for plain
+   * "Foglalás" (new booking).
+   */
+  rescheduleFromIso?: string | null;
   onSelectSlot: (slotId: string) => void | Promise<void>;
 }
 
@@ -49,6 +57,7 @@ export function SlotPickerModal({
   patientId,
   episodeId,
   patientName,
+  rescheduleFromIso,
   onSelectSlot,
 }: SlotPickerModalProps) {
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -235,17 +244,45 @@ export function SlotPickerModal({
 
   if (!open) return null;
 
+  const rescheduleFromLabel = rescheduleFromIso
+    ? new Date(rescheduleFromIso).toLocaleString('hu-HU', {
+        timeZone: 'Europe/Budapest',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : null;
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="slot-picker-title">
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between p-4 border-b">
-          <h2 id="slot-picker-title" className="text-lg font-semibold text-gray-900">
-            Időpont választás{patientName ? ` – ${patientName}` : ''}
+          <h2 id="slot-picker-title" className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            {rescheduleFromIso && <CalendarClock className="w-5 h-5 text-amber-600" aria-hidden="true" />}
+            {rescheduleFromIso ? 'Időpont áthelyezés' : 'Időpont választás'}
+            {patientName ? ` – ${patientName}` : ''}
           </h2>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700 p-1" aria-label="Bezárás">
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {rescheduleFromLabel && (
+          <div className="px-4 py-2 border-b bg-amber-50 text-sm text-amber-900 flex items-start gap-2">
+            <CalendarClock className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-700" aria-hidden="true" />
+            <div>
+              <div>
+                <span className="font-medium">Jelenleg foglalt:</span> {rescheduleFromLabel}
+              </div>
+              <div className="text-xs text-amber-800/90">
+                Új időpont választása esetén a jelenlegi foglalás automatikusan törlődik (slot felszabadul), és helyette
+                az új idő jön létre — egy lépésben.
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-2 p-4 border-b bg-gray-50 items-center">
           <span className="px-2 py-1 rounded text-xs font-medium bg-medical-primary/20 text-medical-primary">{pool}</span>

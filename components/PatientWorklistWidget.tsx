@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { ClipboardList, CalendarCheck, Trash2, Undo2 } from 'lucide-react';
+import { ClipboardList, CalendarCheck, Trash2, Undo2, CalendarClock } from 'lucide-react';
 import {
   getWorklistItemKey,
   deriveWorklistRowState,
@@ -663,6 +663,17 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                           {item.bookedAppointmentId && (
                             <button
                               type="button"
+                              onClick={() => handleBookNext(item)}
+                              className="text-xs text-medical-primary hover:underline font-medium text-left flex items-center gap-0.5"
+                              title="Áthelyezés másik időpontra (a jelenlegi foglalás automatikusan törlődik)"
+                            >
+                              <CalendarClock className="w-3 h-3" />
+                              Áthelyezés
+                            </button>
+                          )}
+                          {item.bookedAppointmentId && (
+                            <button
+                              type="button"
                               onClick={() => handleDeleteAppointment(item.bookedAppointmentId!)}
                               disabled={deleteAppointmentId === item.bookedAppointmentId}
                               className="text-xs text-red-600 hover:underline font-medium disabled:opacity-50 text-left flex items-center gap-0.5"
@@ -734,6 +745,9 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
           episodeId={slotPickerItem.episodeId}
           providerId={slotPickerItem.assignedProviderId ?? undefined}
           patientName={slotPickerItem.patientName ?? undefined}
+          rescheduleFromIso={
+            slotPickerItem.bookedAppointmentId ? slotPickerItem.bookedAppointmentStartTime ?? null : null
+          }
           onSelectSlot={handleSelectSlot}
         />
       )}
