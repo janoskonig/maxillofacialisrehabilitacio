@@ -12,6 +12,7 @@ const VALID_KEYS: SchedulingFeatureFlagKey[] = [
   'auto_convert_intents',
   'auto_rebalance',
   'strict_one_hard_next',
+  'enforce_one_hard_next',
 ];
 
 export const GET = roleHandler(['admin'], async (req, { auth }) => {

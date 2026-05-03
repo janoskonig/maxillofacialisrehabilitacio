@@ -7,6 +7,7 @@
 
 import { Pool, type PoolClient } from 'pg';
 import { checkOneHardNext, getAppointmentRiskSettings } from '@/lib/scheduling-service';
+import { getSchedulingFeatureFlag } from '@/lib/scheduling-feature-flags';
 import type { AuthPayload } from '@/lib/auth-server';
 import { normalizePathwayWorkPhaseArray } from '@/lib/pathway-work-phases-for-episode';
 import { isSchedulerUsePlanItemsEnabled } from '@/lib/plan-items-flags';
@@ -220,21 +221,28 @@ export async function convertIntentToAppointment(
 
       const isChainReservation = skipOneHardNext === true && intent.pool === 'work';
 
+      // The one-hard-next invariant is now feature-flagged. When
+      // `enforce_one_hard_next` is OFF (default), the check is skipped — both
+      // single-intent and bulk paths behave the same. The bulk path's
+      // `skipOneHardNext` flag still wins when set, for backward compat.
       if (!skipOneHardNext) {
-        const oneHardNext = await checkOneHardNext(intent.episode_id, intent.pool as 'work' | 'consult' | 'control', {
-          requiresPrecommit,
-          stepCode: intent.step_code,
-        });
-        if (!oneHardNext.allowed) {
-          await client.query('ROLLBACK');
-          return {
-            ok: false,
-            status: 409,
-            error: oneHardNext.reason ?? 'Episode already has a future work appointment (one-hard-next)',
-            code: 'ONE_HARD_NEXT_VIOLATION',
-            overrideHint:
-              "Egyszerre minden szükséges lépést az „Összes szükséges időpont lefoglalása” gombbal foglalhatod.",
-          };
+        const enforceOneHardNext = await getSchedulingFeatureFlag('enforce_one_hard_next');
+        if (enforceOneHardNext) {
+          const oneHardNext = await checkOneHardNext(intent.episode_id, intent.pool as 'work' | 'consult' | 'control', {
+            requiresPrecommit,
+            stepCode: intent.step_code,
+          });
+          if (!oneHardNext.allowed) {
+            await client.query('ROLLBACK');
+            return {
+              ok: false,
+              status: 409,
+              error: oneHardNext.reason ?? 'Episode already has a future work appointment (one-hard-next)',
+              code: 'ONE_HARD_NEXT_VIOLATION',
+              overrideHint:
+                "Egyszerre minden szükséges lépést az „Összes szükséges időpont lefoglalása” gombbal foglalhatod.",
+            };
+          }
         }
       }
 

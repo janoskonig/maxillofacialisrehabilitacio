@@ -1,6 +1,13 @@
 /**
- * Feature flags for scheduling (overbooking, auto-convert, auto-rebalance, strict one-hard-next).
+ * Feature flags for scheduling (overbooking, auto-convert, auto-rebalance,
+ * strict one-hard-next, enforce one-hard-next).
  * Default: all disabled for safe rollout.
+ *
+ * `enforce_one_hard_next` is the master switch for the one-hard-next invariant
+ * (≤1 future hard work appointment per episode). When `false` (default), the
+ * rule is OFF — bookings proceed without that check. When `true`, the existing
+ * application-level check runs (and `strict_one_hard_next` then controls
+ * whether admin/beutaló orvos override is allowed).
  */
 
 import { getDbPool } from './db';
@@ -9,7 +16,8 @@ export type SchedulingFeatureFlagKey =
   | 'overbooking'
   | 'auto_convert_intents'
   | 'auto_rebalance'
-  | 'strict_one_hard_next';
+  | 'strict_one_hard_next'
+  | 'enforce_one_hard_next';
 
 let cache: Map<string, boolean> | null = null;
 let cacheExpiry = 0;

@@ -221,43 +221,51 @@ export async function createAppointment(
           }
         }
 
-        const oneHardNext = await checkOneHardNext(episodeId, 'work', {
-          requiresPrecommit: requiresPrecommit === true,
-          stepCode: typeof stepCode === 'string' ? stepCode : undefined,
-          dbClient: client,
-        });
-        if (!oneHardNext.allowed) {
-          const strictOneHardNext = await getSchedulingFeatureFlag('strict_one_hard_next');
-          const mayOverride =
-            !strictOneHardNext &&
-            (auth.role === 'admin' || auth.role === 'beutalo_orvos' || auth.role === 'fogpótlástanász') &&
-            overrideReason &&
-            typeof overrideReason === 'string' &&
-            overrideReason.trim().length >= 10;
-          if (mayOverride) {
+        // The one-hard-next invariant is now feature-flagged. When
+        // `enforce_one_hard_next` is OFF (default), the app-level check is
+        // skipped entirely — bookings proceed regardless of existing future
+        // work appointments. The DB-level partial unique index has been
+        // dropped in migration 028 so it cannot resurrect the rule.
+        const enforceOneHardNext = await getSchedulingFeatureFlag('enforce_one_hard_next');
+        if (enforceOneHardNext) {
+          const oneHardNext = await checkOneHardNext(episodeId, 'work', {
+            requiresPrecommit: requiresPrecommit === true,
+            stepCode: typeof stepCode === 'string' ? stepCode : undefined,
+            dbClient: client,
+          });
+          if (!oneHardNext.allowed) {
+            const strictOneHardNext = await getSchedulingFeatureFlag('strict_one_hard_next');
+            const mayOverride =
+              !strictOneHardNext &&
+              (auth.role === 'admin' || auth.role === 'beutalo_orvos' || auth.role === 'fogpótlástanász') &&
+              overrideReason &&
+              typeof overrideReason === 'string' &&
+              overrideReason.trim().length >= 10;
+            if (mayOverride) {
+              await client.query(
+                `INSERT INTO scheduling_override_audit (episode_id, user_id, override_reason) VALUES ($1, $2, $3)`,
+                [episodeId, auth.userId, overrideReason!.trim()],
+              );
+              usedOverride = true;
+            } else {
+              await client.query('ROLLBACK');
+              return {
+                ok: false,
+                validationError: {
+                  error: oneHardNext.reason ?? 'Episode already has a future work appointment (one-hard-next)',
+                  code: 'ONE_HARD_NEXT_VIOLATION',
+                  overrideHint:
+                    "Egyszerre minden szükséges lépést az „Összes szükséges időpont lefoglalása” gombbal foglalhatod. Egyébként: overrideReason (min. 10 karakter) admin/beutaló orvos/fogpótlástanász.",
+                  status: 409,
+                },
+              };
+            }
+          } else if (requiresPrecommit === true && episodeId) {
             await client.query(
               `INSERT INTO scheduling_override_audit (episode_id, user_id, override_reason) VALUES ($1, $2, $3)`,
-              [episodeId, auth.userId, overrideReason!.trim()],
+              [episodeId, auth.userId, `precommit: ${typeof stepCode === 'string' ? stepCode : 'unknown'}`],
             );
-            usedOverride = true;
-          } else {
-            await client.query('ROLLBACK');
-            return {
-              ok: false,
-              validationError: {
-                error: oneHardNext.reason ?? 'Episode already has a future work appointment (one-hard-next)',
-                code: 'ONE_HARD_NEXT_VIOLATION',
-                overrideHint:
-                  "Egyszerre minden szükséges lépést az „Összes szükséges időpont lefoglalása” gombbal foglalhatod. Egyébként: overrideReason (min. 10 karakter) admin/beutaló orvos/fogpótlástanász.",
-                status: 409,
-              },
-            };
           }
-        } else if (requiresPrecommit === true && episodeId) {
-          await client.query(
-            `INSERT INTO scheduling_override_audit (episode_id, user_id, override_reason) VALUES ($1, $2, $3)`,
-            [episodeId, auth.userId, `precommit: ${typeof stepCode === 'string' ? stepCode : 'unknown'}`],
-          );
         }
       }
     }

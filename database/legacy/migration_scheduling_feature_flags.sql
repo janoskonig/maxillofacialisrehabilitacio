@@ -11,12 +11,16 @@ CREATE TABLE IF NOT EXISTS scheduling_feature_flags (
 
 CREATE INDEX IF NOT EXISTS idx_scheduling_feature_flags_enabled ON scheduling_feature_flags(enabled) WHERE enabled = true;
 
--- Seed default flags (all disabled for safe rollout)
+-- Seed default flags (all disabled for safe rollout).
+-- `enforce_one_hard_next` defaults to false: the one-hard-next invariant
+-- (≤1 future hard work appointment per episode) is OFF by default. Flip to
+-- true to re-enable the application-level check.
 INSERT INTO scheduling_feature_flags (key, enabled) VALUES
     ('overbooking', false),
     ('auto_convert_intents', false),
     ('auto_rebalance', false),
-    ('strict_one_hard_next', false)
+    ('strict_one_hard_next', false),
+    ('enforce_one_hard_next', false)
 ON CONFLICT (key) DO NOTHING;
 
 COMMIT;

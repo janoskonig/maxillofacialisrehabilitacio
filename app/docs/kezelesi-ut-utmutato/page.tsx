@@ -86,7 +86,7 @@ export default function KezelesiUtUtmutatoPage() {
               <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">3. Rövid fogalomtár</h2>
               <ul className="space-y-2">
                 <li><strong>Worklist</strong> — következő munkafázist váró betegek listája. Innen foglalsz.</li>
-                <li><strong>One-hard-next</strong> — egyszerre max 1 jövőbeli munkafázisú időpont / beteg (kivéve átadásnál: 2).</li>
+                <li><strong>One-hard-next</strong> — opcionális szabály (feature flag: <code>enforce_one_hard_next</code>): bekapcsolva max 1 jövőbeli munkafázisú időpont / epizód (kivéve átadásnál: 2). Alapból kikapcsolva.</li>
                 <li><strong>Override</strong> — admin/beutaló orvos felülírja a szabályt, indoklás kötelező.</li>
                 <li><strong>Blokk</strong> — pl. laborra várunk: addig nem foglalható a következő munkafázis.</li>
               </ul>
@@ -98,7 +98,7 @@ export default function KezelesiUtUtmutatoPage() {
 
               <h3 className="text-lg font-medium text-gray-800 mt-4 mb-2">Miért nem tudok foglalni?</h3>
               <ul className="list-disc pl-6 space-y-1">
-                <li>Már van jövőbeli work időpont? (one-hard-next — várj a lezárásig, vagy override)</li>
+                <li>Már van jövőbeli work időpont? (csak ha <code>enforce_one_hard_next</code> flag be van kapcsolva — alapból nincs)</li>
                 <li>Blokkolt az epizód? Előbb a blokkot kezelni kell.</li>
                 <li>Nincs kezelési út? Először válassz pathway-t.</li>
               </ul>
