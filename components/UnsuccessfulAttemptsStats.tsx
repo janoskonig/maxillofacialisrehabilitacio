@@ -25,6 +25,7 @@ import {
   MessageSquare,
   Download,
 } from 'lucide-react';
+import { downloadCsv, toCsv } from '@/lib/csv-export';
 
 interface DoctorBucket {
   doctor: string;
@@ -62,6 +63,19 @@ interface RecentSample {
   reason: string | null;
 }
 
+interface AttemptDistributionBucket {
+  maxAttempts: number;
+  parosSzam: number;
+}
+
+interface AttemptDistributionSummary {
+  osszesStepInstance: number;
+  egyProba: number;
+  ketProba: number;
+  haromVagyTobbProba: number;
+  tobbszorPct: number;
+}
+
 interface ApiResponse {
   days: number;
   doctorFilter: string | null;
@@ -76,6 +90,8 @@ interface ApiResponse {
   reasonsByTemplate: ReasonTemplateBucket[];
   weeklyTrend: WeeklyBucket[];
   recent: RecentSample[];
+  attemptDistribution: AttemptDistributionBucket[];
+  attemptDistributionSummary: AttemptDistributionSummary;
 }
 
 const PERIOD_OPTIONS: Array<{ days: number; label: string }> = [
@@ -105,60 +121,18 @@ function formatWeekStart(iso: string): string {
   });
 }
 
-/** RFC 4180 szerinti CSV cella-escape: idézőjelek megduplázása + idézés ha kell. */
-function csvEscape(value: string | number | null | undefined): string {
-  if (value == null) return '';
-  const str = String(value);
-  if (/[",\n\r]/.test(str)) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  return str;
-}
-
 function buildRecentCsv(rows: RecentSample[]): string {
-  const header = [
-    'Mikor jelölve',
-    'Beteg',
-    'Beteg ID',
-    'Munkafázis',
-    'Munkafázis kód',
-    'Próba sorszám',
-    'Időpont',
-    'Indok',
-    'Jelölte',
-  ];
-  const lines = [header.map(csvEscape).join(',')];
-  for (const r of rows) {
-    lines.push(
-      [
-        r.failedAt ?? '',
-        r.patientName ?? '',
-        r.patientId ?? '',
-        r.workPhaseLabel ?? '',
-        r.workPhaseCode ?? '',
-        r.attemptNumber,
-        r.appointmentStart ?? '',
-        r.reason ?? '',
-        r.failedBy ?? '',
-      ]
-        .map(csvEscape)
-        .join(',')
-    );
-  }
-  return lines.join('\r\n');
-}
-
-function downloadCsv(filename: string, csv: string): void {
-  // BOM hozzáfűzve, hogy az Excel UTF-8-ként nyissa meg az ékezetes szöveget.
-  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return toCsv(rows, [
+    { header: 'Mikor jelölve', value: (r) => r.failedAt },
+    { header: 'Beteg', value: (r) => r.patientName },
+    { header: 'Beteg ID', value: (r) => r.patientId },
+    { header: 'Munkafázis', value: (r) => r.workPhaseLabel },
+    { header: 'Munkafázis kód', value: (r) => r.workPhaseCode },
+    { header: 'Próba sorszám', value: (r) => r.attemptNumber },
+    { header: 'Időpont', value: (r) => r.appointmentStart },
+    { header: 'Indok', value: (r) => r.reason },
+    { header: 'Jelölte', value: (r) => r.failedBy },
+  ]);
 }
 
 export function UnsuccessfulAttemptsStats() {
@@ -497,6 +471,78 @@ export function UnsuccessfulAttemptsStats() {
                 : 'Ebben az időszakban nem volt sikertelennek jelölt próba.'}
             </div>
           )}
+
+          {/* Attempt-number eloszlás (összes idejű, NEM csak unsuccessful) */}
+          {data.attemptDistributionSummary.osszesStepInstance > 0 ? (
+            <div className="rounded-xl border border-orange-200/80 bg-gradient-to-br from-orange-50/40 to-white p-4">
+              <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+                <h3 className="text-sm font-semibold text-gray-900">
+                  Hány próbát kívántak a step-instance-ek
+                </h3>
+                <p className="text-xs text-gray-500">
+                  (episode_id, step_code) párok minden idejű attempt_number alapján
+                </p>
+              </div>
+              <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div>
+                  <p className="text-xs text-gray-500">Összes step-instance</p>
+                  <p className="text-xl font-bold tabular-nums text-gray-900">
+                    {data.attemptDistributionSummary.osszesStepInstance}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">1 próba</p>
+                  <p className="text-xl font-bold tabular-nums text-emerald-700">
+                    {data.attemptDistributionSummary.egyProba}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">2 próba</p>
+                  <p className="text-xl font-bold tabular-nums text-amber-700">
+                    {data.attemptDistributionSummary.ketProba}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">3+ próba</p>
+                  <p className="text-xl font-bold tabular-nums text-rose-700">
+                    {data.attemptDistributionSummary.haromVagyTobbProba}
+                  </p>
+                </div>
+              </div>
+              <p className="mb-3 text-xs text-gray-600">
+                Többszörösen próbált step-instance-ek aránya:{' '}
+                <span className="font-semibold tabular-nums">
+                  {data.attemptDistributionSummary.tobbszorPct}%
+                </span>
+              </p>
+              <ul className="space-y-1.5">
+                {data.attemptDistribution.map((b) => {
+                  const max = Math.max(...data.attemptDistribution.map((x) => x.parosSzam));
+                  const pct = max > 0 ? Math.round((b.parosSzam / max) * 100) : 0;
+                  const tone =
+                    b.maxAttempts === 1
+                      ? 'bg-emerald-500/80'
+                      : b.maxAttempts === 2
+                        ? 'bg-amber-500/80'
+                        : 'bg-rose-500/80';
+                  return (
+                    <li key={b.maxAttempts}>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-gray-700">{b.maxAttempts}. próba</span>
+                        <span className="tabular-nums font-semibold text-gray-900">{b.parosSzam}</span>
+                      </div>
+                      <div className="mt-0.5 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-[width] duration-500 ${tone}`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : null}
         </div>
       )}
     </section>

@@ -26,6 +26,9 @@ export const GET = roleHandler(['admin'], async (req, { auth }) => {
     treatmentPlanByCodeResult,
     treatmentPlanArcotResult,
     treatmentTypesResult,
+    ohip14DeltaSummaryResult,
+    ohip14DeltaHistogramResult,
+    treatmentPlanCompletionResult,
   ] = await Promise.all([
     // 1. BNO statisztikák (from patient_anamnesis)
     pool.query(`
@@ -278,6 +281,123 @@ export const GET = roleHandler(['admin'], async (req, { auth }) => {
     `),
 
     pool.query(`SELECT code, label_hu FROM treatment_types ORDER BY code`),
+
+    // OHIP-14 javulás T0 → T3 (klinikai kimenet KPI).
+    // (patient_id, episode_id) páron belül párosítjuk a T0 és T3 score-t.
+    // Csak ahol mindkettő total_score nem NULL.
+    pool.query(`
+      WITH delta AS (
+        SELECT
+          t0.patient_id,
+          t0.episode_id,
+          t3.total_score - t0.total_score AS delta
+        FROM ohip14_responses t0
+        JOIN ohip14_responses t3
+          ON t0.patient_id = t3.patient_id
+         AND COALESCE(t0.episode_id, '00000000-0000-0000-0000-000000000000'::uuid)
+           = COALESCE(t3.episode_id, '00000000-0000-0000-0000-000000000000'::uuid)
+        WHERE t0.timepoint = 'T0' AND t3.timepoint = 'T3'
+          AND t0.total_score IS NOT NULL AND t3.total_score IS NOT NULL
+      )
+      SELECT
+        COUNT(*)::int AS paros_szam,
+        ROUND(AVG(delta)::numeric, 2) AS atlag_delta,
+        ROUND((PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY delta))::numeric, 2) AS median_delta,
+        ROUND(STDDEV_POP(delta)::numeric, 2) AS szoras_delta,
+        MIN(delta)::int AS min_delta,
+        MAX(delta)::int AS max_delta,
+        COUNT(*) FILTER (WHERE delta < 0)::int AS javulok_szama,
+        COUNT(*) FILTER (WHERE delta = 0)::int AS valtozatlanok_szama,
+        COUNT(*) FILTER (WHERE delta > 0)::int AS romlok_szama
+      FROM delta
+    `),
+    // Hisztogram a delta értékekre — alacsony pontszám = jobb minőség (OHIP-14 0..56).
+    // Csoportok: <=-20, -19..-10, -9..-5, -4..-1, 0, 1..4, 5..9, 10..19, >=20
+    pool.query(`
+      WITH delta AS (
+        SELECT t3.total_score - t0.total_score AS delta
+        FROM ohip14_responses t0
+        JOIN ohip14_responses t3
+          ON t0.patient_id = t3.patient_id
+         AND COALESCE(t0.episode_id, '00000000-0000-0000-0000-000000000000'::uuid)
+           = COALESCE(t3.episode_id, '00000000-0000-0000-0000-000000000000'::uuid)
+        WHERE t0.timepoint = 'T0' AND t3.timepoint = 'T3'
+          AND t0.total_score IS NOT NULL AND t3.total_score IS NOT NULL
+      )
+      SELECT
+        CASE
+          WHEN delta <= -20 THEN '≤-20 (nagy javulás)'
+          WHEN delta <= -10 THEN '-19..-10'
+          WHEN delta <= -5  THEN '-9..-5'
+          WHEN delta <= -1  THEN '-4..-1'
+          WHEN delta = 0    THEN '0'
+          WHEN delta <= 4   THEN '1..4'
+          WHEN delta <= 9   THEN '5..9'
+          WHEN delta <= 19  THEN '10..19'
+          ELSE '≥20 (nagy romlás)'
+        END AS sav,
+        CASE
+          WHEN delta <= -20 THEN 0
+          WHEN delta <= -10 THEN 1
+          WHEN delta <= -5  THEN 2
+          WHEN delta <= -1  THEN 3
+          WHEN delta = 0    THEN 4
+          WHEN delta <= 4   THEN 5
+          WHEN delta <= 9   THEN 6
+          WHEN delta <= 19  THEN 7
+          ELSE 8
+        END AS sav_idx,
+        COUNT(*)::int AS darab
+      FROM delta
+      GROUP BY 1, 2
+      ORDER BY 2
+    `),
+    // Kezelési terv készültségi % per beteg (felső / alsó / arcot külön).
+    // Egy beteg "készült" arányát az `elem.elkeszult = true` darabszám / össz tervsor adja meg.
+    // Csak azon betegek, akiknek van legalább 1 elem az adott rácsban.
+    pool.query(`
+      WITH percentages AS (
+        SELECT
+          patient_id,
+          jsonb_array_length(COALESCE(kezelesi_terv_felso, '[]'::jsonb)) AS felso_osszes,
+          (
+            SELECT COUNT(*)::int FROM jsonb_array_elements(COALESCE(kezelesi_terv_felso, '[]'::jsonb)) e
+            WHERE COALESCE((e->>'elkeszult')::boolean, false)
+          ) AS felso_kesz,
+          jsonb_array_length(COALESCE(kezelesi_terv_also, '[]'::jsonb)) AS also_osszes,
+          (
+            SELECT COUNT(*)::int FROM jsonb_array_elements(COALESCE(kezelesi_terv_also, '[]'::jsonb)) e
+            WHERE COALESCE((e->>'elkeszult')::boolean, false)
+          ) AS also_kesz,
+          jsonb_array_length(COALESCE(kezelesi_terv_arcot_erinto, '[]'::jsonb)) AS arcot_osszes,
+          (
+            SELECT COUNT(*)::int FROM jsonb_array_elements(COALESCE(kezelesi_terv_arcot_erinto, '[]'::jsonb)) e
+            WHERE COALESCE((e->>'elkeszult')::boolean, false)
+          ) AS arcot_kesz
+        FROM patient_treatment_plans
+      ),
+      ratios AS (
+        SELECT
+          CASE WHEN felso_osszes > 0 THEN felso_kesz::numeric / felso_osszes END AS felso_arany,
+          CASE WHEN also_osszes  > 0 THEN also_kesz::numeric  / also_osszes  END AS also_arany,
+          CASE WHEN arcot_osszes > 0 THEN arcot_kesz::numeric / arcot_osszes END AS arcot_arany
+        FROM percentages
+      )
+      SELECT
+        COUNT(felso_arany)::int  AS felso_minta,
+        ROUND(AVG(felso_arany * 100)::numeric, 1)  AS felso_atlag_pct,
+        ROUND((PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY felso_arany * 100))::numeric, 1) AS felso_median_pct,
+        COUNT(*) FILTER (WHERE felso_arany = 1)::int  AS felso_teljesen_kesz,
+        COUNT(also_arany)::int  AS also_minta,
+        ROUND(AVG(also_arany * 100)::numeric, 1)  AS also_atlag_pct,
+        ROUND((PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY also_arany * 100))::numeric, 1) AS also_median_pct,
+        COUNT(*) FILTER (WHERE also_arany = 1)::int  AS also_teljesen_kesz,
+        COUNT(arcot_arany)::int AS arcot_minta,
+        ROUND(AVG(arcot_arany * 100)::numeric, 1) AS arcot_atlag_pct,
+        ROUND((PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY arcot_arany * 100))::numeric, 1) AS arcot_median_pct,
+        COUNT(*) FILTER (WHERE arcot_arany = 1)::int AS arcot_teljesen_kesz
+      FROM ratios
+    `),
   ]);
 
   const dmftStats = dmftStatsResult.rows[0] || {};
@@ -333,6 +453,45 @@ export const GET = roleHandler(['admin'], async (req, { auth }) => {
       };
     }
   );
+
+  // ── OHIP-14 T0 → T3 delta + hisztogram (gap-fillelt 9 sávra) ──
+  const ohipDeltaSummary = ohip14DeltaSummaryResult.rows[0] || {};
+  const numOrNull = (v: unknown): number | null => {
+    if (v == null) return null;
+    const n = typeof v === 'string' ? parseFloat(v) : Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  const OHIP_DELTA_LABELS = [
+    '≤-20 (nagy javulás)',
+    '-19..-10',
+    '-9..-5',
+    '-4..-1',
+    '0',
+    '1..4',
+    '5..9',
+    '10..19',
+    '≥20 (nagy romlás)',
+  ];
+  const ohipDeltaBucketMap = new Map<number, number>(
+    ohip14DeltaHistogramResult.rows.map((r: Record<string, unknown>) => [
+      parseInt(String(r.sav_idx), 10),
+      parseInt(String(r.darab), 10),
+    ]),
+  );
+  const ohipDeltaHisztogram = OHIP_DELTA_LABELS.map((label, idx) => ({
+    sav: label,
+    savIdx: idx,
+    darab: ohipDeltaBucketMap.get(idx) ?? 0,
+  }));
+
+  // ── Kezelési terv készültség: 3 rács × {minta, átlag, medián, teljesen kész} ──
+  const tplComp = treatmentPlanCompletionResult.rows[0] || {};
+  const completionFor = (prefix: 'felso' | 'also' | 'arcot') => ({
+    mintaSzam: parseInt(String(tplComp[`${prefix}_minta`] ?? '0'), 10) || 0,
+    atlagPct: numOrNull(tplComp[`${prefix}_atlag_pct`]),
+    medianPct: numOrNull(tplComp[`${prefix}_median_pct`]),
+    teljesenKesz: parseInt(String(tplComp[`${prefix}_teljesen_kesz`] ?? '0'), 10) || 0,
+  });
 
   const response: MedicalStats = {
     bno: {
@@ -404,6 +563,18 @@ export const GET = roleHandler(['admin'], async (req, { auth }) => {
       betegekLegalabbEgyKitoltessel: parseInt(String(ohipTotals.betegek), 10) || 0,
       osszesKitoltes: parseInt(String(ohipTotals.osszes_kitoltes), 10) || 0,
       idopontokSzerint: ohip14Idopontok,
+      t0t3Delta: {
+        parosSzam: parseInt(String(ohipDeltaSummary.paros_szam ?? '0'), 10) || 0,
+        atlagDelta: numOrNull(ohipDeltaSummary.atlag_delta),
+        medianDelta: numOrNull(ohipDeltaSummary.median_delta),
+        szorasDelta: numOrNull(ohipDeltaSummary.szoras_delta),
+        minDelta: numOrNull(ohipDeltaSummary.min_delta),
+        maxDelta: numOrNull(ohipDeltaSummary.max_delta),
+        javulokSzama: parseInt(String(ohipDeltaSummary.javulok_szama ?? '0'), 10) || 0,
+        valtozatlanokSzama: parseInt(String(ohipDeltaSummary.valtozatlanok_szama ?? '0'), 10) || 0,
+        romlokSzama: parseInt(String(ohipDeltaSummary.romlok_szama ?? '0'), 10) || 0,
+        hisztogram: ohipDeltaHisztogram,
+      },
     },
     treatmentPlans: {
       betegekKiosztottTervvel: num(tps.betegek_tervvel),
@@ -420,6 +591,11 @@ export const GET = roleHandler(['admin'], async (req, { auth }) => {
           darab: parseInt(String(r.darab), 10) || 0,
         })
       ),
+      keszultseg: {
+        felso: completionFor('felso'),
+        also: completionFor('also'),
+        arcot: completionFor('arcot'),
+      },
     },
   };
 

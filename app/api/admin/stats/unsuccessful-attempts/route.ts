@@ -81,6 +81,13 @@ interface RecentSample {
   reason: string | null;
 }
 
+interface AttemptDistributionBucket {
+  /** A próba-szint összes próbáinak a maximuma a (episode_id, step_code) páron belül. */
+  maxAttempts: number;
+  /** Hány (episode_id, step_code) pár tartozik ide. */
+  parosSzam: number;
+}
+
 export const GET = roleHandler(['admin'], async (req: NextRequest) => {
   const pool = getDbPool();
   const hasAttemptColumns = await probeAttemptColumns(pool);
@@ -154,6 +161,7 @@ export const GET = roleHandler(['admin'], async (req: NextRequest) => {
     allReasonRows,
     weeklyRows,
     recentRows,
+    attemptDistributionRows,
   ] = await Promise.all([
     pool.query<{ count: string }>(
       `SELECT COUNT(*)::int AS count ${baseFrom}`,
@@ -181,7 +189,7 @@ export const GET = roleHandler(['admin'], async (req: NextRequest) => {
     ),
     pool.query<{ work_phase_code: string | null; label: string | null; count: number }>(
       `SELECT COALESCE(ewp.work_phase_code, a.step_code, '(ismeretlen)') AS work_phase_code,
-              wpc.label AS label,
+              wpc.label_hu AS label,
               COUNT(*)::int AS count
          ${baseFrom}
         GROUP BY 1, 2
@@ -231,7 +239,7 @@ export const GET = roleHandler(['admin'], async (req: NextRequest) => {
       `SELECT a.id,
               a.patient_id,
               p.nev AS patient_name,
-              wpc.label AS work_phase_label,
+              wpc.label_hu AS work_phase_label,
               COALESCE(ewp.work_phase_code, a.step_code) AS work_phase_code,
               a.attempt_number,
               a.start_time,
@@ -242,6 +250,22 @@ export const GET = roleHandler(['admin'], async (req: NextRequest) => {
         ORDER BY a.attempt_failed_at DESC NULLS LAST
         LIMIT 10`,
       periodParams
+    ),
+    // Attempt-number eloszlás: minden (episode_id, step_code) párhoz vesszük
+    // a max attempt_number-t (= hány próba volt összesen), majd buckételjük.
+    // Ez NEM filtereli az `unsuccessful` státuszra, mert a célja, hogy
+    // megmutassa, hány step-instance kívánt többszöri próbát az életében.
+    pool.query<{ max_attempts: number; paros_szam: number }>(
+      `WITH per_step AS (
+         SELECT episode_id, step_code, MAX(attempt_number) AS max_attempts
+         FROM appointments
+         WHERE episode_id IS NOT NULL AND step_code IS NOT NULL
+         GROUP BY episode_id, step_code
+       )
+       SELECT max_attempts, COUNT(*)::int AS paros_szam
+       FROM per_step
+       GROUP BY max_attempts
+       ORDER BY max_attempts ASC`
     ),
   ]);
 
@@ -329,6 +353,32 @@ export const GET = roleHandler(['admin'], async (req: NextRequest) => {
     reason: r.attempt_failed_reason,
   }));
 
+  const attemptDistribution: AttemptDistributionBucket[] =
+    attemptDistributionRows.rows.map((r) => ({
+      maxAttempts: Number(r.max_attempts),
+      parosSzam: Number(r.paros_szam),
+    }));
+  // Származtatott összegzés a UI-nak: hány step-instance kívánt 1 / 2 / 3+ próbát.
+  const stepsTotal = attemptDistribution.reduce((s, b) => s + b.parosSzam, 0);
+  const stepsOne = attemptDistribution
+    .filter((b) => b.maxAttempts === 1)
+    .reduce((s, b) => s + b.parosSzam, 0);
+  const stepsTwo = attemptDistribution
+    .filter((b) => b.maxAttempts === 2)
+    .reduce((s, b) => s + b.parosSzam, 0);
+  const stepsThreePlus = attemptDistribution
+    .filter((b) => b.maxAttempts >= 3)
+    .reduce((s, b) => s + b.parosSzam, 0);
+  const attemptDistributionSummary = {
+    osszesStepInstance: stepsTotal,
+    egyProba: stepsOne,
+    ketProba: stepsTwo,
+    haromVagyTobbProba: stepsThreePlus,
+    tobbszorPct: stepsTotal > 0
+      ? Math.round(((stepsTwo + stepsThreePlus) / stepsTotal) * 1000) / 10
+      : 0,
+  };
+
   return NextResponse.json({
     days,
     doctorFilter,
@@ -343,5 +393,7 @@ export const GET = roleHandler(['admin'], async (req: NextRequest) => {
     reasonsByTemplate,
     weeklyTrend,
     recent,
+    attemptDistribution,
+    attemptDistributionSummary,
   });
 });

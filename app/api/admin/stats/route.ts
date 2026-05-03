@@ -62,6 +62,13 @@ export const GET = roleHandler(['admin'], async () => {
 
     documentsTotal,
     documentsRecent,
+
+    bookingLeadStats,
+    bookingLeadHistogram,
+    patientsAgeStats,
+    patientsAgeBuckets,
+    patientsIntakeStatus,
+    messagesUnread,
   ] = await Promise.all([
     // ───── BETEGEK ─────
     pool.query('SELECT COUNT(*) as total FROM patients'),
@@ -100,7 +107,7 @@ export const GET = roleHandler(['admin'], async () => {
       FROM patients p
       LEFT JOIN users u ON u.id = p.kezeleoorvos_user_id
       WHERE p.kezeleoorvos_user_id IS NOT NULL OR p.kezeleoorvos IS NOT NULL
-      GROUP BY COALESCE(u.doktor_neve, u.email, p.kezeleoorvos)
+      GROUP BY 1
       ORDER BY darab DESC
       LIMIT 10
     `),
@@ -290,6 +297,143 @@ export const GET = roleHandler(['admin'], async () => {
       FROM patient_documents
       WHERE uploaded_at >= CURRENT_DATE - INTERVAL '30 days'
     `),
+
+    // ───── BOOKING LEAD-TIME (mennyivel előre foglalnak) ─────
+    // Csak azok a foglalások, ahol az időpont a foglalás után van
+    // (legitim "előre foglalás"); a múltba foglaltakat (admin-utólag)
+    // és az érvénytelen sorokat kihagyjuk.
+    pool.query(`
+      WITH leads AS (
+        SELECT EXTRACT(EPOCH FROM (ats.start_time - a.created_at)) / 86400.0 AS lead_napok
+        FROM appointments a
+        JOIN available_time_slots ats ON a.time_slot_id = ats.id
+        WHERE ats.start_time > a.created_at
+      )
+      SELECT
+        COUNT(*) AS minta_szam,
+        ROUND(AVG(lead_napok)::numeric, 1) AS atlag_napok,
+        ROUND((PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY lead_napok))::numeric, 1) AS median_napok,
+        ROUND((PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY lead_napok))::numeric, 1) AS p25_napok,
+        ROUND((PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY lead_napok))::numeric, 1) AS p75_napok,
+        ROUND(MIN(lead_napok)::numeric, 1) AS min_napok,
+        ROUND(MAX(lead_napok)::numeric, 1) AS max_napok
+      FROM leads
+    `),
+    // Hisztogram: 0, 1-3, 4-7, 8-14, 15-30, 31-60, 61-90, 90+ nap
+    pool.query(`
+      WITH leads AS (
+        SELECT EXTRACT(EPOCH FROM (ats.start_time - a.created_at)) / 86400.0 AS lead_napok
+        FROM appointments a
+        JOIN available_time_slots ats ON a.time_slot_id = ats.id
+        WHERE ats.start_time > a.created_at
+      )
+      SELECT
+        CASE
+          WHEN lead_napok < 1 THEN '<1 nap'
+          WHEN lead_napok < 4 THEN '1-3 nap'
+          WHEN lead_napok < 8 THEN '4-7 nap'
+          WHEN lead_napok < 15 THEN '8-14 nap'
+          WHEN lead_napok < 31 THEN '15-30 nap'
+          WHEN lead_napok < 61 THEN '31-60 nap'
+          WHEN lead_napok < 91 THEN '61-90 nap'
+          ELSE '90+ nap'
+        END AS sav,
+        CASE
+          WHEN lead_napok < 1 THEN 0
+          WHEN lead_napok < 4 THEN 1
+          WHEN lead_napok < 8 THEN 2
+          WHEN lead_napok < 15 THEN 3
+          WHEN lead_napok < 31 THEN 4
+          WHEN lead_napok < 61 THEN 5
+          WHEN lead_napok < 91 THEN 6
+          ELSE 7
+        END AS sav_idx,
+        COUNT(*) AS darab
+      FROM leads
+      GROUP BY 1, 2
+      ORDER BY 2
+    `),
+
+    // ───── ÉLETKORI DEMOGRÁFIA ─────
+    // Csak élő (halal_datum IS NULL) és értelmes (>=0, <=120 év) páciensek.
+    pool.query(`
+      WITH ages AS (
+        SELECT EXTRACT(YEAR FROM AGE(CURRENT_DATE, szuletesi_datum))::int AS ev
+        FROM patients
+        WHERE szuletesi_datum IS NOT NULL
+          AND halal_datum IS NULL
+          AND szuletesi_datum <= CURRENT_DATE
+          AND EXTRACT(YEAR FROM AGE(CURRENT_DATE, szuletesi_datum)) BETWEEN 0 AND 120
+      )
+      SELECT
+        COUNT(*) AS minta_szam,
+        ROUND(AVG(ev)::numeric, 1) AS atlag_ev,
+        ROUND((PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ev))::numeric, 1) AS median_ev,
+        MIN(ev) AS min_ev,
+        MAX(ev) AS max_ev
+      FROM ages
+    `),
+    // Kohorszok: 0-17, 18-29, 30-39, 40-49, 50-59, 60-69, 70-79, 80+
+    pool.query(`
+      WITH ages AS (
+        SELECT EXTRACT(YEAR FROM AGE(CURRENT_DATE, szuletesi_datum))::int AS ev
+        FROM patients
+        WHERE szuletesi_datum IS NOT NULL
+          AND halal_datum IS NULL
+          AND szuletesi_datum <= CURRENT_DATE
+          AND EXTRACT(YEAR FROM AGE(CURRENT_DATE, szuletesi_datum)) BETWEEN 0 AND 120
+      )
+      SELECT
+        CASE
+          WHEN ev < 18 THEN '0-17'
+          WHEN ev < 30 THEN '18-29'
+          WHEN ev < 40 THEN '30-39'
+          WHEN ev < 50 THEN '40-49'
+          WHEN ev < 60 THEN '50-59'
+          WHEN ev < 70 THEN '60-69'
+          WHEN ev < 80 THEN '70-79'
+          ELSE '80+'
+        END AS kohorsz,
+        CASE
+          WHEN ev < 18 THEN 0
+          WHEN ev < 30 THEN 1
+          WHEN ev < 40 THEN 2
+          WHEN ev < 50 THEN 3
+          WHEN ev < 60 THEN 4
+          WHEN ev < 70 THEN 5
+          WHEN ev < 80 THEN 6
+          ELSE 7
+        END AS kohorsz_idx,
+        COUNT(*) AS darab
+      FROM ages
+      GROUP BY 1, 2
+      ORDER BY 2
+    `),
+
+    // ───── INTAKE STATUS megoszlás ─────
+    // Csak élő pácienseket számolunk; ahol NULL az intake_status, az is bekerül egy bucket-be.
+    pool.query(`
+      SELECT
+        COALESCE(intake_status, '(nincs)') AS intake_status,
+        COUNT(*) AS darab
+      FROM patients
+      WHERE halal_datum IS NULL
+      GROUP BY 1
+      ORDER BY darab DESC
+    `),
+
+    // ───── OLVASATLAN portál üzenetek ─────
+    // Olvasatlan = read_at IS NULL. sender_type szerint bontjuk
+    // (doctor küldte, vagy patient küldte).
+    pool.query<{ sender_type: string; olvasatlan: number; osszes: number }>(`
+      SELECT
+        sender_type,
+        COUNT(*) FILTER (WHERE read_at IS NULL)::int AS olvasatlan,
+        COUNT(*)::int AS osszes
+      FROM messages
+      GROUP BY sender_type
+      ORDER BY sender_type
+    `),
   ]);
 
   // ── Derived appointment metrics ──
@@ -344,6 +488,38 @@ export const GET = roleHandler(['admin'], async () => {
     };
   });
 
+  // ── Booking lead-time hisztogram (gap-fillelt 8 sávra) ──
+  const LEAD_BUCKET_LABELS = ['<1 nap', '1-3 nap', '4-7 nap', '8-14 nap', '15-30 nap', '31-60 nap', '61-90 nap', '90+ nap'];
+  const leadBucketMap = new Map<number, number>(
+    bookingLeadHistogram.rows.map((r) => [parseInt(r.sav_idx), parseInt(r.darab)]),
+  );
+  const bookingLeadHisztogram = LEAD_BUCKET_LABELS.map((label, idx) => ({
+    sav: label,
+    savIdx: idx,
+    darab: leadBucketMap.get(idx) ?? 0,
+  }));
+
+  // ── Életkor kohorszok (gap-fillelt 8 sávra) ──
+  const AGE_BUCKET_LABELS = ['0-17', '18-29', '30-39', '40-49', '50-59', '60-69', '70-79', '80+'];
+  const ageBucketMap = new Map<number, number>(
+    patientsAgeBuckets.rows.map((r) => [parseInt(r.kohorsz_idx), parseInt(r.darab)]),
+  );
+  const eletkorKohorszok = AGE_BUCKET_LABELS.map((label, idx) => ({
+    kohorsz: label,
+    kohorszIdx: idx,
+    darab: ageBucketMap.get(idx) ?? 0,
+  }));
+
+  // ── Olvasatlan portál üzenetek (sender_type bontás + összesítés) ──
+  type UnreadRow = { sender_type: string; olvasatlan: number; osszes: number };
+  const unreadByType = (messagesUnread.rows as UnreadRow[]).map((r) => ({
+    kuldoTipus: r.sender_type,
+    olvasatlan: Number(r.olvasatlan ?? 0),
+    osszes: Number(r.osszes ?? 0),
+  }));
+  const messagesTotal = unreadByType.reduce((s, r) => s + r.osszes, 0);
+  const messagesUnreadTotal = unreadByType.reduce((s, r) => s + r.olvasatlan, 0);
+
   return NextResponse.json({
     generaltAt: new Date().toISOString(),
     betegek: {
@@ -363,6 +539,23 @@ export const GET = roleHandler(['admin'], async () => {
         darab: parseInt(row.darab),
       })),
       havitTrend,
+      // Életkor demográfia (csak élő, 0..120 év közötti minta).
+      eletkor: {
+        mintaSzam: parseInt(patientsAgeStats.rows[0]?.minta_szam ?? '0'),
+        atlagEv: patientsAgeStats.rows[0]?.atlag_ev != null
+          ? parseFloat(patientsAgeStats.rows[0].atlag_ev) : null,
+        medianEv: patientsAgeStats.rows[0]?.median_ev != null
+          ? parseFloat(patientsAgeStats.rows[0].median_ev) : null,
+        minEv: patientsAgeStats.rows[0]?.min_ev != null
+          ? parseInt(patientsAgeStats.rows[0].min_ev) : null,
+        maxEv: patientsAgeStats.rows[0]?.max_ev != null
+          ? parseInt(patientsAgeStats.rows[0].max_ev) : null,
+        kohorszok: eletkorKohorszok,
+      },
+      intakeStatusSzerint: patientsIntakeStatus.rows.map((row) => ({
+        intakeStatus: row.intake_status as string,
+        darab: parseInt(row.darab),
+      })),
     },
     felhasznalok: {
       osszes: parseInt(usersTotal.rows[0].total),
@@ -398,6 +591,23 @@ export const GET = roleHandler(['admin'], async () => {
       befejezesiArany: pct(completed, finishedTotal),
       csucsOrak,
       napiEloszlas,
+      // Booking lead-time: mennyivel előre foglalnak a páciensek időpontot.
+      bookingLeadTime: {
+        mintaSzam: parseInt(bookingLeadStats.rows[0]?.minta_szam ?? '0'),
+        atlagNapok: bookingLeadStats.rows[0]?.atlag_napok != null
+          ? parseFloat(bookingLeadStats.rows[0].atlag_napok) : null,
+        medianNapok: bookingLeadStats.rows[0]?.median_napok != null
+          ? parseFloat(bookingLeadStats.rows[0].median_napok) : null,
+        p25Napok: bookingLeadStats.rows[0]?.p25_napok != null
+          ? parseFloat(bookingLeadStats.rows[0].p25_napok) : null,
+        p75Napok: bookingLeadStats.rows[0]?.p75_napok != null
+          ? parseFloat(bookingLeadStats.rows[0].p75_napok) : null,
+        minNapok: bookingLeadStats.rows[0]?.min_napok != null
+          ? parseFloat(bookingLeadStats.rows[0].min_napok) : null,
+        maxNapok: bookingLeadStats.rows[0]?.max_napok != null
+          ? parseFloat(bookingLeadStats.rows[0].max_napok) : null,
+        hisztogram: bookingLeadHisztogram,
+      },
     },
     idoslotok: {
       osszes: parseInt(timeSlotsTotal.rows[0].total),
@@ -432,6 +642,11 @@ export const GET = roleHandler(['admin'], async () => {
     dokumentumok: {
       osszes: parseInt(documentsTotal.rows[0].total),
       utolso30Napban: parseInt(documentsRecent.rows[0].total),
+    },
+    uzenetek: {
+      osszes: messagesTotal,
+      olvasatlanOsszes: messagesUnreadTotal,
+      kuldoTipusSzerint: unreadByType,
     },
   });
 });

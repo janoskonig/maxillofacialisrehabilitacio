@@ -27,9 +27,27 @@ import {
   CheckCircle2,
   Timer,
   CalendarClock,
+  Database,
+  GitBranch,
+  Cake,
+  ClipboardList,
 } from 'lucide-react';
 import { MedicalStatisticsSection } from '@/components/MedicalStatisticsSection';
 import { UnsuccessfulAttemptsStats } from '@/components/UnsuccessfulAttemptsStats';
+import { StatsCsvExport } from '@/components/StatsCsvExport';
+import {
+  PipelineStatsSection,
+  type PipelineApiResponse,
+} from '@/components/PipelineStatsSection';
+import {
+  OperationalStatsSection,
+  type OperationalApiResponse,
+} from '@/components/OperationalStatsSection';
+import {
+  ConsiliumStatsSection,
+  type ConsiliumApiResponse,
+} from '@/components/ConsiliumStatsSection';
+import type { AdminStats } from '@/lib/types/admin-stats';
 
 // Lazy-loaded chart components — recharts is heavy.
 const AppointmentOutcomeChart = dynamic(
@@ -53,63 +71,22 @@ const MonthlyPatientsChart = dynamic(
   { ssr: false, loading: () => <ChartSkeleton height="h-60" /> },
 );
 
-type Stats = {
-  generaltAt: string;
-  betegek: {
-    osszes: number;
-    ebbenAHonapban: number;
-    multHonapban: number;
-    nemSzerint: Array<{ nem: string; darab: number }>;
-    etiologiaSzerint: Array<{ etiologia: string; darab: number }>;
-    orvosSzerint: Array<{ orvos: string; darab: number }>;
-    havitTrend: Array<{ honap: string; cimke: string; darab: number }>;
-  };
-  felhasznalok: {
-    osszes: number;
-    aktiv: number;
-    inaktiv: number;
-    utolso30Napban: number;
-    szerepkorSzerint: Array<{ szerepkor: string; osszes: number; aktiv: number }>;
-  };
-  idopontfoglalasok: {
-    osszes: number;
-    jovobeli: number;
-    multbeli: number;
-    ebbenAHonapban: number;
-    statusSzerint: Array<{ status: string; darab: number }>;
-    kimenetSzerint: Array<{ kimenet: string; darab: number }>;
-    kesesekSzama: number;
-    noShowArany: number;
-    lemondasiArany: number;
-    befejezesiArany: number;
-    csucsOrak: Array<{ ora: number; cimke: string; darab: number }>;
-    napiEloszlas: Array<{ napIdx: number; napNev: string; darab: number }>;
-  };
-  idoslotok: {
-    osszes: number;
-    elerheto: number;
-    lefoglalt: number;
-  };
-  aktivitas: {
-    osszes: number;
-    utolso7Nap: number;
-    utolso30Nap: number;
-    muveletSzerint: Array<{ muvelet: string; darab: number }>;
-    felhasznaloSzerint: Array<{ felhasznalo: string; darab: number }>;
-    napiTrend: Array<{ datum: string; cimke: string; darab: number }>;
-  };
-  visszajelzesek: {
-    osszes: number;
-    statusSzerint: Array<{ status: string; darab: number }>;
-    tipusSzerint: Array<{ tipus: string; darab: number }>;
-  };
-  dokumentumok: {
-    osszes: number;
-    utolso30Napban: number;
-  };
+type Stats = AdminStats;
+
+type StatsTab = 'overview' | 'system' | 'pipeline' | 'medical' | 'export';
+
+const INTAKE_STATUS_LABEL_HU: Record<string, string> = {
+  JUST_REGISTERED: 'Frissen regisztrált',
+  NEEDS_TRIAGE: 'Triage szükséges',
+  TRIAGED: 'Triage kész',
+  IN_CARE: 'Kezelés alatt',
+  '(nincs)': 'Nincs intake állapot',
 };
 
-type StatsTab = 'overview' | 'system' | 'medical';
+const SENDER_TYPE_LABEL_HU: Record<string, string> = {
+  doctor: 'Orvos küldte',
+  patient: 'Beteg küldte',
+};
 
 function ChartSkeleton({ height = 'h-60' }: { height?: string }) {
   return (
@@ -314,7 +291,9 @@ function StatsLoadingSkeleton() {
 const TAB_CONFIG: { id: StatsTab; label: string; icon: ReactNode; anchor: string }[] = [
   { id: 'overview', label: 'Áttekintés', icon: <LayoutDashboard className="h-4 w-4" />, anchor: 'stats-overview' },
   { id: 'system', label: 'Rendszer', icon: <Server className="h-4 w-4" />, anchor: 'stats-system-patients' },
+  { id: 'pipeline', label: 'Folyamat', icon: <GitBranch className="h-4 w-4" />, anchor: 'stats-pipeline' },
   { id: 'medical', label: 'Szakmai', icon: <Stethoscope className="h-4 w-4" />, anchor: 'stats-medical' },
+  { id: 'export', label: 'Adatexport', icon: <Database className="h-4 w-4" />, anchor: 'stats-export' },
 ];
 
 function formatRelativeTime(iso: string | undefined): string {
@@ -342,6 +321,11 @@ export default function StatsPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<StatsTab>('overview');
   const [now, setNow] = useState<number>(() => Date.now());
+  // Pipeline + operational + consilium adatait a megfelelő szekciók fetchelik;
+  // itt csak azért tartjuk őket, hogy a CSV export panel is ki tudja exportálni.
+  const [pipelineData, setPipelineData] = useState<PipelineApiResponse | null>(null);
+  const [operationalData, setOperationalData] = useState<OperationalApiResponse | null>(null);
+  const [consiliumData, setConsiliumData] = useState<ConsiliumApiResponse | null>(null);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -640,6 +624,67 @@ export default function StatsPage() {
                 />
               </div>
 
+              {/* Új KPI-ok: lead time, kor, intake funnel, olvasatlan üzenetek */}
+              <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                <KpiCard
+                  title="Foglalási előretekintés"
+                  value={
+                    stats.idopontfoglalasok.bookingLeadTime.medianNapok != null
+                      ? `${stats.idopontfoglalasok.bookingLeadTime.medianNapok} nap`
+                      : '—'
+                  }
+                  accent="sky"
+                  subtitle={
+                    stats.idopontfoglalasok.bookingLeadTime.mintaSzam > 0
+                      ? `Medián · átlag ${
+                          stats.idopontfoglalasok.bookingLeadTime.atlagNapok ?? '—'
+                        } nap (${stats.idopontfoglalasok.bookingLeadTime.mintaSzam} foglalás)`
+                      : 'Nincs adat'
+                  }
+                  icon={<CalendarClock className="h-6 w-6" />}
+                />
+                <KpiCard
+                  title="Átlagéletkor"
+                  value={
+                    stats.betegek.eletkor.atlagEv != null
+                      ? `${stats.betegek.eletkor.atlagEv} év`
+                      : '—'
+                  }
+                  accent="teal"
+                  subtitle={
+                    stats.betegek.eletkor.mintaSzam > 0
+                      ? `Medián ${stats.betegek.eletkor.medianEv ?? '—'} év (${
+                          stats.betegek.eletkor.mintaSzam
+                        } élő beteg)`
+                      : 'Nincs adat'
+                  }
+                  icon={<Cake className="h-6 w-6" />}
+                />
+                <KpiCard
+                  title="Intake funnel"
+                  value={
+                    stats.betegek.intakeStatusSzerint.find((s) => s.intakeStatus === 'IN_CARE')
+                      ?.darab ?? 0
+                  }
+                  accent="violet"
+                  subtitle={`${
+                    stats.betegek.intakeStatusSzerint.find((s) => s.intakeStatus === 'JUST_REGISTERED')
+                      ?.darab ?? 0
+                  } regisztrált → ${
+                    stats.betegek.intakeStatusSzerint.find((s) => s.intakeStatus === 'NEEDS_TRIAGE')
+                      ?.darab ?? 0
+                  } triage`}
+                  icon={<ClipboardList className="h-6 w-6" />}
+                />
+                <KpiCard
+                  title="Olvasatlan üzenetek"
+                  value={stats.uzenetek.olvasatlanOsszes}
+                  accent="rose"
+                  subtitle={`${stats.uzenetek.osszes} portál üzenet összesen`}
+                  icon={<MessageSquare className="h-6 w-6" />}
+                />
+              </div>
+
               {/* Quick glance + slot utilisation */}
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
                 <div className="card border-gray-200/80 lg:col-span-2">
@@ -783,6 +828,38 @@ export default function StatsPage() {
                     />
                   </div>
                 </div>
+
+                {/* Életkor és intake demográfia */}
+                <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
+                  <div>
+                    <div className="mb-3 flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-gray-800">Életkor (kohorszok)</h3>
+                      {stats.betegek.eletkor.mintaSzam > 0 ? (
+                        <p className="text-xs text-gray-500">
+                          Átlag {stats.betegek.eletkor.atlagEv ?? '—'} · medián{' '}
+                          {stats.betegek.eletkor.medianEv ?? '—'} · n=
+                          {stats.betegek.eletkor.mintaSzam}
+                        </p>
+                      ) : null}
+                    </div>
+                    <DistributionBars
+                      items={stats.betegek.eletkor.kohorszok}
+                      labelKey="kohorsz"
+                      barClass="bg-teal-500/85"
+                    />
+                  </div>
+                  <div>
+                    <h3 className="mb-3 text-sm font-semibold text-gray-800">Intake állapot</h3>
+                    <DistributionBars
+                      items={stats.betegek.intakeStatusSzerint.map((s) => ({
+                        ...s,
+                        label: INTAKE_STATUS_LABEL_HU[s.intakeStatus] ?? s.intakeStatus,
+                      }))}
+                      labelKey="label"
+                      barClass="bg-violet-500/85"
+                    />
+                  </div>
+                </div>
               </SectionShell>
 
               <SectionShell
@@ -878,6 +955,27 @@ export default function StatsPage() {
                     <h3 className="mb-3 text-sm font-semibold text-gray-800">Hét napjai szerint</h3>
                     <BookingWeekdayChart data={stats.idopontfoglalasok.napiEloszlas} />
                   </div>
+                </div>
+
+                {/* Booking lead-time eloszlás */}
+                <div className="mt-8">
+                  <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
+                    <h3 className="text-sm font-semibold text-gray-800">Foglalási előretekintés</h3>
+                    {stats.idopontfoglalasok.bookingLeadTime.mintaSzam > 0 ? (
+                      <p className="text-xs text-gray-500">
+                        Átlag {stats.idopontfoglalasok.bookingLeadTime.atlagNapok ?? '—'} nap ·
+                        medián {stats.idopontfoglalasok.bookingLeadTime.medianNapok ?? '—'} nap ·
+                        IQR {stats.idopontfoglalasok.bookingLeadTime.p25Napok ?? '—'}–
+                        {stats.idopontfoglalasok.bookingLeadTime.p75Napok ?? '—'} nap · n=
+                        {stats.idopontfoglalasok.bookingLeadTime.mintaSzam}
+                      </p>
+                    ) : null}
+                  </div>
+                  <DistributionBars
+                    items={stats.idopontfoglalasok.bookingLeadTime.hisztogram}
+                    labelKey="sav"
+                    barClass="bg-sky-500/85"
+                  />
                 </div>
               </SectionShell>
 
@@ -996,6 +1094,84 @@ export default function StatsPage() {
                   <MiniStat label="Utolsó 30 napban feltöltött" value={stats.dokumentumok.utolso30Napban} />
                 </div>
               </SectionShell>
+
+              <SectionShell
+                id="stats-system-messages"
+                icon={<MessageSquare className="h-5 w-5" />}
+                title="Portál üzenetek"
+                description="Olvasatlan vs. összes üzenet küldő típus szerint."
+              >
+                <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <MiniStat label="Összes üzenet" value={stats.uzenetek.osszes} />
+                  <MiniStat
+                    label="Olvasatlan"
+                    value={stats.uzenetek.olvasatlanOsszes}
+                    valueClassName="text-rose-600"
+                  />
+                  <MiniStat
+                    label="Olvasatlan arány"
+                    value={
+                      stats.uzenetek.osszes > 0
+                        ? `${Math.round(
+                            (stats.uzenetek.olvasatlanOsszes / stats.uzenetek.osszes) * 1000,
+                          ) / 10}%`
+                        : '—'
+                    }
+                  />
+                </div>
+                <div className="overflow-hidden rounded-xl border border-gray-200">
+                  <table className="min-w-full divide-y divide-gray-200 text-sm">
+                    <thead className="bg-gray-50/90">
+                      <tr>
+                        <th className="px-4 py-3 text-left font-semibold text-gray-600">Küldő típus</th>
+                        <th className="px-4 py-3 text-right font-semibold text-gray-600">Összes</th>
+                        <th className="px-4 py-3 text-right font-semibold text-gray-600">Olvasatlan</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 bg-white">
+                      {stats.uzenetek.kuldoTipusSzerint.length === 0 ? (
+                        <tr>
+                          <td className="px-4 py-2.5 text-gray-500" colSpan={3}>
+                            Nincs üzenet a rendszerben.
+                          </td>
+                        </tr>
+                      ) : (
+                        stats.uzenetek.kuldoTipusSzerint.map((row, idx) => (
+                          <tr key={row.kuldoTipus} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
+                            <td className="px-4 py-2.5 text-gray-800">
+                              {SENDER_TYPE_LABEL_HU[row.kuldoTipus] ?? row.kuldoTipus}
+                            </td>
+                            <td className="px-4 py-2.5 text-right tabular-nums font-medium text-gray-900">
+                              {row.osszes}
+                            </td>
+                            <td className="px-4 py-2.5 text-right tabular-nums font-medium text-rose-600">
+                              {row.olvasatlan}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </SectionShell>
+            </div>
+
+            {/* ───────── Folyamat: episode + work-phase + operatív SLA ───────── */}
+            <div className="space-y-8 border-t border-gray-200/80 pt-10">
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg bg-indigo-100 p-2 text-indigo-700">
+                  <GitBranch className="h-6 w-6" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">Folyamat</h2>
+                  <p className="text-sm text-gray-500">
+                    Episode élettartam, munkafázis pipeline és felhasználói feladat-SLA.
+                  </p>
+                </div>
+              </div>
+              <PipelineStatsSection onDataChange={setPipelineData} />
+              <OperationalStatsSection onDataChange={setOperationalData} />
+              <ConsiliumStatsSection onDataChange={setConsiliumData} />
             </div>
 
             <div id="stats-medical" className="scroll-mt-32 space-y-4 border-t border-gray-200/80 pt-10">
@@ -1013,6 +1189,15 @@ export default function StatsPage() {
               </div>
               <MedicalStatisticsSection />
               <UnsuccessfulAttemptsStats />
+            </div>
+
+            <div className="border-t border-gray-200/80 pt-10">
+              <StatsCsvExport
+                stats={stats}
+                pipeline={pipelineData}
+                operational={operationalData}
+                consilium={consiliumData}
+              />
             </div>
           </div>
         ) : null}
