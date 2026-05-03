@@ -4,8 +4,16 @@ import { authedHandler } from '@/lib/api/route-handler';
 import { prostheticWorkloadStagesInSql } from '@/lib/wip-stage';
 import type { IntakeRecommendationResponse } from '@/lib/forecast-types';
 import { computeDoctorWorkloadScore } from '@/lib/doctor-clinical-target';
+import { buildWorkloadExclusionClause } from '@/lib/workload-exclusions';
 
 export const dynamic = 'force-dynamic';
+
+// Az intake ajánlás a protetikai (STAGE_5) terhelésre néz, mert kifejezetten
+// arra ad GO/CAUTION/STOP-ot, hogy fogadjunk-e be új protetikai pácienst.
+// A score mértékegysége utilizáció % (foglalt+hold / heti penzum 30 napra
+// vetítve), nincs felső korlát.
+const INTAKE_STOP_BUSYNESS_PCT = 200; // 2× heti penzum fölött bármelyik orvosnál → STOP
+const INTAKE_CAUTION_BUSYNESS_PCT = 150; // 1.5–2× heti penzum között → CAUTION
 
 export const GET = authedHandler(async (req, { auth }) => {
   const pool = getDbPool();
@@ -19,9 +27,7 @@ export const GET = authedHandler(async (req, { auth }) => {
 
   const prostheticStagesIn = prostheticWorkloadStagesInSql();
 
-  const EXCLUDED_NAME_PATTERNS = ['Déri', 'Hermann', 'Kádár', 'Kivovics', 'Pótlár'];
-  const excludeClause = EXCLUDED_NAME_PATTERNS.map((_, i) => `doktor_neve NOT ILIKE $${i + 1}`).join(' AND ');
-  const excludeParams = EXCLUDED_NAME_PATTERNS.map((n) => `%${n}%`);
+  const { clause: excludeClause, params: excludeParams } = buildWorkloadExclusionClause(1);
 
   const doctorsResult = await pool.query(
     `SELECT id, doktor_neve, email FROM users
@@ -35,7 +41,6 @@ export const GET = authedHandler(async (req, { auth }) => {
   const doctorIds = doctorsResult.rows.map((d: any) => d.id);
 
   // ── Batch all per-doctor queries into 4 total queries ──
-  const nextParamIdx = excludeParams.length + 1;
   const [slotStatsRows, bookedStatsRows, wipRows, worklistRows] = await Promise.all([
     pool.query(
       `SELECT ats.user_id,
@@ -117,20 +122,15 @@ export const GET = authedHandler(async (req, { auth }) => {
     const heldMinutes = slot?.held_minutes ?? 0;
     const wipCount = wipMap.get(doc.id) ?? 0;
     const worklistCount = worklistMap.get(doc.id) ?? 0;
-    const name = doc.doktor_neve || doc.email;
 
-    const { busynessScore: score } = computeDoctorWorkloadScore({
-      doktorNeve: name,
+    const { utilizationPct: score } = computeDoctorWorkloadScore({
       horizonDays,
       bookedMinutes,
       heldMinutes,
-      wipCount,
-      worklistCount,
-      availableMinutes,
     });
 
     if (score > busynessScore) busynessScore = score;
-    if (score >= 90) nearCriticalIfNewStarts = true;
+    if (score >= INTAKE_STOP_BUSYNESS_PCT) nearCriticalIfNewStarts = true;
     if (availableMinutes === 0 && (wipCount + worklistCount) > 0) nearCriticalIfNewStarts = true;
   }
 
@@ -166,17 +166,23 @@ export const GET = authedHandler(async (req, { auth }) => {
   const reasons: string[] = [];
   let recommendation: 'GO' | 'CAUTION' | 'STOP' = 'GO';
 
-  if (busynessScore >= 90 || nearCriticalIfNewStarts || (wipP80DaysFromNow != null && wipP80DaysFromNow > 28)) {
+  if (
+    busynessScore >= INTAKE_STOP_BUSYNESS_PCT ||
+    nearCriticalIfNewStarts ||
+    (wipP80DaysFromNow != null && wipP80DaysFromNow > 28)
+  ) {
     recommendation = 'STOP';
-    if (busynessScore >= 90) reasons.push(`BUSYNESS_${busynessScore}`);
+    if (busynessScore >= INTAKE_STOP_BUSYNESS_PCT) reasons.push(`BUSYNESS_${busynessScore}`);
     if (nearCriticalIfNewStarts) reasons.push('NEAR_CRITICAL_IF_NEW_STARTS');
     if (wipP80DaysFromNow != null && wipP80DaysFromNow > 28) reasons.push(`WIP_P80_END_+${wipP80DaysFromNow}D`);
   } else if (
-    (busynessScore >= 75 && busynessScore <= 89) ||
+    (busynessScore >= INTAKE_CAUTION_BUSYNESS_PCT && busynessScore < INTAKE_STOP_BUSYNESS_PCT) ||
     (wipP80DaysFromNow != null && wipP80DaysFromNow > 14 && wipP80DaysFromNow <= 28)
   ) {
     recommendation = 'CAUTION';
-    if (busynessScore >= 75 && busynessScore <= 89) reasons.push(`BUSYNESS_${busynessScore}`);
+    if (busynessScore >= INTAKE_CAUTION_BUSYNESS_PCT && busynessScore < INTAKE_STOP_BUSYNESS_PCT) {
+      reasons.push(`BUSYNESS_${busynessScore}`);
+    }
     if (wipP80DaysFromNow != null && wipP80DaysFromNow > 14 && wipP80DaysFromNow <= 28) {
       reasons.push(`WIP_P80_END_+${wipP80DaysFromNow}D`);
     }
