@@ -36,6 +36,22 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
     );
   }
 
+  // Migration 029: a sikertelen-jelölés a dedikált
+  // PATCH /api/appointments/:id/attempt-outcome endpointon megy, mert ott
+  // kötelező az indok, és ott történik az episode_work_phases visszaforgatása
+  // pending-be (hogy új próba foglalható legyen). Itt elutasítjuk, nehogy
+  // valaki indok nélkül állítsa át.
+  if (normalisedStatus === 'unsuccessful') {
+    return NextResponse.json(
+      {
+        error:
+          'A sikertelen-jelölés a PATCH /api/appointments/:id/attempt-outcome végponton mehet, mert kötelező hozzá indok és a munkafázis visszaállítása.',
+        code: 'USE_ATTEMPT_OUTCOME_ENDPOINT',
+      },
+      { status: 400 }
+    );
+  }
+
   const pool = getDbPool();
 
   await pool.query('BEGIN');

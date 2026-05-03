@@ -51,6 +51,29 @@ export interface WorklistMergedPhasePart {
   jaw?: WorklistPhaseJaw | null;
 }
 
+/**
+ * Egy korábbi próba (attempt) összefoglalója — azokat a megtörtént / meg-nem-
+ * jelent próbákat reprezentálja, amelyek NEM az aktuális (legutóbbi) sor.
+ * Migration 029 vezette be a `attempt_*` mezőket; a worklist API tölti.
+ */
+export interface AppointmentAttemptSummary {
+  appointmentId: string;
+  attemptNumber: number;
+  /**
+   * `'unsuccessful'` — vizit megvolt, klinikai cél nem teljesült.
+   * `'no_show'`      — beteg nem jött el.
+   * `'completed'`    — sikeres próba (csak akkor szerepel itt, ha NEM ez az
+   *                    aktuális/legutóbbi sor — különben az elsődleges sor).
+   */
+  status: 'unsuccessful' | 'no_show' | 'completed';
+  startTime: string | null;
+  endTime: string | null;
+  providerEmail: string | null;
+  failedReason: string | null;
+  failedAt: string | null;
+  failedBy: string | null;
+}
+
 export interface WorklistItemBackend {
   episodeId: string;
   patientId: string;
@@ -90,6 +113,26 @@ export interface WorklistItemBackend {
   bookedAppointmentId?: string | null;
   bookedAppointmentStartTime?: string | null;
   bookedAppointmentProviderEmail?: string | null;
+  /**
+   * Az aktuális sor "elsődleges" appointmentje (BOOKED esetén = bookedAppointmentId,
+   * COMPLETED esetén a legutolsó sikeres appointment). Ezt használja a UI a
+   * "Sikertelen próba" akcióhoz, hogy a `PATCH /api/appointments/:id/attempt-outcome`
+   * megfelelő ID-t kapjon. Migration 029 utáni mező.
+   */
+  currentAppointmentId?: string | null;
+  currentAppointmentStatus?: 'pending' | 'completed' | 'no_show' | null;
+  /**
+   * Az aktuális sor próba-sorszáma (1 = első próba, 2 = második, …). Ha
+   * nincs hozzárendelt appointment (pl. tisztán pending step), undefined.
+   */
+  currentAttemptNumber?: number | null;
+  /**
+   * Korábbi próbák (sikertelen, meg-nem-jelent, vagy "regi" sikeres
+   * appointmentek) — `attempt_number` szerint növekvő sorrendben. Ha üres
+   * vagy hiányzik, ennek a (episode, step_code) párosnak nem volt korábbi
+   * próbája. Migration 029 utáni mező.
+   */
+  priorAttempts?: AppointmentAttemptSummary[];
   /** 0-based sequence among pending steps for this episode (0 = immediate next) */
   stepSeq?: number;
   /** True for steps beyond the first pending — booking needs requiresPrecommit to bypass one-hard-next */

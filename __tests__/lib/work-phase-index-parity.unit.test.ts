@@ -5,11 +5,13 @@ import { isAppointmentActive } from '@/lib/active-appointment';
  * Unit-only parity test (no DB).
  *
  * The partial unique index `idx_appointments_unique_work_phase_active` predicate
- * (database/migrations/025_appointment_work_phase_link.sql):
+ * (originally from migration 025, REBUILT in migration 029 to also exclude
+ * `'unsuccessful'`):
  *
  *   WHERE work_phase_id IS NOT NULL
  *     AND (appointment_status IS NULL
- *          OR appointment_status NOT IN ('cancelled_by_doctor', 'cancelled_by_patient'))
+ *          OR appointment_status NOT IN
+ *             ('cancelled_by_doctor', 'cancelled_by_patient', 'unsuccessful'))
  *
  * MUST agree with the TS-side `isAppointmentActive` and with the SQL fragment
  * `SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT` for every possible status value.
@@ -27,12 +29,13 @@ const ALL_STATUSES: Array<string | null> = [
   'no_show',
   'cancelled_by_doctor',
   'cancelled_by_patient',
+  'unsuccessful',
 ];
 
-/** Mirrors the partial unique index predicate ON THE EXISTING ROW. */
+/** Mirrors the partial unique index predicate ON THE EXISTING ROW (post-029). */
 function indexConsidersRowActive(status: string | null): boolean {
   if (status === null) return true;
-  return !['cancelled_by_doctor', 'cancelled_by_patient'].includes(status);
+  return !['cancelled_by_doctor', 'cancelled_by_patient', 'unsuccessful'].includes(status);
 }
 
 describe('Index ↔ guard parity (unit truth-table)', () => {
@@ -43,12 +46,18 @@ describe('Index ↔ guard parity (unit truth-table)', () => {
     }
   );
 
-  it('cancelled_by_doctor and cancelled_by_patient are the ONLY statuses that free a work phase', () => {
+  it('cancelled_*, and unsuccessful are the statuses that free a work phase (post-029)', () => {
     const freedStatuses = ALL_STATUSES.filter((s) => !isAppointmentActive(s));
-    expect(freedStatuses.sort()).toEqual(['cancelled_by_doctor', 'cancelled_by_patient']);
+    expect(freedStatuses.sort()).toEqual([
+      'cancelled_by_doctor',
+      'cancelled_by_patient',
+      'unsuccessful',
+    ]);
   });
 
   it('NULL, completed, and no_show all keep the work phase BOOKED', () => {
+    // unsuccessful is intentionally excluded here — it releases the slot so a
+    // new attempt_number row can be created (see migration 029 rationale).
     expect(isAppointmentActive(null)).toBe(true);
     expect(isAppointmentActive('completed')).toBe(true);
     expect(isAppointmentActive('no_show')).toBe(true);

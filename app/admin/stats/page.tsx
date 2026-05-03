@@ -29,6 +29,7 @@ import {
   CalendarClock,
 } from 'lucide-react';
 import { MedicalStatisticsSection } from '@/components/MedicalStatisticsSection';
+import { UnsuccessfulAttemptsStats } from '@/components/UnsuccessfulAttemptsStats';
 
 // Lazy-loaded chart components — recharts is heavy.
 const AppointmentOutcomeChart = dynamic(
@@ -1011,6 +1012,7 @@ export default function StatsPage() {
                 </div>
               </div>
               <MedicalStatisticsSection />
+              <UnsuccessfulAttemptsStats />
             </div>
           </div>
         ) : null}

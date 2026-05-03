@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import Link from 'next/link';
-import { ChevronDown, ChevronRight, ClipboardList, Calendar, CalendarCheck } from 'lucide-react';
+import { ChevronDown, ChevronRight, ClipboardList, Calendar, CalendarCheck, AlertTriangle, Undo2 } from 'lucide-react';
 import {
   getWorklistItemKey,
   deriveWorklistRowState,
+  type AppointmentAttemptSummary,
   type WorklistItemBackend,
   type WorklistLocalState,
 } from '@/lib/worklist-types';
@@ -14,6 +15,11 @@ import { SlotPickerModal } from '../SlotPickerModal';
 import { OverrideModal } from '../OverrideModal';
 import { BookingQueueModal } from '../BookingQueueModal';
 import { WorklistMergedPhaseCell } from '../WorklistMergedPhaseCell';
+import {
+  UnsuccessfulAttemptModal,
+  type UnsuccessfulAttemptConfirmPayload,
+} from '../UnsuccessfulAttemptModal';
+import { RevertUnsuccessfulModal } from '../RevertUnsuccessfulModal';
 
 const CAN_SEE_WORKLIST_ROLES = ['admin', 'beutalo_orvos', 'fogpótlástanász'];
 
@@ -35,6 +41,24 @@ export function WorklistWidget() {
     expectedHardNext?: { stepCode: string; earliestStart: string; latestStart: string; durationMinutes: number };
     existingAppointment?: { id: string; startTime: string; providerName?: string };
     retryData: { patientId: string; episodeId?: string; slotId: string; pool: string; durationMinutes: number; nextStep: string; stepCode?: string; workPhaseId?: string | null; requiresPrecommit?: boolean };
+  } | null>(null);
+  /** Migration 029 / PR 3: sikertelen-jelölés modal állapotai. */
+  const [unsuccessfulModalCtx, setUnsuccessfulModalCtx] = useState<{
+    item: WorklistItemBackend;
+    appointmentId: string;
+    appointmentStart: string | null;
+    attemptNumber: number;
+  } | null>(null);
+  const [revertModalCtx, setRevertModalCtx] = useState<{
+    item: WorklistItemBackend;
+    attempt: AppointmentAttemptSummary;
+  } | null>(null);
+  const [slotPickerRetryContext, setSlotPickerRetryContext] = useState<{
+    nextAttemptNumber: number;
+    previousAttemptNumber: number;
+    previousFailedReason: string | null;
+    previousAtISO: string | null;
+    stepLabel: string | null;
   } | null>(null);
 
   const fetchWorklist = useCallback(async () => {
@@ -231,6 +255,7 @@ export function WorklistWidget() {
 
       if (res.ok) {
         setSlotPickerItem(null);
+        setSlotPickerRetryContext(null);
         setItems((prev) => prev.filter((i) => getWorklistItemKey(i) !== key));
         setLocal((prev) => {
           const next = { ...prev };
@@ -287,6 +312,56 @@ export function WorklistWidget() {
       setSlotPickerItem(null);
       throw e;
     }
+  };
+
+  /** Migration 029 / PR 3: sikertelen-jelölés (lásd PatientWorklistWidget). */
+  const handleMarkUnsuccessfulConfirmed = async (
+    appointmentId: string,
+    item: WorklistItemBackend,
+    payload: UnsuccessfulAttemptConfirmPayload,
+    contextForRetry: {
+      previousAttemptNumber: number;
+      previousFailedAtISO: string | null;
+    }
+  ) => {
+    const res = await fetch(`/api/appointments/${appointmentId}/attempt-outcome`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ action: 'mark_unsuccessful', reason: payload.reason }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data?.error ?? 'Sikertelen-jelölés nem sikerült.');
+    }
+    await fetchWorklist();
+    if (payload.shouldOpenSlotPicker) {
+      setSlotPickerRetryContext({
+        nextAttemptNumber: contextForRetry.previousAttemptNumber + 1,
+        previousAttemptNumber: contextForRetry.previousAttemptNumber,
+        previousFailedReason: payload.reason,
+        previousAtISO: contextForRetry.previousFailedAtISO,
+        stepLabel: item.stepLabel ?? item.nextStep ?? null,
+      });
+      setSlotPickerItem(item);
+    }
+  };
+
+  const handleRevertUnsuccessfulConfirmed = async (
+    appointmentId: string,
+    reason: string
+  ) => {
+    const res = await fetch(`/api/appointments/${appointmentId}/attempt-outcome`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ action: 'revert', reason }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data?.error ?? 'Visszavonás nem sikerült.');
+    }
+    await fetchWorklist();
   };
 
   const handleOverrideConfirm = async (overrideReason: string) => {
@@ -435,10 +510,96 @@ export function WorklistWidget() {
               const isExpanded = expandedKey === key;
               const isSelected = selectedKeys.has(key);
               const selectable = canSelect(item);
+              const priorAttempts = item.priorAttempts ?? [];
+              const currentAttempt = item.currentAttemptNumber ?? (priorAttempts.length + 1);
+              const stepLabelForModal = item.stepLabel ?? item.nextStep ?? 'Munkafázis';
 
               return (
+                <Fragment key={key}>
+                  {priorAttempts.map((att) => {
+                    const isUnsuccessful = att.status === 'unsuccessful';
+                    const isNoShow = att.status === 'no_show';
+                    return (
+                      <tr
+                        key={`${key}::attempt-${att.appointmentId}`}
+                        className={`border-b text-gray-700 ${
+                          isUnsuccessful ? 'bg-orange-50/40' : isNoShow ? 'bg-gray-50/60' : 'bg-gray-50/30'
+                        }`}
+                      >
+                        <td className="px-3 py-2 text-xs text-gray-500" colSpan={2}>
+                          <span className="opacity-60">↳ előzmény ({item.patientName ?? `#${item.patientId.slice(0, 8)}`})</span>
+                        </td>
+                        <td className="px-3 py-2 text-sm">
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-700">{stepLabelForModal}</span>
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-gray-200 text-gray-700">
+                              {att.attemptNumber}. próba
+                            </span>
+                          </div>
+                          {isUnsuccessful && att.failedReason && (
+                            <div
+                              className="text-xs text-orange-800 mt-0.5 italic line-clamp-2"
+                              title={att.failedReason}
+                            >
+                              „{att.failedReason}"
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-sm text-gray-400" colSpan={3}>–</td>
+                        <td className="px-3 py-2 text-sm text-gray-600">
+                          {att.startTime
+                            ? new Date(att.startTime).toLocaleString('hu-HU', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })
+                            : '–'}
+                          {att.providerEmail && (
+                            <span className="block text-xs text-gray-500 truncate">
+                              {att.providerEmail}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded w-fit inline-flex items-center gap-1 ${
+                              isUnsuccessful
+                                ? 'bg-orange-100 text-orange-800'
+                                : isNoShow
+                                  ? 'bg-gray-200 text-gray-700'
+                                  : 'bg-gray-100 text-gray-600'
+                            }`}
+                          >
+                            {isUnsuccessful && (
+                              <>
+                                <AlertTriangle className="w-3 h-3" />
+                                SIKERTELEN
+                              </>
+                            )}
+                            {isNoShow && 'NEM JELENT MEG'}
+                            {att.status === 'completed' && '✓ KÉSZ (régebbi)'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">
+                          {isUnsuccessful ? (
+                            <button
+                              type="button"
+                              onClick={() => setRevertModalCtx({ item, attempt: att })}
+                              className="text-xs text-gray-600 hover:text-gray-900 hover:underline font-medium text-left flex items-center gap-0.5"
+                              title="Sikertelen-jelölés visszavonása (tévedés esetén)"
+                            >
+                              <Undo2 className="w-3 h-3" />
+                              Visszavonás
+                            </button>
+                          ) : (
+                            <span className="text-xs text-gray-400">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 <tr
-                  key={key}
                   className={`border-b ${item.overdueByDays > 0 ? 'bg-red-50/50' : ''} ${state === 'BLOCKED' ? 'opacity-70' : ''}`}
                 >
                   <td className="px-3 py-2">
@@ -462,6 +623,15 @@ export function WorklistWidget() {
                   <td className="px-3 py-2 text-sm text-gray-600">{item.currentStage}</td>
                   <td className="px-3 py-2">
                     <WorklistMergedPhaseCell item={item} />
+                    {priorAttempts.length > 0 && (
+                      <span
+                        className="ml-1 inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-800 align-middle"
+                        title={`${priorAttempts.length} korábbi próba`}
+                      >
+                        <AlertTriangle className="w-3 h-3" />
+                        {currentAttempt}. próba
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-sm text-gray-600">
                     {state !== 'BLOCKED' && item.forecastCompletionEndP80ISO ? (
@@ -556,7 +726,27 @@ export function WorklistWidget() {
                       </button>
                     )}
                     {state === 'BOOKED' && (
-                      <span className="text-xs text-blue-600 font-medium">✓ Foglalva</span>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-xs text-blue-600 font-medium">✓ Foglalva</span>
+                        {item.bookedAppointmentId && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setUnsuccessfulModalCtx({
+                                item,
+                                appointmentId: item.bookedAppointmentId!,
+                                appointmentStart: item.bookedAppointmentStartTime ?? null,
+                                attemptNumber: currentAttempt,
+                              })
+                            }
+                            className="text-xs text-orange-700 hover:underline font-medium text-left flex items-center gap-0.5"
+                            title="A próba sikertelen volt — új próba szükséges"
+                          >
+                            <AlertTriangle className="w-3 h-3" />
+                            Sikertelen próba
+                          </button>
+                        )}
+                      </div>
                     )}
                     {state === 'BLOCKED' && item.blockedCode === 'NO_CARE_PATHWAY' && (
                       <button
@@ -572,6 +762,7 @@ export function WorklistWidget() {
                     )}
                   </td>
                 </tr>
+                </Fragment>
               );
             })}
           </tbody>
@@ -593,7 +784,10 @@ export function WorklistWidget() {
       {slotPickerItem && (
         <SlotPickerModal
           open={!!slotPickerItem}
-          onClose={() => setSlotPickerItem(null)}
+          onClose={() => {
+            setSlotPickerItem(null);
+            setSlotPickerRetryContext(null);
+          }}
           pool={(slotPickerItem.pool as 'work' | 'consult' | 'control') || 'work'}
           durationMinutes={slotPickerItem.durationMinutes || 30}
           windowStart={
@@ -606,7 +800,48 @@ export function WorklistWidget() {
           episodeId={slotPickerItem.episodeId}
           providerId={slotPickerItem.assignedProviderId ?? undefined}
           patientName={slotPickerItem.patientName ?? undefined}
+          retryContext={slotPickerRetryContext}
           onSelectSlot={handleSelectSlot}
+        />
+      )}
+
+      {unsuccessfulModalCtx && (
+        <UnsuccessfulAttemptModal
+          open
+          onClose={() => setUnsuccessfulModalCtx(null)}
+          appointmentId={unsuccessfulModalCtx.appointmentId}
+          appointmentStart={unsuccessfulModalCtx.appointmentStart}
+          stepLabel={unsuccessfulModalCtx.item.stepLabel ?? unsuccessfulModalCtx.item.nextStep}
+          attemptNumber={unsuccessfulModalCtx.attemptNumber}
+          onConfirmed={async (payload) => {
+            await handleMarkUnsuccessfulConfirmed(
+              unsuccessfulModalCtx.appointmentId,
+              unsuccessfulModalCtx.item,
+              payload,
+              {
+                previousAttemptNumber: unsuccessfulModalCtx.attemptNumber,
+                previousFailedAtISO: unsuccessfulModalCtx.appointmentStart,
+              }
+            );
+          }}
+        />
+      )}
+
+      {revertModalCtx && (
+        <RevertUnsuccessfulModal
+          open
+          onClose={() => setRevertModalCtx(null)}
+          appointmentId={revertModalCtx.attempt.appointmentId}
+          appointmentStart={revertModalCtx.attempt.startTime}
+          stepLabel={revertModalCtx.item.stepLabel ?? revertModalCtx.item.nextStep}
+          attemptNumber={revertModalCtx.attempt.attemptNumber}
+          originalFailedReason={revertModalCtx.attempt.failedReason}
+          onConfirmed={async (reason) => {
+            await handleRevertUnsuccessfulConfirmed(
+              revertModalCtx.attempt.appointmentId,
+              reason
+            );
+          }}
         />
       )}
     </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Calendar, Clock, Users, Plus, CalendarClock } from 'lucide-react';
+import { X, Calendar, Clock, Users, Plus, CalendarClock, AlertTriangle } from 'lucide-react';
 import { toBudapestStartOfDayISO } from '@/lib/datetime';
 
 interface Doctor {
@@ -42,6 +42,20 @@ export interface SlotPickerModalProps {
    * "Foglalás" (new booking).
    */
   rescheduleFromIso?: string | null;
+  /**
+   * Migration 029 / PR 3: amikor a SlotPickert sikertelen-jelölés UTÁN nyitjuk
+   * (ismétlés-foglalás), ezzel adjuk át az előző próba kontextusát. A modal
+   * fejléce „N. próba foglalása", és egy narancs banner megjeleníti az előző
+   * sikertelenség indokát — segít az orvosnak, hogy gyorsan eldöntse, mit
+   * másoljon ki / módosítson a következő foglalásnál (orvos, idő, anyag).
+   */
+  retryContext?: {
+    nextAttemptNumber: number;
+    previousAttemptNumber: number;
+    previousFailedReason?: string | null;
+    previousAtISO?: string | null;
+    stepLabel?: string | null;
+  } | null;
   onSelectSlot: (slotId: string) => void | Promise<void>;
 }
 
@@ -58,6 +72,7 @@ export function SlotPickerModal({
   episodeId,
   patientName,
   rescheduleFromIso,
+  retryContext,
   onSelectSlot,
 }: SlotPickerModalProps) {
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -255,19 +270,62 @@ export function SlotPickerModal({
       })
     : null;
 
+  const previousAttemptLabel = retryContext?.previousAtISO
+    ? new Date(retryContext.previousAtISO).toLocaleString('hu-HU', {
+        timeZone: 'Europe/Budapest',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : null;
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="slot-picker-title">
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between p-4 border-b">
           <h2 id="slot-picker-title" className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            {rescheduleFromIso && <CalendarClock className="w-5 h-5 text-amber-600" aria-hidden="true" />}
-            {rescheduleFromIso ? 'Időpont áthelyezés' : 'Időpont választás'}
+            {retryContext && <AlertTriangle className="w-5 h-5 text-orange-600" aria-hidden="true" />}
+            {!retryContext && rescheduleFromIso && (
+              <CalendarClock className="w-5 h-5 text-amber-600" aria-hidden="true" />
+            )}
+            {retryContext
+              ? `${retryContext.nextAttemptNumber}. próba foglalása`
+              : rescheduleFromIso
+                ? 'Időpont áthelyezés'
+                : 'Időpont választás'}
             {patientName ? ` – ${patientName}` : ''}
           </h2>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700 p-1" aria-label="Bezárás">
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {retryContext && (
+          <div className="px-4 py-2 border-b bg-orange-50 text-sm text-orange-900 flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0 text-orange-700" aria-hidden="true" />
+            <div className="min-w-0">
+              <div className="font-medium">
+                {retryContext.previousAttemptNumber}. próba sikertelen volt
+                {retryContext.stepLabel && ` — ${retryContext.stepLabel}`}
+              </div>
+              {retryContext.previousFailedReason && (
+                <div className="text-xs text-orange-800/90 italic mt-0.5">
+                  „{retryContext.previousFailedReason}"
+                </div>
+              )}
+              {previousAttemptLabel && (
+                <div className="text-xs text-orange-800/80 mt-0.5">
+                  Időpont: {previousAttemptLabel}
+                </div>
+              )}
+              <div className="text-xs text-orange-800/80 mt-1">
+                Válassz új időpontot — a következő munkafázisok dátuma automatikusan tolódik.
+              </div>
+            </div>
+          </div>
+        )}
 
         {rescheduleFromLabel && (
           <div className="px-4 py-2 border-b bg-amber-50 text-sm text-amber-900 flex items-start gap-2">

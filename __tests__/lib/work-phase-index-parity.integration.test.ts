@@ -41,6 +41,8 @@ const ALL_STATUSES: Array<string | null> = [
   'no_show',
   'cancelled_by_doctor',
   'cancelled_by_patient',
+  // Migration 029: 'unsuccessful' also frees the work phase for a new attempt.
+  'unsuccessful',
 ];
 
 let pool: Pool | null = null;

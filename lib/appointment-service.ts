@@ -12,6 +12,7 @@ import { logger } from '@/lib/logger';
 import { normalizePathwayWorkPhaseArray } from '@/lib/pathway-work-phases-for-episode';
 import { translateUniqueViolation } from '@/lib/appointment-constraint-errors';
 import { probeAppointmentsWorkPhaseIdColumn } from '@/lib/active-appointment';
+import { nextAttemptNumber, probeAttemptColumns } from '@/lib/appointment-attempts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -422,9 +423,18 @@ export async function createAppointment(
       }
     }
 
+    // Migration 029: compute the next attempt_number for this (episode_id,
+    // step_code) pair so that retry bookings after an `'unsuccessful'` attempt
+    // get `attempt_number = N + 1`. Pure rebooks (cancel pending → new pending)
+    // do NOT increment — see lib/appointment-attempts.ts for the counting rule.
+    const hasAttemptColumns = await probeAttemptColumns(client);
+    const computedAttemptNumber = hasAttemptColumns
+      ? await nextAttemptNumber(client, episodeId, effectiveStepCode)
+      : 1;
+
     // Build INSERT dynamically so the new work_phase_id column only participates
     // on databases that have run migration 025. Order: existing 18 params first,
-    // then optional work_phase_id as $19.
+    // then optional work_phase_id as $19, then optional attempt_number as $20.
     const baseColumns = [
       'patient_id', 'episode_id', 'time_slot_id', 'created_by', 'dentist_email', 'appointment_type',
       'pool', 'duration_minutes', 'no_show_risk', 'requires_confirmation', 'hold_expires_at', 'created_via',
@@ -441,11 +451,25 @@ export async function createAppointment(
       baseColumns.push('work_phase_id');
       baseValues.push(effectiveWorkPhaseId);
     }
+    if (hasAttemptColumns) {
+      baseColumns.push('attempt_number');
+      baseValues.push(computedAttemptNumber);
+    }
     const placeholders = baseValues.map((_, i) => `$${i + 1}`).join(', ');
     const updateAssignments = baseColumns
       .filter((col) => col !== 'time_slot_id') // conflict key — never re-assign
       .map((col) => `${col} = EXCLUDED.${col}`)
       .join(',\n         ');
+
+    // When reviving a cancelled row, also clear any lingering attempt_failed_*
+    // fields (defensive: a row could in theory have been marked unsuccessful
+    // before being cancelled). Skipped on legacy DBs without migration 029.
+    const attemptFieldsResetClause = hasAttemptColumns
+      ? `,
+         attempt_failed_reason = NULL,
+         attempt_failed_at = NULL,
+         attempt_failed_by = NULL`
+      : '';
 
     const appointmentResult = await client.query(
       `INSERT INTO appointments (${baseColumns.join(', ')})
@@ -461,7 +485,7 @@ export async function createAppointment(
          approval_token = NULL,
          alternative_time_slot_ids = NULL,
          current_alternative_index = NULL,
-         is_late = false
+         is_late = false${attemptFieldsResetClause}
        WHERE appointments.appointment_status IN ('cancelled_by_patient', 'cancelled_by_doctor')
        RETURNING
          id,

@@ -20,6 +20,7 @@ import { isReadPlanItemsEnabled } from '@/lib/plan-items-flags';
 import { sqlBookedFutureAppointmentsWithEffectiveStep } from '@/lib/episode-plan-read-model';
 import { chainBookingRequiredFromCounts } from '@/lib/chain-booking-status';
 import { enrichWorklistBookableWindows } from '@/lib/worklist-bookable-windows';
+import { enrichWorklistPriorAttempts } from '@/lib/worklist-prior-attempts';
 
 export const dynamic = 'force-dynamic';
 
@@ -672,6 +673,11 @@ export const GET = authedHandler(async (req, { auth }) => {
   }
 
   await enrichWorklistBookableWindows(pool, items, serverNow);
+
+  // Migration 029: korábbi próbák (sikertelen / no_show / superseded completed)
+  // hozzáfűzése `priorAttempts`-ként, plusz `currentAppointmentId` /
+  // `currentAttemptNumber` mezők. Pre-029 DB-n no-op.
+  await enrichWorklistPriorAttempts(pool, items);
 
   // ── Forecast enrichment ──
   const forecastEpisodeIds = items.filter((i) => i.status !== 'blocked').map((i) => i.episodeId);

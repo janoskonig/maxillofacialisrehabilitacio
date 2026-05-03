@@ -24,13 +24,21 @@
 /**
  * The exact string set that `appointments.appointment_status` may take.
  * Schema: `VARCHAR(30) CHECK (appointment_status IN (...)) NULL`. NULL is the
- * 5th legal value (= pending appointment, see docs/APPOINTMENT_STATUS_TAXONOMY.md).
+ * 6th legal value (= pending appointment, see docs/APPOINTMENT_STATUS_TAXONOMY.md).
+ *
+ * `'unsuccessful'` was added in migration 029 — the visit took place but the
+ * clinical goal of the work phase was not achieved (e.g. impression came out
+ * unusable). Behaves like a non-cancelled, non-active state: the time slot was
+ * consumed (don't free it), but a new attempt (`attempt_number + 1`) for the
+ * same `(episode_id, step_code)` may be booked. See
+ * `database/migrations/029_appointment_attempts.sql`.
  */
 export const APPOINTMENT_STATUS_VALUES = [
   'cancelled_by_doctor',
   'cancelled_by_patient',
   'completed',
   'no_show',
+  'unsuccessful',
 ] as const;
 
 /** A non-null appointment status value. */
@@ -77,6 +85,7 @@ export function parseAppointmentStatus(
  *   switch (status) {
  *     case 'completed':           return ...;
  *     case 'no_show':             return ...;
+ *     case 'unsuccessful':        return ...;
  *     case 'cancelled_by_doctor': return ...;
  *     case 'cancelled_by_patient':return ...;
  *     default: return assertExhaustiveAppointmentStatus(status);

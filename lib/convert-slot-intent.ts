@@ -16,6 +16,7 @@ import {
   SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT,
   probeAppointmentsWorkPhaseIdColumn,
 } from '@/lib/active-appointment';
+import { nextAttemptNumber, probeAttemptColumns } from '@/lib/appointment-attempts';
 
 export interface ConvertIntentOptions {
   /** Pre-selected time slot id; if not set, a free slot is found in the window */
@@ -458,6 +459,14 @@ export async function convertIntentToAppointment(
         }
       }
 
+      // Migration 029: compute attempt_number for retries (e.g. after a previous
+      // attempt was marked 'unsuccessful'). Cancellation/rebook does NOT
+      // increment — see lib/appointment-attempts.ts for the counting rule.
+      const hasAttemptColumns = await probeAttemptColumns(client);
+      const computedAttemptNumber = hasAttemptColumns
+        ? await nextAttemptNumber(client, intent.episode_id, intent.step_code)
+        : 1;
+
       const insertColumns = [
         'patient_id', 'episode_id', 'time_slot_id', 'created_by', 'dentist_email', 'appointment_type',
         'pool', 'duration_minutes', 'no_show_risk', 'requires_confirmation', 'hold_expires_at', 'created_via',
@@ -489,6 +498,10 @@ export async function convertIntentToAppointment(
         insertColumns.push('work_phase_id');
         insertValues.push(resolvedWorkPhaseId);
       }
+      if (hasAttemptColumns) {
+        insertColumns.push('attempt_number');
+        insertValues.push(computedAttemptNumber);
+      }
       const placeholders = insertValues.map((_, i) => `$${i + 1}`).join(', ');
       // Mirror lib/appointment-service.ts: revive a stale cancelled row on the
       // same slot rather than crashing on the UNIQUE(time_slot_id) constraint.
@@ -503,6 +516,17 @@ export async function convertIntentToAppointment(
         .filter((col) => col !== 'time_slot_id')
         .map((col) => `${col} = EXCLUDED.${col}`)
         .join(',\n           ');
+
+      // When reviving a cancelled row, also clear lingering attempt_failed_*
+      // fields. Skipped on legacy DBs without migration 029. See
+      // lib/appointment-service.ts for the same defensive pattern.
+      const attemptFieldsResetClause = hasAttemptColumns
+        ? `,
+           attempt_failed_reason = NULL,
+           attempt_failed_at = NULL,
+           attempt_failed_by = NULL`
+        : '';
+
       const apptResult = await client.query(
         `INSERT INTO appointments (${insertColumns.join(', ')})
          VALUES (${placeholders})
@@ -517,7 +541,7 @@ export async function convertIntentToAppointment(
            approval_token = NULL,
            alternative_time_slot_ids = NULL,
            current_alternative_index = NULL,
-           is_late = false
+           is_late = false${attemptFieldsResetClause}
          WHERE appointments.appointment_status IN ('cancelled_by_patient', 'cancelled_by_doctor')
          RETURNING id`,
         insertValues
