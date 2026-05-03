@@ -76,15 +76,28 @@ export const GET = authedHandler(async (req, { auth }) => {
   const episodesResult = await pool.query(episodeQuery, params);
   const episodeIds = episodesResult.rows.map((r: { id: string }) => r.id);
 
-  const episodesList = episodesResult.rows.map((r: Record<string, unknown>) => ({
-    id: r.id,
-    patientId: r.patientId,
-    patientName: r.patientName,
-    reason: r.reason,
-    chiefComplaint: r.chiefComplaint,
-    status: r.status,
-    openedAt: (r.openedAt as Date)?.toISOString?.() ?? r.openedAt,
-    closedAt: r.closedAt ? (r.closedAt as Date)?.toISOString?.() ?? r.closedAt : null,
+  const episodesList: Array<{
+    id: string;
+    patientId: string;
+    patientName: string;
+    reason: string;
+    chiefComplaint: string | null;
+    status: string;
+    openedAt: string;
+    closedAt: string | null;
+    currentStageCode: string | null;
+    currentStageStart: string | null;
+  }> = episodesResult.rows.map((r: Record<string, unknown>) => ({
+    id: r.id as string,
+    patientId: r.patientId as string,
+    patientName: r.patientName as string,
+    reason: r.reason as string,
+    chiefComplaint: (r.chiefComplaint as string) ?? null,
+    status: r.status as string,
+    openedAt: (r.openedAt as Date)?.toISOString?.() ?? (r.openedAt as string),
+    closedAt: r.closedAt ? (r.closedAt as Date)?.toISOString?.() ?? (r.closedAt as string) : null,
+    currentStageCode: null,
+    currentStageStart: null,
   }));
 
   let intervals: { episodeId: string; stageCode: string; start: string; end: string }[] = [];
@@ -122,6 +135,7 @@ export const GET = authedHandler(async (req, { auth }) => {
     }
 
     const now = new Date().toISOString();
+    const episodeById = new Map(episodesList.map((e) => [e.id, e]));
     for (const epId of episodeIds) {
       const evs = eventsByEpisode.get(epId) || [];
       for (let i = 0; i < evs.length; i++) {
@@ -133,6 +147,14 @@ export const GET = authedHandler(async (req, { auth }) => {
           start,
           end,
         });
+      }
+      if (evs.length > 0) {
+        const last = evs[evs.length - 1];
+        const ep = episodeById.get(epId);
+        if (ep) {
+          ep.currentStageCode = last.stageCode;
+          ep.currentStageStart = last.at;
+        }
       }
     }
   }

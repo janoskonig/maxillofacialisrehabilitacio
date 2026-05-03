@@ -341,6 +341,7 @@ export default function StagesGanttPage() {
             intervals={intervals}
             catalog={catalogForChart.map((c) => ({ code: c.code, labelHu: c.labelHu, orderIndex: c.orderIndex }))}
             virtualWindows={includeVirtual ? ganttVirtualWindows : []}
+            groupByCurrentStage={viewMode === 'cohort'}
           />
         )}
       </main>
