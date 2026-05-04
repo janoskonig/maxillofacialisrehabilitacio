@@ -72,6 +72,56 @@ export async function assertPrepTokenOrThrow(
   return x;
 }
 
+export type PrepTokenPreviewState =
+  | { state: 'ok'; sessionId: string; itemId: string; institutionId: string; sessionStatus: SessionStatus }
+  | { state: 'not_found' }
+  | { state: 'institution_mismatch' };
+
+/**
+ * Az üzenet-kártya preview-jához használt feloldás: nem dob hibát, hanem
+ * jelzi, hogy a token egyáltalán létezik-e, és ha igen, a felhasználó intézménye
+ * megegyezik-e. Így a kártya finoman jelezni tudja a hozzáférés hiányát.
+ */
+export async function resolvePrepTokenPreviewState(
+  rawToken: string,
+  userInstitutionId: string,
+): Promise<PrepTokenPreviewState> {
+  const pool = getDbPool();
+  const hash = hashConsiliumPrepToken(rawToken.trim());
+  const r = await pool.query<{
+    sessionId: string;
+    itemId: string;
+    institutionId: string;
+    status: string;
+  }>(
+    `SELECT t.session_id as "sessionId", t.item_id as "itemId", s.institution_id as "institutionId", s.status
+     FROM consilium_item_prep_tokens t
+     JOIN consilium_sessions s ON s.id = t.session_id
+     JOIN consilium_session_items i ON i.id = t.item_id AND i.session_id = t.session_id
+     WHERE t.token_hash = $1
+       AND t.revoked_at IS NULL`,
+    [hash],
+  );
+  if (r.rows.length === 0) return { state: 'not_found' };
+  const row = r.rows[0];
+  const st = row.status as SessionStatus;
+  if (st !== 'draft' && st !== 'active' && st !== 'closed') {
+    return { state: 'not_found' };
+  }
+  const userInst = (userInstitutionId || '').trim();
+  const sessionInst = (row.institutionId || '').trim();
+  if (userInst !== sessionInst) {
+    return { state: 'institution_mismatch' };
+  }
+  return {
+    state: 'ok',
+    sessionId: row.sessionId,
+    itemId: row.itemId,
+    institutionId: row.institutionId,
+    sessionStatus: st,
+  };
+}
+
 export const createPrepLinkBodySchema = z.object({
   expiresInDays: z.number().int().min(1).max(365).optional(),
 });
@@ -86,6 +136,51 @@ export async function revokePrepTokensForItem(client: PoolClient, itemId: string
     `UPDATE consilium_item_prep_tokens SET revoked_at = NOW() WHERE item_id = $1::uuid AND revoked_at IS NULL`,
     [itemId],
   );
+}
+
+/**
+ * Visszaadja a tétel aktív (visszavonatlan) előkészítő tokenjét, vagy létrehoz egy újat,
+ * ha még nincs. Ugyanaz a logika, mint a `POST /prep-link` route — közös helper, hogy
+ * az "elküldés üzenetben" végpont is ugyanazt a tokent adja vissza.
+ *
+ * Nem indít / commitol tranzakciót — a hívó felelős. A `client`-en `BEGIN` előtt kell
+ * lennie, és `COMMIT`/`ROLLBACK`-kel kell zárni.
+ */
+export async function ensurePrepTokenForItem(
+  client: PoolClient,
+  params: { sessionId: string; itemId: string; createdBy: string },
+): Promise<{ rawToken: string; expiresAtIso: string; created: boolean }> {
+  const expiresAtIso = new Date(PREP_LINK_NO_EXPIRY_AT_ISO).toISOString();
+
+  await client.query(`SELECT id FROM consilium_session_items WHERE id = $1::uuid FOR UPDATE`, [
+    params.itemId,
+  ]);
+  const existing = await client.query<{ rawToken: string; expiresAt: Date }>(
+    `SELECT raw_token AS "rawToken", expires_at AS "expiresAt"
+     FROM consilium_item_prep_tokens
+     WHERE item_id = $1::uuid AND revoked_at IS NULL AND raw_token IS NOT NULL
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [params.itemId],
+  );
+  if (existing.rows.length > 0) {
+    const row = existing.rows[0];
+    return {
+      rawToken: row.rawToken,
+      expiresAtIso:
+        row.expiresAt instanceof Date ? row.expiresAt.toISOString() : String(row.expiresAt),
+      created: false,
+    };
+  }
+  const rawToken = generateConsiliumPrepTokenRaw();
+  const tokenHash = hashConsiliumPrepToken(rawToken);
+  await revokePrepTokensForItem(client, params.itemId);
+  await client.query(
+    `INSERT INTO consilium_item_prep_tokens (token_hash, raw_token, session_id, item_id, created_by, expires_at)
+     VALUES ($1, $2, $3::uuid, $4::uuid, $5, $6)`,
+    [tokenHash, rawToken, params.sessionId, params.itemId, params.createdBy, expiresAtIso],
+  );
+  return { rawToken, expiresAtIso, created: true };
 }
 
 export async function listPrepCommentsForItem(itemId: string): Promise<ConsiliumPrepCommentSnapshot[]> {

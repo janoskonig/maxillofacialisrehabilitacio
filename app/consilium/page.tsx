@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowDown, ArrowLeft, ArrowUp, CalendarClock, Plus, Presentation, Trash2, Users } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowUp, CalendarClock, Plus, Presentation, Send, Trash2, Users } from 'lucide-react';
 import { getCurrentUser, type AuthUser } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
 import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
+import { SendConsiliumPrepLinkModal } from '@/components/SendConsiliumPrepLinkModal';
 import { useToast } from '@/contexts/ToastContext';
 import type { ConsiliumPresentationItem } from '@/lib/consilium-presentation';
 import {
@@ -785,6 +786,12 @@ export default function ConsiliumPage() {
   const [patientHits, setPatientHits] = useState<PatientHit[]>([]);
   const searchDebounceRef = useRef<NodeJS.Timeout>();
 
+  const [shareModalState, setShareModalState] = useState<{
+    sessionId: string;
+    itemId: string;
+    patientName: string;
+  } | null>(null);
+
   const loadSessions = useCallback(async () => {
     setLoadingSessions(true);
     try {
@@ -1495,6 +1502,20 @@ export default function ConsiliumPage() {
                               </button>
                               <button
                                 type="button"
+                                className="text-xs px-2 py-1 rounded-md bg-cyan-700 text-white hover:bg-cyan-800 inline-flex items-center gap-1"
+                                onClick={() =>
+                                  setShareModalState({
+                                    sessionId: selectedSession.id,
+                                    itemId: it.id,
+                                    patientName: name,
+                                  })
+                                }
+                              >
+                                <Send className="w-3 h-3" />
+                                Küldés felhasználónak
+                              </button>
+                              <button
+                                type="button"
                                 className="text-xs px-2 py-1 rounded-md text-red-700 hover:bg-red-50"
                                 onClick={() => void revokePrepLinksForItem(it.id)}
                               >
@@ -1517,6 +1538,18 @@ export default function ConsiliumPage() {
           külön tárolja.
         </p>
       </main>
+
+      {shareModalState && (
+        <SendConsiliumPrepLinkModal
+          isOpen={!!shareModalState}
+          onClose={() => setShareModalState(null)}
+          sessionId={shareModalState.sessionId}
+          itemId={shareModalState.itemId}
+          patientName={shareModalState.patientName}
+          currentUserId={user?.id}
+          currentInstitution={user?.intezmeny ?? null}
+        />
+      )}
 
       <MobileBottomNav />
     </div>

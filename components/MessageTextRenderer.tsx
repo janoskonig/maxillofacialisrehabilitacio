@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { DocumentRequestCard } from './DocumentRequestCard';
 import { DocumentUploadButton } from './DocumentUploadButton';
 import { DocumentRequestInfoCard } from './DocumentRequestInfoCard';
+import { ConsiliumPrepMessageCard } from './ConsiliumPrepMessageCard';
 import { detectDocumentRequest } from '@/lib/document-request-detector';
 
 interface MessageTextRendererProps {
@@ -21,6 +22,7 @@ interface MessageTextRendererProps {
  * Render message text with @mention support, document request cards, and upload buttons
  * Mentions are in format: @vezeteknev+keresztnev
  * Document uploads are in format: [DOCUMENT_UPLOADED:tag:patientId?:documentId]
+ * Consilium prep links are in format: [CONSILIUM_PREP:<token>]
  * Document requests are detected from text and show upload button for recipients
  */
 export function MessageTextRenderer({ 
@@ -34,6 +36,27 @@ export function MessageTextRenderer({
 }: MessageTextRendererProps) {
   const lines = (text || '').split(/\r?\n/);
   const trailingNote = lines.slice(1).join('\n').trim();
+
+  // Check for Konzílium előkészítő marker: [CONSILIUM_PREP:<token>]
+  // Token is base64url (A-Za-z0-9_-), so the regex is safe and unambiguous.
+  const consiliumPrepRegex = /\[CONSILIUM_PREP:([A-Za-z0-9_-]+)\]/;
+  const consiliumPrepMatch = (text || '').match(consiliumPrepRegex);
+  if (consiliumPrepMatch && typeof consiliumPrepMatch.index === 'number') {
+    const token = consiliumPrepMatch[1];
+    const before = (text || '').slice(0, consiliumPrepMatch.index).trim();
+    const after = (text || '').slice(consiliumPrepMatch.index + consiliumPrepMatch[0].length).trim();
+    return (
+      <>
+        {before ? (
+          <p className="whitespace-pre-wrap break-words text-sm">{before}</p>
+        ) : null}
+        <ConsiliumPrepMessageCard token={token} />
+        {after ? (
+          <p className="whitespace-pre-wrap break-words text-sm mt-1 opacity-90">{after}</p>
+        ) : null}
+      </>
+    );
+  }
 
   // First check for document upload format: [DOCUMENT_UPLOADED:tag:patientId?:documentId]
   const documentUploadRegex = /\[DOCUMENT_UPLOADED:([^:]*):?([^:]*):?([^\]]*)\]/g;
