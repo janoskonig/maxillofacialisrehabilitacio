@@ -8,6 +8,7 @@ import { createHash } from 'crypto';
 import { getDbPool } from './db';
 import { getStepLabelMap } from './step-labels';
 import type { VirtualAppointment, VirtualStatus } from './virtual-appointments-types';
+import { buildWorklistUrl } from './build-worklist-url';
 
 const TIMEZONE = 'Europe/Budapest';
 const DEFAULT_HORIZON_DAYS = 90;
@@ -28,16 +29,6 @@ function computeVirtualKey(
 ): string {
   const input = `${episodeId}|${stepCode}|${windowStartDate}|${windowEndDate}|${pool}`;
   return createHash('sha1').update(input).digest('hex');
-}
-
-/** Build worklist deep link URL */
-function buildWorklistUrl(episodeId: string, stepCode: string, pool: string): string {
-  const params = new URLSearchParams();
-  params.set('tab', 'worklist');
-  params.set('episodeId', episodeId);
-  params.set('stepCode', stepCode);
-  params.set('pool', pool);
-  return `/?${params.toString()}`;
 }
 
 export interface FetchVirtualAppointmentsParams {

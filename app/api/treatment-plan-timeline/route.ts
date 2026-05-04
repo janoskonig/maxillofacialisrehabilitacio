@@ -11,7 +11,7 @@ import { loadPlanItemLinksByLegacyEwp } from '@/lib/episode-plan-read-model';
 
 export const dynamic = 'force-dynamic';
 
-export type TimelineStepStatus = 'completed' | 'booked' | 'in_progress' | 'no_show' | 'projected' | 'overdue';
+export type TimelineStepStatus = 'completed' | 'booked' | 'planned';
 
 interface TimelineStep {
   stepCode: string;
@@ -39,6 +39,7 @@ interface TimelineEpisode {
   status: string;
   openedAt: string;
   carePathwayName: string | null;
+  assignedProviderId: string | null;
   assignedProviderName: string | null;
   treatmentTypeLabel: string | null;
   steps: TimelineStep[];
@@ -51,6 +52,7 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
   const searchParams = req.nextUrl.searchParams;
   const episodeStatus = searchParams.get('status') ?? 'open';
   const providerId = searchParams.get('providerId');
+  const searchRaw = searchParams.get('search')?.trim() ?? '';
   const limit = Math.min(parseInt(searchParams.get('limit') ?? '50', 10), 200);
   const offset = parseInt(searchParams.get('offset') ?? '0', 10);
 
@@ -75,10 +77,16 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
     params.push(providerId);
     pi++;
   }
+  if (searchRaw) {
+    whereParts.push(`p.nev ILIKE $${pi}`);
+    params.push(`%${searchRaw}%`);
+    pi++;
+  }
 
   params.push(limit, offset);
   const episodesResult = await pool.query(
     `SELECT pe.id as episode_id, pe.patient_id, pe.reason, pe.status, pe.opened_at,
+            pe.assigned_provider_id,
             p.nev as patient_name,
             cp.name as care_pathway_name, cp.work_phases_json, cp.steps_json,
             u.doktor_neve as assigned_provider_name,
@@ -97,7 +105,14 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
   if (episodesResult.rows.length === 0) {
     return NextResponse.json({
       episodes: [],
-      meta: { serverNow: now.toISOString(), fetchedAt: now.toISOString(), timezone: 'Europe/Budapest', ordering: 'eta_asc' },
+      meta: {
+        serverNow: now.toISOString(),
+        fetchedAt: now.toISOString(),
+        timezone: 'Europe/Budapest',
+        ordering: 'eta_asc',
+        readPlanItemsEnabled: readPlanItems,
+        counts: { totalEpisodes: 0, actionNeededIn7d: 0 },
+      },
     });
   }
 
@@ -138,8 +153,17 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
     }
   }
 
-  const [apptsResult, intentsResult, stagesResult, episodeStepsResult, stepLabelMap] = await Promise.all([
-    pool.query(
+  // Egy kliensen sorban: elkerüljük az 5 egyidejű pool.query-t (max pool≈5 → más route-tal
+  // „timeout exceeded when trying to connect”). A címke-térkép cache-elt, előre töltjük.
+  const stepLabelMap = await getStepLabelMap();
+  const episodeIdsParam = [episodeIds];
+  const client = await pool.connect();
+  let apptsResult;
+  let intentsResult;
+  let stagesResult;
+  let episodeStepsResult;
+  try {
+    apptsResult = await client.query(
       `SELECT a.id, a.episode_id, a.step_code,
               COALESCE(a.step_seq, si.step_seq) as step_seq,
               a.start_time, a.appointment_status
@@ -151,24 +175,24 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
          AND a.appointment_status IS DISTINCT FROM 'cancelled_by_patient'
          ${apptPlanItemFilter}
        ORDER BY COALESCE(a.step_seq, si.step_seq) ASC NULLS LAST`,
-      [episodeIds]
-    ),
-    pool.query(
+      episodeIdsParam
+    );
+    intentsResult = await client.query(
       `SELECT id, episode_id, step_code, step_seq, window_start, window_end, state
        FROM slot_intents
        WHERE episode_id = ANY($1)
          AND state IN ('open', 'expired', 'converted')
        ORDER BY step_seq ASC`,
-      [episodeIds]
-    ),
-    pool.query(
+      episodeIdsParam
+    );
+    stagesResult = await client.query(
       `SELECT DISTINCT ON (episode_id) episode_id, stage_code
        FROM stage_events
        WHERE episode_id = ANY($1)
        ORDER BY episode_id, at DESC`,
-      [episodeIds]
-    ),
-    pool.query(
+      episodeIdsParam
+    );
+    episodeStepsResult = await client.query(
       `SELECT ewp.id as episode_work_phase_id, ewp.episode_id, ewp.work_phase_code as step_code,
               COALESCE(ewp.seq, ewp.pathway_order_index) as step_seq,
               ewp.pool, ewp.duration_minutes, ewp.custom_label
@@ -176,10 +200,11 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
        WHERE ewp.episode_id = ANY($1)
          AND (ewp.merged_into_episode_work_phase_id IS NULL)
        ORDER BY ewp.episode_id, COALESCE(ewp.seq, ewp.pathway_order_index)`,
-      [episodeIds]
-    ),
-    getStepLabelMap(),
-  ]);
+      episodeIdsParam
+    );
+  } finally {
+    client.release();
+  }
 
   const planLinksByLegacyEwp = readPlanItems
     ? await loadPlanItemLinksByLegacyEwp(pool, episodeIds)
@@ -314,34 +339,28 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
         if (apptStatus === 'completed') {
           status = 'completed';
         } else if (apptStatus === 'no_show') {
-          status = 'no_show';
+          status = 'planned';
         } else {
-          const apptStart = new Date(appt.start_time);
-          status = apptStart > now ? 'booked' : 'in_progress';
+          status = 'booked';
           windowStart = appt.start_time;
+          const apptStart = new Date(appt.start_time);
           if (apptStart > now) {
             etaHeuristic = appt.start_time;
           }
         }
       } else if (intent && intent.state === 'open' && isProtetikai) {
-        const wEnd = intent.window_end ? new Date(intent.window_end) : null;
-        if (wEnd && wEnd < now) {
-          status = 'overdue';
-        } else {
-          status = 'projected';
-        }
+        status = 'planned';
         windowStart = intent.window_start;
         windowEnd = intent.window_end;
         if (intent.window_end) {
           etaHeuristic = intent.window_end;
         }
       } else if (intent && intent.state === 'open' && !isProtetikai) {
-        const wEnd = intent.window_end ? new Date(intent.window_end) : null;
-        status = wEnd && wEnd < now ? 'overdue' : 'projected';
+        status = 'planned';
         windowStart = null;
         windowEnd = null;
       } else {
-        status = 'projected';
+        status = 'planned';
       }
 
       steps.push({
@@ -370,11 +389,43 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
       status: ep.status,
       openedAt: ep.opened_at,
       carePathwayName: resolvedPathwayName,
+      assignedProviderId: ep.assigned_provider_id ?? null,
       assignedProviderName: ep.assigned_provider_name,
       treatmentTypeLabel: ep.treatment_type_label,
       steps,
       etaHeuristic,
     });
+  }
+
+  const nowMs = now.getTime();
+  const horizonMs = nowMs + 7 * 24 * 60 * 60 * 1000;
+  let actionNeededIn7d = 0;
+  for (const ep of episodes) {
+    let needsAttention7d = false;
+    for (const s of ep.steps) {
+      const refStart = s.appointmentStart || s.windowStart;
+      if (s.status === 'booked') {
+        if (refStart) {
+          const t = new Date(refStart).getTime();
+          if (!Number.isNaN(t) && t >= nowMs && t <= horizonMs) needsAttention7d = true;
+        }
+      }
+      if (s.status === 'planned') {
+        const ws = s.windowStart ? new Date(s.windowStart).getTime() : NaN;
+        const we = s.windowEnd ? new Date(s.windowEnd).getTime() : NaN;
+        if (!Number.isNaN(we) && we < nowMs) {
+          needsAttention7d = true;
+        }
+        if (!Number.isNaN(ws) && !Number.isNaN(we)) {
+          if (we >= nowMs && ws <= horizonMs) needsAttention7d = true;
+        } else if (!Number.isNaN(ws) && ws >= nowMs && ws <= horizonMs) {
+          needsAttention7d = true;
+        } else if (!Number.isNaN(we) && we >= nowMs && we <= horizonMs) {
+          needsAttention7d = true;
+        }
+      }
+    }
+    if (needsAttention7d) actionNeededIn7d++;
   }
 
   episodes.sort((a, b) => {
@@ -392,6 +443,10 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
       timezone: 'Europe/Budapest',
       ordering: 'eta_asc',
       readPlanItemsEnabled: readPlanItems,
+      counts: {
+        totalEpisodes: episodes.length,
+        actionNeededIn7d,
+      },
     },
   });
 });
