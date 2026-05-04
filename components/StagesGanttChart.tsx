@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 
 export interface GanttEpisode {
@@ -409,7 +410,13 @@ export function StagesGanttChart({
                         }${episodeCount > 1 ? `\n${episodeCount} epizód` : ''}`}
                       >
                         <div className="flex items-center gap-1 min-w-0">
-                          <span className="font-medium text-gray-900 truncate">{row.patientName}</span>
+                          <Link
+                            href={`/patients/${row.patientId}/view`}
+                            className="font-medium text-gray-900 truncate hover:text-blue-600 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 rounded"
+                            title={`${row.patientName} adatlapjának megnyitása`}
+                          >
+                            {row.patientName}
+                          </Link>
                           {episodeCount > 1 && (
                             <span className="text-[10px] text-gray-500 bg-gray-200 rounded px-1 tabular-nums whitespace-nowrap">
                               {episodeCount} ep.
