@@ -797,6 +797,7 @@ export async function sendConsiliumInvitationEmail(
   rsvpUrl: string,
   baseUrl: string,
   noteFromOrganizer: string | null,
+  agenda?: { patientCount: number; agendaUrl: string | null } | null,
 ): Promise<void> {
   const escapeHtml = (s: string) =>
     s
@@ -823,6 +824,31 @@ export async function sendConsiliumInvitationEmail(
       )}</div>`
     : '';
 
+  // Csak a darabszámot emlegetjük emailben — a betegnevek érzékeny adatok, ezért
+  // a részletes lista csak bejelentkezés után, az auth-gated agenda oldalon érhető el.
+  let agendaBlock = '';
+  if (agenda && agenda.patientCount > 0) {
+    const countText = `${agenda.patientCount} beteg napirenden`;
+    const linkLine = agenda.agendaUrl
+      ? `<p style="margin: 6px 0 0 0; font-size: 13px; color:#0e7490;">
+           <a href="${agenda.agendaUrl}" style="color:#0e7490; text-decoration: underline;">
+             Napirend megtekintése (bejelentkezés szükséges)
+           </a>
+         </p>`
+      : '';
+    agendaBlock = `
+      <div style="margin: 12px 0; padding: 10px 12px; background:#f9fafb; border: 1px solid #e5e7eb; border-radius: 6px;">
+        <p style="margin: 0; font-size: 14px; color:#111827;">
+          <strong>${countText}</strong>
+        </p>
+        <p style="margin: 4px 0 0 0; font-size: 12px; color:#6b7280;">
+          A betegek névsora és részletei nem szerepelnek ebben az emailben.
+        </p>
+        ${linkLine}
+      </div>
+    `;
+  }
+
   // Egy-kattintásos pre-fill linkek a leggyakoribb két válaszhoz; az RSVP-oldal
   // mindig megerősítést kér mielőtt rögzítené a választ.
   const goingUrl = `${rsvpUrl}?response=going`;
@@ -838,6 +864,7 @@ export async function sendConsiliumInvitationEmail(
         <li><strong>Téma:</strong> ${escapeHtml(sessionTitle)}</li>
         <li><strong>Időpont:</strong> ${formattedDate}</li>
       </ul>
+      ${agendaBlock}
       ${noteBlock}
       <p style="margin-top: 18px; color: #374151;">
         Kérjük, jelezze vissza, hogy számíthatunk-e Önre:

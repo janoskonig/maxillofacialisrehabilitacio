@@ -112,8 +112,17 @@ export const POST = authedHandler(async (req, { auth, params }) => {
   );
   const senderName = senderRes.rows[0]?.doktorNeve?.trim?.() || null;
 
+  // Csak a darabszámot emlegetjük emailben (érzékeny adat ne menjen ki) — a
+  // részletes lista az auth-gated agenda oldalon látható.
+  const patientCountRes = await pool.query<{ count: string }>(
+    `SELECT COUNT(*)::text as count FROM consilium_session_items WHERE session_id = $1::uuid`,
+    [sessionId],
+  );
+  const patientCount = Number(patientCountRes.rows[0]?.count ?? '0') || 0;
+
   const baseUrl = resolvePublicBaseUrl(req);
   const sessionScheduledAt = new Date(session.scheduledAt);
+  const agendaUrl = `${baseUrl}/consilium/sessions/${encodeURIComponent(sessionId)}/agenda`;
 
   type SendOutcome = {
     attendeeId: string;
@@ -215,6 +224,7 @@ export const POST = authedHandler(async (req, { auth, params }) => {
         rsvpUrl,
         baseUrl,
         note ?? null,
+        { patientCount, agendaUrl },
       );
       results.push({
         attendeeId: att.id,
