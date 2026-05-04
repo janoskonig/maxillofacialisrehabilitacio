@@ -57,16 +57,33 @@ export interface ForecastAggregateResponse {
   };
 }
 
+/**
+ * Intake-javaslat nézőpontja:
+ * - `PERSONAL`: a bejelentkezett kezelő orvos saját kapacitása alapján.
+ *   Címke a felületen pl. „Fogadhatsz új beteget?".
+ * - `TEAM`: a teljes fogpótlástanász csapat aggregált (MAX) terhelése alapján.
+ *   Beutaló orvosok és saját adat nélküli adminok kapják. Címke pl.
+ *   „Beutalhatsz új beteget?".
+ */
+export type IntakeViewMode = 'PERSONAL' | 'TEAM';
+
 export interface IntakeRecommendationResponse {
   recommendation: 'GO' | 'CAUTION' | 'STOP';
   reasons: string[];
   explain: {
+    viewMode: IntakeViewMode;
     busynessScore: number;
     nearCriticalIfNewStarts: boolean;
-    source: 'MAX_OVER_DOCTORS';
     wipCount: number;
     wipCompletionP80Max: string | null;
     wipP80DaysFromNow: number | null;
+    /**
+     * Becsült legkorábbi dátum (ISO), amikor új beteg fogadása/beutalása újra
+     * javasolt (CAUTION → GO, ill. STOP → CAUTION/GO). Hibrid heurisztika:
+     * MAX(legterheltebb releváns orvos jelenleg foglalt perceinek 50%-os
+     * kifutási dátuma, releváns WIP completion P80 − 28 nap). GO esetén `null`.
+     */
+    nextIntakeDate: string | null;
   };
   meta: {
     serverNow: string;
