@@ -18,6 +18,10 @@ import {
   type UnsuccessfulAttemptConfirmPayload,
 } from './UnsuccessfulAttemptModal';
 import { RevertUnsuccessfulModal } from './RevertUnsuccessfulModal';
+import {
+  MarkCompletedRetroModal,
+  type MarkCompletedRetroPayload,
+} from './MarkCompletedRetroModal';
 
 export interface PatientWorklistWidgetProps {
   patientId: string;
@@ -61,6 +65,16 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
   const [revertModalCtx, setRevertModalCtx] = useState<{
     item: WorklistItemBackend;
     attempt: AppointmentAttemptSummary;
+  } | null>(null);
+  /**
+   * Az „Elkészült (utólag)" gomb most modalt nyit, ahol a felhasználó megadhatja
+   * mikor készült el ténylegesen a fázis (régebbi foglalt időpontból vagy egyéni
+   * dátummal). A context tartja az item-et és az appointment-listából kihagyandó
+   * id-ket (pl. már a fázishoz kötött jövőbeli foglalás vagy prior attempt-ek).
+   */
+  const [markCompleteRetroCtx, setMarkCompleteRetroCtx] = useState<{
+    item: WorklistItemBackend;
+    excludeAppointmentIds: string[];
   } | null>(null);
   /**
    * Ha a SlotPickert sikertelen-jelölés UTÁN nyitjuk meg, ezzel adjuk át az
@@ -342,7 +356,28 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
     }
   };
 
-  const handleMarkStepComplete = async (item: WorklistItemBackend) => {
+  /**
+   * „Elkészült (utólag)" gomb — nem PATCH-ol azonnal, hanem modalt nyit, ahol
+   * a felhasználó kiválaszthatja, hogy a fázis mikor készült el ténylegesen
+   * (régebbi foglalt időpontból vagy egyéni dátummal). A tényleges PATCH-et
+   * a modal `onConfirm` callback-jén keresztül `handleConfirmMarkCompleteRetro`
+   * indítja.
+   */
+  const handleMarkStepComplete = (item: WorklistItemBackend) => {
+    if (!item.workPhaseId || !item.episodeId) return;
+    const exclude: string[] = [];
+    if (item.bookedAppointmentId) exclude.push(item.bookedAppointmentId);
+    if (item.currentAppointmentId) exclude.push(item.currentAppointmentId);
+    for (const att of item.priorAttempts ?? []) {
+      if (att.appointmentId) exclude.push(att.appointmentId);
+    }
+    setMarkCompleteRetroCtx({ item, excludeAppointmentIds: exclude });
+  };
+
+  const handleConfirmMarkCompleteRetro = async (
+    item: WorklistItemBackend,
+    payload: MarkCompletedRetroPayload
+  ) => {
     const workPhaseId = item.workPhaseId;
     const episodeId = item.episodeId;
     if (!workPhaseId || !episodeId) return;
@@ -353,16 +388,18 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ status: 'completed', reason: 'Utólag jelölve késznek (nem itt foglalt)' }),
+        body: JSON.stringify({
+          status: 'completed',
+          reason: payload.reason,
+          completedAt: payload.completedAt,
+          appointmentId: payload.appointmentId,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
-        alert(data.error ?? 'Hiba történt');
-        return;
+        throw new Error(data?.error ?? 'Hiba történt');
       }
       await fetchWorklist();
-    } catch (e) {
-      alert('Hálózati hiba');
     } finally {
       setMarkCompleteKey(null);
     }
@@ -1036,6 +1073,19 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
               revertModalCtx.attempt.appointmentId,
               reason
             );
+          }}
+        />
+      )}
+
+      {markCompleteRetroCtx && (
+        <MarkCompletedRetroModal
+          open
+          onClose={() => setMarkCompleteRetroCtx(null)}
+          patientId={markCompleteRetroCtx.item.patientId}
+          stepLabel={markCompleteRetroCtx.item.stepLabel ?? markCompleteRetroCtx.item.nextStep}
+          excludeAppointmentIds={markCompleteRetroCtx.excludeAppointmentIds}
+          onConfirm={async (payload) => {
+            await handleConfirmMarkCompleteRetro(markCompleteRetroCtx.item, payload);
           }}
         />
       )}

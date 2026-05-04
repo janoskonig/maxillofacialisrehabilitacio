@@ -92,7 +92,24 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
   const episodeId = params.id;
   const workPhaseId = params.workPhaseId;
   const body = await req.json();
-  const { status: newStatus, reason, defaultDaysOffset, durationMinutes, customLabel } = body;
+  const {
+    status: newStatus,
+    reason,
+    defaultDaysOffset,
+    durationMinutes,
+    customLabel,
+    /**
+     * Utólagos teljesítés: a kliensk megadhatja, mikor készült el ténylegesen
+     * a fázis (pl. egy régebbi foglalt időpont alapján). Ha hiányzik vagy
+     * újranyitásnál nem alkalmazandó, esik vissza a CURRENT_TIMESTAMP-re.
+     */
+    completedAt: completedAtRaw,
+    /**
+     * Opcionális: melyik régebbi appointment alapján rögzítjük a teljesítést
+     * (audit / nyomonkövetés). FK-ja az appointments táblára mutat.
+     */
+    appointmentId: completedAppointmentId,
+  } = body;
 
   const pool = getDbPool();
 
@@ -241,14 +258,82 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
         );
       }
 
-      const completedAt =
-        newStatus === 'skipped' || newStatus === 'completed' ? new Date().toISOString() : null;
+      // `completedAt` opcionális override — utólagos teljesítésnél (pl. ha egy
+      // régebbi foglalt időpontnál készült el a fázis) a kliens megadhatja.
+      // Validáljuk: érvényes ISO és nem jövőbeli. Ha hiányzik vagy érvénytelen,
+      // marad a CURRENT_TIMESTAMP fallback.
+      let completedAt: string | null = null;
+      if (newStatus === 'skipped' || newStatus === 'completed') {
+        completedAt = new Date().toISOString();
+        if (newStatus === 'completed' && typeof completedAtRaw === 'string' && completedAtRaw.length > 0) {
+          const parsed = new Date(completedAtRaw);
+          if (Number.isNaN(parsed.getTime())) {
+            await pool.query('ROLLBACK');
+            return NextResponse.json(
+              { error: 'completedAt érvénytelen dátum (ISO szöveg szükséges).' },
+              { status: 400 }
+            );
+          }
+          if (parsed.getTime() > Date.now() + 60_000) {
+            await pool.query('ROLLBACK');
+            return NextResponse.json(
+              { error: 'completedAt nem lehet jövőbeli időpont.' },
+              { status: 400 }
+            );
+          }
+          completedAt = parsed.toISOString();
+        }
+      }
 
-      await pool.query(`UPDATE episode_work_phases SET status = $1, completed_at = $2 WHERE id = $3`, [
-        newStatus,
-        completedAt,
-        workPhaseId,
-      ]);
+      // Opcionális: a megadott korábbi appointment-et kötjük az episode_work_phases-hoz
+      // (a meglévő appointment_id mező). Egyezzen a beteg + ne legyen jövőbeli, és
+      // hagyjuk érintetlenül, ha nem lett megadva (pl. egyéni dátum esetén).
+      let appointmentIdForLink: string | null | undefined = undefined;
+      if (newStatus === 'completed' && typeof completedAppointmentId === 'string' && completedAppointmentId.length > 0) {
+        const apptCheck = await pool.query(
+          `SELECT a.id, a.patient_id, ats.start_time
+           FROM appointments a
+           JOIN available_time_slots ats ON a.time_slot_id = ats.id
+           WHERE a.id = $1`,
+          [completedAppointmentId]
+        );
+        if (apptCheck.rows.length === 0) {
+          await pool.query('ROLLBACK');
+          return NextResponse.json(
+            { error: 'A megadott appointment nem található.' },
+            { status: 400 }
+          );
+        }
+        const epPatient = await pool.query(
+          `SELECT patient_id FROM patient_episodes WHERE id = $1`,
+          [episodeId]
+        );
+        if (
+          epPatient.rows.length === 0 ||
+          epPatient.rows[0].patient_id !== apptCheck.rows[0].patient_id
+        ) {
+          await pool.query('ROLLBACK');
+          return NextResponse.json(
+            { error: 'A megadott appointment nem ehhez a beteghez tartozik.' },
+            { status: 400 }
+          );
+        }
+        appointmentIdForLink = completedAppointmentId;
+      }
+
+      if (appointmentIdForLink !== undefined) {
+        await pool.query(
+          `UPDATE episode_work_phases
+           SET status = $1, completed_at = $2, appointment_id = $3
+           WHERE id = $4`,
+          [newStatus, completedAt, appointmentIdForLink, workPhaseId]
+        );
+      } else {
+        await pool.query(
+          `UPDATE episode_work_phases SET status = $1, completed_at = $2 WHERE id = $3`,
+          [newStatus, completedAt, workPhaseId]
+        );
+      }
 
       await pool.query(
         `INSERT INTO episode_work_phase_audit (episode_work_phase_id, episode_id, old_status, new_status, changed_by, reason)
