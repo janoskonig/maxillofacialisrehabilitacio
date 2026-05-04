@@ -29,6 +29,33 @@ type SessionSummary = {
 
 type SessionAttendee = { id: string; name: string; present: boolean };
 
+type InvitationStatusRow = {
+  id: string;
+  attendeeId: string;
+  attendeeName: string;
+  attendeeEmail: string;
+  sentAt: string | null;
+  revokedAt: string | null;
+  respondedAt: string | null;
+  response: 'going' | 'late' | 'reschedule' | null;
+  proposedAt: string | null;
+  proposedNote: string | null;
+};
+
+function rsvpResponseLabelHu(r: InvitationStatusRow['response']): string {
+  if (r === 'going') return 'Ott leszek';
+  if (r === 'late') return 'Kések';
+  if (r === 'reschedule') return 'Máskor lenne jó';
+  return 'Még nem válaszolt';
+}
+
+function rsvpResponseBadgeClass(r: InvitationStatusRow['response']): string {
+  if (r === 'going') return 'bg-emerald-100 text-emerald-900 border-emerald-200';
+  if (r === 'late') return 'bg-amber-100 text-amber-900 border-amber-200';
+  if (r === 'reschedule') return 'bg-indigo-100 text-indigo-900 border-indigo-200';
+  return 'bg-gray-100 text-gray-700 border-gray-200';
+}
+
 type PatientHit = {
   id: string;
   nev?: string | null;
@@ -792,6 +819,12 @@ export default function ConsiliumPage() {
     patientName: string;
   } | null>(null);
 
+  const [invitations, setInvitations] = useState<InvitationStatusRow[]>([]);
+  const [loadingInvitations, setLoadingInvitations] = useState(false);
+  const [sendingInvitations, setSendingInvitations] = useState(false);
+  const [invitationNote, setInvitationNote] = useState('');
+  const [invitationsExpanded, setInvitationsExpanded] = useState(false);
+
   const loadSessions = useCallback(async () => {
     setLoadingSessions(true);
     try {
@@ -849,11 +882,60 @@ export default function ConsiliumPage() {
     [showToast],
   );
 
+  const loadInvitations = useCallback(
+    async (sessionId: string) => {
+      setLoadingInvitations(true);
+      try {
+        const res = await fetch(`/api/consilium/sessions/${sessionId}/invitations`, {
+          credentials: 'include',
+        });
+        if (!res.ok) throw new Error('invitations_failed');
+        const data = (await res.json()) as { invitations?: InvitationStatusRow[] };
+        setInvitations(Array.isArray(data.invitations) ? data.invitations : []);
+      } catch {
+        setInvitations([]);
+      } finally {
+        setLoadingInvitations(false);
+      }
+    },
+    [],
+  );
+
   const availableInstitutionUsers = useMemo(() => {
     if (!sessionDetail) return [];
     const taken = new Set(sessionDetail.attendees.map((a) => a.id));
     return institutionUsers.filter((u) => !taken.has(u.id));
   }, [sessionDetail, institutionUsers]);
+
+  const activeInvitationsByAttendeeId = useMemo(() => {
+    const m = new Map<string, InvitationStatusRow>();
+    for (const inv of invitations) {
+      if (inv.revokedAt) continue;
+      m.set(inv.attendeeId, inv);
+    }
+    return m;
+  }, [invitations]);
+
+  const invitationSummary = useMemo(() => {
+    const attendees = sessionDetail?.attendees ?? [];
+    let going = 0;
+    let late = 0;
+    let reschedule = 0;
+    let pending = 0;
+    let notInvited = 0;
+    for (const a of attendees) {
+      const inv = activeInvitationsByAttendeeId.get(a.id);
+      if (!inv || !inv.sentAt) {
+        notInvited += 1;
+        continue;
+      }
+      if (inv.response === 'going') going += 1;
+      else if (inv.response === 'late') late += 1;
+      else if (inv.response === 'reschedule') reschedule += 1;
+      else pending += 1;
+    }
+    return { going, late, reschedule, pending, notInvited, total: attendees.length };
+  }, [sessionDetail, activeInvitationsByAttendeeId]);
 
   const draftTransferTargets = useMemo(() => {
     return sessions.filter((s) => s.status === 'draft' && s.id !== selectedSessionId);
@@ -898,11 +980,16 @@ export default function ConsiliumPage() {
     if (!selectedSessionId) {
       setItems([]);
       setSessionDetail(null);
+      setInvitations([]);
+      setInvitationsExpanded(false);
+      setInvitationNote('');
       return;
     }
     setSessionDetail(null);
+    setInvitations([]);
     loadItems(selectedSessionId);
-  }, [selectedSessionId, loadItems]);
+    loadInvitations(selectedSessionId);
+  }, [selectedSessionId, loadItems, loadInvitations]);
 
   useEffect(() => {
     return () => clearTimeout(searchDebounceRef.current);
@@ -989,6 +1076,57 @@ export default function ConsiliumPage() {
       showToast('Alkalom törölve', 'success');
     } catch {
       showToast('Törlés sikertelen', 'error');
+    }
+  };
+
+  const sendInvitations = async (
+    options: {
+      attendeeIds?: string[];
+      regenerate?: boolean;
+      successLabel?: string;
+    } = {},
+  ) => {
+    if (!selectedSessionId || sendingInvitations) return;
+    setSendingInvitations(true);
+    try {
+      const res = await fetch(
+        `/api/consilium/sessions/${selectedSessionId}/invitations/send`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...(options.attendeeIds ? { attendeeIds: options.attendeeIds } : {}),
+            ...(invitationNote.trim() ? { note: invitationNote.trim() } : {}),
+            ...(options.regenerate ? { regenerate: true } : {}),
+          }),
+        },
+      );
+      const data = (await res.json().catch(() => ({}))) as {
+        sentCount?: number;
+        totalCount?: number;
+        error?: string;
+        results?: Array<{ skipReason?: string }>;
+      };
+      if (!res.ok) {
+        showToast(data.error || 'Meghívók kiküldése sikertelen', 'error');
+        return;
+      }
+      const sent = data.sentCount ?? 0;
+      const total = data.totalCount ?? sent;
+      const skipped = total - sent;
+      const baseLabel = options.successLabel || 'Meghívók kiküldve';
+      showToast(
+        skipped > 0
+          ? `${baseLabel}: ${sent}/${total} (${skipped} kihagyva)`
+          : `${baseLabel}: ${sent}/${total}`,
+        sent > 0 ? 'success' : 'error',
+      );
+      await loadInvitations(selectedSessionId);
+    } catch {
+      showToast('Hálózati hiba a meghívók kiküldésekor', 'error');
+    } finally {
+      setSendingInvitations(false);
     }
   };
 
@@ -1345,6 +1483,177 @@ export default function ConsiliumPage() {
                         onChange={(next) => void saveAttendees(next)}
                       />
                     ) : null}
+                </div>
+              )}
+
+              {selectedSession && sessionDetail && (
+                <div className="rounded-lg border border-cyan-100 bg-cyan-50/40 p-3 space-y-2">
+                  <div className="flex items-start justify-between gap-2 flex-wrap">
+                    <div className="min-w-0">
+                      <h4 className="text-sm font-semibold text-gray-900 inline-flex items-center gap-1.5">
+                        <Mail className="w-4 h-4 text-cyan-700" /> Meghívók és RSVP
+                      </h4>
+                      <p className="text-xs text-gray-600 mt-0.5">
+                        Email-meghívót küld a jelenlévőknek. A címzettek a levélből egy kattintással
+                        jelezhetik: <em>Ott leszek</em> / <em>Kések</em> / <em>Máskor lenne jó</em>.
+                      </p>
+                    </div>
+                    {selectedSession.status !== 'closed' && sessionDetail.attendees.length > 0 && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          className="btn-primary text-xs px-3 py-1.5 inline-flex items-center gap-1.5 disabled:opacity-50"
+                          disabled={sendingInvitations}
+                          onClick={() =>
+                            void sendInvitations({
+                              successLabel: 'Meghívók kiküldve',
+                            })
+                          }
+                          title="Email-meghívót küld minden jelenlévőnek; aki már kapott, ugyanazt a linket kapja újra (RSVP nem vész el)."
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          {sendingInvitations ? 'Küldés…' : 'Meghívók kiküldése'}
+                        </button>
+                        <button
+                          type="button"
+                          className="text-xs text-gray-700 hover:underline"
+                          onClick={() => setInvitationsExpanded((v) => !v)}
+                        >
+                          {invitationsExpanded ? 'Kevesebb' : 'Részletek'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {sessionDetail.attendees.length === 0 ? (
+                    <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded px-2 py-1.5">
+                      Adj hozzá legalább egy jelenlévőt, mielőtt meghívót küldenél.
+                    </p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5 text-[11px]">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-emerald-900">
+                        Ott leszek: <strong>{invitationSummary.going}</strong>
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-amber-900">
+                        Kések: <strong>{invitationSummary.late}</strong>
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-indigo-900">
+                        Máskor: <strong>{invitationSummary.reschedule}</strong>
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-2 py-0.5 text-gray-700">
+                        Még nem válaszolt: <strong>{invitationSummary.pending}</strong>
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-gray-600">
+                        Nincs meghívó: <strong>{invitationSummary.notInvited}</strong>
+                      </span>
+                    </div>
+                  )}
+
+                  {invitationsExpanded && (
+                    <div className="space-y-2 pt-2 border-t border-cyan-100">
+                      {selectedSession.status !== 'closed' && (
+                        <div>
+                          <label className="text-[11px] uppercase tracking-wide text-gray-500">
+                            Üzenet a meghívóhoz (opcionális)
+                          </label>
+                          <textarea
+                            className="form-input mt-1 w-full min-h-[60px] text-sm"
+                            placeholder="Pár szó a meghívottaknak (pl. mi a téma, miért fontos)…"
+                            value={invitationNote}
+                            maxLength={1000}
+                            onChange={(e) => setInvitationNote(e.target.value)}
+                          />
+                          <p className="text-[11px] text-gray-400 text-right">
+                            {invitationNote.length}/1000
+                          </p>
+                        </div>
+                      )}
+
+                      {loadingInvitations && invitations.length === 0 ? (
+                        <p className="text-xs text-gray-500">Meghívók betöltése…</p>
+                      ) : (
+                        <ul className="divide-y divide-cyan-100 rounded-md border border-cyan-100 bg-white">
+                          {sessionDetail.attendees.map((a) => {
+                            const inv = activeInvitationsByAttendeeId.get(a.id);
+                            const responded = inv?.respondedAt ? inv.response : null;
+                            const sent = !!inv?.sentAt;
+                            return (
+                              <li key={a.id} className="px-3 py-2 flex items-start gap-2 text-sm">
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-medium text-gray-900 truncate">{a.name}</p>
+                                  {inv?.attendeeEmail && (
+                                    <p className="text-[11px] text-gray-500 truncate">
+                                      {inv.attendeeEmail}
+                                    </p>
+                                  )}
+                                  {sent && inv && (
+                                    <p className="text-[11px] text-gray-500 mt-0.5">
+                                      Küldve: {new Date(inv.sentAt!).toLocaleString('hu-HU')}
+                                      {inv.respondedAt
+                                        ? ` · Válaszolt: ${new Date(inv.respondedAt).toLocaleString('hu-HU')}`
+                                        : ''}
+                                    </p>
+                                  )}
+                                  {inv?.response === 'reschedule' && inv.proposedAt && (
+                                    <p className="text-[11px] text-indigo-800 mt-0.5">
+                                      Javasolt időpont:{' '}
+                                      <strong>
+                                        {new Date(inv.proposedAt).toLocaleString('hu-HU', {
+                                          dateStyle: 'medium',
+                                          timeStyle: 'short',
+                                        })}
+                                      </strong>
+                                      {inv.proposedNote ? ` — „${inv.proposedNote}”` : ''}
+                                    </p>
+                                  )}
+                                </div>
+                                <span
+                                  className={`shrink-0 text-[10px] font-medium px-2 py-0.5 rounded border ${rsvpResponseBadgeClass(
+                                    responded ?? null,
+                                  )}`}
+                                >
+                                  {sent
+                                    ? rsvpResponseLabelHu(responded ?? null)
+                                    : 'Nincs meghívó'}
+                                </span>
+                                {sent && selectedSession.status !== 'closed' && (
+                                  <button
+                                    type="button"
+                                    disabled={sendingInvitations}
+                                    className="shrink-0 text-[11px] text-cyan-800 hover:underline disabled:opacity-40"
+                                    onClick={() =>
+                                      void sendInvitations({
+                                        attendeeIds: [a.id],
+                                        successLabel: 'Meghívó újraküldve',
+                                      })
+                                    }
+                                    title="Ugyanazt a linket küldjük újra; az addigi RSVP válasz megmarad."
+                                  >
+                                    Újraküld
+                                  </button>
+                                )}
+                                {!sent && selectedSession.status !== 'closed' && (
+                                  <button
+                                    type="button"
+                                    disabled={sendingInvitations}
+                                    className="shrink-0 text-[11px] text-cyan-800 hover:underline disabled:opacity-40"
+                                    onClick={() =>
+                                      void sendInvitations({
+                                        attendeeIds: [a.id],
+                                        successLabel: 'Meghívó kiküldve',
+                                      })
+                                    }
+                                  >
+                                    Küldés
+                                  </button>
+                                )}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
