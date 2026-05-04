@@ -26,66 +26,12 @@ export type PrepTokenResolution = {
   sessionStatus: SessionStatus;
 };
 
-export async function resolvePrepTokenForUser(
-  rawToken: string,
-  userInstitutionId: string,
-): Promise<PrepTokenResolution | null> {
-  const pool = getDbPool();
-  const hash = hashConsiliumPrepToken(rawToken.trim());
-  const r = await pool.query<{
-    sessionId: string;
-    itemId: string;
-    institutionId: string;
-    status: string;
-  }>(
-    `SELECT t.session_id as "sessionId", t.item_id as "itemId", s.institution_id as "institutionId", s.status
-     FROM consilium_item_prep_tokens t
-     JOIN consilium_sessions s ON s.id = t.session_id
-     JOIN consilium_session_items i ON i.id = t.item_id AND i.session_id = t.session_id
-     WHERE t.token_hash = $1
-       AND t.revoked_at IS NULL
-       AND btrim(coalesce(s.institution_id, '')) = btrim(coalesce($2::text, ''))`,
-    [hash, userInstitutionId],
-  );
-  if (r.rows.length === 0) return null;
-  const row = r.rows[0];
-  const st = row.status as SessionStatus;
-  if (st !== 'draft' && st !== 'active' && st !== 'closed') {
-    return null;
-  }
-  return {
-    sessionId: row.sessionId,
-    itemId: row.itemId,
-    institutionId: row.institutionId,
-    sessionStatus: st,
-  };
-}
-
-export async function assertPrepTokenOrThrow(
-  rawToken: string,
-  userInstitutionId: string,
-): Promise<PrepTokenResolution> {
-  const x = await resolvePrepTokenForUser(rawToken, userInstitutionId);
-  if (!x) {
-    throw new HttpError(404, 'Érvénytelen vagy lejárt előkészítő link', 'PREP_TOKEN_INVALID');
-  }
-  return x;
-}
-
-export type PrepTokenPreviewState =
-  | { state: 'ok'; sessionId: string; itemId: string; institutionId: string; sessionStatus: SessionStatus }
-  | { state: 'not_found' }
-  | { state: 'institution_mismatch' };
-
 /**
- * Az üzenet-kártya preview-jához használt feloldás: nem dob hibát, hanem
- * jelzi, hogy a token egyáltalán létezik-e, és ha igen, a felhasználó intézménye
- * megegyezik-e. Így a kártya finoman jelezni tudja a hozzáférés hiányát.
+ * A token önmagában ad hozzáférést — bárki, akinek bejelentkezése van és a token a kezében,
+ * megnyithatja az előkészítőt. Az intézmény-egyezést nem ellenőrizzük (a megosztó
+ * felhasználó vállalja a felelősséget azért, akinek a linket küldi).
  */
-export async function resolvePrepTokenPreviewState(
-  rawToken: string,
-  userInstitutionId: string,
-): Promise<PrepTokenPreviewState> {
+export async function resolvePrepToken(rawToken: string): Promise<PrepTokenResolution | null> {
   const pool = getDbPool();
   const hash = hashConsiliumPrepToken(rawToken.trim());
   const r = await pool.query<{
@@ -102,23 +48,48 @@ export async function resolvePrepTokenPreviewState(
        AND t.revoked_at IS NULL`,
     [hash],
   );
-  if (r.rows.length === 0) return { state: 'not_found' };
+  if (r.rows.length === 0) return null;
   const row = r.rows[0];
   const st = row.status as SessionStatus;
   if (st !== 'draft' && st !== 'active' && st !== 'closed') {
-    return { state: 'not_found' };
-  }
-  const userInst = (userInstitutionId || '').trim();
-  const sessionInst = (row.institutionId || '').trim();
-  if (userInst !== sessionInst) {
-    return { state: 'institution_mismatch' };
+    return null;
   }
   return {
-    state: 'ok',
     sessionId: row.sessionId,
     itemId: row.itemId,
     institutionId: row.institutionId,
     sessionStatus: st,
+  };
+}
+
+export async function assertPrepTokenOrThrow(rawToken: string): Promise<PrepTokenResolution> {
+  const x = await resolvePrepToken(rawToken);
+  if (!x) {
+    throw new HttpError(404, 'Érvénytelen vagy lejárt előkészítő link', 'PREP_TOKEN_INVALID');
+  }
+  return x;
+}
+
+export type PrepTokenPreviewState =
+  | { state: 'ok'; sessionId: string; itemId: string; institutionId: string; sessionStatus: SessionStatus }
+  | { state: 'not_found' };
+
+/**
+ * Az üzenet-kártya preview-jához használt feloldás: nem dob hibát, hanem
+ * `not_found`-ot ad vissza, ha a token érvénytelen vagy visszavont — így a kártya
+ * finoman tudja jelezni az előkészítő elérhetetlenségét.
+ */
+export async function resolvePrepTokenPreviewState(
+  rawToken: string,
+): Promise<PrepTokenPreviewState> {
+  const r = await resolvePrepToken(rawToken);
+  if (!r) return { state: 'not_found' };
+  return {
+    state: 'ok',
+    sessionId: r.sessionId,
+    itemId: r.itemId,
+    institutionId: r.institutionId,
+    sessionStatus: r.sessionStatus,
   };
 }
 

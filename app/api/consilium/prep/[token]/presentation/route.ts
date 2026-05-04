@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { authedHandler } from '@/lib/api/route-handler';
 import { assertPrepTokenOrThrow, listPrepCommentsForItem } from '@/lib/consilium-prep-share';
 import { buildConsiliumPresentationItemPayload } from '@/lib/consilium-presentation';
-import { getUserInstitution } from '@/lib/consilium';
 import { logActivity } from '@/lib/activity';
 
 export const dynamic = 'force-dynamic';
@@ -13,10 +12,9 @@ export const GET = authedHandler(async (req, { auth, params }) => {
     return NextResponse.json({ error: 'Hiányzó token' }, { status: 400 });
   }
 
-  const institutionId = await getUserInstitution(auth);
-  const prep = await assertPrepTokenOrThrow(rawToken, institutionId);
+  const prep = await assertPrepTokenOrThrow(rawToken);
 
-  const payload = await buildConsiliumPresentationItemPayload(prep.sessionId, institutionId, prep.itemId);
+  const payload = await buildConsiliumPresentationItemPayload(prep.sessionId, prep.institutionId, prep.itemId);
   if (!payload) {
     return NextResponse.json({ error: 'Előkészítő adat nem tölthető' }, { status: 404 });
   }

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowDown, ArrowLeft, ArrowUp, CalendarClock, Plus, Presentation, Send, Trash2, Users } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowUp, CalendarClock, Mail, Plus, Presentation, Send, Trash2, Users } from 'lucide-react';
 import { getCurrentUser, type AuthUser } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
 import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
@@ -1547,7 +1547,7 @@ export default function ConsiliumPage() {
           itemId={shareModalState.itemId}
           patientName={shareModalState.patientName}
           currentUserId={user?.id}
-          currentInstitution={user?.intezmeny ?? null}
+          currentEmail={user?.email}
         />
       )}
 

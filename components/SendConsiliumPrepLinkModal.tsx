@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { Loader2, Send, Users, X } from 'lucide-react';
+import { Loader2, Mail, Send, Users, X } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
 
 type InstitutionUser = {
@@ -12,11 +12,9 @@ type InstitutionUser = {
   intezmeny?: string | null;
 };
 
-type SelectedRecipient = {
-  id: string;
-  displayName: string;
-  email: string;
-};
+type SelectedRecipient =
+  | { kind: 'user'; id: string; displayName: string; email: string; intezmeny: string | null }
+  | { kind: 'email'; email: string };
 
 interface SendConsiliumPrepLinkModalProps {
   isOpen: boolean;
@@ -26,11 +24,12 @@ interface SendConsiliumPrepLinkModalProps {
   patientName: string;
   /** Saját felhasználói azonosító — ne lehessen önmagunknak küldeni. */
   currentUserId?: string;
-  /** Saját intézmény — szűréshez (csak azonos intézményű kollégák tudják megnyitni a linket). */
-  currentInstitution?: string | null;
+  /** Saját email — szűréshez (ne küldjük magunknak). */
+  currentEmail?: string;
 }
 
 const NOTE_MAX = 1000;
+const EMAIL_REGEX = /^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$/;
 
 function userDisplayName(u: { doktorNeve: string | null; email: string }): string {
   return (u.doktorNeve && u.doktorNeve.trim()) || u.email;
@@ -53,7 +52,7 @@ export function SendConsiliumPrepLinkModal({
   itemId,
   patientName,
   currentUserId,
-  currentInstitution,
+  currentEmail,
 }: SendConsiliumPrepLinkModalProps) {
   const { showToast } = useToast();
   const [users, setUsers] = useState<InstitutionUser[]>([]);
@@ -88,21 +87,47 @@ export function SendConsiliumPrepLinkModal({
     }
   }, [isOpen]);
 
-  const eligibleUsers = useMemo(() => {
-    const inst = (currentInstitution || '').trim();
-    return users.filter((u) => {
-      if (currentUserId && u.id === currentUserId) return false;
-      if (!inst) return true;
-      return (u.intezmeny || '').trim() === inst;
-    });
-  }, [users, currentUserId, currentInstitution]);
+  const eligibleUsers = useMemo(
+    () => users.filter((u) => !currentUserId || u.id !== currentUserId),
+    [users, currentUserId],
+  );
+
+  const selfEmailLower = (currentEmail || '').trim().toLowerCase();
 
   const filtered = useMemo(() => {
     const t = q.trim();
     if (!t) return [];
-    const takenIds = new Set(selected.map((s) => s.id));
-    return eligibleUsers.filter((u) => !takenIds.has(u.id) && pickerMatches(u, t)).slice(0, 30);
+    const takenIds = new Set(
+      selected.filter((s) => s.kind === 'user').map((s) => (s as { id: string }).id),
+    );
+    const takenEmails = new Set(
+      selected
+        .filter((s) => s.kind === 'email')
+        .map((s) => (s as { email: string }).email.toLowerCase()),
+    );
+    return eligibleUsers
+      .filter(
+        (u) =>
+          !takenIds.has(u.id) &&
+          !takenEmails.has(u.email.toLowerCase()) &&
+          pickerMatches(u, t),
+      )
+      .slice(0, 30);
   }, [q, eligibleUsers, selected]);
+
+  /** Az aktuális keresőkifejezés érvényes e-mail-cím, ami még nincs hozzáadva? */
+  const queryAsEmailCandidate = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    if (!t || !EMAIL_REGEX.test(t)) return null;
+    if (t === selfEmailLower) return null;
+    const alreadySelectedEmail = selected.some(
+      (s) =>
+        (s.kind === 'email' && s.email.toLowerCase() === t) ||
+        (s.kind === 'user' && s.email.toLowerCase() === t),
+    );
+    if (alreadySelectedEmail) return null;
+    return t;
+  }, [q, selected, selfEmailLower]);
 
   useEffect(() => {
     setHighlight(0);
@@ -117,18 +142,44 @@ export function SendConsiliumPrepLinkModal({
     return () => document.removeEventListener('mousedown', onDoc);
   }, [open]);
 
-  const pick = (u: InstitutionUser) => {
+  const pickUser = (u: InstitutionUser) => {
     setSelected((prev) =>
-      prev.some((s) => s.id === u.id)
+      prev.some((s) => s.kind === 'user' && s.id === u.id)
         ? prev
-        : [...prev, { id: u.id, displayName: userDisplayName(u), email: u.email }],
+        : [
+            ...prev,
+            {
+              kind: 'user',
+              id: u.id,
+              displayName: userDisplayName(u),
+              email: u.email,
+              intezmeny: u.intezmeny ?? null,
+            },
+          ],
     );
     setQ('');
     setOpen(false);
   };
 
-  const removeSelected = (id: string) => {
-    setSelected((prev) => prev.filter((s) => s.id !== id));
+  const pickEmail = (rawEmail: string) => {
+    const email = rawEmail.trim().toLowerCase();
+    if (!email || !EMAIL_REGEX.test(email)) return;
+    if (email === selfEmailLower) return;
+    setSelected((prev) =>
+      prev.some(
+        (s) =>
+          (s.kind === 'email' && s.email === email) ||
+          (s.kind === 'user' && s.email.toLowerCase() === email),
+      )
+        ? prev
+        : [...prev, { kind: 'email', email }],
+    );
+    setQ('');
+    setOpen(false);
+  };
+
+  const removeSelected = (idx: number) => {
+    setSelected((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -140,22 +191,35 @@ export function SendConsiliumPrepLinkModal({
       return;
     }
     if (!q.trim()) return;
-    if (!open && (e.key === 'ArrowDown' || e.key === 'Enter') && filtered.length > 0) {
-      e.preventDefault();
-      setOpen(true);
-      if (e.key === 'Enter') pick(filtered[0]);
-      return;
+    if (!open && (e.key === 'ArrowDown' || e.key === 'Enter')) {
+      if (filtered.length > 0) {
+        e.preventDefault();
+        setOpen(true);
+        if (e.key === 'Enter') pickUser(filtered[0]);
+        return;
+      }
+      if (queryAsEmailCandidate && e.key === 'Enter') {
+        e.preventDefault();
+        pickEmail(queryAsEmailCandidate);
+        return;
+      }
     }
-    if (!open || filtered.length === 0) return;
+    if (!open || (filtered.length === 0 && !queryAsEmailCandidate)) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setHighlight((h) => Math.min(h + 1, filtered.length - 1));
+      setHighlight((h) =>
+        Math.min(h + 1, Math.max(0, filtered.length - 1 + (queryAsEmailCandidate ? 1 : 0))),
+      );
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setHighlight((h) => Math.max(h - 1, 0));
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      pick(filtered[highlight]);
+      if (highlight < filtered.length) {
+        pickUser(filtered[highlight]);
+      } else if (queryAsEmailCandidate) {
+        pickEmail(queryAsEmailCandidate);
+      }
     }
   };
 
@@ -163,6 +227,13 @@ export function SendConsiliumPrepLinkModal({
     if (selected.length === 0 || sending) return;
     setSending(true);
     try {
+      const recipientIds = selected
+        .filter((s) => s.kind === 'user')
+        .map((s) => (s as { id: string }).id);
+      const recipientEmails = selected
+        .filter((s) => s.kind === 'email')
+        .map((s) => (s as { email: string }).email);
+
       const res = await fetch(
         `/api/consilium/sessions/${sessionId}/items/${itemId}/prep-link/share`,
         {
@@ -170,7 +241,8 @@ export function SendConsiliumPrepLinkModal({
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            recipientIds: selected.map((s) => s.id),
+            recipientIds: recipientIds.length > 0 ? recipientIds : undefined,
+            recipientEmails: recipientEmails.length > 0 ? recipientEmails : undefined,
             note: note.trim() ? note.trim() : undefined,
           }),
         },
@@ -183,22 +255,16 @@ export function SendConsiliumPrepLinkModal({
         );
         return;
       }
-      const sentCount: number = (data as { sentCount?: number })?.sentCount ?? selected.length;
-      const skipped: string[] = Array.isArray((data as { skippedMismatchInstitution?: string[] })?.skippedMismatchInstitution)
-        ? ((data as { skippedMismatchInstitution: string[] }).skippedMismatchInstitution)
-        : [];
-      if (sentCount === 0) {
+      const sentInApp: number = (data as { sentInAppCount?: number })?.sentInAppCount ?? 0;
+      const sentEmail: number = (data as { sentEmailCount?: number })?.sentEmailCount ?? 0;
+      if (sentInApp + sentEmail === 0) {
         showToast('Egy címzettnek sem sikerült kiküldeni', 'error');
         return;
       }
-      const skippedSuffix =
-        skipped.length > 0 ? ` (${skipped.length} címzett intézménye nem egyezik, kihagyva)` : '';
-      showToast(
-        sentCount === 1
-          ? `Előkészítő link kiküldve 1 címzettnek${skippedSuffix}`
-          : `Előkészítő link kiküldve ${sentCount} címzettnek${skippedSuffix}`,
-        'success',
-      );
+      const parts: string[] = [];
+      if (sentInApp > 0) parts.push(`${sentInApp} üzenet a rendszerben`);
+      if (sentEmail > 0) parts.push(`${sentEmail} e-mail kiküldve`);
+      showToast(`Előkészítő link kiküldve — ${parts.join(' · ')}`, 'success');
       onClose();
     } catch {
       showToast('Hálózati hiba a küldéskor', 'error');
@@ -246,36 +312,54 @@ export function SendConsiliumPrepLinkModal({
           <div ref={rootRef} className="relative space-y-2">
             <label className="text-xs font-medium text-gray-700">Címzett(ek)</label>
             <div className="flex flex-wrap gap-1.5 items-center min-h-[42px] p-2 rounded-md border border-gray-200 bg-white focus-within:border-cyan-400 focus-within:ring-1 focus-within:ring-cyan-200">
-              {selected.map((s) => (
-                <span
-                  key={s.id}
-                  className="inline-flex items-center gap-1 max-w-full rounded-full border border-cyan-200 bg-cyan-50 pl-2 pr-0.5 py-0.5 text-xs text-cyan-900"
-                >
-                  <span className="truncate max-w-[200px]" title={s.email}>
-                    {s.displayName}
-                  </span>
-                  <button
-                    type="button"
-                    className="rounded-full px-1 leading-none text-cyan-700 hover:bg-cyan-100"
-                    onClick={() => removeSelected(s.id)}
-                    aria-label="Eltávolítás"
+              {selected.map((s, idx) => {
+                if (s.kind === 'user') {
+                  return (
+                    <span
+                      key={`u-${s.id}`}
+                      className="inline-flex items-center gap-1 max-w-full rounded-full border border-cyan-200 bg-cyan-50 pl-2 pr-0.5 py-0.5 text-xs text-cyan-900"
+                      title={s.email}
+                    >
+                      <span className="truncate max-w-[200px]">{s.displayName}</span>
+                      <button
+                        type="button"
+                        className="rounded-full px-1 leading-none text-cyan-700 hover:bg-cyan-100"
+                        onClick={() => removeSelected(idx)}
+                        aria-label="Eltávolítás"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  );
+                }
+                return (
+                  <span
+                    key={`e-${s.email}`}
+                    className="inline-flex items-center gap-1 max-w-full rounded-full border border-amber-200 bg-amber-50 pl-2 pr-0.5 py-0.5 text-xs text-amber-900"
+                    title="Külső e-mail cím — csak e-mail értesítést kap"
                   >
-                    ×
-                  </button>
-                </span>
-              ))}
+                    <Mail className="w-3 h-3" />
+                    <span className="truncate max-w-[200px]">{s.email}</span>
+                    <button
+                      type="button"
+                      className="rounded-full px-1 leading-none text-amber-700 hover:bg-amber-100"
+                      onClick={() => removeSelected(idx)}
+                      aria-label="Eltávolítás"
+                    >
+                      ×
+                    </button>
+                  </span>
+                );
+              })}
               <input
                 type="text"
                 className="flex-1 min-w-[8rem] border-0 bg-transparent p-1 text-sm outline-none focus:ring-0 placeholder:text-gray-400"
                 placeholder={
                   usersLoading
                     ? 'Felhasználók betöltése…'
-                    : eligibleUsers.length === 0
-                      ? 'Nincs küldhető címzett az intézményben'
-                      : 'Kezdj gépelni: név vagy e-mail…'
+                    : 'Név vagy e-mail cím — Enter hozzáadja'
                 }
                 value={q}
-                disabled={eligibleUsers.length === 0 && !usersLoading}
                 onChange={(e) => {
                   const v = e.target.value;
                   setQ(v);
@@ -289,37 +373,59 @@ export function SendConsiliumPrepLinkModal({
             </div>
             {open && q.trim() && (
               <ul className="absolute z-30 left-0 right-0 mt-0.5 max-w-lg rounded-md border border-gray-200 bg-white py-1 shadow-lg max-h-60 overflow-auto">
-                {filtered.length === 0 ? (
+                {filtered.length === 0 && !queryAsEmailCandidate ? (
                   <li className="px-3 py-2 text-xs text-gray-500">
-                    Nincs találat — próbálj más betűket.
+                    Nincs találat. Egy érvényes e-mail cím beírása után az Enter
+                    hozzáadja külső címzettként.
                   </li>
                 ) : (
-                  filtered.map((u, i) => {
-                    const org = u.intezmeny?.trim();
-                    return (
-                      <li key={u.id}>
+                  <>
+                    {filtered.map((u, i) => {
+                      const org = u.intezmeny?.trim();
+                      return (
+                        <li key={u.id}>
+                          <button
+                            type="button"
+                            className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 ${
+                              i === highlight ? 'bg-gray-50' : ''
+                            }`}
+                            onMouseEnter={() => setHighlight(i)}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => pickUser(u)}
+                          >
+                            <span className="font-medium text-gray-900">{userDisplayName(u)}</span>
+                            {org ? <span className="text-gray-500"> · {org}</span> : null}
+                            <span className="block text-[11px] text-gray-500">{u.email}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                    {queryAsEmailCandidate && (
+                      <li>
                         <button
                           type="button"
-                          className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 ${
-                            i === highlight ? 'bg-gray-50' : ''
+                          className={`w-full px-3 py-2 text-left text-sm hover:bg-amber-50 border-t border-gray-100 inline-flex items-center gap-2 ${
+                            highlight === filtered.length ? 'bg-amber-50' : ''
                           }`}
-                          onMouseEnter={() => setHighlight(i)}
+                          onMouseEnter={() => setHighlight(filtered.length)}
                           onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => pick(u)}
+                          onClick={() => pickEmail(queryAsEmailCandidate)}
                         >
-                          <span className="font-medium text-gray-900">{userDisplayName(u)}</span>
-                          {org ? <span className="text-gray-500"> · {org}</span> : null}
-                          <span className="block text-[11px] text-gray-500">{u.email}</span>
+                          <Mail className="w-3.5 h-3.5 text-amber-700" />
+                          <span className="font-medium text-amber-900">
+                            E-mail küldése: {queryAsEmailCandidate}
+                          </span>
                         </button>
                       </li>
-                    );
-                  })
+                    )}
+                  </>
                 )}
               </ul>
             )}
             <p className="text-[11px] text-gray-500">
-              Csak azonos intézményű, aktív kollégák tudják megnyitni az előkészítőt — más
-              intézményű címzetteknek a rendszer nem küldi ki a linket.
+              Aki rendszer-felhasználó, a rendszerben üzenetet és e-mailt is kap; a külső
+              e-mail címek csak e-mailt kapnak. A megnyitáshoz a címzettnek be kell
+              jelentkeznie (vagy regisztrálnia).
             </p>
           </div>
 
@@ -358,7 +464,7 @@ export function SendConsiliumPrepLinkModal({
             ) : (
               <Send className="w-4 h-4" />
             )}
-            {sending ? 'Küldés…' : 'Küldés üzenetben'}
+            {sending ? 'Küldés…' : 'Küldés'}
           </button>
         </div>
       </div>

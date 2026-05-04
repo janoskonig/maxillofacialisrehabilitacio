@@ -24,7 +24,7 @@ type PreviewPatient = {
 type PreviewResponse =
   | {
       accessible: false;
-      reason: 'invalid_token' | 'revoked_or_not_found' | 'institution_mismatch';
+      reason: 'invalid_token' | 'revoked_or_not_found';
     }
   | {
       accessible: true;
@@ -133,16 +133,11 @@ export function ConsiliumPrepMessageCard({ token }: ConsiliumPrepMessageCardProp
   }
 
   if (!preview.accessible) {
-    let title = 'Konzílium előkészítő';
-    let body = 'Az előkészítő link nem érhető el.';
-    if (preview.reason === 'institution_mismatch') {
-      body =
-        'Ez az előkészítő egy másik intézményhez tartozik, így nem nyitható meg ezzel a fiókkal.';
-    } else if (preview.reason === 'revoked_or_not_found') {
-      body = 'Az előkészítő linket visszavonták, vagy az alkalom időközben megszűnt.';
-    } else {
-      body = 'Érvénytelen előkészítő link.';
-    }
+    const title = 'Konzílium előkészítő';
+    const body =
+      preview.reason === 'revoked_or_not_found'
+        ? 'Az előkészítő linket visszavonták, vagy az alkalom időközben megszűnt.'
+        : 'Érvénytelen előkészítő link.';
     return (
       <div className="my-2 rounded-lg border border-gray-200 bg-gray-50 p-3 max-w-md">
         <div className="flex items-start gap-2">

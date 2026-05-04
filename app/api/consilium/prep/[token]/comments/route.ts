@@ -9,18 +9,16 @@ import {
   listPrepCommentsForItem,
   prepCommentBodySchema,
 } from '@/lib/consilium-prep-share';
-import { getUserInstitution } from '@/lib/consilium';
 import { logActivity } from '@/lib/activity';
 
 export const dynamic = 'force-dynamic';
 
-export const GET = authedHandler(async (_req, { auth, params }) => {
+export const GET = authedHandler(async (_req, { params }) => {
   const rawToken = decodeURIComponent(params.token ?? '');
   if (!rawToken) {
     return NextResponse.json({ error: 'Hiányzó token' }, { status: 400 });
   }
-  const institutionId = await getUserInstitution(auth);
-  const prep = await assertPrepTokenOrThrow(rawToken, institutionId);
+  const prep = await assertPrepTokenOrThrow(rawToken);
   const prepComments = await listPrepCommentsForItem(prep.itemId);
   return NextResponse.json({ prepComments });
 });
@@ -31,8 +29,7 @@ export const POST = authedHandler(async (req, { auth, params }) => {
     return NextResponse.json({ error: 'Hiányzó token' }, { status: 400 });
   }
 
-  const institutionId = await getUserInstitution(auth);
-  const prep = await assertPrepTokenOrThrow(rawToken, institutionId);
+  const prep = await assertPrepTokenOrThrow(rawToken);
 
   if (prep.sessionStatus === 'closed') {
     throw new HttpError(403, 'Lezárt alkalomhoz nem lehet hozzászólni', 'SESSION_CLOSED');

@@ -8,7 +8,6 @@ import {
   assertSessionWritableForItemFields,
   checklistAddSchema,
   getScopedSessionOrThrow,
-  getUserInstitution,
   normalizeChecklist,
 } from '@/lib/consilium';
 import { logActivity } from '@/lib/activity';
@@ -21,10 +20,9 @@ export const POST = authedHandler(async (req, { auth, params }) => {
     return NextResponse.json({ error: 'Hiányzó token' }, { status: 400 });
   }
 
-  const institutionId = await getUserInstitution(auth);
-  const prep = await assertPrepTokenOrThrow(rawToken, institutionId);
+  const prep = await assertPrepTokenOrThrow(rawToken);
 
-  const session = await getScopedSessionOrThrow(prep.sessionId, institutionId);
+  const session = await getScopedSessionOrThrow(prep.sessionId, prep.institutionId);
   assertSessionWritableForItemFields(session.status);
 
   const body = checklistAddSchema.parse(await req.json());

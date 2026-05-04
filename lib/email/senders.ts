@@ -704,6 +704,174 @@ export async function sendDoctorMessageNotification(
 }
 
 /**
+ * Konzílium előkészítő link kiküldése egy címzettnek (regisztrált felhasználó vagy
+ * szabad e-mail cím). A linket bárki megnyithatja, akinek bejelentkezése van — ezért
+ * a levél is hangsúlyozza, hogy bejelentkezés szükséges. Ha a címzett még nincs
+ * regisztrálva, a regisztrációs/bejelentkezési oldalon kell kezdenie.
+ */
+export async function sendConsiliumPrepShareEmail(
+  recipientEmail: string,
+  recipientName: string | null,
+  senderName: string | null,
+  patientName: string | null,
+  prepUrl: string,
+  baseUrl: string,
+  note: string | null,
+): Promise<void> {
+  const escapeHtml = (s: string) =>
+    s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+  let greeting = 'Tisztelt Kolléga';
+  if (recipientName) {
+    const trimmed = recipientName.trim();
+    if (trimmed) greeting = `Tisztelt ${trimmed}`;
+  }
+
+  const senderLine = senderName
+    ? `${escapeHtml(senderName)} kolléga konzílium-előkészítő linket osztott meg Önnel.`
+    : 'Egy kolléga konzílium-előkészítő linket osztott meg Önnel.';
+  const patientLine = patientName
+    ? `<p style="margin: 6px 0;"><strong>Beteg:</strong> ${escapeHtml(patientName)}</p>`
+    : '';
+  const noteBlock = note?.trim()
+    ? `<div style="margin: 16px 0; padding: 10px 12px; background:#ecfeff; border-left: 3px solid #06b6d4; color:#155e75; white-space: pre-wrap;">${escapeHtml(
+        note.trim(),
+      )}</div>`
+    : '';
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #0e7490;">Konzílium előkészítő megosztva</h2>
+      <p>${escapeHtml(greeting)}!</p>
+      <p>${senderLine}</p>
+      ${patientLine}
+      ${noteBlock}
+      <p style="margin-top: 18px;">
+        <a href="${prepUrl}" style="display:inline-block; background-color:#0e7490; color:white; padding:12px 24px; text-decoration:none; border-radius:6px; font-weight:bold;">
+          Előkészítő megnyitása
+        </a>
+      </p>
+      <p style="color:#374151; font-size: 14px; margin-top: 16px;">
+        A megnyitáshoz bejelentkezés szükséges. Ha még nincs fiókja a rendszerben,
+        a link megnyitása után regisztrálnia kell, és bejelentkezés után újra meg kell
+        nyitnia ezt a linket.
+      </p>
+      <p style="color:#6b7280; font-size: 13px; margin-top: 16px;">
+        Ha a gomb nem működik, másolja be az alábbi linket a böngészőbe:<br>
+        <a href="${prepUrl}" style="color:#0e7490;">${prepUrl}</a>
+      </p>
+      <p style="color:#9ca3af; font-size:12px; margin-top:24px;">
+        Rendszer: <a href="${baseUrl}" style="color:#9ca3af;">${baseUrl}</a>
+      </p>
+      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: recipientEmail,
+    subject: patientName
+      ? `Konzílium előkészítő – ${patientName} – Maxillofaciális Rehabilitáció`
+      : 'Konzílium előkészítő megosztva – Maxillofaciális Rehabilitáció',
+    html,
+  });
+}
+
+/**
+ * Konzílium meghívó kiküldése egy jelenlévőnek RSVP linkkel.
+ * Az RSVP oldalon a címzett három opció közül választhat: "Ott leszek",
+ * "Kések", illetve "Máskor lenne jó" — utóbbihoz dátumot/időt kell megadnia.
+ * A linket bárki megnyithatja, akinél a token van — ezért a lehető legkevesebb
+ * adatot tüntetjük fel a levélben (cím, időpont, küldő neve).
+ */
+export async function sendConsiliumInvitationEmail(
+  recipientEmail: string,
+  recipientName: string | null,
+  organizerName: string | null,
+  sessionTitle: string,
+  sessionScheduledAt: Date,
+  rsvpUrl: string,
+  baseUrl: string,
+  noteFromOrganizer: string | null,
+): Promise<void> {
+  const escapeHtml = (s: string) =>
+    s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+  let greeting = 'Tisztelt Kolléga';
+  if (recipientName) {
+    const trimmed = recipientName.trim();
+    if (trimmed) greeting = `Tisztelt ${trimmed}`;
+  }
+
+  const formattedDate = formatDateForEmail(sessionScheduledAt);
+  const organizerLine = organizerName
+    ? `${escapeHtml(organizerName)} kolléga konzíliumra hívja Önt.`
+    : 'Konzíliumra hívjuk Önt.';
+
+  const noteBlock = noteFromOrganizer?.trim()
+    ? `<div style="margin: 16px 0; padding: 10px 12px; background:#ecfeff; border-left: 3px solid #06b6d4; color:#155e75; white-space: pre-wrap;">${escapeHtml(
+        noteFromOrganizer.trim(),
+      )}</div>`
+    : '';
+
+  // Egy-kattintásos pre-fill linkek a leggyakoribb két válaszhoz; az RSVP-oldal
+  // mindig megerősítést kér mielőtt rögzítené a választ.
+  const goingUrl = `${rsvpUrl}?response=going`;
+  const lateUrl = `${rsvpUrl}?response=late`;
+  const rescheduleUrl = `${rsvpUrl}?response=reschedule`;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #0e7490;">Konzílium meghívó</h2>
+      <p>${escapeHtml(greeting)}!</p>
+      <p>${organizerLine}</p>
+      <ul style="margin: 12px 0; padding-left: 20px; color: #111827;">
+        <li><strong>Téma:</strong> ${escapeHtml(sessionTitle)}</li>
+        <li><strong>Időpont:</strong> ${formattedDate}</li>
+      </ul>
+      ${noteBlock}
+      <p style="margin-top: 18px; color: #374151;">
+        Kérjük, jelezze vissza, hogy számíthatunk-e Önre:
+      </p>
+      <div style="margin: 20px 0; text-align: center;">
+        <a href="${goingUrl}" style="display:inline-block; background-color:#10b981; color:white; padding:12px 18px; text-decoration:none; border-radius:6px; font-weight:bold; margin: 4px;">
+          ✓ Ott leszek
+        </a>
+        <a href="${lateUrl}" style="display:inline-block; background-color:#f59e0b; color:white; padding:12px 18px; text-decoration:none; border-radius:6px; font-weight:bold; margin: 4px;">
+          ⏱ Kések
+        </a>
+        <a href="${rescheduleUrl}" style="display:inline-block; background-color:#6366f1; color:white; padding:12px 18px; text-decoration:none; border-radius:6px; font-weight:bold; margin: 4px;">
+          📅 Máskor lenne jó
+        </a>
+      </div>
+      <p style="color:#6b7280; font-size: 13px; margin-top: 16px;">
+        Ha a gombok nem működnek, másolja be ezt a linket a böngészőbe:<br>
+        <a href="${rsvpUrl}" style="color:#0e7490;">${rsvpUrl}</a>
+      </p>
+      <p style="color:#9ca3af; font-size:12px; margin-top:24px;">
+        Rendszer: <a href="${baseUrl}" style="color:#9ca3af;">${baseUrl}</a>
+      </p>
+      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: recipientEmail,
+    subject: `Konzílium meghívó – ${sessionTitle} – Maxillofaciális Rehabilitáció`,
+    html,
+  });
+}
+
+/**
  * Send appointment reminder email to patient (24 hours before)
  */
 export async function sendAppointmentReminderEmail(

@@ -19,6 +19,8 @@ export {
   sendNewAppointmentRequestToAdmin,
   sendNewMessageNotification,
   sendDoctorMessageNotification,
+  sendConsiliumPrepShareEmail,
+  sendConsiliumInvitationEmail,
   sendAppointmentReminderEmail,
   sendOhipReminderEmail,
 } from './senders';

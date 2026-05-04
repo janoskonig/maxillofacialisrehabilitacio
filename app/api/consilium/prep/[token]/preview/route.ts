@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { authedHandler } from '@/lib/api/route-handler';
 import { getDbPool } from '@/lib/db';
 import { resolvePrepTokenPreviewState } from '@/lib/consilium-prep-share';
-import { getUserInstitution } from '@/lib/consilium';
 import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
@@ -20,7 +19,7 @@ type PreviewPatient = {
 type PreviewResponse =
   | {
       accessible: false;
-      reason: 'invalid_token' | 'revoked_or_not_found' | 'institution_mismatch';
+      reason: 'invalid_token' | 'revoked_or_not_found';
     }
   | {
       accessible: true;
@@ -44,7 +43,7 @@ function ageFromBirthDate(birth: Date | null | undefined): number | null {
   return age;
 }
 
-export const GET = authedHandler(async (_req, { auth, params }) => {
+export const GET = authedHandler(async (_req, { params }) => {
   const rawToken = decodeURIComponent(params.token ?? '');
   if (!rawToken) {
     return NextResponse.json<PreviewResponse>(
@@ -53,18 +52,11 @@ export const GET = authedHandler(async (_req, { auth, params }) => {
     );
   }
 
-  const institutionId = await getUserInstitution(auth);
-  const state = await resolvePrepTokenPreviewState(rawToken, institutionId);
+  const state = await resolvePrepTokenPreviewState(rawToken);
 
   if (state.state === 'not_found') {
     return NextResponse.json<PreviewResponse>(
       { accessible: false, reason: 'revoked_or_not_found' },
-      { status: 200 },
-    );
-  }
-  if (state.state === 'institution_mismatch') {
-    return NextResponse.json<PreviewResponse>(
-      { accessible: false, reason: 'institution_mismatch' },
       { status: 200 },
     );
   }

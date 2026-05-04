@@ -6,7 +6,7 @@ import { HttpError } from '@/lib/auth-server';
 import { ensurePrepTokenForItem } from '@/lib/consilium-prep-share';
 import { getScopedSessionOrThrow, getUserInstitution } from '@/lib/consilium';
 import { sendDoctorMessage } from '@/lib/doctor-communication';
-import { sendDoctorMessageNotification } from '@/lib/email';
+import { sendConsiliumPrepShareEmail } from '@/lib/email';
 import { sendPushNotification } from '@/lib/push-notifications';
 import { logActivityWithAuth } from '@/lib/activity';
 import { logger } from '@/lib/logger';
@@ -15,10 +15,18 @@ export const dynamic = 'force-dynamic';
 
 const PREP_NOTE_MAX = 1000;
 
-const shareBodySchema = z.object({
-  recipientIds: z.array(z.string().uuid()).min(1).max(30),
-  note: z.string().max(PREP_NOTE_MAX).optional(),
-});
+const shareBodySchema = z
+  .object({
+    recipientIds: z.array(z.string().uuid()).max(30).optional(),
+    recipientEmails: z.array(z.string().trim().toLowerCase().email()).max(30).optional(),
+    note: z.string().max(PREP_NOTE_MAX).optional(),
+  })
+  .refine(
+    (d) =>
+      (d.recipientIds && d.recipientIds.length > 0) ||
+      (d.recipientEmails && d.recipientEmails.length > 0),
+    { message: 'Adj meg legalább egy címzettet (felhasználó vagy e-mail).' },
+  );
 
 function resolvePublicBaseUrl(req: Request): string {
   const envBase = (process.env.NEXT_PUBLIC_BASE_URL || '').trim();
@@ -52,9 +60,15 @@ export const POST = authedHandler(async (req, { auth, params }) => {
     throw new HttpError(400, 'Érvénytelen kérés', 'INVALID_REQUEST');
   }
 
-  const recipientIds = Array.from(new Set(parsed.data.recipientIds.filter((x) => x !== auth.userId)));
-  if (recipientIds.length === 0) {
-    throw new HttpError(400, 'Adj meg legalább egy címzettet (saját magadat nem)', 'NO_RECIPIENTS');
+  const recipientIds = Array.from(
+    new Set((parsed.data.recipientIds || []).filter((x) => x !== auth.userId)),
+  );
+  const recipientEmailsRaw = Array.from(
+    new Set((parsed.data.recipientEmails || []).map((e) => e.trim().toLowerCase()).filter(Boolean)),
+  );
+
+  if (recipientIds.length === 0 && recipientEmailsRaw.length === 0) {
+    throw new HttpError(400, 'Adj meg legalább egy címzettet', 'NO_RECIPIENTS');
   }
 
   const note = parsed.data.note?.trim() || null;
@@ -80,22 +94,67 @@ export const POST = authedHandler(async (req, { auth, params }) => {
     patientName = pRes.rows[0]?.nev?.trim?.() || null;
   }
 
-  const recipientsRes = await pool.query<{
+  // Regisztrált címzettek lekérése (id-k alapján).
+  let registeredRecipients: Array<{
     id: string;
     email: string;
     doktorNeve: string | null;
-    intezmeny: string | null;
     active: boolean;
-  }>(
-    `SELECT id, email, doktor_neve as "doktorNeve", intezmeny, active
-     FROM users
-     WHERE id = ANY($1::uuid[])`,
-    [recipientIds],
-  );
+  }> = [];
+  if (recipientIds.length > 0) {
+    const recipientsRes = await pool.query<{
+      id: string;
+      email: string;
+      doktorNeve: string | null;
+      active: boolean;
+    }>(
+      `SELECT id, email, doktor_neve as "doktorNeve", active
+       FROM users
+       WHERE id = ANY($1::uuid[])`,
+      [recipientIds],
+    );
+    registeredRecipients = recipientsRes.rows.filter((r) => r.active);
+  }
 
-  const recipients = recipientsRes.rows.filter((r) => r.active);
-  if (recipients.length === 0) {
-    throw new HttpError(404, 'Nem található aktív címzett', 'NO_ACTIVE_RECIPIENTS');
+  // Az e-mail címek közül kihagyjuk azokat, amik már a regisztrált címzettek között
+  // szerepelnek (id-vel) — ne kapja meg dupán ugyanaz a kolléga.
+  const registeredEmailSet = new Set(
+    registeredRecipients.map((r) => r.email.trim().toLowerCase()),
+  );
+  // Saját email is kihagyandó.
+  const selfEmail = (auth.email || '').trim().toLowerCase();
+
+  // Az e-mail címeket szétválasztjuk: amelyik létezik a users táblában aktív fiókkal,
+  // azt regisztráltként kezeljük (in-app üzenet + email). A többi: csak külső email.
+  let externalEmails: string[] = [];
+  if (recipientEmailsRaw.length > 0) {
+    const filtered = recipientEmailsRaw.filter(
+      (e) => !registeredEmailSet.has(e) && e !== selfEmail,
+    );
+    if (filtered.length > 0) {
+      const lookupRes = await pool.query<{
+        id: string;
+        email: string;
+        doktorNeve: string | null;
+        active: boolean;
+      }>(
+        `SELECT id, email, doktor_neve as "doktorNeve", active
+         FROM users
+         WHERE lower(btrim(email)) = ANY($1::text[]) AND active = true`,
+        [filtered],
+      );
+      const matchedByEmail = lookupRes.rows;
+      // Hozzáfűzzük a regisztrált listához (deduplikálva id alapján).
+      const existingIds = new Set(registeredRecipients.map((r) => r.id));
+      for (const u of matchedByEmail) {
+        if (!existingIds.has(u.id) && u.id !== auth.userId) {
+          registeredRecipients.push(u);
+          existingIds.add(u.id);
+        }
+      }
+      const matchedEmails = new Set(matchedByEmail.map((u) => u.email.trim().toLowerCase()));
+      externalEmails = filtered.filter((e) => !matchedEmails.has(e));
+    }
   }
 
   const senderRes = await pool.query<{ doktorNeve: string | null }>(
@@ -131,14 +190,9 @@ export const POST = authedHandler(async (req, { auth, params }) => {
   const messageBody = composeMessageBody(rawToken, note);
 
   const sentMessageIds: string[] = [];
-  const skippedMismatchInstitution: string[] = [];
+  const sentEmails: string[] = [];
 
-  for (const recipient of recipients) {
-    const recipientInst = (recipient.intezmeny || '').trim();
-    if (recipientInst !== institutionId) {
-      skippedMismatchInstitution.push(recipient.id);
-      continue;
-    }
+  for (const recipient of registeredRecipients) {
     try {
       const newMessage = await sendDoctorMessage({
         recipientId: recipient.id,
@@ -151,14 +205,16 @@ export const POST = authedHandler(async (req, { auth, params }) => {
       sentMessageIds.push(newMessage.id);
 
       try {
-        await sendDoctorMessageNotification(
+        await sendConsiliumPrepShareEmail(
           recipient.email,
-          recipient.doktorNeve || recipient.email,
+          recipient.doktorNeve,
           senderName || auth.email,
-          subject,
-          note ? `${note}\n\nElőkészítő link: ${prepUrl}` : `Konzílium előkészítő link: ${prepUrl}`,
+          patientName,
+          prepUrl,
           baseUrl,
+          note,
         );
+        sentEmails.push(recipient.email);
       } catch (emailError) {
         logger.error('[consilium-prep-share] email notification failed', {
           recipientId: recipient.id,
@@ -194,11 +250,31 @@ export const POST = authedHandler(async (req, { auth, params }) => {
     }
   }
 
+  for (const email of externalEmails) {
+    try {
+      await sendConsiliumPrepShareEmail(
+        email,
+        null,
+        senderName || auth.email,
+        patientName,
+        prepUrl,
+        baseUrl,
+        note,
+      );
+      sentEmails.push(email);
+    } catch (emailError) {
+      logger.error('[consilium-prep-share] external email failed', {
+        email,
+        error: String(emailError),
+      });
+    }
+  }
+
   await logActivityWithAuth(
     req,
     auth,
     'consilium_prep_link_shared',
-    `Konzílium előkészítő link megosztva ${sentMessageIds.length} címzettnek (session=${sessionId}, item=${itemId})`,
+    `Konzílium előkészítő link megosztva: ${sentMessageIds.length} in-app, ${sentEmails.length} email (session=${sessionId}, item=${itemId})`,
   );
 
   return NextResponse.json(
@@ -206,9 +282,10 @@ export const POST = authedHandler(async (req, { auth, params }) => {
       token: rawToken,
       prepPath,
       prepUrl,
-      sentCount: sentMessageIds.length,
+      sentInAppCount: sentMessageIds.length,
+      sentEmailCount: sentEmails.length,
       sentMessageIds,
-      skippedMismatchInstitution,
+      sentEmails,
     },
     { status: 200 },
   );
