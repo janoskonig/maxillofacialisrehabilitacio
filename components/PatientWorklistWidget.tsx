@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, Fragment } from 'react';
-import { ClipboardList, CalendarCheck, Trash2, Undo2, CalendarClock, AlertTriangle } from 'lucide-react';
+import { ClipboardList, CalendarCheck, Trash2, Undo2, CalendarClock, AlertTriangle, Shuffle } from 'lucide-react';
 import {
   getWorklistItemKey,
   deriveWorklistRowState,
@@ -22,6 +22,12 @@ import {
   MarkCompletedRetroModal,
   type MarkCompletedRetroPayload,
 } from './MarkCompletedRetroModal';
+import {
+  ReassignStepModal,
+  type ReassignStepCandidate,
+  type ReassignStepPayload,
+} from './ReassignStepModal';
+import { EpisodeIntegrityBanner } from './EpisodeIntegrityBanner';
 
 export interface PatientWorklistWidgetProps {
   patientId: string;
@@ -76,6 +82,18 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
     item: WorklistItemBackend;
     excludeAppointmentIds: string[];
   } | null>(null);
+  /**
+   * „Áthelyezés másik fázisra" modal kontextusa. A sourceItem a BOOKED sor,
+   * amit át akarunk rendelni; a candidates lista ugyanennek az epizódnak a
+   * többi pending/scheduled munkafázisa (azonos pool, nincs BOOKED foglalása).
+   * A tényleges PATCH /api/appointments/:id/reassign-step hívást a modal
+   * `onConfirm` callback-je küldi el, `handleConfirmReassignStep`-en keresztül.
+   */
+  const [reassignStepCtx, setReassignStepCtx] = useState<{
+    item: WorklistItemBackend;
+    candidates: ReassignStepCandidate[];
+  } | null>(null);
+  const [reassignStepSubmittingId, setReassignStepSubmittingId] = useState<string | null>(null);
   /**
    * Ha a SlotPickert sikertelen-jelölés UTÁN nyitjuk meg, ezzel adjuk át az
    * előző próba kontextusát a modal fejlécének és bannerének. Reset-elődik
@@ -357,6 +375,81 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
   };
 
   /**
+   * Modal megnyitása: egy meglévő (BOOKED) foglalás áthelyezése ugyanazon
+   * epizód MÁSIK pending munkafázisára. Csak azokat a fázisokat kínáljuk
+   * fel, amelyek:
+   *   - ugyanehhez az epizódhoz tartoznak,
+   *   - ugyanabban a pool-ban vannak (control/work/consult nem keveredhet),
+   *   - még nincs BOOKED foglalásuk,
+   *   - nem completed / skipped,
+   *   - van `workPhaseId`-juk (backing episode_work_phases sor).
+   *
+   * A fejléc és a warning szöveg a ReassignStepModal-ban van. A tényleges
+   * PATCH hívás `handleConfirmReassignStep`-ben történik.
+   */
+  const handleOpenReassignStep = (item: WorklistItemBackend) => {
+    if (!item.bookedAppointmentId || !item.workPhaseId) return;
+    const candidates: ReassignStepCandidate[] = items
+      .filter(
+        (i) =>
+          i.episodeId === item.episodeId &&
+          i.pool === item.pool &&
+          i.workPhaseId &&
+          i.workPhaseId !== item.workPhaseId &&
+          i.stepStatus !== 'completed' &&
+          i.stepStatus !== 'skipped' &&
+          !i.bookedAppointmentId
+      )
+      .map((i) => ({
+        workPhaseId: i.workPhaseId as string,
+        stepCode: i.stepCode ?? i.nextStep,
+        stepLabel: i.stepLabel ?? i.nextStep,
+        pool: i.pool,
+        windowStart: i.windowStart,
+        windowEnd: i.windowEnd,
+        stepSeq: i.stepSeq ?? null,
+        bookableWindowStart: i.bookableWindowStart ?? null,
+        bookableWindowEnd: i.bookableWindowEnd ?? null,
+      }));
+    setReassignStepCtx({ item, candidates });
+  };
+
+  const handleConfirmReassignStep = async (
+    appointmentId: string,
+    payload: ReassignStepPayload
+  ) => {
+    setReassignStepSubmittingId(appointmentId);
+    try {
+      const res = await fetch(
+        `/api/appointments/${appointmentId}/reassign-step`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            targetWorkPhaseId: payload.targetWorkPhaseId,
+            reason: payload.reason,
+          }),
+        }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error ?? 'Átrendezés sikertelen');
+      }
+      if (data?.cleanedStaleLink) {
+        console.info(
+          '[reassign-step] cél fázison stale appointment_id volt (appointment %s, status %s) — takarítva az átrendezéssel',
+          data.staleLinkedAppointmentId ?? 'n/a',
+          data.staleLinkedAppointmentStatus ?? 'n/a'
+        );
+      }
+      await fetchWorklist();
+    } finally {
+      setReassignStepSubmittingId(null);
+    }
+  };
+
+  /**
    * „Elkészült (utólag)" gomb — nem PATCH-ol azonnal, hanem modalt nyit, ahol
    * a felhasználó kiválaszthatja, hogy a fázis mikor készült el ténylegesen
    * (régebbi foglalt időpontból vagy egyéni dátummal). A tényleges PATCH-et
@@ -631,6 +724,10 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
           </button>
         </p>
       )}
+      <EpisodeIntegrityBanner
+        episodeIds={Array.from(new Set(items.map((i) => i.episodeId).filter(Boolean)))}
+        onRepaired={fetchWorklist}
+      />
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead>
@@ -927,6 +1024,32 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                               Áthelyezés
                             </button>
                           )}
+                          {item.bookedAppointmentId && item.workPhaseId && (() => {
+                            const hasCandidate = items.some(
+                              (i) =>
+                                i.episodeId === item.episodeId &&
+                                i.pool === item.pool &&
+                                i.workPhaseId &&
+                                i.workPhaseId !== item.workPhaseId &&
+                                i.stepStatus !== 'completed' &&
+                                i.stepStatus !== 'skipped' &&
+                                !i.bookedAppointmentId
+                            );
+                            if (!hasCandidate) return null;
+                            const isSubmitting = reassignStepSubmittingId === item.bookedAppointmentId;
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenReassignStep(item)}
+                                disabled={isSubmitting}
+                                className="text-xs text-purple-700 hover:underline font-medium text-left flex items-center gap-0.5 disabled:opacity-50"
+                                title="A foglalás átrendezése az epizód másik munkafázisára (az időpont nem változik, csak a fázis-hovatartozás)"
+                              >
+                                <Shuffle className="w-3 h-3" />
+                                {isSubmitting ? 'Átrendezés…' : 'Másik fázisra'}
+                              </button>
+                            );
+                          })()}
                           {item.bookedAppointmentId && (
                             <button
                               type="button"
@@ -1086,6 +1209,20 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
           excludeAppointmentIds={markCompleteRetroCtx.excludeAppointmentIds}
           onConfirm={async (payload) => {
             await handleConfirmMarkCompleteRetro(markCompleteRetroCtx.item, payload);
+          }}
+        />
+      )}
+
+      {reassignStepCtx && (
+        <ReassignStepModal
+          open
+          onClose={() => setReassignStepCtx(null)}
+          sourceItem={reassignStepCtx.item}
+          candidates={reassignStepCtx.candidates}
+          onConfirm={async (payload) => {
+            const apptId = reassignStepCtx.item.bookedAppointmentId;
+            if (!apptId) return;
+            await handleConfirmReassignStep(apptId, payload);
           }}
         />
       )}
