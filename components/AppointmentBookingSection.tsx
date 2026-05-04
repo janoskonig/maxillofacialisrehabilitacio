@@ -1,7 +1,21 @@
 'use client';
 
 import { useState } from 'react';
-import { Calendar, Clock, Download, CheckCircle2, Plus, X, XCircle, AlertCircle, Clock as ClockIcon, Edit2 } from 'lucide-react';
+import {
+  Calendar,
+  Clock,
+  Download,
+  CheckCircle2,
+  Plus,
+  X,
+  XCircle,
+  AlertCircle,
+  Clock as ClockIcon,
+  Edit2,
+  Shuffle,
+  Undo2,
+  AlertTriangle,
+} from 'lucide-react';
 import { formatDateTime, digitsOnly } from '@/lib/dateUtils';
 import { DateTimePicker } from './DateTimePicker';
 import { Patient } from '@/lib/types';
@@ -9,8 +23,20 @@ import {
   useAppointmentBooking,
   type Appointment,
   type AppointmentType,
+  type AppointmentStatus,
 } from '@/hooks/useAppointmentBooking';
 import { CascadeIntentsModal, type SlotIntentForCascade } from './CascadeIntentsModal';
+import {
+  ReassignStepModal,
+  type ReassignStepCandidate,
+  type ReassignStepPayload,
+} from './ReassignStepModal';
+import {
+  UnsuccessfulAttemptModal,
+  type UnsuccessfulAttemptConfirmPayload,
+} from './UnsuccessfulAttemptModal';
+import { RevertUnsuccessfulModal } from './RevertUnsuccessfulModal';
+import type { WorklistItemBackend } from '@/lib/worklist-types';
 
 interface AppointmentBookingSectionProps {
   patientId: string | null | undefined;
@@ -45,6 +71,8 @@ export function AppointmentBookingSection({
     cancelAppointment,
     modifyAppointment,
     updateAppointmentStatus,
+    markUnsuccessful,
+    revertUnsuccessful,
     createAndBookSlot,
     downloadCalendar,
     refreshData,
@@ -71,7 +99,7 @@ export function AppointmentBookingSection({
     intents: SlotIntentForCascade[];
   } | null>(null);
   const [statusForm, setStatusForm] = useState<{
-    appointmentStatus: 'cancelled_by_doctor' | 'cancelled_by_patient' | 'completed' | 'no_show' | null;
+    appointmentStatus: AppointmentStatus | null;
     completionNotes: string;
     isLate: boolean;
     appointmentType: AppointmentType | null;
@@ -81,6 +109,23 @@ export function AppointmentBookingSection({
     isLate: false,
     appointmentType: null,
   });
+  /**
+   * „Másik fázisra" modal kontextus — egy meglévő foglalás snapshot-ának
+   * (step_code / step_seq / work_phase_id + episode_work_phases.appointment_id
+   * link) átkötése egy másik EWP-re. Múltbeli appointmentekre is működik:
+   * ilyenkor a fázis tényállapota nem változik, csak a hivatkozás frissül.
+   */
+  const [reassignCtx, setReassignCtx] = useState<{
+    appointment: Appointment;
+    sourceItem: WorklistItemBackend;
+    candidates: ReassignStepCandidate[];
+  } | null>(null);
+  const [reassignLoading, setReassignLoading] = useState<string | null>(null);
+  const [reassignError, setReassignError] = useState<string | null>(null);
+  const [unsuccessfulModalAppointment, setUnsuccessfulModalAppointment] =
+    useState<Appointment | null>(null);
+  const [revertModalAppointment, setRevertModalAppointment] =
+    useState<Appointment | null>(null);
 
   const resolvePatientId = async (actionLabel = 'foglalása'): Promise<string | null> => {
     let currentPatientId = patientId;
@@ -250,12 +295,157 @@ export function AppointmentBookingSection({
     });
   };
 
+  /**
+   * „Másik fázisra" modal megnyitása egy meglévő foglalásra. Lekérdezi az
+   * epizód EWP-it (`/api/episodes/:id/step-projections`), és a múltbeli
+   * appointmentekhez is felkínál minden olyan fázist, ami:
+   *   - azonos pool-ban van (control / work / consult nem keveredhet),
+   *   - nincs merged-into (csak primary sorok),
+   *   - nem skipped (skipped fázis explicit „nem akarjuk megcsinálni"),
+   *   - nem ugyanaz, mint a foglalás jelenlegi cél fázisa.
+   *
+   * Completed fázisok IS jelölhetők — a backend ilyenkor csak a snapshot
+   * appointment_id-t frissíti, a fázis tényállapotát nem változtatja.
+   */
+  const handleOpenReassign = async (appointment: Appointment) => {
+    if (!appointment.episodeId) {
+      alert('Ehhez a foglaláshoz nincs epizód kötve, így nem rendelhető át fázishoz.');
+      return;
+    }
+    setReassignLoading(appointment.id);
+    setReassignError(null);
+    try {
+      const res = await fetch(
+        `/api/episodes/${appointment.episodeId}/step-projections`,
+        { credentials: 'include' }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error ?? 'Nem sikerült lekérni a fázisokat.');
+      }
+      type ProjectedStep = {
+        stepCode: string;
+        label: string;
+        seq: number;
+        pool: string;
+        status: string;
+        windowStart: string | null;
+        windowEnd: string | null;
+        workPhaseId?: string | null;
+      };
+      const projected = (data.steps ?? []) as ProjectedStep[];
+      const apptPool = appointment.pool ?? null;
+      const candidates: ReassignStepCandidate[] = projected
+        .filter(
+          (s) =>
+            !!s.workPhaseId &&
+            (apptPool == null || s.pool === apptPool) &&
+            s.status !== 'skipped' &&
+            s.stepCode !== appointment.stepCode
+        )
+        .map((s) => ({
+          workPhaseId: s.workPhaseId as string,
+          stepCode: s.stepCode,
+          stepLabel: s.label,
+          pool: s.pool,
+          windowStart: s.windowStart,
+          windowEnd: s.windowEnd,
+          stepSeq: s.seq ?? null,
+          bookableWindowStart: null,
+          bookableWindowEnd: null,
+          status:
+            s.status === 'completed' ||
+            s.status === 'scheduled' ||
+            s.status === 'pending' ||
+            s.status === 'skipped'
+              ? (s.status as 'completed' | 'scheduled' | 'pending' | 'skipped')
+              : null,
+        }));
+
+      // Minimális WorklistItemBackend stub, hogy a meglévő ReassignStepModal
+      // változtatás nélkül elfogadja a forrást — csak a UI által ténylegesen
+      // olvasott mezők kellenek (pool, stepLabel, bookedAppointmentStartTime,
+      // workPhaseId — utóbbi az „önmaga kizárására" a jelölt-listában).
+      const sourceItem = {
+        episodeId: appointment.episodeId,
+        patientId: patientId ?? '',
+        currentStage: '',
+        nextStep: appointment.stepCode ?? '',
+        stepLabel: appointment.stepLabel ?? appointment.stepCode ?? '',
+        stepCode: appointment.stepCode ?? '',
+        overdueByDays: 0,
+        windowStart: null,
+        windowEnd: null,
+        durationMinutes: 0,
+        pool: appointment.pool ?? 'work',
+        priorityScore: 0,
+        noShowRisk: 0,
+        bookedAppointmentId: appointment.id,
+        bookedAppointmentStartTime: appointment.startTime,
+        workPhaseId: appointment.workPhaseId ?? null,
+      } satisfies Partial<WorklistItemBackend> as WorklistItemBackend;
+
+      setReassignCtx({ appointment, sourceItem, candidates });
+    } catch (e) {
+      setReassignError(e instanceof Error ? e.message : 'Hiba történt');
+    } finally {
+      setReassignLoading(null);
+    }
+  };
+
+  const handleConfirmReassign = async (
+    appointmentId: string,
+    payload: ReassignStepPayload
+  ) => {
+    const res = await fetch(
+      `/api/appointments/${appointmentId}/reassign-step`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          targetWorkPhaseId: payload.targetWorkPhaseId,
+          reason: payload.reason,
+        }),
+      }
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data?.error ?? 'Átrendezés sikertelen');
+    }
+    if (data?.cleanedStaleLink) {
+      console.info(
+        '[reassign-step] cél fázison stale appointment_id volt (appointment %s, status %s) — takarítva',
+        data.staleLinkedAppointmentId ?? 'n/a',
+        data.staleLinkedAppointmentStatus ?? 'n/a'
+      );
+    }
+    await refreshData();
+  };
+
   const handleSaveStatus = async () => {
     if (!editingStatus) return;
 
     if (statusForm.appointmentStatus === 'completed' && !statusForm.completionNotes.trim()) {
       alert('A "mi történt?" mező kitöltése kötelező sikeresen teljesült időpont esetén.');
       return;
+    }
+
+    const goesToCancelOrNoShow =
+      statusForm.appointmentStatus === 'cancelled_by_doctor' ||
+      statusForm.appointmentStatus === 'cancelled_by_patient' ||
+      statusForm.appointmentStatus === 'no_show';
+
+    if (
+      editingStatus.appointmentStatus === 'completed' &&
+      goesToCancelOrNoShow
+    ) {
+      const ok = confirm(
+        'Az időpont korábban „sikeresen teljesült”-nek volt jelezve. ' +
+          'Lemondásra vagy „nem jelent meg” státuszra állításkor a hozzá kötött munkafázis ' +
+          '(ha van epizód kötés) visszaáll várakozóra (pending), és új időpont foglalható. Folytatod?'
+      );
+      if (!ok) return;
     }
 
     const result = await updateAppointmentStatus(editingStatus.id, {
@@ -433,6 +623,76 @@ export function AppointmentBookingSection({
           onConfirm={handleCascadeConfirm}
         />
       )}
+      {reassignError && (
+        <div className="fixed bottom-4 right-4 z-[70] max-w-sm bg-red-50 border border-red-200 text-red-800 text-sm p-3 rounded shadow-lg flex items-start gap-2">
+          <span className="flex-1">{reassignError}</span>
+          <button
+            type="button"
+            onClick={() => setReassignError(null)}
+            className="text-red-600 hover:text-red-800"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+      {reassignCtx && (
+        <ReassignStepModal
+          open
+          onClose={() => setReassignCtx(null)}
+          sourceItem={reassignCtx.sourceItem}
+          candidates={reassignCtx.candidates}
+          onConfirm={async (payload) => {
+            await handleConfirmReassign(reassignCtx.appointment.id, payload);
+          }}
+        />
+      )}
+      {unsuccessfulModalAppointment && (
+        <UnsuccessfulAttemptModal
+          open
+          onClose={() => setUnsuccessfulModalAppointment(null)}
+          appointmentId={unsuccessfulModalAppointment.id}
+          appointmentStart={unsuccessfulModalAppointment.startTime}
+          stepLabel={
+            unsuccessfulModalAppointment.stepLabel ??
+            unsuccessfulModalAppointment.stepCode ??
+            null
+          }
+          attemptNumber={unsuccessfulModalAppointment.attemptNumber ?? 1}
+          onConfirmed={async (payload: UnsuccessfulAttemptConfirmPayload) => {
+            const r = await markUnsuccessful(
+              unsuccessfulModalAppointment.id,
+              payload.reason
+            );
+            if (!r.success) {
+              throw new Error(r.error || 'Sikertelen-jelölés nem sikerült.');
+            }
+            if (payload.shouldOpenSlotPicker) {
+              alert(
+                'Az új próba időpontját a beteg munkalistáján (Következő munkafázis) foglalhatod le.'
+              );
+            }
+          }}
+        />
+      )}
+      {revertModalAppointment && (
+        <RevertUnsuccessfulModal
+          open
+          onClose={() => setRevertModalAppointment(null)}
+          appointmentId={revertModalAppointment.id}
+          appointmentStart={revertModalAppointment.startTime}
+          stepLabel={
+            revertModalAppointment.stepLabel ?? revertModalAppointment.stepCode ?? null
+          }
+          attemptNumber={revertModalAppointment.attemptNumber ?? 1}
+          originalFailedReason={revertModalAppointment.attemptFailedReason ?? null}
+          onConfirmed={async (reason) => {
+            const r = await revertUnsuccessful(revertModalAppointment.id, reason);
+            if (!r.success) {
+              throw new Error(r.error || 'Visszavonás nem sikerült.');
+            }
+          }}
+        />
+      )}
       {/* Status Edit Modal */}
       {editingStatus && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -481,8 +741,21 @@ export function AppointmentBookingSection({
                   <option value="cancelled_by_patient">Lemondta a beteg</option>
                   <option value="completed">Sikeresen teljesült</option>
                   <option value="no_show">Nem jelent meg</option>
+                  <option value="unsuccessful" disabled>
+                    Sikertelen próba (a listában a „Sikertelen vissza” gombbal)
+                  </option>
                 </select>
               </div>
+              {editingStatus.appointmentStatus === 'completed' &&
+                (statusForm.appointmentStatus === 'cancelled_by_doctor' ||
+                  statusForm.appointmentStatus === 'cancelled_by_patient' ||
+                  statusForm.appointmentStatus === 'no_show') && (
+                  <div className="text-xs text-amber-900 bg-amber-50 border border-amber-200 p-2 rounded">
+                    Mentéskor a kapcsolódó munkafázis (ha az időpont epizódhoz kötött és a fázis
+                    ehhez a foglaláshoz volt kötve) <strong>pending</strong> állapotba kerül — új
+                    próba foglalható a munkalistán.
+                  </div>
+                )}
               {statusForm.appointmentStatus === 'completed' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -561,13 +834,40 @@ export function AppointmentBookingSection({
           <div className="space-y-2">
             {appointments.map((appointment) => {
               const displayCim = appointment.cim || DEFAULT_CIM;
+              const st = appointment.appointmentStatus ?? null;
+              let cardWrap =
+                'flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-md';
+              let metaBorder = 'border-green-200';
+              let LeadIcon: typeof CheckCircle2 = CheckCircle2;
+              let leadIconClass = 'text-green-600';
+              if (st === 'cancelled_by_doctor' || st === 'cancelled_by_patient') {
+                cardWrap =
+                  'flex items-center justify-between p-3 bg-red-50 border border-red-200 rounded-md';
+                metaBorder = 'border-red-200';
+                LeadIcon = XCircle;
+                leadIconClass = 'text-red-600';
+              } else if (st === 'no_show') {
+                cardWrap =
+                  'flex items-center justify-between p-3 bg-gray-50 border border-gray-300 rounded-md';
+                metaBorder = 'border-gray-300';
+                LeadIcon = AlertCircle;
+                leadIconClass = 'text-gray-700';
+              } else if (st === 'unsuccessful') {
+                cardWrap =
+                  'flex items-center justify-between p-3 bg-orange-50 border border-orange-200 rounded-md';
+                metaBorder = 'border-orange-200';
+                LeadIcon = AlertTriangle;
+                leadIconClass = 'text-orange-600';
+              }
+              const canMarkUnsuccessful =
+                !!appointment.episodeId &&
+                st !== 'cancelled_by_doctor' &&
+                st !== 'cancelled_by_patient' &&
+                st !== 'unsuccessful';
               return (
-              <div
-                key={appointment.id}
-                className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-md"
-              >
+              <div key={appointment.id} className={cardWrap}>
                 <div className="flex items-center gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-green-600" />
+                  <LeadIcon className={`w-5 h-5 ${leadIconClass}`} />
                   <div>
                     <div className="text-sm font-medium text-gray-900">
                       {formatDateTime(appointment.startTime)}
@@ -607,7 +907,7 @@ export function AppointmentBookingSection({
                           </span>
                         </div>
                       )}
-                      <div className="mt-2 pt-2 border-t border-green-200 space-y-1">
+                      <div className={`mt-2 pt-2 border-t ${metaBorder} space-y-1`}>
                         {appointment.createdAt && (
                           <div>
                             <span className="text-xs font-medium text-gray-600">Létrehozva: </span>
@@ -701,6 +1001,21 @@ export function AppointmentBookingSection({
                             </div>
                           );
                         }
+                        if (appointment.appointmentStatus === 'unsuccessful') {
+                          return (
+                            <div className="mt-1">
+                              <div className="flex items-center gap-1 text-orange-700">
+                                <AlertTriangle className="w-3 h-3" />
+                                <span>Sikertelen próba — ismétlés szükséges</span>
+                              </div>
+                              {appointment.attemptFailedReason && (
+                                <div className="text-xs text-orange-900 mt-0.5 whitespace-pre-wrap break-words">
+                                  {appointment.attemptFailedReason}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
                         return null;
                       })()}
                     </div>
@@ -725,6 +1040,42 @@ export function AppointmentBookingSection({
                         <Edit2 className="w-4 h-4" />
                         Módosítás
                       </button>
+                      {appointment.episodeId && (
+                        <button
+                          onClick={() => handleOpenReassign(appointment)}
+                          disabled={reassignLoading === appointment.id}
+                          className="text-sm text-purple-700 hover:text-purple-900 flex items-center gap-1 disabled:opacity-50"
+                          title="A foglalás fázis-hovatartozásának módosítása (snapshot átkötése másik munkafázisra)"
+                        >
+                          <Shuffle className="w-4 h-4" />
+                          {reassignLoading === appointment.id
+                            ? 'Betöltés…'
+                            : 'Másik fázisra'}
+                        </button>
+                      )}
+                      {canMarkUnsuccessful && (
+                        <button
+                          type="button"
+                          onClick={() => setUnsuccessfulModalAppointment(appointment)}
+                          className="text-sm text-orange-700 hover:text-orange-900 flex items-center gap-1"
+                          title="A próba sikertelen volt — új próba szükséges (indok kötelező)"
+                        >
+                          <AlertTriangle className="w-4 h-4" />
+                          Sikertelen próba
+                        </button>
+                      )}
+                      {appointment.episodeId &&
+                        appointment.appointmentStatus === 'unsuccessful' && (
+                          <button
+                            type="button"
+                            onClick={() => setRevertModalAppointment(appointment)}
+                            className="text-sm text-gray-700 hover:text-gray-900 flex items-center gap-1"
+                            title="Sikertelen-jelölés visszavonása (tévedés esetén)"
+                          >
+                            <Undo2 className="w-4 h-4" />
+                            Sikertelen vissza
+                          </button>
+                        )}
                       <button
                         onClick={() => handleEditStatus(appointment)}
                         className="text-sm text-purple-600 hover:text-purple-800 flex items-center gap-1"

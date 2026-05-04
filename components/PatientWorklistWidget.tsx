@@ -410,6 +410,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
         stepSeq: i.stepSeq ?? null,
         bookableWindowStart: i.bookableWindowStart ?? null,
         bookableWindowEnd: i.bookableWindowEnd ?? null,
+        status: i.stepStatus ?? null,
       }));
     setReassignStepCtx({ item, candidates });
   };

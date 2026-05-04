@@ -19,6 +19,18 @@ export interface ProjectedStep {
   customLabel?: string | null;
   /** Human-readable labels of steps merged into this primary row (same appointment). */
   mergedPartLabels?: string[];
+  /**
+   * Canonical episode_work_phases.id (primary row only — merged sub-rows are
+   * filtered out earlier). Hiányzik, ha a sor egy „virtual" pending step
+   * (még nincs backing EWP, ritka pathway-only fallback).
+   */
+  workPhaseId?: string | null;
+  /**
+   * Az EWP-hez (appointment_id linken keresztül) jelenleg kötött
+   * appointment id (a worklist BOOKED-matchingjétől függetlenül,
+   * snapshot mező). UI ennek alapján mutathat státuszt.
+   */
+  linkedAppointmentId?: string | null;
 }
 
 export interface StepProjectionsResponse {
@@ -67,6 +79,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
   const episodeStepsResult = await pool.query(
     `SELECT ewp.id as ewp_id, ewp.work_phase_code, ewp.seq, ewp.pathway_order_index, ewp.pool,
             ewp.duration_minutes, ewp.status, ewp.completed_at, ewp.custom_label,
+            ewp.appointment_id,
             sc.label_hu,
             a.start_time as appointment_start
      FROM episode_work_phases ewp
@@ -199,6 +212,8 @@ export const GET = authedHandler(async (req, { auth, params }) => {
         windowEnd,
         waitFromNowDays,
         customLabel: row.custom_label,
+        workPhaseId: primaryId.length > 0 ? primaryId : null,
+        linkedAppointmentId: row.appointment_id ?? null,
       };
       if (mergedAgg && mergedAgg.labels.length > 0) {
         stepPayload.mergedPartLabels = mergedAgg.labels;

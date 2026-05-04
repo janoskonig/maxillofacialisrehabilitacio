@@ -6,6 +6,7 @@ import {
   APPOINTMENT_STATUS_VALUES,
   parseAppointmentStatus,
 } from '@/lib/appointment-status';
+import { SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT } from '@/lib/active-appointment';
 
 export const dynamic = 'force-dynamic';
 
@@ -57,7 +58,12 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
   await pool.query('BEGIN');
   try {
     const appointmentResult = await pool.query(
-      'SELECT id, appointment_status as "appointmentStatus" FROM appointments WHERE id = $1 FOR UPDATE',
+      `SELECT id,
+              appointment_status AS "appointmentStatus",
+              episode_id         AS "episodeId",
+              step_code          AS "stepCode",
+              work_phase_id      AS "workPhaseId"
+       FROM appointments WHERE id = $1 FOR UPDATE`,
       [appointmentId]
     );
 
@@ -69,7 +75,11 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
       );
     }
 
-    const oldStatus = appointmentResult.rows[0].appointmentStatus ?? null;
+    const apptBefore = appointmentResult.rows[0];
+    const oldStatus = apptBefore.appointmentStatus ?? null;
+    const episodeIdForEwp: string | null = apptBefore.episodeId ?? null;
+    const stepCodeForEwp: string | null = apptBefore.stepCode ?? null;
+    const workPhaseIdForEwp: string | null = apptBefore.workPhaseId ?? null;
 
     const updateFields: string[] = [];
     const updateValues: unknown[] = [];
@@ -165,6 +175,88 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
       normalisedStatus === 'no_show';
 
     if (isCancelOrNoShow) {
+      // Ha az időpont korábban `completed` volt, és az EWP ehhez az appointmenthez
+      // kötődött (completed vagy scheduled + appointment_id), a fázist visszanyitjuk
+      // `pending`-re — különben „completed” fázis + lemondott időpont inkonzisztencia.
+      if (
+        oldStatus === 'completed' &&
+        episodeIdForEwp &&
+        stepCodeForEwp
+      ) {
+        let ewpId: string | null = workPhaseIdForEwp;
+        let ewpStatus: string | null = null;
+        let ewpApptId: string | null = null;
+
+        if (!ewpId) {
+          const ewpLookup = await pool.query(
+            `SELECT id, status, appointment_id AS "appointmentId"
+             FROM episode_work_phases
+             WHERE episode_id = $1 AND work_phase_code = $2
+               AND (
+                 NOT EXISTS (
+                   SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public' AND table_name = 'episode_work_phases'
+                     AND column_name = 'merged_into_episode_work_phase_id'
+                 )
+                 OR merged_into_episode_work_phase_id IS NULL
+               )
+             FOR UPDATE`,
+            [episodeIdForEwp, stepCodeForEwp]
+          );
+          if (ewpLookup.rows.length === 1) {
+            ewpId = ewpLookup.rows[0].id;
+            ewpStatus = ewpLookup.rows[0].status ?? null;
+            ewpApptId = ewpLookup.rows[0].appointmentId ?? null;
+          }
+        } else {
+          const ewpRow = await pool.query(
+            `SELECT status, appointment_id AS "appointmentId"
+             FROM episode_work_phases WHERE id = $1 FOR UPDATE`,
+            [ewpId]
+          );
+          ewpStatus = ewpRow.rows[0]?.status ?? null;
+          ewpApptId = ewpRow.rows[0]?.appointmentId ?? null;
+        }
+
+        if (
+          ewpId &&
+          ewpApptId === appointmentId &&
+          (ewpStatus === 'completed' || ewpStatus === 'scheduled')
+        ) {
+          const otherActive = await pool.query(
+            `SELECT 1 FROM appointments a
+             WHERE a.episode_id = $1
+               AND a.step_code = $2
+               AND a.id <> $3
+               AND ${SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT}
+             LIMIT 1`,
+            [episodeIdForEwp, stepCodeForEwp, appointmentId]
+          );
+          if (otherActive.rows.length === 0) {
+            const changedBy = auth.email ?? auth.userId ?? 'unknown';
+            await pool.query(
+              `UPDATE episode_work_phases
+               SET status = 'pending', appointment_id = NULL
+               WHERE id = $1`,
+              [ewpId]
+            );
+            await pool.query(
+              `INSERT INTO episode_work_phase_audit
+                 (episode_work_phase_id, episode_id, old_status, new_status, changed_by, reason)
+               VALUES ($1, $2, $3, $4, $5, $6)`,
+              [
+                ewpId,
+                episodeIdForEwp,
+                ewpStatus,
+                'pending',
+                changedBy,
+                `appointment ${appointmentId} státusza ${normalisedStatus}-re változott (utólagos jelölés) — fázis visszanyitva`,
+              ]
+            );
+          }
+        }
+      }
+
       await pool.query(
         `UPDATE slot_intents si
          SET state = 'expired', updated_at = CURRENT_TIMESTAMP

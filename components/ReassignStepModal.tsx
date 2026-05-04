@@ -28,6 +28,12 @@ export interface ReassignStepCandidate {
   stepSeq: number | null;
   bookableWindowStart: string | null;
   bookableWindowEnd: string | null;
+  /**
+   * Cél fázis aktuális státusza. Ha `completed`, az átrendezés csak az
+   * `appointment_id` snapshot-ot frissíti, a fázis tényállapotát NEM
+   * változtatja meg. A modal ezt jelzi a felhasználónak.
+   */
+  status?: 'completed' | 'scheduled' | 'pending' | 'skipped' | null;
 }
 
 export interface ReassignStepPayload {
@@ -124,6 +130,7 @@ export function ReassignStepModal({
   const currentLabel =
     sourceItem.stepLabel ?? sourceItem.nextStep ?? sourceItem.stepCode ?? 'Munkafázis';
   const bookedStart = sourceItem.bookedAppointmentStartTime ?? null;
+  const isPastBooking = !!bookedStart && new Date(bookedStart) <= new Date();
 
   return (
     <div
@@ -157,13 +164,29 @@ export function ReassignStepModal({
             <AlertTriangle className="w-4 h-4 text-amber-700 flex-shrink-0 mt-0.5" />
             <div>
               <div className="font-medium text-amber-900">
-                Óvatos adatmozgatás
+                {isPastBooking
+                  ? 'Múltbeli snapshot-rögzítés javítása'
+                  : 'Óvatos adatmozgatás'}
               </div>
               <div className="text-xs text-amber-900/80 mt-1">
-                Az időpont (slot) nem változik, csak a fázis-hovatartozás.
-                A régi fázis visszaáll <code>pending</code>-re, a cél fázis
-                <code> scheduled</code>-re. Az összes lépés auditálva lesz
-                az <code>episode_work_phase_audit</code> táblában, és a
+                {isPastBooking ? (
+                  <>
+                    Az időpont (slot) nem változik, csak a fázis-hovatartozás
+                    (<code>step_code</code> / <code>step_seq</code> /
+                    <code> work_phase_id</code> snapshot). A cél fázis
+                    tényállapota nem változik (<code>completed</code> az
+                    is marad), csak az <code>appointment_id</code> link
+                    frissül.
+                  </>
+                ) : (
+                  <>
+                    Az időpont (slot) nem változik, csak a fázis-hovatartozás.
+                    A régi fázis visszaáll <code>pending</code>-re, a cél
+                    fázis <code>scheduled</code>-re.
+                  </>
+                )}{' '}
+                Az összes lépés auditálva lesz az
+                {' '}<code>episode_work_phase_audit</code> táblában, és a
                 művelet aktivitás-naplóba is bekerül.
               </div>
             </div>
@@ -218,23 +241,62 @@ export function ReassignStepModal({
                         disabled={submitting}
                       />
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm text-gray-900 font-medium">
-                          {c.stepLabel || c.stepCode}
+                        <div className="text-sm text-gray-900 font-medium flex items-center gap-1.5">
+                          <span>{c.stepLabel || c.stepCode}</span>
+                          {c.status && (
+                            <span
+                              className={`text-[10px] px-1 py-0.5 rounded font-medium ${
+                                c.status === 'completed'
+                                  ? 'bg-green-100 text-green-800'
+                                  : c.status === 'scheduled'
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : c.status === 'skipped'
+                                      ? 'bg-gray-200 text-gray-700'
+                                      : 'bg-amber-100 text-amber-800'
+                              }`}
+                            >
+                              {c.status === 'completed'
+                                ? 'KÉSZ'
+                                : c.status === 'scheduled'
+                                  ? 'FOGLALT'
+                                  : c.status === 'skipped'
+                                    ? 'KIHAGYVA'
+                                    : 'PENDING'}
+                            </span>
+                          )}
                         </div>
                         <div className="text-xs text-gray-600 truncate">
-                          Terv szerinti ablak:{' '}
-                          <strong>
-                            {formatDateRange(windowStart, windowEnd)}
-                          </strong>
+                          {windowStart || windowEnd ? (
+                            <>
+                              Terv szerinti ablak:{' '}
+                              <strong>
+                                {formatDateRange(windowStart, windowEnd)}
+                              </strong>
+                            </>
+                          ) : (
+                            <span className="italic text-gray-500">
+                              {c.status === 'completed'
+                                ? 'Lezárt fázis'
+                                : 'Nincs ablak'}
+                            </span>
+                          )}
                           {c.stepSeq != null && (
                             <span className="ml-1 text-gray-500">
                               · seq {c.stepSeq}
                             </span>
                           )}
                         </div>
+                        {c.status === 'completed' && (
+                          <div className="text-xs text-blue-700 mt-0.5">
+                            ℹ Lezárt fázis — az átrendezés csak az
+                            <code className="mx-0.5">appointment_id</code>
+                            snapshot-ot frissíti, a fázis státusza nem változik.
+                          </div>
+                        )}
                         {bookedStart &&
                           windowStart &&
                           windowEnd &&
+                          c.status !== 'completed' &&
                           (new Date(bookedStart) < new Date(windowStart) ||
                             new Date(bookedStart) > new Date(windowEnd)) && (
                             <div className="text-xs text-amber-700 mt-0.5">

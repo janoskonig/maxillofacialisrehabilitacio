@@ -12,24 +12,33 @@ export const dynamic = 'force-dynamic';
 /**
  * PATCH /api/appointments/:id/reassign-step
  *
- * Egy meglévő jövőbeli foglalás átkötése ugyanazon epizód egy MÁSIK
+ * Egy meglévő foglalás átkötése ugyanazon epizód egy MÁSIK
  * `episode_work_phases` sorára — a slot (time_slot_id) és a foglalás maga
  * NEM változik, csak a fázis-hovatartozás (step_code, step_seq, work_phase_id
  * és az `episode_work_phases.appointment_id` linkek).
+ *
+ * Múltbeli foglalásokra is működik (snapshot-rögzítés utólagos javítása,
+ * pl. ha a foglaláskor rossz step_code-ot rögzítettek admin override-ban).
+ * Ilyenkor a cél fázis lehet completed is — a státuszát nem írjuk át,
+ * csak az `appointment_id`-t frissítjük.
  *
  * Szigorú védelmek (óvatos művelet):
  *  - auth: csak admin / beutalo_orvos / fogpótlástanász.
  *  - Ugyanaz az epizód (kereszt-epizód át-rendelés nincs).
  *  - Ugyanaz a `pool` (control / work / consult nem keveredhet).
- *  - A cél nem lehet merged, completed, skipped, és nem foglalhat helyet
+ *  - A cél nem lehet merged vagy skipped, és nem foglalhat helyet
  *    másik aktív appointment (partial unique index védelme alatt is).
- *  - Csak aktív, jövőbeli appointment rendelhető át.
+ *  - A foglalás aktív kell legyen (lemondott / sikertelen / no-show
+ *    foglalást nem lehet áthelyezni).
  *
  * Transaction-ban frissíti:
  *  - a régi `episode_work_phases.appointment_id`-t NULL-ra,
- *    `scheduled` → `pending` státusz audit-tal (episode_work_phase_audit),
- *  - a cél `episode_work_phases.appointment_id`-t erre az appointmentre,
- *    státuszt `scheduled`-ra (audit),
+ *    `scheduled` → `pending` státusz audit-tal (a `completed` érintetlen
+ *    marad — csak a link vesz le róla),
+ *  - a cél `episode_work_phases.appointment_id`-t erre az appointmentre.
+ *    Ha a cél `pending`/`scheduled` volt → `scheduled`. Ha `completed`
+ *    volt → `completed` marad (a fázis tényállapota nem változik
+ *    pusztán a snapshot-átírástól), csak az `appointment_id` frissül.
  *  - `appointments.step_code / step_seq / work_phase_id` mezőket a cél
  *    fázisra.
  *
@@ -97,13 +106,6 @@ export const PATCH = roleHandler(
       );
     }
 
-    if (!appt.isFuture) {
-      return NextResponse.json(
-        { error: 'Csak jövőbeli foglalás rendelhető át másik fázishoz' },
-        { status: 400 }
-      );
-    }
-
     if (!appt.isActiveStatus) {
       return NextResponse.json(
         {
@@ -160,14 +162,18 @@ export const PATCH = roleHandler(
       );
     }
 
-    if (target.status === 'completed' || target.status === 'skipped') {
+    if (target.status === 'skipped') {
       return NextResponse.json(
         {
-          error: `A cél munkafázis ${target.status} állapotban van — nem rendelhető hozzá új foglalás`,
+          error:
+            'A cél munkafázis kihagyott (skipped) — nem rendelhető hozzá foglalás. Előbb állítsd vissza pendingre.',
         },
         { status: 400 }
       );
     }
+    // target.status === 'completed' szándékosan engedélyezett: utólagos
+    // snapshot-rögzítés esetén a fázis tényállapota nem változik (marad
+    // completed), csak az appointment_id link frissül.
 
     if (target.pool !== appt.pool) {
       return NextResponse.json(
@@ -300,14 +306,22 @@ export const PATCH = roleHandler(
         }
       }
 
+      // Cél új státusza:
+      //   - ha completed volt → marad completed (csak az appointment_id frissül)
+      //   - egyébként → scheduled
+      // Ezzel a múltbeli (snapshot-rögzítő) áthelyezés nem alakítja a fázis
+      // tényállapotát, csak a hivatkozást frissíti.
+      const newTargetStatus =
+        targetCurrentStatus === 'completed' ? 'completed' : 'scheduled';
+
       await client.query(
         `UPDATE episode_work_phases
-         SET appointment_id = $1, status = 'scheduled'
-         WHERE id = $2`,
-        [appointmentId, target.id]
+         SET appointment_id = $1, status = $2
+         WHERE id = $3`,
+        [appointmentId, newTargetStatus, target.id]
       );
 
-      if (targetCurrentStatus !== 'scheduled') {
+      if (targetCurrentStatus !== newTargetStatus) {
         await client.query(
           `INSERT INTO episode_work_phase_audit
              (episode_work_phase_id, episode_id, old_status, new_status, changed_by, reason)
@@ -316,7 +330,7 @@ export const PATCH = roleHandler(
             target.id,
             appt.episodeId,
             targetCurrentStatus,
-            'scheduled',
+            newTargetStatus,
             changedBy,
             `appointment ${appointmentId} ide rendelve (${appt.stepCode ?? 'n/a'} → ${target.workPhaseCode})${reasonSuffix}`,
           ]

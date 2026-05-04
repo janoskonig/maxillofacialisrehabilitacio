@@ -42,8 +42,11 @@ describe('PATCH /api/appointments/[id]/reassign-step — source-level invariants
     );
   });
 
-  it('csak jövőbeli és aktív foglalást enged át-rendelni', () => {
-    expect(SRC).toMatch(/!appt\.isFuture/);
+  it('csak aktív foglalást enged át-rendelni (múltbeli is megengedett)', () => {
+    // A múltbeli appointmentekre is engedjük az át-rendelést, hogy
+    // utólagos snapshot-rögzítés javítható legyen — ezért az isFuture
+    // ellenőrzés szándékosan eltávolítva.
+    expect(SRC).not.toMatch(/!appt\.isFuture/);
     expect(SRC).toMatch(/!appt\.isActiveStatus/);
   });
 
@@ -55,10 +58,25 @@ describe('PATCH /api/appointments/[id]/reassign-step — source-level invariants
     expect(SRC).toMatch(/target\.pool\s*!==\s*appt\.pool/);
   });
 
-  it('merged / completed / skipped cél fázist nem fogad el', () => {
+  it('merged / skipped cél fázist nem fogad el (completed engedélyezett)', () => {
     expect(SRC).toMatch(/target\.mergedIntoWorkPhaseId/);
-    expect(SRC).toMatch(
+    // skipped → block
+    expect(SRC).toMatch(/target\.status\s*===\s*'skipped'/);
+    // completed → szándékosan engedélyezett (snapshot-rögzítés javítása).
+    // A korábbi (régi) blokkoló feltétel ami completed-et is kizárta már
+    // NEM létezhet a forráskódban.
+    expect(SRC).not.toMatch(
       /target\.status\s*===\s*'completed'\s*\|\|\s*target\.status\s*===\s*'skipped'/
+    );
+  });
+
+  it('cél fázis új státusza: completed → completed, egyébként scheduled', () => {
+    expect(SRC).toMatch(
+      /newTargetStatus\s*=[\s\S]{0,80}targetCurrentStatus\s*===\s*'completed'\s*\?\s*'completed'\s*:\s*'scheduled'/
+    );
+    // Az UPDATE-ben nem hard-coded 'scheduled', hanem newTargetStatus
+    expect(SRC).toMatch(
+      /UPDATE episode_work_phases\s+SET appointment_id = \$1, status = \$2/
     );
   });
 
@@ -90,11 +108,12 @@ describe('PATCH /api/appointments/[id]/reassign-step — source-level invariants
     );
   });
 
-  it('cél EWP scheduled-re áll, státuszváltás auditálva', () => {
+  it('cél EWP új státusza: az audit csak akkor megy, ha tényleg változott', () => {
+    // A legutolsó audit-feltétel a régi és az új státuszt hasonlítja —
+    // pending → scheduled audit-ot ír, completed → completed esetén nem.
     expect(SRC).toMatch(
-      /UPDATE episode_work_phases\s+SET appointment_id = \$1, status = 'scheduled'/
+      /targetCurrentStatus\s*!==\s*newTargetStatus/
     );
-    expect(SRC).toMatch(/targetCurrentStatus\s*!==\s*'scheduled'/);
   });
 
   it('appointments step_code / step_seq / work_phase_id szinkronban frissül', () => {

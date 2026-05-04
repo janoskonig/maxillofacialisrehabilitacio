@@ -5,7 +5,12 @@ import { getCurrentUser } from '@/lib/auth';
 import { toLocalISOString } from '@/lib/dateUtils';
 
 export type AppointmentType = 'elso_konzultacio' | 'munkafazis' | 'kontroll';
-export type AppointmentStatus = 'cancelled_by_doctor' | 'cancelled_by_patient' | 'completed' | 'no_show';
+export type AppointmentStatus =
+  | 'cancelled_by_doctor'
+  | 'cancelled_by_patient'
+  | 'completed'
+  | 'no_show'
+  | 'unsuccessful';
 export type Pool = 'consult' | 'work' | 'control';
 
 export interface TimeSlot {
@@ -34,6 +39,15 @@ export interface Appointment {
   stepCode?: string | null;
   stepSeq?: number | null;
   stepLabel?: string | null;
+  /**
+   * Canonical episode_work_phases.id link — populated by booking writes
+   * since migration 025. Hiányzik régebbi sorokon (NULL), és csak akkor
+   * frissítjük, ha a sor opt-in lett a kanonikus index-be.
+   */
+  workPhaseId?: string | null;
+  attemptNumber?: number;
+  attemptFailedReason?: string | null;
+  attemptFailedAt?: string | null;
   pool?: Pool | null;
   createdVia?: string | null;
   createdAt?: string;
@@ -98,6 +112,8 @@ export interface UseAppointmentBookingReturn {
   cancelAppointment: (appointmentId: string) => Promise<OperationResult>;
   modifyAppointment: (appointmentId: string, params: ModifyAppointmentParams) => Promise<OperationResult>;
   updateAppointmentStatus: (appointmentId: string, params: UpdateStatusParams) => Promise<OperationResult>;
+  markUnsuccessful: (appointmentId: string, reason: string) => Promise<OperationResult>;
+  revertUnsuccessful: (appointmentId: string, reason: string) => Promise<OperationResult>;
   createAndBookSlot: (params: CreateAndBookSlotParams) => Promise<OperationResult>;
   downloadCalendar: (appointmentId: string) => Promise<OperationResult>;
 }
@@ -311,6 +327,62 @@ export function useAppointmentBooking(patientId: string | null | undefined): Use
     }
   };
 
+  const markUnsuccessful = async (
+    appointmentId: string,
+    reason: string
+  ): Promise<OperationResult> => {
+    try {
+      const response = await fetch(`/api/appointments/${appointmentId}/attempt-outcome`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ action: 'mark_unsuccessful', reason }),
+      });
+
+      if (response.ok) {
+        await reloadAll();
+        return { success: true };
+      }
+
+      const data = await response.json();
+      return {
+        success: false,
+        error: data.error || 'A sikertelen-jelölés nem sikerült',
+      };
+    } catch (error) {
+      console.error('Error marking appointment unsuccessful:', error);
+      return { success: false, error: 'A sikertelen-jelölés nem sikerült' };
+    }
+  };
+
+  const revertUnsuccessful = async (
+    appointmentId: string,
+    reason: string
+  ): Promise<OperationResult> => {
+    try {
+      const response = await fetch(`/api/appointments/${appointmentId}/attempt-outcome`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ action: 'revert', reason }),
+      });
+
+      if (response.ok) {
+        await reloadAll();
+        return { success: true };
+      }
+
+      const data = await response.json();
+      return {
+        success: false,
+        error: data.error || 'A visszavonás nem sikerült',
+      };
+    } catch (error) {
+      console.error('Error reverting unsuccessful appointment:', error);
+      return { success: false, error: 'A visszavonás nem sikerült' };
+    }
+  };
+
   const createAndBookSlot = async (params: CreateAndBookSlotParams): Promise<OperationResult> => {
     try {
       const isoDateTime = toLocalISOString(params.startTime);
@@ -402,6 +474,8 @@ export function useAppointmentBooking(patientId: string | null | undefined): Use
     cancelAppointment,
     modifyAppointment,
     updateAppointmentStatus,
+    markUnsuccessful,
+    revertUnsuccessful,
     createAndBookSlot,
     downloadCalendar,
   };

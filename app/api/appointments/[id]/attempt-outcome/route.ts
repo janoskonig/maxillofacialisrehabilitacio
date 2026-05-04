@@ -172,12 +172,13 @@ export const PATCH = roleHandler(
       let ewpId: string | null = workPhaseId;
       let oldEwpStatus: string | null = null;
       let newEwpStatus: string | null = null;
+      let ewpAppointmentId: string | null = null;
 
       if (episodeId && stepCode) {
         // Megkeresés: ha nincs work_phase_id, fallback a (episode, step_code) párra.
         if (!ewpId) {
           const ewpLookup = await pool.query(
-            `SELECT id, status FROM episode_work_phases
+            `SELECT id, status, appointment_id AS "appointmentId" FROM episode_work_phases
               WHERE episode_id = $1 AND work_phase_code = $2
                 AND (
                   -- ha az oszlop létezik, hagyjuk ki a merged child sorokat
@@ -194,13 +195,15 @@ export const PATCH = roleHandler(
           if (ewpLookup.rows.length === 1) {
             ewpId = ewpLookup.rows[0].id;
             oldEwpStatus = ewpLookup.rows[0].status;
+            ewpAppointmentId = ewpLookup.rows[0].appointmentId ?? null;
           }
         } else {
           const ewpStatusRow = await pool.query(
-            `SELECT status FROM episode_work_phases WHERE id = $1 FOR UPDATE`,
+            `SELECT status, appointment_id AS "appointmentId" FROM episode_work_phases WHERE id = $1 FOR UPDATE`,
             [ewpId]
           );
           oldEwpStatus = ewpStatusRow.rows[0]?.status ?? null;
+          ewpAppointmentId = ewpStatusRow.rows[0]?.appointmentId ?? null;
         }
 
         if (ewpId) {
@@ -220,9 +223,39 @@ export const PATCH = roleHandler(
           // (NULL = active per a canonical taxonomy).
           const thisStillActive = action === 'revert';
 
-          // Csak akkor frissítjük az EWP-t, ha jelenleg nem completed/skipped
-          // (azokat csak az újranyitás kezeli, és nem a próba-mechanizmus).
-          if (oldEwpStatus === 'pending' || oldEwpStatus === 'scheduled') {
+          const changedBy = auth.email ?? auth.userId ?? 'unknown';
+
+          // mark_unsuccessful + completed fázis: ha ez az appointment kötődik
+          // az EWP-hez és nincs másik aktív foglalás a lépésre, a fázist
+          // visszanyitjuk pending-re (új próba foglalható).
+          const shouldRevertCompletedPhase =
+            action === 'mark_unsuccessful' &&
+            oldEwpStatus === 'completed' &&
+            ewpAppointmentId === appointmentId &&
+            !hasOtherActive;
+
+          if (shouldRevertCompletedPhase) {
+            await pool.query(
+              `UPDATE episode_work_phases
+               SET status = 'pending', appointment_id = NULL
+               WHERE id = $1`,
+              [ewpId]
+            );
+            newEwpStatus = 'pending';
+            await pool.query(
+              `INSERT INTO episode_work_phase_audit
+                 (episode_work_phase_id, episode_id, old_status, new_status, changed_by, reason)
+               VALUES ($1, $2, $3, $4, $5, $6)`,
+              [
+                ewpId,
+                episodeId,
+                'completed',
+                'pending',
+                changedBy,
+                `attempt #${appointment.attemptNumber ?? 1} sikertelen (completed fázis visszanyitva): ${reasonRaw}`,
+              ]
+            );
+          } else if (oldEwpStatus === 'pending' || oldEwpStatus === 'scheduled') {
             const desired = hasOtherActive || thisStillActive ? 'scheduled' : 'pending';
             if (desired !== oldEwpStatus) {
               await pool.query(
@@ -240,7 +273,7 @@ export const PATCH = roleHandler(
                   episodeId,
                   oldEwpStatus,
                   desired,
-                  auth.email ?? auth.userId ?? 'unknown',
+                  changedBy,
                   action === 'mark_unsuccessful'
                     ? `attempt #${appointment.attemptNumber ?? 1} sikertelen: ${reasonRaw}`
                     : `attempt #${appointment.attemptNumber ?? 1} sikertelen-jelölés visszavonva: ${reasonRaw}`,
