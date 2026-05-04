@@ -4,6 +4,10 @@ import bcrypt from 'bcryptjs';
 import { sendApprovalEmail } from '@/lib/email';
 import { authedHandler, roleHandler } from '@/lib/api/route-handler';
 import { logger } from '@/lib/logger';
+import {
+  closeStaffRegistrationReviewTasks,
+  deleteStaffRegistrationReviewTasks,
+} from '@/lib/user-tasks';
 
 export const dynamic = 'force-dynamic';
 
@@ -134,6 +138,19 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
     } catch (emailError) {
       logger.error('Failed to send approval email:', emailError);
     }
+    try {
+      await closeStaffRegistrationReviewTasks(id, 'done');
+    } catch (taskError) {
+      logger.error('Failed to close staff registration review tasks (approve):', taskError);
+    }
+  }
+
+  if (active === false && !wasInactive) {
+    try {
+      await closeStaffRegistrationReviewTasks(id, 'cancelled');
+    } catch (taskError) {
+      logger.error('Failed to close staff registration review tasks (deactivate):', taskError);
+    }
   }
 
   return NextResponse.json({ user: updatedUser });
@@ -142,7 +159,39 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
 export const DELETE = roleHandler(['admin'], async (req, { auth, params }) => {
   const { id } = params;
   const pool = getDbPool();
+
+  const userResult = await pool.query(
+    'SELECT id, active FROM users WHERE id = $1',
+    [id]
+  );
+  if (userResult.rows.length === 0) {
+    return NextResponse.json({ error: 'Felhasználó nem található' }, { status: 404 });
+  }
+  const targetUser = userResult.rows[0] as { id: string; active: boolean };
+
+  // Ha a felhasználó még sosem volt aktív (függő regisztráció elutasítása),
+  // ténylegesen töröljük a sort, hogy ne maradjon bent a „Jóváhagyásra váró"
+  // listán. Ehhez előbb el kell tüntetni a kapcsolódó user_tasks sorokat,
+  // mert a `created_by_user_id` NOT NULL + ON DELETE SET NULL ellentmondás
+  // miatt egyébként hibára futna a törlés.
+  if (!targetUser.active) {
+    try {
+      await deleteStaffRegistrationReviewTasks(id);
+    } catch (taskError) {
+      logger.error('Failed to delete staff registration review tasks (reject):', taskError);
+    }
+    await pool.query('DELETE FROM users WHERE id = $1', [id]);
+    return NextResponse.json({ success: true, deleted: true });
+  }
+
+  // Aktív felhasználó esetén soft-delete: csak deaktiváljuk.
   await pool.query('UPDATE users SET active = false WHERE id = $1', [id]);
 
-  return NextResponse.json({ success: true });
+  try {
+    await closeStaffRegistrationReviewTasks(id, 'cancelled');
+  } catch (taskError) {
+    logger.error('Failed to close staff registration review tasks (deactivate):', taskError);
+  }
+
+  return NextResponse.json({ success: true, deleted: false });
 });

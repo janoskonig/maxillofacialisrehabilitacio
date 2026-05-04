@@ -131,6 +131,16 @@ export default function StaffTasksPage() {
                           Beteg karton (fogkezelés)
                         </Link>
                       )}
+                    {t.taskType === 'staff_registration_review' && (
+                      <div className="mt-3">
+                        <Link
+                          href="/admin"
+                          className="text-sm text-medical-primary font-medium hover:underline"
+                        >
+                          Jóváhagyás kezelése (Admin → Felhasználók)
+                        </Link>
+                      </div>
+                    )}
                     {(t.taskType === 'document_upload' || t.taskType === 'meeting_action') && (
                       <button
                         type="button"

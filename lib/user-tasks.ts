@@ -54,7 +54,12 @@ export async function insertUserTask(params: {
   assigneeUserId: string | null;
   assigneePatientId: string | null;
   patientId: string | null;
-  taskType: 'document_upload' | 'ohip14' | 'manual' | 'meeting_action';
+  taskType:
+    | 'document_upload'
+    | 'ohip14'
+    | 'manual'
+    | 'meeting_action'
+    | 'staff_registration_review';
   title: string;
   description?: string | null;
   metadata?: Record<string, unknown>;
@@ -214,6 +219,114 @@ export async function markTaskDoneForStaff(taskId: string, staffUserId: string):
     [taskId, staffUserId]
   );
   return result.rows.length > 0;
+}
+
+/**
+ * Új munkatárs regisztrációs kérelméhez egy-egy nyitott feladatot hoz létre
+ * minden aktív admin részére. A feladat metadata-jában tárolja a függő
+ * felhasználó azonosítóját (`pendingUserId`), így később (jóváhagyáskor /
+ * elutasításkor) az összes admin feladata egyszerre lezárható.
+ *
+ * Visszaadja a létrehozott feladatok számát.
+ */
+export async function createStaffRegistrationReviewTasks(params: {
+  pendingUserId: string;
+  pendingUserEmail: string;
+  pendingUserName?: string | null;
+  pendingUserRole?: string | null;
+  pendingUserInstitution?: string | null;
+  pendingUserAccessReason?: string | null;
+}): Promise<number> {
+  const pool = getDbPool();
+  const adminsResult = await pool.query(
+    `SELECT id FROM users WHERE role = 'admin' AND active = true`
+  );
+  const admins: Array<{ id: string }> = adminsResult.rows;
+  if (admins.length === 0) return 0;
+
+  const title = 'Új regisztrációs kérelem jóváhagyása';
+  const descriptionLines = [
+    `Email: ${params.pendingUserEmail}`,
+    params.pendingUserName ? `Név: ${params.pendingUserName}` : null,
+    params.pendingUserRole ? `Szerepkör: ${params.pendingUserRole}` : null,
+    params.pendingUserInstitution ? `Intézmény: ${params.pendingUserInstitution}` : null,
+    params.pendingUserAccessReason
+      ? `Indokolás: ${params.pendingUserAccessReason}`
+      : null,
+  ].filter((line): line is string => Boolean(line));
+  const description = descriptionLines.join('\n');
+
+  const metadata = {
+    source: 'staff_registration',
+    pendingUserId: params.pendingUserId,
+    pendingUserEmail: params.pendingUserEmail,
+    pendingUserName: params.pendingUserName ?? null,
+    pendingUserRole: params.pendingUserRole ?? null,
+    pendingUserInstitution: params.pendingUserInstitution ?? null,
+  };
+
+  let inserted = 0;
+  for (const admin of admins) {
+    await pool.query(
+      `INSERT INTO user_tasks (
+        assignee_kind, assignee_user_id, assignee_patient_id, patient_id,
+        task_type, status, title, description, metadata, created_by_user_id
+      ) VALUES ('staff', $1, NULL, NULL,
+        'staff_registration_review', 'open', $2, $3, $4::jsonb, $5)`,
+      [admin.id, title, description, JSON.stringify(metadata), params.pendingUserId]
+    );
+    inserted++;
+  }
+  return inserted;
+}
+
+/**
+ * Lezárja a megadott függő felhasználóhoz tartozó nyitott
+ * `staff_registration_review` feladatokat. `status`:
+ *   - `done`      — admin jóváhagyta a regisztrációt
+ *   - `cancelled` — admin elutasította / inaktiválta a felhasználót
+ *
+ * Visszaadja a frissített sorok számát.
+ */
+export async function closeStaffRegistrationReviewTasks(
+  pendingUserId: string,
+  status: 'done' | 'cancelled'
+): Promise<number> {
+  const pool = getDbPool();
+  const result = await pool.query(
+    `UPDATE user_tasks
+       SET status = $2, completed_at = NOW()
+     WHERE task_type = 'staff_registration_review'
+       AND status = 'open'
+       AND metadata->>'pendingUserId' = $1`,
+    [pendingUserId, status]
+  );
+  return result.rowCount ?? 0;
+}
+
+/**
+ * Véglegesen törli a megadott függő felhasználóhoz tartozó összes
+ * `staff_registration_review` feladatot (státusztól függetlenül).
+ *
+ * Akkor használjuk, amikor a függő `users` sort is ténylegesen DELETE-eljük
+ * (regisztráció elutasítása). Erre azért van szükség, mert a
+ * `user_tasks.created_by_user_id` FK ugyan `ON DELETE SET NULL`, de a
+ * column `NOT NULL`, így a kaszkád törlés egyébként hibára futna.
+ */
+export async function deleteStaffRegistrationReviewTasks(
+  pendingUserId: string
+): Promise<number> {
+  const pool = getDbPool();
+  const result = await pool.query(
+    `DELETE FROM user_tasks
+     WHERE task_type = 'staff_registration_review'
+       AND (
+         metadata->>'pendingUserId' = $1
+         OR created_by_user_id = $1::uuid
+       )`,
+    [pendingUserId]
+  );
+  return result.rowCount ?? 0;
 }
 
 /**

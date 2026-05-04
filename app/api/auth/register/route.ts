@@ -5,6 +5,7 @@ import { SignJWT } from 'jose';
 import { logActivity } from '@/lib/activity';
 import { apiHandler } from '@/lib/api/route-handler';
 import { logger } from '@/lib/logger';
+import { createStaffRegistrationReviewTasks } from '@/lib/user-tasks';
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'change-this-to-a-random-secret-in-production'
@@ -159,6 +160,19 @@ export const POST = apiHandler(async (req) => {
   }
 
   await logActivity(req, user.email, 'register', 'pending_approval');
+
+  try {
+    await createStaffRegistrationReviewTasks({
+      pendingUserId: user.id,
+      pendingUserEmail: user.email,
+      pendingUserName: cleanedName,
+      pendingUserRole: databaseRole,
+      pendingUserInstitution: institution,
+      pendingUserAccessReason: accessReason.trim(),
+    });
+  } catch (taskError) {
+    logger.error('Failed to create staff registration review tasks:', taskError);
+  }
 
   return NextResponse.json({
     success: true,
