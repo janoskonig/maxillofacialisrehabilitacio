@@ -4,12 +4,11 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Loader2, Mail, Send, Users, X } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
 
-type InstitutionUser = {
+type DirectoryUser = {
   id: string;
   email: string;
-  doktorNeve: string | null;
-  role: string;
-  intezmeny?: string | null;
+  name: string | null;
+  intezmeny: string | null;
 };
 
 type SelectedRecipient =
@@ -31,11 +30,11 @@ interface SendConsiliumPrepLinkModalProps {
 const NOTE_MAX = 1000;
 const EMAIL_REGEX = /^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$/;
 
-function userDisplayName(u: { doktorNeve: string | null; email: string }): string {
-  return (u.doktorNeve && u.doktorNeve.trim()) || u.email;
+function userDisplayName(u: { name: string | null; email: string }): string {
+  return (u.name && u.name.trim()) || u.email;
 }
 
-function pickerMatches(u: InstitutionUser, needleRaw: string): boolean {
+function pickerMatches(u: DirectoryUser, needleRaw: string): boolean {
   const needle = needleRaw.trim().toLowerCase();
   if (!needle) return false;
   const name = userDisplayName(u).toLowerCase();
@@ -55,8 +54,9 @@ export function SendConsiliumPrepLinkModal({
   currentEmail,
 }: SendConsiliumPrepLinkModalProps) {
   const { showToast } = useToast();
-  const [users, setUsers] = useState<InstitutionUser[]>([]);
+  const [users, setUsers] = useState<DirectoryUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
+  const [usersError, setUsersError] = useState<string | null>(null);
   const [selected, setSelected] = useState<SelectedRecipient[]>([]);
   const [note, setNote] = useState('');
   const [q, setQ] = useState('');
@@ -67,15 +67,37 @@ export function SendConsiliumPrepLinkModal({
 
   useEffect(() => {
     if (!isOpen) return;
+    let cancelled = false;
     setUsersLoading(true);
-    fetch('/api/consilium/institution-users', { credentials: 'include' })
-      .then((res) => (res.ok ? res.json() : Promise.resolve({ users: [] })))
-      .then((data) => {
-        const all: InstitutionUser[] = Array.isArray(data.users) ? data.users : [];
-        setUsers(all);
+    setUsersError(null);
+    fetch('/api/users/doctors', { credentials: 'include' })
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error(`status_${res.status}`);
+        }
+        const data = await res.json();
+        const list: DirectoryUser[] = Array.isArray(data?.doctors)
+          ? data.doctors.map((d: { id: string; email: string; name: string | null; intezmeny: string | null }) => ({
+              id: d.id,
+              email: d.email,
+              name: d.name ?? null,
+              intezmeny: d.intezmeny ?? null,
+            }))
+          : [];
+        if (!cancelled) setUsers(list);
       })
-      .catch(() => setUsers([]))
-      .finally(() => setUsersLoading(false));
+      .catch(() => {
+        if (!cancelled) {
+          setUsers([]);
+          setUsersError('Nem sikerült betölteni a felhasználói listát.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setUsersLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [isOpen]);
 
   useEffect(() => {
@@ -95,8 +117,6 @@ export function SendConsiliumPrepLinkModal({
   const selfEmailLower = (currentEmail || '').trim().toLowerCase();
 
   const filtered = useMemo(() => {
-    const t = q.trim();
-    if (!t) return [];
     const takenIds = new Set(
       selected.filter((s) => s.kind === 'user').map((s) => (s as { id: string }).id),
     );
@@ -105,14 +125,12 @@ export function SendConsiliumPrepLinkModal({
         .filter((s) => s.kind === 'email')
         .map((s) => (s as { email: string }).email.toLowerCase()),
     );
-    return eligibleUsers
-      .filter(
-        (u) =>
-          !takenIds.has(u.id) &&
-          !takenEmails.has(u.email.toLowerCase()) &&
-          pickerMatches(u, t),
-      )
-      .slice(0, 30);
+    const available = eligibleUsers.filter(
+      (u) => !takenIds.has(u.id) && !takenEmails.has(u.email.toLowerCase()),
+    );
+    const t = q.trim();
+    if (!t) return available.slice(0, 50);
+    return available.filter((u) => pickerMatches(u, t)).slice(0, 50);
   }, [q, eligibleUsers, selected]);
 
   /** Az aktuális keresőkifejezés érvényes e-mail-cím, ami még nincs hozzáadva? */
@@ -142,7 +160,7 @@ export function SendConsiliumPrepLinkModal({
     return () => document.removeEventListener('mousedown', onDoc);
   }, [open]);
 
-  const pickUser = (u: InstitutionUser) => {
+  const pickUser = (u: DirectoryUser) => {
     setSelected((prev) =>
       prev.some((s) => s.kind === 'user' && s.id === u.id)
         ? prev
@@ -190,17 +208,17 @@ export function SendConsiliumPrepLinkModal({
       }
       return;
     }
-    if (!q.trim()) return;
     if (!open && (e.key === 'ArrowDown' || e.key === 'Enter')) {
-      if (filtered.length > 0) {
+      if (filtered.length > 0 || queryAsEmailCandidate) {
         e.preventDefault();
         setOpen(true);
-        if (e.key === 'Enter') pickUser(filtered[0]);
-        return;
-      }
-      if (queryAsEmailCandidate && e.key === 'Enter') {
-        e.preventDefault();
-        pickEmail(queryAsEmailCandidate);
+        if (e.key === 'Enter') {
+          if (filtered.length > 0) {
+            pickUser(filtered[0]);
+          } else if (queryAsEmailCandidate) {
+            pickEmail(queryAsEmailCandidate);
+          }
+        }
         return;
       }
     }
@@ -357,26 +375,33 @@ export function SendConsiliumPrepLinkModal({
                 placeholder={
                   usersLoading
                     ? 'Felhasználók betöltése…'
-                    : 'Név vagy e-mail cím — Enter hozzáadja'
+                    : 'Kezdj gépelni: kolléga neve vagy e-mail címe…'
                 }
                 value={q}
                 onChange={(e) => {
-                  const v = e.target.value;
-                  setQ(v);
-                  setOpen(!!v.trim());
+                  setQ(e.target.value);
+                  setOpen(true);
                 }}
-                onFocus={() => {
-                  if (q.trim()) setOpen(true);
-                }}
+                onFocus={() => setOpen(true)}
                 onKeyDown={onKeyDown}
               />
             </div>
-            {open && q.trim() && (
-              <ul className="absolute z-30 left-0 right-0 mt-0.5 max-w-lg rounded-md border border-gray-200 bg-white py-1 shadow-lg max-h-60 overflow-auto">
-                {filtered.length === 0 && !queryAsEmailCandidate ? (
+            {open && (
+              <ul className="absolute z-30 left-0 right-0 mt-0.5 max-w-lg rounded-md border border-gray-200 bg-white py-1 shadow-lg max-h-72 overflow-auto">
+                {usersLoading ? (
+                  <li className="px-3 py-2 text-xs text-gray-500 inline-flex items-center gap-2">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Felhasználók betöltése…
+                  </li>
+                ) : usersError ? (
+                  <li className="px-3 py-2 text-xs text-red-700 bg-red-50">{usersError}</li>
+                ) : filtered.length === 0 && !queryAsEmailCandidate ? (
                   <li className="px-3 py-2 text-xs text-gray-500">
-                    Nincs találat. Egy érvényes e-mail cím beírása után az Enter
-                    hozzáadja külső címzettként.
+                    {q.trim()
+                      ? 'Nincs egyező rendszer-felhasználó. Ha külső címzettnek küldenéd, írj be egy érvényes e-mail címet.'
+                      : eligibleUsers.length === 0
+                        ? 'Nincs választható kolléga.'
+                        : 'Kezdj gépelni a szűkítéshez (vagy görgess a listában).'}
                   </li>
                 ) : (
                   <>
@@ -413,7 +438,7 @@ export function SendConsiliumPrepLinkModal({
                         >
                           <Mail className="w-3.5 h-3.5 text-amber-700" />
                           <span className="font-medium text-amber-900">
-                            E-mail küldése: {queryAsEmailCandidate}
+                            E-mail küldése külső címre: {queryAsEmailCandidate}
                           </span>
                         </button>
                       </li>
@@ -422,10 +447,13 @@ export function SendConsiliumPrepLinkModal({
                 )}
               </ul>
             )}
+            {usersError && (
+              <p className="text-[11px] text-red-700">{usersError}</p>
+            )}
             <p className="text-[11px] text-gray-500">
-              Aki rendszer-felhasználó, a rendszerben üzenetet és e-mailt is kap; a külső
-              e-mail címek csak e-mailt kapnak. A megnyitáshoz a címzettnek be kell
-              jelentkeznie (vagy regisztrálnia).
+              Rendszerbe regisztrált kollégák a listából választhatók (üzenetet és e-mailt
+              is kapnak). Külső címzettnek érvényes e-mail címet beírva küldhetsz —
+              ők csak e-mailt kapnak.
             </p>
           </div>
 
