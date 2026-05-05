@@ -137,6 +137,22 @@ export function TreatmentPlanGantt() {
     [axis.t0, axis.t1, axis.rangeMs, axis.nowMs]
   );
 
+  // Stabil step-select callback: az `EpisodeRow` `memo`-wrapped, de a régi
+  // inline `(step, _el) => setPopover({ episode: ep, step })` minden
+  // render-nél új closure-t adott, ami invalidálta a memo-t (és
+  // virtualizer-rel is felesleges re-render-eket okozott a látható
+  // sorokon). Egy stabil callback + episode lookup-ra váltunk.
+  //
+  // Az episode lookup-ot az EpisodeRow-ra delegáljuk a `data-episode-id`
+  // helyett — ez bonyolítaná a row-t. Kompromisszum: a callback önmaga
+  // stabil, és `episode`-t csak közvetlenül passzoljuk át a step-tel.
+  const handleStepSelect = useCallback(
+    (episode: TimelineEpisode, step: TimelineStep) => {
+      setPopover({ episode, step });
+    },
+    []
+  );
+
   const renderRow = (ep: TimelineEpisode) => (
     <EpisodeRow
       key={ep.episodeId}
@@ -145,7 +161,7 @@ export function TreatmentPlanGantt() {
       toPercent={axis.toPercent}
       todayPercent={axis.todayPercent}
       trackMinWidth={trackW}
-      onStepSelect={(step, _el) => setPopover({ episode: ep, step })}
+      onStepSelect={handleStepSelect}
     />
   );
 

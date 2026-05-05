@@ -63,6 +63,8 @@ export function AppointmentBookingSection({
     availableSlots,
     appointments,
     loading,
+    loadError,
+    retryLoad,
     userRole,
     roleLoaded,
     availableCims,
@@ -827,6 +829,25 @@ export function AppointmentBookingSection({
         <h3 className="text-lg font-semibold text-gray-900">Időpont foglalás</h3>
       </div>
 
+      {loadError && (
+        <div className="mb-4 flex items-start gap-2 p-3 rounded-md bg-red-50 border border-red-200 text-sm text-red-800">
+          <AlertCircle className="w-4 h-4 mt-0.5 text-red-600 flex-shrink-0" />
+          <div className="flex-1">
+            <div className="font-medium">Nem sikerült betölteni az időpontokat</div>
+            <div className="text-xs text-red-700/90 mt-0.5">{loadError}</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              void retryLoad();
+            }}
+            className="text-xs underline font-medium"
+          >
+            Újra
+          </button>
+        </div>
+      )}
+
       {/* Existing Appointments */}
       {appointments.length > 0 && (
         <div className="mb-6">
@@ -1231,6 +1252,14 @@ export function AppointmentBookingSection({
                   );
                 })}
               </select>
+            ) : loadError ? (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-md">
+                <p className="text-sm text-amber-900 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-700" />
+                  A betöltés most nem sikerült — a fenti hibasávban tudod
+                  újrapróbálni.
+                </p>
+              </div>
             ) : (
               <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
                 <p className="text-sm text-gray-600 flex items-center gap-2">

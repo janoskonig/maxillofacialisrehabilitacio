@@ -10,6 +10,10 @@ import {
   getPathwayWorkPhasesForEpisode,
   type PathwayWorkPhaseTemplate,
 } from './pathway-work-phases-for-episode';
+import {
+  getMergedFilterFragment,
+  probeColumnExists,
+} from './schema-probe';
 
 export type { PathwayWorkPhaseTemplate } from './pathway-work-phases-for-episode';
 
@@ -134,28 +138,17 @@ async function getEpisodeWorkPhases(
   pool: Awaited<ReturnType<typeof getDbPool>>,
   episodeId: string
 ): Promise<EpisodeWorkPhaseRow[] | null> {
-  let mergedFilter = '';
-  try {
-    const col = await pool.query(
-      `SELECT 1 FROM information_schema.columns WHERE table_name = 'episode_work_phases' AND column_name = 'merged_into_episode_work_phase_id' LIMIT 1`
-    );
-    if (col.rows.length > 0) mergedFilter = 'AND merged_into_episode_work_phase_id IS NULL';
-  } catch {
-    /* column may not exist */
-  }
-
+  // A schema-probe modulszintű cache-ből szolgálja ki ezeket az ellenőrzéseket
+  // (lib/schema-probe.ts) — egy request-en belül több hívásra is csak az
+  // első jár DB-vel, a többi a cache-ből megy.
+  const [mergedFilter, hasDefaultDaysOffset, hasCustomLabel] = await Promise.all([
+    getMergedFilterFragment(pool, 'episode_work_phases'),
+    probeColumnExists(pool, 'episode_work_phases', 'default_days_offset'),
+    probeColumnExists(pool, 'episode_work_phases', 'custom_label'),
+  ]);
   let optionalCols = '';
-  try {
-    const colCheck = await pool.query(
-      `SELECT column_name FROM information_schema.columns
-       WHERE table_name = 'episode_work_phases' AND column_name IN ('default_days_offset', 'custom_label')`
-    );
-    const colNames = new Set(colCheck.rows.map((r: { column_name: string }) => r.column_name));
-    if (colNames.has('default_days_offset')) optionalCols += ', default_days_offset';
-    if (colNames.has('custom_label')) optionalCols += ', custom_label';
-  } catch {
-    /* columns may not exist */
-  }
+  if (hasDefaultDaysOffset) optionalCols += ', default_days_offset';
+  if (hasCustomLabel) optionalCols += ', custom_label';
 
   const r = await pool.query(
     `SELECT work_phase_code, pathway_order_index, seq, status, completed_at, pool, duration_minutes${optionalCols}

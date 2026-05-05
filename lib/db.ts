@@ -1,6 +1,25 @@
 import { Pool } from 'pg';
 
-let pool: Pool | null = null;
+/**
+ * HMR pool-leak megelőzés.
+ *
+ * Next.js dev-ben a moduláris singleton (`let pool: Pool | null`) HMR
+ * újraértékeléskor új példányt kap, miközben a régi pool zombi connection-jei
+ * még nem zártak be. Néhány ciklus alatt felemészti a Postgres
+ * `max_connections`-t, és minden új kérés `53300 too many clients already`
+ * fatal hibára fut. A standard megoldás a `globalThis`-en perzisztált
+ * singleton, ami túléli a HMR ciklust — production buildben a globalThis
+ * tiszta, így csak dev-re van hatása.
+ *
+ * Lásd: https://nextjs.org/docs/messages/hmr-singletons
+ */
+type PoolGlobals = {
+  __mfrPgPool?: Pool;
+  __mfrPgPoolListenersAttached?: boolean;
+};
+const globalForPool = globalThis as unknown as PoolGlobals;
+
+let pool: Pool | null = globalForPool.__mfrPgPool ?? null;
 
 const SLOW_QUERY_THRESHOLD = parseInt(process.env.SLOW_QUERY_MS || '500', 10);
 
@@ -83,6 +102,9 @@ export function getDbPool(): Pool {
     };
 
     pool = rawPool;
+    if (process.env.NODE_ENV !== 'production') {
+      globalForPool.__mfrPgPool = rawPool;
+    }
   }
 
   return pool;
@@ -93,6 +115,9 @@ export async function closeDbPool(): Promise<void> {
   if (pool) {
     await pool.end();
     pool = null;
+    if (process.env.NODE_ENV !== 'production') {
+      delete globalForPool.__mfrPgPool;
+    }
   }
 }
 

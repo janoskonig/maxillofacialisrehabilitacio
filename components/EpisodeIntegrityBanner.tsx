@@ -14,7 +14,7 @@
  * step_code / step_seq snapshot frissítése az EWP szerint.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ShieldAlert, RefreshCw, CheckCircle2 } from 'lucide-react';
 
 type ViolationKind =
@@ -71,15 +71,29 @@ export function EpisodeIntegrityBanner({
   const [repairError, setRepairError] = useState<string | null>(null);
   const [lastRepairSummary, setLastRepairSummary] = useState<string | null>(null);
 
+  /**
+   * `episodeIds` referenciastabilizálás: a szülő minden state-update-jén új
+   * tömböt kap (pl. `Array.from(new Set(items.map(...)))`), ami a `loadAll`
+   * `useCallback` deps-jét invalidálná, és minden render N párhuzamos
+   * /scheduling-integrity hívást indítana — ez könnyen felzabálja a
+   * DB_POOL-t (DB_POOL_MAX = 5). A serialized kulcs csak a tartalom
+   * változására invalidál.
+   */
+  const episodeIdsKey = useMemo(
+    () => [...episodeIds].sort().join(','),
+    [episodeIds]
+  );
+
   const loadAll = useCallback(async () => {
-    if (episodeIds.length === 0) {
+    const ids = episodeIdsKey ? episodeIdsKey.split(',') : [];
+    if (ids.length === 0) {
       setPayloads([]);
       return;
     }
     setLoading(true);
     try {
       const results = await Promise.all(
-        episodeIds.map(async (id) => {
+        ids.map(async (id) => {
           try {
             const res = await fetch(
               `/api/episodes/${id}/scheduling-integrity`,
@@ -97,7 +111,9 @@ export function EpisodeIntegrityBanner({
     } finally {
       setLoading(false);
     }
-  }, [episodeIds]);
+    // A loadAll csak akkor fut újra, ha az episodeIds tényleges tartalma
+    // (a sorbarendezett kulcs) változik — nem a referencia.
+  }, [episodeIdsKey]);
 
   useEffect(() => {
     void loadAll();

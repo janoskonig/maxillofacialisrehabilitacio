@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, Fragment } from 'react';
+import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
 import { ClipboardList, CalendarCheck, Trash2, Undo2, CalendarClock, AlertTriangle, Shuffle } from 'lucide-react';
 import {
   getWorklistItemKey,
@@ -151,6 +151,15 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
     sortedItems
       .filter((item) => deriveWorklistRowState(item, local, getWorklistItemKey(item)).state === 'READY')
       .map((item) => item.episodeId)
+  );
+
+  // Stabil episodeIds — különben a banner minden render-en újra fetch-eli az
+  // integrity-checket, ami N párhuzamos query-t indít a DB_POOL-on. Itt
+  // számoljuk a hookot, hogy a korai return-ek (loading / 403 / üres lista)
+  // után se sérüljön a hook-rendezési invariáns.
+  const integrityEpisodeIds = useMemo(
+    () => Array.from(new Set(items.map((i) => i.episodeId).filter(Boolean))),
+    [items]
   );
 
   const handleBookNext = (item: WorklistItemBackend) => {
@@ -726,7 +735,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
         </p>
       )}
       <EpisodeIntegrityBanner
-        episodeIds={Array.from(new Set(items.map((i) => i.episodeId).filter(Boolean)))}
+        episodeIds={integrityEpisodeIds}
         onRepaired={fetchWorklist}
       />
       <div className="overflow-x-auto">

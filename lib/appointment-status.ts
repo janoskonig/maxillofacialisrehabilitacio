@@ -47,6 +47,21 @@ export type AppointmentStatus = (typeof APPOINTMENT_STATUS_VALUES)[number];
 /** A possibly-null appointment status, including the implicit "pending" / NULL. */
 export type AppointmentStatusOrPending = AppointmentStatus | null;
 
+/**
+ * Audit-only sentinel a `appointment_status_events.new_status` mezőjére.
+ *
+ * A tábla `new_status VARCHAR(30) NOT NULL` (lásd
+ * database/legacy/migration_scheduling_v2.sql:233), így a NULL appointment-
+ * státusz (= pending) átírást valamilyen sztring literállal kell rögzíteni.
+ * Ez a konstans az egyetlen, amit a write-oldal NULL helyett ír — a
+ * consumer-ek tudják, hogy ezt NEM regularis appointment_status-nak
+ * kell venni, hanem „visszaírt pending"-nek.
+ *
+ * Ha valaha CHECK constraint-et adunk az events táblára vagy a `new_status`
+ * NULLABLE-re kerül, ezt egy helyen lehet majd cserélni / eltávolítani.
+ */
+export const APPOINTMENT_STATUS_EVENT_PENDING_AUDIT = 'pending' as const;
+
 /** Set lookup, ~O(1). */
 const VALID_SET: ReadonlySet<string> = new Set(APPOINTMENT_STATUS_VALUES);
 

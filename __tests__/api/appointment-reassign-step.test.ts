@@ -85,8 +85,19 @@ describe('PATCH /api/appointments/[id]/reassign-step — source-level invariants
     expect(SRC).toMatch(
       /LEFT JOIN appointments ta ON ta\.id\s*=\s*ewp\.appointment_id/
     );
-    expect(SRC).toMatch(/isAppointmentActive\(target\.linkedAppointmentStatus\)/);
+    expect(SRC).toMatch(/isAppointmentActive\(\s*target\.linkedAppointmentStatus/);
     expect(SRC).toMatch(/targetHasStaleLink/);
+  });
+
+  it('a tranzakcióban olvas FOR UPDATE-tel (TOCTOU védelem)', () => {
+    // Az appointment-sort és a target EWP-t a tranzakción belül kell
+    // FOR UPDATE-tel olvasni, hogy ne lehessen race a validáció és az
+    // UPDATE-ek között (pl. egy közbeeső status change miatt stale
+    // isActiveStatus-ra ne foglaljunk át).
+    expect(SRC).toMatch(/await pool\.connect\(\)/);
+    expect(SRC).toMatch(/client\.query\('BEGIN'\)/);
+    expect(SRC).toMatch(/FOR UPDATE OF a/);
+    expect(SRC).toMatch(/FOR UPDATE OF ewp/);
   });
 
   it('csak AKTÍV másik foglalást utasít el (stale-t takarítja)', () => {

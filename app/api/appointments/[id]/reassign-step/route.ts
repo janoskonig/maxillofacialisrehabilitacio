@@ -74,155 +74,204 @@ export const PATCH = roleHandler(
     }
 
     const pool = getDbPool();
+    const client = await pool.connect();
 
-    const apptResult = await pool.query(
-      `SELECT a.id,
-              a.episode_id          AS "episodeId",
-              a.step_code           AS "stepCode",
-              a.step_seq            AS "stepSeq",
-              a.work_phase_id       AS "workPhaseId",
-              a.pool,
-              a.is_future           AS "isFuture",
-              a.is_active_status    AS "isActiveStatus",
-              a.appointment_status  AS "appointmentStatus"
-       FROM appointments a
-       WHERE a.id = $1`,
-      [appointmentId]
-    );
-
-    if (apptResult.rows.length === 0) {
-      return NextResponse.json(
-        { error: 'Foglalás nem található' },
-        { status: 404 }
-      );
+    interface AppointmentRow {
+      id: string;
+      episodeId: string | null;
+      stepCode: string | null;
+      stepSeq: number | null;
+      workPhaseId: string | null;
+      pool: string;
+      isFuture: boolean;
+      isActiveStatus: boolean;
+      appointmentStatus: string | null;
+    }
+    interface TargetRow {
+      id: string;
+      episodeId: string;
+      workPhaseCode: string;
+      pathwayOrderIndex: number | null;
+      pool: string;
+      status: string;
+      appointmentId: string | null;
+      mergedIntoWorkPhaseId: string | null;
+      linkedAppointmentStatus: string | null;
+      linkedAppointmentExistsId: string | null;
     }
 
-    const appt = apptResult.rows[0];
-
-    if (!appt.episodeId) {
-      return NextResponse.json(
-        { error: 'Csak epizódhoz kötött foglalás rendelhető át másik fázishoz' },
-        { status: 400 }
-      );
-    }
-
-    if (!appt.isActiveStatus) {
-      return NextResponse.json(
-        {
-          error: `Inaktív / lemondott foglalás nem rendelhető át (status: ${appt.appointmentStatus ?? 'n/a'})`,
-        },
-        { status: 400 }
-      );
-    }
-
-    // Cél EWP + a hozzá (esetlegesen) kötött appointment státusza, hogy ki
-    // tudjuk szűrni a stale linkeket (cancelled / unsuccessful / törölt
-    // appointment). A worklist BOOKED-matchingje is pont ezeket szűri
-    // (SQL_APPOINTMENT_VISIBLE_STATUS_FRAGMENT) — itt konzisztens kell legyen.
-    const targetResult = await pool.query(
-      `SELECT ewp.id,
-              ewp.episode_id                         AS "episodeId",
-              ewp.work_phase_code                    AS "workPhaseCode",
-              ewp.pathway_order_index                AS "pathwayOrderIndex",
-              ewp.pool,
-              ewp.status,
-              ewp.appointment_id                     AS "appointmentId",
-              ewp.merged_into_episode_work_phase_id  AS "mergedIntoWorkPhaseId",
-              ta.appointment_status                   AS "linkedAppointmentStatus",
-              ta.id                                   AS "linkedAppointmentExistsId"
-       FROM episode_work_phases ewp
-       LEFT JOIN appointments ta ON ta.id = ewp.appointment_id
-       WHERE ewp.id = $1`,
-      [targetWorkPhaseId]
-    );
-
-    if (targetResult.rows.length === 0) {
-      return NextResponse.json(
-        { error: 'Cél munkafázis nem található' },
-        { status: 404 }
-      );
-    }
-
-    const target = targetResult.rows[0];
-
-    if (target.episodeId !== appt.episodeId) {
-      return NextResponse.json(
-        { error: 'A cél munkafázis más epizódhoz tartozik' },
-        { status: 400 }
-      );
-    }
-
-    if (target.mergedIntoWorkPhaseId) {
-      return NextResponse.json(
-        {
-          error:
-            'A cél munkafázis összevont (merged) sor — közvetlenül nem rendelhető hozzá foglalás. Rendeld a fő (primary) sorhoz.',
-        },
-        { status: 400 }
-      );
-    }
-
-    if (target.status === 'skipped') {
-      return NextResponse.json(
-        {
-          error:
-            'A cél munkafázis kihagyott (skipped) — nem rendelhető hozzá foglalás. Előbb állítsd vissza pendingre.',
-        },
-        { status: 400 }
-      );
-    }
-    // target.status === 'completed' szándékosan engedélyezett: utólagos
-    // snapshot-rögzítés esetén a fázis tényállapota nem változik (marad
-    // completed), csak az appointment_id link frissül.
-
-    if (target.pool !== appt.pool) {
-      return NextResponse.json(
-        {
-          error: `Pool eltérés: a foglalás "${appt.pool}", a cél fázis "${target.pool}". Az áthelyezéshez azonos pool kell.`,
-        },
-        { status: 400 }
-      );
-    }
-
-    // Stale link detektálás: a cél EWP.appointment_id mutathat olyan
-    // foglalásra, ami már lemondott / sikertelen / törölt (nem létező sor).
-    // Ezeket NEM tekintjük blokkolónak — csak logoljuk, és a tranzakcióban
-    // lenullázzuk a linket. Csak AKTÍV, más id-jű foglalást utasítunk vissza.
-    const targetHasStaleLink =
-      !!target.appointmentId &&
-      target.appointmentId !== appointmentId &&
-      (target.linkedAppointmentExistsId == null ||
-        !isAppointmentActive(target.linkedAppointmentStatus));
-
-    if (
-      target.appointmentId &&
-      target.appointmentId !== appointmentId &&
-      !targetHasStaleLink
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            'A cél munkafázishoz már tartozik egy másik aktív foglalás — előbb azt kell törölni / átrendezni.',
-          linkedAppointmentId: target.appointmentId,
-          linkedAppointmentStatus: target.linkedAppointmentStatus ?? null,
-        },
-        { status: 400 }
-      );
-    }
-
-    if (target.id === appt.workPhaseId) {
-      return NextResponse.json(
-        { error: 'A foglalás már ehhez a fázishoz van rendelve' },
-        { status: 400 }
-      );
-    }
-
+    // Az `appt` és `target` típust előre deklaráljuk, hogy a tranzakció
+    // után (logActivity / projector / event) is hozzáférjünk az értékükhöz.
+    // A tényleges SELECT a tranzakción belül megy `FOR UPDATE`-tel, hogy
+    // ne lehessen TOCTOU-race a validáció és az UPDATE-ek között.
+    let appt: AppointmentRow | null = null;
+    let target: TargetRow | null = null;
+    let targetHasStaleLink = false;
     const changedBy = auth.email ?? auth.userId ?? 'unknown';
     const reasonSuffix = reasonInput.length > 0 ? ` — ${reasonInput}` : '';
 
-    const client = await pool.connect();
     try {
       await client.query('BEGIN');
+
+      // A foglalás-sort mindig FOR UPDATE-tel olvassuk: a párhuzamos
+      // status / cancel / attempt-outcome műveletek így blokkolódnak
+      // a tranzakció végéig, és nem tudjuk stale `isActiveStatus`-ra
+      // alapozva eldönteni az átrendezés engedélyezését.
+      const apptResult = await client.query(
+        `SELECT a.id,
+                a.episode_id          AS "episodeId",
+                a.step_code           AS "stepCode",
+                a.step_seq            AS "stepSeq",
+                a.work_phase_id       AS "workPhaseId",
+                a.pool,
+                a.is_future           AS "isFuture",
+                a.is_active_status    AS "isActiveStatus",
+                a.appointment_status  AS "appointmentStatus"
+         FROM appointments a
+         WHERE a.id = $1
+         FOR UPDATE OF a`,
+        [appointmentId]
+      );
+
+      if (apptResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return NextResponse.json(
+          { error: 'Foglalás nem található' },
+          { status: 404 }
+        );
+      }
+
+      appt = apptResult.rows[0] as AppointmentRow;
+
+      if (!appt.episodeId) {
+        await client.query('ROLLBACK');
+        return NextResponse.json(
+          { error: 'Csak epizódhoz kötött foglalás rendelhető át másik fázishoz' },
+          { status: 400 }
+        );
+      }
+
+      if (!appt.isActiveStatus) {
+        await client.query('ROLLBACK');
+        return NextResponse.json(
+          {
+            error: `Inaktív / lemondott foglalás nem rendelhető át (status: ${appt.appointmentStatus ?? 'n/a'})`,
+          },
+          { status: 400 }
+        );
+      }
+
+      // Cél EWP + a hozzá (esetlegesen) kötött appointment státusza, hogy ki
+      // tudjuk szűrni a stale linkeket (cancelled / unsuccessful / törölt
+      // appointment). FOR UPDATE az ewp soron — nem zárolja a linked
+      // appointment-et (ha van), mert annak státuszát csak olvassuk a
+      // stale-detekcióhoz; ha közben átírják, a worst case egy felesleges
+      // 400 (amit a felhasználó újrapróbál).
+      const targetResult = await client.query(
+        `SELECT ewp.id,
+                ewp.episode_id                         AS "episodeId",
+                ewp.work_phase_code                    AS "workPhaseCode",
+                ewp.pathway_order_index                AS "pathwayOrderIndex",
+                ewp.pool,
+                ewp.status,
+                ewp.appointment_id                     AS "appointmentId",
+                ewp.merged_into_episode_work_phase_id  AS "mergedIntoWorkPhaseId",
+                ta.appointment_status                   AS "linkedAppointmentStatus",
+                ta.id                                   AS "linkedAppointmentExistsId"
+         FROM episode_work_phases ewp
+         LEFT JOIN appointments ta ON ta.id = ewp.appointment_id
+         WHERE ewp.id = $1
+         FOR UPDATE OF ewp`,
+        [targetWorkPhaseId]
+      );
+
+      if (targetResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return NextResponse.json(
+          { error: 'Cél munkafázis nem található' },
+          { status: 404 }
+        );
+      }
+
+      target = targetResult.rows[0] as TargetRow;
+
+      if (target.episodeId !== appt.episodeId) {
+        await client.query('ROLLBACK');
+        return NextResponse.json(
+          { error: 'A cél munkafázis más epizódhoz tartozik' },
+          { status: 400 }
+        );
+      }
+
+      if (target.mergedIntoWorkPhaseId) {
+        await client.query('ROLLBACK');
+        return NextResponse.json(
+          {
+            error:
+              'A cél munkafázis összevont (merged) sor — közvetlenül nem rendelhető hozzá foglalás. Rendeld a fő (primary) sorhoz.',
+          },
+          { status: 400 }
+        );
+      }
+
+      if (target.status === 'skipped') {
+        await client.query('ROLLBACK');
+        return NextResponse.json(
+          {
+            error:
+              'A cél munkafázis kihagyott (skipped) — nem rendelhető hozzá foglalás. Előbb állítsd vissza pendingre.',
+          },
+          { status: 400 }
+        );
+      }
+      // target.status === 'completed' szándékosan engedélyezett: utólagos
+      // snapshot-rögzítés esetén a fázis tényállapota nem változik (marad
+      // completed), csak az appointment_id link frissül.
+
+      if (target.pool !== appt.pool) {
+        await client.query('ROLLBACK');
+        return NextResponse.json(
+          {
+            error: `Pool eltérés: a foglalás "${appt.pool}", a cél fázis "${target.pool}". Az áthelyezéshez azonos pool kell.`,
+          },
+          { status: 400 }
+        );
+      }
+
+      // Stale link detektálás: a cél EWP.appointment_id mutathat olyan
+      // foglalásra, ami már lemondott / sikertelen / törölt (nem létező sor).
+      // Ezeket NEM tekintjük blokkolónak — csak logoljuk, és a tranzakcióban
+      // lenullázzuk a linket. Csak AKTÍV, más id-jű foglalást utasítunk vissza.
+      targetHasStaleLink =
+        !!target.appointmentId &&
+        target.appointmentId !== appointmentId &&
+        (target.linkedAppointmentExistsId == null ||
+          !isAppointmentActive(target.linkedAppointmentStatus as string | null | undefined));
+
+      if (
+        target.appointmentId &&
+        target.appointmentId !== appointmentId &&
+        !targetHasStaleLink
+      ) {
+        await client.query('ROLLBACK');
+        return NextResponse.json(
+          {
+            error:
+              'A cél munkafázishoz már tartozik egy másik aktív foglalás — előbb azt kell törölni / átrendezni.',
+            linkedAppointmentId: target.appointmentId,
+            linkedAppointmentStatus: target.linkedAppointmentStatus ?? null,
+          },
+          { status: 400 }
+        );
+      }
+
+      if (target.id === appt.workPhaseId) {
+        await client.query('ROLLBACK');
+        return NextResponse.json(
+          { error: 'A foglalás már ehhez a fázishoz van rendelve' },
+          { status: 400 }
+        );
+      }
 
       // A partial unique index (idx_appointments_unique_work_phase_active)
       // miatt a work_phase_id-t NEM állíthatjuk közvetlenül target.id-ra, ha a
@@ -238,34 +287,42 @@ export const PATCH = roleHandler(
         [appointmentId]
       );
 
+      // A fenti validáció-ágak mind ROLLBACK + return-nel végződnek,
+      // így innentől biztosan be van állítva az `appt` és `target`.
+      // A non-null asserciókat (!) szándékosan használjuk a tranzakciós
+      // kódblokkban, hogy a TS típusrendszerét ne kelljen extra őrökkel
+      // terhelni.
+      const apptInTx = appt;
+      const targetInTx = target;
+
       // A cél EWP aktuális státuszát követjük — a stale-clear után
       // változhat, és az utolsó audit-bejegyzéshez erre lesz szükség.
-      let targetCurrentStatus: string = target.status;
+      let targetCurrentStatus: string = targetInTx.status;
 
       if (targetHasStaleLink) {
         const staleStatusLabel =
-          target.linkedAppointmentExistsId == null
+          targetInTx.linkedAppointmentExistsId == null
             ? 'nem létezik'
-            : (target.linkedAppointmentStatus ?? 'ismeretlen');
+            : (targetInTx.linkedAppointmentStatus ?? 'ismeretlen');
         await client.query(
           `UPDATE episode_work_phases
            SET appointment_id = NULL,
                status = CASE WHEN status = 'scheduled' THEN 'pending' ELSE status END
            WHERE id = $1`,
-          [target.id]
+          [targetInTx.id]
         );
-        if (target.status === 'scheduled') {
+        if (targetInTx.status === 'scheduled') {
           await client.query(
             `INSERT INTO episode_work_phase_audit
                (episode_work_phase_id, episode_id, old_status, new_status, changed_by, reason)
              VALUES ($1, $2, $3, $4, $5, $6)`,
             [
-              target.id,
-              appt.episodeId,
+              targetInTx.id,
+              apptInTx.episodeId,
               'scheduled',
               'pending',
               changedBy,
-              `stale appointment_id takarítása (mutatott: ${target.appointmentId}, status: ${staleStatusLabel}) reassign előtt${reasonSuffix}`,
+              `stale appointment_id takarítása (mutatott: ${targetInTx.appointmentId}, status: ${staleStatusLabel}) reassign előtt${reasonSuffix}`,
             ]
           );
           targetCurrentStatus = 'pending';
@@ -276,7 +333,7 @@ export const PATCH = roleHandler(
         `SELECT id, work_phase_code AS "workPhaseCode", status
          FROM episode_work_phases
          WHERE episode_id = $1 AND appointment_id = $2 AND id <> $3`,
-        [appt.episodeId, appointmentId, target.id]
+        [apptInTx.episodeId, appointmentId, targetInTx.id]
       );
 
       for (const oldEwp of oldLinkedResult.rows) {
@@ -296,11 +353,11 @@ export const PATCH = roleHandler(
              VALUES ($1, $2, $3, $4, $5, $6)`,
             [
               oldEwp.id,
-              appt.episodeId,
+              apptInTx.episodeId,
               'scheduled',
               'pending',
               changedBy,
-              `appointment ${appointmentId} átrendezve másik fázisra (${oldEwp.workPhaseCode} → ${target.workPhaseCode})${reasonSuffix}`,
+              `appointment ${appointmentId} átrendezve másik fázisra (${oldEwp.workPhaseCode} → ${targetInTx.workPhaseCode})${reasonSuffix}`,
             ]
           );
         }
@@ -318,7 +375,7 @@ export const PATCH = roleHandler(
         `UPDATE episode_work_phases
          SET appointment_id = $1, status = $2
          WHERE id = $3`,
-        [appointmentId, newTargetStatus, target.id]
+        [appointmentId, newTargetStatus, targetInTx.id]
       );
 
       if (targetCurrentStatus !== newTargetStatus) {
@@ -327,12 +384,12 @@ export const PATCH = roleHandler(
              (episode_work_phase_id, episode_id, old_status, new_status, changed_by, reason)
            VALUES ($1, $2, $3, $4, $5, $6)`,
           [
-            target.id,
-            appt.episodeId,
+            targetInTx.id,
+            apptInTx.episodeId,
             targetCurrentStatus,
             newTargetStatus,
             changedBy,
-            `appointment ${appointmentId} ide rendelve (${appt.stepCode ?? 'n/a'} → ${target.workPhaseCode})${reasonSuffix}`,
+            `appointment ${appointmentId} ide rendelve (${apptInTx.stepCode ?? 'n/a'} → ${targetInTx.workPhaseCode})${reasonSuffix}`,
           ]
         );
       }
@@ -342,9 +399,9 @@ export const PATCH = roleHandler(
          SET step_code = $1, step_seq = $2, work_phase_id = $3
          WHERE id = $4`,
         [
-          target.workPhaseCode,
-          target.pathwayOrderIndex,
-          target.id,
+          targetInTx.workPhaseCode,
+          targetInTx.pathwayOrderIndex,
+          targetInTx.id,
           appointmentId,
         ]
       );
@@ -363,6 +420,14 @@ export const PATCH = roleHandler(
       );
     } finally {
       client.release();
+    }
+
+    // A try-blokk minden korai exit-je ROLLBACK + return — ide csak akkor
+    // jutunk el, ha a tranzakció sikeresen commit-olt, így appt/target
+    // garantáltan be van állítva.
+    if (!appt || !target || !appt.episodeId) {
+      // Védelem typescript miatt; ide elméletileg sosem jutunk.
+      return NextResponse.json({ ok: true, appointmentId });
     }
 
     try {

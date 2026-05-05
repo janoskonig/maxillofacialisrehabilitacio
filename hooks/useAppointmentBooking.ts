@@ -103,6 +103,15 @@ export interface UseAppointmentBookingReturn {
   availableSlots: TimeSlot[];
   appointments: Appointment[];
   loading: boolean;
+  /**
+   * Backend-hibajelzés a slot/appointment betöltéskor (pl. 5xx, 53300,
+   * hálózati hiba). Üres slot-listával együtt nézve a UI így meg tudja
+   * különböztetni: „valóban nincs szabad időpont" vs „nem sikerült
+   * betölteni — próbáld újra".
+   */
+  loadError: string | null;
+  /** Manuális retry trigger a UI-ból (pl. „Újra" gomb a hibasávban). */
+  retryLoad: () => Promise<void>;
   userRole: string;
   roleLoaded: boolean;
   availableCims: string[];
@@ -122,27 +131,45 @@ export function useAppointmentBooking(patientId: string | null | undefined): Use
   const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string>('');
   const [roleLoaded, setRoleLoaded] = useState(false);
 
-  const loadAvailableSlots = async () => {
+  const loadAvailableSlots = async (): Promise<{ ok: boolean; error?: string }> => {
     try {
+      // Backend-szintű szűrés: csak az `available` státuszú, „most-4 óra"
+      // óta kezdődő slotok jönnek. Korábban a hook akár 100 oldalat
+      // (10 000 slot) húzott le sorba, és kliens-oldalon szűrt — ezt
+      // helyettesíti a backend `from` + `onlyAvailable` paramétere.
+      const fourHoursAgoISO = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
+      const baseQuery = new URLSearchParams({
+        onlyAvailable: 'true',
+        from: fourHoursAgoISO,
+        limit: '500',
+      });
+
       let allSlots: TimeSlot[] = [];
       let page = 1;
       let hasMore = true;
-      const limit = 100;
-      const maxPages = 100;
+      // Még backend-szűréssel is plafon: szabad-slot lista 5 × 500 = 2500
+      // sornál ne menjen tovább, ennyi felett már UX-szempontból amúgy
+      // nem listázható választ.
+      const maxPages = 5;
+      let firstError: string | null = null;
 
       while (hasMore && page <= maxPages) {
-        const response = await fetch(`/api/time-slots?page=${page}&limit=${limit}`, {
+        const params = new URLSearchParams(baseQuery);
+        params.set('page', String(page));
+        const response = await fetch(`/api/time-slots?${params.toString()}`, {
           credentials: 'include',
         });
         if (response.ok) {
           const data = await response.json();
-          const slots = data.timeSlots || [];
+          const slots: TimeSlot[] = data.timeSlots || [];
           allSlots = [...allSlots, ...slots];
 
           const pagination = data.pagination;
+          const limit = Number(pagination?.limit ?? 500);
           if (pagination && page >= pagination.totalPages) {
             hasMore = false;
           } else if (slots.length < limit) {
@@ -151,24 +178,32 @@ export function useAppointmentBooking(patientId: string | null | undefined): Use
             page++;
           }
         } else {
+          // Megkülönböztetjük az „üres állapot" (200 + üres tömb) és a
+          // szerverhiba (5xx / 401 / hálózati) eseteket — a hívó fél
+          // ennek tudatában tud értelmes UI-t mutatni.
+          if (firstError === null) {
+            firstError =
+              response.status === 401 || response.status === 403
+                ? 'Nincs jogosultság az időpontok megjelenítéséhez.'
+                : `Szerverhiba (${response.status}) az időpontok betöltésekor.`;
+          }
           hasMore = false;
         }
       }
 
-      // Only show future slots (with a 4-hour grace period for recently passed ones)
-      const now = new Date();
-      const fourHoursAgo = new Date(now.getTime() - 4 * 60 * 60 * 1000);
-      const futureSlots = allSlots.filter((slot: TimeSlot) =>
-        new Date(slot.startTime) >= fourHoursAgo
-      );
-      setAvailableSlots(futureSlots);
+      setAvailableSlots(allSlots);
+      if (firstError) {
+        return { ok: false, error: firstError };
+      }
+      return { ok: true };
     } catch (error) {
       console.error('Error loading time slots:', error);
+      return { ok: false, error: 'Hálózati hiba az időpontok betöltésekor.' };
     }
   };
 
-  const loadAppointments = async () => {
-    if (!patientId) return;
+  const loadAppointments = async (): Promise<{ ok: boolean; error?: string }> => {
+    if (!patientId) return { ok: true };
 
     try {
       const response = await fetch(`/api/appointments?patientId=${patientId}`, {
@@ -178,20 +213,32 @@ export function useAppointmentBooking(patientId: string | null | undefined): Use
       if (response.ok) {
         const data = await response.json();
         setAppointments(data.appointments || []);
-      } else {
-        console.error('Failed to load appointments');
-        setAppointments([]);
+        return { ok: true };
       }
+      console.error('Failed to load appointments', response.status);
+      return {
+        ok: false,
+        error:
+          response.status === 401 || response.status === 403
+            ? 'Nincs jogosultság a foglalások megjelenítéséhez.'
+            : `Szerverhiba (${response.status}) a foglalások betöltésekor.`,
+      };
     } catch (error) {
       console.error('Error loading appointments:', error);
-      setAppointments([]);
+      return { ok: false, error: 'Hálózati hiba a foglalások betöltésekor.' };
     }
   };
 
   const refreshData = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
-      await Promise.all([loadAvailableSlots(), loadAppointments()]);
+      const [slotsRes, apptsRes] = await Promise.all([
+        loadAvailableSlots(),
+        loadAppointments(),
+      ]);
+      const firstError = slotsRes.error ?? apptsRes.error ?? null;
+      setLoadError(firstError);
     } finally {
       setLoading(false);
     }
@@ -200,6 +247,7 @@ export function useAppointmentBooking(patientId: string | null | undefined): Use
   useEffect(() => {
     const initialize = async () => {
       setLoading(true);
+      setLoadError(null);
 
       const user = await getCurrentUser();
       if (user) {
@@ -207,19 +255,33 @@ export function useAppointmentBooking(patientId: string | null | undefined): Use
       }
       setRoleLoaded(true);
 
-      await loadAvailableSlots();
+      const slotsRes = await loadAvailableSlots();
 
+      let apptsRes: { ok: boolean; error?: string } = { ok: true };
       if (patientId) {
-        await loadAppointments();
+        apptsRes = await loadAppointments();
       }
 
+      const firstError = slotsRes.error ?? apptsRes.error ?? null;
+      setLoadError(firstError);
       setLoading(false);
     };
 
     initialize();
   }, [patientId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const reloadAll = () => Promise.all([loadAvailableSlots(), loadAppointments()]);
+  const reloadAll = async () => {
+    const [slotsRes, apptsRes] = await Promise.all([
+      loadAvailableSlots(),
+      loadAppointments(),
+    ]);
+    const firstError = slotsRes.error ?? apptsRes.error ?? null;
+    setLoadError(firstError);
+  };
+
+  const retryLoad = async () => {
+    await refreshData();
+  };
 
   const bookAppointment = async (params: BookAppointmentParams): Promise<OperationResult> => {
     try {
@@ -465,6 +527,8 @@ export function useAppointmentBooking(patientId: string | null | undefined): Use
     availableSlots,
     appointments,
     loading,
+    loadError,
+    retryLoad,
     userRole,
     roleLoaded,
     availableCims: AVAILABLE_CIMS,

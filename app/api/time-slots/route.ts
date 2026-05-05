@@ -6,25 +6,47 @@ export const dynamic = 'force-dynamic';
 
 export const GET = authedHandler(async (req, { auth }) => {
   const pool = getDbPool();
-  const role = auth.role;
-  const userEmail = auth.email;
-  
+
   const searchParams = req.nextUrl.searchParams;
   const page = parseInt(searchParams.get('page') || '1', 10);
-  const limit = parseInt(searchParams.get('limit') || '50', 10);
+  // Hardcap a limitre, hogy a kliens ne tudjon véletlen 100k sort lekérni
+  // (a `useAppointmentBooking` hook history-ja: 100 oldal × 100 = 10k slot
+  // szekvenciálisan).
+  const rawLimit = parseInt(searchParams.get('limit') || '50', 10);
+  const limit = Math.max(1, Math.min(rawLimit, 500));
   const offset = (page - 1) * limit;
-  
+
   const onlyAvailable = searchParams.get('onlyAvailable') === 'true';
-  const statusFilter = onlyAvailable ? "WHERE ats.status = 'available'" : '';
+  /**
+   * `from` paraméter — ha megadott ISO dátum, csak az ettől kezdődő slotokat
+   * adjuk vissza. A `useAppointmentBooking` korábban kliens-oldalon szűrt
+   * `now() - 4 óra`-ra, de így minden slot (akár évek óta múltbeli) átment
+   * a wire-on. A backend-szintű szűréssel a 10k+ múltbeli sor kikerül.
+   */
+  const fromRaw = searchParams.get('from');
+  const fromDate = fromRaw ? new Date(fromRaw) : null;
+  const hasFrom = fromDate !== null && !Number.isNaN(fromDate.getTime());
+
+  const whereParts: string[] = [];
+  const params: unknown[] = [];
+  if (onlyAvailable) {
+    whereParts.push(`ats.status = 'available'`);
+  }
+  if (hasFrom) {
+    params.push(fromDate!.toISOString());
+    whereParts.push(`ats.start_time >= $${params.length}`);
+  }
+  const whereClause = whereParts.length > 0 ? `WHERE ${whereParts.join(' AND ')}` : '';
 
   const countQuery = `
     SELECT COUNT(*) as total
     FROM available_time_slots ats
     JOIN users u ON ats.user_id = u.id
-    ${statusFilter}
+    ${whereClause}
   `;
-  const countResult = await pool.query(countQuery);
+  const countResult = await pool.query(countQuery, params);
 
+  const dataParams = [...params, limit.toString(), offset.toString()];
   const query = `
     SELECT 
       ats.id,
@@ -42,24 +64,23 @@ export const GET = authedHandler(async (req, { auth }) => {
       ats.duration_minutes as "durationMinutes"
     FROM available_time_slots ats
     JOIN users u ON ats.user_id = u.id
-    ${statusFilter}
+    ${whereClause}
     ORDER BY ats.start_time ASC
-    LIMIT $1 OFFSET $2
+    LIMIT $${params.length + 1} OFFSET $${params.length + 2}
   `;
-  const params: unknown[] = [limit.toString(), offset.toString()];
 
-  const result = await pool.query(query, params);
-  
+  const result = await pool.query(query, dataParams);
+
   const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
   const timeSlots = result.rows.map((row: { cim?: string | null; [key: string]: unknown }) => ({
     ...row,
     cim: row.cim || DEFAULT_CIM,
   }));
-  
+
   const total = parseInt(countResult.rows[0].total, 10);
   const totalPages = Math.ceil(total / limit);
-  
-  return NextResponse.json({ 
+
+  return NextResponse.json({
     timeSlots,
     pagination: {
       page,

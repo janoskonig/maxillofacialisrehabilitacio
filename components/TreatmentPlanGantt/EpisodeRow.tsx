@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 import Link from 'next/link';
 import { Clock } from 'lucide-react';
 import type { TimelineEpisode, TimelineStep } from './types';
@@ -12,7 +12,12 @@ export interface EpisodeRowProps {
   todayPercent: number;
   trackMinWidth: number;
   trackHeight?: number;
-  onStepSelect: (step: TimelineStep, el: HTMLElement) => void;
+  /**
+   * Stabil callback a szülőből — az `episode`-t paraméterként kapja vissza,
+   * hogy ne kelljen episode-onkénti closure-t létrehozni a hívóban
+   * (különben a `memo` invalidálódna minden szülő render-nél).
+   */
+  onStepSelect: (episode: TimelineEpisode, step: TimelineStep) => void;
 }
 
 export const EpisodeRow = memo(function EpisodeRow({
@@ -30,6 +35,17 @@ export const EpisodeRow = memo(function EpisodeRow({
   const next = computeNextTodo(episode, range.nowMs);
 
   const showToday = todayPercent >= -1 && todayPercent <= 101;
+
+  // A StepBar a régi `(step, el) => void` szignaturát várja, a parent
+  // viszont a stabil `(episode, step)` callback-et adta. Itt összekötjük
+  // — episode-onként egyetlen useCallback, amit a memo-zott row tart, így
+  // a StepBar memo-ja sem invalidálódik szülő-render-en.
+  const handleStepBarSelect = useCallback(
+    (step: TimelineStep, _el: HTMLElement) => {
+      onStepSelect(episode, step);
+    },
+    [onStepSelect, episode]
+  );
 
   return (
     <div className="flex border-b border-gray-100 bg-white" style={{ minWidth: 0 }}>
@@ -80,7 +96,7 @@ export const EpisodeRow = memo(function EpisodeRow({
           />
         )}
         {episode.steps.map((step) => (
-          <StepBar key={step.stepSeq} step={step} range={range} toPercent={toPercent} onSelect={onStepSelect} />
+          <StepBar key={step.stepSeq} step={step} range={range} toPercent={toPercent} onSelect={handleStepBarSelect} />
         ))}
       </div>
     </div>

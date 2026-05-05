@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
 import { allPendingSteps, isBlockedAll, type PendingStep } from '@/lib/next-step-engine';
+import { getEpisodeWorkPhasesMergedColumnExists } from '@/lib/schema-probe';
 
 export const dynamic = 'force-dynamic';
 
@@ -63,18 +64,12 @@ export const GET = authedHandler(async (req, { auth, params }) => {
     return NextResponse.json({ error: 'Epizód nem található' }, { status: 404 });
   }
 
-  let mergedFilter = '';
-  try {
-    const epCols = await pool.query(
-      `SELECT column_name FROM information_schema.columns
-       WHERE table_name = 'episode_work_phases' AND column_name = 'merged_into_episode_work_phase_id'`
-    );
-    if (epCols.rows.length > 0) {
-      mergedFilter = 'AND ewp.merged_into_episode_work_phase_id IS NULL';
-    }
-  } catch {
-    /* ignore */
-  }
+  // A merged-oszlop probe-ot modulszinten cache-eljük (lib/schema-probe.ts),
+  // hogy ne legyen request-enként extra information_schema query.
+  const mergedColumnExists = await getEpisodeWorkPhasesMergedColumnExists(pool);
+  const mergedFilter = mergedColumnExists
+    ? 'AND ewp.merged_into_episode_work_phase_id IS NULL'
+    : '';
 
   const episodeStepsResult = await pool.query(
     `SELECT ewp.id as ewp_id, ewp.work_phase_code, ewp.seq, ewp.pathway_order_index, ewp.pool,

@@ -7,6 +7,10 @@ import {
   parseAppointmentStatus,
 } from '@/lib/appointment-status';
 import { SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT } from '@/lib/active-appointment';
+import {
+  findEwpForAppointmentRevert,
+  revertWorkPhaseLinkToPending,
+} from '@/lib/episode-work-phase-revert-lookup';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,10 +58,12 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
   }
 
   const pool = getDbPool();
+  const client = await pool.connect();
 
-  await pool.query('BEGIN');
   try {
-    const appointmentResult = await pool.query(
+    await client.query('BEGIN');
+
+    const appointmentResult = await client.query(
       `SELECT id,
               appointment_status AS "appointmentStatus",
               episode_id         AS "episodeId",
@@ -68,7 +74,7 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
     );
 
     if (appointmentResult.rows.length === 0) {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK');
       return NextResponse.json(
         { error: 'Időpont nem található' },
         { status: 404 }
@@ -107,7 +113,7 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
       if (appointmentType !== null && appointmentType !== undefined) {
         const validTypes = ['elso_konzultacio', 'munkafazis', 'kontroll'];
         if (!validTypes.includes(appointmentType)) {
-          await pool.query('ROLLBACK');
+          await client.query('ROLLBACK');
           return NextResponse.json(
             { error: 'Érvénytelen időpont típus érték' },
             { status: 400 }
@@ -120,7 +126,7 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
     }
 
     if (updateFields.length === 0) {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK');
       return NextResponse.json(
         { error: 'Nincs módosítandó mező' },
         { status: 400 }
@@ -129,7 +135,7 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
 
     updateValues.push(appointmentId);
 
-    const updateResult = await pool.query(
+    const updateResult = await client.query(
       `UPDATE appointments 
      SET ${updateFields.join(', ')} 
      WHERE id = $${paramIndex}
@@ -144,7 +150,7 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
 
     const appointment = updateResult.rows[0];
     if (!appointment) {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK');
       return NextResponse.json(
         { error: 'Az időpont frissítése sikertelen volt (adatbázis nem adott vissza eredményt)' },
         { status: 500 }
@@ -155,7 +161,7 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
       const newStatus = appointment.appointmentStatus;
       if (newStatus !== undefined && newStatus !== null) {
         const createdBy = auth.email ?? auth.userId ?? 'unknown';
-        await pool.query(
+        await client.query(
           `INSERT INTO appointment_status_events (appointment_id, old_status, new_status, created_by)
            VALUES ($1, $2, $3, $4)`,
           [appointmentId, oldStatus, newStatus, createdBy]
@@ -183,47 +189,19 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
         episodeIdForEwp &&
         stepCodeForEwp
       ) {
-        let ewpId: string | null = workPhaseIdForEwp;
-        let ewpStatus: string | null = null;
-        let ewpApptId: string | null = null;
-
-        if (!ewpId) {
-          const ewpLookup = await pool.query(
-            `SELECT id, status, appointment_id AS "appointmentId"
-             FROM episode_work_phases
-             WHERE episode_id = $1 AND work_phase_code = $2
-               AND (
-                 NOT EXISTS (
-                   SELECT 1 FROM information_schema.columns
-                   WHERE table_schema = 'public' AND table_name = 'episode_work_phases'
-                     AND column_name = 'merged_into_episode_work_phase_id'
-                 )
-                 OR merged_into_episode_work_phase_id IS NULL
-               )
-             FOR UPDATE`,
-            [episodeIdForEwp, stepCodeForEwp]
-          );
-          if (ewpLookup.rows.length === 1) {
-            ewpId = ewpLookup.rows[0].id;
-            ewpStatus = ewpLookup.rows[0].status ?? null;
-            ewpApptId = ewpLookup.rows[0].appointmentId ?? null;
-          }
-        } else {
-          const ewpRow = await pool.query(
-            `SELECT status, appointment_id AS "appointmentId"
-             FROM episode_work_phases WHERE id = $1 FOR UPDATE`,
-            [ewpId]
-          );
-          ewpStatus = ewpRow.rows[0]?.status ?? null;
-          ewpApptId = ewpRow.rows[0]?.appointmentId ?? null;
-        }
+        const ewp = await findEwpForAppointmentRevert(client, {
+          episodeId: episodeIdForEwp,
+          stepCode: stepCodeForEwp,
+          workPhaseId: workPhaseIdForEwp,
+          appointmentId,
+        });
 
         if (
-          ewpId &&
-          ewpApptId === appointmentId &&
-          (ewpStatus === 'completed' || ewpStatus === 'scheduled')
+          ewp &&
+          ewp.appointmentId === appointmentId &&
+          (ewp.status === 'completed' || ewp.status === 'scheduled')
         ) {
-          const otherActive = await pool.query(
+          const otherActive = await client.query(
             `SELECT 1 FROM appointments a
              WHERE a.episode_id = $1
                AND a.step_code = $2
@@ -233,31 +211,18 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
             [episodeIdForEwp, stepCodeForEwp, appointmentId]
           );
           if (otherActive.rows.length === 0) {
-            const changedBy = auth.email ?? auth.userId ?? 'unknown';
-            await pool.query(
-              `UPDATE episode_work_phases
-               SET status = 'pending', appointment_id = NULL
-               WHERE id = $1`,
-              [ewpId]
-            );
-            await pool.query(
-              `INSERT INTO episode_work_phase_audit
-                 (episode_work_phase_id, episode_id, old_status, new_status, changed_by, reason)
-               VALUES ($1, $2, $3, $4, $5, $6)`,
-              [
-                ewpId,
-                episodeIdForEwp,
-                ewpStatus,
-                'pending',
-                changedBy,
-                `appointment ${appointmentId} státusza ${normalisedStatus}-re változott (utólagos jelölés) — fázis visszanyitva`,
-              ]
-            );
+            await revertWorkPhaseLinkToPending(client, {
+              ewpId: ewp.id,
+              episodeId: episodeIdForEwp,
+              oldEwpStatus: ewp.status,
+              changedBy: auth.email ?? auth.userId ?? 'unknown',
+              reasonText: `appointment ${appointmentId} státusza ${normalisedStatus}-re változott (utólagos jelölés) — fázis visszanyitva`,
+            });
           }
         }
       }
 
-      await pool.query(
+      await client.query(
         `UPDATE slot_intents si
          SET state = 'expired', updated_at = CURRENT_TIMESTAMP
          FROM appointments a
@@ -278,7 +243,7 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
         normalisedStatus === 'cancelled_by_doctor' ||
         normalisedStatus === 'cancelled_by_patient'
       ) {
-        await pool.query(
+        await client.query(
           `UPDATE available_time_slots ats
               SET state = 'free', status = 'available'
               FROM appointments a
@@ -288,20 +253,19 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
         );
       }
 
-      const epRow = await pool.query(
-        'SELECT episode_id FROM appointments WHERE id = $1',
-        [appointmentId]
-      );
-      const episodeId = epRow.rows[0]?.episode_id;
-      if (episodeId) {
-        await pool.query(
+      // A REPROJECT_INTENTS event-et az episodeIdForEwp-ből vesszük, amit
+      // már a tranzakció elején FOR UPDATE-tel olvastunk — nem kell külön
+      // re-fetch-elni az appointment-ből (extra round-trip megtakarítás
+      // + race-mentes a párhuzamos episode_id módosítás ellen).
+      if (episodeIdForEwp) {
+        await client.query(
           `INSERT INTO scheduling_events (entity_type, entity_id, event_type) VALUES ('episode', $1, 'REPROJECT_INTENTS')`,
-          [episodeId]
+          [episodeIdForEwp]
         );
       }
     }
 
-    await pool.query('COMMIT');
+    await client.query('COMMIT');
 
     if (appointmentStatus !== undefined) {
       try {
@@ -315,7 +279,13 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
       appointment
     }, { status: 200 });
   } catch (txError) {
-    await pool.query('ROLLBACK');
+    try {
+      await client.query('ROLLBACK');
+    } catch {
+      /* már bezárt connection — felejtsük el */
+    }
     throw txError;
+  } finally {
+    client.release();
   }
 });

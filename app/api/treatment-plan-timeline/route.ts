@@ -174,7 +174,8 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
          AND a.appointment_status IS DISTINCT FROM 'cancelled_by_doctor'
          AND a.appointment_status IS DISTINCT FROM 'cancelled_by_patient'
          ${apptPlanItemFilter}
-       ORDER BY COALESCE(a.step_seq, si.step_seq) ASC NULLS LAST`,
+       ORDER BY COALESCE(a.step_seq, si.step_seq) ASC NULLS LAST,
+                a.start_time ASC NULLS LAST`,
       episodeIdsParam
     );
     intentsResult = await client.query(
@@ -282,13 +283,21 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
     const currentStage = stageByEpisode.get(ep.episode_id) ?? null;
     const isProtetikai = currentStage != null && (PROTETIKAI_STAGE_CODES as readonly string[]).includes(currentStage);
 
+    // FIFO queue per step_code a `step_seq IS NULL` appointmentekhez:
+    // ha az epizódban több (pl. ismételt KONTROLL) lépés van ugyanazzal a
+    // code-dal és a foglalás snapshot-ja nem rögzítette a `step_seq`-et,
+    // korábban csak az ELSŐ appointment matchel-t a stepre, a többi
+    // eldobódott. A queue-val a `start_time ASC`-rendezésben sorrendben
+    // fogyasztják a step-ek (FIFO).
     const apptBySeq = new Map<number, (typeof appts)[0]>();
-    const apptByCodeOnly = new Map<string, (typeof appts)[0]>();
+    const apptByCodeOnlyQueue = new Map<string, (typeof appts)[0][]>();
     for (const a of appts) {
       if (a.step_seq != null) {
         apptBySeq.set(a.step_seq, a);
       } else if (a.step_code) {
-        if (!apptByCodeOnly.has(a.step_code)) apptByCodeOnly.set(a.step_code, a);
+        const queue = apptByCodeOnlyQueue.get(a.step_code) ?? [];
+        queue.push(a);
+        apptByCodeOnlyQueue.set(a.step_code, queue);
       }
     }
     const intentBySeq = new Map<number, (typeof intents)[0]>();
@@ -323,9 +332,19 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
         }
       } else {
         appt = apptBySeq.get(src.stepSeq) ?? null;
-        if (!appt && apptByCodeOnly.has(src.stepCode)) {
-          appt = apptByCodeOnly.get(src.stepCode)!;
-          apptByCodeOnly.delete(src.stepCode);
+        if (!appt) {
+          // FIFO consume: a legkorábbi (start_time ASC) no-step_seq
+          // appointmentet rendeljük a következő ilyen step-hez. Az így
+          // elfogyasztott appointmenteket a következő iteráció már nem
+          // látja, így multi-step esetén minden no-seq foglalás külön
+          // sorhoz kerül.
+          const queue = apptByCodeOnlyQueue.get(src.stepCode);
+          if (queue && queue.length > 0) {
+            appt = queue.shift() ?? null;
+            if (queue.length === 0) {
+              apptByCodeOnlyQueue.delete(src.stepCode);
+            }
+          }
         }
       }
       const intent = intentBySeq.get(src.stepSeq);
