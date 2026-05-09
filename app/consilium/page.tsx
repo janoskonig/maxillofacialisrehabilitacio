@@ -56,6 +56,21 @@ function rsvpResponseBadgeClass(r: InvitationStatusRow['response']): string {
   return 'bg-gray-100 text-gray-700 border-gray-200';
 }
 
+function localDateTimeToIso(local: string): string | null {
+  if (!local) return null;
+  const d = new Date(local);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
+function isoToLocalDateTime(iso: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 type PatientHit = {
   id: string;
   nev?: string | null;
@@ -824,6 +839,8 @@ export default function ConsiliumPage() {
   const [sendingInvitations, setSendingInvitations] = useState(false);
   const [invitationNote, setInvitationNote] = useState('');
   const [invitationsExpanded, setInvitationsExpanded] = useState(false);
+  const [scheduleEditLocal, setScheduleEditLocal] = useState('');
+  const [savingSchedule, setSavingSchedule] = useState(false);
 
   const loadSessions = useCallback(async () => {
     setLoadingSessions(true);
@@ -916,6 +933,21 @@ export default function ConsiliumPage() {
     return m;
   }, [invitations]);
 
+  const rescheduleProposals = useMemo(() => {
+    if (!sessionDetail) return [];
+    const bySlot = new Map<string, { proposedAt: string; attendeeNames: string[] }>();
+    for (const attendee of sessionDetail.attendees) {
+      const inv = activeInvitationsByAttendeeId.get(attendee.id);
+      if (!inv || inv.response !== 'reschedule' || !inv.proposedAt) continue;
+      const hit = bySlot.get(inv.proposedAt) ?? { proposedAt: inv.proposedAt, attendeeNames: [] };
+      hit.attendeeNames.push(attendee.name);
+      bySlot.set(inv.proposedAt, hit);
+    }
+    return Array.from(bySlot.values()).sort(
+      (a, b) => new Date(a.proposedAt).getTime() - new Date(b.proposedAt).getTime(),
+    );
+  }, [sessionDetail, activeInvitationsByAttendeeId]);
+
   const invitationSummary = useMemo(() => {
     const attendees = sessionDetail?.attendees ?? [];
     let going = 0;
@@ -992,6 +1024,10 @@ export default function ConsiliumPage() {
   }, [selectedSessionId, loadItems, loadInvitations]);
 
   useEffect(() => {
+    setScheduleEditLocal(sessionDetail ? isoToLocalDateTime(sessionDetail.scheduledAt) : '');
+  }, [sessionDetail?.id, sessionDetail?.scheduledAt]);
+
+  useEffect(() => {
     return () => clearTimeout(searchDebounceRef.current);
   }, []);
 
@@ -1056,6 +1092,40 @@ export default function ConsiliumPage() {
     } catch {
       showToast('Állapotváltás sikertelen', 'error');
     }
+  };
+
+  const saveSessionScheduledAt = async (scheduledAtIso: string) => {
+    if (!selectedSessionId || savingSchedule) return;
+    setSavingSchedule(true);
+    try {
+      const res = await fetch(`/api/consilium/sessions/${selectedSessionId}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scheduledAt: scheduledAtIso }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        throw new Error(data.error || 'schedule_patch_failed');
+      }
+      await loadSessions();
+      await loadItems(selectedSessionId);
+      await loadInvitations(selectedSessionId);
+      showToast('Konzílium időpont frissítve', 'success');
+    } catch (e: any) {
+      showToast(e?.message ? String(e.message) : 'Időpont mentése sikertelen', 'error');
+    } finally {
+      setSavingSchedule(false);
+    }
+  };
+
+  const saveScheduledAtFromInput = async () => {
+    const iso = localDateTimeToIso(scheduleEditLocal);
+    if (!iso) {
+      showToast('Érvénytelen időpont', 'error');
+      return;
+    }
+    await saveSessionScheduledAt(iso);
   };
 
   const deleteSession = async (sessionId: string, status: SessionSummary['status']) => {
@@ -1455,6 +1525,61 @@ export default function ConsiliumPage() {
                 <p className="text-xs text-gray-600">
                   Lezárt alkalom: csak olvasható. A vetítés továbbra is elérhető, de szerkesztés nem engedélyezett.
                 </p>
+              )}
+
+              {selectedSession && sessionDetail && selectedSession.status !== 'closed' && (
+                <div className="rounded-lg border border-indigo-100 bg-indigo-50/40 p-3 space-y-2">
+                  <h4 className="text-sm font-semibold text-gray-900">Konzílium időpont módosítása</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto] gap-2 items-end">
+                    <div>
+                      <label className="text-xs text-gray-600">Új időpont</label>
+                      <input
+                        type="datetime-local"
+                        className="form-input mt-1"
+                        value={scheduleEditLocal}
+                        onChange={(e) => setScheduleEditLocal(e.target.value)}
+                        disabled={savingSchedule}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-primary text-xs px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={!scheduleEditLocal || savingSchedule}
+                      onClick={() => void saveScheduledAtFromInput()}
+                    >
+                      {savingSchedule ? 'Mentés…' : 'Időpont mentése'}
+                    </button>
+                  </div>
+                  {rescheduleProposals.length > 0 ? (
+                    <div className="space-y-1.5 pt-1">
+                      <p className="text-xs text-indigo-900/85">
+                        RSVP-ben javasolt időpontok ({rescheduleProposals.length}):
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {rescheduleProposals.map((proposal) => (
+                          <button
+                            key={proposal.proposedAt}
+                            type="button"
+                            className="text-xs px-2 py-1 rounded-md border border-indigo-200 bg-white text-indigo-900 hover:bg-indigo-50 disabled:opacity-50"
+                            disabled={savingSchedule}
+                            onClick={() => void saveSessionScheduledAt(proposal.proposedAt)}
+                            title={`Javasolta: ${proposal.attendeeNames.join(', ')}`}
+                          >
+                            {new Date(proposal.proposedAt).toLocaleString('hu-HU', {
+                              dateStyle: 'medium',
+                              timeStyle: 'short',
+                            })}{' '}
+                            · {proposal.attendeeNames.length} fő
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-500">
+                      Még nincs RSVP-ben javasolt időpont; az alkalom tetszőleges időpontra átállítható.
+                    </p>
+                  )}
+                </div>
               )}
 
               {selectedSession && (sessionDetail || loadingItems) && (
