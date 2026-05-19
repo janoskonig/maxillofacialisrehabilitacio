@@ -798,6 +798,11 @@ export async function sendConsiliumInvitationEmail(
   baseUrl: string,
   noteFromOrganizer: string | null,
   agenda?: { patientCount: number; agendaUrl: string | null } | null,
+  logContext?: {
+    sessionId: string;
+    invitationId: string;
+    sentBy?: string;
+  },
 ): Promise<void> {
   const escapeHtml = (s: string) =>
     s
@@ -895,6 +900,14 @@ export async function sendConsiliumInvitationEmail(
     to: recipientEmail,
     subject: `Konzílium meghívó – ${sessionTitle} – Maxillofaciális Rehabilitáció`,
     html,
+    emailType: 'consilium_invitation',
+    sentBy: logContext?.sentBy,
+    metadata: logContext
+      ? {
+          sessionId: logContext.sessionId,
+          invitationId: logContext.invitationId,
+        }
+      : undefined,
   });
 }
 
@@ -958,6 +971,11 @@ export async function sendOhipReminderEmail(
   windowClosesAt: Date | null,
   portalUrl: string,
   adminEmails?: string[],
+  logContext?: {
+    patientId: string;
+    episodeId: string;
+    sentBy?: string;
+  },
 ): Promise<void> {
   const timepointLabels: Record<string, string> = {
     T0: 'Protetikai fázis előtt',
@@ -1016,5 +1034,14 @@ export async function sendOhipReminderEmail(
     subject: `OHIP-14 kérdőív kitöltése (${timepoint}) - Maxillofaciális Rehabilitáció`,
     html,
     bcc: adminEmails && adminEmails.length > 0 ? adminEmails : undefined,
+    emailType: 'ohip_reminder',
+    sentBy: logContext?.sentBy ?? 'system',
+    metadata: logContext
+      ? {
+          patientId: logContext.patientId,
+          episodeId: logContext.episodeId,
+          timepoint,
+        }
+      : { timepoint },
   });
 }

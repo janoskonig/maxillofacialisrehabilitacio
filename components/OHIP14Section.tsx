@@ -6,7 +6,7 @@ import { OHIP14Response, OHIP14Timepoint, ohip14TimepointOptions, ohip14Response
 import { ohip14Questions, calculateOHIP14Scores } from '@/lib/ohip14-questions';
 import { getTimepointAvailability, type TimepointAvailability } from '@/lib/ohip14-timepoint-stage';
 import { useToast } from '@/contexts/ToastContext';
-import { FileText, Save, Loader2, CheckCircle, AlertCircle, Lock, CalendarClock } from 'lucide-react';
+import { FileText, Save, Loader2, CheckCircle, AlertCircle, Lock, CalendarClock, Mail } from 'lucide-react';
 
 interface OHIP14SectionProps {
   patientId: string;
@@ -33,6 +33,14 @@ export function OHIP14Section({
   const [currentStageCode, setCurrentStageCode] = useState<string | null>(null);
   const [deliveryDate, setDeliveryDate] = useState<Date | null>(null);
   const [completedTimepoints, setCompletedTimepoints] = useState<OHIP14Timepoint[]>([]);
+  const [reminderEmailLogs, setReminderEmailLogs] = useState<Array<{
+    timepoint: string | null;
+    status: 'sent' | 'failed';
+    sentAt: string;
+    sentBy: string | null;
+    recipient: string;
+    errorMessage: string | null;
+  }>>([]);
 
   useEffect(() => {
     fetchCurrentStage();
@@ -134,6 +142,11 @@ export function OHIP14Section({
           });
         }
         setResponses(responsesMap);
+        if (Array.isArray(data.reminderEmailLogs)) {
+          setReminderEmailLogs(data.reminderEmailLogs);
+        } else {
+          setReminderEmailLogs([]);
+        }
       }
     } catch (error) {
       console.error('Error fetching OHIP-14 responses:', error);
@@ -349,6 +362,34 @@ export function OHIP14Section({
           </button>
         )}
       </div>
+
+      {!isPatientPortal && reminderEmailLogs.length > 0 && (
+        <div className="mb-6 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+          <p className="text-xs font-medium text-gray-700 flex items-center gap-1.5 mb-2">
+            <Mail className="w-3.5 h-3.5" />
+            OHIP-14 emlékeztető emailek
+          </p>
+          <ul className="space-y-1">
+            {reminderEmailLogs.slice(0, 5).map((log, idx) => (
+              <li key={`${log.sentAt}-${idx}`} className="text-[11px] flex items-start gap-1.5">
+                {log.status === 'sent' ? (
+                  <CheckCircle className="w-3 h-3 text-green-600 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertCircle className="w-3 h-3 text-red-600 shrink-0 mt-0.5" />
+                )}
+                <span className={log.status === 'sent' ? 'text-gray-700' : 'text-red-700'}>
+                  {log.timepoint ?? '?'} — {new Date(log.sentAt).toLocaleString('hu-HU')}
+                  {log.status === 'sent'
+                    ? ` → ${log.recipient}`
+                    : log.errorMessage
+                      ? ` — ${log.errorMessage}`
+                      : ' — sikertelen'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {isPatientPortal && (
         <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">

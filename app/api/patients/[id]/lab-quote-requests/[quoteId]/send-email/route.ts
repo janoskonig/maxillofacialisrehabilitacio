@@ -170,10 +170,24 @@ Fogpótlástani Klinika
         contentType: 'application/pdf',
       },
     ],
+    emailType: 'lab_quote',
+    sentBy: auth.email,
+    metadata: {
+      patientId,
+      quoteId,
+    },
   });
 
   return NextResponse.json(
-    { success: true, message: 'Email sikeresen elküldve a laboratóriumnak' },
+    {
+      success: true,
+      message: 'Email sikeresen elküldve a laboratóriumnak',
+      emailLog: {
+        status: 'sent' as const,
+        sentAt: new Date().toISOString(),
+        sentBy: auth.email,
+      },
+    },
     { status: 200 }
   );
 });

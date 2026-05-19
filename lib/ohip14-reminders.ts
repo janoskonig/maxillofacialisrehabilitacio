@@ -110,7 +110,12 @@ export async function sendOhipReminders(): Promise<ReminderResult> {
         pendingTp,
         pendingAvail.closesAt ?? null,
         portalUrl,
-        undefined
+        undefined,
+        {
+          patientId: patient_id,
+          episodeId: episode_id,
+          sentBy: 'system',
+        },
       );
 
       await queueAdminNotification(

@@ -143,7 +143,15 @@ export function PatientForm({
     currentPatientRef.current = newPatient;
     setCurrentPatient(newPatient);
   }, []);
-  const [labQuoteRequests, setLabQuoteRequests] = useState<Array<{ id: string; szoveg: string; datuma: string }>>([]);
+  const [labQuoteRequests, setLabQuoteRequests] = useState<Array<{
+    id: string;
+    szoveg: string;
+    datuma: string;
+    lastEmailStatus?: 'sent' | 'failed' | null;
+    lastEmailSentAt?: string | null;
+    lastEmailSentBy?: string | null;
+    lastEmailError?: string | null;
+  }>>([]);
   const [newQuoteSzoveg, setNewQuoteSzoveg] = useState<string>('');
   const [newQuoteDatuma, setNewQuoteDatuma] = useState<Date | null>(null);
   const [activeEpisodeId, setActiveEpisodeId] = useState<string | null>(null);

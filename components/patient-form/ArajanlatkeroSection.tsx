@@ -2,15 +2,25 @@
 
 import { Dispatch, SetStateAction } from 'react';
 import { formatDateForInput } from '@/lib/dateUtils';
-import { FileText, Download, Send, Trash2, Plus } from 'lucide-react';
+import { FileText, Download, Send, Trash2, Plus, CheckCircle, AlertCircle } from 'lucide-react';
 import { DatePicker } from '../DatePicker';
+
+interface LabQuoteRequestRow {
+  id: string;
+  szoveg: string;
+  datuma: string;
+  lastEmailStatus?: 'sent' | 'failed' | null;
+  lastEmailSentAt?: string | null;
+  lastEmailSentBy?: string | null;
+  lastEmailError?: string | null;
+}
 
 interface ArajanlatkeroSectionProps {
   isViewOnly: boolean;
   patientId: string | null;
   userRole: string;
-  labQuoteRequests: Array<{ id: string; szoveg: string; datuma: string }>;
-  setLabQuoteRequests: Dispatch<SetStateAction<Array<{ id: string; szoveg: string; datuma: string }>>>;
+  labQuoteRequests: LabQuoteRequestRow[];
+  setLabQuoteRequests: Dispatch<SetStateAction<LabQuoteRequestRow[]>>;
   newQuoteSzoveg: string;
   setNewQuoteSzoveg: Dispatch<SetStateAction<string>>;
   newQuoteDatuma: Date | null;
@@ -54,6 +64,20 @@ export function ArajanlatkeroSection({
                   <div className="text-xs text-gray-600 mt-1 line-clamp-2">
                     {quote.szoveg.substring(0, 100)}{quote.szoveg.length > 100 ? '...' : ''}
                   </div>
+                  {quote.lastEmailStatus === 'sent' && quote.lastEmailSentAt && (
+                    <p className="text-[11px] text-green-700 mt-1 flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3 shrink-0" />
+                      Email elküldve: {new Date(quote.lastEmailSentAt).toLocaleString('hu-HU')}
+                      {quote.lastEmailSentBy ? ` (${quote.lastEmailSentBy})` : ''}
+                    </p>
+                  )}
+                  {quote.lastEmailStatus === 'failed' && (
+                    <p className="text-[11px] text-red-700 mt-1 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      Email küldés sikertelen
+                      {quote.lastEmailError ? `: ${quote.lastEmailError}` : ''}
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 ml-4">
                   <button
@@ -119,6 +143,21 @@ export function ArajanlatkeroSection({
                           const errorData = await response.json();
                           throw new Error(errorData.error || 'Email küldési hiba');
                         }
+
+                        const data = await response.json();
+                        setLabQuoteRequests((prev) =>
+                          prev.map((q) =>
+                            q.id === quote.id
+                              ? {
+                                  ...q,
+                                  lastEmailStatus: 'sent' as const,
+                                  lastEmailSentAt: data.emailLog?.sentAt ?? new Date().toISOString(),
+                                  lastEmailSentBy: data.emailLog?.sentBy ?? null,
+                                  lastEmailError: null,
+                                }
+                              : q,
+                          ),
+                        );
 
                         showToast('Email sikeresen elküldve a laboratóriumnak', 'success');
                       } catch (error) {

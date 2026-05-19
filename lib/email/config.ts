@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { logOutboundEmail, type EmailLogMetadata } from './outbound-log';
 
 // Trim whitespace to avoid authentication issues from copy/paste
 const SMTP_HOST = process.env.SMTP_HOST?.trim();
@@ -43,6 +44,10 @@ export interface SendEmailOptions {
   attachments?: EmailAttachment[];
   replyTo?: string;
   bcc?: string | string[];
+  /** Naplózáshoz: pl. consilium_invitation, ohip_reminder, lab_quote */
+  emailType?: string;
+  metadata?: EmailLogMetadata;
+  sentBy?: string;
 }
 
 /**
@@ -177,8 +182,33 @@ export async function sendEmail(options: SendEmailOptions): Promise<void> {
 
     const info = await transporter.sendMail(mailOptions);
     console.log('Email sent successfully:', info.messageId);
+
+    await logOutboundEmail({
+      emailType: options.emailType ?? 'generic',
+      recipient: toAddress,
+      subject: options.subject,
+      messageId: info.messageId ?? null,
+      status: 'sent',
+      sentBy: options.sentBy ?? null,
+      metadata: {
+        ...(options.metadata ?? {}),
+        ...(bccAddresses && bccAddresses.length > 0 ? { bcc: bccAddresses.join(', ') } : {}),
+      },
+    });
   } catch (error) {
     console.error('Error sending email:', error);
+
+    const toRecipients = Array.isArray(options.to) ? options.to : [options.to];
+    await logOutboundEmail({
+      emailType: options.emailType ?? 'generic',
+      recipient: toRecipients[0] ?? 'unknown',
+      subject: options.subject,
+      status: 'failed',
+      errorMessage: error instanceof Error ? error.message : String(error),
+      sentBy: options.sentBy ?? null,
+      metadata: options.metadata,
+    });
+
     throw error;
   }
 }

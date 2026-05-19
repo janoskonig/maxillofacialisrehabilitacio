@@ -108,5 +108,42 @@ export const GET = authedHandler(async (req, { params }) => {
     updatedBy: row.updatedBy,
   }));
 
-  return NextResponse.json({ responses });
+  let reminderEmailLogs: Array<{
+    timepoint: string | null;
+    status: string;
+    sentAt: string;
+    sentBy: string | null;
+    recipient: string;
+    errorMessage: string | null;
+  }> = [];
+
+  try {
+    const logRes = await pool.query(
+      `SELECT
+         metadata->>'timepoint' as timepoint,
+         status,
+         created_at as "sentAt",
+         sent_by as "sentBy",
+         recipient,
+         error_message as "errorMessage"
+       FROM outbound_email_log
+       WHERE email_type = 'ohip_reminder'
+         AND metadata->>'patientId' = $1
+       ORDER BY created_at DESC
+       LIMIT 20`,
+      [patientId],
+    );
+    reminderEmailLogs = logRes.rows.map((row) => ({
+      timepoint: row.timepoint ?? null,
+      status: row.status,
+      sentAt: row.sentAt?.toISOString?.() ?? String(row.sentAt),
+      sentBy: row.sentBy ?? null,
+      recipient: row.recipient,
+      errorMessage: row.errorMessage ?? null,
+    }));
+  } catch {
+    // Ha a tábla még nem létezik (migráció előtt), csendben kihagyjuk.
+  }
+
+  return NextResponse.json({ responses, reminderEmailLogs });
 });

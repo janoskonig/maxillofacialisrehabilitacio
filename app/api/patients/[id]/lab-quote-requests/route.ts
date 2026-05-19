@@ -29,17 +29,29 @@ export const GET = authedHandler(async (req, { params }) => {
   // Árajánlatkérők lekérdezése
   const result = await pool.query(
     `SELECT 
-        id,
-        patient_id as "patientId",
-        szoveg,
-        datuma,
-        created_at as "createdAt",
-        updated_at as "updatedAt",
-        created_by as "createdBy",
-        updated_by as "updatedBy"
-      FROM lab_quote_requests
-      WHERE patient_id = $1
-      ORDER BY created_at DESC`,
+        lqr.id,
+        lqr.patient_id as "patientId",
+        lqr.szoveg,
+        lqr.datuma,
+        lqr.created_at as "createdAt",
+        lqr.updated_at as "updatedAt",
+        lqr.created_by as "createdBy",
+        lqr.updated_by as "updatedBy",
+        el.status as "lastEmailStatus",
+        el.created_at as "lastEmailSentAt",
+        el.sent_by as "lastEmailSentBy",
+        el.error_message as "lastEmailError"
+      FROM lab_quote_requests lqr
+      LEFT JOIN LATERAL (
+        SELECT status, created_at, sent_by, error_message
+        FROM outbound_email_log
+        WHERE email_type = 'lab_quote'
+          AND metadata->>'quoteId' = lqr.id::text
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) el ON true
+      WHERE lqr.patient_id = $1
+      ORDER BY lqr.created_at DESC`,
     [patientId]
   );
 
