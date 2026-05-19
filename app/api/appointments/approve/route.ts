@@ -10,9 +10,9 @@ import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { queueAdminNotification } from '@/lib/email/admin-notification-queue';
 import { recomputeKezeleoorvosSilent } from '@/lib/recompute-kezeleoorvos';
-import { writeAuditEvent } from '@/lib/tmk/audit-events';
-import { bumpDomainRevision } from '@/lib/tmk/entity-revision';
-import { invalidateFromSource } from '@/lib/tmk/invalidation';
+import { writeAuditEvent } from '@/lib/research-registry/audit-events';
+import { bumpDomainRevision } from '@/lib/research-registry/entity-revision';
+import { invalidateFromSource } from '@/lib/research-registry/invalidation';
 
 /**
  * Approve a pending appointment (via email link)

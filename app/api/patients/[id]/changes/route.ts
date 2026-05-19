@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
-import { canAccessPatientAuditTrail } from '@/lib/tmk/access-policy';
+import { canAccessPatientAuditTrail } from '@/lib/research-registry/access-policy';
 import { HttpError } from '@/lib/auth-server';
 
 /**

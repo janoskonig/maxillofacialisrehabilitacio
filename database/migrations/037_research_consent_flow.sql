@@ -1,4 +1,4 @@
--- TMK research consent flow: event history, active consent version seed
+-- Research consent flow: event history, active consent version seed
 
 ALTER TABLE consent_versions
   ADD COLUMN IF NOT EXISTS consent_body_hu TEXT,
@@ -29,8 +29,8 @@ CREATE INDEX IF NOT EXISTS idx_patient_consent_events_patient
 -- Default protocol + active consent version (idempotent seed)
 INSERT INTO registry_protocols (protocol_code, title, version_label, effective_from)
 VALUES (
-  'TMK_MAXREHAB',
-  'Maxillofaciális rehabilitációs regiszter',
+  'MAXREHAB_REGISTRY',
+  'Maxillofaciális rehabilitációs kutatási regiszter',
   'v1',
   CURRENT_DATE
 )
@@ -47,10 +47,10 @@ INSERT INTO consent_versions (
 SELECT
   p.id,
   'v1',
-  encode(sha256('tmk_research_consent_v1_hu'::bytea), 'hex'),
+  encode(sha256('research_consent_v1_hu'::bytea), 'hex'),
   CURRENT_DATE,
   $consent$
-A beteg hozzájárulását kéri a Maxillofaciális Rehabilitációs Regiszter (TMK) keretében történő anonimizált adatfeldolgozáshoz és kutatási célú felhasználáshoz.
+A beteg hozzájárulását kéri a maxillofaciális rehabilitációs kutatási regiszter keretében történő anonimizált adatfeldolgozáshoz és kutatási célú felhasználáshoz.
 
 A hozzájárulás önkéntes. A beteg tájékoztatást kap arról, hogy:
 - személyes adatai kizárólag a szükséges mértékben kerülnek feldolgozásra;
@@ -62,7 +62,7 @@ A hozzájárulás rögzítése után az adatok a regiszter minőségbiztosítás
 $consent$,
   true
 FROM registry_protocols p
-WHERE p.protocol_code = 'TMK_MAXREHAB'
+WHERE p.protocol_code = 'MAXREHAB_REGISTRY'
   AND NOT EXISTS (
     SELECT 1 FROM consent_versions cv
     WHERE cv.protocol_id = p.id AND cv.version_label = 'v1'
@@ -72,12 +72,12 @@ UPDATE consent_versions cv
 SET is_active = false
 FROM registry_protocols p
 WHERE cv.protocol_id = p.id
-  AND p.protocol_code = 'TMK_MAXREHAB'
+  AND p.protocol_code = 'MAXREHAB_REGISTRY'
   AND cv.version_label <> 'v1';
 
 UPDATE consent_versions cv
 SET is_active = true
 FROM registry_protocols p
 WHERE cv.protocol_id = p.id
-  AND p.protocol_code = 'TMK_MAXREHAB'
+  AND p.protocol_code = 'MAXREHAB_REGISTRY'
   AND cv.version_label = 'v1';

@@ -1,4 +1,4 @@
--- TMK compliance Phase 1: CRF skeleton registry + quality state machine + recompute queue
+-- Research registry compliance Phase 1: CRF skeleton registry + quality state machine + recompute queue
 
 -- ---------------------------------------------------------------------------
 -- CRF registry (form/field versions)

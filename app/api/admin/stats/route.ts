@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
-import { fetchQualitySummary } from '@/lib/tmk/quality-summary';
-import { getComplianceFeatureFlag } from '@/lib/tmk/feature-flags';
+import { fetchQualitySummary } from '@/lib/research-registry/quality-summary';
+import { getComplianceFeatureFlag } from '@/lib/research-registry/feature-flags';
 
 export const dynamic = 'force-dynamic';
 
@@ -655,7 +655,7 @@ export const GET = roleHandler(['admin'], async () => {
       olvasatlanOsszes: messagesUnreadTotal,
       kuldoTipusSzerint: unreadByType,
     },
-    tmk: {
+    registry: {
       quality: qualitySummary,
       researchExportPipeline,
     },

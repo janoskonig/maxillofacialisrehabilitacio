@@ -82,7 +82,7 @@ export type AdminStats = {
     olvasatlanOsszes: number;
     kuldoTipusSzerint: Array<{ kuldoTipus: string; olvasatlan: number; osszes: number }>;
   };
-  tmk?: {
+  registry?: {
     quality: {
       enabled: boolean;
       totalEntities: number;

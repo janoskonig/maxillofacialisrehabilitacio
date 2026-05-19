@@ -1,4 +1,4 @@
--- TMK compliance Phase 0: domain foundation
+-- Research registry compliance Phase 0: domain foundation
 -- Unified audit, entity revision, temporal columns, dependency graph, feature flags
 
 -- ---------------------------------------------------------------------------

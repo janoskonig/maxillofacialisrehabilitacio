@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
 import { treatmentTypePatchSchema } from '@/lib/admin-process-schemas';
-import { writeAuditEvent } from '@/lib/tmk/audit-events';
-import { guardClinicalWrite } from '@/lib/tmk/read-write-boundary';
+import { writeAuditEvent } from '@/lib/research-registry/audit-events';
+import { guardClinicalWrite } from '@/lib/research-registry/read-write-boundary';
 
 export const dynamic = 'force-dynamic';
 

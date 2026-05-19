@@ -1,4 +1,4 @@
--- TMK compliance Phase 3: governance, protocol metadata, consent lifecycle
+-- Research registry compliance Phase 3: governance, protocol metadata, consent lifecycle
 
 -- ---------------------------------------------------------------------------
 -- Study / center governance (MVP)

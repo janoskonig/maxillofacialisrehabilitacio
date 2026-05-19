@@ -1185,7 +1185,7 @@ export function StatsCsvExport({
   const [bulkRunning, setBulkRunning] = useState(false);
   const [researchExportStatus, setResearchExportStatus] = useState<string | null>(null);
 
-  const researchExportEnabled = stats?.tmk?.researchExportPipeline === true;
+  const researchExportEnabled = stats?.registry?.researchExportPipeline === true;
 
   const loadMedical = useCallback(async () => {
     setMedicalLoading(true);
@@ -1275,7 +1275,7 @@ export function StatsCsvExport({
   const registerResearchExport = useCallback(async () => {
     setResearchExportStatus(null);
     try {
-      const res = await fetch('/api/admin/tmk/research-export', {
+      const res = await fetch('/api/admin/research-registry/research-export', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },

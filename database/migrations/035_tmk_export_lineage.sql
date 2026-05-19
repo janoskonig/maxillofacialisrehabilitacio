@@ -1,4 +1,4 @@
--- TMK compliance Phase 2: reproducible export, anonymization, lineage-lite
+-- Research registry compliance Phase 2: reproducible export, anonymization, lineage-lite
 
 -- ---------------------------------------------------------------------------
 -- Analysis exports (frozen research artifacts)

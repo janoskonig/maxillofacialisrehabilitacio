@@ -4,9 +4,9 @@ import { roleHandler } from '@/lib/api/route-handler';
 import { getCurrentEpisodeAndStage } from '@/lib/ohip14-stage';
 import { OHIP14Timepoint } from '@/lib/types';
 import { logActivity } from '@/lib/activity';
-import { writeAuditEvent } from '@/lib/tmk/audit-events';
-import { bumpDomainRevision, RevisionConflictError } from '@/lib/tmk/entity-revision';
-import { invalidateFromSource } from '@/lib/tmk/invalidation';
+import { writeAuditEvent } from '@/lib/research-registry/audit-events';
+import { bumpDomainRevision, RevisionConflictError } from '@/lib/research-registry/entity-revision';
+import { invalidateFromSource } from '@/lib/research-registry/invalidation';
 
 /**
  * Lock patient's OHIP-14 response (prevent patient from modifying)

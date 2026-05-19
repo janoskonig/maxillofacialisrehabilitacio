@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
-import { fetchQualitySummary } from '@/lib/tmk/quality-summary';
+import { fetchQualitySummary } from '@/lib/research-registry/quality-summary';
 
 export const dynamic = 'force-dynamic';
 

@@ -7,7 +7,7 @@ import {
   withdrawResearchConsent,
   markConsentPending,
   listPatientConsentEvents,
-} from '@/lib/tmk/research-consent-service';
+} from '@/lib/research-registry/research-consent-service';
 
 export const dynamic = 'force-dynamic';
 
