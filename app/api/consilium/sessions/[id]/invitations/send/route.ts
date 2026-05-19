@@ -9,7 +9,9 @@ import {
   normalizeSessionAttendees,
 } from '@/lib/consilium';
 import {
+  clearInvitationResponse,
   ensureInvitationForAttendee,
+  findActiveInvitationForAttendee,
   markInvitationSent,
 } from '@/lib/consilium-invitations';
 import { sendConsiliumInvitationEmail } from '@/lib/email';
@@ -28,6 +30,10 @@ const sendInvitationsBodySchema = z.object({
    * Alapból false: meglévő linket küldjük újra ugyanahhoz a címzetthez.
    */
   regenerate: z.boolean().optional(),
+  /**
+   * Ha false, újraküldéskor is megmarad a korábbi RSVP. Alapból true.
+   */
+  clearRsvpOnResend: z.boolean().optional(),
 });
 
 function resolvePublicBaseUrl(req: Request): string {
@@ -65,7 +71,8 @@ export const POST = authedHandler(async (req, { auth, params }) => {
   if (!parsed.success) {
     throw new HttpError(400, 'Érvénytelen kérés', 'INVALID_REQUEST');
   }
-  const { attendeeIds, note, regenerate } = parsed.data;
+  const { attendeeIds, note, regenerate, clearRsvpOnResend } = parsed.data;
+  const shouldClearRsvpOnResend = clearRsvpOnResend !== false;
 
   const allAttendees = normalizeSessionAttendees(session.attendees);
   if (allAttendees.length === 0) {
@@ -177,6 +184,9 @@ export const POST = authedHandler(async (req, { auth, params }) => {
     let rotated = false;
     try {
       await client.query('BEGIN');
+      const priorInvitation = await findActiveInvitationForAttendee(client, sessionId, att.id);
+      const isResend = priorInvitation?.sentAt != null;
+
       const ensured = await ensureInvitationForAttendee(client, {
         sessionId,
         attendeeId: att.id,
@@ -188,6 +198,10 @@ export const POST = authedHandler(async (req, { auth, params }) => {
       invitationId = ensured.invitationId;
       rawTokenForLink = ensured.rawToken;
       rotated = ensured.rotated;
+
+      if (shouldClearRsvpOnResend && isResend && !rotated) {
+        await clearInvitationResponse(client, invitationId);
+      }
 
       await markInvitationSent(client, invitationId);
       await client.query('COMMIT');

@@ -1634,7 +1634,7 @@ export default function ConsiliumPage() {
                               successLabel: 'Meghívók kiküldve',
                             })
                           }
-                          title="Email-meghívót küld minden jelenlévőnek; aki már kapott, ugyanazt a linket kapja újra (RSVP nem vész el)."
+                          title="Email-meghívót küld minden jelenlévőnek. Aki már kapott meghívót, újra megkapja — a korábbi RSVP válasz törlődik, újra kell jeleznie."
                         >
                           <Send className="w-3.5 h-3.5" />
                           {sendingInvitations ? 'Küldés…' : 'Meghívók kiküldése'}
@@ -1752,7 +1752,7 @@ export default function ConsiliumPage() {
                                         successLabel: 'Meghívó újraküldve',
                                       })
                                     }
-                                    title="Ugyanazt a linket küldjük újra; az addigi RSVP válasz megmarad."
+                                    title="Ugyanazt a linket küldjük újra; a korábbi RSVP válasz törlődik, újra kell jeleznie."
                                   >
                                     Újraküld
                                   </button>

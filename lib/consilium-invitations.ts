@@ -246,6 +246,23 @@ export async function markInvitationSent(client: PoolClient, invitationId: strin
   );
 }
 
+/** Újraküldés előtt: a korábbi RSVP törlése (link/token változatlan marad). */
+export async function clearInvitationResponse(
+  client: PoolClient,
+  invitationId: string,
+): Promise<void> {
+  await client.query(
+    `UPDATE consilium_session_invitations
+     SET response = NULL,
+         proposed_at = NULL,
+         proposed_note = NULL,
+         responded_at = NULL
+     WHERE id = $1::uuid
+       AND revoked_at IS NULL`,
+    [invitationId],
+  );
+}
+
 export type InvitationTokenResolution = {
   invitationId: string;
   sessionId: string;
