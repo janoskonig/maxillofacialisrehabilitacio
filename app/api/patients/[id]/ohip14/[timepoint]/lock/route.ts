@@ -4,6 +4,9 @@ import { roleHandler } from '@/lib/api/route-handler';
 import { getCurrentEpisodeAndStage } from '@/lib/ohip14-stage';
 import { OHIP14Timepoint } from '@/lib/types';
 import { logActivity } from '@/lib/activity';
+import { writeAuditEvent } from '@/lib/tmk/audit-events';
+import { bumpDomainRevision, RevisionConflictError } from '@/lib/tmk/entity-revision';
+import { invalidateFromSource } from '@/lib/tmk/invalidation';
 
 /**
  * Lock patient's OHIP-14 response (prevent patient from modifying)
@@ -58,7 +61,10 @@ export const POST = roleHandler(
       );
     }
 
-    // Lock it
+    const body = await req.json().catch(() => ({}));
+    const auditReason =
+      typeof body?.auditReason === 'string' ? body.auditReason : 'OHIP-14 clinical lock';
+
     await pool.query(
       `UPDATE ohip14_responses 
        SET locked_at = CURRENT_TIMESTAMP,
@@ -66,6 +72,40 @@ export const POST = roleHandler(
        WHERE id = $2`,
       [auth.email, findResult.rows[0].id]
     );
+
+    let patientRevision: number;
+    try {
+      patientRevision = await bumpDomainRevision(
+        pool,
+        'patient',
+        patientId,
+        body?.expectedRevision
+      );
+    } catch (e) {
+      if (e instanceof RevisionConflictError) {
+        return NextResponse.json(
+          {
+            error: 'A beteg adatai közben módosultak. Frissítse az oldalt és próbálja újra.',
+            code: e.code,
+            expectedRevision: e.expected,
+            actualRevision: e.actual,
+          },
+          { status: 409 }
+        );
+      }
+      throw e;
+    }
+    await writeAuditEvent(pool, {
+      entityType: 'ohip14_response',
+      entityId: findResult.rows[0].id,
+      action: 'ohip14_locked',
+      actorEmail: auth.email,
+      actorId: auth.userId,
+      reason: auditReason,
+      oldState: { lockedAt: null, timepoint },
+      newState: { lockedAt: new Date().toISOString(), patientRevision },
+    });
+    await invalidateFromSource(pool, 'patient', patientId, { includeMaterialized: true });
 
     await logActivity(
       req,

@@ -1183,6 +1183,9 @@ export function StatsCsvExport({
   const [attemptsUnavailable, setAttemptsUnavailable] = useState(false);
 
   const [bulkRunning, setBulkRunning] = useState(false);
+  const [researchExportStatus, setResearchExportStatus] = useState<string | null>(null);
+
+  const researchExportEnabled = stats?.tmk?.researchExportPipeline === true;
 
   const loadMedical = useCallback(async () => {
     setMedicalLoading(true);
@@ -1269,9 +1272,36 @@ export function StatsCsvExport({
     downloadCsv(filename, csv);
   }, []);
 
+  const registerResearchExport = useCallback(async () => {
+    setResearchExportStatus(null);
+    try {
+      const res = await fetch('/api/admin/tmk/research-export', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          exportLabel: `stats_bulk_${todayIso()}`,
+          source: 'patients',
+        }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { exportId: string; rowCount: number };
+        setResearchExportStatus(
+          `Kutatási export regisztrálva (${data.rowCount} sor, id: ${data.exportId.slice(0, 8)}…)`
+        );
+      } else {
+        const body = await res.json().catch(() => ({}));
+        setResearchExportStatus(body?.error || `Kutatási export hiba (HTTP ${res.status})`);
+      }
+    } catch {
+      setResearchExportStatus('Hálózati hiba a kutatási export regisztrálásakor');
+    }
+  }, []);
+
   const triggerAll = useCallback(async () => {
     if (datasets.length === 0) return;
     setBulkRunning(true);
+    setResearchExportStatus(null);
     try {
       for (const ds of datasets) {
         triggerOne(ds);
@@ -1279,10 +1309,13 @@ export function StatsCsvExport({
         // anélkül hogy "Engedélyezi több fájl letöltését?" promptot dobna.
         await sleep(150);
       }
+      if (researchExportEnabled) {
+        await registerResearchExport();
+      }
     } finally {
       setBulkRunning(false);
     }
-  }, [datasets, triggerOne]);
+  }, [datasets, triggerOne, researchExportEnabled, registerResearchExport]);
 
   const totalRows = datasets.reduce((s, d) => s + (d.rowCount ?? 0), 0);
 
@@ -1304,6 +1337,9 @@ export function StatsCsvExport({
             <p className="mt-0.5 text-sm text-gray-500">
               Aggregált dataframe-ek letöltése későbbi R / pandas elemzésre — UTF-8
               + BOM, vesszős, CRLF (RFC 4180).
+              {researchExportEnabled
+                ? ' Kutatási export pipeline aktív: tömeges letöltéskor de-identifikált kohorsz is regisztrálódik.'
+                : null}
             </p>
           </div>
         </div>
@@ -1324,6 +1360,12 @@ export function StatsCsvExport({
           </button>
         </div>
       </div>
+
+      {researchExportStatus ? (
+        <p className="mb-3 text-xs text-emerald-800" role="status">
+          {researchExportStatus}
+        </p>
+      ) : null}
 
       <div className="mb-5 rounded-lg border border-emerald-100 bg-emerald-50/60 p-3 text-xs text-emerald-900">
         <div className="flex items-start gap-2">

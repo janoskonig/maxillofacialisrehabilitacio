@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
+import { canAccessPatientAuditTrail } from '@/lib/tmk/access-policy';
+import { HttpError } from '@/lib/auth-server';
 
 /**
  * Get patient change history
@@ -9,9 +11,11 @@ import { authedHandler } from '@/lib/api/route-handler';
 export const dynamic = 'force-dynamic';
 
 export const GET = authedHandler(async (req, { auth, params }) => {
+  if (!(await canAccessPatientAuditTrail(auth))) {
+    throw new HttpError(403, 'Nincs jogosultság a változástörténet megtekintéséhez', 'FORBIDDEN');
+  }
+
   const pool = getDbPool();
-  const role = auth.role;
-  const userEmail = auth.email;
   const patientId = params.id;
 
   // Verify patient exists and user has access (same logic as GET /api/patients/[id])

@@ -1,0 +1,30 @@
+{
+  "variables": [
+    {
+      "variable": "age_band_start",
+      "label": "Életkor sáv (5 év)",
+      "type": "integer",
+      "source": "research_patient_view",
+      "notes": "De-identified; no exact birth date in exports"
+    },
+    {
+      "variable": "region_prefix",
+      "label": "Irányítószám előtag (2 karakter)",
+      "type": "string",
+      "source": "research_patient_view"
+    },
+    {
+      "variable": "completeness_score",
+      "label": "Adatminőség teljesség %",
+      "type": "numeric",
+      "source": "entity_quality_state"
+    },
+    {
+      "variable": "legacy_compliance_status",
+      "label": "Átmeneti compliance státusz",
+      "type": "enum",
+      "allowedValues": ["LEGACY_UNVERIFIED", "IMPORTED_LEGACY", "VERIFIED"],
+      "source": "patients"
+    }
+  ]
+}

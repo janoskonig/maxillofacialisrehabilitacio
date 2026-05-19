@@ -82,4 +82,19 @@ export type AdminStats = {
     olvasatlanOsszes: number;
     kuldoTipusSzerint: Array<{ kuldoTipus: string; olvasatlan: number; osszes: number }>;
   };
+  tmk?: {
+    quality: {
+      enabled: boolean;
+      totalEntities: number;
+      byState: Array<{ state: string; count: number }>;
+      avgCompleteness: number | null;
+      lowCompletenessCount: number;
+      staleCount: number;
+      withContradictions: number;
+      queuePending: number;
+      queueFailed: number;
+      queueQuarantined: number;
+    };
+    researchExportPipeline: boolean;
+  };
 };

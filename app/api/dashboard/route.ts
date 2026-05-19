@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
+import { fetchQualitySummary } from '@/lib/tmk/quality-summary';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +13,8 @@ export const GET = authedHandler(async (req, { auth }) => {
   const todayEnd = new Date(now);
   todayEnd.setHours(23, 59, 59, 999);
 
-  const [nextAppointmentsResult, pendingAppointmentsResult, newRegistrationsResult] = await Promise.all([
+  const [nextAppointmentsResult, pendingAppointmentsResult, newRegistrationsResult, qualitySummary] =
+    await Promise.all([
     pool.query(
       `SELECT 
         a.id,
@@ -80,11 +82,13 @@ export const GET = authedHandler(async (req, { auth }) => {
         AND p.created_by IS NULL
       ORDER BY p.created_at ASC`
     ),
+    fetchQualitySummary(pool),
   ]);
 
   return NextResponse.json({
     nextAppointments: nextAppointmentsResult.rows,
     pendingAppointments: pendingAppointmentsResult.rows,
     newRegistrations: newRegistrationsResult.rows,
+    qualitySummary: qualitySummary.enabled ? qualitySummary : null,
   });
 });

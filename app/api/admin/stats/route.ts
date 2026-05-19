@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
+import { fetchQualitySummary } from '@/lib/tmk/quality-summary';
+import { getComplianceFeatureFlag } from '@/lib/tmk/feature-flags';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +20,11 @@ function pct(numerator: number, denominator: number): number {
 
 export const GET = roleHandler(['admin'], async () => {
   const pool = getDbPool();
+
+  const [qualitySummary, researchExportPipeline] = await Promise.all([
+    fetchQualitySummary(pool),
+    getComplianceFeatureFlag('research_export_pipeline'),
+  ]);
 
   // All queries run in parallel — previously they ran serially (~25 round-trips).
   const [
@@ -647,6 +654,10 @@ export const GET = roleHandler(['admin'], async () => {
       osszes: messagesTotal,
       olvasatlanOsszes: messagesUnreadTotal,
       kuldoTipusSzerint: unreadByType,
+    },
+    tmk: {
+      quality: qualitySummary,
+      researchExportPipeline,
     },
   });
 });

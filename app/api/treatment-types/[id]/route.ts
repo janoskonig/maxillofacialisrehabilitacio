@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
 import { treatmentTypePatchSchema } from '@/lib/admin-process-schemas';
+import { writeAuditEvent } from '@/lib/tmk/audit-events';
+import { guardClinicalWrite } from '@/lib/tmk/read-write-boundary';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,16 +22,40 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász'], async (req, { 
   }
   const data = parsed.data;
 
+  try {
+    guardClinicalWrite('treatment_types');
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : 'Write blocked' },
+      { status: 403 }
+    );
+  }
+
   const pool = getDbPool();
+  const before = await pool.query(
+    `SELECT id, code, label_hu FROM treatment_types WHERE id = $1`,
+    [id]
+  );
+  if (before.rows.length === 0) {
+    return NextResponse.json({ error: 'Kezeléstípus nem található' }, { status: 404 });
+  }
+
   const r = await pool.query(
     `UPDATE treatment_types SET label_hu = $1 WHERE id = $2
      RETURNING id, code, label_hu as "labelHu"`,
     [data.labelHu, id]
   );
 
-  if (r.rows.length === 0) {
-    return NextResponse.json({ error: 'Kezeléstípus nem található' }, { status: 404 });
-  }
+  await writeAuditEvent(pool, {
+    entityType: 'treatment_type',
+    entityId: id,
+    action: 'treatment_type_updated',
+    actorEmail: auth.email,
+    actorId: auth.userId,
+    reason: data.auditReason,
+    oldState: before.rows[0],
+    newState: r.rows[0],
+  });
 
   console.info('[admin] treatment_type updated', {
     id,
@@ -48,7 +74,7 @@ export const DELETE = roleHandler(['admin', 'fogpótlástanász'], async (req, {
   const pool = getDbPool();
 
   const exists = await pool.query(
-    `SELECT 1 FROM treatment_types WHERE id = $1`,
+    `SELECT id, code, label_hu FROM treatment_types WHERE id = $1`,
     [id]
   );
   if (exists.rows.length === 0) {
@@ -70,6 +96,17 @@ export const DELETE = roleHandler(['admin', 'fogpótlástanász'], async (req, {
   }
 
   await pool.query(`DELETE FROM treatment_types WHERE id = $1`, [id]);
+
+  await writeAuditEvent(pool, {
+    entityType: 'treatment_type',
+    entityId: id,
+    action: 'treatment_type_deleted',
+    actorEmail: auth.email,
+    actorId: auth.userId,
+    reason: req.nextUrl.searchParams.get('auditReason'),
+    oldState: exists.rows[0],
+    newState: null,
+  });
 
   const auditReason = req.nextUrl.searchParams.get('auditReason');
   console.info('[admin] treatment_type deleted', {

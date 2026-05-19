@@ -10,6 +10,9 @@ import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { queueAdminNotification } from '@/lib/email/admin-notification-queue';
 import { recomputeKezeleoorvosSilent } from '@/lib/recompute-kezeleoorvos';
+import { writeAuditEvent } from '@/lib/tmk/audit-events';
+import { bumpDomainRevision } from '@/lib/tmk/entity-revision';
+import { invalidateFromSource } from '@/lib/tmk/invalidation';
 
 /**
  * Approve a pending appointment (via email link)
@@ -105,9 +108,27 @@ export const GET = apiHandler(async (req, { params }) => {
     try {
       // Update appointment status to approved and set approved_at timestamp
       await pool.query(
-        'UPDATE appointments SET approval_status = $1, approved_at = CURRENT_TIMESTAMP WHERE id = $2',
+        `UPDATE appointments SET approval_status = $1, approved_at = CURRENT_TIMESTAMP,
+         recorded_at = COALESCE(recorded_at, CURRENT_TIMESTAMP),
+         effective_at = CURRENT_TIMESTAMP
+         WHERE id = $2`,
         ['approved', appointment.id]
       );
+
+      const newRevision = await bumpDomainRevision(pool, 'appointment', appointment.id);
+      await writeAuditEvent(pool, {
+        entityType: 'appointment',
+        entityId: appointment.id,
+        action: 'appointment_approved',
+        actorEmail: appointment.patient_email ?? 'patient_portal',
+        reason: 'Patient approved conditional appointment via token',
+        oldState: { approvalStatus: 'pending' },
+        newState: { approvalStatus: 'approved', domainRevision: newRevision },
+      });
+      await invalidateFromSource(pool, 'appointment', appointment.id, {
+        includeMaterialized: true,
+        patientId: appointment.patient_id,
+      });
 
       // Time slot is already marked as booked, so no need to update it
 

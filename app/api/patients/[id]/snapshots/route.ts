@@ -1,9 +1,15 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
+import { canAccessPatientAuditTrail } from '@/lib/tmk/access-policy';
+import { HttpError } from '@/lib/auth-server';
 
 // GET /api/patients/[id]/snapshots - List snapshots for a patient
 export const GET = authedHandler(async (req, { auth, params, correlationId }) => {
+  if (!(await canAccessPatientAuditTrail(auth))) {
+    throw new HttpError(403, 'Nincs jogosultság a pillanatképek megtekintéséhez', 'FORBIDDEN');
+  }
+
   const patientId = params.id;
 
   const pool = getDbPool();

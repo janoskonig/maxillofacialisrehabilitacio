@@ -40,7 +40,11 @@
     "episode-plan:phase3-link": "node scripts/episode-plan-phase3-link-appointments.js",
     "migrate:025-backfill": "node scripts/migrate-025-backfill-work-phase-id.js",
     "backfill:kezeleoorvos": "node scripts/backfill-kezeleoorvos.js",
-    "report:booking-consistency": "node scripts/run-booking-consistency-report.js"
+    "report:booking-consistency": "node scripts/run-booking-consistency-report.js",
+    "tmk:legacy-backfill": "node scripts/tmk-legacy-backfill.js",
+    "tmk:legacy-backfill:dry-run": "node scripts/tmk-legacy-backfill.js --dry-run",
+    "tmk:quality-worker": "tsx scripts/tmk-quality-worker.ts",
+    "tmk:enable-flags": "node scripts/tmk-enable-flags.js"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
