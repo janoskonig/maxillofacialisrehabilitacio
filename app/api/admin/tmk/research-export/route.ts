@@ -7,6 +7,11 @@ import {
 } from '@/lib/tmk/export-service';
 import { getComplianceFeatureFlag } from '@/lib/tmk/feature-flags';
 import { deidentifyPatientRow } from '@/lib/tmk/research-patient-view';
+import {
+  assertResearchExportModeAllowsCohortExport,
+  ResearchExportBlockedError,
+  filterPatientsEligibleForResearchExport,
+} from '@/lib/tmk/research-export-gate';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,14 +63,40 @@ export const POST = roleHandler(['admin', 'fogpótlástanász'], async (req, { a
   let patientIds: string[] = [];
 
   if (body.source === 'patients' || (!body.rows?.length && body.source !== 'custom')) {
+    try {
+      assertResearchExportModeAllowsCohortExport();
+    } catch (e) {
+      if (e instanceof ResearchExportBlockedError) {
+        return NextResponse.json({ error: e.message }, { status: 403 });
+      }
+      throw e;
+    }
+
     const patients = await pool.query(`
       SELECT p.id, p.nem, p.szuletesi_datum, p.iranyitoszam, p.domain_revision,
              p.legacy_compliance_status, a.kezelesre_erkezes_indoka
       FROM patients p
       LEFT JOIN patient_anamnesis a ON a.patient_id = p.id
     `);
-    rows = patients.rows.map((row) => deidentifyPatientRow(row as Record<string, unknown>));
-    patientIds = patients.rows.map((r) => String(r.id));
+    const allIds = patients.rows.map((r) => String(r.id));
+    const { eligible, excluded } = await filterPatientsEligibleForResearchExport(
+      allIds,
+      pool
+    );
+    if (eligible.length === 0) {
+      return NextResponse.json(
+        {
+          error:
+            'Nincs exportálható beteg (consent / compliance). Kutatási export jelenleg nem aktív.',
+          excludedCount: excluded.length,
+        },
+        { status: 403 }
+      );
+    }
+    const eligibleSet = new Set(eligible);
+    const filtered = patients.rows.filter((r) => eligibleSet.has(String(r.id)));
+    rows = filtered.map((row) => deidentifyPatientRow(row as Record<string, unknown>));
+    patientIds = eligible;
   }
 
   const keyColumns =

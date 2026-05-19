@@ -1,21 +1,20 @@
 /**
  * Consent lifecycle helpers.
- * NOTE: Withdrawal impact on frozen exports requires legal/compliance decision.
+ * Withdrawal policy: exclude_future_only (see operational-policy.ts).
  */
 
 import type { Pool } from 'pg';
 import { getDbPool } from '@/lib/db';
+import { CONSENT_WITHDRAWAL_POLICY } from './operational-policy';
 
 export type ConsentStatus = 'unknown' | 'pending' | 'granted' | 'withdrawn' | 'expired';
 
 export interface ConsentWithdrawalPolicy {
-  /** 'exclude_future_only' | 'tombstone_artifact' | 'hard_delete' — legal decision required */
   frozenExportPolicy: 'exclude_future_only' | 'tombstone_artifact' | 'hard_delete';
 }
 
-/** Default until legal review — safest technical default. */
 export const DEFAULT_WITHDRAWAL_POLICY: ConsentWithdrawalPolicy = {
-  frozenExportPolicy: 'exclude_future_only',
+  frozenExportPolicy: CONSENT_WITHDRAWAL_POLICY.frozenExportPolicy,
 };
 
 export async function recordConsentWithdrawal(
@@ -40,23 +39,28 @@ export async function recordConsentWithdrawal(
   );
 }
 
+const TRANSITIONAL_COMPLIANCE = new Set(['LEGACY_UNVERIFIED', 'IMPORTED_LEGACY']);
+
 export async function isPatientResearchUsable(
   patientId: string,
   pool?: Pool
 ): Promise<boolean> {
   const db = pool ?? getDbPool();
   const r = await db.query(
-    `SELECT consent_status, research_usable_until, consent_withdrawn_at
+    `SELECT consent_status, research_usable_until, consent_withdrawn_at, legacy_compliance_status
      FROM patients WHERE id = $1`,
     [patientId]
   );
   if (r.rows.length === 0) return false;
   const row = r.rows[0];
-  if (row.consent_status === 'withdrawn') return false;
+  if (row.consent_status === 'withdrawn' || row.consent_status === 'expired') return false;
+  if (row.consent_status !== 'granted') return false;
   if (row.research_usable_until && new Date(row.research_usable_until) < new Date()) {
     return false;
   }
-  return row.consent_status === 'granted' || row.consent_status === 'unknown';
+  const legacy = row.legacy_compliance_status as string | null;
+  if (legacy && TRANSITIONAL_COMPLIANCE.has(legacy)) return false;
+  return true;
 }
 
 /** Returns export IDs that included a withdrawn subject (for compliance review). */
