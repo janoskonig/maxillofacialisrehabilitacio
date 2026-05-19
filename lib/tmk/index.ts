@@ -17,6 +17,7 @@ export * from './export-service';
 export * from './research-patient-view';
 export * from './governance';
 export * from './consent';
+export * from './research-consent-service';
 export * from './codebook';
 export * from './phi-safety';
 export * from './schema-evolution';

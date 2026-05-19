@@ -7,5 +7,6 @@ export { BetegvizsgalatSection } from './BetegvizsgalatSection';
 export { ImplantatumokSection } from './ImplantatumokSection';
 export { MeltanyossagiSection } from './MeltanyossagiSection';
 export { ArajanlatkeroSection } from './ArajanlatkeroSection';
+export { ResearchConsentSection } from './ResearchConsentSection';
 export { ConflictModal } from './ConflictModal';
 export { StickySubmitBar } from './StickySubmitBar';

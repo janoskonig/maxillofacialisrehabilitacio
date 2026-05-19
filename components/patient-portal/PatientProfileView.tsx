@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import Link from 'next/link';
 import { useToast } from '@/contexts/ToastContext';
+import { ResearchConsentCard } from '@/components/patient-portal/ResearchConsentCard';
 
 interface Patient {
   id: string;
@@ -494,6 +495,8 @@ export function PatientProfileView() {
           </div>
         )}
       </div>
+
+      <ResearchConsentCard />
 
       {/* GDPR Data Rights Section */}
       <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">

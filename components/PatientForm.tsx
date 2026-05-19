@@ -15,6 +15,7 @@ import {
   ImplantatumokSection,
   MeltanyossagiSection,
   ArajanlatkeroSection,
+  ResearchConsentSection,
   ConflictModal,
   StickySubmitBar,
   getToothState,
@@ -1896,6 +1897,14 @@ export function PatientForm({
         )}
 
         {/* Árajánlatkérő laborba */}
+        {shouldShowSection('adminisztracio') && patientId && userRole !== 'technikus' && (
+          <ResearchConsentSection
+            patientId={patientId}
+            isViewOnly={isViewOnly}
+            showToast={showToast}
+          />
+        )}
+
         {shouldShowSection('adminisztracio') && patientId && (
           <ArajanlatkeroSection
             isViewOnly={isViewOnly}
