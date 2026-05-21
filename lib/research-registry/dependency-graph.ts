@@ -52,7 +52,7 @@ export function transitiveInvalidationTargets(
     }
   }
   visited.delete(source);
-  return [...visited];
+  return Array.from(visited);
 }
 
 export function assertAcyclic(graph: DependencyGraph): void {

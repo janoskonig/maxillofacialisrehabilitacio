@@ -95,7 +95,9 @@ export const POST = roleHandler(['admin', 'fogpótlástanász'], async (req, { a
     }
     const eligibleSet = new Set(eligible);
     const filtered = patients.rows.filter((r) => eligibleSet.has(String(r.id)));
-    rows = filtered.map((row) => deidentifyPatientRow(row as Record<string, unknown>));
+    rows = filtered.map((row) => ({
+      ...deidentifyPatientRow(row as Record<string, unknown>),
+    }));
     patientIds = eligible;
   }
 
