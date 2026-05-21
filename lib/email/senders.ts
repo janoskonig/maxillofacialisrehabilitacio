@@ -862,6 +862,33 @@ export async function sendConsiliumInvitationEmail(
     `;
   }
 
+  const teaserBlock = agenda?.agendaUrl
+    ? `<div style="margin: 12px 0; padding: 10px 12px; background:#eef6ff; border: 1px solid #bfdbfe; border-radius: 6px;">
+         <p style="margin: 0; font-size: 13px; color:#1e3a8a;">
+           <strong>Ízelítő az előkészítő anyagból:</strong>
+         </p>
+         <ul style="margin: 6px 0 0 18px; padding: 0; color:#1f2937; font-size: 13px;">
+           <li>betegenként képi előnézet (OP + fotók)</li>
+           <li>napirendi pontok és meglévő válaszok</li>
+           <li>előkészítő megjegyzések és kérdések</li>
+         </ul>
+       </div>`
+    : '';
+
+  const instructionsBlock = agenda?.agendaUrl
+    ? `<div style="margin: 12px 0; padding: 10px 12px; background:#f8fafc; border: 1px dashed #cbd5e1; border-radius: 6px;">
+         <p style="margin: 0; font-size: 13px; color:#0f172a;">
+           <strong>Rövid útmutató:</strong>
+         </p>
+         <ol style="margin: 6px 0 0 18px; padding: 0; color:#334155; font-size: 13px;">
+           <li>Kattintson a <em>Teljes konzíliumi anyag megnyitása</em> gombra.</li>
+           <li>Jelentkezzen be a rendszerbe (ha még nincs bejelentkezve).</li>
+           <li>Nézze át a beteganyagokat, és rögzítse az előkészítő kérdéseket/megjegyzéseket.</li>
+           <li>Végül itt, a levélben jelezze vissza a részvételét az RSVP gombokkal.</li>
+         </ol>
+       </div>`
+    : '';
+
   // Egy-kattintásos pre-fill linkek a leggyakoribb két válaszhoz; az RSVP-oldal
   // mindig megerősítést kér mielőtt rögzítené a választ.
   const goingUrl = `${rsvpUrl}?response=going`;
@@ -878,7 +905,9 @@ export async function sendConsiliumInvitationEmail(
         <li><strong>Időpont:</strong> ${formattedDate}</li>
       </ul>
       ${agendaBlock}
+      ${teaserBlock}
       ${noteBlock}
+      ${instructionsBlock}
       <p style="margin-top: 18px; color: #374151;">
         Kérjük, jelezze vissza, hogy számíthatunk-e Önre:
       </p>
