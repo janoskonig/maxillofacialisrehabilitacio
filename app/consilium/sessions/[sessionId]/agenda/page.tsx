@@ -223,9 +223,42 @@ export default function ConsiliumSessionAgendaPage() {
                   )}
                 </div>
 
-                <div className="text-xs text-gray-600">
-                  Média: OP {it.mediaSummary?.opPreview?.imageCount ?? 0} kép · Fotó{' '}
-                  {it.mediaSummary?.photoPreview?.imageCount ?? 0} kép
+                <div className="rounded-md border border-gray-100 bg-gray-50 p-2 space-y-2">
+                  <p className="text-[11px] uppercase tracking-wide text-gray-500">
+                    Kép előnézet: OP {it.mediaSummary?.opPreview?.imageCount ?? 0} · Fotó{' '}
+                    {it.mediaSummary?.photoPreview?.imageCount ?? 0}
+                  </p>
+                  {it.mediaSummary?.opPreview?.previews?.[0]?.previewUrl ? (
+                    <div className="rounded-md overflow-hidden border border-gray-200 bg-black/5">
+                      <img
+                        src={it.mediaSummary.opPreview.previews[0].previewUrl}
+                        alt="OP előnézet"
+                        className="w-full max-h-56 object-contain bg-black"
+                        loading="lazy"
+                      />
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-500">Nincs OP előnézet.</p>
+                  )}
+                  {(it.mediaSummary?.photoPreview?.previews?.length ?? 0) > 0 ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {it.mediaSummary.photoPreview.previews.slice(0, 6).map((photo) => (
+                        <div
+                          key={photo.documentId}
+                          className="rounded-md overflow-hidden border border-gray-200 bg-black/5"
+                        >
+                          <img
+                            src={photo.previewUrl}
+                            alt="Fotó előnézet"
+                            className="w-full h-24 object-cover"
+                            loading="lazy"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-500">Nincs fotó előnézet.</p>
+                  )}
                 </div>
 
                 {(it.discussionState?.checklist?.length ?? 0) > 0 && (
