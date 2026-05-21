@@ -546,6 +546,23 @@ export async function createAppointment(
       updateValues,
     );
 
+    if (effectiveWorkPhaseId && episodeId) {
+      await client.query(
+        `UPDATE episode_work_phases
+         SET appointment_id = NULL,
+             status = CASE WHEN status = 'scheduled' THEN 'pending' ELSE status END
+         WHERE episode_id = $1 AND appointment_id = $2 AND id <> $3`,
+        [episodeId, appointment.id, effectiveWorkPhaseId]
+      );
+      await client.query(
+        `UPDATE episode_work_phases
+         SET appointment_id = $1,
+             status = CASE WHEN status IN ('pending', 'scheduled') THEN 'scheduled' ELSE status END
+         WHERE id = $2`,
+        [appointment.id, effectiveWorkPhaseId]
+      );
+    }
+
     await client.query('COMMIT');
     committed = true;
 

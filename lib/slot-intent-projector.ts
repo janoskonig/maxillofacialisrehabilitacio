@@ -44,7 +44,12 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
     await pool.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, [episodeId]);
 
     const [episodeRow, apptsRow] = await Promise.all([
-      pool.query(`SELECT opened_at FROM patient_episodes WHERE id = $1 FOR SHARE`, [episodeId]),
+      pool.query(
+        `SELECT opened_at, plan_start_date FROM patient_episodes WHERE id = $1 FOR SHARE`,
+        [episodeId]
+      ).catch(() =>
+        pool.query(`SELECT opened_at FROM patient_episodes WHERE id = $1 FOR SHARE`, [episodeId])
+      ),
       pool.query(
         `SELECT a.step_code, a.step_seq,
                 COALESCE(a.start_time, ats.start_time) AS start_time,
@@ -119,7 +124,9 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
       await pool.query('COMMIT');
       return { projected: 0, reason: 'NO_PATHWAY' };
     }
-    const openedAt = new Date(episodeRow.rows[0].opened_at);
+    const epRow = episodeRow.rows[0];
+    const openedAt = new Date(epRow.opened_at);
+    const planStartDate = epRow.plan_start_date ? new Date(epRow.plan_start_date) : null;
 
     const pathwayByCode = new Map<string, PathwayWorkPhaseTemplate>();
     for (const s of steps) pathwayByCode.set(s.work_phase_code, s);
@@ -127,7 +134,7 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
     // Appointment coverage: keyed by step_code (not step_seq) to avoid index mismatches
     const completedStepCodes = new Set<string>();
     const bookedStepCodes = new Set<string>();
-    let lastHardAnchor = openedAt;
+    let lastHardAnchor = planStartDate ?? openedAt;
     for (const a of apptsRow.rows) {
       const startTime = a.start_time ? new Date(a.start_time) : null;
       if (a.appointment_status === 'completed') {

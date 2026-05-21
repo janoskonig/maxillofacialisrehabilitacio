@@ -21,6 +21,7 @@ import { sqlBookedFutureAppointmentsWithEffectiveStep } from '@/lib/episode-plan
 import { chainBookingRequiredFromCounts } from '@/lib/chain-booking-status';
 import { enrichWorklistBookableWindows } from '@/lib/worklist-bookable-windows';
 import { enrichWorklistPriorAttempts } from '@/lib/worklist-prior-attempts';
+import { probeColumnExists } from '@/lib/schema-probe';
 
 export const dynamic = 'force-dynamic';
 
@@ -201,10 +202,11 @@ export const GET = authedHandler(async (req, { auth }) => {
       [allPatientIds]
     ),
     pool.query(`SELECT id, code, label_hu FROM treatment_types`),
-    pool.query(
-      `SELECT id, opened_at FROM patient_episodes WHERE id = ANY($1)`,
-      [allEpisodeIds]
-    ),
+    (async () => {
+      const hasPlanStart = await probeColumnExists(pool, 'patient_episodes', 'plan_start_date');
+      const cols = hasPlanStart ? 'id, opened_at, plan_start_date' : 'id, opened_at';
+      return pool.query(`SELECT ${cols} FROM patient_episodes WHERE id = ANY($1)`, [allEpisodeIds]);
+    })(),
     pool.query(
       `SELECT episode_id,
               COUNT(*) FILTER (WHERE state = 'open' AND pool = 'work')::int AS cnt
@@ -322,9 +324,15 @@ export const GET = authedHandler(async (req, { auth }) => {
     treatmentTypesRows.rows.map((r: any) => [r.code, { id: r.id, label_hu: r.label_hu }])
   );
 
-  // Episode opened_at
+  // Episode opened_at + plan_start_date
   const openedAtMap = new Map<string, Date>(
     episodeOpenedRows.rows.map((r: any) => [r.id, r.opened_at ? new Date(r.opened_at) : new Date()])
+  );
+  const planStartDateMap = new Map<string, Date | null>(
+    episodeOpenedRows.rows.map((r: any) => [
+      r.id,
+      r.plan_start_date ? new Date(r.plan_start_date) : null,
+    ])
   );
 
   const openWorkIntentByEpisode = new Map<string, number>(
@@ -411,6 +419,7 @@ export const GET = authedHandler(async (req, { auth }) => {
       completedStats: completedStatsMap.get(episodeId) ?? { completedCount: 0, lastCompletedAt: null },
       episodeWorkPhases: episodeWorkPhasesMap.get(episodeId) ?? null,
       openedAt: openedAtMap.get(episodeId) ?? new Date(),
+      planStartDate: planStartDateMap.get(episodeId) ?? null,
       currentStage: stageMap.get(episodeId) ?? null,
     };
 
@@ -553,6 +562,7 @@ export const GET = authedHandler(async (req, { auth }) => {
         stepStatus: step.stepStatus,
         ...(workPhaseId && { workPhaseId }),
         ...(row.assignedProviderId && { assignedProviderId: row.assignedProviderId }),
+        planStartDate: planStartDateMap.get(episodeId)?.toISOString() ?? null,
       };
 
       if (treatmentTypeCode || treatmentTypeLabel || treatmentTypeSource) {

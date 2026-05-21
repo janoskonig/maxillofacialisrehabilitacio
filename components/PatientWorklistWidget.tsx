@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
-import { ClipboardList, CalendarCheck, Trash2, Undo2, CalendarClock, AlertTriangle, Shuffle } from 'lucide-react';
+import { ClipboardList, CalendarCheck, Trash2, Undo2, CalendarClock, AlertTriangle, Shuffle, Link2 } from 'lucide-react';
 import {
   getWorklistItemKey,
   deriveWorklistRowState,
@@ -28,6 +28,8 @@ import {
   type ReassignStepPayload,
 } from './ReassignStepModal';
 import { EpisodeIntegrityBanner } from './EpisodeIntegrityBanner';
+import { LinkAppointmentModal } from './LinkAppointmentModal';
+import { PlanStartDateControl } from './PlanStartDateControl';
 
 export interface PatientWorklistWidgetProps {
   patientId: string;
@@ -94,6 +96,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
     candidates: ReassignStepCandidate[];
   } | null>(null);
   const [reassignStepSubmittingId, setReassignStepSubmittingId] = useState<string | null>(null);
+  const [linkAppointmentItem, setLinkAppointmentItem] = useState<WorklistItemBackend | null>(null);
   /**
    * Ha a SlotPickert sikertelen-jelölés UTÁN nyitjuk meg, ezzel adjuk át az
    * előző próba kontextusát a modal fejlécének és bannerének. Reset-elődik
@@ -422,6 +425,28 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
         status: i.stepStatus ?? null,
       }));
     setReassignStepCtx({ item, candidates });
+  };
+
+  const handleConfirmLinkAppointment = async (
+    item: WorklistItemBackend,
+    appointmentId: string,
+    reason: string
+  ) => {
+    const res = await fetch(`/api/appointments/${appointmentId}/link-work-phase`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        targetWorkPhaseId: item.workPhaseId,
+        episodeId: item.episodeId,
+        reason,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data?.error ?? 'Hozzárendelés sikertelen');
+    }
+    await fetchWorklist();
   };
 
   const handleConfirmReassignStep = async (
@@ -767,6 +792,19 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
 
               return (
                 <Fragment key={key}>
+                  {isFirstRowOfEpisode &&
+                    item.stepStatus !== 'completed' &&
+                    item.stepStatus !== 'skipped' && (
+                      <tr key={`${key}::plan-start`} className="bg-slate-50/80">
+                        <td colSpan={6} className="px-3 py-1">
+                          <PlanStartDateControl
+                            episodeId={item.episodeId}
+                            planStartDate={item.planStartDate}
+                            onSaved={fetchWorklist}
+                          />
+                        </td>
+                      </tr>
+                    )}
                   {priorAttempts.map((att) => {
                     const isUnsuccessful = att.status === 'unsuccessful';
                     const isNoShow = att.status === 'no_show';
@@ -1010,6 +1048,17 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                           {item.workPhaseId && (
                             <button
                               type="button"
+                              onClick={() => setLinkAppointmentItem(item)}
+                              className="text-xs text-indigo-700 hover:underline font-medium text-left flex items-center gap-0.5"
+                              title="Már létező jövőbeli foglalás (pl. páciens portál) hozzárendelése ehhez a munkafázishoz"
+                            >
+                              <Link2 className="w-3 h-3" />
+                              Meglévő foglalás
+                            </button>
+                          )}
+                          {item.workPhaseId && (
+                            <button
+                              type="button"
                               onClick={() => handleMarkStepComplete(item)}
                               disabled={markCompleteKey === key}
                               className="text-xs text-gray-600 hover:underline font-medium disabled:opacity-50 text-left"
@@ -1233,6 +1282,17 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
             const apptId = reassignStepCtx.item.bookedAppointmentId;
             if (!apptId) return;
             await handleConfirmReassignStep(apptId, payload);
+          }}
+        />
+      )}
+
+      {linkAppointmentItem && (
+        <LinkAppointmentModal
+          open
+          onClose={() => setLinkAppointmentItem(null)}
+          item={linkAppointmentItem}
+          onConfirm={async (appointmentId, reason) => {
+            await handleConfirmLinkAppointment(linkAppointmentItem, appointmentId, reason);
           }}
         />
       )}

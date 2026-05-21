@@ -6,6 +6,7 @@
 
 import { getDbPool } from './db';
 import { computeStepWindow } from './step-window';
+import { resolveSchedulingAnchor } from './scheduling-anchor';
 import {
   getPathwayWorkPhasesForEpisode,
   type PathwayWorkPhaseTemplate,
@@ -160,18 +161,35 @@ async function getEpisodeWorkPhases(
   return r.rows as EpisodeWorkPhaseRow[];
 }
 
-/** Get episode anchor for window calculation when last_step_completed_at is null.
- * Fallback: opened_at (episode creation/activation). Deterministic, avoids new Date() drift. */
-async function getEpisodeAnchorFallback(
+/** Episode opened_at + optional plan_start_date for scheduling anchor fallback. */
+async function getEpisodeSchedulingFallback(
   pool: Awaited<ReturnType<typeof getDbPool>>,
   episodeId: string
-): Promise<Date> {
+): Promise<{ openedAt: Date; planStartDate: Date | null }> {
+  const hasPlanStart = await probeColumnExists(pool, 'patient_episodes', 'plan_start_date');
+  const cols = hasPlanStart ? 'opened_at, plan_start_date' : 'opened_at';
   const r = await pool.query(
-    `SELECT opened_at FROM patient_episodes WHERE id = $1`,
+    `SELECT ${cols} FROM patient_episodes WHERE id = $1`,
     [episodeId]
   );
-  const openedAt = r.rows[0]?.opened_at;
-  return openedAt ? new Date(openedAt) : new Date();
+  const row = r.rows[0];
+  const openedAt = row?.opened_at ? new Date(row.opened_at) : new Date();
+  const planStartDate =
+    hasPlanStart && row?.plan_start_date ? new Date(row.plan_start_date) : null;
+  return { openedAt, planStartDate };
+}
+
+function anchorFromStats(
+  lastResolvedAt: Date | null,
+  completedStats: { lastCompletedAt: Date | null },
+  fallback: { openedAt: Date; planStartDate: Date | null }
+): Date {
+  return resolveSchedulingAnchor({
+    lastResolvedAt,
+    lastCompletedAppointmentAt: completedStats.lastCompletedAt,
+    planStartDate: fallback.planStartDate,
+    openedAt: fallback.openedAt,
+  });
 }
 
 /** Synthesize a PathwayWorkPhaseTemplate from an EpisodeWorkPhaseRow when no matching pathway template exists
@@ -261,9 +279,8 @@ export async function nextRequiredStep(episodeId: string): Promise<NextRequiredS
       .filter((d): d is Date => d !== null)
       .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] ?? null;
 
-    const anchorDate = lastResolvedAt
-      ? new Date(lastResolvedAt)
-      : completedStats.lastCompletedAt ?? (await getEpisodeAnchorFallback(pool, episodeId));
+    const fallback = await getEpisodeSchedulingFallback(pool, episodeId);
+    const anchorDate = anchorFromStats(lastResolvedAt, completedStats, fallback);
 
     const daysOffset = pendingStep.default_days_offset ?? matchingStep.default_days_offset ?? 14;
     const { windowStart, windowEnd } = computeStepWindow(anchorDate, daysOffset);
@@ -289,8 +306,8 @@ export async function nextRequiredStep(episodeId: string): Promise<NextRequiredS
 
   // No pathway and no episode_work_phases → default to first consultation
   if (!pathwayWorkPhases || pathwayWorkPhases.length === 0) {
-    const anchorDate =
-      completedStats.lastCompletedAt ?? (await getEpisodeAnchorFallback(pool, episodeId));
+    const fallback = await getEpisodeSchedulingFallback(pool, episodeId);
+    const anchorDate = anchorFromStats(null, completedStats, fallback);
     const { windowStart, windowEnd } = computeStepWindow(anchorDate, DEFAULT_CONSULT_STEP.default_days_offset);
     return {
       work_phase_code: DEFAULT_CONSULT_STEP.work_phase_code,
@@ -306,8 +323,8 @@ export async function nextRequiredStep(episodeId: string): Promise<NextRequiredS
   }
 
   // Legacy fallback: no episode_work_phases generated yet — use appointment count
-  const anchorDate =
-    completedStats.lastCompletedAt ?? (await getEpisodeAnchorFallback(pool, episodeId));
+  const legacyFallback = await getEpisodeSchedulingFallback(pool, episodeId);
+  const anchorDate = anchorFromStats(null, completedStats, legacyFallback);
   const nextStepIndex = completedStats.completedCount;
 
   // For STAGE_0 (pre-consult): next step is first consult
@@ -387,9 +404,8 @@ export async function allPendingSteps(episodeId: string): Promise<AllPendingStep
       .filter((d): d is Date => d !== null)
       .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] ?? null;
 
-    let anchor = lastResolvedAt
-      ? new Date(lastResolvedAt)
-      : completedStats.lastCompletedAt ?? (await getEpisodeAnchorFallback(pool, episodeId));
+    const fallback = await getEpisodeSchedulingFallback(pool, episodeId);
+    let anchor = anchorFromStats(lastResolvedAt, completedStats, fallback);
 
     const results: PendingStep[] = [];
     for (let i = 0; i < pendingSteps.length; i++) {
@@ -420,8 +436,8 @@ export async function allPendingSteps(episodeId: string): Promise<AllPendingStep
 
   // No pathway and no episode_work_phases → default to first consultation
   if (!pathwayWorkPhases || pathwayWorkPhases.length === 0) {
-    const anchorDate =
-      completedStats.lastCompletedAt ?? (await getEpisodeAnchorFallback(pool, episodeId));
+    const fallback = await getEpisodeSchedulingFallback(pool, episodeId);
+    const anchorDate = anchorFromStats(null, completedStats, fallback);
     const { windowStart, windowEnd } = computeStepWindow(anchorDate, DEFAULT_CONSULT_STEP.default_days_offset);
     return [{
       work_phase_code: DEFAULT_CONSULT_STEP.work_phase_code,
@@ -438,8 +454,8 @@ export async function allPendingSteps(episodeId: string): Promise<AllPendingStep
   }
 
   // Legacy fallback: no episode_work_phases — return remaining pathway phases by appointment count
-  const anchorDate =
-    completedStats.lastCompletedAt ?? (await getEpisodeAnchorFallback(pool, episodeId));
+  const legacyFallbackAll = await getEpisodeSchedulingFallback(pool, episodeId);
+  const anchorDate = anchorFromStats(null, completedStats, legacyFallbackAll);
   const nextStepIndex = completedStats.completedCount;
   const currentStage = await getCurrentStage(pool, episodeId);
 
@@ -495,6 +511,8 @@ export interface EpisodeBatchData {
   completedStats: { completedCount: number; lastCompletedAt: Date | null };
   episodeWorkPhases: EpisodeWorkPhaseRow[] | null;
   openedAt: Date;
+  /** Tervezési kezdődátum — anchor ha nincs teljesített fázis / időpont. */
+  planStartDate?: Date | null;
   currentStage: string | null;
 }
 
@@ -512,7 +530,7 @@ export function allPendingStepsWithData(
   episodeId: string,
   data: EpisodeBatchData
 ): AllPendingStepsResult {
-  const { blocks, pathwayWorkPhases, completedStats, episodeWorkPhases, openedAt, currentStage } = data;
+  const { blocks, pathwayWorkPhases, completedStats, episodeWorkPhases, openedAt, planStartDate, currentStage } = data;
 
   if (blocks.length > 0) {
     return {
@@ -534,9 +552,12 @@ export function allPendingStepsWithData(
       .filter((d): d is Date => d !== null)
       .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] ?? null;
 
-    let anchor = lastResolvedAt
-      ? new Date(lastResolvedAt)
-      : completedStats.lastCompletedAt ?? openedAt;
+    let anchor = resolveSchedulingAnchor({
+      lastResolvedAt,
+      lastCompletedAppointmentAt: completedStats.lastCompletedAt,
+      planStartDate: planStartDate ?? null,
+      openedAt,
+    });
 
     const results: PendingStep[] = [];
 
@@ -591,7 +612,12 @@ export function allPendingStepsWithData(
 
   // No pathway and no episode_work_phases → default to first consultation
   if (!pathwayWorkPhases || pathwayWorkPhases.length === 0) {
-    const anchorDate = completedStats.lastCompletedAt ?? openedAt;
+    const anchorDate = resolveSchedulingAnchor({
+      lastResolvedAt: null,
+      lastCompletedAppointmentAt: completedStats.lastCompletedAt,
+      planStartDate: planStartDate ?? null,
+      openedAt,
+    });
     const { windowStart, windowEnd } = computeStepWindow(anchorDate, DEFAULT_CONSULT_STEP.default_days_offset);
     return [{
       work_phase_code: DEFAULT_CONSULT_STEP.work_phase_code,
@@ -608,7 +634,12 @@ export function allPendingStepsWithData(
   }
 
   // Legacy fallback: no episode_work_phases — use appointment count
-  const anchorDate = completedStats.lastCompletedAt ?? openedAt;
+  const anchorDate = resolveSchedulingAnchor({
+    lastResolvedAt: null,
+    lastCompletedAppointmentAt: completedStats.lastCompletedAt,
+    planStartDate: planStartDate ?? null,
+    openedAt,
+  });
   const nextStepIndex = completedStats.completedCount;
 
   if (currentStage === 'STAGE_0') {

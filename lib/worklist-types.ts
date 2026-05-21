@@ -139,6 +139,8 @@ export interface WorklistItemBackend {
   requiresPrecommit?: boolean;
   /** 0-based position of the episode in the patient's treatment plan (opened_at order) */
   episodeOrder?: number;
+  /** Epizód tervezési kezdődátuma (ISO) — a munkafázis ablakok horgonya, ha nincs teljesített fázis */
+  planStartDate?: string | null;
   /**
    * Canonical work-phase row id (episode_work_phases.id) — present when the
    * current pending/scheduled step has a backing row. Drives:

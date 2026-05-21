@@ -8,6 +8,9 @@ import { mapEpisodePathwayRows, type EpisodePathwayApiRow } from '@/lib/map-epis
 import { getCurrentSuggestion } from '@/lib/stage-suggestion-service';
 import { logger } from '@/lib/logger';
 import { recomputeKezeleoorvosSilent } from '@/lib/recompute-kezeleoorvos';
+import { probeColumnExists } from '@/lib/schema-probe';
+import { projectRemainingSteps } from '@/lib/slot-intent-projector';
+import { emitSchedulingEvent } from '@/lib/scheduling-events';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,10 +22,12 @@ export const GET = authedHandler(async (req, { auth, params }) => {
   const pool = getDbPool();
   const episodeId = params.id;
 
+  const hasPlanStartCol = await probeColumnExists(pool, 'patient_episodes', 'plan_start_date');
+  const planStartSelect = hasPlanStartCol ? ', pe.plan_start_date as "planStartDate"' : '';
   const epRow = await pool.query(
     `SELECT pe.id, pe.patient_id as "patientId", pe.reason, pe.pathway_code as "pathwayCode",
       pe.chief_complaint as "chiefComplaint", pe.case_title as "caseTitle", pe.status,
-      pe.opened_at as "openedAt", pe.closed_at as "closedAt",
+      pe.opened_at as "openedAt", pe.closed_at as "closedAt"${planStartSelect},
       pe.parent_episode_id as "parentEpisodeId", pe.trigger_type as "triggerType",
       pe.created_at as "createdAt", pe.created_by as "createdBy",
       pe.care_pathway_id as "carePathwayId", pe.assigned_provider_id as "assignedProviderId",
@@ -73,6 +78,9 @@ export const GET = authedHandler(async (req, { auth, params }) => {
     caseTitle: row.caseTitle,
     status: row.status,
     openedAt: (row.openedAt as Date)?.toISOString?.() ?? String(row.openedAt),
+    planStartDate: hasPlanStartCol && row.planStartDate
+      ? (row.planStartDate as Date)?.toISOString?.() ?? String(row.planStartDate)
+      : null,
     closedAt: row.closedAt ? (row.closedAt as Date)?.toISOString?.() ?? null : null,
     parentEpisodeId: row.parentEpisodeId,
     triggerType: row.triggerType,
@@ -113,10 +121,12 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
     return await handleRemovePathway(pool, episodeId, body.carePathwayId, body.episodePathwayId);
   }
 
-  const { carePathwayId, carePathwayVersion, assignedProviderId, treatmentTypeId } = body;
+  const { carePathwayId, carePathwayVersion, assignedProviderId, treatmentTypeId, planStartDate } = body;
+  const hasPlanStartCol = await probeColumnExists(pool, 'patient_episodes', 'plan_start_date');
   const updates: string[] = [];
   const values: unknown[] = [];
   let idx = 1;
+  let planStartChanged = false;
 
   if (carePathwayId !== undefined) {
     updates.push(`care_pathway_id = $${idx}`);
@@ -137,6 +147,20 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
     updates.push(`treatment_type_id = $${idx}`);
     values.push(treatmentTypeId || null);
     idx++;
+  }
+  if (planStartDate !== undefined && hasPlanStartCol) {
+    let parsed: Date | null = null;
+    if (planStartDate != null && planStartDate !== '') {
+      const d = new Date(String(planStartDate));
+      if (Number.isNaN(d.getTime())) {
+        return NextResponse.json({ error: 'Érvénytelen kezdődátum' }, { status: 400 });
+      }
+      parsed = d;
+    }
+    updates.push(`plan_start_date = $${idx}`);
+    values.push(parsed);
+    idx++;
+    planStartChanged = true;
   }
 
   if (updates.length === 0) {
@@ -181,10 +205,19 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
     // Fire-and-forget: egy recompute hiba ne blokkolja a fő flow-t.
     recomputeKezeleoorvosSilent(prev.patient_id);
   }
+  if (planStartChanged) {
+    try {
+      await projectRemainingSteps(episodeId);
+      await emitSchedulingEvent('episode', episodeId, 'REPROJECT_INTENTS');
+    } catch (e) {
+      logger.error('Failed to reproject after plan_start_date change:', e);
+    }
+  }
 
+  const planStartAfterSelect = hasPlanStartCol ? ', pe.plan_start_date as "planStartDate"' : '';
   const after = await pool.query(
     `SELECT pe.id, pe.care_pathway_id as "carePathwayId", pe.care_pathway_version as "carePathwayVersion",
-      pe.assigned_provider_id as "assignedProviderId", pe.treatment_type_id as "treatmentTypeId",
+      pe.assigned_provider_id as "assignedProviderId", pe.treatment_type_id as "treatmentTypeId"${planStartAfterSelect},
       tt.code as "treatmentTypeCode", tt.label_hu as "treatmentTypeLabel"
      FROM patient_episodes pe
      LEFT JOIN treatment_types tt ON pe.treatment_type_id = tt.id
