@@ -7,6 +7,7 @@ import { ArrowLeft, CalendarClock, Loader2 } from 'lucide-react';
 import { getCurrentUser, type AuthUser } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
 import type { ConsiliumPresentationItem } from '@/lib/consilium-presentation';
+import { formatConsiliumHuDateTime } from '@/lib/consilium-view-helpers';
 
 type AgendaSession = {
   id: string;
@@ -46,6 +47,11 @@ export default function ConsiliumSessionAgendaPage() {
   const [data, setData] = useState<AgendaResponse | null>(null);
   const [loadingData, setLoadingData] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [newChecklistByItemId, setNewChecklistByItemId] = useState<Record<string, string>>({});
+  const [commentDraftByKey, setCommentDraftByKey] = useState<Record<string, string>>({});
+  const [addingChecklistItemId, setAddingChecklistItemId] = useState<string | null>(null);
+  const [submittingCommentKey, setSubmittingCommentKey] = useState<string | null>(null);
 
   useEffect(() => {
     getCurrentUser()
@@ -95,6 +101,77 @@ export default function ConsiliumSessionAgendaPage() {
   }, [loadAgenda]);
 
   const sortedItems = useMemo(() => data?.items ?? [], [data]);
+  const readonly = data?.session.status === 'closed';
+
+  const addChecklistPoint = useCallback(
+    async (itemId: string) => {
+      if (readonly || !sessionId) return;
+      const label = (newChecklistByItemId[itemId] || '').trim();
+      if (!label) return;
+      setActionError(null);
+      setAddingChecklistItemId(itemId);
+      try {
+        const res = await fetch(
+          `/api/consilium/sessions/${encodeURIComponent(sessionId)}/items/${encodeURIComponent(itemId)}/checklist`,
+          {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ label }),
+          },
+        );
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) {
+          setActionError(body.error || 'Nem sikerült az új napirendi pont mentése.');
+          return;
+        }
+        setNewChecklistByItemId((prev) => ({ ...prev, [itemId]: '' }));
+        await loadAgenda();
+      } catch {
+        setActionError('Hálózati hiba történt az új pont mentésekor.');
+      } finally {
+        setAddingChecklistItemId(null);
+      }
+    },
+    [readonly, sessionId, newChecklistByItemId, loadAgenda],
+  );
+
+  const submitPrepComment = useCallback(
+    async (itemId: string, checklistKey: string) => {
+      if (readonly || !sessionId) return;
+      const draftKey = `${itemId}:${checklistKey}`;
+      const bodyText = (commentDraftByKey[draftKey] || '').trim();
+      if (!bodyText) return;
+      setActionError(null);
+      setSubmittingCommentKey(draftKey);
+      try {
+        const res = await fetch(
+          `/api/consilium/sessions/${encodeURIComponent(sessionId)}/items/${encodeURIComponent(itemId)}/prep-comments`,
+          {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              checklistKey,
+              body: bodyText,
+            }),
+          },
+        );
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) {
+          setActionError(body.error || 'Nem sikerült a hozzászólás mentése.');
+          return;
+        }
+        setCommentDraftByKey((prev) => ({ ...prev, [draftKey]: '' }));
+        await loadAgenda();
+      } catch {
+        setActionError('Hálózati hiba történt a hozzászólás mentésekor.');
+      } finally {
+        setSubmittingCommentKey(null);
+      }
+    },
+    [readonly, sessionId, commentDraftByKey, loadAgenda],
+  );
 
   const renderShell = (children: React.ReactNode) => (
     <div className="min-h-screen bg-gradient-to-b from-cyan-50 to-white">
@@ -161,6 +238,11 @@ export default function ConsiliumSessionAgendaPage() {
 
   return renderShell(
     <div className="space-y-4">
+      {actionError && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          {actionError}
+        </div>
+      )}
       <section className="card p-4 sm:p-6 space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
@@ -266,29 +348,82 @@ export default function ConsiliumSessionAgendaPage() {
                     <p className="text-[11px] uppercase tracking-wide text-gray-500">Checklist</p>
                     <ul className="space-y-1">
                       {it.discussionState.checklist.map((entry) => (
-                        <li key={entry.key} className="text-xs text-gray-800">
-                          - {entry.label}
-                          {entry.response ? (
-                            <span className="text-gray-600"> — {entry.response}</span>
-                          ) : null}
+                        <li key={entry.key} className="text-xs text-gray-800 border border-gray-200 rounded-md bg-white p-2 space-y-1.5">
+                          <p>
+                            - {entry.label}
+                            {entry.response ? (
+                              <span className="text-gray-600"> — {entry.response}</span>
+                            ) : null}
+                          </p>
+                          {(it.prepComments ?? []).filter((c) => c.checklistKey === entry.key).length > 0 && (
+                            <ul className="space-y-1">
+                              {(it.prepComments ?? [])
+                                .filter((c) => c.checklistKey === entry.key)
+                                .map((comment) => (
+                                  <li key={comment.id} className="rounded bg-cyan-50 border border-cyan-100 px-2 py-1 text-[11px] text-gray-800">
+                                    <span className="text-cyan-700">
+                                      {comment.authorDisplay} · {formatConsiliumHuDateTime(comment.createdAt)}
+                                    </span>
+                                    <p className="mt-0.5 whitespace-pre-wrap">{comment.body}</p>
+                                  </li>
+                                ))}
+                            </ul>
+                          )}
+                          {!readonly && (
+                            <div className="space-y-1">
+                              <textarea
+                                className="w-full rounded border border-gray-300 px-2 py-1 text-xs min-h-[58px]"
+                                placeholder="Előkészítő megjegyzés vagy kérdés..."
+                                value={commentDraftByKey[`${it.id}:${entry.key}`] || ''}
+                                onChange={(e) =>
+                                  setCommentDraftByKey((prev) => ({
+                                    ...prev,
+                                    [`${it.id}:${entry.key}`]: e.target.value,
+                                  }))
+                                }
+                              />
+                              <button
+                                type="button"
+                                className="text-xs px-2 py-1 rounded bg-cyan-700 text-white hover:bg-cyan-800 disabled:opacity-50"
+                                disabled={submittingCommentKey === `${it.id}:${entry.key}`}
+                                onClick={() => void submitPrepComment(it.id, entry.key)}
+                              >
+                                {submittingCommentKey === `${it.id}:${entry.key}` ? 'Mentés…' : 'Megjegyzés mentése'}
+                              </button>
+                            </div>
+                          )}
                         </li>
                       ))}
                     </ul>
                   </div>
                 )}
 
-                {(it.prepComments?.length ?? 0) > 0 && (
-                  <div className="rounded-md border border-cyan-100 bg-cyan-50/60 p-2 space-y-1">
-                    <p className="text-[11px] uppercase tracking-wide text-cyan-700">
-                      Előkészítő megjegyzések ({it.prepComments.length})
+                {!readonly && (
+                  <div className="rounded-md border border-indigo-100 bg-indigo-50/60 p-2 space-y-1.5">
+                    <p className="text-[11px] uppercase tracking-wide text-indigo-700">
+                      Új napirendi kérdés / pont
                     </p>
-                    <ul className="space-y-1">
-                      {it.prepComments.map((comment) => (
-                        <li key={comment.id} className="text-xs text-gray-800">
-                          {comment.authorDisplay}: {comment.body}
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        className="flex-1 rounded border border-indigo-200 bg-white px-2 py-1.5 text-xs"
+                        placeholder="Pl. Műtéti kockázat megbeszélése"
+                        value={newChecklistByItemId[it.id] || ''}
+                        onChange={(e) =>
+                          setNewChecklistByItemId((prev) => ({
+                            ...prev,
+                            [it.id]: e.target.value,
+                          }))
+                        }
+                      />
+                      <button
+                        type="button"
+                        className="text-xs px-2.5 py-1.5 rounded bg-indigo-700 text-white hover:bg-indigo-800 disabled:opacity-50"
+                        disabled={addingChecklistItemId === it.id}
+                        onClick={() => void addChecklistPoint(it.id)}
+                      >
+                        {addingChecklistItemId === it.id ? 'Mentés…' : 'Pont hozzáadása'}
+                      </button>
+                    </div>
                   </div>
                 )}
               </li>
