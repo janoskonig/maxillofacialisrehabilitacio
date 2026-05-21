@@ -832,12 +832,20 @@ export async function sendConsiliumInvitationEmail(
   // Csak a darabszámot emlegetjük emailben — a betegnevek érzékeny adatok, ezért
   // a részletes lista csak bejelentkezés után, az auth-gated agenda oldalon érhető el.
   let agendaBlock = '';
-  if (agenda && agenda.patientCount > 0) {
-    const countText = `${agenda.patientCount} beteg napirenden`;
+  if (agenda) {
+    const countText =
+      agenda.patientCount > 0
+        ? `${agenda.patientCount} beteg napirenden`
+        : 'Jelenleg nincs beteg a napirenden';
     const linkLine = agenda.agendaUrl
       ? `<p style="margin: 6px 0 0 0; font-size: 13px; color:#0e7490;">
            <a href="${agenda.agendaUrl}" style="color:#0e7490; text-decoration: underline;">
-             Napirend megtekintése (bejelentkezés szükséges)
+             Összes beteg megtekintése (bejelentkezés szükséges)
+           </a>
+         </p>
+         <p style="margin: 10px 0 0 0;">
+           <a href="${agenda.agendaUrl}" style="display:inline-block; background-color:#0e7490; color:white; padding:10px 14px; text-decoration:none; border-radius:6px; font-weight:bold;">
+             Teljes konzíliumi anyag megnyitása
            </a>
          </p>`
       : '';
