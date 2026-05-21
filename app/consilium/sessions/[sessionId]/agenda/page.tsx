@@ -3,15 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, CalendarClock, Loader2, Presentation } from 'lucide-react';
+import { ArrowLeft, CalendarClock, Loader2 } from 'lucide-react';
 import { getCurrentUser, type AuthUser } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
-
-type AgendaItem = {
-  sortOrder: number;
-  discussed: boolean;
-  name: string | null;
-};
+import type { ConsiliumPresentationItem } from '@/lib/consilium-presentation';
 
 type AgendaSession = {
   id: string;
@@ -22,7 +17,7 @@ type AgendaSession = {
 
 type AgendaResponse = {
   session: AgendaSession;
-  items: AgendaItem[];
+  items: ConsiliumPresentationItem[];
 };
 
 function formatHuDateTime(iso: string): string {
@@ -67,7 +62,7 @@ export default function ConsiliumSessionAgendaPage() {
     setLoadingData(true);
     setError(null);
     try {
-      const res = await fetch(`/api/consilium/sessions/${encodeURIComponent(sessionId)}/agenda`, {
+      const res = await fetch(`/api/consilium/sessions/${encodeURIComponent(sessionId)}/presentation`, {
         credentials: 'include',
         cache: 'no-store',
       });
@@ -185,47 +180,90 @@ export default function ConsiliumSessionAgendaPage() {
       </section>
 
       <section className="card p-4 sm:p-6 space-y-3">
-        <div className="flex items-center justify-between gap-2">
+        <div className="space-y-1">
           <h2 className="text-base font-semibold text-gray-900">
-            Napirenden lévő betegek ({sortedItems.length})
+            Előkészítő anyagcsomag ({sortedItems.length} beteg)
           </h2>
-          <Link
-            href={`/consilium/${encodeURIComponent(data.session.id)}/present`}
-            className="btn-secondary text-xs px-3 py-1.5 inline-flex items-center gap-1"
-          >
-            <Presentation className="w-3.5 h-3.5" />
-            Vetítés
-          </Link>
+          <p className="text-xs text-gray-600">
+            A konzíliumra előkészített beteganyagok egyben: alapadatok, checklist és előkészítő megjegyzések.
+          </p>
         </div>
 
         {sortedItems.length === 0 ? (
           <p className="text-sm text-gray-500">Még nincs beteg az alkalmon.</p>
         ) : (
-          <ol className="divide-y divide-gray-100 rounded-md border border-gray-200 bg-white">
+          <ol className="space-y-3">
             {sortedItems.map((it) => (
               <li
-                key={it.sortOrder}
-                className="px-3 py-2 flex items-center gap-3 text-sm"
+                key={it.id}
+                className="rounded-md border border-gray-200 bg-white px-3 py-3 space-y-2"
               >
-                <span className="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-cyan-50 text-cyan-800 text-xs font-semibold">
-                  {it.sortOrder}
-                </span>
-                <span className="flex-1 truncate text-gray-900">
-                  {it.name || <em className="text-gray-400">Beteg neve nem elérhető</em>}
-                </span>
-                {it.discussed && (
-                  <span className="shrink-0 text-[10px] font-medium px-2 py-0.5 rounded border bg-emerald-100 text-emerald-900 border-emerald-200">
-                    Megbeszélve
+                <div className="flex items-start gap-2">
+                  <span className="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-cyan-50 text-cyan-800 text-xs font-semibold">
+                    {it.sortOrder}
                   </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-gray-900 truncate">
+                      {it.patientSummary.name || <em className="text-gray-400">Beteg neve nem elérhető</em>}
+                    </p>
+                    <p className="text-xs text-gray-600 mt-0.5">
+                      {it.patientSummary.taj ? `TAJ: ${it.patientSummary.taj}` : 'TAJ nem elérhető'}
+                      {typeof it.patientSummary.age === 'number'
+                        ? ` · ${it.patientSummary.age} év`
+                        : ''}
+                    </p>
+                    {it.patientSummary.diagnozis && (
+                      <p className="text-xs text-gray-700 mt-1">{it.patientSummary.diagnozis}</p>
+                    )}
+                  </div>
+                  {it.discussionState?.discussed && (
+                    <span className="shrink-0 text-[10px] font-medium px-2 py-0.5 rounded border bg-emerald-100 text-emerald-900 border-emerald-200">
+                      Megbeszélve
+                    </span>
+                  )}
+                </div>
+
+                <div className="text-xs text-gray-600">
+                  Média: OP {it.mediaSummary?.opPreview?.imageCount ?? 0} kép · Fotó{' '}
+                  {it.mediaSummary?.photoPreview?.imageCount ?? 0} kép
+                </div>
+
+                {(it.discussionState?.checklist?.length ?? 0) > 0 && (
+                  <div className="rounded-md border border-gray-100 bg-gray-50 p-2 space-y-1">
+                    <p className="text-[11px] uppercase tracking-wide text-gray-500">Checklist</p>
+                    <ul className="space-y-1">
+                      {it.discussionState.checklist.map((entry) => (
+                        <li key={entry.key} className="text-xs text-gray-800">
+                          - {entry.label}
+                          {entry.response ? (
+                            <span className="text-gray-600"> — {entry.response}</span>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {(it.prepComments?.length ?? 0) > 0 && (
+                  <div className="rounded-md border border-cyan-100 bg-cyan-50/60 p-2 space-y-1">
+                    <p className="text-[11px] uppercase tracking-wide text-cyan-700">
+                      Előkészítő megjegyzések ({it.prepComments.length})
+                    </p>
+                    <ul className="space-y-1">
+                      {it.prepComments.map((comment) => (
+                        <li key={comment.id} className="text-xs text-gray-800">
+                          {comment.authorDisplay}: {comment.body}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </li>
             ))}
           </ol>
         )}
 
-        <p className="text-[11px] text-gray-500">
-          Részletes előkészítés és napirendi pontok a Konzílium oldalon érhetők el.
-        </p>
+        <p className="text-[11px] text-gray-500">A szerkesztés továbbra is a Konzílium oldalon érhető el.</p>
       </section>
     </div>,
   );
