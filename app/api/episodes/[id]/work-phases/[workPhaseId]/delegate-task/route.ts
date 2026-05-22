@@ -6,7 +6,7 @@ import { getDbPool } from '@/lib/db';
 import { ensurePatientVisibleForUser, getUserInstitution } from '@/lib/consilium';
 import { insertUserTask } from '@/lib/user-tasks';
 import { assertAssignableStaffUser } from '@/lib/task-assignee';
-import { workPhaseDelegateSchema } from '@/lib/work-phase-delegate';
+import { workPhaseDelegateSchema, type WorkPhaseDelegateInput } from '@/lib/work-phase-delegate';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,7 +30,7 @@ export const POST = authedHandler(async (req, { auth, params }) => {
     return NextResponse.json({ error: 'Érvénytelen JSON' }, { status: 400 });
   }
 
-  let parsed;
+  let parsed: WorkPhaseDelegateInput;
   try {
     parsed = workPhaseDelegateSchema.parse(body);
   } catch (e) {
