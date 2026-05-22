@@ -8,6 +8,11 @@ import { getDbPool } from './db';
 import { computeStepWindow } from './step-window';
 import { resolveSchedulingAnchor } from './scheduling-anchor';
 import {
+  computePhaseWindowChain,
+  type PhaseWindowChainRow,
+} from './phase-window-chain';
+import { sqlBookedFutureAppointmentsWithEffectiveStep } from './episode-plan-read-model';
+import {
   getPathwayWorkPhasesForEpisode,
   type PathwayWorkPhaseTemplate,
 } from './pathway-work-phases-for-episode';
@@ -394,27 +399,51 @@ export async function allPendingSteps(episodeId: string): Promise<AllPendingStep
 
   // When episode_work_phases exist, use them as SSOT (handles both pathway and tooth-treatment phases).
   if (episodeWorkPhases) {
-    const resolvedSteps = episodeWorkPhases.filter((s) => s.status === 'completed' || s.status === 'skipped');
     const pendingSteps = episodeWorkPhases.filter((s) => s.status === 'pending' || s.status === 'scheduled');
-
     if (pendingSteps.length === 0) return [];
 
+    const resolvedSteps = episodeWorkPhases.filter((s) => s.status === 'completed' || s.status === 'skipped');
     const lastResolvedAt = resolvedSteps
       .map((s) => s.completed_at)
       .filter((d): d is Date => d !== null)
       .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] ?? null;
 
     const fallback = await getEpisodeSchedulingFallback(pool, episodeId);
-    let anchor = anchorFromStats(lastResolvedAt, completedStats, fallback);
+    const initialAnchor = anchorFromStats(lastResolvedAt, completedStats, fallback);
+
+    const bookedByCode = new Map<string, Date>();
+    try {
+      const bookedRes = await pool.query(sqlBookedFutureAppointmentsWithEffectiveStep(), [[episodeId]]);
+      for (const row of bookedRes.rows as Array<{ step_code: string | null; effective_start: Date | string }>) {
+        if (row.step_code) {
+          bookedByCode.set(row.step_code, new Date(row.effective_start));
+        }
+      }
+    } catch {
+      /* tolerate */
+    }
+
+    const chainRows: PhaseWindowChainRow[] = episodeWorkPhases.map((row) => {
+      const ps = pathwayWorkPhases?.find((p) => p.work_phase_code === row.work_phase_code)
+        ?? episodeWorkPhaseAsPathwayTemplate(row);
+      return {
+        workPhaseCode: row.work_phase_code,
+        defaultDaysOffset: (row.default_days_offset ?? ps.default_days_offset) ?? 14,
+        status: row.status,
+        completedAt: row.completed_at ? new Date(row.completed_at) : null,
+        bookedStart: bookedByCode.get(row.work_phase_code) ?? null,
+      };
+    });
+    const chainWindows = computePhaseWindowChain(chainRows, initialAnchor);
 
     const results: PendingStep[] = [];
     for (let i = 0; i < pendingSteps.length; i++) {
       const pending = pendingSteps[i];
       const ps = pathwayWorkPhases?.find((p) => p.work_phase_code === pending.work_phase_code)
         ?? episodeWorkPhaseAsPathwayTemplate(pending);
-
-      const daysOffset = (pending.default_days_offset ?? ps.default_days_offset) ?? 14;
-      const { windowStart, windowEnd, expectedDate } = computeStepWindow(anchor, daysOffset);
+      const chained = chainWindows.get(pending.work_phase_code);
+      const windowStart = chained?.earliestAllowedStart ?? chained?.windowStart ?? initialAnchor;
+      const windowEnd = chained?.windowEnd ?? windowStart;
 
       results.push({
         work_phase_code: ps.work_phase_code,
@@ -424,12 +453,10 @@ export async function allPendingSteps(episodeId: string): Promise<AllPendingStep
         earliest_date: windowStart,
         latest_date: windowEnd,
         reason: `Pathway step ${ps.label ?? ps.work_phase_code}`,
-        anchor: anchor.toISOString(),
+        anchor: initialAnchor.toISOString(),
         stepSeq: i,
         isFirstPending: i === 0,
       });
-
-      anchor = expectedDate;
     }
     return results;
   }
@@ -513,6 +540,8 @@ export interface EpisodeBatchData {
   openedAt: Date;
   /** Tervezési kezdődátum — anchor ha nincs teljesített fázis / időpont. */
   planStartDate?: Date | null;
+  /** step_code → jövőbeli foglalás start (batch enrichment). */
+  futureBookedStartByStepCode?: Map<string, Date>;
   currentStage: string | null;
 }
 
@@ -546,22 +575,35 @@ export function allPendingStepsWithData(
   if (episodeWorkPhases) {
     const resolvedSteps = episodeWorkPhases.filter((s) => s.status === 'completed' || s.status === 'skipped');
     const pendingSteps = episodeWorkPhases.filter((s) => s.status === 'pending' || s.status === 'scheduled');
+    const bookedByCode = data.futureBookedStartByStepCode ?? new Map<string, Date>();
 
     const lastResolvedAt = resolvedSteps
       .map((s) => s.completed_at)
       .filter((d): d is Date => d !== null)
       .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] ?? null;
 
-    let anchor = resolveSchedulingAnchor({
+    const initialAnchor = resolveSchedulingAnchor({
       lastResolvedAt,
       lastCompletedAppointmentAt: completedStats.lastCompletedAt,
       planStartDate: planStartDate ?? null,
       openedAt,
     });
 
+    const chainRows: PhaseWindowChainRow[] = episodeWorkPhases.map((row) => {
+      const ps = pathwayWorkPhases?.find((p) => p.work_phase_code === row.work_phase_code)
+        ?? episodeWorkPhaseAsPathwayTemplate(row);
+      return {
+        workPhaseCode: row.work_phase_code,
+        defaultDaysOffset: (row.default_days_offset ?? ps.default_days_offset) ?? 14,
+        status: row.status,
+        completedAt: row.completed_at ? new Date(row.completed_at) : null,
+        bookedStart: bookedByCode.get(row.work_phase_code) ?? null,
+      };
+    });
+    const chainWindows = computePhaseWindowChain(chainRows, initialAnchor);
+
     const results: PendingStep[] = [];
 
-    // First: resolved (completed/skipped) steps — shown as history
     for (let i = 0; i < resolvedSteps.length; i++) {
       const step = resolvedSteps[i];
       const ps = pathwayWorkPhases?.find((p) => p.work_phase_code === step.work_phase_code)
@@ -581,14 +623,13 @@ export function allPendingStepsWithData(
       });
     }
 
-    // Then: pending/scheduled steps — shown for booking
     let pendingIdx = 0;
     for (const pending of pendingSteps) {
       const ps = pathwayWorkPhases?.find((p) => p.work_phase_code === pending.work_phase_code)
         ?? episodeWorkPhaseAsPathwayTemplate(pending);
-
-      const daysOffset = (pending.default_days_offset ?? ps.default_days_offset) ?? 14;
-      const { windowStart, windowEnd, expectedDate } = computeStepWindow(anchor, daysOffset);
+      const chained = chainWindows.get(pending.work_phase_code);
+      const windowStart = chained?.earliestAllowedStart ?? chained?.windowStart ?? initialAnchor;
+      const windowEnd = chained?.windowEnd ?? windowStart;
 
       results.push({
         work_phase_code: ps.work_phase_code,
@@ -598,13 +639,12 @@ export function allPendingStepsWithData(
         earliest_date: windowStart,
         latest_date: windowEnd,
         reason: `Pathway step ${ps.label ?? ps.work_phase_code}`,
-        anchor: anchor.toISOString(),
+        anchor: initialAnchor.toISOString(),
         stepSeq: pendingIdx,
         isFirstPending: pendingIdx === 0,
         stepStatus: pending.status as 'pending' | 'scheduled',
       });
 
-      anchor = expectedDate;
       pendingIdx++;
     }
     return results;

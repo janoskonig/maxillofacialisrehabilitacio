@@ -400,6 +400,29 @@ export const GET = authedHandler(async (req, { auth }) => {
     }
   }
 
+  // Jövőbeli foglalások step_code szerint — munkafázis ablak láncoláshoz (előző tényleges dátum).
+  const futureBookedByEpisode = new Map<string, Map<string, Date>>();
+  if (allEpisodeIds.length > 0) {
+    const bookedFutureBatch = await pool.query(
+      sqlBookedFutureAppointmentsWithEffectiveStep(),
+      [allEpisodeIds]
+    );
+    for (const row of bookedFutureBatch.rows as Array<{
+      episode_id: string;
+      step_code: string | null;
+      effective_start: Date | string;
+    }>) {
+      if (!row.step_code) continue;
+      const start = new Date(row.effective_start);
+      const inner = futureBookedByEpisode.get(row.episode_id) ?? new Map<string, Date>();
+      const existing = inner.get(row.step_code);
+      if (!existing || start.getTime() < existing.getTime()) {
+        inner.set(row.step_code, start);
+      }
+      futureBookedByEpisode.set(row.episode_id, inner);
+    }
+  }
+
   // BOOKED state is derived solely from the `bookedAppointmentId` enrichment
   // below (`sqlBookedFutureAppointmentsWithEffectiveStep`). The previously
   // computed completedApptSteps / activeApptSteps maps were unused half-protection
@@ -420,6 +443,7 @@ export const GET = authedHandler(async (req, { auth }) => {
       episodeWorkPhases: episodeWorkPhasesMap.get(episodeId) ?? null,
       openedAt: openedAtMap.get(episodeId) ?? new Date(),
       planStartDate: planStartDateMap.get(episodeId) ?? null,
+      futureBookedStartByStepCode: futureBookedByEpisode.get(episodeId) ?? new Map(),
       currentStage: stageMap.get(episodeId) ?? null,
     };
 

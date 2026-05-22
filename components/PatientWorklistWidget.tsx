@@ -1196,10 +1196,18 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
           pool={(slotPickerItem.pool as 'work' | 'consult' | 'control') || 'work'}
           durationMinutes={slotPickerItem.durationMinutes || 30}
           windowStart={
-            slotPickerItem.windowStart ? new Date(slotPickerItem.windowStart) : new Date()
+            slotPickerItem.bookableWindowStart
+              ? new Date(slotPickerItem.bookableWindowStart)
+              : slotPickerItem.windowStart
+                ? new Date(slotPickerItem.windowStart)
+                : new Date()
           }
           windowEnd={
-            slotPickerItem.windowEnd ? new Date(slotPickerItem.windowEnd) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+            slotPickerItem.bookableWindowEnd
+              ? new Date(slotPickerItem.bookableWindowEnd)
+              : slotPickerItem.windowEnd
+                ? new Date(slotPickerItem.windowEnd)
+                : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
           }
           patientId={slotPickerItem.patientId}
           episodeId={slotPickerItem.episodeId}

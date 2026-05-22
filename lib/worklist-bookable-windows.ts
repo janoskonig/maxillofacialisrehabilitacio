@@ -84,8 +84,30 @@ export async function enrichWorklistBookableWindows(
     group.sort((a: WorklistItemBackend, b: WorklistItemBackend) => (a.stepSeq ?? 0) - (b.stepSeq ?? 0));
     let prevEarliest: Date | null = null;
     let prevSuggested: Date | null = null;
+    /** Előző fázis tényleges foglalása / teljesítése — következő nem lehet előtte. */
+    let prevHardStart: Date | null = null;
 
     for (const item of group) {
+      if (item.bookedAppointmentStartTime) {
+        const booked = new Date(item.bookedAppointmentStartTime);
+        prevHardStart = booked;
+        prevEarliest = booked;
+        if (item.windowStart) {
+          prevSuggested = new Date(item.windowStart);
+        }
+        continue;
+      }
+
+      if (item.stepStatus === 'completed' || item.stepStatus === 'skipped') {
+        if (item.windowStart) {
+          const completed = new Date(item.windowStart);
+          prevHardStart = completed;
+          prevEarliest = completed;
+          prevSuggested = completed;
+        }
+        continue;
+      }
+
       const pathwayStart = new Date(item.windowStart!);
       const pathwayEnd = new Date(item.windowEnd!);
       const key = `${item.episodeId}:${item.stepSeq ?? 0}:${item.stepCode}`;
@@ -93,6 +115,9 @@ export async function enrichWorklistBookableWindows(
       const currSuggested = suggestedFromIntent ?? pathwayStart;
 
       const lowerParts = [serverNow.getTime(), pathwayStart.getTime(), currSuggested.getTime()];
+      if (prevHardStart) {
+        lowerParts.push(prevHardStart.getTime());
+      }
       if (prevEarliest && prevSuggested) {
         const deltaMs = currSuggested.getTime() - prevSuggested.getTime();
         if (deltaMs >= 0) {
