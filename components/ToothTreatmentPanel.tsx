@@ -162,11 +162,15 @@ function ToothTreatmentDelegateBlock({
   const [sending, setSending] = useState(false);
   const [feedback, setFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
   const [listOpen, setListOpen] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     void loadInstitutionUsers();
-    void getCurrentUser().then((u) => setSelfUserId((u?.id ?? '').trim()));
+    void getCurrentUser().then((u) => {
+      setSelfUserId((u?.id ?? '').trim());
+      setUserRole(u?.role ?? null);
+    });
   }, [loadInstitutionUsers]);
 
   useEffect(() => {
@@ -285,6 +289,12 @@ function ToothTreatmentDelegateBlock({
           Bezár
         </button>
       </div>
+
+      {userRole === 'admin' && (
+        <p className="text-[10px] text-indigo-800/80">
+          Admin: feladat kiosztható bármely aktív, nem technikus felhasználónak.
+        </p>
+      )}
 
       <div className="flex flex-wrap gap-2">
         <label className="inline-flex items-center gap-1 cursor-pointer">

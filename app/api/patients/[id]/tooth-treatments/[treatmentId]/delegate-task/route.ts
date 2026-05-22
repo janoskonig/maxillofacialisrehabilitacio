@@ -5,22 +5,9 @@ import { getDbPool } from '@/lib/db';
 import { ensurePatientVisibleForUser, getUserInstitution } from '@/lib/consilium';
 import { insertUserTask } from '@/lib/user-tasks';
 import { toothTreatmentDelegateSchema } from '@/lib/tooth-treatment-delegate';
+import { assertAssignableStaffUser } from '@/lib/task-assignee';
 
 export const dynamic = 'force-dynamic';
-
-async function assertActiveUserInInstitution(
-  pool: ReturnType<typeof getDbPool>,
-  userId: string,
-  institutionId: string,
-): Promise<boolean> {
-  const r = await pool.query(
-    `SELECT 1 FROM users
-     WHERE id = $1::uuid AND active = true
-       AND btrim(coalesce(intezmeny, '')) = btrim(coalesce($2::text, ''))`,
-    [userId, institutionId],
-  );
-  return r.rows.length > 0;
-}
 
 /**
  * POST /api/patients/:id/tooth-treatments/:treatmentId/delegate-task
@@ -100,10 +87,10 @@ export const POST = authedHandler(async (req, { auth, params }) => {
   let externalAssigneeLabel: string | undefined;
 
   if (parsed.mode === 'staff') {
-    const ok = await assertActiveUserInInstitution(pool, parsed.assigneeUserId!, institutionId);
+    const ok = await assertAssignableStaffUser(pool, parsed.assigneeUserId!, institutionId, auth.role);
     if (!ok) {
       return NextResponse.json(
-        { error: 'A címzett nem található, inaktív, vagy nem ehhez az intézményhez tartozik' },
+        { error: 'A címzett nem található, inaktív, technikus, vagy nem kiosztható' },
         { status: 400 },
       );
     }
@@ -114,10 +101,10 @@ export const POST = authedHandler(async (req, { auth, params }) => {
     delegatedMode = 'external';
     externalAssigneeLabel = parsed.externalAssigneeLabel!;
     const ownerId = parsed.taskOwnerUserId?.trim() || auth.userId;
-    const ownerOk = await assertActiveUserInInstitution(pool, ownerId, institutionId);
+    const ownerOk = await assertAssignableStaffUser(pool, ownerId, institutionId, auth.role);
     if (!ownerOk) {
       return NextResponse.json(
-        { error: 'A feladat felelőse nem található, inaktív, vagy nem ehhez az intézményhez tartozik' },
+        { error: 'A feladat felelőse nem található, inaktív, vagy nem kiosztható' },
         { status: 400 },
       );
     }

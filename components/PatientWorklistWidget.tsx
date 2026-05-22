@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
-import { ClipboardList, CalendarCheck, Trash2, Undo2, CalendarClock, AlertTriangle, Shuffle, Link2 } from 'lucide-react';
+import { ClipboardList, CalendarCheck, Trash2, Undo2, CalendarClock, AlertTriangle, Shuffle, Link2, SendHorizontal } from 'lucide-react';
+import { WorkPhaseTaskDelegateBlock } from './WorkPhaseTaskDelegateBlock';
 import {
   getWorklistItemKey,
   deriveWorklistRowState,
@@ -97,6 +98,8 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
   } | null>(null);
   const [reassignStepSubmittingId, setReassignStepSubmittingId] = useState<string | null>(null);
   const [linkAppointmentItem, setLinkAppointmentItem] = useState<WorklistItemBackend | null>(null);
+  /** Munkalista sorhoz feladat delegálás / felosztás panel */
+  const [delegateItemKey, setDelegateItemKey] = useState<string | null>(null);
   /**
    * Ha a SlotPickert sikertelen-jelölés UTÁN nyitjuk meg, ezzel adjuk át az
    * előző próba kontextusát a modal fejlécének és bannerének. Reset-elődik
@@ -1037,6 +1040,26 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                           {isConvertingAll ? 'Lefoglalás…' : 'Összes szükséges időpont lefoglalása'}
                         </button>
                       )}
+                      {item.workPhaseId &&
+                        (state === 'READY' || state === 'BOOKED') &&
+                        item.stepStatus !== 'completed' &&
+                        item.stepStatus !== 'skipped' && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setDelegateItemKey((cur) => (cur === key ? null : key))
+                            }
+                            className={`text-xs font-medium text-left flex items-center gap-0.5 ${
+                              delegateItemKey === key
+                                ? 'text-indigo-800 underline'
+                                : 'text-indigo-700 hover:underline'
+                            }`}
+                            title="Feladat kiosztása vagy felosztása részletes listára"
+                          >
+                            <SendHorizontal className="w-3 h-3" />
+                            Feladat osztása
+                          </button>
+                        )}
                       {state === 'READY' && (
                         <>
                           <button
@@ -1167,6 +1190,18 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                     </div>
                   </td>
                 </tr>
+                {delegateItemKey === key && item.workPhaseId && (
+                  <tr className="bg-indigo-50/30">
+                    <td colSpan={5} className="px-3 py-2">
+                      <WorkPhaseTaskDelegateBlock
+                        episodeId={item.episodeId}
+                        workPhaseId={item.workPhaseId}
+                        phaseLabel={item.stepLabel ?? item.nextStep}
+                        onClose={() => setDelegateItemKey(null)}
+                      />
+                    </td>
+                  </tr>
+                )}
                 </Fragment>
               );
             })}

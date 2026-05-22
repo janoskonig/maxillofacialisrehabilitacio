@@ -5,8 +5,9 @@ import { useToast } from '@/contexts/ToastContext';
 import {
   Loader2, SkipForward, RotateCcw, CheckCircle2, Circle, Clock,
   ChevronDown, ChevronUp, ArrowUp, ArrowDown, GripVertical, Trash2,
-  Plus, Search, FileText, Layers, PenLine, Merge, Unlink, Calendar,
+  Plus, Search, FileText, Layers, PenLine, Merge, Unlink, Calendar, SendHorizontal,
 } from 'lucide-react';
+import { WorkPhaseTaskDelegateBlock } from './WorkPhaseTaskDelegateBlock';
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors,
   type DragEndEvent, type Modifier,
@@ -142,7 +143,7 @@ function SortableStepRow({
   onSkipConfirm, onUnskipConfirm, onDelete, onMoveUp, onMoveDown,
   canMoveUp, canMoveDown, reordering,
   mergeMode, mergeSelected, onToggleMerge,
-  onEditTiming, onUnmerge,
+  onEditTiming, onUnmerge, canDelegate, onDelegateClick, delegateOpen,
 }: {
   step: EpisodeStep;
   idx: number;
@@ -164,6 +165,9 @@ function SortableStepRow({
   onToggleMerge: () => void;
   onEditTiming: () => void;
   onUnmerge: () => void;
+  canDelegate: boolean;
+  onDelegateClick: () => void;
+  delegateOpen: boolean;
 }) {
   const {
     attributes, listeners, setNodeRef, setActivatorNodeRef,
@@ -301,6 +305,20 @@ function SortableStepRow({
 
         {/* Actions */}
         <div className="shrink-0 flex items-center gap-1">
+          {canDelegate && !mergeMode && (
+            <button
+              onClick={onDelegateClick}
+              className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded transition-colors ${
+                delegateOpen
+                  ? 'text-indigo-700 bg-indigo-100'
+                  : 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100'
+              }`}
+              title="Feladat kiosztása / felosztása"
+            >
+              <SendHorizontal className="w-3 h-3" />
+              Feladat
+            </button>
+          )}
           {!mergeMode && (
             <button
               onClick={onEditTiming}
@@ -367,6 +385,7 @@ function StepRowWithConfirm({
   onSkipConfirm, onUnskipConfirm, onDelete, onMoveUp, onMoveDown,
   onSkip, onUnskip, onDeleteConfirm, onCancel, onSkipReasonChange,
   onEditTiming, onUnmerge,
+  episodeId, delegatePhaseId, setDelegatePhaseId,
 }: {
   step: EpisodeStep; idx: number; isNext: boolean; stepLabel: string;
   pathwayLabel: string | null; pathwayColor: string;
@@ -380,8 +399,13 @@ function StepRowWithConfirm({
   onSkip: () => void; onUnskip: () => void; onDeleteConfirm: () => void;
   onCancel: () => void; onSkipReasonChange: (v: string) => void;
   onEditTiming: () => void; onUnmerge: () => void;
+  episodeId: string;
+  delegatePhaseId: string | null;
+  setDelegatePhaseId: (id: string | null) => void;
 }) {
   const isConfirming = confirmStepId === step.id;
+  const canDelegate = step.status === 'pending' || step.status === 'scheduled';
+  const delegateOpen = delegatePhaseId === step.id;
   return (
     <div>
       <SortableStepRow
@@ -393,7 +417,20 @@ function StepRowWithConfirm({
         canMoveUp={canMoveUp} canMoveDown={canMoveDown} reordering={reordering}
         mergeMode={mergeMode} mergeSelected={mergeSelected} onToggleMerge={onToggleMerge}
         onEditTiming={onEditTiming} onUnmerge={onUnmerge}
+        canDelegate={canDelegate}
+        delegateOpen={delegateOpen}
+        onDelegateClick={() => setDelegatePhaseId(delegateOpen ? null : step.id)}
       />
+      {delegateOpen && (
+        <div className="ml-12 mb-2">
+          <WorkPhaseTaskDelegateBlock
+            episodeId={episodeId}
+            workPhaseId={step.id}
+            phaseLabel={stepLabel}
+            onClose={() => setDelegatePhaseId(null)}
+          />
+        </div>
+      )}
       {isConfirming && (
         <div className="mt-1 ml-12 p-3 rounded-lg border border-gray-200 bg-white">
           {confirmAction === 'skip' && (
@@ -548,6 +585,7 @@ export function EpisodeStepsManager({
   // Merge mode
   const [mergeMode, setMergeMode] = useState(false);
   const [mergeSelection, setMergeSelection] = useState<Set<string>>(new Set());
+  const [delegatePhaseId, setDelegatePhaseId] = useState<string | null>(null);
 
   // Linked tooth treatments
   const [linkedTreatments, setLinkedTreatments] = useState<LinkedToothTreatment[]>([]);
@@ -1248,6 +1286,9 @@ export function EpisodeStepsManager({
                           onSkipReasonChange={setSkipReason}
                           onEditTiming={() => { setConfirmStepId(step.id); setConfirmAction('timing'); }}
                           onUnmerge={() => handleUnmerge(step.id)}
+                          episodeId={episodeId}
+                          delegatePhaseId={delegatePhaseId}
+                          setDelegatePhaseId={setDelegatePhaseId}
                         />
                       ))}
                     </SortableContext>

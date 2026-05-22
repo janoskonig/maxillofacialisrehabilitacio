@@ -11,6 +11,7 @@ import {
   normalizeChecklist,
 } from '@/lib/consilium';
 import { insertUserTask } from '@/lib/user-tasks';
+import { assertAssignableStaffUser } from '@/lib/task-assignee';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,15 +48,15 @@ export const POST = authedHandler(async (req, { auth, params }) => {
 
   await ensurePatientVisibleForUser(patientId, auth, institutionId);
 
-  const assigneeRes = await pool.query(
-    `SELECT id FROM users
-     WHERE id = $1::uuid AND active = true
-       AND btrim(coalesce(intezmeny, '')) = btrim(coalesce($2::text, ''))`,
-    [body.assigneeUserId, institutionId],
+  const assigneeOk = await assertAssignableStaffUser(
+    pool,
+    body.assigneeUserId,
+    institutionId,
+    auth.role,
   );
-  if (assigneeRes.rows.length === 0) {
+  if (!assigneeOk) {
     return NextResponse.json(
-      { error: 'A kijelölt felhasználó nem található, inaktív, vagy nem ehhez az intézményhez tartozik' },
+      { error: 'A kijelölt felhasználó nem található, inaktív, technikus, vagy nem kiosztható' },
       { status: 400 },
     );
   }
