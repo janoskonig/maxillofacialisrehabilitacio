@@ -5,7 +5,7 @@ import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Patient, patientQuickIntakeSchema, patientSchema } from '@/lib/types';
 import { formatDateForInput } from '@/lib/dateUtils';
-import { X, Calendar, User, MapPin, FileText, AlertTriangle, History } from 'lucide-react';
+import { X, Calendar, User, MapPin, FileText, AlertTriangle, History, ClipboardList } from 'lucide-react';
 import {
   AlapadatokSection,
   SzemelyesAdatokSection,
@@ -101,7 +101,7 @@ interface PatientFormProps {
   onSave: (patient: Patient, options?: { source: 'auto' | 'manual' }) => void;
   onCancel: () => void;
   isViewOnly?: boolean;
-  showOnlySections?: string[]; // Array of section IDs to show: 'alapadatok', 'szemelyes', 'beutalo', 'anamnezis', 'betegvizsgalat', 'adminisztracio', 'idopont', 'stadium'
+  showOnlySections?: string[]; // 'alapadatok', 'szemelyes', 'beutalo', 'anamnezis', 'betegvizsgalat', 'ohip14', 'adminisztracio', 'idopont', 'stadium'
   /** Gyors új beteg: rejtett NEAK-hiánylista; személyes szekció szűkített */
   minimalNewPatient?: boolean;
 }
@@ -1463,15 +1463,18 @@ export function PatientForm({
     { id: 'beutalo', label: 'Beutaló', icon: <FileText className="w-4 h-4" /> },
     { id: 'anamnezis', label: 'Anamnézis', icon: <Calendar className="w-4 h-4" /> },
     { id: 'betegvizsgalat', label: 'Betegvizsgálat', icon: <Calendar className="w-4 h-4" /> },
+    { id: 'ohip14', label: 'OHIP-14', icon: <ClipboardList className="w-4 h-4" /> },
     { id: 'adminisztracio', label: 'Adminisztráció', icon: <FileText className="w-4 h-4" /> },
     { id: 'idopont', label: 'Időpont', icon: <Calendar className="w-4 h-4" /> },
     { id: 'stadium', label: 'Stádium', icon: <Calendar className="w-4 h-4" /> },
   ];
 
-  // Filter sections based on showOnlySections
-  const visibleSections = showOnlySections && showOnlySections.length > 0
-    ? allSections.filter(s => showOnlySections.includes(s.id))
-    : allSections;
+  // Filter sections based on showOnlySections (OHIP-14 csak mentett betegnél)
+  const visibleSections = (
+    showOnlySections && showOnlySections.length > 0
+      ? allSections.filter((s) => showOnlySections.includes(s.id))
+      : allSections
+  ).filter((s) => s.id !== 'ohip14' || !!patientId);
 
   // Get active section index
   const activeIndex = visibleSections.findIndex(s => s.id === activeSectionId);
