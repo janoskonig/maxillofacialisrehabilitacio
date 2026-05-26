@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { OHIP14Response, OHIP14Timepoint, ohip14TimepointOptions, ohip14ResponseValueOptions } from '@/lib/types';
 import { ohip14Questions, calculateOHIP14Scores } from '@/lib/ohip14-questions';
 import { getTimepointAvailability, type TimepointAvailability } from '@/lib/ohip14-timepoint-stage';
+import { getOhip14ImpactBand } from '@/lib/ohip14-score-interpretation';
+import { Ohip14StaffScoreGuide } from '@/components/Ohip14StaffScoreGuide';
 import { useToast } from '@/contexts/ToastContext';
 import { FileText, Save, Loader2, CheckCircle, AlertCircle, Lock, CalendarClock, Mail } from 'lucide-react';
 
@@ -401,6 +403,12 @@ export function OHIP14Section({
         )}
       </div>
 
+      {!isPatientPortal && (
+        <Ohip14StaffScoreGuide
+          response={activeTimepoint ? responses[activeTimepoint] : null}
+        />
+      )}
+
       {!isPatientPortal && reminderEmailLogs.length > 0 && (
         <div className="mb-6 p-3 bg-gray-50 border border-gray-200 rounded-lg">
           <p className="text-xs font-medium text-gray-700 flex items-center gap-1.5 mb-2">
@@ -626,11 +634,18 @@ export function OHIP14Section({
           {/* Total score display */}
           {responses[activeTimepoint]?.totalScore !== undefined && (
             <div className="mt-6 p-4 bg-medical-primary/10 rounded-lg border border-medical-primary/20">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-sm font-medium text-gray-900">Összpontszám:</span>
-                <span className="text-2xl font-bold text-medical-primary">
-                  {responses[activeTimepoint]?.totalScore} / 56
-                </span>
+                <div className="text-right">
+                  <span className="text-2xl font-bold text-medical-primary">
+                    {responses[activeTimepoint]?.totalScore} / 56
+                  </span>
+                  {!isPatientPortal && (
+                    <p className="text-sm font-medium text-medical-primary/90 mt-0.5">
+                      {getOhip14ImpactBand(responses[activeTimepoint]!.totalScore!).label}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           )}
