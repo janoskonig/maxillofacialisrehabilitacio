@@ -63,7 +63,11 @@ export const GET = apiHandler(async (req) => {
     const { episodeId: activeEpisodeId, stageCode, deliveryDate } = await getCurrentEpisodeAndStage(pool, patientId);
     const ohipRes = await pool.query(
       `SELECT timepoint FROM ohip14_responses
-       WHERE patient_id = $1 AND (episode_id = $2 OR episode_id IS NULL OR $2 IS NULL)`,
+       WHERE patient_id = $1
+         AND (
+           ($2::uuid IS NOT NULL AND episode_id = $2)
+           OR ($2::uuid IS NULL AND episode_id IS NULL)
+         )`,
       [patientId, activeEpisodeId]
     );
     const completedTps = Array.from(

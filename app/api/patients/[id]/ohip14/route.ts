@@ -1,7 +1,34 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
-import { OHIP14Response } from '@/lib/types';
+import { OHIP14Response, OHIP14Timepoint } from '@/lib/types';
+import { getOhipPatientContext } from '@/lib/ohip14-stage';
+
+const OHIP_TIMEPOINTS: OHIP14Timepoint[] = ['T0', 'T1', 'T2', 'T3'];
+
+function pickResponsesForEpisode(
+  rows: OHIP14Response[],
+  episodeId: string | null,
+): OHIP14Response[] {
+  const byTimepoint = new Map<OHIP14Timepoint, OHIP14Response>();
+
+  for (const tp of OHIP_TIMEPOINTS) {
+    const forEpisode = episodeId
+      ? rows.filter((r) => r.timepoint === tp && r.episodeId === episodeId)
+      : [];
+    const legacyNull = rows.filter((r) => r.timepoint === tp && r.episodeId == null);
+    const candidates = forEpisode.length > 0 ? forEpisode : legacyNull;
+    if (candidates.length === 0) continue;
+    const best = [...candidates].sort((a, b) => {
+      const atA = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+      const atB = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+      return atB - atA;
+    })[0];
+    byTimepoint.set(tp, best);
+  }
+
+  return OHIP_TIMEPOINTS.filter((tp) => byTimepoint.has(tp)).map((tp) => byTimepoint.get(tp)!);
+}
 
 /**
  * Get patient's OHIP-14 responses
@@ -70,7 +97,7 @@ export const GET = authedHandler(async (req, { params }) => {
     [patientId]
   );
 
-  const responses: OHIP14Response[] = result.rows.map((row) => ({
+  const allResponses: OHIP14Response[] = result.rows.map((row) => ({
     id: row.id,
     patientId: row.patientId,
     episodeId: row.episodeId,
@@ -107,6 +134,9 @@ export const GET = authedHandler(async (req, { params }) => {
     createdBy: row.createdBy,
     updatedBy: row.updatedBy,
   }));
+
+  const ohipContext = await getOhipPatientContext(pool, patientId);
+  const responses = pickResponsesForEpisode(allResponses, ohipContext.episodeId);
 
   let reminderEmailLogs: Array<{
     timepoint: string | null;
@@ -145,5 +175,13 @@ export const GET = authedHandler(async (req, { params }) => {
     // Ha a tábla még nem létezik (migráció előtt), csendben kihagyjuk.
   }
 
-  return NextResponse.json({ responses, reminderEmailLogs });
+  return NextResponse.json({
+    responses,
+    reminderEmailLogs,
+    context: {
+      activeEpisodeId: ohipContext.episodeId,
+      stageCode: ohipContext.stageCode,
+      deliveryDate: ohipContext.deliveryDate?.toISOString() ?? null,
+    },
+  });
 });

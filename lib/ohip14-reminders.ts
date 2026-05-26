@@ -1,6 +1,7 @@
 import { getDbPool } from '@/lib/db';
 import { sendOhipReminderEmail } from '@/lib/email';
 import { queueAdminNotification } from '@/lib/email/admin-notification-queue';
+import { getOhipPatientContext } from '@/lib/ohip14-stage';
 import { getTimepointAvailability, type TimepointAvailability } from '@/lib/ohip14-timepoint-stage';
 import type { OHIP14Timepoint } from '@/lib/types';
 
@@ -43,25 +44,12 @@ export async function sendOhipReminders(): Promise<ReminderResult> {
   // 2) For each patient, determine pending timepoints
   for (const row of patientsRes.rows) {
     try {
-      const { patient_id, nev, nem, email, episode_id } = row;
+      const { patient_id, nev, nem, email, episode_id: openEpisodeId } = row;
 
-      // Get current stage
-      const stageRes = await pool.query(
-        `SELECT stage_code FROM stage_events
-         WHERE patient_id = $1 AND episode_id = $2
-         ORDER BY at DESC LIMIT 1`,
-        [patient_id, episode_id]
-      );
-      const stageCode = stageRes.rows[0]?.stage_code ?? null;
-
-      // Get delivery date (STAGE_6)
-      const deliveryRes = await pool.query(
-        `SELECT at FROM stage_events
-         WHERE patient_id = $1 AND episode_id = $2 AND stage_code = 'STAGE_6'
-         ORDER BY at DESC LIMIT 1`,
-        [patient_id, episode_id]
-      );
-      const deliveryDate: Date | null = deliveryRes.rows[0]?.at ?? null;
+      const ohipCtx = await getOhipPatientContext(pool, patient_id);
+      const episode_id = ohipCtx.episodeId ?? openEpisodeId;
+      const stageCode = ohipCtx.stageCode;
+      const deliveryDate = ohipCtx.deliveryDate;
 
       // Get already-completed timepoints for this episode
       const completedRes = await pool.query(

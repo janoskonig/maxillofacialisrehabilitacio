@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
-import { getCurrentEpisodeAndStage } from '@/lib/ohip14-stage';
+import { getOhipPatientContext } from '@/lib/ohip14-stage';
 import { apiHandler } from '@/lib/api/route-handler';
 
 export const dynamic = 'force-dynamic';
@@ -17,7 +17,7 @@ export const GET = apiHandler(async (req, { correlationId }) => {
   }
 
   const pool = getDbPool();
-  const { episodeId: activeEpisodeId } = await getCurrentEpisodeAndStage(pool, patientId);
+  const { episodeId: activeEpisodeId } = await getOhipPatientContext(pool, patientId);
 
   const result = await pool.query(
     `SELECT 
@@ -58,7 +58,10 @@ export const GET = apiHandler(async (req, { correlationId }) => {
       updated_by as "updatedBy"
     FROM ohip14_responses
     WHERE patient_id = $1
-      AND (episode_id = $2 OR episode_id IS NULL OR $2 IS NULL)
+      AND (
+        ($2::uuid IS NOT NULL AND episode_id = $2)
+        OR ($2::uuid IS NULL AND episode_id IS NULL)
+      )
     ORDER BY timepoint, completed_at DESC`,
     [patientId, activeEpisodeId]
   );

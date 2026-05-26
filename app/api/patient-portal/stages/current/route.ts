@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
-import { getCurrentEpisodeAndStage } from '@/lib/ohip14-stage';
+import { getOhipPatientContext } from '@/lib/ohip14-stage';
 import { apiHandler } from '@/lib/api/route-handler';
 
 export const dynamic = 'force-dynamic';
@@ -17,7 +17,7 @@ export const GET = apiHandler(async (req, { correlationId }) => {
   }
 
   const pool = getDbPool();
-  const { episodeId, stageCode, stage, useNewModel, deliveryDate } = await getCurrentEpisodeAndStage(pool, patientId);
+  const { episodeId, stageCode, stage, useNewModel, deliveryDate } = await getOhipPatientContext(pool, patientId);
 
   if (!episodeId && !stage) {
     return NextResponse.json({

@@ -7,6 +7,7 @@ import { logActivity } from '@/lib/activity';
 import { logger } from '@/lib/logger';
 import { legacyPatientStageToCode, LEGACY_MERGED_STAGE_EVENT_ID_PREFIX } from '@/lib/legacy-patient-stage-map';
 import { stageTimelineDedupeKey } from '@/lib/stage-timeline-merge';
+import { getOhipPatientContext } from '@/lib/ohip14-stage';
 
 /**
  * Get patient stages timeline
@@ -146,7 +147,16 @@ export const GET = authedHandler(async (req, { auth, params }) => {
     history,
     episodes,
   };
-  return NextResponse.json({ timeline, useNewModel: true });
+
+  const ohipContext = await getOhipPatientContext(pool, patientId);
+
+  return NextResponse.json({
+    timeline,
+    useNewModel: true,
+    activeEpisodeId: ohipContext.episodeId,
+    deliveryDate: ohipContext.deliveryDate?.toISOString() ?? null,
+    ohipStageCode: ohipContext.stageCode,
+  });
 });
 
 async function legacyGetTimeline(pool: ReturnType<typeof getDbPool>, patientId: string) {
@@ -204,7 +214,14 @@ async function legacyGetTimeline(pool: ReturnType<typeof getDbPool>, patientId: 
     episodes,
   };
 
-  return NextResponse.json({ timeline });
+  const ohipContext = await getOhipPatientContext(pool, patientId);
+
+  return NextResponse.json({
+    timeline,
+    activeEpisodeId: ohipContext.episodeId,
+    deliveryDate: ohipContext.deliveryDate?.toISOString() ?? null,
+    ohipStageCode: ohipContext.stageCode,
+  });
 }
 
 /**

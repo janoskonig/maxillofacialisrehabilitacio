@@ -3,7 +3,11 @@ import { getDbPool } from '@/lib/db';
 import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
 import { OHIP14Response, OHIP14Timepoint } from '@/lib/types';
 import { calculateOHIP14Scores } from '@/lib/ohip14-questions';
-import { getCurrentStageCodeForOhip, getCurrentEpisodeAndStage } from '@/lib/ohip14-stage';
+import {
+  getCurrentEpisodeAndStage,
+  getCurrentStageCodeForOhip,
+  getOhipPatientContext,
+} from '@/lib/ohip14-stage';
 import { getTimepointAvailability } from '@/lib/ohip14-timepoint-stage';
 import { apiHandler } from '@/lib/api/route-handler';
 
@@ -30,7 +34,7 @@ export const GET = apiHandler(async (req, { correlationId, params }) => {
   }
 
   const pool = getDbPool();
-  const { episodeId: activeEpisodeId } = await getCurrentEpisodeAndStage(pool, patientId);
+  const { episodeId: activeEpisodeId } = await getOhipPatientContext(pool, patientId);
 
   const result = await pool.query(
     `SELECT 
@@ -72,7 +76,10 @@ export const GET = apiHandler(async (req, { correlationId, params }) => {
     FROM ohip14_responses
     WHERE patient_id = $1
       AND timepoint = $2
-      AND (episode_id = $3 OR episode_id IS NULL OR $3 IS NULL)
+      AND (
+        ($3::uuid IS NOT NULL AND episode_id = $3)
+        OR ($3::uuid IS NULL AND episode_id IS NULL)
+      )
     ORDER BY completed_at DESC
     LIMIT 1`,
     [patientId, timepoint, activeEpisodeId]

@@ -64,6 +64,68 @@ export async function getCurrentEpisodeAndStage(
   return { episodeId, stageCode, stage, useNewModel: false, deliveryDate };
 }
 
+/**
+ * OHIP kontextus: nyitott epizód, vagy — ha nincs — utolsó OHIP kitöltés / STAGE_6 epizódja.
+ * Staff nézet és zárt epizódú betegek számára is ad értelmes deliveryDate-et.
+ */
+export async function getOhipPatientContext(
+  pool: Pool,
+  patientId: string,
+): Promise<CurrentEpisodeAndStage> {
+  const current = await getCurrentEpisodeAndStage(pool, patientId);
+  if (current.episodeId) {
+    return current;
+  }
+
+  const ohipEp = await pool.query(
+    `SELECT episode_id
+     FROM ohip14_responses
+     WHERE patient_id = $1 AND episode_id IS NOT NULL
+     ORDER BY completed_at DESC NULLS LAST, created_at DESC
+     LIMIT 1`,
+    [patientId],
+  );
+  const fromOhip = ohipEp.rows[0]?.episode_id as string | undefined;
+  if (fromOhip) {
+    const stageCode = await getCurrentStageCodeForOhip(pool, patientId, fromOhip);
+    const deliveryDate = await getDeliveryDate(pool, patientId, fromOhip);
+    return {
+      episodeId: fromOhip,
+      stageCode,
+      stage: null,
+      useNewModel: current.useNewModel,
+      deliveryDate,
+    };
+  }
+
+  try {
+    const stage6 = await pool.query(
+      `SELECT episode_id, at
+       FROM stage_events
+       WHERE patient_id = $1 AND stage_code = 'STAGE_6'
+       ORDER BY at DESC
+       LIMIT 1`,
+      [patientId],
+    );
+    const episodeId = stage6.rows[0]?.episode_id as string | undefined;
+    if (episodeId) {
+      const stageCode = await getCurrentStageCodeForOhip(pool, patientId, episodeId);
+      const deliveryDate = stage6.rows[0]?.at ?? (await getDeliveryDate(pool, patientId, episodeId));
+      return {
+        episodeId,
+        stageCode,
+        stage: null,
+        useNewModel: true,
+        deliveryDate: deliveryDate ?? null,
+      };
+    }
+  } catch {
+    // stage_events may not exist on legacy installs
+  }
+
+  return current;
+}
+
 /** Szerver oldali wrapper a tiszta függvényre */
 export function isTimepointAllowedForStage(
   timepoint: OHIP14Timepoint,
