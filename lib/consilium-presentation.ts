@@ -973,6 +973,8 @@ export type ConsiliumPresentationSession = {
   scheduledAt: string;
   status: string;
   attendees: ReturnType<typeof normalizeSessionAttendees>;
+  invitationSendCount: number;
+  scheduledAtChangeCount: number;
 };
 
 async function loadConsiliumSessionForPresentation(
@@ -981,7 +983,9 @@ async function loadConsiliumSessionForPresentation(
   institutionId: string,
 ): Promise<ConsiliumPresentationSession | null> {
   const sessionResult = await pool.query(
-    `SELECT id, title, institution_id as "institutionId", scheduled_at as "scheduledAt", status, attendees
+    `SELECT id, title, institution_id as "institutionId", scheduled_at as "scheduledAt", status, attendees,
+            invitation_send_count as "invitationSendCount",
+            scheduled_at_change_count as "scheduledAtChangeCount"
      FROM consilium_sessions
      WHERE id = $1::uuid
        AND btrim(coalesce(institution_id, '')) = btrim(coalesce($2::text, ''))`,
@@ -990,9 +994,12 @@ async function loadConsiliumSessionForPresentation(
   if (sessionResult.rows.length === 0) {
     return null;
   }
+  const row = sessionResult.rows[0];
   return {
-    ...sessionResult.rows[0],
-    attendees: normalizeSessionAttendees(sessionResult.rows[0].attendees),
+    ...row,
+    attendees: normalizeSessionAttendees(row.attendees),
+    invitationSendCount: Number(row.invitationSendCount ?? 0) || 0,
+    scheduledAtChangeCount: Number(row.scheduledAtChangeCount ?? 0) || 0,
   };
 }
 

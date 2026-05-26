@@ -74,7 +74,8 @@ Vagy egy fajl:
 Egyeb viselkedes
 ----------------
 
-- Jelenlevok (`attendees`): `id` = `users.id`, `name` = doktor neve vagy e-mail. UI: intezmenyi felhasznalok (nem beteglista), nev/e-mail szuro a `GET .../institution-users` listan; cimkek, pipa = jelen van, x = eltavolitas; csak aktiv fiokok, mar felveettek nem duplikalodnak a keresesben.
+- Jelenlevok (`attendees`): `id` = `users.id`, `name` = doktor neve vagy e-mail. UI: intezmenyi felhasznalok (nem beteglista), nev/e-mail szuro a `GET .../institution-users` listan; cimkek, pipa = ott volt, x = listarol le (meghivo marad); csak aktiv fiokok.
+- Nyomon kovetes (040 migracio): `consilium_sessions.invitation_send_count`, `scheduled_at_change_count`; `consilium_session_invitations.send_count`; naplo: `consilium_invitation_send_log`, `consilium_session_schedule_audit`. Szamlalo csak sikeres email / tenyleges idopont-valtozas utan novekszik.
 - Beteg tetel: `discussed` = megbeszelve / nem (egyszeru boolean).
 - Napirendi pontok (checklist): Konzilium oldalon hozzaadas / atnevezes / torles, pipa es pontonkenti `response` (verdikt); vetitesen is pipa + verdikt szerkesztheto (`draft`/`active`), `closed` alatt csak olvashato.
 - Előkészítő link: Konzílium oldalról másolható URL (`/consilium/prep/<token>`); `closed` alkalomnál a prep oldal csak olvasható (nincs új komment / új pont).

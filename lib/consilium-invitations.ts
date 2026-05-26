@@ -64,7 +64,24 @@ export type InvitationRow = {
   response: InvitationResponse | null;
   proposedAt: string | null;
   proposedNote: string | null;
+  sendCount: number;
 };
+
+const INVITATION_ROW_SELECT = `
+            id,
+            session_id as "sessionId",
+            attendee_id as "attendeeId",
+            attendee_name as "attendeeName",
+            attendee_email as "attendeeEmail",
+            created_by as "createdBy",
+            created_at as "createdAt",
+            sent_at as "sentAt",
+            revoked_at as "revokedAt",
+            responded_at as "respondedAt",
+            response,
+            proposed_at as "proposedAt",
+            proposed_note as "proposedNote",
+            send_count as "sendCount"`;
 
 function toIso(value: Date | string | null): string | null {
   if (value == null) return null;
@@ -86,6 +103,7 @@ function mapInvitationRow(row: {
   response: string | null;
   proposedAt: Date | string | null;
   proposedNote: string | null;
+  sendCount?: number | string | null;
 }): InvitationRow {
   const respParsed = row.response ? invitationResponseSchema.safeParse(row.response) : null;
   return {
@@ -102,6 +120,7 @@ function mapInvitationRow(row: {
     response: respParsed && respParsed.success ? respParsed.data : null,
     proposedAt: toIso(row.proposedAt),
     proposedNote: row.proposedNote,
+    sendCount: Math.max(0, Number(row.sendCount ?? 0) || 0),
   };
 }
 
@@ -112,19 +131,7 @@ function mapInvitationRow(row: {
 export async function listInvitationsForSession(sessionId: string): Promise<InvitationRow[]> {
   const pool = getDbPool();
   const r = await pool.query(
-    `SELECT id,
-            session_id as "sessionId",
-            attendee_id as "attendeeId",
-            attendee_name as "attendeeName",
-            attendee_email as "attendeeEmail",
-            created_by as "createdBy",
-            created_at as "createdAt",
-            sent_at as "sentAt",
-            revoked_at as "revokedAt",
-            responded_at as "respondedAt",
-            response,
-            proposed_at as "proposedAt",
-            proposed_note as "proposedNote"
+    `SELECT ${INVITATION_ROW_SELECT}
      FROM consilium_session_invitations
      WHERE session_id = $1::uuid
      ORDER BY created_at DESC`,
@@ -142,19 +149,7 @@ export async function findActiveInvitationForAttendee(
   attendeeId: string,
 ): Promise<InvitationRow | null> {
   const r = await client.query(
-    `SELECT id,
-            session_id as "sessionId",
-            attendee_id as "attendeeId",
-            attendee_name as "attendeeName",
-            attendee_email as "attendeeEmail",
-            created_by as "createdBy",
-            created_at as "createdAt",
-            sent_at as "sentAt",
-            revoked_at as "revokedAt",
-            responded_at as "respondedAt",
-            response,
-            proposed_at as "proposedAt",
-            proposed_note as "proposedNote"
+    `SELECT ${INVITATION_ROW_SELECT}
      FROM consilium_session_invitations
      WHERE session_id = $1::uuid
        AND attendee_id = $2
@@ -235,15 +230,6 @@ export async function ensureInvitationForAttendee(
     created: existing.rows.length === 0,
     rotated: existing.rows.length > 0,
   };
-}
-
-export async function markInvitationSent(client: PoolClient, invitationId: string): Promise<void> {
-  await client.query(
-    `UPDATE consilium_session_invitations
-     SET sent_at = NOW()
-     WHERE id = $1::uuid`,
-    [invitationId],
-  );
 }
 
 /** Újraküldés előtt: a korábbi RSVP törlése (link/token változatlan marad). */

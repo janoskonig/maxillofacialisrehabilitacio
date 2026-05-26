@@ -40,6 +40,7 @@ type InvitationStatusRow = {
   response: 'going' | 'late' | 'reschedule' | null;
   proposedAt: string | null;
   proposedNote: string | null;
+  sendCount: number;
 };
 
 function rsvpResponseLabelHu(r: InvitationStatusRow['response']): string {
@@ -140,15 +141,41 @@ function attendeePickerMatches(u: InstitutionUserRow, needleRaw: string): boolea
   return name.split(/\s+/).some((w) => w.length > 0 && w.startsWith(needle));
 }
 
+type InvitationRosterRow = { id: string; name: string; onAttendeeList: boolean };
+
+/** Jelenlévők + korábban meghívottak (akik már nincsenek a listán, de volt kiküldött meghívó). */
+function buildInvitationRosterRows(
+  attendees: SessionAttendee[],
+  invitations: InvitationStatusRow[],
+): InvitationRosterRow[] {
+  const rows: InvitationRosterRow[] = [];
+  const seen = new Set<string>();
+  for (const a of attendees) {
+    seen.add(a.id);
+    rows.push({ id: a.id, name: a.name, onAttendeeList: true });
+  }
+  for (const inv of invitations) {
+    if (inv.revokedAt || !inv.sentAt) continue;
+    if (seen.has(inv.attendeeId)) continue;
+    seen.add(inv.attendeeId);
+    rows.push({ id: inv.attendeeId, name: inv.attendeeName, onAttendeeList: false });
+  }
+  return rows;
+}
+
 function ConsiliumAttendeeTagField({
   attendees,
-  readonly,
+  rosterReadonly,
+  presenceEditable,
   availableUsers,
   usersLoading,
   onChange,
 }: {
   attendees: SessionAttendee[];
-  readonly: boolean;
+  /** Új név felvétele / × eltávolítás — lezárt alkalomnál tiltva. */
+  rosterReadonly: boolean;
+  /** „Jelen volt” pipa — lezárt alkalomnál is szerkeszthető. */
+  presenceEditable: boolean;
   availableUsers: InstitutionUserRow[];
   usersLoading: boolean;
   onChange: (next: SessionAttendee[]) => void;
@@ -229,7 +256,7 @@ function ConsiliumAttendeeTagField({
       <label className="text-[10px] text-gray-500 uppercase tracking-wide">Jelenlévők</label>
       <div
         className={`flex flex-wrap gap-1.5 items-center min-h-[42px] p-2 rounded-md border border-gray-200 bg-white ${
-          readonly ? '' : 'focus-within:border-medical-primary/40 focus-within:ring-1 focus-within:ring-medical-primary/20'
+          rosterReadonly ? '' : 'focus-within:border-medical-primary/40 focus-within:ring-1 focus-within:ring-medical-primary/20'
         }`}
       >
         {attendees.map((a) => (
@@ -237,13 +264,13 @@ function ConsiliumAttendeeTagField({
             key={a.id}
             className="inline-flex items-center gap-1 max-w-full rounded-full border border-gray-200 bg-medical-primary/5 pl-1.5 pr-0.5 py-0.5 text-xs text-gray-800"
           >
-            {!readonly ? (
+            {presenceEditable ? (
               <input
                 type="checkbox"
                 checked={a.present}
                 onChange={() => togglePresent(a.id)}
                 className="rounded border-gray-300 shrink-0"
-                title="Jelen van"
+                title="Jelen volt az értekezleten"
               />
             ) : (
               <span className="text-[10px] text-gray-500 shrink-0 w-4 text-center" title="Jelenlét">
@@ -253,11 +280,12 @@ function ConsiliumAttendeeTagField({
             <span className="truncate max-w-[220px]" title={a.name}>
               {a.name}
             </span>
-            {!readonly && (
+            {!rosterReadonly && (
               <button
                 type="button"
                 className="shrink-0 rounded-full px-1 leading-none text-gray-500 hover:bg-red-50 hover:text-red-700"
-                aria-label="Eltávolítás"
+                aria-label="Eltávolítás a jelenlévők listáról"
+                title="A meghívó és RSVP adatok megmaradnak a Meghívók szekcióban"
                 onClick={() => remove(a.id)}
               >
                 ×
@@ -265,7 +293,7 @@ function ConsiliumAttendeeTagField({
             )}
           </span>
         ))}
-        {!readonly && (
+        {!rosterReadonly && (
           <input
             type="text"
             className="flex-1 min-w-[8rem] border-0 bg-transparent p-1 text-sm outline-none focus:ring-0 placeholder:text-gray-400"
@@ -286,7 +314,7 @@ function ConsiliumAttendeeTagField({
           />
         )}
       </div>
-      {!readonly && open && q.trim() && (
+      {!rosterReadonly && open && q.trim() && (
         <ul className="absolute z-30 left-0 right-0 mt-0.5 max-w-lg rounded-md border border-gray-200 bg-white py-1 shadow-lg max-h-52 overflow-auto">
           {filtered.length === 0 ? (
             <li className="px-3 py-2 text-xs text-gray-500">Nincs találat — próbálj más betűket.</li>
@@ -819,6 +847,8 @@ export default function ConsiliumPage() {
     scheduledAt: string;
     status: string;
     attendees: SessionAttendee[];
+    invitationSendCount: number;
+    scheduledAtChangeCount: number;
   } | null>(null);
   const [loadingItems, setLoadingItems] = useState(false);
   const [institutionUsers, setInstitutionUsers] = useState<InstitutionUserRow[]>([]);
@@ -880,6 +910,9 @@ export default function ConsiliumPage() {
             title: data.session.title,
             scheduledAt: data.session.scheduledAt,
             status: data.session.status,
+            invitationSendCount: Number((data.session as { invitationSendCount?: number }).invitationSendCount ?? 0) || 0,
+            scheduledAtChangeCount:
+              Number((data.session as { scheduledAtChangeCount?: number }).scheduledAtChangeCount ?? 0) || 0,
             attendees: att.filter(
               (a): a is SessionAttendee =>
                 !!a &&
@@ -933,20 +966,25 @@ export default function ConsiliumPage() {
     return m;
   }, [invitations]);
 
+  const invitationRosterRows = useMemo(() => {
+    if (!sessionDetail) return [] as InvitationRosterRow[];
+    return buildInvitationRosterRows(sessionDetail.attendees, invitations);
+  }, [sessionDetail, invitations]);
+
   const rescheduleProposals = useMemo(() => {
     if (!sessionDetail) return [];
     const bySlot = new Map<string, { proposedAt: string; attendeeNames: string[] }>();
-    for (const attendee of sessionDetail.attendees) {
-      const inv = activeInvitationsByAttendeeId.get(attendee.id);
+    for (const row of invitationRosterRows) {
+      const inv = activeInvitationsByAttendeeId.get(row.id);
       if (!inv || inv.response !== 'reschedule' || !inv.proposedAt) continue;
       const hit = bySlot.get(inv.proposedAt) ?? { proposedAt: inv.proposedAt, attendeeNames: [] };
-      hit.attendeeNames.push(attendee.name);
+      hit.attendeeNames.push(row.name);
       bySlot.set(inv.proposedAt, hit);
     }
     return Array.from(bySlot.values()).sort(
       (a, b) => new Date(a.proposedAt).getTime() - new Date(b.proposedAt).getTime(),
     );
-  }, [sessionDetail, activeInvitationsByAttendeeId]);
+  }, [sessionDetail, invitationRosterRows, activeInvitationsByAttendeeId]);
 
   const invitationSummary = useMemo(() => {
     const attendees = sessionDetail?.attendees ?? [];
@@ -955,10 +993,10 @@ export default function ConsiliumPage() {
     let reschedule = 0;
     let pending = 0;
     let notInvited = 0;
-    for (const a of attendees) {
-      const inv = activeInvitationsByAttendeeId.get(a.id);
+    for (const row of invitationRosterRows) {
+      const inv = activeInvitationsByAttendeeId.get(row.id);
       if (!inv || !inv.sentAt) {
-        notInvited += 1;
+        if (row.onAttendeeList) notInvited += 1;
         continue;
       }
       if (inv.response === 'going') going += 1;
@@ -966,8 +1004,8 @@ export default function ConsiliumPage() {
       else if (inv.response === 'reschedule') reschedule += 1;
       else pending += 1;
     }
-    return { going, late, reschedule, pending, notInvited, total: attendees.length };
-  }, [sessionDetail, activeInvitationsByAttendeeId]);
+    return { going, late, reschedule, pending, notInvited, total: invitationRosterRows.length };
+  }, [sessionDetail, invitationRosterRows, activeInvitationsByAttendeeId]);
 
   const draftTransferTargets = useMemo(() => {
     return sessions.filter((s) => s.status === 'draft' && s.id !== selectedSessionId);
@@ -1193,6 +1231,7 @@ export default function ConsiliumPage() {
         sent > 0 ? 'success' : 'error',
       );
       await loadInvitations(selectedSessionId);
+      await loadItems(selectedSessionId);
     } catch {
       showToast('Hálózati hiba a meghívók kiküldésekor', 'error');
     } finally {
@@ -1216,6 +1255,12 @@ export default function ConsiliumPage() {
       showToast('Jelenlévők mentése sikertelen', 'error');
       await loadItems(selectedSessionId);
     }
+  };
+
+  const clearAllPresence = () => {
+    if (!sessionDetail) return;
+    const next = sessionDetail.attendees.map((a) => ({ ...a, present: false }));
+    void saveAttendees(next);
   };
 
   const addPatientToSession = async (patientId: string) => {
@@ -1527,6 +1572,16 @@ export default function ConsiliumPage() {
                 </p>
               )}
 
+              {selectedSession && sessionDetail && (
+                <p className="text-xs text-gray-600 rounded-md border border-gray-200 bg-white/80 px-2.5 py-2">
+                  Nyomon követés: konzílium időpontja{' '}
+                  <strong>{sessionDetail.scheduledAtChangeCount}</strong> alkalommal módosult
+                  {sessionDetail.scheduledAtChangeCount === 0 ? ' (még nem)' : ''}; meghívó email összesen{' '}
+                  <strong>{sessionDetail.invitationSendCount}</strong> alkalommal ment ki
+                  {sessionDetail.invitationSendCount === 0 ? ' (még nem)' : ''}.
+                </p>
+              )}
+
               {selectedSession && sessionDetail && selectedSession.status !== 'closed' && (
                 <div className="rounded-lg border border-indigo-100 bg-indigo-50/40 p-3 space-y-2">
                   <h4 className="text-sm font-semibold text-gray-900">Konzílium időpont módosítása</h4>
@@ -1584,11 +1639,23 @@ export default function ConsiliumPage() {
 
               {selectedSession && (sessionDetail || loadingItems) && (
                 <div className="rounded-lg border border-gray-200 bg-gray-50/80 p-3 space-y-2">
-                  <h4 className="text-sm font-semibold text-gray-900">Jelenlévők az értekezleten</h4>
+                  <div className="flex items-start justify-between gap-2 flex-wrap">
+                    <h4 className="text-sm font-semibold text-gray-900">Ki volt ott az értekezleten</h4>
+                    {sessionDetail && sessionDetail.attendees.some((a) => a.present) && (
+                      <button
+                        type="button"
+                        className="text-xs text-gray-700 hover:text-red-800 hover:underline shrink-0"
+                        onClick={clearAllPresence}
+                      >
+                        Jelenlét törlése (mindenki)
+                      </button>
+                    )}
+                  </div>
                   <p className="text-xs text-gray-600">
                     Intézményi felhasználók (nem a beteglista): gépelj név- vagy e-mail-részletet, válassz a javaslatok közül.
-                    Minden kiválasztott címkeként látszik — pipa: jelen van, ×: eltávolítás. Csak aktív fiókok; aki már rajta van,
-                    nem jelenik meg újra a keresésben.
+                    A pipa azt jelenti, <strong>ott volt</strong> a konzíliumon — ez külön a meghívótól és az RSVP-től. A × csak a
+                    jelenlévők listáról veszi le a nevet; a kiküldött meghívó és válasz a „Meghívók és RSVP” szekcióban megmarad.
+                    Lezárt alkalomnál is módosítható a pipa (utólagos javítás).
                   </p>
                   {loadingItems && !sessionDetail && <p className="text-xs text-gray-500">Betöltés…</p>}
                   {sessionDetail &&
@@ -1602,7 +1669,8 @@ export default function ConsiliumPage() {
                       <ConsiliumAttendeeTagField
                         key={selectedSession.id}
                         attendees={sessionDetail.attendees}
-                        readonly={selectedSession.status === 'closed'}
+                        rosterReadonly={selectedSession.status === 'closed'}
+                        presenceEditable
                         availableUsers={availableInstitutionUsers}
                         usersLoading={institutionUsersLoading}
                         onChange={(next) => void saveAttendees(next)}
@@ -1620,25 +1688,28 @@ export default function ConsiliumPage() {
                       </h4>
                       <p className="text-xs text-gray-600 mt-0.5">
                         Email-meghívót küld a jelenlévőknek. A címzettek a levélből egy kattintással
-                        jelezhetik: <em>Ott leszek</em> / <em>Kések</em> / <em>Máskor lenne jó</em>.
+                        jelezhetik: <em>Ott leszek</em> / <em>Kések</em> / <em>Máskor lenne jó</em>. Minden sikeres
+                        kiküldés növeli a számlálót (újraküldés is).
                       </p>
                     </div>
-                    {selectedSession.status !== 'closed' && sessionDetail.attendees.length > 0 && (
+                    {(sessionDetail.attendees.length > 0 || invitationRosterRows.length > 0) && (
                       <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          className="btn-primary text-xs px-3 py-1.5 inline-flex items-center gap-1.5 disabled:opacity-50"
-                          disabled={sendingInvitations}
-                          onClick={() =>
-                            void sendInvitations({
-                              successLabel: 'Meghívók kiküldve',
-                            })
-                          }
-                          title="Email-meghívót küld minden jelenlévőnek. Aki már kapott meghívót, újra megkapja — a korábbi RSVP válasz törlődik, újra kell jeleznie."
-                        >
-                          <Send className="w-3.5 h-3.5" />
-                          {sendingInvitations ? 'Küldés…' : 'Meghívók kiküldése'}
-                        </button>
+                        {selectedSession.status !== 'closed' && sessionDetail.attendees.length > 0 && (
+                          <button
+                            type="button"
+                            className="btn-primary text-xs px-3 py-1.5 inline-flex items-center gap-1.5 disabled:opacity-50"
+                            disabled={sendingInvitations}
+                            onClick={() =>
+                              void sendInvitations({
+                                successLabel: 'Meghívók kiküldve',
+                              })
+                            }
+                            title="Email-meghívót küld minden jelenlévőnek. Aki már kapott meghívót, újra megkapja — a korábbi RSVP válasz törlődik, újra kell jeleznie."
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                            {sendingInvitations ? 'Küldés…' : 'Meghívók kiküldése'}
+                          </button>
+                        )}
                         <button
                           type="button"
                           className="text-xs text-gray-700 hover:underline"
@@ -1650,11 +1721,11 @@ export default function ConsiliumPage() {
                     )}
                   </div>
 
-                  {sessionDetail.attendees.length === 0 ? (
+                  {sessionDetail.attendees.length === 0 && invitationRosterRows.length === 0 ? (
                     <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded px-2 py-1.5">
                       Adj hozzá legalább egy jelenlévőt, mielőtt meghívót küldenél.
                     </p>
-                  ) : (
+                  ) : invitationRosterRows.length > 0 || sessionDetail.attendees.length > 0 ? (
                     <div className="flex flex-wrap gap-1.5 text-[11px]">
                       <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-emerald-900">
                         Ott leszek: <strong>{invitationSummary.going}</strong>
@@ -1672,7 +1743,7 @@ export default function ConsiliumPage() {
                         Nincs meghívó: <strong>{invitationSummary.notInvited}</strong>
                       </span>
                     </div>
-                  )}
+                  ) : null}
 
                   {invitationsExpanded && (
                     <div className="space-y-2 pt-2 border-t border-cyan-100">
@@ -1698,7 +1769,7 @@ export default function ConsiliumPage() {
                         <p className="text-xs text-gray-500">Meghívók betöltése…</p>
                       ) : (
                         <ul className="divide-y divide-cyan-100 rounded-md border border-cyan-100 bg-white">
-                          {sessionDetail.attendees.map((a) => {
+                          {invitationRosterRows.map((a) => {
                             const inv = activeInvitationsByAttendeeId.get(a.id);
                             const responded = inv?.respondedAt ? inv.response : null;
                             const sent = !!inv?.sentAt;
@@ -1706,6 +1777,11 @@ export default function ConsiliumPage() {
                               <li key={a.id} className="px-3 py-2 flex items-start gap-2 text-sm">
                                 <div className="min-w-0 flex-1">
                                   <p className="font-medium text-gray-900 truncate">{a.name}</p>
+                                  {!a.onAttendeeList && (
+                                    <p className="text-[10px] text-gray-500 italic">
+                                      Nincs a jelenlévők listán (meghívó megmaradt)
+                                    </p>
+                                  )}
                                   {inv?.attendeeEmail && (
                                     <p className="text-[11px] text-gray-500 truncate">
                                       {inv.attendeeEmail}
@@ -1714,6 +1790,7 @@ export default function ConsiliumPage() {
                                   {sent && inv && (
                                     <p className="text-[11px] text-gray-500 mt-0.5">
                                       Küldve: {new Date(inv.sentAt!).toLocaleString('hu-HU')}
+                                      {inv.sendCount > 1 ? ` · ${inv.sendCount}× kiküldve összesen` : ''}
                                       {inv.respondedAt
                                         ? ` · Válaszolt: ${new Date(inv.respondedAt).toLocaleString('hu-HU')}`
                                         : ''}

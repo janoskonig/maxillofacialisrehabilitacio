@@ -12,8 +12,8 @@ import {
   clearInvitationResponse,
   ensureInvitationForAttendee,
   findActiveInvitationForAttendee,
-  markInvitationSent,
 } from '@/lib/consilium-invitations';
+import { recordInvitationEmailSent } from '@/lib/consilium-session-tracking';
 import { sendConsiliumInvitationEmail } from '@/lib/email';
 import { logActivityWithAuth } from '@/lib/activity';
 import { logger } from '@/lib/logger';
@@ -203,7 +203,6 @@ export const POST = authedHandler(async (req, { auth, params }) => {
         await clearInvitationResponse(client, invitationId);
       }
 
-      await markInvitationSent(client, invitationId);
       await client.query('COMMIT');
     } catch (e) {
       await client.query('ROLLBACK').catch(() => {});
@@ -240,6 +239,37 @@ export const POST = authedHandler(async (req, { auth, params }) => {
         note ?? null,
         { patientCount, agendaUrl },
       );
+      const logClient = await pool.connect();
+      let sendLogged = false;
+      try {
+        await logClient.query('BEGIN');
+        await recordInvitationEmailSent(logClient, {
+          invitationId,
+          sessionId,
+          attendeeId: att.id,
+          sentBy: auth.email,
+        });
+        await logClient.query('COMMIT');
+        sendLogged = true;
+      } catch (logErr) {
+        await logClient.query('ROLLBACK').catch(() => {});
+        logger.error('[consilium-invitations.send] send log failed', {
+          attendeeId: att.id,
+          sessionId,
+          error: String(logErr),
+        });
+        results.push({
+          attendeeId: att.id,
+          attendeeName: att.name,
+          attendeeEmail: recipientEmail,
+          sent: false,
+          rotated,
+          skipReason: 'log_failed',
+        });
+      } finally {
+        logClient.release();
+      }
+      if (!sendLogged) continue;
       results.push({
         attendeeId: att.id,
         attendeeName: att.name,
