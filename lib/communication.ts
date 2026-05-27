@@ -9,7 +9,15 @@ import {
   ReplyTargetNotFoundError,
   type PatientReplySender,
 } from './message-reply';
-import type { QuotedMessagePreview } from './types/messaging';
+import type { QuotedMessagePreview, ServerDeliveryStatus } from './types/messaging';
+import {
+  batchPatientMessageReplyCounts,
+  attachReplyCounts,
+} from './message-reply-counts';
+import {
+  markPatientMessagesDeliveredForViewer,
+  parseServerDeliveryStatus,
+} from './message-delivery';
 
 export type MessageSenderType = 'doctor' | 'patient';
 
@@ -27,6 +35,10 @@ export interface Message {
   replyToMessageId?: string | null;
   /** Szerver-oldalon összeállított preview a parent-ről (csak reply-nál). */
   quotedMessage?: QuotedMessagePreview | null;
+  /** Fázis 1.1: közvetlen válaszok száma. */
+  replyCount?: number;
+  /** Fázis 1.2: szerveroldali kézbesítési állapot. */
+  deliveryStatus?: ServerDeliveryStatus;
 }
 
 export interface CreateMessageInput {
@@ -155,6 +167,20 @@ async function loadPatientQuotePreviewMap(
     );
   }
   return map;
+}
+
+function effectivePatientDeliveryStatus(
+  row: { delivery_status: unknown; sender_type: string },
+  viewerRole: 'doctor' | 'patient' | null,
+): ServerDeliveryStatus {
+  let status = parseServerDeliveryStatus(row.delivery_status);
+  if (status === 'sent' && viewerRole) {
+    const incomingToViewer =
+      (viewerRole === 'doctor' && row.sender_type === 'patient') ||
+      (viewerRole === 'patient' && row.sender_type === 'doctor');
+    if (incomingToViewer) status = 'delivered';
+  }
+  return status;
 }
 
 /**
@@ -345,7 +371,7 @@ export async function getPatientMessages(
   }
 
   let query = `
-    SELECT m.id, m.patient_id, m.sender_type, m.sender_id, m.sender_email, m.subject, m.message, m.read_at, m.created_at, m.recipient_doctor_id, m.reply_to_message_id
+    SELECT m.id, m.patient_id, m.sender_type, m.sender_id, m.sender_email, m.subject, m.message, m.read_at, m.created_at, m.recipient_doctor_id, m.reply_to_message_id, m.delivery_status
     FROM messages m
     WHERE m.patient_id = $1
   `;
@@ -395,6 +421,17 @@ export async function getPatientMessages(
 
   const result = await pool.query(query, params);
 
+  const viewerRole: 'doctor' | 'patient' | null = options?.isPatientPortal
+    ? 'patient'
+    : options?.doctorId || options?.isAdmin
+      ? 'doctor'
+      : null;
+
+  const messageIds = result.rows.map((row: { id: string }) => row.id);
+  if (viewerRole && messageIds.length > 0) {
+    await markPatientMessagesDeliveredForViewer(messageIds, viewerRole);
+  }
+
   // Reply preview-k (Szelet 0.3): batch SELECT a parent üzenetekre,
   // ugyanarra a patient_id-ra szűrve.
   const parentIds = Array.from(
@@ -405,8 +442,9 @@ export async function getPatientMessages(
     ),
   );
   const quoteMap = await loadPatientQuotePreviewMap(parentIds, validatedPatientId);
+  const replyCountMap = await batchPatientMessageReplyCounts(messageIds);
 
-  return result.rows.map((row: any) => ({
+  const mapped = result.rows.map((row: any) => ({
     id: row.id,
     patientId: row.patient_id,
     senderType: row.sender_type,
@@ -420,7 +458,10 @@ export async function getPatientMessages(
     quotedMessage: row.reply_to_message_id
       ? quoteMap.get(row.reply_to_message_id) ?? null
       : null,
+    deliveryStatus: effectivePatientDeliveryStatus(row, viewerRole),
   }));
+
+  return attachReplyCounts(mapped, replyCountMap);
 }
 
 /**
@@ -433,7 +474,11 @@ export async function markMessageAsRead(messageId: string): Promise<void> {
   const validatedMessageId = validateUUID(messageId, 'Üzenet ID');
 
   const result = await pool.query(
-    `UPDATE messages SET read_at = CURRENT_TIMESTAMP WHERE id = $1 AND read_at IS NULL RETURNING id`,
+    `UPDATE messages
+        SET read_at = CURRENT_TIMESTAMP,
+            delivery_status = 'read'
+      WHERE id = $1 AND read_at IS NULL
+      RETURNING id`,
     [validatedMessageId]
   );
   

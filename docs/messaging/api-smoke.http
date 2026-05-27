@@ -199,3 +199,20 @@ Content-Type: application/json
 
 GET {{host}}/api/messages?patientId={{patientId}}
 Cookie: {{authCookie}}
+
+###############################################################################
+# [Fázis 1.1] GET doctor messages — replyCount mező minden üzeneten
+# Elvárt: a parent üzenetnél replyCount >= 1, ha van közvetlen válasz.
+###############################################################################
+
+GET {{host}}/api/doctor-messages?recipientId={{recipientDoctorId}}
+Cookie: {{authCookie}}
+
+###############################################################################
+# [Fázis 1.2] deliveryStatus mező — olvasás után `read`
+# Futtasd a fenti GET-et olvasás ELŐTT/UTÁN; a saját küldött üzenetnél
+# deliveryStatus: sent → delivered (címzett megnyitja) → read (read PUT után).
+###############################################################################
+
+PUT {{host}}/api/doctor-messages/{{parentMessageId}}/read
+Cookie: {{authCookie}}

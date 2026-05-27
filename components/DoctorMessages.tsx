@@ -89,6 +89,14 @@ export function DoctorMessages() {
     }, 1600);
   }, []);
 
+  const scrollToFirstReply = useCallback(
+    (parentId: string) => {
+      const firstReply = messages.find((m) => m.replyToMessageId === parentId);
+      if (firstReply) scrollToMessage(firstReply.id);
+    },
+    [messages, scrollToMessage],
+  );
+
   // ── Scroll effects ──────────────────────────────────────────────────
 
   // Scroll listener: tracks if user is near bottom
@@ -495,7 +503,10 @@ export function DoctorMessages() {
               isFromMe,
               replyToMessageId: message.replyToMessageId ?? null,
               quotedMessage: message.quotedMessage ?? null,
-              deliveryStatus: isPending ? 'pending' : 'sent',
+              replyCount: message.replyCount ?? 0,
+              deliveryStatus: isPending
+                ? 'pending'
+                : message.deliveryStatus ?? (message.readAt ? 'read' : 'sent'),
               readAt: message.readAt ?? null,
             };
 
@@ -587,6 +598,7 @@ export function DoctorMessages() {
                     )}
                     onReply={isPending ? undefined : () => startReplyTo(message)}
                     onQuoteClick={scrollToMessage}
+                    onReplyThreadClick={scrollToFirstReply}
                     bubbleFooter={groupReadFooter}
                   />
                 </div>

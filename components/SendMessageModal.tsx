@@ -36,6 +36,8 @@ interface RecentMessage {
   pending?: boolean; // Küldés alatt
   replyToMessageId?: string | null;
   quotedMessage?: QuotedMessagePreview | null;
+  replyCount?: number;
+  deliveryStatus?: 'sent' | 'delivered' | 'read' | 'failed';
 }
 
 interface SendMessageModalProps {
@@ -100,6 +102,14 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
       el.classList.remove('ring-2', 'ring-blue-400', 'rounded-lg');
     }, 1600);
   }, []);
+
+  const scrollToFirstReply = useCallback(
+    (parentId: string) => {
+      const firstReply = conversationMessages.find((m) => m.replyToMessageId === parentId);
+      if (firstReply) scrollToMessage(firstReply.id);
+    },
+    [conversationMessages, scrollToMessage],
+  );
 
   useEffect(() => {
     if (isOpen) {
@@ -533,7 +543,10 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
                           isFromMe: isDoctor,
                           replyToMessageId: msg.replyToMessageId ?? null,
                           quotedMessage: msg.quotedMessage ?? null,
-                          deliveryStatus: isPending ? 'pending' : 'sent',
+                          replyCount: msg.replyCount ?? 0,
+                          deliveryStatus: isPending
+                            ? 'pending'
+                            : msg.deliveryStatus ?? (msg.readAt ? 'read' : 'sent'),
                           readAt: msg.readAt ?? null,
                         };
 
@@ -571,6 +584,7 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
                               )}
                               onReply={isPending ? undefined : () => startReplyTo(msg)}
                               onQuoteClick={scrollToMessage}
+                              onReplyThreadClick={scrollToFirstReply}
                             />
                           </div>
                         );

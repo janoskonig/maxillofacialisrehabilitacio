@@ -20,7 +20,7 @@ import type { ReactNode } from 'react';
 import type { QuotedMessagePreview } from '@/lib/types/messaging';
 import { MessageQuoteBlock } from './MessageQuoteBlock';
 
-export type DeliveryStatus = 'pending' | 'sent' | 'failed';
+export type DeliveryStatus = 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
 
 export interface ChatBubbleMessage {
   id: string;
@@ -32,12 +32,13 @@ export interface ChatBubbleMessage {
   replyToMessageId?: string | null;
   quotedMessage?: QuotedMessagePreview | null;
   /**
-   * Kézbesítési állapot a 0.8-as szelethez előkészítve. 0.4-ben a kliens
-   * csak optimistic-pending / sent jelzéseket használ; a `failed` ágon
-   * jelenik meg az újraküldés gomb.
+   * Kézbesítési állapot. Kliens-only: `pending` / `failed`.
+   * Szerver (Fázis 1.2): `sent` | `delivered` | `read`.
    */
   deliveryStatus?: DeliveryStatus;
   readAt?: Date | string | null;
+  /** Fázis 1.1: közvetlen válaszok száma. */
+  replyCount?: number;
 }
 
 interface Props {
@@ -58,6 +59,10 @@ interface Props {
    * elemhez a saját üzenetlista konténerében.
    */
   onQuoteClick?: (messageId: string) => void;
+  /**
+   * Fázis 1.1: „N válasz” kattintás — a hívó görgessen az első válaszhoz.
+   */
+  onReplyThreadClick?: (parentMessageId: string) => void;
   /**
    * Optimistic retry (0.8 előkészítés). Csak akkor jelenik meg, ha
    * `deliveryStatus === 'failed'` ÉS van handler.
@@ -81,6 +86,7 @@ export function ChatMessageBubble({
   renderText,
   onReply,
   onQuoteClick,
+  onReplyThreadClick,
   onRetry,
   currentUserId,
   showSenderLabel = true,
@@ -88,10 +94,11 @@ export function ChatMessageBubble({
   className,
 }: Props) {
   const isFromMe = message.isFromMe;
-  const status: DeliveryStatus = message.deliveryStatus ?? (message.readAt ? 'sent' : 'sent');
-  const isPending = status === 'pending';
-  const isFailed = status === 'failed';
-  const isRead = !!message.readAt;
+  const visualStatus = resolveDeliveryVisual(message);
+  const isPending = visualStatus === 'pending';
+  const isFailed = visualStatus === 'failed';
+  const isRead = visualStatus === 'read';
+  const isDelivered = visualStatus === 'delivered';
   const createdAt =
     message.createdAt instanceof Date ? message.createdAt : new Date(message.createdAt);
 
@@ -150,6 +157,8 @@ export function ChatMessageBubble({
                   <AlertTriangle className="w-3 h-3" aria-label="küldés sikertelen" />
                 ) : isRead ? (
                   <CheckCheck className="w-3 h-3" aria-label="olvasott" />
+                ) : isDelivered ? (
+                  <CheckCheck className="w-3 h-3 opacity-70" aria-label="kézbesítve" />
                 ) : (
                   <Check className="w-3 h-3 opacity-70" aria-label="elküldve" />
                 )}
@@ -173,8 +182,28 @@ export function ChatMessageBubble({
           <ReplyActionButton onClick={() => onReply(message)} side="right" />
         )}
       </div>
+
+      {message.replyCount != null && message.replyCount > 0 && onReplyThreadClick && (
+        <button
+          type="button"
+          onClick={() => onReplyThreadClick(message.id)}
+          className={`mt-1 text-xs font-medium underline-offset-2 hover:underline ${
+            isFromMe ? 'text-blue-600 self-end' : 'text-gray-600 self-start'
+          }`}
+        >
+          {message.replyCount} válasz
+        </button>
+      )}
     </div>
   );
+}
+
+function resolveDeliveryVisual(message: ChatBubbleMessage): DeliveryStatus {
+  const status = message.deliveryStatus ?? 'sent';
+  if (status === 'pending' || status === 'failed') return status;
+  if (status === 'read' || message.readAt) return 'read';
+  if (status === 'delivered') return 'delivered';
+  return 'sent';
 }
 
 function ReplyActionButton({ onClick, side }: { onClick: () => void; side: 'left' | 'right' }) {

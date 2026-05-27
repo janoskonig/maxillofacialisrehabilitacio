@@ -7,7 +7,15 @@ import {
   ReplyTargetNotFoundError,
   type DoctorReplyScope,
 } from './message-reply';
-import type { QuotedMessagePreview } from './types/messaging';
+import type { QuotedMessagePreview, ServerDeliveryStatus } from './types/messaging';
+import {
+  batchDoctorMessageReplyCounts,
+  attachReplyCounts,
+} from './message-reply-counts';
+import {
+  markDoctorMessagesDeliveredForViewer,
+  parseServerDeliveryStatus,
+} from './message-delivery';
 
 export interface DoctorMessage {
   id: string;
@@ -28,6 +36,10 @@ export interface DoctorMessage {
   replyToMessageId?: string | null;
   /** Szerver által összerakott előnézet az eredeti üzenetről (csak reply-nál). */
   quotedMessage?: QuotedMessagePreview | null;
+  /** Fázis 1.1: közvetlen válaszok száma. */
+  replyCount?: number;
+  /** Fázis 1.2: szerveroldali kézbesítési állapot. */
+  deliveryStatus?: ServerDeliveryStatus;
   readBy?: Array<{ // Új mező: ki olvasta az üzenetet (group chat-ekhez)
     userId: string;
     userName: string | null;
@@ -145,6 +157,7 @@ function buildDoctorMessageFromRow(
     mentionedPatientIds: mentionedPatientIdsParsed,
     replyToMessageId: row.reply_to_message_id ?? null,
     quotedMessage: opts?.quotedMessageOverride ?? null,
+    deliveryStatus: parseServerDeliveryStatus(row.delivery_status),
   };
 }
 
@@ -185,6 +198,59 @@ async function loadDoctorQuotePreviewMap(
     );
   }
   return map;
+}
+
+function effectiveDoctorDeliveryStatus(
+  row: { delivery_status: unknown; sender_id: string },
+  viewerUserId: string,
+): ServerDeliveryStatus {
+  let status = parseServerDeliveryStatus(row.delivery_status);
+  if (status === 'sent' && row.sender_id !== viewerUserId) {
+    status = 'delivered';
+  }
+  return status;
+}
+
+async function mapDoctorMessageRows(
+  rows: any[],
+  viewerUserId: string,
+  readByMap: Map<string, Array<{ userId: string; userName: string | null; readAt: Date }>>,
+): Promise<DoctorMessage[]> {
+  const messageIds = rows.map((row) => row.id as string);
+  if (messageIds.length > 0) {
+    await markDoctorMessagesDeliveredForViewer(messageIds, viewerUserId);
+  }
+
+  const parentIds = Array.from(
+    new Set(
+      rows
+        .map((row) => row.reply_to_message_id)
+        .filter((id: unknown): id is string => typeof id === 'string' && id.length > 0),
+    ),
+  );
+  const quoteMap = await loadDoctorQuotePreviewMap(parentIds);
+  const replyCountMap = await batchDoctorMessageReplyCounts(messageIds);
+
+  const mapped = rows.map((row) => ({
+    id: row.id,
+    senderId: row.sender_id,
+    recipientId: row.recipient_id || null,
+    groupId: row.group_id || null,
+    senderEmail: row.sender_email,
+    senderName: row.sender_name,
+    subject: row.subject,
+    message: row.message,
+    readAt: row.read_at ? new Date(row.read_at) : null,
+    createdAt: new Date(row.created_at),
+    replyToMessageId: row.reply_to_message_id ?? null,
+    quotedMessage: row.reply_to_message_id
+      ? quoteMap.get(row.reply_to_message_id) ?? null
+      : null,
+    readBy: row.group_id ? readByMap.get(row.id) || [] : undefined,
+    deliveryStatus: effectiveDoctorDeliveryStatus(row, viewerUserId),
+  }));
+
+  return attachReplyCounts(mapped, replyCountMap);
 }
 
 /**
@@ -312,7 +378,7 @@ export async function getDoctorMessages(
   const pool = getDbPool();
 
   let query = `
-    SELECT id, sender_id, recipient_id, group_id, sender_email, sender_name, subject, message, read_at, created_at, reply_to_message_id
+    SELECT id, sender_id, recipient_id, group_id, sender_email, sender_name, subject, message, read_at, created_at, reply_to_message_id, delivery_status
     FROM doctor_messages
     WHERE (sender_id = $1 OR recipient_id = $1)
   `;
@@ -375,32 +441,7 @@ export async function getDoctorMessages(
   }
 
   // Reply preview-k (Szelet 0.2): batch SELECT a parent üzenetekre.
-  const parentIds = Array.from(
-    new Set(
-      result.rows
-        .map((row: any) => row.reply_to_message_id)
-        .filter((id: any): id is string => typeof id === 'string' && id.length > 0),
-    ),
-  );
-  const quoteMap = await loadDoctorQuotePreviewMap(parentIds);
-
-  return result.rows.map((row: any) => ({
-    id: row.id,
-    senderId: row.sender_id,
-    recipientId: row.recipient_id || null,
-    groupId: row.group_id || null,
-    senderEmail: row.sender_email,
-    senderName: row.sender_name,
-    subject: row.subject,
-    message: row.message,
-    readAt: row.read_at ? new Date(row.read_at) : null,
-    createdAt: new Date(row.created_at),
-    replyToMessageId: row.reply_to_message_id ?? null,
-    quotedMessage: row.reply_to_message_id
-      ? quoteMap.get(row.reply_to_message_id) ?? null
-      : null,
-    readBy: row.group_id ? (readByMap.get(row.id) || []) : undefined,
-  }));
+  return mapDoctorMessageRows(result.rows, userId, readByMap);
 }
 
 /**
@@ -451,7 +492,8 @@ export async function markDoctorMessageAsRead(messageId: string, userId: string)
 
     const updateResult = await pool.query(
       `UPDATE doctor_messages 
-       SET read_at = CURRENT_TIMESTAMP 
+       SET read_at = CURRENT_TIMESTAMP,
+           delivery_status = 'read'
        WHERE id = $1 AND recipient_id = $2 AND read_at IS NULL
        RETURNING id`,
       [messageId, userId]
@@ -917,7 +959,7 @@ export async function getGroupMessages(
   }
 
   let query = `
-    SELECT id, sender_id, recipient_id, group_id, sender_email, sender_name, subject, message, read_at, created_at, reply_to_message_id
+    SELECT id, sender_id, recipient_id, group_id, sender_email, sender_name, subject, message, read_at, created_at, reply_to_message_id, delivery_status
     FROM doctor_messages
     WHERE group_id = $1
     ORDER BY created_at ASC
@@ -962,38 +1004,8 @@ export async function getGroupMessages(
     }
   }
   
-  // Reply preview-k (Szelet 0.2): batch SELECT a parent üzenetekre.
-  const parentIds = Array.from(
-    new Set(
-      result.rows
-        .map((row: any) => row.reply_to_message_id)
-        .filter((id: any): id is string => typeof id === 'string' && id.length > 0),
-    ),
-  );
-  const quoteMap = await loadDoctorQuotePreviewMap(parentIds);
-
-  const mappedMessages = result.rows.map((row: any) => {
-    const readBy = readByMap.get(row.id) || [];
-    return {
-      id: row.id,
-      senderId: row.sender_id,
-      recipientId: row.recipient_id || null,
-      groupId: row.group_id || null,
-      senderEmail: row.sender_email,
-      senderName: row.sender_name,
-      subject: row.subject,
-      message: row.message,
-      readAt: row.read_at ? new Date(row.read_at) : null,
-      createdAt: new Date(row.created_at),
-      replyToMessageId: row.reply_to_message_id ?? null,
-      quotedMessage: row.reply_to_message_id
-        ? quoteMap.get(row.reply_to_message_id) ?? null
-        : null,
-      readBy: readBy,
-    };
-  });
-  
-  return mappedMessages;
+  // Reply preview-k + delivery + reply counts (Fázis 1).
+  return mapDoctorMessageRows(result.rows, userId, readByMap);
 }
 
 /**

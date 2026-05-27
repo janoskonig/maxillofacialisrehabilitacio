@@ -29,6 +29,8 @@ interface Message {
   pending?: boolean;
   replyToMessageId?: string | null;
   quotedMessage?: QuotedMessagePreview | null;
+  replyCount?: number;
+  deliveryStatus?: 'sent' | 'delivered' | 'read' | 'failed';
 }
 
 interface PatientMessagesProps {
@@ -91,6 +93,14 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
       el.classList.remove('ring-2', 'ring-blue-400', 'rounded-lg');
     }, 1600);
   }, []);
+
+  const scrollToFirstReply = useCallback(
+    (parentId: string) => {
+      const firstReply = messages.find((m) => m.replyToMessageId === parentId);
+      if (firstReply) scrollToMessage(firstReply.id);
+    },
+    [messages, scrollToMessage],
+  );
 
   // Get current user
   useEffect(() => {
@@ -434,7 +444,10 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
               isFromMe,
               replyToMessageId: message.replyToMessageId ?? null,
               quotedMessage: message.quotedMessage ?? null,
-              deliveryStatus: isPending ? 'pending' : 'sent',
+              replyCount: message.replyCount ?? 0,
+              deliveryStatus: isPending
+                ? 'pending'
+                : message.deliveryStatus ?? (message.readAt ? 'read' : 'sent'),
               readAt: message.readAt ?? null,
             };
 
@@ -469,6 +482,7 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
                   )}
                   onReply={isPending ? undefined : () => startReplyTo(message)}
                   onQuoteClick={scrollToMessage}
+                  onReplyThreadClick={scrollToFirstReply}
                 />
               </div>
             );
