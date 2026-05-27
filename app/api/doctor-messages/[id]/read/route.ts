@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { authedHandler } from '@/lib/api/route-handler';
 import { markDoctorMessageAsRead } from '@/lib/doctor-communication';
 import { getDbPool } from '@/lib/db';
-import { emitDoctorMessageRead } from '@/lib/socket-server';
+import { emitDoctorMessageRead, emitDoctorMessageReadDirect } from '@/lib/socket-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,19 +20,28 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
 
   const pool = getDbPool();
   const messageResult = await pool.query(
-    `SELECT group_id FROM doctor_messages WHERE id = $1`,
+    `SELECT group_id, sender_id, recipient_id FROM doctor_messages WHERE id = $1`,
     [id]
   );
 
-  if (messageResult.rows.length > 0 && messageResult.rows[0].group_id) {
-    const groupId = messageResult.rows[0].group_id;
-    const userResult = await pool.query(
-      `SELECT doktor_neve FROM users WHERE id = $1`,
-      [auth.userId]
-    );
-    const userName = userResult.rows.length > 0 ? userResult.rows[0].doktor_neve : null;
-    
-    emitDoctorMessageRead(groupId, id, auth.userId, userName);
+  if (messageResult.rows.length > 0) {
+    const row = messageResult.rows[0];
+    if (row.group_id) {
+      const userResult = await pool.query(
+        `SELECT doktor_neve FROM users WHERE id = $1`,
+        [auth.userId]
+      );
+      const userName = userResult.rows.length > 0 ? userResult.rows[0].doktor_neve : null;
+
+      emitDoctorMessageRead(row.group_id, id, auth.userId, userName);
+    } else if (row.sender_id && row.sender_id !== auth.userId) {
+      // Slice 0.7: 1:1 — a feladónak küldjük, hogy az ő UI-jában frissüljön.
+      emitDoctorMessageReadDirect({
+        senderUserId: row.sender_id,
+        recipientUserId: auth.userId,
+        messageId: id,
+      });
+    }
   }
 
   return NextResponse.json({

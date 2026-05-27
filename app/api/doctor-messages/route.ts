@@ -7,6 +7,7 @@ import { logActivityWithAuth } from '@/lib/activity';
 import { getDbPool } from '@/lib/db';
 import { sendPushNotification } from '@/lib/push-notifications';
 import { logger } from '@/lib/logger';
+import { emitNewDoctorMessage } from '@/lib/socket-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,7 +61,18 @@ export const POST = authedHandler(async (req, { auth }) => {
     });
 
     const participants = await getGroupParticipants(groupId);
-    
+
+    // Slice 0.7: realtime kézbesítés a csoport szobának.
+    try {
+      emitNewDoctorMessage({
+        recipientUserIds: [],
+        groupId,
+        message: newMessage,
+      });
+    } catch (socketError) {
+      logger.error('Hiba a Socket.io új csoport üzenet emit során:', socketError);
+    }
+
     try {
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 
         (req.headers.get('origin') || 'http://localhost:3000');
@@ -163,6 +175,17 @@ export const POST = authedHandler(async (req, { auth }) => {
     'doctor_message_sent',
     `Üzenet küldve orvosnak: ${recipientResult.rows[0].doktor_neve || recipientResult.rows[0].email}`
   );
+
+  // Slice 0.7: realtime kézbesítés a címzett `user:{id}` szobájába.
+  try {
+    emitNewDoctorMessage({
+      recipientUserIds: [recipientId],
+      groupId: null,
+      message: newMessage,
+    });
+  } catch (socketError) {
+    logger.error('Hiba a Socket.io új 1:1 üzenet emit során:', socketError);
+  }
 
   try {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 
