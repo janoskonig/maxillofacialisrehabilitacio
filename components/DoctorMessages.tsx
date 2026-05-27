@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
-import { MessageCircle, Send, Check, CheckCheck, Loader2, Users, UserPlus, Edit2, X, Trash2 } from 'lucide-react';
+import { useCallback, useState, useEffect, useRef, useMemo } from 'react';
+import { MessageCircle, Send, CheckCheck, Loader2, Users, UserPlus, Edit2, X, Trash2 } from 'lucide-react';
 import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
@@ -14,6 +14,8 @@ import { useSocket } from '@/contexts/SocketContext';
 import { MessagesShell } from './mobile/MessagesShell';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useDoctorMessages } from '@/hooks/useDoctorMessages';
+import { ChatMessageBubble, type ChatBubbleMessage } from './messaging/ChatMessageBubble';
+import { ReplyComposerBar } from './messaging/ReplyComposerBar';
 
 export function DoctorMessages() {
   const { showToast } = useToast();
@@ -24,6 +26,7 @@ export function DoctorMessages() {
     currentUserId, isGroupCreator,
     selectedDoctorId, selectedDoctorName, selectedGroupId, selectedGroupName,
     loading, sending, deletingGroup,
+    replyState, startReplyTo,
     selectDoctor, selectGroup, clearSelection, sendMessage,
     createGroupConversation, renameGroup, deleteGroup,
     refreshConversations, refreshGroupParticipants, setSelectedGroupName,
@@ -70,6 +73,21 @@ export function DoctorMessages() {
     if (!el) return;
     el.scrollTo({ top: el.scrollHeight, behavior });
   };
+
+  // Idézet kattintásra: az eredeti `data-message-id` targethez ugrunk az
+  // aktuális üzenetlistában. Ha nincs (pl. törölt parent vagy nincs még
+  // betöltve), csendben nem csinálunk semmit.
+  const scrollToMessage = useCallback((messageId: string) => {
+    const el = messagesContainerRef.current?.querySelector<HTMLElement>(
+      `[data-message-id="${messageId}"]`,
+    );
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('ring-2', 'ring-blue-400', 'rounded-lg');
+    window.setTimeout(() => {
+      el.classList.remove('ring-2', 'ring-blue-400', 'rounded-lg');
+    }, 1600);
+  }, []);
 
   // ── Scroll effects ──────────────────────────────────────────────────
 
@@ -221,6 +239,11 @@ export function DoctorMessages() {
   };
 
   const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Escape' && replyState.isReplying) {
+      e.preventDefault();
+      replyState.clearReply();
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey && !isMobile) {
       e.preventDefault();
       handleSendMessage();
@@ -447,7 +470,6 @@ export function DoctorMessages() {
           messages.map((message, index) => {
             const isFromMe = currentUserId ? message.senderId === currentUserId : false;
             const isPending = message.pending === true;
-            const isRead = message.readAt !== null;
             const senderName = message.senderName || message.senderEmail || 'Ismeretlen';
             const lastName = getLastName(senderName);
             const monogram = getMonogram(senderName);
@@ -462,6 +484,72 @@ export function DoctorMessages() {
               ? 'Tegnap'
               : format(msgDate, 'yyyy. MMMM d.', { locale: hu });
 
+            // Slice 0.5: csatorna-független `ChatMessageBubble`-re adapter
+            // (a hook tartja a forrás-szót, itt csak shape-coercion van).
+            const bubbleMessage: ChatBubbleMessage = {
+              id: message.id,
+              message: message.message,
+              createdAt: message.createdAt,
+              senderId: message.senderId,
+              senderName,
+              isFromMe,
+              replyToMessageId: message.replyToMessageId ?? null,
+              quotedMessage: message.quotedMessage ?? null,
+              deliveryStatus: isPending ? 'pending' : 'sent',
+              readAt: message.readAt ?? null,
+            };
+
+            // Csoport olvasás-vizualizáció a buborék belső footerébe — a
+            // korábbi inline implementáció (Slice 0.4 előtti) megtartva,
+            // csak `bubbleFooter` slotból renderelve.
+            const groupReadFooter =
+              isFromMe && selectedGroupId && groupParticipants.length > 0 ? (
+                <div className="text-xs text-blue-100 mt-2 px-1 space-y-1">
+                  {message.readBy && message.readBy.length > 0 && (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-medium">Olvasták:</span>
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {message.readBy.map((reader) => (
+                          <div
+                            key={reader.userId}
+                            className="flex items-center gap-1 bg-blue-500/30 rounded-full px-2 py-0.5"
+                            title={`${reader.userName || 'Ismeretlen'} - ${format(new Date(reader.readAt), 'HH:mm', { locale: hu })}`}
+                          >
+                            <CheckCheck className="w-3 h-3 text-green-300 flex-shrink-0" />
+                            <span className="opacity-90">{reader.userName || 'Ismeretlen'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {(() => {
+                    const readUserIds = new Set(message.readBy?.map(r => r.userId) || []);
+                    const unreadParticipants = groupParticipants.filter(
+                      p => p.userId !== currentUserId && p.userId !== message.senderId && !readUserIds.has(p.userId)
+                    );
+                    if (unreadParticipants.length === 0) return null;
+                    return (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-medium">Nem olvasták:</span>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {unreadParticipants.map((participant) => (
+                            <div
+                              key={participant.userId}
+                              className="flex items-center gap-1 bg-blue-500/20 rounded-full px-2 py-0.5 opacity-70"
+                              title={participant.userName || participant.userEmail}
+                            >
+                              <div className="w-3 h-3 rounded-full bg-gray-400 border border-gray-500 flex-shrink-0"></div>
+                              <span>{participant.userName || participant.userEmail}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              ) : null;
+
             return (
               <div key={message.id}>
                 {showDateSeparator && (
@@ -471,116 +559,56 @@ export function DoctorMessages() {
                     <div className="flex-1 border-t border-gray-300" />
                   </div>
                 )}
-              <div
-                data-message-id={message.id}
-                className={`flex flex-col ${isFromMe ? 'items-end' : 'items-start'}`}
-              >
-                {!isFromMe && (
-                  <div className="flex items-center gap-1.5 mb-1 px-1">
-                    <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-xs font-semibold text-blue-700">
-                      {monogram}
-                    </div>
-                    <span className="text-xs font-medium text-gray-700">{lastName}</span>
-                  </div>
-                )}
-                <div
-                  className={`max-w-[75%] rounded-lg px-4 py-2 ${
-                    isFromMe
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white text-gray-900 border border-gray-200'
-                  }`}
-                >
-                  <div className="text-sm">
-                    <MessageTextRenderer 
-                      text={message.message} 
-                      chatType="doctor-doctor"
-                      patientId={null}
-                      messageId={message.id}
-                      senderId={message.senderId}
-                      currentUserId={currentUserId}
-                      onSendMessage={async (messageText) => {
-                        await handleSendMessage(messageText);
-                      }}
-                    />
-                  </div>
-                  <div className={`text-xs mt-1 flex items-center gap-1.5 ${
-                    isFromMe ? 'text-blue-100' : 'text-gray-500'
-                  }`}>
-                    <span>{format(new Date(message.createdAt), 'HH:mm', { locale: hu })}</span>
-                    {isFromMe && (
-                      <span className="ml-1">
-                        {isPending ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                        ) : isRead ? (
-                          <CheckCheck className="w-3 h-3" />
-                        ) : (
-                          <Check className="w-3 h-3 opacity-70" />
-                        )}
-                      </span>
-                    )}
-                  </div>
-                  {isFromMe && selectedGroupId && groupParticipants.length > 0 && (
-                    <div className="text-xs text-blue-100 mt-2 px-1 space-y-1">
-                      {message.readBy && message.readBy.length > 0 && (
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-medium">Olvasták:</span>
-                          <div className="flex items-center gap-1 flex-wrap">
-                            {message.readBy.map((reader) => {
-                              const participant = groupParticipants.find(p => p.userId === reader.userId);
-                              return (
-                                <div
-                                  key={reader.userId}
-                                  className="flex items-center gap-1 bg-blue-500/30 rounded-full px-2 py-0.5"
-                                  title={`${reader.userName || 'Ismeretlen'} - ${format(new Date(reader.readAt), 'HH:mm', { locale: hu })}`}
-                                >
-                                  <CheckCheck className="w-3 h-3 text-green-300 flex-shrink-0" />
-                                  <span className="opacity-90">{reader.userName || 'Ismeretlen'}</span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {(() => {
-                        const readUserIds = new Set(message.readBy?.map(r => r.userId) || []);
-                        const unreadParticipants = groupParticipants.filter(
-                          p => p.userId !== currentUserId && p.userId !== message.senderId && !readUserIds.has(p.userId)
-                        );
-                        
-                        if (unreadParticipants.length > 0) {
-                          return (
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-medium">Nem olvasták:</span>
-                              <div className="flex items-center gap-1 flex-wrap">
-                                {unreadParticipants.map((participant) => {
-                                  return (
-                                    <div
-                                      key={participant.userId}
-                                      className="flex items-center gap-1 bg-blue-500/20 rounded-full px-2 py-0.5 opacity-70"
-                                      title={participant.userName || participant.userEmail}
-                                    >
-                                      <div className="w-3 h-3 rounded-full bg-gray-400 border border-gray-500 flex-shrink-0"></div>
-                                      <span>{participant.userName || participant.userEmail}</span>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          );
-                        }
-                        return null;
-                      })()}
+                <div className={`flex flex-col ${isFromMe ? 'items-end' : 'items-start'}`}>
+                  {!isFromMe && (
+                    <div className="flex items-center gap-1.5 mb-1 px-1">
+                      <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-xs font-semibold text-blue-700">
+                        {monogram}
+                      </div>
+                      <span className="text-xs font-medium text-gray-700">{lastName}</span>
                     </div>
                   )}
+                  <ChatMessageBubble
+                    message={bubbleMessage}
+                    currentUserId={currentUserId}
+                    showSenderLabel={false}
+                    renderText={(text) => (
+                      <MessageTextRenderer
+                        text={text}
+                        chatType="doctor-doctor"
+                        patientId={null}
+                        messageId={message.id}
+                        senderId={message.senderId}
+                        currentUserId={currentUserId}
+                        onSendMessage={async (messageText) => {
+                          await handleSendMessage(messageText);
+                        }}
+                      />
+                    )}
+                    onReply={isPending ? undefined : () => startReplyTo(message)}
+                    onQuoteClick={scrollToMessage}
+                    bubbleFooter={groupReadFooter}
+                  />
                 </div>
-              </div>
               </div>
             );
           })
         )}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Slice 0.5: reply mód csík a composer fölött */}
+      {replyState.isReplying && replyState.replyTarget && (
+        <ReplyComposerBar
+          quote={replyState.replyTarget}
+          onClose={replyState.clearReply}
+          senderLabelOverride={
+            replyState.replyTarget.senderId === currentUserId
+              ? 'Te'
+              : replyState.replyTarget.senderName ?? undefined
+          }
+        />
+      )}
 
       {/* Message Input */}
       <div className="flex-shrink-0 border-t bg-white p-2 sm:p-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-4 relative">

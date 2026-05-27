@@ -1,8 +1,20 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import { verifySocketAuth, SocketAuthPayload } from './socket-auth';
+import { getDbPool } from './db';
+import { hasEverTreatedPatient } from './patient-doctor-access';
 
 let io: SocketIOServer | null = null;
+
+/**
+ * Slice 0.7 — szoba elnevezések:
+ *   patient:{patientId}        beteg ↔ orvos szál
+ *   user:{userId}              egyetlen felhasználó (orvos vagy beteg) — 1:1 routing
+ *   doctor-group:{groupId}     orvos csoport
+ *
+ * Az ACL ellenőrzés a `join-room` eseten történik. A `user:{userId}` szobába
+ * a connect handler auto-joinol, így a kliensnek nem kell külön kérnie.
+ */
 
 /**
  * Initialize Socket.io server
@@ -56,32 +68,62 @@ export function initSocketIO(httpServer: HTTPServer): SocketIOServer {
     const auth = socket.data.auth as SocketAuthPayload;
     console.log(`[Socket] User connected: ${auth.userType} ${auth.userId}`);
 
-    // Join patient room if applicable
+    // Auto-join per-user room — 1:1 cél (orvos → orvos new-doctor-message,
+    // 1:1 doctor-message-read a feladónak).
+    const userRoom = `user:${auth.userId}`;
+    socket.join(userRoom);
+
+    // Join patient room if applicable (sajat szal)
     if (auth.userType === 'patient' && auth.patientId) {
       const room = `patient:${auth.patientId}`;
       socket.join(room);
       console.log(`[Socket] Patient ${auth.patientId} joined room: ${room}`);
     }
 
-    // Handle join-room event (for doctors joining patient rooms or group chats)
+    // Handle join-room event — Slice 0.7 ACL ellenőrzéssel.
     socket.on('join-room', async (data: { patientId?: string; groupId?: string }) => {
       if (data.patientId) {
-        // Verify access (doctors need to have access to the patient)
-        if (auth.userType === 'doctor') {
-          // TODO: Verify doctor has access to this patient
-          // For now, allow all authenticated doctors
+        // Doctor: csak ha valaha kezelte ezt a beteget (vagy admin).
+        if (auth.userType !== 'doctor') {
+          console.warn(`[Socket] join-room patient rejected: ${auth.userType} not allowed`);
+          return;
+        }
+        try {
+          const allowed = auth.role === 'admin'
+            || (await hasEverTreatedPatient(auth.userId, data.patientId));
+          if (!allowed) {
+            console.warn(`[Socket] ACL deny: doctor ${auth.userId} → patient:${data.patientId}`);
+            return;
+          }
           const room = `patient:${data.patientId}`;
           socket.join(room);
           console.log(`[Socket] Doctor ${auth.userId} joined room: ${room}`);
+        } catch (err) {
+          console.error(`[Socket] join-room patient ACL error:`, err);
         }
       } else if (data.groupId) {
-        // Group chat room
-        if (auth.userType === 'doctor') {
-          // TODO: Verify doctor is a participant in this group
-          // For now, allow all authenticated doctors
-          const room = data.groupId;
+        // Doctor: csak ha tényleg résztvevő a csoportban.
+        if (auth.userType !== 'doctor') return;
+        try {
+          // A groupId érkezhet bare uuid-ként vagy `doctor-group:<uuid>` prefixszel.
+          const rawId = data.groupId.startsWith('doctor-group:')
+            ? data.groupId.slice('doctor-group:'.length)
+            : data.groupId;
+          const pool = getDbPool();
+          const result = await pool.query(
+            `SELECT 1 FROM doctor_message_group_participants
+              WHERE group_id = $1 AND user_id = $2 LIMIT 1`,
+            [rawId, auth.userId],
+          );
+          if (result.rows.length === 0) {
+            console.warn(`[Socket] ACL deny: doctor ${auth.userId} → doctor-group:${rawId}`);
+            return;
+          }
+          const room = `doctor-group:${rawId}`;
           socket.join(room);
           console.log(`[Socket] Doctor ${auth.userId} joined group room: ${room}`);
+        } catch (err) {
+          console.error(`[Socket] join-room group ACL error:`, err);
         }
       }
     });
@@ -186,4 +228,65 @@ export function emitDoctorMessageRead(groupId: string, messageId: string, userId
   });
 
   console.log(`[Socket] Emitted doctor-message-read to room: ${room}`);
+}
+
+/**
+ * Slice 0.7 — új orvos üzenet realtime kézbesítés.
+ *
+ *  - `recipientUserIds`: kik kapják a 1:1 esetén (általában csak a címzett);
+ *    csoportnál üres tömb is OK, akkor csak a group szobába megy.
+ *  - `groupId`: ha csoport, ide is emit megy.
+ *
+ * A `user:{id}` szobát minden kliens automatikusan csatlakozik connect-kor,
+ * így a 1:1 routing nem igényel client-oldali subscribe-ot.
+ */
+export function emitNewDoctorMessage(opts: {
+  recipientUserIds: string[];
+  groupId: string | null;
+  message: unknown;
+}): void {
+  const socketIO = getSocketIO();
+  if (!socketIO) return;
+
+  const { recipientUserIds, groupId, message } = opts;
+  const payload = { message, groupId };
+
+  if (groupId) {
+    const room = `doctor-group:${groupId}`;
+    socketIO.to(room).emit('new-doctor-message', payload);
+    console.log(`[Socket] Emitted new-doctor-message to ${room}`);
+    return;
+  }
+
+  // 1:1 — minden címzettnek a saját szobájába.
+  for (const recipientId of recipientUserIds) {
+    const room = `user:${recipientId}`;
+    socketIO.to(room).emit('new-doctor-message', payload);
+    console.log(`[Socket] Emitted new-doctor-message to ${room}`);
+  }
+}
+
+/**
+ * Slice 0.7 — orvos üzenet 1:1 olvasott esemény: a feladónak küldjük,
+ * hogy az ő UI-jában frissüljön a pipa-status. A group eset továbbra is
+ * az `emitDoctorMessageRead`-en megy.
+ */
+export function emitDoctorMessageReadDirect(opts: {
+  senderUserId: string;
+  recipientUserId: string;
+  messageId: string;
+}): void {
+  const socketIO = getSocketIO();
+  if (!socketIO) return;
+
+  const { senderUserId, recipientUserId, messageId } = opts;
+  // Az eredeti feladó kapja a read jelzést.
+  const room = `user:${senderUserId}`;
+  socketIO.to(room).emit('doctor-message-read', {
+    messageId,
+    groupId: null,
+    userId: recipientUserId,
+    userName: null,
+  });
+  console.log(`[Socket] Emitted doctor-message-read (1:1) to ${room}`);
 }

@@ -5,6 +5,9 @@ import { DoctorMessage, DoctorConversation } from '@/lib/types';
 import { getCurrentUser } from '@/lib/auth';
 import { useToast } from '@/contexts/ToastContext';
 import type { Socket } from 'socket.io-client';
+import { useReplyState, type ReplyState } from '@/components/messaging/useReplyState';
+import { buildQuotedMessagePreview } from '@/lib/message-reply';
+import type { QuotedMessagePreview } from '@/lib/types/messaging';
 
 export interface Doctor {
   id: string;
@@ -43,6 +46,17 @@ export interface UseDoctorMessagesReturn {
   deletingGroup: boolean;
   pendingMessageId: string | null;
 
+  /**
+   * Reply state (Slice 0.5). A hook saját maga birtokolja a `replyTarget`-et
+   * — a komponens a `replyState.setReplyTarget(...)`-val állítja be (a
+   * buborékon a „Válasz” gomb), és a hook `sendMessage`-e automatikusan
+   * beleszerkeszti a POST body-jába a `replyToMessageId`-t, majd sikeres
+   * küldés után törli.
+   */
+  replyState: ReplyState;
+  /** Kényelmi setter: meglévő `DoctorMessage`-ből épít `QuotedMessagePreview`-t. */
+  startReplyTo: (message: DoctorMessage) => void;
+
   selectDoctor: (doctorId: string, doctorName: string) => void;
   selectGroup: (groupId: string, groupName: string | null) => void;
   clearSelection: () => void;
@@ -80,6 +94,27 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
   const [sending, setSending] = useState(false);
   const [deletingGroup, setDeletingGroup] = useState(false);
   const [pendingMessageId, setPendingMessageId] = useState<string | null>(null);
+
+  // ── Reply state (Slice 0.5) ─────────────────────────────────────────
+  const replyState = useReplyState();
+
+  /**
+   * Egy meglévő `DoctorMessage` row-ból azonnal `replyTarget` lesz. A
+   * preview szöveg-csonkolás megegyezik a szerver oldalival (lásd
+   * `lib/message-reply.buildQuotedMessagePreview`), így a saját és server-
+   * generált preview vizuálisan azonos.
+   */
+  const startReplyTo = (message: DoctorMessage) => {
+    const quote: QuotedMessagePreview = buildQuotedMessagePreview({
+      id: message.id,
+      channel: 'doctor',
+      senderId: message.senderId,
+      senderName: message.senderName ?? null,
+      message: message.message,
+      createdAt: message.createdAt,
+    });
+    replyState.setReplyTarget(quote);
+  };
 
   // ── Fetch helpers ───────────────────────────────────────────────────
 
@@ -333,6 +368,9 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
     };
     loadData();
 
+    // Slice 0.7: polling lefojtva 120s safety netre — a primer kézbesítés
+    // a Socket.io `new-doctor-message` / `doctor-message-read` eseményekből
+    // jön (lásd lentebb a subscribe useEffect-ben).
     const interval = setInterval(async () => {
       fetchConversations();
       fetchUnreadCount();
@@ -341,7 +379,7 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
       } else if (selectedGroupId) {
         fetchGroupMessages();
       }
-    }, 30_000);
+    }, 120_000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDoctorId, selectedGroupId]);
@@ -361,6 +399,9 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
     } else {
       setMessages([]);
     }
+    // Reply target conversation-specific — másik szálra váltáskor ne
+    // szivárogjon át a kiválasztott idézet.
+    replyState.clearReply();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDoctorId, selectedGroupId]);
 
@@ -484,20 +525,26 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDoctorId, selectedGroupId, loading, currentUserId, messages.length]);
 
-  // WebSocket: listen for doctor-message-read events in group chats
+  // WebSocket: listen for doctor-message-read events (group + 1:1 from 0.7).
   useEffect(() => {
-    if (!socket || !isConnected || !selectedGroupId) return;
+    if (!socket || !isConnected) return;
+    if (!selectedGroupId && !selectedDoctorId) return;
 
-    const handleDoctorMessageRead = (data: { messageId: string; groupId: string; userId: string; userName: string | null }) => {
-      if (data.groupId !== selectedGroupId) return;
+    const handleDoctorMessageRead = (data: { messageId: string; groupId: string | null; userId: string; userName: string | null }) => {
+      // Group eset: csak a saját szálban érdekel.
+      if (data.groupId && data.groupId !== selectedGroupId) return;
+      // 1:1 eset: csak akkor érdekel, ha jelenleg ezzel az orvossal beszélünk
+      // (a `user:{me}` szobába jön ide, de a kontextus elveszik a payloadban;
+      // ezért az aktuálisan kiválasztott 1:1 messages listáján futtatunk
+      // map-et — ha nincs egyezés, no-op).
+      if (!data.groupId && !selectedDoctorId) return;
 
       setMessages(prevMessages =>
         prevMessages.map(m => {
-          if (m.id === data.messageId) {
+          if (m.id !== data.messageId) return m;
+          if (data.groupId) {
             const existingReadBy = m.readBy || [];
-            if (existingReadBy.some(r => r.userId === data.userId)) {
-              return m;
-            }
+            if (existingReadBy.some(r => r.userId === data.userId)) return m;
             return {
               ...m,
               readBy: [
@@ -510,19 +557,75 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
               ]
             };
           }
-          return m;
+          // 1:1: a feladó UI-ja kapja meg, frissítjük readAt-ot.
+          return { ...m, readAt: m.readAt ?? new Date() };
         })
       );
     };
 
-    socket.emit('join-room', { groupId: `doctor-group:${selectedGroupId}` });
     socket.on('doctor-message-read', handleDoctorMessageRead);
+
+    if (selectedGroupId) {
+      socket.emit('join-room', { groupId: `doctor-group:${selectedGroupId}` });
+    }
 
     return () => {
       socket.off('doctor-message-read', handleDoctorMessageRead);
-      socket.emit('leave-room', { groupId: `doctor-group:${selectedGroupId}` });
+      if (selectedGroupId) {
+        socket.emit('leave-room', { groupId: `doctor-group:${selectedGroupId}` });
+      }
     };
-  }, [socket, isConnected, selectedGroupId]);
+  }, [socket, isConnected, selectedGroupId, selectedDoctorId]);
+
+  // Slice 0.7: élő new-doctor-message kézbesítés. A `user:{me}` szobához a
+  // szerver auto-joinol, group szobához a fenti effect csatlakoztat.
+  useEffect(() => {
+    if (!socket || !isConnected) return;
+
+    const handleNewDoctorMessage = (data: { message: DoctorMessage; groupId: string | null }) => {
+      const msg = data.message;
+      if (!msg || !msg.id) return;
+      if (msg.senderId === currentUserId) {
+        // A saját pending üzenetet a POST callback már lecserélte —
+        // duplikációt elkerülünk.
+        return;
+      }
+
+      if (data.groupId) {
+        // Group: csak ha jelenleg a megfelelő szálban vagyunk.
+        if (data.groupId !== selectedGroupId) {
+          fetchConversations();
+          fetchUnreadCount();
+          return;
+        }
+      } else {
+        // 1:1: csak ha jelenleg a feladóval beszélünk.
+        if (!selectedDoctorId || msg.senderId !== selectedDoctorId) {
+          fetchConversations();
+          fetchUnreadCount();
+          return;
+        }
+      }
+
+      setMessages(prev => {
+        if (prev.some(m => m.id === msg.id)) return prev;
+        return [
+          ...prev,
+          {
+            ...msg,
+            createdAt: new Date(msg.createdAt),
+            readAt: msg.readAt ? new Date(msg.readAt) : null,
+          },
+        ];
+      });
+    };
+
+    socket.on('new-doctor-message', handleNewDoctorMessage);
+    return () => {
+      socket.off('new-doctor-message', handleNewDoctorMessage);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket, isConnected, selectedGroupId, selectedDoctorId, currentUserId]);
 
   // ── Actions ─────────────────────────────────────────────────────────
 
@@ -555,10 +658,22 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
   const sendMessage = async (text: string): Promise<boolean> => {
     if (!text.trim() || (!selectedDoctorId && !selectedGroupId)) return false;
 
+    const replyTargetSnapshot = replyState.replyTarget;
+    const replyToMessageId = replyTargetSnapshot?.id ?? null;
+
+    // Slice 0.8: kliens-oldali idempotencia kulcs. A `pending-` prefix
+    // miatt a meglévő `.startsWith('pending-')` szűrők (auto-read effect,
+    // fetchMessages) változatlanul működnek; a szerver `(sender_id,
+    // client_message_id)` UNIQUE kulcsa biztosítja, hogy a retry NEM
+    // duplikál.
+    const randomPart = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const tempId = `pending-${randomPart}`;
+
     try {
       setSending(true);
 
-      const tempId = `pending-${Date.now()}`;
       const pendingMessage: DoctorMessage = {
         id: tempId,
         senderId: currentUserId || '',
@@ -570,6 +685,8 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
         readAt: null,
         createdAt: new Date(),
         pending: true,
+        replyToMessageId,
+        quotedMessage: replyTargetSnapshot ?? null,
       };
 
       setMessages(prev => [...prev, pendingMessage]);
@@ -584,13 +701,24 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
           groupId: selectedGroupId || undefined,
           subject: null,
           message: text,
+          replyToMessageId,
+          clientMessageId: tempId,
         }),
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        setMessages(prev => prev.filter(m => m.id !== tempId));
+        const error = await response.json().catch(() => ({}));
         setPendingMessageId(null);
+
+        if (response.status === 429) {
+          // Slice 0.8: rate limit — failed bubble megmarad újraküldés-gombbal.
+          // A tempId UNIQUE-kulcsa garantálja, hogy az újraküldés nem duplikál.
+          showToast(error.error || 'Túl sok üzenet — próbáld újra később.', 'error');
+          return false;
+        }
+
+        // Bármilyen más hiba esetén eltakarítjuk a pending buborékot.
+        setMessages(prev => prev.filter(m => m.id !== tempId));
         throw new Error(error.error || 'Hiba az üzenet küldésekor');
       }
 
@@ -600,6 +728,7 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
         prev.map(m => m.id === tempId ? { ...data.message, pending: false } : m)
       );
       setPendingMessageId(null);
+      replyState.clearReply();
 
       showToast('Üzenet sikeresen elküldve', 'success');
 
@@ -731,6 +860,9 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
     sending,
     deletingGroup,
     pendingMessageId,
+
+    replyState,
+    startReplyTo,
 
     selectDoctor,
     selectGroup,

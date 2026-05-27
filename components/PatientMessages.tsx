@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { MessageCircle, Send, Check, CheckCheck, Loader2, User, ArrowRight, FileQuestion } from 'lucide-react';
+import { MessageCircle, Send, User, ArrowRight, FileQuestion } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
@@ -10,6 +10,11 @@ import { getMonogram, getLastName } from '@/lib/utils';
 import { MessageTextRenderer } from './MessageTextRenderer';
 import { useSocket } from '@/contexts/SocketContext';
 import { DocumentRequestSendWizard } from './DocumentRequestSendWizard';
+import { ChatMessageBubble, type ChatBubbleMessage } from './messaging/ChatMessageBubble';
+import { ReplyComposerBar } from './messaging/ReplyComposerBar';
+import { useReplyState } from './messaging/useReplyState';
+import { buildQuotedMessagePreview } from '@/lib/message-reply';
+import type { QuotedMessagePreview } from '@/lib/types/messaging';
 
 interface Message {
   id: string;
@@ -22,6 +27,8 @@ interface Message {
   readAt: Date | null;
   createdAt: Date;
   pending?: boolean;
+  replyToMessageId?: string | null;
+  quotedMessage?: QuotedMessagePreview | null;
 }
 
 interface PatientMessagesProps {
@@ -44,7 +51,46 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesLoadedRef = useRef<Set<string>>(new Set());
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [showRequestWizard, setShowRequestWizard] = useState(false);
+
+  // Slice 0.6: reply state — beteg csatorna staff oldal.
+  const replyState = useReplyState();
+
+  // Beteg-szál váltáskor töröljük a reply targetet, hogy ne szivárogjon át
+  // egy másik beteg üzenetére irányuló idézet.
+  useEffect(() => {
+    replyState.clearReply();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patientId]);
+
+  const startReplyTo = useCallback((message: Message) => {
+    const quote: QuotedMessagePreview = buildQuotedMessagePreview({
+      id: message.id,
+      channel: 'patient',
+      senderId: message.senderId,
+      senderName: message.senderType === 'doctor'
+        ? message.senderEmail || 'Orvos'
+        : patientName || 'Beteg',
+      message: message.message,
+      createdAt: message.createdAt,
+    });
+    replyState.setReplyTarget(quote);
+    // Fókuszt adunk a textareának, hogy a billentyűzet rögtön gépelésre álljon.
+    textareaRef.current?.focus();
+  }, [patientName, replyState]);
+
+  const scrollToMessage = useCallback((messageId: string) => {
+    const el = messagesContainerRef.current?.querySelector<HTMLElement>(
+      `[data-message-id="${messageId}"]`,
+    );
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('ring-2', 'ring-blue-400', 'rounded-lg');
+    window.setTimeout(() => {
+      el.classList.remove('ring-2', 'ring-blue-400', 'rounded-lg');
+    }, 1600);
+  }, []);
 
   // Get current user
   useEffect(() => {
@@ -251,6 +297,16 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
       return;
     }
 
+    // Reply state snapshot a POST startján — közben felhasználó nem
+    // tud egy másik üzenetre váltani.
+    const replyTargetSnapshot = replyState.replyTarget;
+    const replyToMessageId = replyTargetSnapshot?.id ?? null;
+
+    // Slice 0.8: idempotencia kulcs.
+    const clientMessageId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
     try {
       setSending(true);
       
@@ -264,11 +320,17 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
           patientId,
           subject: null,
           message: textToSend,
+          replyToMessageId,
+          clientMessageId,
         }),
       });
 
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json().catch(() => ({}));
+        if (response.status === 429) {
+          showToast(error.error || 'Túl sok üzenet — próbáld újra később.', 'error');
+          return;
+        }
         throw new Error(error.error || 'Hiba az üzenet küldésekor');
       }
 
@@ -289,6 +351,7 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
       }
       
       setNewMessage('');
+      replyState.clearReply();
       showToast('Üzenet sikeresen elküldve', 'success');
     } catch (error: any) {
       console.error('Hiba az üzenet küldésekor:', error);
@@ -355,20 +418,28 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
             // Orvos oldalon: orvos üzenetei JOBBRA (kék), beteg üzenetei BALRA (fehér)
             const isFromMe = currentUserId ? message.senderType === 'doctor' && message.senderId === currentUserId : message.senderType === 'doctor';
             const isPending = message.pending === true;
-            const isRead = message.readAt !== null;
-            
-            const senderName = isFromMe 
+
+            const senderName = isFromMe
               ? (message.senderEmail || 'Én')
               : (patientName || 'Beteg');
             const lastName = getLastName(senderName);
             const monogram = getMonogram(senderName);
 
+            const bubbleMessage: ChatBubbleMessage = {
+              id: message.id,
+              message: message.message,
+              createdAt: message.createdAt,
+              senderId: message.senderId,
+              senderName,
+              isFromMe,
+              replyToMessageId: message.replyToMessageId ?? null,
+              quotedMessage: message.quotedMessage ?? null,
+              deliveryStatus: isPending ? 'pending' : 'sent',
+              readAt: message.readAt ?? null,
+            };
+
             return (
-              <div
-                key={message.id}
-                data-message-id={message.id}
-                className={`flex flex-col ${isFromMe ? 'items-end' : 'items-start'}`}
-              >
+              <div key={message.id} className={`flex flex-col ${isFromMe ? 'items-end' : 'items-start'}`}>
                 {/* Sender name and monogram */}
                 {!isFromMe && (
                   <div className="flex items-center gap-1.5 mb-1 px-1">
@@ -378,16 +449,13 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
                     <span className="text-xs font-medium text-gray-700">{lastName}</span>
                   </div>
                 )}
-                <div
-                  className={`max-w-[75%] rounded-lg px-4 py-2 ${
-                    isFromMe
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white text-gray-900 border border-gray-200'
-                  }`}
-                >
-                  <div className="text-sm">
-                    <MessageTextRenderer 
-                      text={message.message} 
+                <ChatMessageBubble
+                  message={bubbleMessage}
+                  currentUserId={currentUserId}
+                  showSenderLabel={false}
+                  renderText={(text) => (
+                    <MessageTextRenderer
+                      text={text}
                       chatType="doctor-view-patient"
                       patientId={patientId}
                       messageId={message.id}
@@ -398,30 +466,29 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
                         await handleSendMessage();
                       }}
                     />
-                  </div>
-                  <div className={`text-xs mt-1 flex items-center gap-1.5 ${
-                    isFromMe ? 'text-blue-100' : 'text-gray-500'
-                  }`}>
-                    <span>{format(new Date(message.createdAt), 'HH:mm', { locale: hu })}</span>
-                    {isFromMe && (
-                      <span className="ml-1">
-                        {isPending ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                        ) : isRead ? (
-                          <CheckCheck className="w-3 h-3" />
-                        ) : (
-                          <Check className="w-3 h-3 opacity-70" />
-                        )}
-                      </span>
-                    )}
-                  </div>
-                </div>
+                  )}
+                  onReply={isPending ? undefined : () => startReplyTo(message)}
+                  onQuoteClick={scrollToMessage}
+                />
               </div>
             );
           })
         )}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Slice 0.6: reply mód csík a composer fölött */}
+      {replyState.isReplying && replyState.replyTarget && (
+        <ReplyComposerBar
+          quote={replyState.replyTarget}
+          onClose={replyState.clearReply}
+          senderLabelOverride={
+            replyState.replyTarget.senderId === currentUserId
+              ? 'Te'
+              : replyState.replyTarget.senderName ?? undefined
+          }
+        />
+      )}
 
       {/* Message Input */}
       <div className="border-t bg-white p-2 sm:p-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-4">
@@ -436,8 +503,15 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
             <span className="hidden sm:inline text-sm">Bekérés</span>
           </button>
           <textarea
+            ref={textareaRef}
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape' && replyState.isReplying) {
+                e.preventDefault();
+                replyState.clearReply();
+              }
+            }}
             className="form-input flex-1 resize-none min-h-[44px]"
             rows={2}
             placeholder="Írja be üzenetét..."

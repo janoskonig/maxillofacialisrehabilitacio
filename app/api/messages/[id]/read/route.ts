@@ -6,6 +6,7 @@ import { getDbPool } from '@/lib/db';
 import { validateUUID } from '@/lib/validation';
 import { apiHandler } from '@/lib/api/route-handler';
 import { logger } from '@/lib/logger';
+import { emitMessageRead } from '@/lib/socket-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -83,6 +84,12 @@ export const PUT = apiHandler(async (req, { params }) => {
     }
     logger.info(`[markMessageAsRead API] Beteg portál - marking as read`);
     await markMessageAsRead(validatedMessageId);
+    // Slice 0.7: a párhuzamosan kapcsolódó orvos klienseknek is jelezzük.
+    try {
+      emitMessageRead(message.patient_id, validatedMessageId);
+    } catch (socketError) {
+      logger.error('Hiba a Socket.io message-read emit során (patient portal):', socketError);
+    }
     return NextResponse.json({
       success: true,
       message: 'Üzenet olvasottnak jelölve',
@@ -154,6 +161,14 @@ export const PUT = apiHandler(async (req, { params }) => {
   }
 
   await markMessageAsRead(validatedMessageId);
+
+  // Slice 0.7: realtime read jelzés a `patient:{id}` szobának, hogy a többi
+  // résztvevő (másik tab, párhuzamos kliens) is frissítse a pipa-statust.
+  try {
+    emitMessageRead(message.patient_id, validatedMessageId);
+  } catch (socketError) {
+    logger.error('Hiba a Socket.io message-read emit során:', socketError);
+  }
 
   return NextResponse.json({
     success: true,

@@ -67,6 +67,12 @@ interface Props {
   currentUserId?: string | null;
   /** Show or hide the sender label above the bubble (non-own). Default: true. */
   showSenderLabel?: boolean;
+  /**
+   * Extra content rendered INSIDE the bubble, under the time/check row.
+   * Csatorna-specifikus elemekhez (pl. group chat `readBy` / "nem olvasták")
+   * — a chrome egységes marad, a tartalom a hívó hatáskörében.
+   */
+  bubbleFooter?: ReactNode;
   className?: string;
 }
 
@@ -78,6 +84,7 @@ export function ChatMessageBubble({
   onRetry,
   currentUserId,
   showSenderLabel = true,
+  bubbleFooter,
   className,
 }: Props) {
   const isFromMe = message.isFromMe;
@@ -158,6 +165,8 @@ export function ChatMessageBubble({
               </button>
             )}
           </div>
+
+          {bubbleFooter}
         </div>
 
         {onReply && !isFromMe && (

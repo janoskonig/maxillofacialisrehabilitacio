@@ -15,7 +15,11 @@
 
 import type { QuotedMessagePreview } from '@/lib/types/messaging';
 
-export type MessageQuoteVariant = 'bubble-own' | 'bubble-other' | 'composer';
+export type MessageQuoteVariant =
+  | 'bubble-own'
+  | 'bubble-own-green'
+  | 'bubble-other'
+  | 'composer';
 
 interface Props {
   quote: QuotedMessagePreview;
@@ -83,6 +87,15 @@ const STYLES: Record<MessageQuoteVariant, {
     bodyText: 'text-white/90',
     deletedText: 'italic text-white/60',
     button: 'hover:bg-blue-500/40',
+  },
+  'bubble-own-green': {
+    // A beteg-portál zöld saját buborékához igazítva.
+    container: 'px-2 py-1.5 rounded-md bg-green-600/40',
+    accent: 'w-0.5 self-stretch rounded bg-white/80',
+    senderText: 'text-white/95',
+    bodyText: 'text-white/90',
+    deletedText: 'italic text-white/60',
+    button: 'hover:bg-green-600/50',
   },
   'bubble-other': {
     container: 'px-2 py-1.5 rounded-md bg-gray-100',
