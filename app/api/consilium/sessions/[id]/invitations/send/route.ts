@@ -137,7 +137,7 @@ export const POST = authedHandler(async (req, { auth, params }) => {
     attendeeEmail: string | null;
     sent: boolean;
     rotated: boolean;
-    skipReason?: 'no_user' | 'inactive' | 'no_email' | 'email_failed';
+    skipReason?: 'no_user' | 'inactive' | 'no_email' | 'email_failed' | 'log_failed';
   };
   const results: SendOutcome[] = [];
 
