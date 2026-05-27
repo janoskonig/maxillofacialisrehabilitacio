@@ -161,3 +161,45 @@ export function buildDoctorChannelReadDeliveryUpdate(row: {
     groupId: row.group_id,
   };
 }
+
+/**
+ * Fázis 3.2 — Csoport üzenet: ha minden más résztvevő olvasta, értesítjük
+ * a küldőt `read` delivery státusszal.
+ */
+export async function notifyGroupMessageFullyReadIfNeeded(
+  messageId: string,
+  groupId: string,
+): Promise<void> {
+  const pool = getDbPool();
+  const msgResult = await pool.query<{ sender_id: string; group_id: string | null }>(
+    `SELECT sender_id, group_id FROM doctor_messages WHERE id = $1`,
+    [messageId],
+  );
+  if (msgResult.rows.length === 0) return;
+
+  const { sender_id: senderId, group_id: msgGroupId } = msgResult.rows[0];
+  if (!msgGroupId || msgGroupId !== groupId) return;
+
+  const participantsResult = await pool.query<{ user_id: string }>(
+    `SELECT user_id FROM doctor_message_group_participants WHERE group_id = $1`,
+    [groupId],
+  );
+  const others = participantsResult.rows.filter((p) => p.user_id !== senderId);
+  if (others.length === 0) return;
+
+  const readsResult = await pool.query<{ user_id: string }>(
+    `SELECT user_id FROM doctor_message_reads WHERE message_id = $1`,
+    [messageId],
+  );
+  const readIds = new Set(readsResult.rows.map((r) => r.user_id));
+  const allRead = others.every((p) => readIds.has(p.user_id));
+  if (!allRead) return;
+
+  notifyDeliveryStatusUpdates([
+    buildDoctorChannelReadDeliveryUpdate({
+      id: messageId,
+      sender_id: senderId,
+      group_id: groupId,
+    }),
+  ]);
+}

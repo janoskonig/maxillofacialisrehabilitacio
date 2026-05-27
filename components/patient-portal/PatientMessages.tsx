@@ -20,6 +20,7 @@ import {
   applyDeliveryStatusUpdate,
   isPatientChannelDeliveryEvent,
 } from '@/components/messaging/delivery-status-socket';
+import { incrementParentReplyCount } from '@/components/messaging/reply-count-socket';
 
 interface Message {
   id: string;
@@ -35,6 +36,7 @@ interface Message {
   replyToMessageId?: string | null;
   quotedMessage?: QuotedMessagePreview | null;
   deliveryStatus?: 'sent' | 'delivered' | 'read' | 'failed';
+  replyCount?: number;
 }
 
 interface Recipient {
@@ -119,6 +121,14 @@ export function PatientMessages() {
       el.classList.remove('ring-2', 'ring-blue-400', 'rounded-2xl');
     }, 1600);
   }, []);
+
+  const scrollToFirstReply = useCallback(
+    (parentId: string) => {
+      const firstReply = messages.find((m) => m.replyToMessageId === parentId);
+      if (firstReply) scrollToMessage(firstReply.id);
+    },
+    [messages, scrollToMessage],
+  );
 
   const totalUnreadCount = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
 
@@ -277,11 +287,15 @@ export function PatientMessages() {
         messagesLoadedRef.current.add(data.message.id);
         setMessages(prev => {
           if (prev.some(m => m.id === data.message.id)) return prev;
-          return [...prev, {
-            ...data.message,
-            createdAt: new Date(data.message.createdAt),
-            readAt: data.message.readAt ? new Date(data.message.readAt) : null,
-          }];
+          const withReply = [
+            ...prev,
+            {
+              ...data.message,
+              createdAt: new Date(data.message.createdAt),
+              readAt: data.message.readAt ? new Date(data.message.readAt) : null,
+            },
+          ];
+          return incrementParentReplyCount(withReply, data.message.replyToMessageId);
         });
       }
 
@@ -736,6 +750,18 @@ export function PatientMessages() {
                         </div>
                       </div>
                     </div>
+
+                    {(message.replyCount ?? 0) > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => scrollToFirstReply(message.id)}
+                        className={`mt-1 text-xs font-medium underline-offset-2 hover:underline ${
+                          isMyMessage ? 'text-green-700' : 'text-gray-600'
+                        }`}
+                      >
+                        {message.replyCount} válasz
+                      </button>
+                    )}
                   </div>
                   
                   {isMyMessage && <div className="flex-shrink-0 w-8"></div>}

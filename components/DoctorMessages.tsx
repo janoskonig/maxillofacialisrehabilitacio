@@ -14,6 +14,7 @@ import { useSocket } from '@/contexts/SocketContext';
 import { MessagesShell } from './mobile/MessagesShell';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useDoctorMessages } from '@/hooks/useDoctorMessages';
+import { aggregateGroupSenderDeliveryStatus } from '@/lib/messaging/group-delivery-status';
 import { ChatMessageBubble, type ChatBubbleMessage } from './messaging/ChatMessageBubble';
 import { ReplyComposerBar } from './messaging/ReplyComposerBar';
 
@@ -494,6 +495,16 @@ export function DoctorMessages() {
 
             // Slice 0.5: csatorna-független `ChatMessageBubble`-re adapter
             // (a hook tartja a forrás-szót, itt csak shape-coercion van).
+            const effectiveDeliveryStatus = isPending
+              ? 'pending' as const
+              : selectedGroupId && isFromMe
+                ? aggregateGroupSenderDeliveryStatus(
+                    message,
+                    currentUserId ?? '',
+                    groupParticipants,
+                  )
+                : message.deliveryStatus ?? (message.readAt ? 'read' : 'sent');
+
             const bubbleMessage: ChatBubbleMessage = {
               id: message.id,
               message: message.message,
@@ -504,9 +515,7 @@ export function DoctorMessages() {
               replyToMessageId: message.replyToMessageId ?? null,
               quotedMessage: message.quotedMessage ?? null,
               replyCount: message.replyCount ?? 0,
-              deliveryStatus: isPending
-                ? 'pending'
-                : message.deliveryStatus ?? (message.readAt ? 'read' : 'sent'),
+              deliveryStatus: effectiveDeliveryStatus,
               readAt: message.readAt ?? null,
             };
 

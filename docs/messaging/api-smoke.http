@@ -230,3 +230,13 @@ Cookie: {{authCookie}}
 #   2. Orvos B megnyitja a beszélgetést → A-nál delivered ikon.
 #   3. Orvos B read PUT (automatikus is lehet) → A-nál read ikon.
 ###############################################################################
+
+###############################################################################
+# [Fázis 3] replyCount + csoport delivery aggregáció
+#
+# - Új válasz socketen (`new-message` / `new-doctor-message`) → parent
+#   `replyCount` +1 a listában (refresh nélkül).
+# - Beteg portál: „N válasz” link a zöld bubble alatt.
+# - Csoport: ha minden más résztvevő olvasta → küldőnél read ikon
+#   (`message-delivery-status` read emit a read route-ból).
+###############################################################################

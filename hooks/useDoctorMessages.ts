@@ -13,6 +13,7 @@ import {
   isDoctorDirectDeliveryEvent,
   isDoctorGroupDeliveryEvent,
 } from '@/components/messaging/delivery-status-socket';
+import { incrementParentReplyCount } from '@/components/messaging/reply-count-socket';
 
 export interface Doctor {
   id: string;
@@ -550,16 +551,18 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
           if (data.groupId) {
             const existingReadBy = m.readBy || [];
             if (existingReadBy.some(r => r.userId === data.userId)) return m;
+            const readBy = [
+              ...existingReadBy,
+              {
+                userId: data.userId,
+                userName: data.userName,
+                readAt: new Date(),
+              },
+            ];
             return {
               ...m,
-              readBy: [
-                ...existingReadBy,
-                {
-                  userId: data.userId,
-                  userName: data.userName,
-                  readAt: new Date(),
-                }
-              ]
+              readBy,
+              deliveryStatus: 'delivered' as const,
             };
           }
           // 1:1: a feladó UI-ja kapja meg, frissítjük readAt-ot + deliveryStatus.
@@ -618,7 +621,7 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
 
       setMessages(prev => {
         if (prev.some(m => m.id === msg.id)) return prev;
-        return [
+        const withNew = [
           ...prev,
           {
             ...msg,
@@ -626,6 +629,7 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
             readAt: msg.readAt ? new Date(msg.readAt) : null,
           },
         ];
+        return incrementParentReplyCount(withNew, msg.replyToMessageId);
       });
     };
 

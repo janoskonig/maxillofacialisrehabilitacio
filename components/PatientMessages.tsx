@@ -19,6 +19,7 @@ import {
   applyDeliveryStatusUpdate,
   isPatientChannelDeliveryEvent,
 } from './messaging/delivery-status-socket';
+import { incrementParentReplyCount } from './messaging/reply-count-socket';
 
 interface Message {
   id: string;
@@ -188,12 +189,12 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
         if (prev.some(m => m.id === data.message.id)) {
           return prev;
         }
-        
-        return [...prev, {
+        const withNew = [...prev, {
           ...data.message,
           createdAt: new Date(data.message.createdAt),
           readAt: data.message.readAt ? new Date(data.message.readAt) : null,
         }];
+        return incrementParentReplyCount(withNew, data.message.replyToMessageId);
       });
 
       if (data.message.senderType === 'patient' && !data.message.readAt) {
