@@ -1,5 +1,13 @@
 import { getDbPool } from './db';
 import { extractPatientMentions } from './mention-parser';
+import {
+  parseReplyToMessageId,
+  isDoctorReplyTargetInScope,
+  buildQuotedMessagePreview,
+  ReplyTargetNotFoundError,
+  type DoctorReplyScope,
+} from './message-reply';
+import type { QuotedMessagePreview } from './types/messaging';
 
 export interface DoctorMessage {
   id: string;
@@ -16,6 +24,10 @@ export interface DoctorMessage {
   readAt: Date | null;
   createdAt: Date;
   mentionedPatientIds?: string[]; // Új mező a megemlített betegek ID-ihoz
+  /** 041_message_replies óta: ha válasz, az eredeti doctor_messages.id. */
+  replyToMessageId?: string | null;
+  /** Szerver által összerakott előnézet az eredeti üzenetről (csak reply-nál). */
+  quotedMessage?: QuotedMessagePreview | null;
   readBy?: Array<{ // Új mező: ki olvasta az üzenetet (group chat-ekhez)
     userId: string;
     userName: string | null;
@@ -31,23 +43,146 @@ export interface CreateDoctorMessageInput {
   subject?: string | null;
   message: string;
   groupId?: string; // Opcionális csoportos beszélgetéshez
+  /**
+   * Reply target üzenet ID-ja ugyanebben a szálban. Ha megadott, a backend
+   * ellenőrzi, hogy a target tényleg ebbe a beszélgetésbe (group_id ill.
+   * 1:1 pár) tartozik — máskülönben `ReplyTargetNotFoundError` (HTTP 404).
+   */
+  replyToMessageId?: string | null;
 }
 
 /**
- * Üzenet küldése orvosnak
+ * Belső helper: validálja és betölti a reply target üzenetet adott scope-ban.
+ *
+ * Visszatérési érték a `QuotedMessagePreview` az `INSERT ... RETURNING` után
+ * visszaadott DoctorMessage-hez, hogy a kliens egyetlen roundtripben megkapja
+ * mind a saját új üzenetét, mind az idézett szövegrészt.
+ */
+async function loadDoctorReplyTargetForScope(
+  replyToMessageId: string,
+  scope: DoctorReplyScope,
+): Promise<QuotedMessagePreview> {
+  const pool = getDbPool();
+
+  // doktor_neve a felhasználói táblából kell, hogy a quote-ban
+  // ugyanazt a megjelenítendő nevet lássuk, mint a többi buborékon.
+  const targetResult = await pool.query(
+    `SELECT dm.id, dm.group_id, dm.sender_id, dm.recipient_id,
+            dm.sender_name, dm.message, dm.created_at,
+            u.doktor_neve AS sender_doctor_name
+       FROM doctor_messages dm
+       LEFT JOIN users u ON u.id = dm.sender_id
+      WHERE dm.id = $1`,
+    [replyToMessageId],
+  );
+
+  if (targetResult.rows.length === 0) {
+    throw new ReplyTargetNotFoundError();
+  }
+
+  const row = targetResult.rows[0];
+  const inScope = isDoctorReplyTargetInScope(
+    {
+      groupId: row.group_id ?? null,
+      senderId: row.sender_id,
+      recipientId: row.recipient_id ?? null,
+    },
+    scope,
+  );
+
+  if (!inScope) {
+    // Szándékosan ugyanaz a hibatípus, mint a "nem létezik" eset —
+    // ne adjunk infót más szálak üzeneteiről.
+    throw new ReplyTargetNotFoundError();
+  }
+
+  return buildQuotedMessagePreview({
+    id: row.id,
+    channel: 'doctor',
+    senderId: row.sender_id,
+    senderName: row.sender_doctor_name ?? row.sender_name ?? null,
+    message: row.message,
+    createdAt: row.created_at,
+  });
+}
+
+/**
+ * Belső helper: tömegesen betölti a quoted preview-kat egy ID-listához
+ * (egy SELECT a doctor_messages táblára). A hívó réteg (getDoctorMessages,
+ * getGroupMessages) gondoskodik róla, hogy csak ugyanezen szálban látható
+ * üzenetek `reply_to_message_id`-jait adja be — a 0.2 POST-scope check +
+ * 041 self-FK miatt a parent garantáltan ugyanabban a szálban van.
+ */
+async function loadDoctorQuotePreviewMap(
+  ids: string[],
+): Promise<Map<string, QuotedMessagePreview>> {
+  const map = new Map<string, QuotedMessagePreview>();
+  if (ids.length === 0) return map;
+
+  const pool = getDbPool();
+  const result = await pool.query(
+    `SELECT dm.id, dm.sender_id, dm.sender_name, dm.message, dm.created_at,
+            u.doktor_neve AS sender_doctor_name
+       FROM doctor_messages dm
+       LEFT JOIN users u ON u.id = dm.sender_id
+      WHERE dm.id = ANY($1::uuid[])`,
+    [ids],
+  );
+
+  for (const row of result.rows) {
+    map.set(
+      row.id,
+      buildQuotedMessagePreview({
+        id: row.id,
+        channel: 'doctor',
+        senderId: row.sender_id,
+        senderName: row.sender_doctor_name ?? row.sender_name ?? null,
+        message: row.message,
+        createdAt: row.created_at,
+      }),
+    );
+  }
+  return map;
+}
+
+/**
+ * Üzenet küldése orvosnak (1:1 vagy csoport).
+ *
+ * Reply támogatás (Szelet 0.2):
+ *  - `replyToMessageId` opcionális UUID; ha érvénytelen formátum → throw 400-ként
+ *    (parseReplyToMessageId), ha másik szálra mutat → `ReplyTargetNotFoundError`
+ *    (HTTP 404, így nem leakelünk létezés-infót).
+ *  - Sikeres válasz esetén a visszaadott `DoctorMessage`-be belekerül a
+ *    `quotedMessage` preview is, hogy a kliensnek ne kelljen külön roundtrip.
  */
 export async function sendDoctorMessage(input: CreateDoctorMessageInput): Promise<DoctorMessage> {
   const pool = getDbPool();
 
   // Extract patient mentions from message text
   const mentionedPatientIds = await extractPatientMentions(input.message);
-  
 
-  // Üzenet mentése (groupId támogatással)
+  // Reply target normalizálás + scope ACL ellenőrzés (Szelet 0.2)
+  const normalizedReplyToId = parseReplyToMessageId(input.replyToMessageId);
+  let quotedMessage: QuotedMessagePreview | null = null;
+  if (normalizedReplyToId) {
+    const scope: DoctorReplyScope = input.groupId
+      ? { kind: 'group', groupId: input.groupId }
+      : {
+          kind: 'direct',
+          userAId: input.senderId,
+          userBId: input.recipientId ?? '',
+        };
+    quotedMessage = await loadDoctorReplyTargetForScope(normalizedReplyToId, scope);
+  }
+
+  // Üzenet mentése (groupId + reply_to_message_id támogatással)
   const result = await pool.query(
-    `INSERT INTO doctor_messages (sender_id, recipient_id, sender_email, sender_name, subject, message, mentioned_patient_ids, group_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-     RETURNING id, sender_id, recipient_id, sender_email, sender_name, subject, message, read_at, created_at, mentioned_patient_ids`,
+    `INSERT INTO doctor_messages
+       (sender_id, recipient_id, sender_email, sender_name, subject, message,
+        mentioned_patient_ids, group_id, reply_to_message_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     RETURNING id, sender_id, recipient_id, sender_email, sender_name, subject, message,
+               read_at, created_at, mentioned_patient_ids, group_id, reply_to_message_id`,
     [
       input.senderId,
       input.recipientId || null,
@@ -57,9 +192,10 @@ export async function sendDoctorMessage(input: CreateDoctorMessageInput): Promis
       input.message,
       JSON.stringify(mentionedPatientIds),
       input.groupId || null,
+      normalizedReplyToId,
     ]
   );
-  
+
 
   const row = result.rows[0];
   
@@ -85,6 +221,8 @@ export async function sendDoctorMessage(input: CreateDoctorMessageInput): Promis
     readAt: row.read_at ? new Date(row.read_at) : null,
     createdAt: new Date(row.created_at),
     mentionedPatientIds: mentionedPatientIdsParsed,
+    replyToMessageId: row.reply_to_message_id ?? null,
+    quotedMessage,
   };
 
   return message;
@@ -109,7 +247,7 @@ export async function getDoctorMessages(
   const pool = getDbPool();
 
   let query = `
-    SELECT id, sender_id, recipient_id, group_id, sender_email, sender_name, subject, message, read_at, created_at
+    SELECT id, sender_id, recipient_id, group_id, sender_email, sender_name, subject, message, read_at, created_at, reply_to_message_id
     FROM doctor_messages
     WHERE (sender_id = $1 OR recipient_id = $1)
   `;
@@ -171,6 +309,16 @@ export async function getDoctorMessages(
     }
   }
 
+  // Reply preview-k (Szelet 0.2): batch SELECT a parent üzenetekre.
+  const parentIds = Array.from(
+    new Set(
+      result.rows
+        .map((row: any) => row.reply_to_message_id)
+        .filter((id: any): id is string => typeof id === 'string' && id.length > 0),
+    ),
+  );
+  const quoteMap = await loadDoctorQuotePreviewMap(parentIds);
+
   return result.rows.map((row: any) => ({
     id: row.id,
     senderId: row.sender_id,
@@ -182,6 +330,10 @@ export async function getDoctorMessages(
     message: row.message,
     readAt: row.read_at ? new Date(row.read_at) : null,
     createdAt: new Date(row.created_at),
+    replyToMessageId: row.reply_to_message_id ?? null,
+    quotedMessage: row.reply_to_message_id
+      ? quoteMap.get(row.reply_to_message_id) ?? null
+      : null,
     readBy: row.group_id ? (readByMap.get(row.id) || []) : undefined,
   }));
 }
@@ -357,7 +509,7 @@ export async function getDoctorConversations(userId: string): Promise<Array<{
 
     // Utolsó üzenet
     const lastMessageResult = await pool.query(
-      `SELECT id, sender_id, recipient_id, group_id, sender_email, sender_name, subject, message, read_at, created_at
+      `SELECT id, sender_id, recipient_id, group_id, sender_email, sender_name, subject, message, read_at, created_at, reply_to_message_id
        FROM doctor_messages
        WHERE ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1))
        AND group_id IS NULL
@@ -369,6 +521,9 @@ export async function getDoctorConversations(userId: string): Promise<Array<{
     let lastMessage: DoctorMessage | null = null;
     if (lastMessageResult.rows.length > 0) {
       const msgRow = lastMessageResult.rows[0];
+      const lastQuoteMap = await loadDoctorQuotePreviewMap(
+        msgRow.reply_to_message_id ? [msgRow.reply_to_message_id] : [],
+      );
       lastMessage = {
         id: msgRow.id,
         senderId: msgRow.sender_id,
@@ -380,6 +535,10 @@ export async function getDoctorConversations(userId: string): Promise<Array<{
         message: msgRow.message,
         readAt: msgRow.read_at ? new Date(msgRow.read_at) : null,
         createdAt: new Date(msgRow.created_at),
+        replyToMessageId: msgRow.reply_to_message_id ?? null,
+        quotedMessage: msgRow.reply_to_message_id
+          ? lastQuoteMap.get(msgRow.reply_to_message_id) ?? null
+          : null,
       };
     }
 
@@ -574,7 +733,7 @@ export async function getDoctorMessageGroups(userId: string): Promise<Array<{
 
     // Get last message
     const lastMessageResult = await pool.query(
-      `SELECT id, sender_id, recipient_id, group_id, sender_email, sender_name, subject, message, read_at, created_at
+      `SELECT id, sender_id, recipient_id, group_id, sender_email, sender_name, subject, message, read_at, created_at, reply_to_message_id
        FROM doctor_messages
        WHERE group_id = $1
        ORDER BY created_at DESC
@@ -602,6 +761,10 @@ export async function getDoctorMessageGroups(userId: string): Promise<Array<{
         readAt: new Date(readRow.read_at),
       }));
 
+      const lastQuoteMap = await loadDoctorQuotePreviewMap(
+        msgRow.reply_to_message_id ? [msgRow.reply_to_message_id] : [],
+      );
+
       lastMessage = {
         id: msgRow.id,
         senderId: msgRow.sender_id,
@@ -613,6 +776,10 @@ export async function getDoctorMessageGroups(userId: string): Promise<Array<{
         message: msgRow.message,
         readAt: msgRow.read_at ? new Date(msgRow.read_at) : null,
         createdAt: new Date(msgRow.created_at),
+        replyToMessageId: msgRow.reply_to_message_id ?? null,
+        quotedMessage: msgRow.reply_to_message_id
+          ? lastQuoteMap.get(msgRow.reply_to_message_id) ?? null
+          : null,
         readBy: readBy,
       };
     }
@@ -685,7 +852,7 @@ export async function getGroupMessages(
   }
 
   let query = `
-    SELECT id, sender_id, recipient_id, group_id, sender_email, sender_name, subject, message, read_at, created_at
+    SELECT id, sender_id, recipient_id, group_id, sender_email, sender_name, subject, message, read_at, created_at, reply_to_message_id
     FROM doctor_messages
     WHERE group_id = $1
     ORDER BY created_at ASC
@@ -730,6 +897,16 @@ export async function getGroupMessages(
     }
   }
   
+  // Reply preview-k (Szelet 0.2): batch SELECT a parent üzenetekre.
+  const parentIds = Array.from(
+    new Set(
+      result.rows
+        .map((row: any) => row.reply_to_message_id)
+        .filter((id: any): id is string => typeof id === 'string' && id.length > 0),
+    ),
+  );
+  const quoteMap = await loadDoctorQuotePreviewMap(parentIds);
+
   const mappedMessages = result.rows.map((row: any) => {
     const readBy = readByMap.get(row.id) || [];
     return {
@@ -743,6 +920,10 @@ export async function getGroupMessages(
       message: row.message,
       readAt: row.read_at ? new Date(row.read_at) : null,
       createdAt: new Date(row.created_at),
+      replyToMessageId: row.reply_to_message_id ?? null,
+      quotedMessage: row.reply_to_message_id
+        ? quoteMap.get(row.reply_to_message_id) ?? null
+        : null,
       readBy: readBy,
     };
   });

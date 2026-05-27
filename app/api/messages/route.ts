@@ -13,23 +13,26 @@ import { logger } from '@/lib/logger';
 import { apiHandler } from '@/lib/api/route-handler';
 import { detectDocumentRequest } from '@/lib/document-request-detector';
 import { hasEverTreatedPatient } from '@/lib/patient-doctor-access';
+import { parseReplyToMessageId, ReplyTargetNotFoundError, type PatientReplySender } from '@/lib/message-reply';
 
 export const dynamic = 'force-dynamic';
 
 export const POST = apiHandler(async (req) => {
   const body = await req.json();
-  const { patientId, subject, message, recipientDoctorId } = body;
+  const { patientId, subject, message, recipientDoctorId, replyToMessageId } = body;
 
   let finalPatientId: string;
   let finalMessage: string;
   let finalSubject: string | null;
   let finalRecipientDoctorId: string | null;
-  
+  let normalizedReplyToMessageId: string | null;
+
   try {
     finalPatientId = validateUUID(patientId, 'Beteg ID');
     finalMessage = validateMessageText(message);
     finalSubject = validateSubject(subject);
     finalRecipientDoctorId = recipientDoctorId ? validateUUID(recipientDoctorId, 'Címzett orvos ID') : null;
+    normalizedReplyToMessageId = parseReplyToMessageId(replyToMessageId);
   } catch (validationError: any) {
     return NextResponse.json(
       { error: validationError.message || 'Érvénytelen adatok' },
@@ -45,6 +48,7 @@ export const POST = apiHandler(async (req) => {
   let senderEmail: string;
   let senderName: string | null = null;
   let recipientDoctorIdFinal: string | null = null;
+  let replySender: PatientReplySender | undefined;
 
   if (patientSessionId && patientSessionId === finalPatientId) {
     const docReq = detectDocumentRequest(finalMessage);
@@ -121,6 +125,14 @@ export const POST = apiHandler(async (req) => {
 
       recipientDoctorIdFinal = treatingDoctorId;
     }
+
+    if (normalizedReplyToMessageId) {
+      replySender = {
+        kind: 'patient',
+        patientId: finalPatientId,
+        laneDoctorId: recipientDoctorIdFinal,
+      };
+    }
   } else if (auth) {
     senderType = 'doctor';
     senderId = auth.userId;
@@ -142,9 +154,11 @@ export const POST = apiHandler(async (req) => {
     // Jogosultság: admin → szabad. Egyébként a felhasználónak valamikor
     // kezelnie kellett a beteget (jelenlegi vagy korábbi kezelőorvos /
     // epizód provider / volt időpontja). Lásd lib/patient-doctor-access.ts.
-    if (auth.role !== 'admin') {
-      const allowed = await hasEverTreatedPatient(auth.userId, finalPatientId);
-      if (!allowed) {
+    const isAdmin = auth.role === 'admin';
+    let isTreating = false;
+    if (!isAdmin) {
+      isTreating = await hasEverTreatedPatient(auth.userId, finalPatientId);
+      if (!isTreating) {
         return NextResponse.json(
           { error: 'Nincs jogosultsága üzenetet küldeni ennek a betegnek' },
           { status: 403 }
@@ -157,6 +171,15 @@ export const POST = apiHandler(async (req) => {
       [auth.userId]
     );
     senderName = userResult.rows.length > 0 ? userResult.rows[0].doktor_neve : auth.email;
+
+    if (normalizedReplyToMessageId) {
+      replySender = {
+        kind: 'doctor',
+        doctorId: auth.userId,
+        isAdmin,
+        isTreating,
+      };
+    }
   } else {
     return NextResponse.json(
       { error: 'Nincs jogosultsága üzenetet küldeni' },
@@ -172,6 +195,8 @@ export const POST = apiHandler(async (req) => {
     subject: finalSubject,
     message: finalMessage,
     recipientDoctorId: recipientDoctorIdFinal,
+    replyToMessageId: normalizedReplyToMessageId,
+    replySender,
   });
 
   if (auth) {

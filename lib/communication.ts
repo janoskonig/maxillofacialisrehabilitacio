@@ -2,6 +2,14 @@ import { getDbPool } from './db';
 import { logCommunication } from './communication-logs';
 import { validateUUID, validateMessageText, validateSubject } from './validation';
 import { hasEverTreatedPatient } from './patient-doctor-access';
+import {
+  parseReplyToMessageId,
+  canPatientReplySenderSeeTarget,
+  buildQuotedMessagePreview,
+  ReplyTargetNotFoundError,
+  type PatientReplySender,
+} from './message-reply';
+import type { QuotedMessagePreview } from './types/messaging';
 
 export type MessageSenderType = 'doctor' | 'patient';
 
@@ -15,6 +23,10 @@ export interface Message {
   message: string;
   readAt: Date | null;
   createdAt: Date;
+  /** 041_message_replies óta: ha válasz, a hivatkozott parent messages.id. */
+  replyToMessageId?: string | null;
+  /** Szerver-oldalon összeállított preview a parent-ről (csak reply-nál). */
+  quotedMessage?: QuotedMessagePreview | null;
 }
 
 export interface CreateMessageInput {
@@ -25,11 +37,131 @@ export interface CreateMessageInput {
   subject?: string | null;
   message: string;
   recipientDoctorId?: string | null; // Opcionális: ha beteg küldi, megadhatja, melyik orvosnak küldi (kezelőorvos vagy admin)
+  /**
+   * Reply target üzenet ID-ja ugyanennek a betegnek a szálában. Ha megadva,
+   * a backend ellenőrzi (lane-tudatos visibility), hogy a sender egyáltalán
+   * látná-e ezt az üzenetet GET-en. Ha nem → `ReplyTargetNotFoundError` (404).
+   */
+  replyToMessageId?: string | null;
+  /**
+   * Sender kontextus a reply visibility ellenőrzéshez. A route adja, nem a
+   * kliens — a `lib` réteg nem dönt admin/treating jogosultságról saját erőből.
+   * Csak akkor szükséges, ha `replyToMessageId` van.
+   */
+  replySender?: PatientReplySender;
+}
+
+/**
+ * Belső helper: validálja és betölti a reply target üzenetet a beteg
+ * csatornán, GET-szabályoknak megfelelő láthatóság-ellenőrzéssel.
+ */
+async function loadPatientReplyTargetForSender(
+  replyToMessageId: string,
+  sender: PatientReplySender,
+  patientId: string,
+): Promise<QuotedMessagePreview> {
+  const pool = getDbPool();
+
+  // Sender név preferencia: orvosnál `doktor_neve`, betegnél `patients.nev`.
+  // LEFT JOIN-ok mindkét irányban, hogy egy query-vel elinduljunk.
+  const targetResult = await pool.query(
+    `SELECT m.id, m.patient_id, m.sender_type, m.sender_id, m.recipient_doctor_id,
+            m.message, m.created_at,
+            u.doktor_neve AS doctor_name,
+            p.nev          AS patient_name
+       FROM messages m
+       LEFT JOIN users    u ON m.sender_type = 'doctor'  AND u.id = m.sender_id
+       LEFT JOIN patients p ON m.sender_type = 'patient' AND p.id = m.sender_id
+      WHERE m.id = $1`,
+    [replyToMessageId],
+  );
+
+  if (targetResult.rows.length === 0) {
+    throw new ReplyTargetNotFoundError();
+  }
+
+  const row = targetResult.rows[0];
+  const allowed = canPatientReplySenderSeeTarget(
+    {
+      patientId: row.patient_id,
+      senderType: row.sender_type,
+      senderId: row.sender_id,
+      recipientDoctorId: row.recipient_doctor_id ?? null,
+    },
+    sender,
+    patientId,
+  );
+  if (!allowed) {
+    // Ugyanaz a hibatípus, mint a "nem létezik" eset — más lane-ek
+    // létezésének leakelése kerülendő.
+    throw new ReplyTargetNotFoundError();
+  }
+
+  const senderName: string | null =
+    row.sender_type === 'doctor' ? row.doctor_name ?? null : row.patient_name ?? null;
+
+  return buildQuotedMessagePreview({
+    id: row.id,
+    channel: 'patient',
+    senderId: row.sender_id,
+    senderName,
+    message: row.message,
+    createdAt: row.created_at,
+  });
+}
+
+/**
+ * Belső helper: tömegesen betölti a quoted preview-kat egy ID-listához,
+ * ugyanarra a `patient_id`-ra szűrve (belt-and-braces a POST-gate mellett).
+ */
+async function loadPatientQuotePreviewMap(
+  ids: string[],
+  patientId: string,
+): Promise<Map<string, QuotedMessagePreview>> {
+  const map = new Map<string, QuotedMessagePreview>();
+  if (ids.length === 0) return map;
+
+  const pool = getDbPool();
+  const result = await pool.query(
+    `SELECT m.id, m.sender_type, m.sender_id, m.message, m.created_at,
+            u.doktor_neve AS doctor_name,
+            p.nev          AS patient_name
+       FROM messages m
+       LEFT JOIN users    u ON m.sender_type = 'doctor'  AND u.id = m.sender_id
+       LEFT JOIN patients p ON m.sender_type = 'patient' AND p.id = m.sender_id
+      WHERE m.id = ANY($1::uuid[])
+        AND m.patient_id = $2`,
+    [ids, patientId],
+  );
+
+  for (const row of result.rows) {
+    const senderName: string | null =
+      row.sender_type === 'doctor' ? row.doctor_name ?? null : row.patient_name ?? null;
+    map.set(
+      row.id,
+      buildQuotedMessagePreview({
+        id: row.id,
+        channel: 'patient',
+        senderId: row.sender_id,
+        senderName,
+        message: row.message,
+        createdAt: row.created_at,
+      }),
+    );
+  }
+  return map;
 }
 
 /**
  * Üzenet küldése betegnek vagy orvosnak
- * Automatikusan naplózza az érintkezést és küld email értesítést
+ * Automatikusan naplózza az érintkezést és küld email értesítést.
+ *
+ * Reply támogatás (Szelet 0.3):
+ *  - `replyToMessageId` opcionális UUID; ha érvénytelen → 400 (parser dob).
+ *  - Ha a sender (route által adott `replySender`) nem látná GET-en a parent
+ *    üzenetet → `ReplyTargetNotFoundError` (HTTP 404, lane info nem leakelve).
+ *  - Sikeres válasznál a visszakapott `Message`-be belekerül a
+ *    `quotedMessage` preview is, hogy a kliens egy roundtripben rendezhesse.
  */
 export async function sendMessage(input: CreateMessageInput): Promise<Message> {
   const pool = getDbPool();
@@ -44,11 +176,29 @@ export async function sendMessage(input: CreateMessageInput): Promise<Message> {
     validateUUID(input.recipientDoctorId, 'Címzett orvos ID');
   }
 
+  // Reply target normalizálás + visibility-tudatos scope check (Szelet 0.3).
+  const normalizedReplyToId = parseReplyToMessageId(input.replyToMessageId);
+  let quotedMessage: QuotedMessagePreview | null = null;
+  if (normalizedReplyToId) {
+    if (!input.replySender) {
+      // Belső konzisztencia: a route mindig adjon küldő kontextust.
+      throw new ReplyTargetNotFoundError();
+    }
+    quotedMessage = await loadPatientReplyTargetForSender(
+      normalizedReplyToId,
+      input.replySender,
+      validatedPatientId,
+    );
+  }
+
   // Üzenet mentése
   const result = await pool.query(
-    `INSERT INTO messages (patient_id, sender_type, sender_id, sender_email, subject, message, recipient_doctor_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
-     RETURNING id, patient_id, sender_type, sender_id, sender_email, subject, message, read_at, created_at, recipient_doctor_id`,
+    `INSERT INTO messages
+       (patient_id, sender_type, sender_id, sender_email, subject, message,
+        recipient_doctor_id, reply_to_message_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     RETURNING id, patient_id, sender_type, sender_id, sender_email, subject, message,
+               read_at, created_at, recipient_doctor_id, reply_to_message_id`,
     [
       validatedPatientId,
       input.senderType,
@@ -57,6 +207,7 @@ export async function sendMessage(input: CreateMessageInput): Promise<Message> {
       validatedSubject,
       validatedMessage,
       input.recipientDoctorId || null,
+      normalizedReplyToId,
     ]
   );
 
@@ -71,6 +222,8 @@ export async function sendMessage(input: CreateMessageInput): Promise<Message> {
     message: row.message,
     readAt: row.read_at ? new Date(row.read_at) : null,
     createdAt: new Date(row.created_at),
+    replyToMessageId: row.reply_to_message_id ?? null,
+    quotedMessage,
   };
 
   // Érintkezési napló létrehozása
@@ -153,7 +306,7 @@ export async function getPatientMessages(
   }
 
   let query = `
-    SELECT m.id, m.patient_id, m.sender_type, m.sender_id, m.sender_email, m.subject, m.message, m.read_at, m.created_at, m.recipient_doctor_id
+    SELECT m.id, m.patient_id, m.sender_type, m.sender_id, m.sender_email, m.subject, m.message, m.read_at, m.created_at, m.recipient_doctor_id, m.reply_to_message_id
     FROM messages m
     WHERE m.patient_id = $1
   `;
@@ -203,6 +356,17 @@ export async function getPatientMessages(
 
   const result = await pool.query(query, params);
 
+  // Reply preview-k (Szelet 0.3): batch SELECT a parent üzenetekre,
+  // ugyanarra a patient_id-ra szűrve.
+  const parentIds = Array.from(
+    new Set(
+      result.rows
+        .map((row: any) => row.reply_to_message_id)
+        .filter((id: any): id is string => typeof id === 'string' && id.length > 0),
+    ),
+  );
+  const quoteMap = await loadPatientQuotePreviewMap(parentIds, validatedPatientId);
+
   return result.rows.map((row: any) => ({
     id: row.id,
     patientId: row.patient_id,
@@ -213,6 +377,10 @@ export async function getPatientMessages(
     message: row.message,
     readAt: row.read_at ? new Date(row.read_at) : null,
     createdAt: new Date(row.created_at),
+    replyToMessageId: row.reply_to_message_id ?? null,
+    quotedMessage: row.reply_to_message_id
+      ? quoteMap.get(row.reply_to_message_id) ?? null
+      : null,
   }));
 }
 

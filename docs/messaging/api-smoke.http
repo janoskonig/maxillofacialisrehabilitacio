@@ -1,0 +1,201 @@
+### MaxRehab messaging — manuális API smoke gyűjtemény
+###
+### Cél: a kommunikációs platform szeletek (Fázis 0+) HTTP rétegét lokálisan
+### és preview környezetben gyorsan végig lehessen kattintani VS Code REST
+### Client / IntelliJ HTTP / `curl` paste-tel.
+###
+### Használat:
+###   1. Indítsd a dev szervert: `npm run dev`.
+###   2. Jelentkezz be a böngészőből (cookie session kell), majd másold ki
+###      a `next-auth.session-token` (vagy a projekt által használt) sütit a
+###      `@authCookie` változóba.
+###   3. UUID-ket cseréld ki valós DB értékekre (lásd `users` / `doctor_messages`).
+###
+### Konvenciók:
+###   - Minden POST/GET orvosi authentikált session-t feltételez.
+###   - A 0.2-höz tartozó eseteket "[Szelet 0.2]" jelöli.
+
+@host = http://localhost:3000
+@authCookie = REPLACE_WITH_REAL_SESSION_COOKIE
+
+# Cseréld ki valós orvos / üzenet ID-kra:
+@recipientDoctorId = 11111111-1111-4111-8111-111111111111
+@groupId = aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+@parentMessageId = 22222222-2222-4222-8222-222222222222
+@otherThreadMessageId = 33333333-3333-4333-8333-333333333333
+
+###############################################################################
+# [Szelet 0.2] 1:1 üzenet küldése REPLY NÉLKÜL (regresszió: 0.1 nem törte el)
+###############################################################################
+
+POST {{host}}/api/doctor-messages
+Cookie: {{authCookie}}
+Content-Type: application/json
+
+{
+  "recipientId": "{{recipientDoctorId}}",
+  "subject": "Smoke teszt",
+  "message": "Sima 1:1 üzenet, nem reply."
+}
+
+###############################################################################
+# [Szelet 0.2] 1:1 reply ugyanabban a párbeszédben
+# Elvárt: 200 OK, response.message.replyToMessageId = parentMessageId,
+#         response.message.quotedMessage.message kitöltve.
+###############################################################################
+
+POST {{host}}/api/doctor-messages
+Cookie: {{authCookie}}
+Content-Type: application/json
+
+{
+  "recipientId": "{{recipientDoctorId}}",
+  "message": "Válasz egy korábbi üzenetre.",
+  "replyToMessageId": "{{parentMessageId}}"
+}
+
+###############################################################################
+# [Szelet 0.2] 1:1 reply EGY MÁSIK SZÁL üzenetére — el kell utasítani
+# Elvárt: 404 (REPLY_TARGET_NOT_FOUND), nem 403,
+#         hogy ne leakeljük más szálak létezését.
+###############################################################################
+
+POST {{host}}/api/doctor-messages
+Cookie: {{authCookie}}
+Content-Type: application/json
+
+{
+  "recipientId": "{{recipientDoctorId}}",
+  "message": "Cross-thread próbálkozás, ennek 404-et kell adnia.",
+  "replyToMessageId": "{{otherThreadMessageId}}"
+}
+
+###############################################################################
+# [Szelet 0.2] 1:1 reply ÉRVÉNYTELEN UUID formátummal
+# Elvárt: 400, üzenet "Érvénytelen replyToMessageId formátum"-ra utal.
+###############################################################################
+
+POST {{host}}/api/doctor-messages
+Cookie: {{authCookie}}
+Content-Type: application/json
+
+{
+  "recipientId": "{{recipientDoctorId}}",
+  "message": "Hibás reply id.",
+  "replyToMessageId": "not-a-uuid"
+}
+
+###############################################################################
+# [Szelet 0.2] Csoport üzenet REPLY-jal
+# Elvárt: 200 OK, quotedMessage.channel = "doctor".
+###############################################################################
+
+POST {{host}}/api/doctor-messages
+Cookie: {{authCookie}}
+Content-Type: application/json
+
+{
+  "groupId": "{{groupId}}",
+  "message": "Csoport válasz egy korábbi üzenetre.",
+  "replyToMessageId": "{{parentMessageId}}"
+}
+
+###############################################################################
+# [Szelet 0.2] Csoport reply, de a parent 1:1 (más szál) — el kell utasítani
+# Elvárt: 404 (REPLY_TARGET_NOT_FOUND).
+###############################################################################
+
+POST {{host}}/api/doctor-messages
+Cookie: {{authCookie}}
+Content-Type: application/json
+
+{
+  "groupId": "{{groupId}}",
+  "message": "Group reply egy 1:1 parentre, 404.",
+  "replyToMessageId": "{{otherThreadMessageId}}"
+}
+
+###############################################################################
+# [Szelet 0.2] GET 1:1 üzenetek (replyToMessageId + quotedMessage mezőkkel)
+# Elvárt: a reply-üzeneteknél quotedMessage objektum, máshol null/undefined.
+###############################################################################
+
+GET {{host}}/api/doctor-messages?recipientId={{recipientDoctorId}}
+Cookie: {{authCookie}}
+
+###############################################################################
+# [Szelet 0.2] GET csoport üzenetek (replyToMessageId + quotedMessage mezőkkel)
+###############################################################################
+
+GET {{host}}/api/doctor-messages?groupId={{groupId}}
+Cookie: {{authCookie}}
+
+###############################################################################
+# [Szelet 0.2] GET conversations — utolsó üzenet quote info-val
+###############################################################################
+
+GET {{host}}/api/doctor-messages?conversations=true
+Cookie: {{authCookie}}
+
+###############################################################################
+# [Szelet 0.3] BETEG–ORVOS reply: változók
+###############################################################################
+
+# Cseréld ki valós beteg / üzenet ID-kra:
+@patientId = bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb
+@recipientDoctorForPatient = 44444444-4444-4444-8444-444444444444
+@patientChannelParentId = 55555555-5555-4555-8555-555555555555
+@otherLaneParentId = 66666666-6666-4666-8666-666666666666
+
+###############################################################################
+# [Szelet 0.3] Orvos válasz egy patient → me üzenetre — 200 OK
+# Elvárt: replyToMessageId rögzítve, quotedMessage.channel = "patient".
+###############################################################################
+
+POST {{host}}/api/messages
+Cookie: {{authCookie}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "message": "Doktor válasz a betegnek.",
+  "replyToMessageId": "{{patientChannelParentId}}"
+}
+
+###############################################################################
+# [Szelet 0.3] Orvos válasz EGY MÁSIK lane parentjére — 404
+# Elvárt: REPLY_TARGET_NOT_FOUND. Más orvosnak címzett üzenetre még treating
+# orvos sem válaszolhat (csak admin).
+###############################################################################
+
+POST {{host}}/api/messages
+Cookie: {{authCookie}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "message": "Cross-lane próba, 404 elvárva.",
+  "replyToMessageId": "{{otherLaneParentId}}"
+}
+
+###############################################################################
+# [Szelet 0.3] Érvénytelen reply UUID — 400
+###############################################################################
+
+POST {{host}}/api/messages
+Cookie: {{authCookie}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "message": "Hibás reply id.",
+  "replyToMessageId": "not-a-uuid"
+}
+
+###############################################################################
+# [Szelet 0.3] GET messages — replyToMessageId + quotedMessage mezővel
+# Elvárt: a reply-üzenetek `quotedMessage` mezője ki van töltve.
+###############################################################################
+
+GET {{host}}/api/messages?patientId={{patientId}}
+Cookie: {{authCookie}}

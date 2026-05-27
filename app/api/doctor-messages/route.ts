@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic';
 
 export const POST = authedHandler(async (req, { auth }) => {
   const body = await req.json();
-  const { recipientId, groupId, subject, message } = body;
+  const { recipientId, groupId, subject, message, replyToMessageId } = body;
 
   if (!message || message.trim().length === 0) {
     return NextResponse.json(
@@ -56,6 +56,7 @@ export const POST = authedHandler(async (req, { auth }) => {
       subject: subject || null,
       message: message.trim(),
       groupId,
+      replyToMessageId: replyToMessageId ?? null,
     });
 
     const participants = await getGroupParticipants(groupId);
@@ -153,6 +154,7 @@ export const POST = authedHandler(async (req, { auth }) => {
     senderName,
     subject: subject || null,
     message: message.trim(),
+    replyToMessageId: replyToMessageId ?? null,
   });
 
   await logActivityWithAuth(

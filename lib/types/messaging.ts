@@ -1,3 +1,31 @@
+/**
+ * Üzenetcsatorna azonosítója. A reply-célok mindig saját csatornájukra
+ * mutatnak (lásd 041_message_replies migráció), így a cross-channel
+ * idézés modell-szinten nem megengedett.
+ */
+export type MessageChannel = 'patient' | 'doctor';
+
+/**
+ * Egy idézett (válaszolt) üzenet előnézete a buborékban / API válaszban.
+ *
+ * NEM tartalmazza a teljes eredeti üzenetet (csak rövid preview-t), mert:
+ *  - a buborékban úgyis csak ~2 sort jelenítünk meg,
+ *  - ha az eredeti törölve van, csak a metaadat marad (deleted = true).
+ *
+ * A `message` mező a `buildQuotedMessagePreviewText` által csonkolt szöveg.
+ * A `channel` segít a kliensnek eldönteni, hogy melyik csatornán scrolloljon
+ * az eredetihez (Fázis 0.5/0.6 integráció során használjuk).
+ */
+export interface QuotedMessagePreview {
+  id: string;
+  channel: MessageChannel;
+  senderId: string;
+  senderName: string | null;
+  message: string;
+  createdAt: Date;
+  deleted?: boolean;
+}
+
 export interface DoctorMessage {
   id: string;
   senderId: string;
@@ -14,6 +42,15 @@ export interface DoctorMessage {
   createdAt: Date;
   pending?: boolean;
   mentionedPatientIds?: string[];
+  /** 041_message_replies óta: ha válasz, az eredeti doctor_messages.id. */
+  replyToMessageId?: string | null;
+  /**
+   * 041_message_replies óta: szerver által összeállított preview az
+   * eredeti üzenetről, hogy a buborék külön roundtrip nélkül rendezhető
+   * legyen. Csak akkor jön ki a DB-ből, ha `replyToMessageId` van és a
+   * megtekintő látja az eredetit (jogosultság ellenőrzés Fázis 0.2-ben).
+   */
+  quotedMessage?: QuotedMessagePreview | null;
   readBy?: Array<{
     userId: string;
     userName: string | null;
