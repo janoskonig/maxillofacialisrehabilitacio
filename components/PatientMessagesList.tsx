@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { MessageCircle, Send, Search, User, ArrowRight, Plus, X } from 'lucide-react';
 import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 import { hu } from 'date-fns/locale';
@@ -22,6 +22,8 @@ import {
   isPatientChannelDeliveryEvent,
 } from './messaging/delivery-status-socket';
 import { incrementParentReplyCount } from './messaging/reply-count-socket';
+import { useReplyThreadCollapse } from './messaging/useReplyThreadCollapse';
+import { filterMessagesByThreadCollapse } from '@/lib/messaging/reply-thread-visibility';
 
 interface Message {
   id: string;
@@ -125,6 +127,24 @@ export function PatientMessagesList() {
     },
     [messages, scrollToMessage],
   );
+
+  const { collapsedRoots, isCollapsed, toggleThread, resetThreads } = useReplyThreadCollapse();
+  const visibleMessages = useMemo(
+    () => filterMessagesByThreadCollapse(messages, collapsedRoots),
+    [messages, collapsedRoots],
+  );
+  const handleReplyThreadToggle = useCallback(
+    (parentId: string) => {
+      const wasCollapsed = isCollapsed(parentId);
+      toggleThread(parentId);
+      if (wasCollapsed) scrollToFirstReply(parentId);
+    },
+    [isCollapsed, toggleThread, scrollToFirstReply],
+  );
+
+  useEffect(() => {
+    resetThreads();
+  }, [selectedPatientId, resetThreads]);
 
   // Get current user
   useEffect(() => {
@@ -710,7 +730,7 @@ export function PatientMessagesList() {
               <p>Még nincsenek üzenetek</p>
             </div>
           ) : (
-            messages.map((message, index) => {
+            visibleMessages.map((message, index) => {
               // Orvos oldalon: orvos üzenetei JOBBRA (kék), beteg üzenetei BALRA (fehér)
               const isFromMe = currentUserId ? message.senderType === 'doctor' && message.senderId === currentUserId : message.senderType === 'doctor';
               const isPending = message.pending === true;
@@ -722,7 +742,7 @@ export function PatientMessagesList() {
               const monogram = getMonogram(senderName);
 
               const msgDate = new Date(message.createdAt);
-              const prevMsg = index > 0 ? messages[index - 1] : null;
+              const prevMsg = index > 0 ? visibleMessages[index - 1] : null;
               const showDateSeparator = !prevMsg || !isSameDay(msgDate, new Date(prevMsg.createdAt));
 
               const dateSeparatorLabel = isToday(msgDate)
@@ -785,7 +805,8 @@ export function PatientMessagesList() {
                       )}
                       onReply={isPending ? undefined : () => startReplyTo(message)}
                       onQuoteClick={scrollToMessage}
-                      onReplyThreadClick={scrollToFirstReply}
+                      onReplyThreadToggle={handleReplyThreadToggle}
+                      replyThreadCollapsed={isCollapsed(message.id)}
                     />
                   </div>
                 </div>

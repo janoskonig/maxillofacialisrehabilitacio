@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { MessageCircle, Send, User, ArrowRight, FileQuestion } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
@@ -20,6 +20,8 @@ import {
   isPatientChannelDeliveryEvent,
 } from './messaging/delivery-status-socket';
 import { incrementParentReplyCount } from './messaging/reply-count-socket';
+import { useReplyThreadCollapse } from './messaging/useReplyThreadCollapse';
+import { filterMessagesByThreadCollapse } from '@/lib/messaging/reply-thread-visibility';
 
 interface Message {
   id: string;
@@ -106,6 +108,24 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
     },
     [messages, scrollToMessage],
   );
+
+  const { collapsedRoots, isCollapsed, toggleThread, resetThreads } = useReplyThreadCollapse();
+  const visibleMessages = useMemo(
+    () => filterMessagesByThreadCollapse(messages, collapsedRoots),
+    [messages, collapsedRoots],
+  );
+  const handleReplyThreadToggle = useCallback(
+    (parentId: string) => {
+      const wasCollapsed = isCollapsed(parentId);
+      toggleThread(parentId);
+      if (wasCollapsed) scrollToFirstReply(parentId);
+    },
+    [isCollapsed, toggleThread, scrollToFirstReply],
+  );
+
+  useEffect(() => {
+    resetThreads();
+  }, [patientId, resetThreads]);
 
   // Get current user
   useEffect(() => {
@@ -438,7 +458,7 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
             <p>Még nincsenek üzenetek</p>
           </div>
         ) : (
-          messages.map((message) => {
+          visibleMessages.map((message) => {
             // Orvos oldalon: orvos üzenetei JOBBRA (kék), beteg üzenetei BALRA (fehér)
             const isFromMe = currentUserId ? message.senderType === 'doctor' && message.senderId === currentUserId : message.senderType === 'doctor';
             const isPending = message.pending === true;
@@ -496,7 +516,8 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
                   )}
                   onReply={isPending ? undefined : () => startReplyTo(message)}
                   onQuoteClick={scrollToMessage}
-                  onReplyThreadClick={scrollToFirstReply}
+                  onReplyThreadToggle={handleReplyThreadToggle}
+                  replyThreadCollapsed={isCollapsed(message.id)}
                 />
               </div>
             );

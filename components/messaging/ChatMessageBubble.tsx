@@ -19,6 +19,7 @@ import { Check, CheckCheck, Loader2, AlertTriangle, RotateCcw, CornerUpLeft } fr
 import type { ReactNode } from 'react';
 import type { QuotedMessagePreview } from '@/lib/types/messaging';
 import { MessageQuoteBlock } from './MessageQuoteBlock';
+import { replyThreadToggleLabel } from './reply-thread-label';
 
 export type DeliveryStatus = 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
 
@@ -60,9 +61,11 @@ interface Props {
    */
   onQuoteClick?: (messageId: string) => void;
   /**
-   * Fázis 1.1: „N válasz” kattintás — a hívó görgessen az első válaszhoz.
+   * Fázis 1.1: „N válasz” kattintás — szál toggle (Fázis 4.2) vagy scroll.
    */
-  onReplyThreadClick?: (parentMessageId: string) => void;
+  onReplyThreadToggle?: (parentMessageId: string) => void;
+  /** Fázis 4.2: true ha a közvetlen válaszok jelenleg rejtve vannak. */
+  replyThreadCollapsed?: boolean;
   /**
    * Optimistic retry (0.8 előkészítés). Csak akkor jelenik meg, ha
    * `deliveryStatus === 'failed'` ÉS van handler.
@@ -86,7 +89,8 @@ export function ChatMessageBubble({
   renderText,
   onReply,
   onQuoteClick,
-  onReplyThreadClick,
+  onReplyThreadToggle,
+  replyThreadCollapsed = false,
   onRetry,
   currentUserId,
   showSenderLabel = true,
@@ -183,15 +187,15 @@ export function ChatMessageBubble({
         )}
       </div>
 
-      {message.replyCount != null && message.replyCount > 0 && onReplyThreadClick && (
+      {message.replyCount != null && message.replyCount > 0 && onReplyThreadToggle && (
         <button
           type="button"
-          onClick={() => onReplyThreadClick(message.id)}
+          onClick={() => onReplyThreadToggle(message.id)}
           className={`mt-1 text-xs font-medium underline-offset-2 hover:underline ${
             isFromMe ? 'text-blue-600 self-end' : 'text-gray-600 self-start'
           }`}
         >
-          {message.replyCount} válasz
+          {replyThreadToggleLabel(message.replyCount, replyThreadCollapsed)}
         </button>
       )}
     </div>

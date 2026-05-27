@@ -240,3 +240,10 @@ Cookie: {{authCookie}}
 # - Csoport: ha minden más résztvevő olvasta → küldőnél read ikon
 #   (`message-delivery-status` read emit a read route-ból).
 ###############################################################################
+
+###############################################################################
+# [Fázis 4] Szál összecsukás + failed retry
+#
+# - „N válasz — összecsukás” elrejti a közvetlen válaszokat; „megjelenítés” vissza.
+# - Orvos chat: 429 után failed bubble + „Újraküldés” (ugyanaz a clientMessageId).
+###############################################################################

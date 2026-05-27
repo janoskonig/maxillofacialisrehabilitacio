@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { MessageCircle, Send, Clock, Check, CheckCheck, Loader2, ChevronDown, Users, Search, X, CornerUpLeft } from 'lucide-react';
 import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 import { hu } from 'date-fns/locale';
@@ -21,6 +21,9 @@ import {
   isPatientChannelDeliveryEvent,
 } from '@/components/messaging/delivery-status-socket';
 import { incrementParentReplyCount } from '@/components/messaging/reply-count-socket';
+import { useReplyThreadCollapse } from '@/components/messaging/useReplyThreadCollapse';
+import { filterMessagesByThreadCollapse } from '@/lib/messaging/reply-thread-visibility';
+import { replyThreadToggleLabel } from '@/components/messaging/reply-thread-label';
 
 interface Message {
   id: string;
@@ -129,6 +132,24 @@ export function PatientMessages() {
     },
     [messages, scrollToMessage],
   );
+
+  const { collapsedRoots, isCollapsed, toggleThread, resetThreads } = useReplyThreadCollapse();
+  const visibleMessages = useMemo(
+    () => filterMessagesByThreadCollapse(messages, collapsedRoots),
+    [messages, collapsedRoots],
+  );
+  const handleReplyThreadToggle = useCallback(
+    (parentId: string) => {
+      const wasCollapsed = isCollapsed(parentId);
+      toggleThread(parentId);
+      if (wasCollapsed) scrollToFirstReply(parentId);
+    },
+    [isCollapsed, toggleThread, scrollToFirstReply],
+  );
+
+  useEffect(() => {
+    resetThreads();
+  }, [selectedDoctorId, resetThreads]);
 
   const totalUnreadCount = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
 
@@ -619,7 +640,7 @@ export function PatientMessages() {
             <p className="text-sm mt-2">Küldjön üzenetet!</p>
           </div>
         ) : (
-          messages.map((message, index) => {
+          visibleMessages.map((message, index) => {
             const isMyMessage = message.senderType === 'patient';
             const isTheirMessage = message.senderType === 'doctor';
             const isUnread = !message.readAt && isTheirMessage;
@@ -636,7 +657,7 @@ export function PatientMessages() {
             const monogram = getMonogram(senderName);
 
             const msgDate = new Date(message.createdAt);
-            const prevMsg = index > 0 ? messages[index - 1] : null;
+            const prevMsg = index > 0 ? visibleMessages[index - 1] : null;
             const showDateSeparator = !prevMsg || !isSameDay(msgDate, new Date(prevMsg.createdAt));
 
             const dateSeparatorLabel = isToday(msgDate)
@@ -754,12 +775,12 @@ export function PatientMessages() {
                     {(message.replyCount ?? 0) > 0 && (
                       <button
                         type="button"
-                        onClick={() => scrollToFirstReply(message.id)}
+                        onClick={() => handleReplyThreadToggle(message.id)}
                         className={`mt-1 text-xs font-medium underline-offset-2 hover:underline ${
                           isMyMessage ? 'text-green-700' : 'text-gray-600'
                         }`}
                       >
-                        {message.replyCount} válasz
+                        {replyThreadToggleLabel(message.replyCount ?? 0, isCollapsed(message.id))}
                       </button>
                     )}
                   </div>

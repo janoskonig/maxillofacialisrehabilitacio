@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState, useEffect, useRef } from 'react';
+import { useCallback, useState, useEffect, useRef, useMemo } from 'react';
 import { MessageCircle, Send, X, Search, User, Clock, Mail, ArrowLeft, Check, CheckCheck, Loader2, FileQuestion } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
 import { format } from 'date-fns';
@@ -11,6 +11,8 @@ import { MessageTextRenderer } from './MessageTextRenderer';
 import { DocumentRequestSendWizard } from './DocumentRequestSendWizard';
 import { ChatMessageBubble, type ChatBubbleMessage } from './messaging/ChatMessageBubble';
 import { ReplyComposerBar } from './messaging/ReplyComposerBar';
+import { useReplyThreadCollapse } from './messaging/useReplyThreadCollapse';
+import { filterMessagesByThreadCollapse } from '@/lib/messaging/reply-thread-visibility';
 import { useReplyState } from './messaging/useReplyState';
 import { buildQuotedMessagePreview } from '@/lib/message-reply';
 import type { QuotedMessagePreview } from '@/lib/types/messaging';
@@ -110,6 +112,24 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
     },
     [conversationMessages, scrollToMessage],
   );
+
+  const { collapsedRoots, isCollapsed, toggleThread, resetThreads } = useReplyThreadCollapse();
+  const visibleConversationMessages = useMemo(
+    () => filterMessagesByThreadCollapse(conversationMessages, collapsedRoots),
+    [conversationMessages, collapsedRoots],
+  );
+  const handleReplyThreadToggle = useCallback(
+    (parentId: string) => {
+      const wasCollapsed = isCollapsed(parentId);
+      toggleThread(parentId);
+      if (wasCollapsed) scrollToFirstReply(parentId);
+    },
+    [isCollapsed, toggleThread, scrollToFirstReply],
+  );
+
+  useEffect(() => {
+    resetThreads();
+  }, [selectedPatient?.id, resetThreads]);
 
   useEffect(() => {
     if (isOpen) {
@@ -524,7 +544,7 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
                         <p>Még nincsenek üzenetek ebben a beszélgetésben</p>
                       </div>
                     ) : (
-                      conversationMessages.map((msg) => {
+                      visibleConversationMessages.map((msg) => {
                         const isDoctor = msg.senderType === 'doctor';
                         const isPending = msg.pending === true;
                         
@@ -584,7 +604,8 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
                               )}
                               onReply={isPending ? undefined : () => startReplyTo(msg)}
                               onQuoteClick={scrollToMessage}
-                              onReplyThreadClick={scrollToFirstReply}
+                              onReplyThreadToggle={handleReplyThreadToggle}
+                              replyThreadCollapsed={isCollapsed(msg.id)}
                             />
                           </div>
                         );

@@ -67,6 +67,8 @@ export interface UseDoctorMessagesReturn {
   selectGroup: (groupId: string, groupName: string | null) => void;
   clearSelection: () => void;
   sendMessage: (text: string) => Promise<boolean>;
+  /** Fázis 4.1: sikertelen (429 / hálózat) üzenet újraküldése ugyanazzal a clientMessageId-val. */
+  retryMessage: (message: DoctorMessage) => Promise<boolean>;
   createGroupConversation: (participantIds: string[]) => Promise<{ groupId: string } | null>;
   renameGroup: (newName: string) => Promise<boolean>;
   deleteGroup: () => Promise<boolean>;
@@ -746,8 +748,13 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
         setPendingMessageId(null);
 
         if (response.status === 429) {
-          // Slice 0.8: rate limit — failed bubble megmarad újraküldés-gombbal.
-          // A tempId UNIQUE-kulcsa garantálja, hogy az újraküldés nem duplikál.
+          setMessages(prev =>
+            prev.map(m =>
+              m.id === tempId
+                ? { ...m, pending: false, deliveryStatus: 'failed' }
+                : m,
+            ),
+          );
           showToast(error.error || 'Túl sok üzenet — próbáld újra később.', 'error');
           return false;
         }
@@ -780,6 +787,78 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
     } catch (error: any) {
       console.error('Hiba az üzenet küldésekor:', error);
       showToast(error.message || 'Hiba történt az üzenet küldésekor', 'error');
+      return false;
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const retryMessage = async (failedMessage: DoctorMessage): Promise<boolean> => {
+    if (!failedMessage.id.startsWith('pending-')) return false;
+    if (!selectedDoctorId && !selectedGroupId) return false;
+
+    const text = failedMessage.message;
+    const replyToMessageId = failedMessage.replyToMessageId ?? null;
+    const clientMessageId = failedMessage.id;
+
+    try {
+      setSending(true);
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === clientMessageId
+            ? { ...m, pending: true, deliveryStatus: undefined }
+            : m,
+        ),
+      );
+
+      const response = await fetch('/api/doctor-messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          recipientId: selectedDoctorId || undefined,
+          groupId: selectedGroupId || undefined,
+          subject: null,
+          message: text,
+          replyToMessageId,
+          clientMessageId,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        setMessages(prev =>
+          prev.map(m =>
+            m.id === clientMessageId
+              ? { ...m, pending: false, deliveryStatus: 'failed' }
+              : m,
+          ),
+        );
+        if (response.status === 429) {
+          showToast(error.error || 'Túl sok üzenet — próbáld újra később.', 'error');
+        } else {
+          showToast(error.error || 'Újraküldés sikertelen', 'error');
+        }
+        return false;
+      }
+
+      const data = await response.json();
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === clientMessageId ? { ...data.message, pending: false } : m,
+        ),
+      );
+      showToast('Üzenet sikeresen elküldve', 'success');
+      return true;
+    } catch (error: unknown) {
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === clientMessageId
+            ? { ...m, pending: false, deliveryStatus: 'failed' }
+            : m,
+        ),
+      );
+      showToast('Újraküldés sikertelen', 'error');
       return false;
     } finally {
       setSending(false);
@@ -903,6 +982,7 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
     selectGroup,
     clearSelection,
     sendMessage,
+    retryMessage,
     createGroupConversation,
     renameGroup,
     deleteGroup,
