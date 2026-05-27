@@ -5,6 +5,9 @@ import { DoctorMessage, DoctorConversation } from '@/lib/types';
 import { getCurrentUser } from '@/lib/auth';
 import { useToast } from '@/contexts/ToastContext';
 import type { Socket } from 'socket.io-client';
+import { useReplyState, type ReplyState } from '@/components/messaging/useReplyState';
+import { buildQuotedMessagePreview } from '@/lib/message-reply';
+import type { QuotedMessagePreview } from '@/lib/types/messaging';
 
 export interface Doctor {
   id: string;
@@ -43,6 +46,17 @@ export interface UseDoctorMessagesReturn {
   deletingGroup: boolean;
   pendingMessageId: string | null;
 
+  /**
+   * Reply state (Slice 0.5). A hook saját maga birtokolja a `replyTarget`-et
+   * — a komponens a `replyState.setReplyTarget(...)`-val állítja be (a
+   * buborékon a „Válasz” gomb), és a hook `sendMessage`-e automatikusan
+   * beleszerkeszti a POST body-jába a `replyToMessageId`-t, majd sikeres
+   * küldés után törli.
+   */
+  replyState: ReplyState;
+  /** Kényelmi setter: meglévő `DoctorMessage`-ből épít `QuotedMessagePreview`-t. */
+  startReplyTo: (message: DoctorMessage) => void;
+
   selectDoctor: (doctorId: string, doctorName: string) => void;
   selectGroup: (groupId: string, groupName: string | null) => void;
   clearSelection: () => void;
@@ -80,6 +94,27 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
   const [sending, setSending] = useState(false);
   const [deletingGroup, setDeletingGroup] = useState(false);
   const [pendingMessageId, setPendingMessageId] = useState<string | null>(null);
+
+  // ── Reply state (Slice 0.5) ─────────────────────────────────────────
+  const replyState = useReplyState();
+
+  /**
+   * Egy meglévő `DoctorMessage` row-ból azonnal `replyTarget` lesz. A
+   * preview szöveg-csonkolás megegyezik a szerver oldalival (lásd
+   * `lib/message-reply.buildQuotedMessagePreview`), így a saját és server-
+   * generált preview vizuálisan azonos.
+   */
+  const startReplyTo = (message: DoctorMessage) => {
+    const quote: QuotedMessagePreview = buildQuotedMessagePreview({
+      id: message.id,
+      channel: 'doctor',
+      senderId: message.senderId,
+      senderName: message.senderName ?? null,
+      message: message.message,
+      createdAt: message.createdAt,
+    });
+    replyState.setReplyTarget(quote);
+  };
 
   // ── Fetch helpers ───────────────────────────────────────────────────
 
@@ -361,6 +396,9 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
     } else {
       setMessages([]);
     }
+    // Reply target conversation-specific — másik szálra váltáskor ne
+    // szivárogjon át a kiválasztott idézet.
+    replyState.clearReply();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDoctorId, selectedGroupId]);
 
@@ -555,6 +593,12 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
   const sendMessage = async (text: string): Promise<boolean> => {
     if (!text.trim() || (!selectedDoctorId && !selectedGroupId)) return false;
 
+    // Snapshot a reply state-ről a try blokk elején — ha közben a user
+    // megváltoztatja, nem hatása a már elindult POST-ra. Sikeres küldés
+    // után közvetlenül a snapshot-ot használva törlünk.
+    const replyTargetSnapshot = replyState.replyTarget;
+    const replyToMessageId = replyTargetSnapshot?.id ?? null;
+
     try {
       setSending(true);
 
@@ -570,6 +614,9 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
         readAt: null,
         createdAt: new Date(),
         pending: true,
+        // Optimistic render: a quote azonnal megjelenik a saját buborékon.
+        replyToMessageId,
+        quotedMessage: replyTargetSnapshot ?? null,
       };
 
       setMessages(prev => [...prev, pendingMessage]);
@@ -584,6 +631,7 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
           groupId: selectedGroupId || undefined,
           subject: null,
           message: text,
+          replyToMessageId,
         }),
       });
 
@@ -600,6 +648,8 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
         prev.map(m => m.id === tempId ? { ...data.message, pending: false } : m)
       );
       setPendingMessageId(null);
+      // Sikeres küldés → reply mód elhagyása (UX: a textarea ürül + a csík eltűnik).
+      replyState.clearReply();
 
       showToast('Üzenet sikeresen elküldve', 'success');
 
@@ -731,6 +781,9 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
     sending,
     deletingGroup,
     pendingMessageId,
+
+    replyState,
+    startReplyTo,
 
     selectDoctor,
     selectGroup,
