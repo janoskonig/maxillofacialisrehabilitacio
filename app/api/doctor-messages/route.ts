@@ -8,7 +8,7 @@ import { getDbPool } from '@/lib/db';
 import { sendPushNotification } from '@/lib/push-notifications';
 import { logger } from '@/lib/logger';
 import { emitNewDoctorMessage } from '@/lib/socket-server';
-import { checkRateLimit, buildRateLimitedResponse } from '@/lib/api/rate-limit';
+import { checkRateLimitAsync, buildRateLimitedResponse } from '@/lib/api/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,7 +31,7 @@ export const POST = authedHandler(async (req, { auth }) => {
   }
 
   // Slice 0.8: rate limit (30 POST/perc/user, csatorna-független).
-  const rl = checkRateLimit({
+  const rl = await checkRateLimitAsync({
     key: `msg-doctor:${auth.userId}`,
     limit: 30,
     windowMs: 60_000,

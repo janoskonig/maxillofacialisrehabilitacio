@@ -199,3 +199,94 @@ Content-Type: application/json
 
 GET {{host}}/api/messages?patientId={{patientId}}
 Cookie: {{authCookie}}
+
+###############################################################################
+# [Fázis 1.1] GET doctor messages — replyCount mező minden üzeneten
+# Elvárt: a parent üzenetnél replyCount >= 1, ha van közvetlen válasz.
+###############################################################################
+
+GET {{host}}/api/doctor-messages?recipientId={{recipientDoctorId}}
+Cookie: {{authCookie}}
+
+###############################################################################
+# [Fázis 1.2] deliveryStatus mező — olvasás után `read`
+# Futtasd a fenti GET-et olvasás ELŐTT/UTÁN; a saját küldött üzenetnél
+# deliveryStatus: sent → delivered (címzett megnyitja) → read (read PUT után).
+###############################################################################
+
+PUT {{host}}/api/doctor-messages/{{parentMessageId}}/read
+Cookie: {{authCookie}}
+
+###############################################################################
+# [Fázis 2] Realtime deliveryStatus — Socket.io `message-delivery-status`
+#
+# A küldő kliens (user:{senderId} vagy betegnél patient:{patientId} szoba)
+# eseményt kap, amikor a címzett megnyitja a szálat (delivered) vagy olvassa
+# (read). DevTools → Network → WS → figyeld az esemény payloadot:
+#   { messageId, deliveryStatus, channel, patientId?, groupId? }
+#
+# Manuális flow:
+#   1. Orvos A küld üzenetet orvos B-nek (1:1).
+#   2. Orvos B megnyitja a beszélgetést → A-nál delivered ikon.
+#   3. Orvos B read PUT (automatikus is lehet) → A-nál read ikon.
+###############################################################################
+
+###############################################################################
+# [Fázis 3] replyCount + csoport delivery aggregáció
+#
+# - Új válasz socketen (`new-message` / `new-doctor-message`) → parent
+#   `replyCount` +1 a listában (refresh nélkül).
+# - Beteg portál: „N válasz” link a zöld bubble alatt.
+# - Csoport: ha minden más résztvevő olvasta → küldőnél read ikon
+#   (`message-delivery-status` read emit a read route-ból).
+###############################################################################
+
+###############################################################################
+# [Fázis 4] Szál összecsukás + failed retry
+#
+# - „N válasz — összecsukás” elrejti a közvetlen válaszokat; „megjelenítés” vissza.
+# - Orvos chat: 429 után failed bubble + „Újraküldés” (ugyanaz a clientMessageId).
+###############################################################################
+
+###############################################################################
+# [Fázis 5] Redis rate limit + beteg csatorna retry + nested collapse
+#
+# Rate limit (opcionális REDIS_URL):
+#   - Ha be van állítva: disztribuált sliding window (Redis sorted set).
+#   - Ha nincs / hiba: in-memory fallback (checkRateLimitAsync).
+#   - Kulcsok: msg-patient:{senderId}, msg-doctor:{userId}, 30 POST/perc.
+#
+# 429 smoke — ismételt POST ugyanazzal a clientMessageId-val (idempotens retry):
+#   Elvárt: első siker után a második ugyanazzal az ID-val nem duplikál.
+###############################################################################
+
+POST {{host}}/api/messages
+Cookie: {{authCookie}}
+Content-Type: application/json
+
+{
+  "patientId": "REPLACE_PATIENT_UUID",
+  "message": "Rate limit / retry smoke — cseréld ki a patientId-t.",
+  "clientMessageId": "pending-smoke-retry-001"
+}
+
+###
+# Ugyanaz a clientMessageId — elvárt: 200 + ugyanaz az üzenet (nem dupla sor).
+###
+
+POST {{host}}/api/messages
+Cookie: {{authCookie}}
+Content-Type: application/json
+
+{
+  "patientId": "REPLACE_PATIENT_UUID",
+  "message": "Rate limit / retry smoke — cseréld ki a patientId-t.",
+  "clientMessageId": "pending-smoke-retry-001"
+}
+
+###
+# UI ellenőrzés (manuális):
+# - Beteg csatorna (PatientMessages, PatientMessagesList, SendMessageModal,
+#   beteg portál): 429 → failed buborék + „Újraküldés”.
+# - Szál összecsukás: összecsukott ősnél a beágyazott válaszok is rejtve.
+###

@@ -3,6 +3,11 @@ import { authedHandler } from '@/lib/api/route-handler';
 import { markDoctorMessageAsRead } from '@/lib/doctor-communication';
 import { getDbPool } from '@/lib/db';
 import { emitDoctorMessageRead, emitDoctorMessageReadDirect } from '@/lib/socket-server';
+import {
+  buildDoctorChannelReadDeliveryUpdate,
+  notifyDeliveryStatusUpdates,
+  notifyGroupMessageFullyReadIfNeeded,
+} from '@/lib/message-delivery';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,6 +39,7 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
       const userName = userResult.rows.length > 0 ? userResult.rows[0].doktor_neve : null;
 
       emitDoctorMessageRead(row.group_id, id, auth.userId, userName);
+      await notifyGroupMessageFullyReadIfNeeded(id, row.group_id);
     } else if (row.sender_id && row.sender_id !== auth.userId) {
       // Slice 0.7: 1:1 — a feladónak küldjük, hogy az ő UI-jában frissüljön.
       emitDoctorMessageReadDirect({
@@ -41,6 +47,14 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
         recipientUserId: auth.userId,
         messageId: id,
       });
+      // Fázis 2: küldő bubble deliveryStatus → read.
+      notifyDeliveryStatusUpdates([
+        buildDoctorChannelReadDeliveryUpdate({
+          id,
+          sender_id: row.sender_id,
+          group_id: null,
+        }),
+      ]);
     }
   }
 

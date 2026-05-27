@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { MessageCircle, Send, User, ArrowRight, FileQuestion } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
@@ -14,7 +14,14 @@ import { ChatMessageBubble, type ChatBubbleMessage } from './messaging/ChatMessa
 import { ReplyComposerBar } from './messaging/ReplyComposerBar';
 import { useReplyState } from './messaging/useReplyState';
 import { buildQuotedMessagePreview } from '@/lib/message-reply';
-import type { QuotedMessagePreview } from '@/lib/types/messaging';
+import type { QuotedMessagePreview, MessageDeliveryStatusEvent } from '@/lib/types/messaging';
+import {
+  applyDeliveryStatusUpdate,
+  isPatientChannelDeliveryEvent,
+} from './messaging/delivery-status-socket';
+import { incrementParentReplyCount } from './messaging/reply-count-socket';
+import { useReplyThreadCollapse } from './messaging/useReplyThreadCollapse';
+import { filterMessagesByThreadCollapse } from '@/lib/messaging/reply-thread-visibility';
 
 interface Message {
   id: string;
@@ -29,6 +36,8 @@ interface Message {
   pending?: boolean;
   replyToMessageId?: string | null;
   quotedMessage?: QuotedMessagePreview | null;
+  replyCount?: number;
+  deliveryStatus?: 'sent' | 'delivered' | 'read' | 'failed';
 }
 
 interface PatientMessagesProps {
@@ -91,6 +100,32 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
       el.classList.remove('ring-2', 'ring-blue-400', 'rounded-lg');
     }, 1600);
   }, []);
+
+  const scrollToFirstReply = useCallback(
+    (parentId: string) => {
+      const firstReply = messages.find((m) => m.replyToMessageId === parentId);
+      if (firstReply) scrollToMessage(firstReply.id);
+    },
+    [messages, scrollToMessage],
+  );
+
+  const { collapsedRoots, isCollapsed, toggleThread, resetThreads } = useReplyThreadCollapse();
+  const visibleMessages = useMemo(
+    () => filterMessagesByThreadCollapse(messages, collapsedRoots),
+    [messages, collapsedRoots],
+  );
+  const handleReplyThreadToggle = useCallback(
+    (parentId: string) => {
+      const wasCollapsed = isCollapsed(parentId);
+      toggleThread(parentId);
+      if (wasCollapsed) scrollToFirstReply(parentId);
+    },
+    [isCollapsed, toggleThread, scrollToFirstReply],
+  );
+
+  useEffect(() => {
+    resetThreads();
+  }, [patientId, resetThreads]);
 
   // Get current user
   useEffect(() => {
@@ -174,12 +209,12 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
         if (prev.some(m => m.id === data.message.id)) {
           return prev;
         }
-        
-        return [...prev, {
+        const withNew = [...prev, {
           ...data.message,
           createdAt: new Date(data.message.createdAt),
           readAt: data.message.readAt ? new Date(data.message.readAt) : null,
         }];
+        return incrementParentReplyCount(withNew, data.message.replyToMessageId);
       });
 
       if (data.message.senderType === 'patient' && !data.message.readAt) {
@@ -192,19 +227,28 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
 
       setMessages(prev =>
         prev.map(m =>
-          m.id === data.messageId ? { ...m, readAt: new Date() } : m
+          m.id === data.messageId
+            ? { ...m, readAt: new Date(), deliveryStatus: 'read' as const }
+            : m
         )
       );
 
       setUnreadCount(prev => Math.max(0, prev - 1));
     };
 
+    const handleDeliveryStatus = (event: MessageDeliveryStatusEvent) => {
+      if (!patientId || !isPatientChannelDeliveryEvent(event, patientId)) return;
+      setMessages((prev) => applyDeliveryStatusUpdate(prev, event));
+    };
+
     socket.on('new-message', handleNewMessage);
     socket.on('message-read', handleMessageRead);
+    socket.on('message-delivery-status', handleDeliveryStatus);
 
     return () => {
       socket.off('new-message', handleNewMessage);
       socket.off('message-read', handleMessageRead);
+      socket.off('message-delivery-status', handleDeliveryStatus);
     };
   }, [socket, patientId]);
 
@@ -289,7 +333,65 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
     }
   }, [patientId, loading]);
 
-  // Send message
+  const postPatientMessage = useCallback(
+    async (
+      tempId: string,
+      text: string,
+      replyToMessageId: string | null,
+      options?: { recipientDoctorId?: string },
+    ): Promise<boolean> => {
+      const response = await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          patientId,
+          subject: null,
+          message: text,
+          replyToMessageId,
+          clientMessageId: tempId,
+          ...(options?.recipientDoctorId
+            ? { recipientDoctorId: options.recipientDoctorId }
+            : {}),
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        if (response.status === 429) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === tempId ? { ...m, pending: false, deliveryStatus: 'failed' } : m,
+            ),
+          );
+          showToast(error.error || 'Túl sok üzenet — próbáld újra később.', 'error');
+          return false;
+        }
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
+        throw new Error(error.error || 'Hiba az üzenet küldésekor');
+      }
+
+      const data = await response.json();
+      if (data.message) {
+        messagesLoadedRef.current.add(data.message.id);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === tempId
+              ? {
+                  ...data.message,
+                  createdAt: new Date(data.message.createdAt),
+                  readAt: data.message.readAt ? new Date(data.message.readAt) : null,
+                  pending: false,
+                }
+              : m,
+          ),
+        );
+      }
+      return true;
+    },
+    [patientId, showToast],
+  );
+
   const handleSendMessage = async () => {
     const textToSend = newMessage.trim();
     if (!textToSend) {
@@ -297,69 +399,82 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
       return;
     }
 
-    // Reply state snapshot a POST startján — közben felhasználó nem
-    // tud egy másik üzenetre váltani.
     const replyTargetSnapshot = replyState.replyTarget;
     const replyToMessageId = replyTargetSnapshot?.id ?? null;
 
-    // Slice 0.8: idempotencia kulcs.
-    const clientMessageId = (typeof crypto !== 'undefined' && crypto.randomUUID)
-      ? crypto.randomUUID()
-      : `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const randomPart =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const tempId = `pending-${randomPart}`;
 
     try {
       setSending(true);
-      
-      const response = await fetch('/api/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          patientId,
-          subject: null,
-          message: textToSend,
-          replyToMessageId,
-          clientMessageId,
-        }),
-      });
 
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        if (response.status === 429) {
-          showToast(error.error || 'Túl sok üzenet — próbáld újra később.', 'error');
-          return;
-        }
-        throw new Error(error.error || 'Hiba az üzenet küldésekor');
-      }
+      const pendingMessage: Message = {
+        id: tempId,
+        patientId,
+        senderType: 'doctor',
+        senderId: currentUserId || '',
+        senderEmail: '',
+        subject: null,
+        message: textToSend,
+        readAt: null,
+        createdAt: new Date(),
+        pending: true,
+        replyToMessageId,
+        quotedMessage: replyTargetSnapshot ?? null,
+      };
+      setMessages((prev) => [...prev, pendingMessage]);
 
-      const data = await response.json();
-      
-      if (data.message) {
-        messagesLoadedRef.current.add(data.message.id);
-        setMessages(prev => {
-          if (prev.some(m => m.id === data.message.id)) {
-            return prev;
-          }
-          return [...prev, {
-            ...data.message,
-            createdAt: new Date(data.message.createdAt),
-            readAt: data.message.readAt ? new Date(data.message.readAt) : null,
-          }];
-        });
-      }
-      
+      const ok = await postPatientMessage(tempId, textToSend, replyToMessageId);
+      if (!ok) return;
+
       setNewMessage('');
       replyState.clearReply();
       showToast('Üzenet sikeresen elküldve', 'success');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Hiba az üzenet küldésekor:', error);
-      showToast(error.message || 'Hiba történt az üzenet küldésekor', 'error');
+      const message = error instanceof Error ? error.message : 'Hiba történt az üzenet küldésekor';
+      showToast(message, 'error');
     } finally {
       setSending(false);
     }
   };
+
+  const retryFailedMessage = useCallback(
+    async (failedMessage: Message): Promise<void> => {
+      if (!failedMessage.id.startsWith('pending-')) return;
+
+      try {
+        setSending(true);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === failedMessage.id
+              ? { ...m, pending: true, deliveryStatus: undefined }
+              : m,
+          ),
+        );
+
+        const ok = await postPatientMessage(
+          failedMessage.id,
+          failedMessage.message,
+          failedMessage.replyToMessageId ?? null,
+        );
+        if (ok) {
+          replyState.clearReply();
+          showToast('Üzenet sikeresen elküldve', 'success');
+        }
+      } catch (error: unknown) {
+        console.error('Hiba az üzenet újraküldésekor:', error);
+        const message = error instanceof Error ? error.message : 'Újraküldés sikertelen';
+        showToast(message, 'error');
+      } finally {
+        setSending(false);
+      }
+    },
+    [postPatientMessage, replyState, showToast],
+  );
 
   if (loading) {
     return (
@@ -414,10 +529,11 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
             <p>Még nincsenek üzenetek</p>
           </div>
         ) : (
-          messages.map((message) => {
+          visibleMessages.map((message) => {
             // Orvos oldalon: orvos üzenetei JOBBRA (kék), beteg üzenetei BALRA (fehér)
             const isFromMe = currentUserId ? message.senderType === 'doctor' && message.senderId === currentUserId : message.senderType === 'doctor';
             const isPending = message.pending === true;
+            const isFailed = message.deliveryStatus === 'failed';
 
             const senderName = isFromMe
               ? (message.senderEmail || 'Én')
@@ -434,7 +550,12 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
               isFromMe,
               replyToMessageId: message.replyToMessageId ?? null,
               quotedMessage: message.quotedMessage ?? null,
-              deliveryStatus: isPending ? 'pending' : 'sent',
+              replyCount: message.replyCount ?? 0,
+              deliveryStatus: isPending
+                ? 'pending'
+                : isFailed
+                  ? 'failed'
+                  : message.deliveryStatus ?? (message.readAt ? 'read' : 'sent'),
               readAt: message.readAt ?? null,
             };
 
@@ -467,8 +588,17 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
                       }}
                     />
                   )}
-                  onReply={isPending ? undefined : () => startReplyTo(message)}
+                  onReply={isPending || isFailed ? undefined : () => startReplyTo(message)}
                   onQuoteClick={scrollToMessage}
+                  onReplyThreadToggle={handleReplyThreadToggle}
+                  replyThreadCollapsed={isCollapsed(message.id)}
+                  onRetry={
+                    isFailed && isFromMe
+                      ? () => {
+                          void retryFailedMessage(message);
+                        }
+                      : undefined
+                  }
                 />
               </div>
             );

@@ -7,7 +7,13 @@ import { useToast } from '@/contexts/ToastContext';
 import type { Socket } from 'socket.io-client';
 import { useReplyState, type ReplyState } from '@/components/messaging/useReplyState';
 import { buildQuotedMessagePreview } from '@/lib/message-reply';
-import type { QuotedMessagePreview } from '@/lib/types/messaging';
+import type { QuotedMessagePreview, MessageDeliveryStatusEvent } from '@/lib/types/messaging';
+import {
+  applyDeliveryStatusUpdate,
+  isDoctorDirectDeliveryEvent,
+  isDoctorGroupDeliveryEvent,
+} from '@/components/messaging/delivery-status-socket';
+import { incrementParentReplyCount } from '@/components/messaging/reply-count-socket';
 
 export interface Doctor {
   id: string;
@@ -61,6 +67,8 @@ export interface UseDoctorMessagesReturn {
   selectGroup: (groupId: string, groupName: string | null) => void;
   clearSelection: () => void;
   sendMessage: (text: string) => Promise<boolean>;
+  /** Fázis 4.1: sikertelen (429 / hálózat) üzenet újraküldése ugyanazzal a clientMessageId-val. */
+  retryMessage: (message: DoctorMessage) => Promise<boolean>;
   createGroupConversation: (participantIds: string[]) => Promise<{ groupId: string } | null>;
   renameGroup: (newName: string) => Promise<boolean>;
   deleteGroup: () => Promise<boolean>;
@@ -545,20 +553,26 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
           if (data.groupId) {
             const existingReadBy = m.readBy || [];
             if (existingReadBy.some(r => r.userId === data.userId)) return m;
+            const readBy = [
+              ...existingReadBy,
+              {
+                userId: data.userId,
+                userName: data.userName,
+                readAt: new Date(),
+              },
+            ];
             return {
               ...m,
-              readBy: [
-                ...existingReadBy,
-                {
-                  userId: data.userId,
-                  userName: data.userName,
-                  readAt: new Date(),
-                }
-              ]
+              readBy,
+              deliveryStatus: 'delivered' as const,
             };
           }
-          // 1:1: a feladó UI-ja kapja meg, frissítjük readAt-ot.
-          return { ...m, readAt: m.readAt ?? new Date() };
+          // 1:1: a feladó UI-ja kapja meg, frissítjük readAt-ot + deliveryStatus.
+          return {
+            ...m,
+            readAt: m.readAt ?? new Date(),
+            deliveryStatus: 'read',
+          };
         })
       );
     };
@@ -609,7 +623,7 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
 
       setMessages(prev => {
         if (prev.some(m => m.id === msg.id)) return prev;
-        return [
+        const withNew = [
           ...prev,
           {
             ...msg,
@@ -617,6 +631,7 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
             readAt: msg.readAt ? new Date(msg.readAt) : null,
           },
         ];
+        return incrementParentReplyCount(withNew, msg.replyToMessageId);
       });
     };
 
@@ -626,6 +641,28 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, isConnected, selectedGroupId, selectedDoctorId, currentUserId]);
+
+  // Fázis 2: realtime deliveryStatus (delivered / read) a küldő bubble-ön.
+  useEffect(() => {
+    if (!socket || !isConnected) return;
+    if (!selectedGroupId && !selectedDoctorId) return;
+
+    const handleDeliveryStatus = (event: MessageDeliveryStatusEvent) => {
+      if (event.channel !== 'doctor') return;
+      if (event.groupId) {
+        if (!isDoctorGroupDeliveryEvent(event, selectedGroupId)) return;
+      } else if (!isDoctorDirectDeliveryEvent(event, selectedDoctorId)) {
+        return;
+      }
+
+      setMessages((prev) => applyDeliveryStatusUpdate(prev, event));
+    };
+
+    socket.on('message-delivery-status', handleDeliveryStatus);
+    return () => {
+      socket.off('message-delivery-status', handleDeliveryStatus);
+    };
+  }, [socket, isConnected, selectedGroupId, selectedDoctorId]);
 
   // ── Actions ─────────────────────────────────────────────────────────
 
@@ -711,8 +748,13 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
         setPendingMessageId(null);
 
         if (response.status === 429) {
-          // Slice 0.8: rate limit — failed bubble megmarad újraküldés-gombbal.
-          // A tempId UNIQUE-kulcsa garantálja, hogy az újraküldés nem duplikál.
+          setMessages(prev =>
+            prev.map(m =>
+              m.id === tempId
+                ? { ...m, pending: false, deliveryStatus: 'failed' }
+                : m,
+            ),
+          );
           showToast(error.error || 'Túl sok üzenet — próbáld újra később.', 'error');
           return false;
         }
@@ -745,6 +787,78 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
     } catch (error: any) {
       console.error('Hiba az üzenet küldésekor:', error);
       showToast(error.message || 'Hiba történt az üzenet küldésekor', 'error');
+      return false;
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const retryMessage = async (failedMessage: DoctorMessage): Promise<boolean> => {
+    if (!failedMessage.id.startsWith('pending-')) return false;
+    if (!selectedDoctorId && !selectedGroupId) return false;
+
+    const text = failedMessage.message;
+    const replyToMessageId = failedMessage.replyToMessageId ?? null;
+    const clientMessageId = failedMessage.id;
+
+    try {
+      setSending(true);
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === clientMessageId
+            ? { ...m, pending: true, deliveryStatus: undefined }
+            : m,
+        ),
+      );
+
+      const response = await fetch('/api/doctor-messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          recipientId: selectedDoctorId || undefined,
+          groupId: selectedGroupId || undefined,
+          subject: null,
+          message: text,
+          replyToMessageId,
+          clientMessageId,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        setMessages(prev =>
+          prev.map(m =>
+            m.id === clientMessageId
+              ? { ...m, pending: false, deliveryStatus: 'failed' }
+              : m,
+          ),
+        );
+        if (response.status === 429) {
+          showToast(error.error || 'Túl sok üzenet — próbáld újra később.', 'error');
+        } else {
+          showToast(error.error || 'Újraküldés sikertelen', 'error');
+        }
+        return false;
+      }
+
+      const data = await response.json();
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === clientMessageId ? { ...data.message, pending: false } : m,
+        ),
+      );
+      showToast('Üzenet sikeresen elküldve', 'success');
+      return true;
+    } catch (error: unknown) {
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === clientMessageId
+            ? { ...m, pending: false, deliveryStatus: 'failed' }
+            : m,
+        ),
+      );
+      showToast('Újraküldés sikertelen', 'error');
       return false;
     } finally {
       setSending(false);
@@ -868,6 +982,7 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
     selectGroup,
     clearSelection,
     sendMessage,
+    retryMessage,
     createGroupConversation,
     renameGroup,
     deleteGroup,

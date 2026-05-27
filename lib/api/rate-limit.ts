@@ -2,16 +2,18 @@
  * Egyszerű in-memory sliding-window rate limiter (Slice 0.8).
  *
  * Csak az aktuális Node folyamatban él — több instance esetén minden példány
- * külön számláló. A 0.8 célja az anti-flooding alap, nem a globális kontroll;
- * disztribuált rate-limit (Redis token bucket) Fázis 5 alá tartozik.
+ * külön számláló. Fázis 5: `checkRateLimitAsync` Redis-et használ, ha
+ * `REDIS_URL` be van állítva; különben vagy hiba esetén memória fallback.
  *
  * Használat:
- *   const result = checkRateLimit({ key: `msg:${userId}`, limit: 30, windowMs: 60_000 });
+ *   const result = await checkRateLimitAsync({ key: `msg:${userId}`, limit: 30, windowMs: 60_000 });
  *   if (!result.allowed) return new Response(...429...);
  *
  * A `key`-nek elég dimenziót adni, hogy a hívó tudja szétválasztani:
  * pl. `msg-patient:{userId}`, `msg-doctor:{userId}` külön számolódik.
  */
+
+import { checkRedisRateLimit } from './rate-limit-redis';
 
 interface BucketState {
   // Időbélyegek (ms), a legrégebbi elsőként; a window-on kívül esőket
@@ -81,6 +83,21 @@ export function checkRateLimit(opts: RateLimitOptions): RateLimitResult {
     resetAt: bucket.timestamps[0] + opts.windowMs,
     used: bucket.timestamps.length,
   };
+}
+
+/**
+ * Fázis 5 — Redis (ha elérhető), különben in-memory sliding window.
+ */
+export async function checkRateLimitAsync(opts: RateLimitOptions): Promise<RateLimitResult> {
+  if (process.env.REDIS_URL?.trim()) {
+    try {
+      return await checkRedisRateLimit(opts);
+    } catch {
+      // Redis átmenetileg nem elérhető — ne blokkoljuk a küldést teljesen,
+      // essünk vissza process-szintű limitre.
+    }
+  }
+  return checkRateLimit(opts);
 }
 
 /**

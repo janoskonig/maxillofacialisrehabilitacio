@@ -14,7 +14,7 @@ import { apiHandler } from '@/lib/api/route-handler';
 import { detectDocumentRequest } from '@/lib/document-request-detector';
 import { hasEverTreatedPatient } from '@/lib/patient-doctor-access';
 import { parseReplyToMessageId, ReplyTargetNotFoundError, type PatientReplySender } from '@/lib/message-reply';
-import { checkRateLimit, buildRateLimitedResponse } from '@/lib/api/rate-limit';
+import { checkRateLimitAsync, buildRateLimitedResponse } from '@/lib/api/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -190,7 +190,7 @@ export const POST = apiHandler(async (req) => {
 
   // Slice 0.8: rate limit a tényleges sender alapján (senderId már ismert
   // ezen a ponton, függetlenül a patient portal / authed doctor ágtól).
-  const rl = checkRateLimit({
+  const rl = await checkRateLimitAsync({
     key: `msg-patient:${senderId}`,
     limit: 30,
     windowMs: 60_000,

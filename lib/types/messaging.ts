@@ -5,6 +5,20 @@
  */
 export type MessageChannel = 'patient' | 'doctor';
 
+/** Szerveroldali kézbesítési állapot (042 migráció, Fázis 1.2+). */
+export type ServerDeliveryStatus = 'sent' | 'delivered' | 'read' | 'failed';
+
+/** Fázis 2 — Socket.io `message-delivery-status` esemény payload. */
+export interface MessageDeliveryStatusEvent {
+  messageId: string;
+  deliveryStatus: 'delivered' | 'read';
+  channel: MessageChannel;
+  /** Beteg csatornán a szál azonosítója (kliens szűréshez). */
+  patientId?: string;
+  /** Orvos csatornán csoport esetén (kliens szűréshez). */
+  groupId?: string | null;
+}
+
 /**
  * Egy idézett (válaszolt) üzenet előnézete a buborékban / API válaszban.
  *
@@ -51,6 +65,10 @@ export interface DoctorMessage {
    * megtekintő látja az eredetit (jogosultság ellenőrzés Fázis 0.2-ben).
    */
   quotedMessage?: QuotedMessagePreview | null;
+  /** Fázis 1.1: közvetlen válaszok száma (reply_to_message_id = ez az id). */
+  replyCount?: number;
+  /** Fázis 1.2: szerveroldali kézbesítési állapot (042 migráció). */
+  deliveryStatus?: ServerDeliveryStatus;
   readBy?: Array<{
     userId: string;
     userName: string | null;

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { MessageCircle, Send, Clock, Check, CheckCheck, Loader2, ChevronDown, Users, Search, X, CornerUpLeft } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { MessageCircle, Send, Clock, Check, CheckCheck, Loader2, ChevronDown, Users, Search, X, CornerUpLeft, AlertTriangle, RotateCcw } from 'lucide-react';
 import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
@@ -15,7 +15,15 @@ import { MessageQuoteBlock } from '@/components/messaging/MessageQuoteBlock';
 import { ReplyComposerBar } from '@/components/messaging/ReplyComposerBar';
 import { useReplyState } from '@/components/messaging/useReplyState';
 import { buildQuotedMessagePreview } from '@/lib/message-reply';
-import type { QuotedMessagePreview } from '@/lib/types/messaging';
+import type { QuotedMessagePreview, MessageDeliveryStatusEvent } from '@/lib/types/messaging';
+import {
+  applyDeliveryStatusUpdate,
+  isPatientChannelDeliveryEvent,
+} from '@/components/messaging/delivery-status-socket';
+import { incrementParentReplyCount } from '@/components/messaging/reply-count-socket';
+import { useReplyThreadCollapse } from '@/components/messaging/useReplyThreadCollapse';
+import { filterMessagesByThreadCollapse } from '@/lib/messaging/reply-thread-visibility';
+import { replyThreadToggleLabel } from '@/components/messaging/reply-thread-label';
 
 interface Message {
   id: string;
@@ -30,6 +38,8 @@ interface Message {
   pending?: boolean;
   replyToMessageId?: string | null;
   quotedMessage?: QuotedMessagePreview | null;
+  deliveryStatus?: 'sent' | 'delivered' | 'read' | 'failed';
+  replyCount?: number;
 }
 
 interface Recipient {
@@ -114,6 +124,32 @@ export function PatientMessages() {
       el.classList.remove('ring-2', 'ring-blue-400', 'rounded-2xl');
     }, 1600);
   }, []);
+
+  const scrollToFirstReply = useCallback(
+    (parentId: string) => {
+      const firstReply = messages.find((m) => m.replyToMessageId === parentId);
+      if (firstReply) scrollToMessage(firstReply.id);
+    },
+    [messages, scrollToMessage],
+  );
+
+  const { collapsedRoots, isCollapsed, toggleThread, resetThreads } = useReplyThreadCollapse();
+  const visibleMessages = useMemo(
+    () => filterMessagesByThreadCollapse(messages, collapsedRoots),
+    [messages, collapsedRoots],
+  );
+  const handleReplyThreadToggle = useCallback(
+    (parentId: string) => {
+      const wasCollapsed = isCollapsed(parentId);
+      toggleThread(parentId);
+      if (wasCollapsed) scrollToFirstReply(parentId);
+    },
+    [isCollapsed, toggleThread, scrollToFirstReply],
+  );
+
+  useEffect(() => {
+    resetThreads();
+  }, [selectedDoctorId, resetThreads]);
 
   const totalUnreadCount = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
 
@@ -272,11 +308,15 @@ export function PatientMessages() {
         messagesLoadedRef.current.add(data.message.id);
         setMessages(prev => {
           if (prev.some(m => m.id === data.message.id)) return prev;
-          return [...prev, {
-            ...data.message,
-            createdAt: new Date(data.message.createdAt),
-            readAt: data.message.readAt ? new Date(data.message.readAt) : null,
-          }];
+          const withReply = [
+            ...prev,
+            {
+              ...data.message,
+              createdAt: new Date(data.message.createdAt),
+              readAt: data.message.readAt ? new Date(data.message.readAt) : null,
+            },
+          ];
+          return incrementParentReplyCount(withReply, data.message.replyToMessageId);
         });
       }
 
@@ -288,17 +328,26 @@ export function PatientMessages() {
 
       setMessages(prev =>
         prev.map(m =>
-          m.id === data.messageId ? { ...m, readAt: new Date() } : m
+          m.id === data.messageId
+            ? { ...m, readAt: new Date(), deliveryStatus: 'read' as const }
+            : m
         )
       );
     };
 
+    const handleDeliveryStatus = (event: MessageDeliveryStatusEvent) => {
+      if (!patientId || !isPatientChannelDeliveryEvent(event, patientId)) return;
+      setMessages((prev) => applyDeliveryStatusUpdate(prev, event));
+    };
+
     socket.on('new-message', handleNewMessage);
     socket.on('message-read', handleMessageRead);
+    socket.on('message-delivery-status', handleDeliveryStatus);
 
     return () => {
       socket.off('new-message', handleNewMessage);
       socket.off('message-read', handleMessageRead);
+      socket.off('message-delivery-status', handleDeliveryStatus);
     };
   }, [socket, patientId, selectedDoctorId, fetchConversations]);
 
@@ -379,7 +428,68 @@ export function PatientMessages() {
     setDoctorSearchQuery('');
   };
 
-  // Send message
+  const postPatientMessage = useCallback(
+    async (
+      tempId: string,
+      text: string,
+      replyToMessageId: string | null,
+    ): Promise<boolean> => {
+      if (!patientId || !selectedDoctorId) return false;
+
+      const response = await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          patientId,
+          subject: null,
+          message: text,
+          recipientDoctorId: selectedDoctorId,
+          replyToMessageId,
+          clientMessageId: tempId,
+        }),
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          router.push('/patient-portal');
+          return false;
+        }
+        const error = await response.json().catch(() => ({}));
+        if (response.status === 429) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === tempId ? { ...m, pending: false, deliveryStatus: 'failed' } : m,
+            ),
+          );
+          showToast(error.error || 'Túl sok üzenet — próbáld újra később.', 'error');
+          return false;
+        }
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
+        throw new Error(error.error || 'Hiba az üzenet küldésekor');
+      }
+
+      const data = await response.json();
+      if (data.message) {
+        messagesLoadedRef.current.add(data.message.id);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === tempId
+              ? {
+                  ...data.message,
+                  createdAt: new Date(data.message.createdAt),
+                  readAt: data.message.readAt ? new Date(data.message.readAt) : null,
+                  pending: false,
+                }
+              : m,
+          ),
+        );
+      }
+      return true;
+    },
+    [patientId, selectedDoctorId, router, showToast],
+  );
+
   const handleSendMessage = async () => {
     const textToSend = newMessage.trim();
     if (!patientId || !textToSend || !selectedDoctorId) {
@@ -390,67 +500,81 @@ export function PatientMessages() {
     const replyTargetSnapshot = replyState.replyTarget;
     const replyToMessageId = replyTargetSnapshot?.id ?? null;
 
-    // Slice 0.8: idempotencia kulcs.
-    const clientMessageId = (typeof crypto !== 'undefined' && crypto.randomUUID)
-      ? crypto.randomUUID()
-      : `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const randomPart =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const tempId = `pending-${randomPart}`;
 
     try {
       setSending(true);
-      
-      const response = await fetch('/api/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          patientId,
-          subject: null,
-          message: textToSend,
-          recipientDoctorId: selectedDoctorId,
-          replyToMessageId,
-          clientMessageId,
-        }),
-      });
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          router.push('/patient-portal');
-          return;
-        }
-        const error = await response.json().catch(() => ({}));
-        if (response.status === 429) {
-          showToast(error.error || 'Túl sok üzenet — próbáld újra később.', 'error');
-          return;
-        }
-        throw new Error(error.error || 'Hiba az üzenet küldésekor');
-      }
+      const pendingMessage: Message = {
+        id: tempId,
+        patientId,
+        senderType: 'patient',
+        senderId: patientId,
+        senderEmail: '',
+        subject: null,
+        message: textToSend,
+        readAt: null,
+        createdAt: new Date(),
+        pending: true,
+        replyToMessageId,
+        quotedMessage: replyTargetSnapshot ?? null,
+      };
+      setMessages((prev) => [...prev, pendingMessage]);
 
-      const data = await response.json();
-      
-      if (data.message) {
-        messagesLoadedRef.current.add(data.message.id);
-        setMessages(prev => {
-          if (prev.some(m => m.id === data.message.id)) return prev;
-          return [...prev, {
-            ...data.message,
-            createdAt: new Date(data.message.createdAt),
-            readAt: data.message.readAt ? new Date(data.message.readAt) : null,
-          }];
-        });
-      }
-      
+      const ok = await postPatientMessage(tempId, textToSend, replyToMessageId);
+      if (!ok) return;
+
       setNewMessage('');
       replyState.clearReply();
       showToast('Üzenet sikeresen elküldve', 'success');
-
       setTimeout(() => fetchConversations(), 500);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Hiba az üzenet küldésekor:', error);
-      showToast(error.message || 'Hiba történt az üzenet küldésekor', 'error');
+      const message = error instanceof Error ? error.message : 'Hiba történt az üzenet küldésekor';
+      showToast(message, 'error');
     } finally {
       setSending(false);
     }
   };
+
+  const retryFailedMessage = useCallback(
+    async (failedMessage: Message): Promise<void> => {
+      if (!failedMessage.id.startsWith('pending-')) return;
+
+      try {
+        setSending(true);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === failedMessage.id
+              ? { ...m, pending: true, deliveryStatus: undefined }
+              : m,
+          ),
+        );
+
+        const ok = await postPatientMessage(
+          failedMessage.id,
+          failedMessage.message,
+          failedMessage.replyToMessageId ?? null,
+        );
+        if (ok) {
+          replyState.clearReply();
+          showToast('Üzenet sikeresen elküldve', 'success');
+          setTimeout(() => fetchConversations(), 500);
+        }
+      } catch (error: unknown) {
+        console.error('Hiba az üzenet újraküldésekor:', error);
+        const message = error instanceof Error ? error.message : 'Újraküldés sikertelen';
+        showToast(message, 'error');
+      } finally {
+        setSending(false);
+      }
+    },
+    [postPatientMessage, replyState, showToast, fetchConversations],
+  );
 
   // Filtered doctors for new chat
   const filteredRecipients = recipients.filter(r => {
@@ -591,12 +715,18 @@ export function PatientMessages() {
             <p className="text-sm mt-2">Küldjön üzenetet!</p>
           </div>
         ) : (
-          messages.map((message, index) => {
+          visibleMessages.map((message, index) => {
             const isMyMessage = message.senderType === 'patient';
             const isTheirMessage = message.senderType === 'doctor';
             const isUnread = !message.readAt && isTheirMessage;
             const isPending = message.pending === true;
-            const isRead = message.readAt !== null;
+            const isFailed = message.deliveryStatus === 'failed';
+            const deliveryState =
+              isFailed
+                ? 'failed'
+                : message.deliveryStatus ?? (message.readAt ? 'read' : 'sent');
+            const isRead = deliveryState === 'read' || message.readAt !== null;
+            const isDelivered = deliveryState === 'delivered';
 
             const senderName = isMyMessage 
               ? (patientName || 'Én')
@@ -605,7 +735,7 @@ export function PatientMessages() {
             const monogram = getMonogram(senderName);
 
             const msgDate = new Date(message.createdAt);
-            const prevMsg = index > 0 ? messages[index - 1] : null;
+            const prevMsg = index > 0 ? visibleMessages[index - 1] : null;
             const showDateSeparator = !prevMsg || !isSameDay(msgDate, new Date(prevMsg.createdAt));
 
             const dateSeparatorLabel = isToday(msgDate)
@@ -642,7 +772,7 @@ export function PatientMessages() {
                     )}
                     
                     <div className={`flex items-end gap-1 ${isMyMessage ? 'flex-row-reverse' : 'flex-row'}`}>
-                      {!isPending && (
+                      {!isPending && !isFailed && (
                         <button
                           type="button"
                           onClick={() => startReplyTo(message)}
@@ -699,11 +829,26 @@ export function PatientMessages() {
                             {format(new Date(message.createdAt), 'HH:mm', { locale: hu })}
                           </span>
                           {isMyMessage && (
-                            <span className="flex items-center">
+                            <span className="flex items-center gap-1">
                               {isPending ? (
                                 <Loader2 className="w-3 h-3 animate-spin text-green-200" />
+                              ) : isFailed ? (
+                                <>
+                                  <AlertTriangle className="w-3 h-3 text-green-200" aria-label="küldés sikertelen" />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      void retryFailedMessage(message);
+                                    }}
+                                    className="inline-flex items-center gap-0.5 text-[10px] underline-offset-2 hover:underline text-green-100"
+                                  >
+                                    <RotateCcw className="w-3 h-3" /> Újraküldés
+                                  </button>
+                                </>
                               ) : isRead ? (
                                 <CheckCheck className="w-3 h-3 text-green-200" />
+                              ) : isDelivered ? (
+                                <CheckCheck className="w-3 h-3 text-green-200 opacity-70" />
                               ) : (
                                 <Check className="w-3 h-3 text-green-200 opacity-70" />
                               )}
@@ -717,6 +862,18 @@ export function PatientMessages() {
                         </div>
                       </div>
                     </div>
+
+                    {(message.replyCount ?? 0) > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => handleReplyThreadToggle(message.id)}
+                        className={`mt-1 text-xs font-medium underline-offset-2 hover:underline ${
+                          isMyMessage ? 'text-green-700' : 'text-gray-600'
+                        }`}
+                      >
+                        {replyThreadToggleLabel(message.replyCount ?? 0, isCollapsed(message.id))}
+                      </button>
+                    )}
                   </div>
                   
                   {isMyMessage && <div className="flex-shrink-0 w-8"></div>}

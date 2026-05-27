@@ -7,6 +7,10 @@ import { validateUUID } from '@/lib/validation';
 import { apiHandler } from '@/lib/api/route-handler';
 import { logger } from '@/lib/logger';
 import { emitMessageRead } from '@/lib/socket-server';
+import {
+  buildPatientChannelReadDeliveryUpdate,
+  notifyDeliveryStatusUpdates,
+} from '@/lib/message-delivery';
 
 export const dynamic = 'force-dynamic';
 
@@ -84,6 +88,15 @@ export const PUT = apiHandler(async (req, { params }) => {
     }
     logger.info(`[markMessageAsRead API] Beteg portál - marking as read`);
     await markMessageAsRead(validatedMessageId);
+    // Fázis 2: küldő felé realtime `read` delivery státusz.
+    notifyDeliveryStatusUpdates([
+      buildPatientChannelReadDeliveryUpdate({
+        id: validatedMessageId,
+        sender_id: message.sender_id,
+        sender_type: message.sender_type,
+        patient_id: message.patient_id,
+      }),
+    ]);
     // Slice 0.7: a párhuzamosan kapcsolódó orvos klienseknek is jelezzük.
     try {
       emitMessageRead(message.patient_id, validatedMessageId);
@@ -161,6 +174,16 @@ export const PUT = apiHandler(async (req, { params }) => {
   }
 
   await markMessageAsRead(validatedMessageId);
+
+  // Fázis 2: küldő felé realtime `read` delivery státusz.
+  notifyDeliveryStatusUpdates([
+    buildPatientChannelReadDeliveryUpdate({
+      id: validatedMessageId,
+      sender_id: message.sender_id,
+      sender_type: message.sender_type,
+      patient_id: message.patient_id,
+    }),
+  ]);
 
   // Slice 0.7: realtime read jelzés a `patient:{id}` szobának, hogy a többi
   // résztvevő (másik tab, párhuzamos kliens) is frissítse a pipa-statust.

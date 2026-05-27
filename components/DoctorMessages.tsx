@@ -14,8 +14,11 @@ import { useSocket } from '@/contexts/SocketContext';
 import { MessagesShell } from './mobile/MessagesShell';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useDoctorMessages } from '@/hooks/useDoctorMessages';
+import { aggregateGroupSenderDeliveryStatus } from '@/lib/messaging/group-delivery-status';
 import { ChatMessageBubble, type ChatBubbleMessage } from './messaging/ChatMessageBubble';
 import { ReplyComposerBar } from './messaging/ReplyComposerBar';
+import { useReplyThreadCollapse } from './messaging/useReplyThreadCollapse';
+import { filterMessagesByThreadCollapse } from '@/lib/messaging/reply-thread-visibility';
 
 export function DoctorMessages() {
   const { showToast } = useToast();
@@ -27,7 +30,7 @@ export function DoctorMessages() {
     selectedDoctorId, selectedDoctorName, selectedGroupId, selectedGroupName,
     loading, sending, deletingGroup,
     replyState, startReplyTo,
-    selectDoctor, selectGroup, clearSelection, sendMessage,
+    selectDoctor, selectGroup, clearSelection, sendMessage, retryMessage,
     createGroupConversation, renameGroup, deleteGroup,
     refreshConversations, refreshGroupParticipants, setSelectedGroupName,
   } = useDoctorMessages({ socket, isConnected });
@@ -88,6 +91,36 @@ export function DoctorMessages() {
       el.classList.remove('ring-2', 'ring-blue-400', 'rounded-lg');
     }, 1600);
   }, []);
+
+  const scrollToFirstReply = useCallback(
+    (parentId: string) => {
+      const firstReply = messages.find((m) => m.replyToMessageId === parentId);
+      if (firstReply) scrollToMessage(firstReply.id);
+    },
+    [messages, scrollToMessage],
+  );
+
+  const { collapsedRoots, isCollapsed, toggleThread, resetThreads } = useReplyThreadCollapse();
+
+  const visibleMessages = useMemo(
+    () => filterMessagesByThreadCollapse(messages, collapsedRoots),
+    [messages, collapsedRoots],
+  );
+
+  const handleReplyThreadToggle = useCallback(
+    (parentId: string) => {
+      const wasCollapsed = isCollapsed(parentId);
+      toggleThread(parentId);
+      if (wasCollapsed) {
+        scrollToFirstReply(parentId);
+      }
+    },
+    [isCollapsed, toggleThread, scrollToFirstReply],
+  );
+
+  useEffect(() => {
+    resetThreads();
+  }, [conversationKey, resetThreads]);
 
   // ── Scroll effects ──────────────────────────────────────────────────
 
@@ -467,7 +500,7 @@ export function DoctorMessages() {
             <p>Még nincsenek üzenetek</p>
           </div>
         ) : (
-          messages.map((message, index) => {
+          visibleMessages.map((message, index) => {
             const isFromMe = currentUserId ? message.senderId === currentUserId : false;
             const isPending = message.pending === true;
             const senderName = message.senderName || message.senderEmail || 'Ismeretlen';
@@ -475,7 +508,7 @@ export function DoctorMessages() {
             const monogram = getMonogram(senderName);
 
             const msgDate = new Date(message.createdAt);
-            const prevMsg = index > 0 ? messages[index - 1] : null;
+            const prevMsg = index > 0 ? visibleMessages[index - 1] : null;
             const showDateSeparator = !prevMsg || !isSameDay(msgDate, new Date(prevMsg.createdAt));
 
             const dateSeparatorLabel = isToday(msgDate)
@@ -486,6 +519,18 @@ export function DoctorMessages() {
 
             // Slice 0.5: csatorna-független `ChatMessageBubble`-re adapter
             // (a hook tartja a forrás-szót, itt csak shape-coercion van).
+            const effectiveDeliveryStatus = isPending
+              ? 'pending' as const
+              : message.deliveryStatus === 'failed'
+                ? 'failed' as const
+                : selectedGroupId && isFromMe
+                ? aggregateGroupSenderDeliveryStatus(
+                    message,
+                    currentUserId ?? '',
+                    groupParticipants,
+                  )
+                : message.deliveryStatus ?? (message.readAt ? 'read' : 'sent');
+
             const bubbleMessage: ChatBubbleMessage = {
               id: message.id,
               message: message.message,
@@ -495,7 +540,8 @@ export function DoctorMessages() {
               isFromMe,
               replyToMessageId: message.replyToMessageId ?? null,
               quotedMessage: message.quotedMessage ?? null,
-              deliveryStatus: isPending ? 'pending' : 'sent',
+              replyCount: message.replyCount ?? 0,
+              deliveryStatus: effectiveDeliveryStatus,
               readAt: message.readAt ?? null,
             };
 
@@ -587,6 +633,13 @@ export function DoctorMessages() {
                     )}
                     onReply={isPending ? undefined : () => startReplyTo(message)}
                     onQuoteClick={scrollToMessage}
+                    onReplyThreadToggle={handleReplyThreadToggle}
+                    replyThreadCollapsed={isCollapsed(message.id)}
+                    onRetry={
+                      message.deliveryStatus === 'failed'
+                        ? () => retryMessage(message)
+                        : undefined
+                    }
                     bubbleFooter={groupReadFooter}
                   />
                 </div>
