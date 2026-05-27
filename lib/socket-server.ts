@@ -3,6 +3,7 @@ import { Server as HTTPServer } from 'http';
 import { verifySocketAuth, SocketAuthPayload } from './socket-auth';
 import { getDbPool } from './db';
 import { hasEverTreatedPatient } from './patient-doctor-access';
+import type { MessageDeliveryStatusEvent } from './types/messaging';
 
 let io: SocketIOServer | null = null;
 
@@ -289,4 +290,22 @@ export function emitDoctorMessageReadDirect(opts: {
     userName: null,
   });
   console.log(`[Socket] Emitted doctor-message-read (1:1) to ${room}`);
+}
+
+/**
+ * Fázis 2 — kézbesítési állapot változás a küldő felé (`delivered` / `read`).
+ * A `room` a küldő socket szobája (`user:{id}` vagy betegnél `patient:{id}`).
+ */
+export function emitMessageDeliveryStatusBatch(
+  items: Array<{ room: string; event: MessageDeliveryStatusEvent }>,
+): void {
+  const socketIO = getSocketIO();
+  if (!socketIO || items.length === 0) return;
+
+  for (const { room, event } of items) {
+    socketIO.to(room).emit('message-delivery-status', event);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[Socket] Emitted message-delivery-status (${event.deliveryStatus}) to ${room} msg=${event.messageId}`);
+    }
+  }
 }

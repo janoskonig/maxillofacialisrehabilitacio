@@ -14,7 +14,11 @@ import { ChatMessageBubble, type ChatBubbleMessage } from './messaging/ChatMessa
 import { ReplyComposerBar } from './messaging/ReplyComposerBar';
 import { useReplyState } from './messaging/useReplyState';
 import { buildQuotedMessagePreview } from '@/lib/message-reply';
-import type { QuotedMessagePreview } from '@/lib/types/messaging';
+import type { QuotedMessagePreview, MessageDeliveryStatusEvent } from '@/lib/types/messaging';
+import {
+  applyDeliveryStatusUpdate,
+  isPatientChannelDeliveryEvent,
+} from './messaging/delivery-status-socket';
 
 interface Message {
   id: string;
@@ -202,19 +206,28 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
 
       setMessages(prev =>
         prev.map(m =>
-          m.id === data.messageId ? { ...m, readAt: new Date() } : m
+          m.id === data.messageId
+            ? { ...m, readAt: new Date(), deliveryStatus: 'read' as const }
+            : m
         )
       );
 
       setUnreadCount(prev => Math.max(0, prev - 1));
     };
 
+    const handleDeliveryStatus = (event: MessageDeliveryStatusEvent) => {
+      if (!patientId || !isPatientChannelDeliveryEvent(event, patientId)) return;
+      setMessages((prev) => applyDeliveryStatusUpdate(prev, event));
+    };
+
     socket.on('new-message', handleNewMessage);
     socket.on('message-read', handleMessageRead);
+    socket.on('message-delivery-status', handleDeliveryStatus);
 
     return () => {
       socket.off('new-message', handleNewMessage);
       socket.off('message-read', handleMessageRead);
+      socket.off('message-delivery-status', handleDeliveryStatus);
     };
   }, [socket, patientId]);
 

@@ -216,3 +216,17 @@ Cookie: {{authCookie}}
 
 PUT {{host}}/api/doctor-messages/{{parentMessageId}}/read
 Cookie: {{authCookie}}
+
+###############################################################################
+# [Fázis 2] Realtime deliveryStatus — Socket.io `message-delivery-status`
+#
+# A küldő kliens (user:{senderId} vagy betegnél patient:{patientId} szoba)
+# eseményt kap, amikor a címzett megnyitja a szálat (delivered) vagy olvassa
+# (read). DevTools → Network → WS → figyeld az esemény payloadot:
+#   { messageId, deliveryStatus, channel, patientId?, groupId? }
+#
+# Manuális flow:
+#   1. Orvos A küld üzenetet orvos B-nek (1:1).
+#   2. Orvos B megnyitja a beszélgetést → A-nál delivered ikon.
+#   3. Orvos B read PUT (automatikus is lehet) → A-nál read ikon.
+###############################################################################

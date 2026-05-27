@@ -15,7 +15,11 @@ import { MessageQuoteBlock } from '@/components/messaging/MessageQuoteBlock';
 import { ReplyComposerBar } from '@/components/messaging/ReplyComposerBar';
 import { useReplyState } from '@/components/messaging/useReplyState';
 import { buildQuotedMessagePreview } from '@/lib/message-reply';
-import type { QuotedMessagePreview } from '@/lib/types/messaging';
+import type { QuotedMessagePreview, MessageDeliveryStatusEvent } from '@/lib/types/messaging';
+import {
+  applyDeliveryStatusUpdate,
+  isPatientChannelDeliveryEvent,
+} from '@/components/messaging/delivery-status-socket';
 
 interface Message {
   id: string;
@@ -30,6 +34,7 @@ interface Message {
   pending?: boolean;
   replyToMessageId?: string | null;
   quotedMessage?: QuotedMessagePreview | null;
+  deliveryStatus?: 'sent' | 'delivered' | 'read' | 'failed';
 }
 
 interface Recipient {
@@ -288,17 +293,26 @@ export function PatientMessages() {
 
       setMessages(prev =>
         prev.map(m =>
-          m.id === data.messageId ? { ...m, readAt: new Date() } : m
+          m.id === data.messageId
+            ? { ...m, readAt: new Date(), deliveryStatus: 'read' as const }
+            : m
         )
       );
     };
 
+    const handleDeliveryStatus = (event: MessageDeliveryStatusEvent) => {
+      if (!patientId || !isPatientChannelDeliveryEvent(event, patientId)) return;
+      setMessages((prev) => applyDeliveryStatusUpdate(prev, event));
+    };
+
     socket.on('new-message', handleNewMessage);
     socket.on('message-read', handleMessageRead);
+    socket.on('message-delivery-status', handleDeliveryStatus);
 
     return () => {
       socket.off('new-message', handleNewMessage);
       socket.off('message-read', handleMessageRead);
+      socket.off('message-delivery-status', handleDeliveryStatus);
     };
   }, [socket, patientId, selectedDoctorId, fetchConversations]);
 
@@ -596,7 +610,10 @@ export function PatientMessages() {
             const isTheirMessage = message.senderType === 'doctor';
             const isUnread = !message.readAt && isTheirMessage;
             const isPending = message.pending === true;
-            const isRead = message.readAt !== null;
+            const deliveryState =
+              message.deliveryStatus ?? (message.readAt ? 'read' : 'sent');
+            const isRead = deliveryState === 'read' || message.readAt !== null;
+            const isDelivered = deliveryState === 'delivered';
 
             const senderName = isMyMessage 
               ? (patientName || 'Én')
@@ -704,6 +721,8 @@ export function PatientMessages() {
                                 <Loader2 className="w-3 h-3 animate-spin text-green-200" />
                               ) : isRead ? (
                                 <CheckCheck className="w-3 h-3 text-green-200" />
+                              ) : isDelivered ? (
+                                <CheckCheck className="w-3 h-3 text-green-200 opacity-70" />
                               ) : (
                                 <Check className="w-3 h-3 text-green-200 opacity-70" />
                               )}

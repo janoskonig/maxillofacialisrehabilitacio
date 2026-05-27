@@ -17,6 +17,7 @@ import {
 import {
   markPatientMessagesDeliveredForViewer,
   parseServerDeliveryStatus,
+  notifyDeliveryStatusUpdates,
 } from './message-delivery';
 
 export type MessageSenderType = 'doctor' | 'patient';
@@ -429,7 +430,12 @@ export async function getPatientMessages(
 
   const messageIds = result.rows.map((row: { id: string }) => row.id);
   if (viewerRole && messageIds.length > 0) {
-    await markPatientMessagesDeliveredForViewer(messageIds, viewerRole);
+    const deliveredUpdates = await markPatientMessagesDeliveredForViewer(
+      messageIds,
+      viewerRole,
+      validatedPatientId,
+    );
+    notifyDeliveryStatusUpdates(deliveredUpdates);
   }
 
   // Reply preview-k (Szelet 0.3): batch SELECT a parent üzenetekre,

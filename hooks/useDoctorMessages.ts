@@ -7,7 +7,12 @@ import { useToast } from '@/contexts/ToastContext';
 import type { Socket } from 'socket.io-client';
 import { useReplyState, type ReplyState } from '@/components/messaging/useReplyState';
 import { buildQuotedMessagePreview } from '@/lib/message-reply';
-import type { QuotedMessagePreview } from '@/lib/types/messaging';
+import type { QuotedMessagePreview, MessageDeliveryStatusEvent } from '@/lib/types/messaging';
+import {
+  applyDeliveryStatusUpdate,
+  isDoctorDirectDeliveryEvent,
+  isDoctorGroupDeliveryEvent,
+} from '@/components/messaging/delivery-status-socket';
 
 export interface Doctor {
   id: string;
@@ -557,8 +562,12 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
               ]
             };
           }
-          // 1:1: a feladó UI-ja kapja meg, frissítjük readAt-ot.
-          return { ...m, readAt: m.readAt ?? new Date() };
+          // 1:1: a feladó UI-ja kapja meg, frissítjük readAt-ot + deliveryStatus.
+          return {
+            ...m,
+            readAt: m.readAt ?? new Date(),
+            deliveryStatus: 'read',
+          };
         })
       );
     };
@@ -626,6 +635,28 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, isConnected, selectedGroupId, selectedDoctorId, currentUserId]);
+
+  // Fázis 2: realtime deliveryStatus (delivered / read) a küldő bubble-ön.
+  useEffect(() => {
+    if (!socket || !isConnected) return;
+    if (!selectedGroupId && !selectedDoctorId) return;
+
+    const handleDeliveryStatus = (event: MessageDeliveryStatusEvent) => {
+      if (event.channel !== 'doctor') return;
+      if (event.groupId) {
+        if (!isDoctorGroupDeliveryEvent(event, selectedGroupId)) return;
+      } else if (!isDoctorDirectDeliveryEvent(event, selectedDoctorId)) {
+        return;
+      }
+
+      setMessages((prev) => applyDeliveryStatusUpdate(prev, event));
+    };
+
+    socket.on('message-delivery-status', handleDeliveryStatus);
+    return () => {
+      socket.off('message-delivery-status', handleDeliveryStatus);
+    };
+  }, [socket, isConnected, selectedGroupId, selectedDoctorId]);
 
   // ── Actions ─────────────────────────────────────────────────────────
 

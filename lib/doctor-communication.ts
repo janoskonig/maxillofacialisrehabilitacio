@@ -15,6 +15,7 @@ import {
 import {
   markDoctorMessagesDeliveredForViewer,
   parseServerDeliveryStatus,
+  notifyDeliveryStatusUpdates,
 } from './message-delivery';
 
 export interface DoctorMessage {
@@ -218,7 +219,8 @@ async function mapDoctorMessageRows(
 ): Promise<DoctorMessage[]> {
   const messageIds = rows.map((row) => row.id as string);
   if (messageIds.length > 0) {
-    await markDoctorMessagesDeliveredForViewer(messageIds, viewerUserId);
+    const deliveredUpdates = await markDoctorMessagesDeliveredForViewer(messageIds, viewerUserId);
+    notifyDeliveryStatusUpdates(deliveredUpdates);
   }
 
   const parentIds = Array.from(
