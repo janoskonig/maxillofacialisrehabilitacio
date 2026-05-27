@@ -593,7 +593,7 @@ export function OHIP14Section({
             const isLocked = !!response?.lockedAt;
             const isAllowed = getAvailability(activeTimepoint).allowed;
             const canEditAnswers =
-              isAllowed && !isPatientPortal && !isTimepointFilled(activeTimepoint);
+              isAllowed && !isTimepointFilled(activeTimepoint) && !isViewOnly && !isLocked;
 
             return (
               <div key={question.id} className="border-b border-gray-100 pb-4 last:border-b-0">
