@@ -348,9 +348,11 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
         setPendingMessageId(null);
 
         if (response.status === 429) {
-          // Slice 0.8: rate-limit. A pending buborékot meghagyjuk, hogy a
-          // felhasználó tudja, mit akart küldeni — a saját ID-val történő
-          // retry idempotens.
+          setConversationMessages((prev) =>
+            prev.map((m) =>
+              m.id === tempId ? { ...m, pending: false, deliveryStatus: 'failed' } : m,
+            ),
+          );
           showToast(error.error || 'Túl sok üzenet — próbáld újra később.', 'error');
           return;
         }
@@ -390,6 +392,82 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
       setSending(false);
     }
   };
+
+  const retryFailedMessage = useCallback(
+    async (failedMessage: RecentMessage): Promise<void> => {
+      if (!failedMessage.id.startsWith('pending-') || !selectedPatient) return;
+
+      const clientMessageId = failedMessage.id;
+      try {
+        setSending(true);
+        setConversationMessages((prev) =>
+          prev.map((m) =>
+            m.id === clientMessageId
+              ? { ...m, pending: true, deliveryStatus: undefined }
+              : m,
+          ),
+        );
+
+        const response = await fetch('/api/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            patientId: selectedPatient.id,
+            subject: null,
+            message: failedMessage.message,
+            replyToMessageId: failedMessage.replyToMessageId ?? null,
+            clientMessageId,
+          }),
+        });
+
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          setConversationMessages((prev) =>
+            prev.map((m) =>
+              m.id === clientMessageId
+                ? { ...m, pending: false, deliveryStatus: 'failed' }
+                : m,
+            ),
+          );
+          if (response.status === 429) {
+            showToast(error.error || 'Túl sok üzenet — próbáld újra később.', 'error');
+          } else {
+            showToast(error.error || 'Újraküldés sikertelen', 'error');
+          }
+          return;
+        }
+
+        const data = await response.json();
+        showToast('Üzenet sikeresen elküldve', 'success');
+        setConversationMessages((prev) => {
+          const filtered = prev.filter((m) => m.id !== clientMessageId);
+          return [...filtered, { ...data.message, pending: false }];
+        });
+        setPendingMessageId(null);
+        replyState.clearReply();
+        setTimeout(() => {
+          if (selectedPatient) {
+            fetchConversation(selectedPatient.id);
+          }
+          fetchRecentMessages();
+        }, 500);
+      } catch (error: unknown) {
+        setConversationMessages((prev) =>
+          prev.map((m) =>
+            m.id === clientMessageId
+              ? { ...m, pending: false, deliveryStatus: 'failed' }
+              : m,
+          ),
+        );
+        console.error('Hiba az üzenet újraküldésekor:', error);
+        showToast('Újraküldés sikertelen', 'error');
+      } finally {
+        setSending(false);
+      }
+    },
+    [selectedPatient, showToast, replyState, fetchConversation, fetchRecentMessages],
+  );
 
   if (!isOpen) return null;
 
@@ -547,6 +625,7 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
                       visibleConversationMessages.map((msg) => {
                         const isDoctor = msg.senderType === 'doctor';
                         const isPending = msg.pending === true;
+                        const isFailed = msg.deliveryStatus === 'failed';
                         
                         const senderName = isDoctor 
                           ? 'Orvos'
@@ -566,7 +645,9 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
                           replyCount: msg.replyCount ?? 0,
                           deliveryStatus: isPending
                             ? 'pending'
-                            : msg.deliveryStatus ?? (msg.readAt ? 'read' : 'sent'),
+                            : isFailed
+                              ? 'failed'
+                              : msg.deliveryStatus ?? (msg.readAt ? 'read' : 'sent'),
                           readAt: msg.readAt ?? null,
                         };
 
@@ -602,10 +683,17 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
                                   }}
                                 />
                               )}
-                              onReply={isPending ? undefined : () => startReplyTo(msg)}
+                              onReply={isPending || isFailed ? undefined : () => startReplyTo(msg)}
                               onQuoteClick={scrollToMessage}
                               onReplyThreadToggle={handleReplyThreadToggle}
                               replyThreadCollapsed={isCollapsed(msg.id)}
+                              onRetry={
+                                isFailed && isDoctor
+                                  ? () => {
+                                      void retryFailedMessage(msg);
+                                    }
+                                  : undefined
+                              }
                             />
                           </div>
                         );

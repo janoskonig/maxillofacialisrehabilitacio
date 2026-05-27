@@ -27,10 +27,15 @@ describe('reply-thread-visibility (Fázis 4.2)', () => {
     expect(countHiddenDirectReplies(messages, 'p1', collapsed)).toBe(2);
   });
 
-  it('isDirectReplyVisible respects parent collapse only', () => {
+  it('isDirectReplyVisible respects collapsed parent', () => {
     const collapsed = new Set(['p1']);
-    expect(isDirectReplyVisible({ replyToMessageId: 'p1' }, collapsed)).toBe(false);
-    expect(isDirectReplyVisible({ replyToMessageId: null }, collapsed)).toBe(true);
+    const index = new Map(messages.map((m) => [m.id, m]));
+    expect(isDirectReplyVisible({ id: 'r1', replyToMessageId: 'p1' }, collapsed, index)).toBe(
+      false,
+    );
+    expect(isDirectReplyVisible({ id: 'p2', replyToMessageId: null }, collapsed, index)).toBe(
+      true,
+    );
   });
 });
 

@@ -247,3 +247,46 @@ Cookie: {{authCookie}}
 # - „N válasz — összecsukás” elrejti a közvetlen válaszokat; „megjelenítés” vissza.
 # - Orvos chat: 429 után failed bubble + „Újraküldés” (ugyanaz a clientMessageId).
 ###############################################################################
+
+###############################################################################
+# [Fázis 5] Redis rate limit + beteg csatorna retry + nested collapse
+#
+# Rate limit (opcionális REDIS_URL):
+#   - Ha be van állítva: disztribuált sliding window (Redis sorted set).
+#   - Ha nincs / hiba: in-memory fallback (checkRateLimitAsync).
+#   - Kulcsok: msg-patient:{senderId}, msg-doctor:{userId}, 30 POST/perc.
+#
+# 429 smoke — ismételt POST ugyanazzal a clientMessageId-val (idempotens retry):
+#   Elvárt: első siker után a második ugyanazzal az ID-val nem duplikál.
+###############################################################################
+
+POST {{host}}/api/messages
+Cookie: {{authCookie}}
+Content-Type: application/json
+
+{
+  "patientId": "REPLACE_PATIENT_UUID",
+  "message": "Rate limit / retry smoke — cseréld ki a patientId-t.",
+  "clientMessageId": "pending-smoke-retry-001"
+}
+
+###
+# Ugyanaz a clientMessageId — elvárt: 200 + ugyanaz az üzenet (nem dupla sor).
+###
+
+POST {{host}}/api/messages
+Cookie: {{authCookie}}
+Content-Type: application/json
+
+{
+  "patientId": "REPLACE_PATIENT_UUID",
+  "message": "Rate limit / retry smoke — cseréld ki a patientId-t.",
+  "clientMessageId": "pending-smoke-retry-001"
+}
+
+###
+# UI ellenőrzés (manuális):
+# - Beteg csatorna (PatientMessages, PatientMessagesList, SendMessageModal,
+#   beteg portál): 429 → failed buborék + „Újraküldés”.
+# - Szál összecsukás: összecsukott ősnél a beágyazott válaszok is rejtve.
+###
