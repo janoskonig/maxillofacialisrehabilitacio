@@ -8,12 +8,13 @@ import { getDbPool } from '@/lib/db';
 import { sendPushNotification } from '@/lib/push-notifications';
 import { logger } from '@/lib/logger';
 import { emitNewDoctorMessage } from '@/lib/socket-server';
+import { checkRateLimit, buildRateLimitedResponse } from '@/lib/api/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
 export const POST = authedHandler(async (req, { auth }) => {
   const body = await req.json();
-  const { recipientId, groupId, subject, message, replyToMessageId } = body;
+  const { recipientId, groupId, subject, message, replyToMessageId, clientMessageId } = body;
 
   if (!message || message.trim().length === 0) {
     return NextResponse.json(
@@ -27,6 +28,20 @@ export const POST = authedHandler(async (req, { auth }) => {
       { error: 'Címzett orvos ID vagy csoport ID megadása kötelező' },
       { status: 400 }
     );
+  }
+
+  // Slice 0.8: rate limit (30 POST/perc/user, csatorna-független).
+  const rl = checkRateLimit({
+    key: `msg-doctor:${auth.userId}`,
+    limit: 30,
+    windowMs: 60_000,
+  });
+  if (!rl.allowed) {
+    const { body: rlBody, retryAfterSeconds } = buildRateLimitedResponse(rl);
+    return NextResponse.json(rlBody, {
+      status: 429,
+      headers: { 'Retry-After': String(retryAfterSeconds) },
+    });
   }
 
   const pool = getDbPool();
@@ -58,6 +73,7 @@ export const POST = authedHandler(async (req, { auth }) => {
       message: message.trim(),
       groupId,
       replyToMessageId: replyToMessageId ?? null,
+      clientMessageId: clientMessageId ?? null,
     });
 
     const participants = await getGroupParticipants(groupId);
@@ -167,6 +183,7 @@ export const POST = authedHandler(async (req, { auth }) => {
     subject: subject || null,
     message: message.trim(),
     replyToMessageId: replyToMessageId ?? null,
+    clientMessageId: clientMessageId ?? null,
   });
 
   await logActivityWithAuth(

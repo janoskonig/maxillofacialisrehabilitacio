@@ -49,6 +49,11 @@ export interface CreateMessageInput {
    * Csak akkor szükséges, ha `replyToMessageId` van.
    */
   replySender?: PatientReplySender;
+  /**
+   * Slice 0.8: kliens-oldali idempotencia kulcs. `(sender_id, client_message_id)`
+   * UNIQUE; ha már létezik, a meglévő sort adjuk vissza (idempotens).
+   */
+  clientMessageId?: string | null;
 }
 
 /**
@@ -191,12 +196,45 @@ export async function sendMessage(input: CreateMessageInput): Promise<Message> {
     );
   }
 
+  // Slice 0.8: idempotencia — ha (sender_id, client_message_id) él, vissza.
+  const normalizedClientMessageId =
+    typeof input.clientMessageId === 'string' && input.clientMessageId.trim().length > 0
+      ? input.clientMessageId.trim()
+      : null;
+
+  if (normalizedClientMessageId) {
+    const existing = await pool.query(
+      `SELECT id, patient_id, sender_type, sender_id, sender_email, subject, message,
+              read_at, created_at, recipient_doctor_id, reply_to_message_id
+         FROM messages
+        WHERE sender_id = $1 AND client_message_id = $2
+        LIMIT 1`,
+      [validatedSenderId, normalizedClientMessageId],
+    );
+    if (existing.rows.length > 0) {
+      const r = existing.rows[0];
+      return {
+        id: r.id,
+        patientId: r.patient_id,
+        senderType: r.sender_type,
+        senderId: r.sender_id,
+        senderEmail: r.sender_email,
+        subject: r.subject,
+        message: r.message,
+        readAt: r.read_at ? new Date(r.read_at) : null,
+        createdAt: new Date(r.created_at),
+        replyToMessageId: r.reply_to_message_id ?? null,
+        quotedMessage,
+      };
+    }
+  }
+
   // Üzenet mentése
   const result = await pool.query(
     `INSERT INTO messages
        (patient_id, sender_type, sender_id, sender_email, subject, message,
-        recipient_doctor_id, reply_to_message_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        recipient_doctor_id, reply_to_message_id, client_message_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING id, patient_id, sender_type, sender_id, sender_email, subject, message,
                read_at, created_at, recipient_doctor_id, reply_to_message_id`,
     [
@@ -208,6 +246,7 @@ export async function sendMessage(input: CreateMessageInput): Promise<Message> {
       validatedMessage,
       input.recipientDoctorId || null,
       normalizedReplyToId,
+      normalizedClientMessageId,
     ]
   );
 

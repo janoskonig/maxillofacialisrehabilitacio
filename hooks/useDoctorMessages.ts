@@ -658,16 +658,22 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
   const sendMessage = async (text: string): Promise<boolean> => {
     if (!text.trim() || (!selectedDoctorId && !selectedGroupId)) return false;
 
-    // Snapshot a reply state-ről a try blokk elején — ha közben a user
-    // megváltoztatja, nem hatása a már elindult POST-ra. Sikeres küldés
-    // után közvetlenül a snapshot-ot használva törlünk.
     const replyTargetSnapshot = replyState.replyTarget;
     const replyToMessageId = replyTargetSnapshot?.id ?? null;
+
+    // Slice 0.8: kliens-oldali idempotencia kulcs. A `pending-` prefix
+    // miatt a meglévő `.startsWith('pending-')` szűrők (auto-read effect,
+    // fetchMessages) változatlanul működnek; a szerver `(sender_id,
+    // client_message_id)` UNIQUE kulcsa biztosítja, hogy a retry NEM
+    // duplikál.
+    const randomPart = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const tempId = `pending-${randomPart}`;
 
     try {
       setSending(true);
 
-      const tempId = `pending-${Date.now()}`;
       const pendingMessage: DoctorMessage = {
         id: tempId,
         senderId: currentUserId || '',
@@ -679,7 +685,6 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
         readAt: null,
         createdAt: new Date(),
         pending: true,
-        // Optimistic render: a quote azonnal megjelenik a saját buborékon.
         replyToMessageId,
         quotedMessage: replyTargetSnapshot ?? null,
       };
@@ -697,13 +702,23 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
           subject: null,
           message: text,
           replyToMessageId,
+          clientMessageId: tempId,
         }),
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        setMessages(prev => prev.filter(m => m.id !== tempId));
+        const error = await response.json().catch(() => ({}));
         setPendingMessageId(null);
+
+        if (response.status === 429) {
+          // Slice 0.8: rate limit — failed bubble megmarad újraküldés-gombbal.
+          // A tempId UNIQUE-kulcsa garantálja, hogy az újraküldés nem duplikál.
+          showToast(error.error || 'Túl sok üzenet — próbáld újra később.', 'error');
+          return false;
+        }
+
+        // Bármilyen más hiba esetén eltakarítjuk a pending buborékot.
+        setMessages(prev => prev.filter(m => m.id !== tempId));
         throw new Error(error.error || 'Hiba az üzenet küldésekor');
       }
 
@@ -713,7 +728,6 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
         prev.map(m => m.id === tempId ? { ...data.message, pending: false } : m)
       );
       setPendingMessageId(null);
-      // Sikeres küldés → reply mód elhagyása (UX: a textarea ürül + a csík eltűnik).
       replyState.clearReply();
 
       showToast('Üzenet sikeresen elküldve', 'success');

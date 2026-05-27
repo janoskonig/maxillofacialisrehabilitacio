@@ -49,6 +49,12 @@ export interface CreateDoctorMessageInput {
    * 1:1 pár) tartozik — máskülönben `ReplyTargetNotFoundError` (HTTP 404).
    */
   replyToMessageId?: string | null;
+  /**
+   * Slice 0.8: kliens-oldali idempotencia kulcs. Ha a `(sender_id,
+   * client_message_id)` páros már létezik, a meglévő üzenetet adjuk vissza,
+   * nem dobunk hibát. NULL-ra hagyva normál INSERT történik.
+   */
+  clientMessageId?: string | null;
 }
 
 /**
@@ -104,6 +110,42 @@ async function loadDoctorReplyTargetForScope(
     message: row.message,
     createdAt: row.created_at,
   });
+}
+
+/**
+ * Belső helper: a doctor_messages DB sorból `DoctorMessage` DTO. A 0.8-as
+ * idempotencia ágban használjuk, amikor egy meglévő üzenetet kell visszaadni
+ * dupla POST esetén — a `quotedMessageOverride` opcióval a hívó beadhatja
+ * az újra-felkért preview-t (a parent is változatlan, nem érdemes újra
+ * lekérni).
+ */
+function buildDoctorMessageFromRow(
+  row: any,
+  opts?: { quotedMessageOverride?: QuotedMessagePreview | null },
+): DoctorMessage {
+  let mentionedPatientIdsParsed: string[] = [];
+  if (row.mentioned_patient_ids) {
+    if (typeof row.mentioned_patient_ids === 'string') {
+      mentionedPatientIdsParsed = JSON.parse(row.mentioned_patient_ids);
+    } else if (Array.isArray(row.mentioned_patient_ids)) {
+      mentionedPatientIdsParsed = row.mentioned_patient_ids;
+    }
+  }
+  return {
+    id: row.id,
+    senderId: row.sender_id,
+    recipientId: row.recipient_id || null,
+    groupId: row.group_id || null,
+    senderEmail: row.sender_email,
+    senderName: row.sender_name,
+    subject: row.subject,
+    message: row.message,
+    readAt: row.read_at ? new Date(row.read_at) : null,
+    createdAt: new Date(row.created_at),
+    mentionedPatientIds: mentionedPatientIdsParsed,
+    replyToMessageId: row.reply_to_message_id ?? null,
+    quotedMessage: opts?.quotedMessageOverride ?? null,
+  };
 }
 
 /**
@@ -175,12 +217,34 @@ export async function sendDoctorMessage(input: CreateDoctorMessageInput): Promis
     quotedMessage = await loadDoctorReplyTargetForScope(normalizedReplyToId, scope);
   }
 
-  // Üzenet mentése (groupId + reply_to_message_id támogatással)
+  // Slice 0.8: idempotencia — ha (sender_id, client_message_id) már él,
+  // a meglévő sort adjuk vissza, ne csapjon meg 23505.
+  const normalizedClientMessageId =
+    typeof input.clientMessageId === 'string' && input.clientMessageId.trim().length > 0
+      ? input.clientMessageId.trim()
+      : null;
+
+  if (normalizedClientMessageId) {
+    const existing = await pool.query(
+      `SELECT id, sender_id, recipient_id, group_id, sender_email, sender_name,
+              subject, message, read_at, created_at, mentioned_patient_ids,
+              reply_to_message_id
+         FROM doctor_messages
+        WHERE sender_id = $1 AND client_message_id = $2
+        LIMIT 1`,
+      [input.senderId, normalizedClientMessageId],
+    );
+    if (existing.rows.length > 0) {
+      return buildDoctorMessageFromRow(existing.rows[0], { quotedMessageOverride: quotedMessage });
+    }
+  }
+
+  // Üzenet mentése (groupId + reply_to_message_id + client_message_id támogatással)
   const result = await pool.query(
     `INSERT INTO doctor_messages
        (sender_id, recipient_id, sender_email, sender_name, subject, message,
-        mentioned_patient_ids, group_id, reply_to_message_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        mentioned_patient_ids, group_id, reply_to_message_id, client_message_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING id, sender_id, recipient_id, sender_email, sender_name, subject, message,
                read_at, created_at, mentioned_patient_ids, group_id, reply_to_message_id`,
     [
@@ -193,6 +257,7 @@ export async function sendDoctorMessage(input: CreateDoctorMessageInput): Promis
       JSON.stringify(mentionedPatientIds),
       input.groupId || null,
       normalizedReplyToId,
+      normalizedClientMessageId,
     ]
   );
 

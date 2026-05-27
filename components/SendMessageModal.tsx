@@ -269,11 +269,16 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
     const replyTargetSnapshot = replyState.replyTarget;
     const replyToMessageId = replyTargetSnapshot?.id ?? null;
 
+    // Slice 0.8: idempotencia kulcs (reuse: a tempId egyben client_message_id).
+    const randomPart = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const tempId = `pending-${randomPart}`;
+
     try {
       setSending(true);
       
       // Hozzáadunk egy pending üzenetet azonnal
-      const tempId = `pending-${Date.now()}`;
       const pendingMessage: RecentMessage = {
         id: tempId,
         patientId: selectedPatient.id,
@@ -304,14 +309,24 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
           subject: null,
           message: textToSend,
           replyToMessageId,
+          clientMessageId: tempId,
         }),
       });
 
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json().catch(() => ({}));
+        setPendingMessageId(null);
+
+        if (response.status === 429) {
+          // Slice 0.8: rate-limit. A pending buborékot meghagyjuk, hogy a
+          // felhasználó tudja, mit akart küldeni — a saját ID-val történő
+          // retry idempotens.
+          showToast(error.error || 'Túl sok üzenet — próbáld újra később.', 'error');
+          return;
+        }
+
         // Eltávolítjuk a pending üzenetet, ha hiba történt
         setConversationMessages(conversationMessages.filter(m => m.id !== tempId));
-        setPendingMessageId(null);
         throw new Error(error.error || 'Hiba az üzenet küldésekor');
       }
 

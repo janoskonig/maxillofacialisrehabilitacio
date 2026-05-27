@@ -302,6 +302,11 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
     const replyTargetSnapshot = replyState.replyTarget;
     const replyToMessageId = replyTargetSnapshot?.id ?? null;
 
+    // Slice 0.8: idempotencia kulcs.
+    const clientMessageId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
     try {
       setSending(true);
       
@@ -316,11 +321,16 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
           subject: null,
           message: textToSend,
           replyToMessageId,
+          clientMessageId,
         }),
       });
 
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json().catch(() => ({}));
+        if (response.status === 429) {
+          showToast(error.error || 'Túl sok üzenet — próbáld újra később.', 'error');
+          return;
+        }
         throw new Error(error.error || 'Hiba az üzenet küldésekor');
       }
 
