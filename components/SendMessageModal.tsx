@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import { MessageCircle, Send, X, Search, User, Clock, Mail, ArrowLeft, Check, CheckCheck, Loader2, FileQuestion } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
 import { format } from 'date-fns';
@@ -9,6 +9,11 @@ import { useRouter } from 'next/navigation';
 import { getMonogram, getLastName } from '@/lib/utils';
 import { MessageTextRenderer } from './MessageTextRenderer';
 import { DocumentRequestSendWizard } from './DocumentRequestSendWizard';
+import { ChatMessageBubble, type ChatBubbleMessage } from './messaging/ChatMessageBubble';
+import { ReplyComposerBar } from './messaging/ReplyComposerBar';
+import { useReplyState } from './messaging/useReplyState';
+import { buildQuotedMessagePreview } from '@/lib/message-reply';
+import type { QuotedMessagePreview } from '@/lib/types/messaging';
 
 interface Patient {
   id: string;
@@ -29,6 +34,8 @@ interface RecentMessage {
   readAt: Date | null;
   createdAt: Date;
   pending?: boolean; // Küldés alatt
+  replyToMessageId?: string | null;
+  quotedMessage?: QuotedMessagePreview | null;
 }
 
 interface SendMessageModalProps {
@@ -53,7 +60,46 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
   const [activeTab, setActiveTab] = useState<'send' | 'recent'>('send');
   const [pendingMessageId, setPendingMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [showRequestWizard, setShowRequestWizard] = useState(false);
+
+  // Slice 0.6: reply state — staff "compose anywhere" modal.
+  const replyState = useReplyState();
+
+  // Beteg-váltáskor reply target reset (más szál → más quote).
+  useEffect(() => {
+    replyState.clearReply();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPatient?.id]);
+
+  const startReplyTo = useCallback((msg: RecentMessage) => {
+    const senderName = msg.senderType === 'doctor'
+      ? 'Orvos'
+      : (selectedPatient?.nev || msg.patientName || 'Beteg');
+    const quote: QuotedMessagePreview = buildQuotedMessagePreview({
+      id: msg.id,
+      channel: 'patient',
+      senderId: msg.senderId,
+      senderName,
+      message: msg.message,
+      createdAt: msg.createdAt,
+    });
+    replyState.setReplyTarget(quote);
+    textareaRef.current?.focus();
+  }, [selectedPatient, replyState]);
+
+  const scrollToMessage = useCallback((messageId: string) => {
+    const el = messagesContainerRef.current?.querySelector<HTMLElement>(
+      `[data-message-id="${messageId}"]`,
+    );
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('ring-2', 'ring-blue-400', 'rounded-lg');
+    window.setTimeout(() => {
+      el.classList.remove('ring-2', 'ring-blue-400', 'rounded-lg');
+    }, 1600);
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -219,6 +265,10 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
       return;
     }
 
+    // Reply snapshot — egy roundtrip alatt nem változik a target.
+    const replyTargetSnapshot = replyState.replyTarget;
+    const replyToMessageId = replyTargetSnapshot?.id ?? null;
+
     try {
       setSending(true);
       
@@ -236,6 +286,8 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
         readAt: null,
         createdAt: new Date(),
         pending: true,
+        replyToMessageId,
+        quotedMessage: replyTargetSnapshot ?? null,
       };
       
       setConversationMessages([...conversationMessages, pendingMessage]);
@@ -251,6 +303,7 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
           patientId: selectedPatient.id,
           subject: null,
           message: textToSend,
+          replyToMessageId,
         }),
       });
 
@@ -277,6 +330,7 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
       if (!messageText) {
         setMessage('');
       }
+      replyState.clearReply();
       // Frissítjük a beszélgetést és az üzenetek listáját (késleltetve, hogy a fenti frissítés előbb történjen)
       setTimeout(() => {
         if (selectedPatient) {
@@ -433,7 +487,7 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
                   </div>
 
                   {/* Chat Messages */}
-                  <div className="flex-1 overflow-y-auto p-4 bg-gray-50 space-y-3">
+                  <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 bg-gray-50 space-y-3">
                     {loadingConversation ? (
                       <div className="text-center py-8 text-gray-500">
                         <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-600 border-t-transparent mx-auto mb-2"></div>
@@ -448,17 +502,26 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
                       conversationMessages.map((msg) => {
                         const isDoctor = msg.senderType === 'doctor';
                         const isPending = msg.pending === true;
-                        const isRead = msg.readAt !== null;
-                        
-                        // Csak a saját üzeneteinknek mutatjuk a státuszt
-                        const showStatus = isDoctor;
                         
                         const senderName = isDoctor 
                           ? 'Orvos'
                           : (selectedPatient?.nev || 'Beteg');
                         const lastName = getLastName(senderName);
                         const monogram = getMonogram(senderName);
-                        
+
+                        const bubbleMessage: ChatBubbleMessage = {
+                          id: msg.id,
+                          message: msg.message,
+                          createdAt: msg.createdAt,
+                          senderId: msg.senderId,
+                          senderName,
+                          isFromMe: isDoctor,
+                          replyToMessageId: msg.replyToMessageId ?? null,
+                          quotedMessage: msg.quotedMessage ?? null,
+                          deliveryStatus: isPending ? 'pending' : 'sent',
+                          readAt: msg.readAt ?? null,
+                        };
+
                         return (
                           <div
                             key={msg.id}
@@ -475,16 +538,12 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
                               </div>
                               <span className="text-xs font-medium text-gray-700">{lastName}</span>
                             </div>
-                            <div
-                              className={`max-w-[75%] rounded-lg px-4 py-2 ${
-                                isDoctor
-                                  ? 'bg-blue-600 text-white'
-                                  : 'bg-white text-gray-900 border border-gray-200'
-                              }`}
-                            >
-                              <div className="text-sm whitespace-pre-wrap break-words">
-                                <MessageTextRenderer 
-                                  text={msg.message} 
+                            <ChatMessageBubble
+                              message={bubbleMessage}
+                              showSenderLabel={false}
+                              renderText={(text) => (
+                                <MessageTextRenderer
+                                  text={text}
                                   chatType="doctor-view-patient"
                                   patientId={selectedPatient?.id || null}
                                   messageId={msg.id}
@@ -494,30 +553,24 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
                                     await handleSendMessage(messageText);
                                   }}
                                 />
-                              </div>
-                              <div className={`text-xs mt-1 flex items-center gap-1.5 ${
-                                isDoctor ? 'text-blue-100' : 'text-gray-500'
-                              }`}>
-                                <span>{format(new Date(msg.createdAt), 'HH:mm', { locale: hu })}</span>
-                                {showStatus && (
-                                  <span className="ml-1">
-                                    {isPending ? (
-                                      <Loader2 className="w-3 h-3 animate-spin" />
-                                    ) : isRead ? (
-                                      <CheckCheck className="w-3 h-3" />
-                                    ) : (
-                                      <Check className="w-3 h-3 opacity-70" />
-                                    )}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
+                              )}
+                              onReply={isPending ? undefined : () => startReplyTo(msg)}
+                              onQuoteClick={scrollToMessage}
+                            />
                           </div>
                         );
                       })
                     )}
                     <div ref={messagesEndRef} />
                   </div>
+
+                  {/* Slice 0.6: reply mód csík a composer fölött */}
+                  {replyState.isReplying && replyState.replyTarget && (
+                    <ReplyComposerBar
+                      quote={replyState.replyTarget}
+                      onClose={replyState.clearReply}
+                    />
+                  )}
 
                   {/* Message Input */}
                   <div className="border-t bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
@@ -532,8 +585,15 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
                         <span className="hidden sm:inline text-sm">Bekérés</span>
                       </button>
                       <textarea
+                        ref={textareaRef}
                         value={message}
                         onChange={(e) => setMessage(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape' && replyState.isReplying) {
+                            e.preventDefault();
+                            replyState.clearReply();
+                          }
+                        }}
                         className="form-input flex-1 resize-none min-h-[44px]"
                         rows={2}
                         placeholder="Írja be üzenetét..."

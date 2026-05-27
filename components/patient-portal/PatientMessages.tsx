@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { MessageCircle, Send, Clock, Check, CheckCheck, Loader2, ChevronDown, Users, Search, X } from 'lucide-react';
+import { MessageCircle, Send, Clock, Check, CheckCheck, Loader2, ChevronDown, Users, Search, X, CornerUpLeft } from 'lucide-react';
 import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
@@ -11,6 +11,11 @@ import { MessageTextRenderer } from '@/components/MessageTextRenderer';
 import { useSocket } from '@/contexts/SocketContext';
 import { MessagesShell } from '@/components/mobile/MessagesShell';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { MessageQuoteBlock } from '@/components/messaging/MessageQuoteBlock';
+import { ReplyComposerBar } from '@/components/messaging/ReplyComposerBar';
+import { useReplyState } from '@/components/messaging/useReplyState';
+import { buildQuotedMessagePreview } from '@/lib/message-reply';
+import type { QuotedMessagePreview } from '@/lib/types/messaging';
 
 interface Message {
   id: string;
@@ -23,6 +28,8 @@ interface Message {
   readAt: Date | null;
   createdAt: Date;
   pending?: boolean;
+  replyToMessageId?: string | null;
+  quotedMessage?: QuotedMessagePreview | null;
 }
 
 interface Recipient {
@@ -66,9 +73,47 @@ export function PatientMessages() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesLoadedRef = useRef<Set<string>>(new Set());
-  
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
   const breakpoint = useBreakpoint();
   const isMobile = breakpoint === 'mobile';
+
+  // Slice 0.6: reply state — beteg portál (saját zöld bubble stílus megmarad).
+  const replyState = useReplyState();
+
+  // Lane-váltáskor (másik orvos kiválasztva) töröljük a reply targetet.
+  useEffect(() => {
+    replyState.clearReply();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDoctorId]);
+
+  const startReplyTo = useCallback((message: Message) => {
+    const senderName = message.senderType === 'patient'
+      ? (patientName || 'Én')
+      : (selectedDoctorName || 'Orvos');
+    const quote: QuotedMessagePreview = buildQuotedMessagePreview({
+      id: message.id,
+      channel: 'patient',
+      senderId: message.senderId,
+      senderName,
+      message: message.message,
+      createdAt: message.createdAt,
+    });
+    replyState.setReplyTarget(quote);
+    textareaRef.current?.focus();
+  }, [patientName, selectedDoctorName, replyState]);
+
+  const scrollToMessage = useCallback((messageId: string) => {
+    const el = messagesContainerRef.current?.querySelector<HTMLElement>(
+      `[data-message-id="${messageId}"]`,
+    );
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('ring-2', 'ring-blue-400', 'rounded-2xl');
+    window.setTimeout(() => {
+      el.classList.remove('ring-2', 'ring-blue-400', 'rounded-2xl');
+    }, 1600);
+  }, []);
 
   const totalUnreadCount = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
 
@@ -342,6 +387,9 @@ export function PatientMessages() {
       return;
     }
 
+    const replyTargetSnapshot = replyState.replyTarget;
+    const replyToMessageId = replyTargetSnapshot?.id ?? null;
+
     try {
       setSending(true);
       
@@ -354,6 +402,7 @@ export function PatientMessages() {
           subject: null,
           message: textToSend,
           recipientDoctorId: selectedDoctorId,
+          replyToMessageId,
         }),
       });
 
@@ -381,6 +430,7 @@ export function PatientMessages() {
       }
       
       setNewMessage('');
+      replyState.clearReply();
       showToast('Üzenet sikeresen elküldve', 'success');
 
       setTimeout(() => fetchConversations(), 500);
@@ -564,7 +614,8 @@ export function PatientMessages() {
                   </div>
                 )}
               <div
-                className={`flex w-full ${isMyMessage ? 'justify-end' : 'justify-start'} animate-message-pop`}
+                data-message-id={message.id}
+                className={`group flex w-full ${isMyMessage ? 'justify-end' : 'justify-start'} animate-message-pop`}
               >
                 <div className={`flex gap-2 max-w-[80%] sm:max-w-[70%] ${isMyMessage ? 'flex-row-reverse' : 'flex-row'}`}>
                   {isTheirMessage && (
@@ -580,50 +631,80 @@ export function PatientMessages() {
                       </div>
                     )}
                     
-                    <div
-                      className={`rounded-2xl px-4 py-2.5 shadow-sm transition-all duration-200 ${
-                        isMyMessage
-                          ? 'bg-green-500 text-white rounded-br-md'
-                          : isUnread
-                          ? 'bg-white text-gray-900 border-2 border-blue-400 shadow-md'
-                          : 'bg-white text-gray-900 border border-gray-200'
-                      }`}
-                    >
-                      <div className={`text-sm whitespace-pre-wrap break-words ${isMyMessage ? 'text-white' : 'text-gray-900'}`}>
-                        <MessageTextRenderer 
-                          text={message.message} 
-                          chatType="patient-doctor"
-                          patientId={patientId}
-                          messageId={message.id}
-                          senderId={message.senderId}
-                          currentUserId={patientId}
-                          onSendMessage={async (messageText) => {
-                            setNewMessage(messageText);
-                            await handleSendMessage();
-                          }}
-                        />
-                      </div>
-                      
-                      <div className={`flex items-center gap-1.5 mt-1.5 ${isMyMessage ? 'justify-end' : 'justify-start'}`}>
-                        <span className={`text-[10px] ${isMyMessage ? 'text-green-100' : 'text-gray-500'}`}>
-                          {format(new Date(message.createdAt), 'HH:mm', { locale: hu })}
-                        </span>
-                        {isMyMessage && (
-                          <span className="flex items-center">
-                            {isPending ? (
-                              <Loader2 className="w-3 h-3 animate-spin text-green-200" />
-                            ) : isRead ? (
-                              <CheckCheck className="w-3 h-3 text-green-200" />
-                            ) : (
-                              <Check className="w-3 h-3 text-green-200 opacity-70" />
-                            )}
-                          </span>
+                    <div className={`flex items-end gap-1 ${isMyMessage ? 'flex-row-reverse' : 'flex-row'}`}>
+                      {!isPending && (
+                        <button
+                          type="button"
+                          onClick={() => startReplyTo(message)}
+                          className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity p-1 rounded-full bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-300 shadow-sm flex-shrink-0"
+                          aria-label="Válasz erre az üzenetre"
+                          title="Válasz"
+                        >
+                          <CornerUpLeft className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+
+                      <div
+                        className={`rounded-2xl px-4 py-2.5 shadow-sm transition-all duration-200 ${
+                          isMyMessage
+                            ? 'bg-green-500 text-white rounded-br-md'
+                            : isUnread
+                            ? 'bg-white text-gray-900 border-2 border-blue-400 shadow-md'
+                            : 'bg-white text-gray-900 border border-gray-200'
+                        }`}
+                      >
+                        {/* Slice 0.6: idézet előnézet a buborékon belül */}
+                        {message.quotedMessage && (
+                          <div className="mb-2">
+                            <MessageQuoteBlock
+                              quote={message.quotedMessage}
+                              variant={isMyMessage ? 'bubble-own-green' : 'bubble-other'}
+                              onClick={scrollToMessage}
+                              senderLabelOverride={
+                                message.quotedMessage.senderId === patientId
+                                  ? 'Te'
+                                  : message.quotedMessage.senderName ?? undefined
+                              }
+                            />
+                          </div>
                         )}
-                        {isUnread && (
-                          <span className="ml-1 px-1.5 py-0.5 text-[10px] font-semibold text-white bg-red-500 rounded">
-                            Új
+
+                        <div className={`text-sm whitespace-pre-wrap break-words ${isMyMessage ? 'text-white' : 'text-gray-900'}`}>
+                          <MessageTextRenderer
+                            text={message.message}
+                            chatType="patient-doctor"
+                            patientId={patientId}
+                            messageId={message.id}
+                            senderId={message.senderId}
+                            currentUserId={patientId}
+                            onSendMessage={async (messageText) => {
+                              setNewMessage(messageText);
+                              await handleSendMessage();
+                            }}
+                          />
+                        </div>
+
+                        <div className={`flex items-center gap-1.5 mt-1.5 ${isMyMessage ? 'justify-end' : 'justify-start'}`}>
+                          <span className={`text-[10px] ${isMyMessage ? 'text-green-100' : 'text-gray-500'}`}>
+                            {format(new Date(message.createdAt), 'HH:mm', { locale: hu })}
                           </span>
-                        )}
+                          {isMyMessage && (
+                            <span className="flex items-center">
+                              {isPending ? (
+                                <Loader2 className="w-3 h-3 animate-spin text-green-200" />
+                              ) : isRead ? (
+                                <CheckCheck className="w-3 h-3 text-green-200" />
+                              ) : (
+                                <Check className="w-3 h-3 text-green-200 opacity-70" />
+                              )}
+                            </span>
+                          )}
+                          {isUnread && (
+                            <span className="ml-1 px-1.5 py-0.5 text-[10px] font-semibold text-white bg-red-500 rounded">
+                              Új
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -638,13 +719,32 @@ export function PatientMessages() {
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Slice 0.6: reply mód csík a composer fölött */}
+      {replyState.isReplying && replyState.replyTarget && (
+        <ReplyComposerBar
+          quote={replyState.replyTarget}
+          onClose={replyState.clearReply}
+          senderLabelOverride={
+            replyState.replyTarget.senderId === patientId
+              ? 'Te'
+              : replyState.replyTarget.senderName ?? undefined
+          }
+        />
+      )}
+
       {/* Input Area */}
       <div className="flex-shrink-0 border-t bg-white p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-4">
         <div className="flex items-end gap-2">
           <textarea
+            ref={textareaRef}
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyDown={(e) => {
+              if (e.key === 'Escape' && replyState.isReplying) {
+                e.preventDefault();
+                replyState.clearReply();
+                return;
+              }
               if (e.key === 'Enter' && !e.shiftKey && !isMobile) {
                 e.preventDefault();
                 handleSendMessage();
