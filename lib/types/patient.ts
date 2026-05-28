@@ -1,5 +1,13 @@
 import { z } from 'zod';
 
+/** DB / űrlap null értékeket adhat vissza; Zod default csak undefined-re vonatkozik. */
+function patientBoolean(defaultValue: boolean) {
+  return z.preprocess(
+    (v) => (v === null || v === undefined ? defaultValue : v),
+    z.boolean()
+  );
+}
+
 export const patientSchema = z.object({
   id: z.string().optional(),
   nev: z.string().optional().nullable().or(z.literal('')),
@@ -52,35 +60,35 @@ export const patientSchema = z.object({
   szovettaniDiagnozis: z.string().optional().nullable(),
   nyakiBlokkdisszekcio: z.enum(['nem volt', 'volt, egyoldali', 'volt, kétoldali']).optional().nullable().or(z.literal('')),
 
-  radioterapia: z.boolean().default(false),
+  radioterapia: patientBoolean(false),
   radioterapiaDozis: z.string().optional().nullable(),
   radioterapiaDatumIntervallum: z.string().optional().nullable(),
-  chemoterapia: z.boolean().default(false),
+  chemoterapia: patientBoolean(false),
   chemoterapiaLeiras: z.string().optional().nullable(),
 
   alkoholfogyasztas: z.string().optional().nullable(),
   dohanyzasSzam: z.string().optional().nullable(),
   kezelesreErkezesIndoka: z.enum(['traumás sérülés', 'veleszületett rendellenesség', 'onkológiai kezelés utáni állapot']).optional().nullable().or(z.literal('')),
-  maxilladefektusVan: z.boolean().default(false),
+  maxilladefektusVan: patientBoolean(false),
   brownFuggolegesOsztaly: z.enum(['1', '2', '3', '4']).optional().nullable().or(z.literal('')),
   brownVizszintesKomponens: z.enum(['a', 'b', 'c']).optional().nullable().or(z.literal('')),
-  mandibuladefektusVan: z.boolean().default(false),
+  mandibuladefektusVan: patientBoolean(false),
   kovacsDobakOsztaly: z.enum(['1', '2', '3', '4', '5']).optional().nullable().or(z.literal('')),
-  nyelvmozgásokAkadályozottak: z.boolean().default(false),
-  gombocosBeszed: z.boolean().default(false),
+  nyelvmozgásokAkadályozottak: patientBoolean(false),
+  gombocosBeszed: patientBoolean(false),
   nyalmirigyAllapot: z.enum(['hiposzaliváció', 'hiperszaliváció', 'Nem számol be eltérésről']).optional().nullable().or(z.literal('')),
   tnmStaging: z.string().optional().nullable(),
 
-  felsoFogpotlasVan: z.boolean().default(false),
+  felsoFogpotlasVan: patientBoolean(false),
   felsoFogpotlasMikor: z.string().optional().nullable(),
   felsoFogpotlasKeszito: z.string().optional().nullable(),
-  felsoFogpotlasElegedett: z.boolean().default(true),
+  felsoFogpotlasElegedett: patientBoolean(true),
   felsoFogpotlasProblema: z.string().optional().nullable(),
 
-  alsoFogpotlasVan: z.boolean().default(false),
+  alsoFogpotlasVan: patientBoolean(false),
   alsoFogpotlasMikor: z.string().optional().nullable(),
   alsoFogpotlasKeszito: z.string().optional().nullable(),
-  alsoFogpotlasElegedett: z.boolean().default(true),
+  alsoFogpotlasElegedett: patientBoolean(true),
   alsoFogpotlasProblema: z.string().optional().nullable(),
 
   meglevoFogak: z.record(
@@ -113,28 +121,28 @@ export const patientSchema = z.object({
   kezeleoorvosIntezete: z.string().optional().nullable(),
   felvetelDatuma: z.string().optional().nullable(),
   meglevoImplantatumok: z.record(z.string()).optional(),
-  nemIsmertPoziciokbanImplantatum: z.boolean().default(false),
+  nemIsmertPoziciokbanImplantatum: patientBoolean(false),
   nemIsmertPoziciokbanImplantatumRészletek: z.string().optional().nullable(),
 
   kezelesiTervFelso: z.array(z.object({
     tipus: z.string().optional().nullable(),
     treatmentTypeCode: z.string().optional().nullable(),
     tervezettAtadasDatuma: z.string().optional().nullable(),
-    elkeszult: z.boolean().default(false)
+    elkeszult: patientBoolean(false)
   })).optional().nullable().default([]),
 
   kezelesiTervAlso: z.array(z.object({
     tipus: z.string().optional().nullable(),
     treatmentTypeCode: z.string().optional().nullable(),
     tervezettAtadasDatuma: z.string().optional().nullable(),
-    elkeszult: z.boolean().default(false)
+    elkeszult: patientBoolean(false)
   })).optional().nullable().default([]),
 
   kezelesiTervArcotErinto: z.array(z.object({
     tipus: z.enum(['orrepitézis', 'fülepitézis', 'orbitaepitézis', 'középarcepitézis']),
     elhorgonyzasEszkoze: z.enum(['bőrragasztó', 'mágnes', 'rúd-lovas rendszer', 'gömbretenció']).optional().nullable(),
     tervezettAtadasDatuma: z.string().optional().nullable(),
-    elkeszult: z.boolean().default(false)
+    elkeszult: patientBoolean(false)
   })).optional().nullable().default([]),
 
   createdAt: z.string().optional().nullable(),
