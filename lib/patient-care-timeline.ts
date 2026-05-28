@@ -213,25 +213,25 @@ async function loadConsiliumPrepEvents(
     [patientId],
   );
 
-  return r.rows
-    .map((row) => {
-      const at = row.createdAt instanceof Date ? row.createdAt : new Date(row.createdAt);
-      if (!withinRetention(at)) return null;
-      return {
-        id: `consilium_prep:${row.id}`,
-        type: 'consilium_prep' as const,
-        at: iso(at),
-        episodeId: pickEpisodeIdForDate(episodes, at),
-        payload: {
-          sessionId: String(row.sessionId),
-          itemId: String(row.itemId),
-          checklistKey: String(row.checklistKey),
-          body: String(row.body),
-          authorDisplay: row.authorDisplay != null ? String(row.authorDisplay) : null,
-        },
-      };
-    })
-    .filter((e): e is CareTimelineEvent => e != null);
+  const events: CareTimelineEvent[] = [];
+  for (const row of r.rows) {
+    const at = row.createdAt instanceof Date ? row.createdAt : new Date(row.createdAt);
+    if (!withinRetention(at)) continue;
+    events.push({
+      id: `consilium_prep:${row.id}`,
+      type: 'consilium_prep',
+      at: iso(at),
+      episodeId: pickEpisodeIdForDate(episodes, at),
+      payload: {
+        sessionId: String(row.sessionId),
+        itemId: String(row.itemId),
+        checklistKey: String(row.checklistKey),
+        body: String(row.body),
+        authorDisplay: row.authorDisplay != null ? String(row.authorDisplay) : null,
+      },
+    });
+  }
+  return events;
 }
 
 async function loadDelegatedTaskEvents(
@@ -308,23 +308,23 @@ async function loadMilestoneEvents(patientId: string): Promise<CareTimelineEvent
     [patientId],
   );
 
-  return r.rows
-    .map((row) => {
-      const at = row.at instanceof Date ? row.at : new Date(row.at);
-      if (!withinRetention(at)) return null;
-      return {
-        id: `milestone:${row.id}`,
-        type: 'milestone' as const,
-        at: iso(at),
-        episodeId: row.episodeId != null ? String(row.episodeId) : null,
-        payload: {
-          code: String(row.code),
-          label: milestoneLabel(String(row.code)),
-          note: row.note != null ? String(row.note) : null,
-        },
-      };
-    })
-    .filter((e): e is CareTimelineEvent => e != null);
+  const events: CareTimelineEvent[] = [];
+  for (const row of r.rows) {
+    const at = row.at instanceof Date ? row.at : new Date(row.at);
+    if (!withinRetention(at)) continue;
+    events.push({
+      id: `milestone:${row.id}`,
+      type: 'milestone',
+      at: iso(at),
+      episodeId: row.episodeId != null ? String(row.episodeId) : null,
+      payload: {
+        code: String(row.code),
+        label: milestoneLabel(String(row.code)),
+        note: row.note != null ? String(row.note) : null,
+      },
+    });
+  }
+  return events;
 }
 
 async function loadWorkPhaseEvents(patientId: string): Promise<CareTimelineEvent[]> {
@@ -348,26 +348,26 @@ async function loadWorkPhaseEvents(patientId: string): Promise<CareTimelineEvent
     [patientId],
   );
 
-  return r.rows
-    .map((row) => {
-      const atRaw = row.completedAt ?? row.createdAt;
-      const at = atRaw instanceof Date ? atRaw : new Date(atRaw);
-      if (!withinRetention(at)) return null;
-      const status = row.status === 'skipped' ? 'skipped' : 'completed';
-      return {
-        id: `work_phase:${row.id}`,
-        type: 'work_phase' as const,
-        at: iso(at),
-        episodeId: String(row.episodeId),
-        payload: {
-          workPhaseId: String(row.id),
-          workPhaseCode: String(row.workPhaseCode),
-          label: String(row.label),
-          status,
-        },
-      };
-    })
-    .filter((e): e is CareTimelineEvent => e != null);
+  const events: CareTimelineEvent[] = [];
+  for (const row of r.rows) {
+    const atRaw = row.completedAt ?? row.createdAt;
+    const at = atRaw instanceof Date ? atRaw : new Date(atRaw);
+    if (!withinRetention(at)) continue;
+    const status = row.status === 'skipped' ? 'skipped' : 'completed';
+    events.push({
+      id: `work_phase:${row.id}`,
+      type: 'work_phase',
+      at: iso(at),
+      episodeId: String(row.episodeId),
+      payload: {
+        workPhaseId: String(row.id),
+        workPhaseCode: String(row.workPhaseCode),
+        label: String(row.label),
+        status,
+      },
+    });
+  }
+  return events;
 }
 
 async function loadPrepLinkEvents(
@@ -451,8 +451,8 @@ function groupByEpisode(
     events: sortEventsNewestFirst(byEp.get(ep.id) ?? []),
   }));
 
-  for (const [eid, evs] of byEp.entries()) {
-    if (episodes.some((e) => e.id === eid)) continue;
+  byEp.forEach((evs, eid) => {
+    if (episodes.some((e) => e.id === eid)) return;
     summaries.push({
       episodeId: eid,
       reason: null,
@@ -463,7 +463,7 @@ function groupByEpisode(
       closedAt: null,
       events: sortEventsNewestFirst(evs),
     });
-  }
+  });
 
   if (unassigned.length > 0) {
     const openId = episodes.find((e) => e.status === 'open')?.id ?? episodes[0]?.id;

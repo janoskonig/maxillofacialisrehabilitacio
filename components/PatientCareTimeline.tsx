@@ -543,7 +543,6 @@ export function PatientCareTimeline({
                       <EventRow
                         key={ev.id}
                         event={ev}
-                        patientId={patientId}
                         canEditStageStart={canEditStageStart}
                         editingEventId={editingEventId}
                         editAtValue={editAtValue}
