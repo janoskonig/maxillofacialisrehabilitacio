@@ -6,6 +6,8 @@ import type { PatientDocumentAnnotation } from '@/lib/types/document-annotation'
 import { File, Download, Trash2, Tag, Pencil, X, Plus, Check } from 'lucide-react';
 import { formatDateForDisplay } from '@/lib/dateUtils';
 import { DocumentAnnotationThumbnail } from './DocumentAnnotationThumbnail';
+import { DocumentListThumbnail } from '@/components/messaging/DocumentListThumbnail';
+import { getPatientDocumentInlineUrl, isPdfDocument } from '@/lib/document-inline-url';
 
 interface DocumentCardProps {
   document: PatientDocument;
@@ -47,6 +49,7 @@ export function DocumentCard({
   const errorLatchedRef = useRef(false);
 
   const isImage = document.mimeType?.startsWith('image/');
+  const isPdf = isPdfDocument(document.mimeType, document.filename);
 
   useEffect(() => {
     setDraftTags(Array.isArray(document.tags) ? document.tags : []);
@@ -65,6 +68,15 @@ export function DocumentCard({
     if (isImage && onPreview && !imageError) {
       e.stopPropagation();
       onPreview(document);
+      return;
+    }
+    if (isPdf && document.id) {
+      e.stopPropagation();
+      window.open(
+        getPatientDocumentInlineUrl(document.id, patientId),
+        '_blank',
+        'noopener,noreferrer',
+      );
     }
   };
 
@@ -123,12 +135,22 @@ export function DocumentCard({
 
   return (
     <div
-      className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+      className={`bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow ${
+        (isImage && !imageError) || isPdf ? 'cursor-pointer' : ''
+      }`}
       onClick={handleThumbnailClick}
     >
       {/* Thumbnail */}
       <div className="relative aspect-square bg-gray-100 group">
-        {thumbnailUrl ? (
+        {isPdf ? (
+          <DocumentListThumbnail
+            documentId={document.id}
+            filename={document.filename}
+            mimeType={document.mimeType}
+            patientId={patientId}
+            size="lg"
+          />
+        ) : thumbnailUrl ? (
           annotationsBatchReady && document.id ? (
             <DocumentAnnotationThumbnail
               patientId={patientId}

@@ -1,4 +1,4 @@
-const THUMB_WIDTH_PX = 96;
+const DEFAULT_THUMB_WIDTH_PX = 96;
 const pdfThumbCache = new Map<string, string>();
 
 let workerConfigured = false;
@@ -13,8 +13,12 @@ async function ensurePdfWorker() {
 }
 
 /** Első oldal renderelése JPEG data URL-ként (böngészőben, auth cookie-val). */
-export async function renderPdfFirstPageThumbnail(url: string): Promise<string | null> {
-  const cached = pdfThumbCache.get(url);
+export async function renderPdfFirstPageThumbnail(
+  url: string,
+  widthPx = DEFAULT_THUMB_WIDTH_PX,
+): Promise<string | null> {
+  const cacheKey = `${url}::${widthPx}`;
+  const cached = pdfThumbCache.get(cacheKey);
   if (cached) return cached;
 
   const pdfjs = await ensurePdfWorker();
@@ -22,7 +26,7 @@ export async function renderPdfFirstPageThumbnail(url: string): Promise<string |
   const pdf = await loadingTask.promise;
   const page = await pdf.getPage(1);
   const baseViewport = page.getViewport({ scale: 1 });
-  const scale = THUMB_WIDTH_PX / baseViewport.width;
+  const scale = widthPx / baseViewport.width;
   const viewport = page.getViewport({ scale });
 
   const canvas = document.createElement('canvas');
@@ -33,6 +37,6 @@ export async function renderPdfFirstPageThumbnail(url: string): Promise<string |
 
   await page.render({ canvasContext: context, viewport }).promise;
   const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-  pdfThumbCache.set(url, dataUrl);
+  pdfThumbCache.set(cacheKey, dataUrl);
   return dataUrl;
 }

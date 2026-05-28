@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { FileText, Upload, Download, Plus, Loader2, X, Image as ImageIcon, File } from 'lucide-react';
+import { FileText, Upload, Download, Plus, Loader2, X } from 'lucide-react';
+import { DocumentListThumbnail } from '@/components/messaging/DocumentListThumbnail';
+import { getPortalDocumentInlineUrl, isPdfDocument } from '@/lib/document-inline-url';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
@@ -568,45 +570,30 @@ export function PatientDocumentsList() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {documents.map((doc) => {
-              const getThumbnailUrl = (doc: Document) => {
-                if (doc.mimeType && doc.mimeType.startsWith('image/')) {
-                  return `/api/patient-portal/documents/${doc.id}/download?inline=true`;
-                }
-                return null;
-              };
-              const thumbnailUrl = getThumbnailUrl(doc);
-              
+              const isPdf = isPdfDocument(doc.mimeType, doc.filename);
               return (
                 <div
                   key={doc.id}
                   className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow"
                 >
                   {/* Thumbnail */}
-                  <div 
+                  <div
                     className="relative aspect-square bg-gray-100 cursor-pointer group"
-                    onClick={() => window.open(`/api/patient-portal/documents/${doc.id}/download`, '_blank')}
+                    onClick={() => {
+                      const url = isPdf
+                        ? getPortalDocumentInlineUrl(doc.id)
+                        : `/api/patient-portal/documents/${doc.id}/download`;
+                      window.open(url, '_blank', 'noopener,noreferrer');
+                    }}
                   >
-                    {thumbnailUrl ? (
-                      <>
-                        <img
-                          src={thumbnailUrl}
-                          alt={doc.filename}
-                          className="w-full h-full object-cover group-hover:opacity-75 transition-opacity"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).style.display = 'none';
-                            const fallback = (e.target as HTMLImageElement).nextElementSibling;
-                            if (fallback) fallback.classList.remove('hidden');
-                          }}
-                        />
-                        <div className="hidden w-full h-full absolute inset-0 flex items-center justify-center bg-gray-100">
-                          <ImageIcon className="w-12 h-12 text-gray-400" />
-                        </div>
-                      </>
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <File className="w-12 h-12 text-gray-400" />
-                      </div>
-                    )}
+                    <DocumentListThumbnail
+                      documentId={doc.id}
+                      filename={doc.filename}
+                      mimeType={doc.mimeType}
+                      patientId={null}
+                      portalMode
+                      size="lg"
+                    />
                   </div>
                   
                   {/* Document Info */}

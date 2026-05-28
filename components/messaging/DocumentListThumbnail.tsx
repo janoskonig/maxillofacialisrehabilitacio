@@ -16,13 +16,26 @@ interface DocumentListThumbnailProps {
   mimeType: string | null;
   patientId: string | null;
   portalMode?: boolean;
+  /** Lista (48px) vagy kártya (teljes doboz) méret. */
+  size?: 'sm' | 'lg';
 }
 
-function ThumbnailFallback({ mimeType }: { mimeType: string | null }) {
+function ThumbnailFallback({
+  mimeType,
+  size,
+}: {
+  mimeType: string | null;
+  size: 'sm' | 'lg';
+}) {
   const Icon = mimeType?.startsWith('image/') ? ImageIcon : FileText;
+  const boxClass =
+    size === 'lg'
+      ? 'w-full h-full flex items-center justify-center bg-gray-100'
+      : 'w-12 h-12 flex-shrink-0 rounded-md bg-gray-100 flex items-center justify-center';
+  const iconClass = size === 'lg' ? 'w-12 h-12 text-gray-400' : 'w-5 h-5 text-gray-400';
   return (
-    <div className="w-12 h-12 flex-shrink-0 rounded-md bg-gray-100 flex items-center justify-center">
-      <Icon className="w-5 h-5 text-gray-400" />
+    <div className={boxClass}>
+      <Icon className={iconClass} />
     </div>
   );
 }
@@ -33,7 +46,18 @@ export function DocumentListThumbnail({
   mimeType,
   patientId,
   portalMode = false,
+  size = 'sm',
 }: DocumentListThumbnailProps) {
+  const pdfWidthPx = size === 'lg' ? 400 : 96;
+  const boxClass =
+    size === 'lg'
+      ? 'w-full h-full overflow-hidden bg-gray-100'
+      : 'w-12 h-12 flex-shrink-0 rounded-md overflow-hidden bg-gray-100';
+  const loaderBoxClass =
+    size === 'lg'
+      ? 'w-full h-full flex items-center justify-center bg-gray-100'
+      : 'w-12 h-12 flex-shrink-0 rounded-md bg-gray-100 flex items-center justify-center';
+  const loaderIconClass = size === 'lg' ? 'w-8 h-8' : 'w-4 h-4';
   const [imageError, setImageError] = useState(false);
   const [pdfThumb, setPdfThumb] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -58,7 +82,7 @@ export function DocumentListThumbnail({
     let cancelled = false;
     setPdfLoading(true);
     setPdfThumb(null);
-    void renderPdfFirstPageThumbnail(inlineUrl)
+    void renderPdfFirstPageThumbnail(inlineUrl, pdfWidthPx)
       .then((dataUrl) => {
         if (!cancelled) setPdfThumb(dataUrl);
       })
@@ -71,40 +95,44 @@ export function DocumentListThumbnail({
     return () => {
       cancelled = true;
     };
-  }, [isPdf, inlineUrl]);
+  }, [isPdf, inlineUrl, pdfWidthPx]);
 
   if (!previewable || !inlineUrl) {
-    return <ThumbnailFallback mimeType={mimeType} />;
+    return <ThumbnailFallback mimeType={mimeType} size={size} />;
   }
 
   if (isPdf) {
     if (pdfLoading) {
       return (
-        <div className="w-12 h-12 flex-shrink-0 rounded-md bg-gray-100 flex items-center justify-center">
-          <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+        <div className={loaderBoxClass}>
+          <Loader2 className={`${loaderIconClass} animate-spin text-gray-400`} />
         </div>
       );
     }
     if (!pdfThumb) {
-      return <ThumbnailFallback mimeType={mimeType} />;
+      return <ThumbnailFallback mimeType={mimeType} size={size} />;
     }
     return (
-      <div className="w-12 h-12 flex-shrink-0 rounded-md overflow-hidden bg-gray-100">
-        <img src={pdfThumb} alt="" className="w-full h-full object-cover" />
+      <div className={boxClass}>
+        <img
+          src={pdfThumb}
+          alt=""
+          className={`w-full h-full object-cover${size === 'lg' ? ' group-hover:opacity-75 transition-opacity' : ''}`}
+        />
       </div>
     );
   }
 
   if (!isImage || imageError) {
-    return <ThumbnailFallback mimeType={mimeType} />;
+    return <ThumbnailFallback mimeType={mimeType} size={size} />;
   }
 
   return (
-    <div className="w-12 h-12 flex-shrink-0 rounded-md overflow-hidden bg-gray-100">
+    <div className={boxClass}>
       <img
         src={inlineUrl}
         alt=""
-        className="w-full h-full object-cover"
+        className={`w-full h-full object-cover${size === 'lg' ? ' group-hover:opacity-75 transition-opacity' : ''}`}
         loading="lazy"
         decoding="async"
         onError={() => setImageError(true)}

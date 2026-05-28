@@ -43,12 +43,12 @@ export function DocumentLinkComposerButton({
         disabled={disabled || !canOpen}
         className={
           className ??
-          'flex-shrink-0 btn-secondary rounded-full w-10 h-10 sm:w-auto sm:rounded-lg sm:px-3 sm:py-2.5 p-0 sm:p-2'
+          'inline-flex items-center justify-center gap-1.5 flex-shrink-0 btn-secondary rounded-full w-10 h-10 p-0 sm:w-auto sm:h-auto sm:min-h-[44px] sm:rounded-lg sm:px-3 sm:py-2'
         }
         title={title}
       >
-        <Link2 className="w-4 h-4 sm:mr-1" />
-        <span className="hidden sm:inline text-sm">Link</span>
+        <Link2 className="w-4 h-4 flex-shrink-0" />
+        <span className="hidden sm:inline text-sm leading-none whitespace-nowrap">Link</span>
       </button>
 
       <DocumentLinkPicker
