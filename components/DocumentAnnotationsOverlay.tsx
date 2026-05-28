@@ -12,7 +12,7 @@ import {
 import { createPortal } from 'react-dom';
 import type { PatientDocumentAnnotation } from '@/lib/types/document-annotation';
 import type { TextPayloadV1 } from '@/lib/document-annotations-schema';
-import { Pencil, Type, Save, Trash2, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Pencil, Type, Save, Trash2, Eye, EyeOff, Loader2, PenLine, Check } from 'lucide-react';
 import { drawFreehandAnnotationsFiltered, hueFromString } from '@/lib/document-annotation-canvas';
 
 function formatAnnotationDateTime(iso: string | null | undefined): string {
@@ -54,7 +54,8 @@ export type DocumentAnnotationsOverlayProps = {
   patientId: string;
   documentId: string;
   imageUrl: string | null;
-  mode: 'view' | 'edit';
+  /** Megmaradt kompatibilitás miatt; a szerkesztés belső „Annotálás” kapcsolóval indul. */
+  mode?: 'view' | 'edit';
   canEdit?: boolean;
   imgClassName?: string;
   compact?: boolean;
@@ -69,7 +70,7 @@ export function DocumentAnnotationsOverlay({
   patientId,
   documentId,
   imageUrl,
-  mode,
+  mode: _mode = 'view',
   canEdit = false,
   imgClassName = 'max-w-full max-h-full object-contain block',
   compact = false,
@@ -86,6 +87,8 @@ export function DocumentAnnotationsOverlay({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showAnnotations, setShowAnnotations] = useState(true);
+  /** Rajzolás / szöveg csak szándékosan — alapból megtekintés (tiszta kép). */
+  const [isEditing, setIsEditing] = useState(false);
   const [tool, setTool] = useState<'pen' | 'text'>('pen');
   const [draftPaths, setDraftPaths] = useState<DraftPath[]>([]);
   const [activeStroke, setActiveStroke] = useState<DraftPath | null>(null);
@@ -113,7 +116,7 @@ export function DocumentAnnotationsOverlay({
   }, []);
 
   useEffect(() => {
-    if (!pendingText || mode !== 'edit' || !canEdit) return;
+    if (!pendingText || !isEditing || !canEdit) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       e.preventDefault();
@@ -123,7 +126,7 @@ export function DocumentAnnotationsOverlay({
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [pendingText, mode, canEdit]);
+  }, [pendingText, isEditing, canEdit]);
 
   const loadAnnotations = useCallback(async () => {
     if (!patientId || !documentId) return;
@@ -152,16 +155,32 @@ export function DocumentAnnotationsOverlay({
 
   useEffect(() => {
     setMobileNotesExpanded(false);
+    setIsEditing(false);
+    setDraftPaths([]);
+    setPendingText(null);
+    setPendingTextValue('');
+    setSelectedId(null);
   }, [documentId]);
 
+  const exitEditing = useCallback(() => {
+    if (draftPaths.length > 0 || pendingText) {
+      if (!window.confirm('Nem mentett vázlat van. Biztosan kilép az annotálásból?')) return;
+    }
+    setIsEditing(false);
+    setDraftPaths([]);
+    setPendingText(null);
+    setPendingTextValue('');
+    setSelectedId(null);
+  }, [draftPaths.length, pendingText]);
+
   useEffect(() => {
-    if (!pendingText || mode !== 'edit' || !canEdit) return;
+    if (!pendingText || !isEditing || !canEdit) return;
     const el = pendingTextPanelRef.current?.querySelector('textarea');
     requestAnimationFrame(() => {
       el?.focus({ preventScroll: true });
       pendingTextPanelRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     });
-  }, [pendingText, mode, canEdit]);
+  }, [pendingText, isEditing, canEdit]);
 
   useEffect(() => {
     const valid = new Set(annotations.map((a) => a.id));
@@ -340,7 +359,7 @@ export function DocumentAnnotationsOverlay({
   );
 
   const onPointerDown = (e: React.PointerEvent) => {
-    if (mode !== 'edit' || !canEdit || !showAnnotations) return;
+    if (!isEditing || !canEdit || !showAnnotations) return;
     const n = normFromClient(e.clientX, e.clientY);
     if (!n) return;
 
@@ -360,7 +379,7 @@ export function DocumentAnnotationsOverlay({
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
-    if (mode !== 'edit' || !canEdit || tool !== 'pen') return;
+    if (!isEditing || !canEdit || tool !== 'pen') return;
     const prev = drawingRef.current;
     if (!prev) return;
     e.preventDefault();
@@ -376,7 +395,7 @@ export function DocumentAnnotationsOverlay({
   };
 
   const onPointerUp = (e: React.PointerEvent) => {
-    if (mode !== 'edit' || !canEdit || tool !== 'pen') return;
+    if (!isEditing || !canEdit || tool !== 'pen') return;
     e.preventDefault();
     try {
       e.currentTarget.releasePointerCapture(e.pointerId);
@@ -479,12 +498,56 @@ export function DocumentAnnotationsOverlay({
 
   const notesCount = annotations.length + draftPaths.length;
 
-  const editChrome = mode === 'edit' && canEdit;
+  const editChrome = canEdit && isEditing;
   /** Vetítés / előkészítő: sötét háttérhez igazított eszközsor. */
-  const toolbarOnDark = compact && editChrome;
+  const toolbarOnDark = compact;
+  const showViewToolbar = !editChrome && (notesCount > 0 || canEdit);
+
+  const visibilityToggleButton = (
+    <button
+      type="button"
+      onClick={() => setShowAnnotations((s) => !s)}
+      className={`flex items-center justify-center gap-1 px-2 py-1.5 rounded border w-full sm:w-auto ${
+        editChrome ? 'sm:ml-auto' : ''
+      } ${
+        toolbarOnDark
+          ? 'border-white/30 bg-white/10 text-white hover:bg-white/15'
+          : 'border-gray-300 bg-white text-gray-900'
+      }`}
+    >
+      {showAnnotations ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+      <span className="whitespace-normal text-center sm:text-left">
+        Rajzok és szövegek: {showAnnotations ? 'láthatók' : 'rejtve'}
+      </span>
+    </button>
+  );
 
   return (
     <div className="flex flex-col gap-2 w-full max-w-full">
+      {showViewToolbar && (
+        <div
+          className={`flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center text-sm ${
+            toolbarOnDark ? 'text-white' : ''
+          }`}
+        >
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setIsEditing(true)}
+              className={`flex items-center justify-center gap-1 px-2 py-1.5 rounded border w-full sm:w-auto ${
+                toolbarOnDark
+                  ? 'border-medical-primary/80 bg-medical-primary text-white hover:opacity-90'
+                  : 'border-medical-primary bg-medical-primary text-white hover:opacity-90'
+              }`}
+            >
+              <PenLine className="w-4 h-4" />
+              Annotálás
+            </button>
+          )}
+          {notesCount > 0 && visibilityToggleButton}
+        </div>
+      )}
+
       {editChrome && (
         <div
           className={`flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center text-sm ${
@@ -492,6 +555,18 @@ export function DocumentAnnotationsOverlay({
           }`}
         >
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={exitEditing}
+              className={`flex items-center gap-1 px-2 py-1 rounded border ${
+                toolbarOnDark
+                  ? 'border-white/30 bg-white/10 text-white hover:bg-white/15'
+                  : 'border-gray-300 bg-white text-gray-900'
+              }`}
+            >
+              <Check className="w-4 h-4" />
+              Kész
+            </button>
             <button
               type="button"
               onClick={() => setTool('pen')}
@@ -545,20 +620,7 @@ export function DocumentAnnotationsOverlay({
               </button>
             )}
           </div>
-          <button
-            type="button"
-            onClick={() => setShowAnnotations((s) => !s)}
-            className={`flex items-center justify-center gap-1 px-2 py-1.5 rounded border w-full sm:w-auto sm:ml-auto ${
-              toolbarOnDark
-                ? 'border-white/30 bg-white/10 text-white hover:bg-white/15'
-                : 'border-gray-300 bg-white text-gray-900'
-            }`}
-          >
-            {showAnnotations ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-            <span className="whitespace-normal text-center sm:text-left">
-              Rajzok és szövegek: {showAnnotations ? 'láthatók' : 'rejtve'}
-            </span>
-          </button>
+          {visibilityToggleButton}
         </div>
       )}
 
@@ -585,12 +647,12 @@ export function DocumentAnnotationsOverlay({
                 width: layout.dw,
                 height: layout.dh,
                 pointerEvents:
-                  mode === 'edit' && canEdit && showAnnotations && (tool === 'pen' || tool === 'text')
+                  editChrome && showAnnotations && (tool === 'pen' || tool === 'text')
                     ? 'auto'
                     : 'none',
-                cursor: mode === 'edit' && canEdit && showAnnotations && tool === 'text' ? 'crosshair' : 'default',
+                cursor: editChrome && showAnnotations && tool === 'text' ? 'crosshair' : 'default',
                 touchAction:
-                  mode === 'edit' && canEdit && showAnnotations
+                  editChrome && showAnnotations
                     ? tool === 'pen'
                       ? 'none'
                       : 'manipulation'
@@ -600,7 +662,7 @@ export function DocumentAnnotationsOverlay({
               <canvas
                 ref={canvasRef}
                 className="absolute inset-0 z-[1] select-none"
-                style={{ touchAction: mode === 'edit' && canEdit && tool === 'pen' ? 'none' : 'inherit' }}
+                style={{ touchAction: editChrome && tool === 'pen' ? 'none' : 'inherit' }}
                 onPointerDown={onPointerDown}
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUp}
@@ -625,7 +687,7 @@ export function DocumentAnnotationsOverlay({
                       }}
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (mode === 'edit' && canEdit) setSelectedId(ann.id);
+                        if (editChrome) setSelectedId(ann.id);
                       }}
                     >
                       <div

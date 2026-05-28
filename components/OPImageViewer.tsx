@@ -303,7 +303,7 @@ export function OPImageViewer({
                     patientId={patientId}
                     documentId={currentDocument.id!}
                     imageUrl={imageUrl}
-                    mode={canAnnotate ? 'edit' : 'view'}
+                    mode="view"
                     canEdit={canAnnotate}
                     compact
                     presentationActivityContext={presentationActivityContext}

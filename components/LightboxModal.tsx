@@ -292,7 +292,7 @@ export function LightboxModal({
               patientId={patientId}
               documentId={currentDoc.id!}
               imageUrl={state.src}
-              mode={canAnnotate ? 'edit' : 'view'}
+              mode="view"
               canEdit={canAnnotate}
               imgClassName="max-w-full max-h-[min(85vh,900px)] object-contain block"
               onAnnotationsUpdated={onAnnotationsUpdated}

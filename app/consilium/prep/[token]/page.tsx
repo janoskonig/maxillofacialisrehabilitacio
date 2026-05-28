@@ -595,7 +595,7 @@ export default function ConsiliumPrepPage() {
                 patientId={photoLightbox.patientId}
                 documentId={photoLightbox.previews[photoLightbox.index].documentId}
                 imageUrl={photoLightbox.previews[photoLightbox.index].previewUrl}
-                mode={canAnnotatePatientDocs ? 'edit' : 'view'}
+                mode="view"
                 canEdit={canAnnotatePatientDocs}
                 compact
                 presentationActivityContext="consilium_prep"
