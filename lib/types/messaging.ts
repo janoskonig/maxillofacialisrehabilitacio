@@ -160,3 +160,32 @@ export type MessageAuditEventType =
   | 'unpinned'
   | 'attachment_added'
   | 'attachment_removed';
+
+/** Fázis 2.2 — FTS keresés találat (snippet + rank). */
+export interface MessageSearchHit {
+  id: string;
+  channel: MessageChannel;
+  patientId?: string;
+  patientName?: string | null;
+  senderType?: 'doctor' | 'patient';
+  senderId: string;
+  /** Beteg csatorna: címzett orvos (lane), beteg által küldött üzenetnél. */
+  recipientDoctorId?: string | null;
+  senderEmail?: string | null;
+  senderName?: string | null;
+  recipientId?: string | null;
+  groupId?: string | null;
+  subject: string | null;
+  message: string;
+  snippet: string;
+  rank: number;
+  createdAt: Date;
+  replyToMessageId?: string | null;
+}
+
+export interface MessageSearchResult {
+  hits: MessageSearchHit[];
+  total: number;
+  limit: number;
+  offset: number;
+}

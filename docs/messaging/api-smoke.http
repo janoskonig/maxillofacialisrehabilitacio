@@ -354,3 +354,38 @@ Content-Type: application/json
   "linkId": "REPLACE_CONTEXT_LINK_UUID"
 }
 ###
+
+###############################################################################
+# [Fázis 2.2] FTS keresés — beteg csatorna
+# Előfeltétel: 047_message_fts.sql migráció lefuttatva.
+# Elvárt: 200, hits[] + snippet (<mark>…</mark>), total, limit, offset.
+###############################################################################
+
+@patientId = REPLACE_PATIENT_UUID
+@searchQ = kontroll
+
+GET {{host}}/api/messages/search?q={{searchQ}}&patientId={{patientId}}&limit=10
+Cookie: {{authCookie}}
+
+###
+# [2.2] Orvos csatorna — 1:1 szűkítés
+###
+
+@recipientDoctorId = 11111111-1111-4111-8111-111111111111
+
+GET {{host}}/api/doctor-messages/search?q=meeting&recipientId={{recipientDoctorId}}&limit=5
+Cookie: {{authCookie}}
+
+###
+# [2.2] Túl rövid q → 400 QUERY_TOO_SHORT
+###
+
+GET {{host}}/api/messages/search?q=x&patientId={{patientId}}
+Cookie: {{authCookie}}
+
+###
+# [Fázis 2.3] UI — böngészőben: /messages vagy beteg portál → / billentyű vagy
+# keresés ikon → találat kattintás → scroll + sárga kiemelés az üzenethez.
+###
+
+###

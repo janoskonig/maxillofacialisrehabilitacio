@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, type RefObject } from 'react';
 import { MessageCircle, Send, User, ArrowRight, FileQuestion } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
@@ -16,6 +16,10 @@ import { PendingContextLinksBar } from './messaging/PendingContextLinksBar';
 import type { PendingContextLink } from './messaging/ContextLinkAttachPicker';
 import { useMessageContextActions } from '@/hooks/useMessageContextActions';
 import type { MessageContextLink } from '@/lib/types/messaging';
+import { MessageSearchProvider } from '@/contexts/MessageSearchContext';
+import { MessageSearchButton } from './messaging/MessageSearchButton';
+import { useRegisterMessageSearch } from '@/hooks/useRegisterMessageSearch';
+import type { MessageSearchHandler } from '@/contexts/MessageSearchContext';
 import { ChatMessageBubble, type ChatBubbleMessage } from './messaging/ChatMessageBubble';
 import { ReplyComposerBar } from './messaging/ReplyComposerBar';
 import { useReplyState } from './messaging/useReplyState';
@@ -98,17 +102,35 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
     textareaRef.current?.focus();
   }, [patientName, replyState]);
 
-  const scrollToMessage = useCallback((messageId: string) => {
+  const scrollToMessage = useCallback((messageId: string): boolean => {
     const el = messagesContainerRef.current?.querySelector<HTMLElement>(
       `[data-message-id="${messageId}"]`,
     );
-    if (!el) return;
+    if (!el) return false;
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     el.classList.add('ring-2', 'ring-blue-400', 'rounded-lg');
     window.setTimeout(() => {
       el.classList.remove('ring-2', 'ring-blue-400', 'rounded-lg');
     }, 1600);
+    return true;
   }, []);
+
+  const searchHandler = useMemo<MessageSearchHandler>(
+    () => ({
+      id: `patient-detail-${patientId}`,
+      channel: 'patient',
+      scope: { patientId },
+      messagesContainerRef: messagesContainerRef as RefObject<HTMLElement | null>,
+      scrollToMessage,
+      focusComposer: () => textareaRef.current?.focus(),
+      prepareHit: async () => {
+        /* egy beteg szál — nincs beszélgetésváltás */
+      },
+    }),
+    [patientId, scrollToMessage],
+  );
+
+  useRegisterMessageSearch(searchHandler);
 
   const scrollToFirstReply = useCallback(
     (parentId: string) => {
@@ -531,6 +553,7 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
   }
 
   return (
+    <MessageSearchProvider preferredChannel="patient">
     <div className="card flex flex-col h-[600px] min-h-[600px]">
       {/* Header */}
       <div className="p-3 sm:p-4 border-b border-gray-200 bg-gray-50">
@@ -552,6 +575,7 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
             </div>
           </div>
           <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+            <MessageSearchButton channel="patient" />
             {isConnected && (
               <div className="w-2 h-2 bg-green-500 rounded-full animate-connection-pulse" title="Kapcsolódva" />
             )}
@@ -731,5 +755,6 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
         onSent={() => fetchMessages()}
       />
     </div>
+    </MessageSearchProvider>
   );
 }

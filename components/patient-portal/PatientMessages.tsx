@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, type RefObject } from 'react';
 import { MessageCircle, Send, Clock, Check, CheckCheck, Loader2, ChevronDown, Users, Search, X, CornerUpLeft, AlertTriangle, RotateCcw } from 'lucide-react';
 import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 import { hu } from 'date-fns/locale';
@@ -19,7 +19,12 @@ import type {
   MessageContextLink,
   QuotedMessagePreview,
   MessageDeliveryStatusEvent,
+  MessageSearchHit,
 } from '@/lib/types/messaging';
+import { MessageSearchProvider } from '@/contexts/MessageSearchContext';
+import { MessageSearchButton } from '@/components/messaging/MessageSearchButton';
+import { useRegisterMessageSearch } from '@/hooks/useRegisterMessageSearch';
+import type { MessageSearchHandler } from '@/contexts/MessageSearchContext';
 import { MessageContextLinksStrip } from '@/components/messaging/MessageContextLinksStrip';
 import {
   applyDeliveryStatusUpdate,
@@ -120,16 +125,17 @@ export function PatientMessages() {
     textareaRef.current?.focus();
   }, [patientName, selectedDoctorName, replyState]);
 
-  const scrollToMessage = useCallback((messageId: string) => {
+  const scrollToMessage = useCallback((messageId: string): boolean => {
     const el = messagesContainerRef.current?.querySelector<HTMLElement>(
       `[data-message-id="${messageId}"]`,
     );
-    if (!el) return;
+    if (!el) return false;
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     el.classList.add('ring-2', 'ring-blue-400', 'rounded-2xl');
     window.setTimeout(() => {
       el.classList.remove('ring-2', 'ring-blue-400', 'rounded-2xl');
     }, 1600);
+    return true;
   }, []);
 
   const scrollToFirstReply = useCallback(
@@ -245,13 +251,14 @@ export function PatientMessages() {
   }, [fetchConversations]);
 
   // Fetch messages for selected doctor
-  const fetchMessages = useCallback(async () => {
-    if (!patientId || !selectedDoctorId) return;
+  const fetchMessages = useCallback(async (doctorIdOverride?: string) => {
+    const laneDoctorId = doctorIdOverride ?? selectedDoctorId;
+    if (!patientId || !laneDoctorId) return;
 
     try {
       setMessagesLoading(true);
       const response = await fetch(
-        `/api/messages?patientId=${patientId}&doctorId=${selectedDoctorId}`,
+        `/api/messages?patientId=${patientId}&doctorId=${laneDoctorId}`,
         { credentials: 'include' }
       );
 
@@ -285,6 +292,42 @@ export function PatientMessages() {
       setMessages([]);
     }
   }, [selectedDoctorId, fetchMessages]);
+
+  const searchHandler = useMemo<MessageSearchHandler | null>(() => {
+    if (!patientId) return null;
+    return {
+      id: 'patient-portal-messages',
+      channel: 'patient',
+      scope: {
+        patientId,
+        doctorId: selectedDoctorId ?? undefined,
+      },
+      messagesContainerRef: messagesContainerRef as RefObject<HTMLElement | null>,
+      scrollToMessage,
+      focusComposer: () => textareaRef.current?.focus(),
+      prepareHit: async (hit: MessageSearchHit) => {
+        if (!patientId || hit.channel !== 'patient') return;
+        const laneDoctorId =
+          hit.senderType === 'doctor'
+            ? hit.senderId
+            : hit.recipientDoctorId ?? undefined;
+        if (laneDoctorId && selectedDoctorId !== laneDoctorId) {
+          const conv = conversations.find((c) => c.doctorId === laneDoctorId);
+          setSelectedDoctorName(conv?.doctorName ?? 'Orvos');
+          setSelectedDoctorId(laneDoctorId);
+          await fetchMessages(laneDoctorId);
+        }
+      },
+    };
+  }, [
+    conversations,
+    fetchMessages,
+    patientId,
+    scrollToMessage,
+    selectedDoctorId,
+  ]);
+
+  useRegisterMessageSearch(searchHandler);
 
   // WebSocket setup
   useEffect(() => {
@@ -698,6 +741,7 @@ export function PatientMessages() {
         return null;
       })()}
       <div className="flex items-center gap-2 flex-shrink-0 mt-1 sm:mt-0">
+        <MessageSearchButton channel="patient" />
         {isConnected && (
           <div className="w-2 h-2 bg-green-500 rounded-full animate-connection-pulse" title="Kapcsolódva" />
         )}
@@ -1025,6 +1069,7 @@ export function PatientMessages() {
   );
 
   return (
+    <MessageSearchProvider preferredChannel="patient">
     <div className="card">
       <MessagesShell
         listTitle="Üzenetek"
@@ -1045,5 +1090,6 @@ export function PatientMessages() {
         newChatContent={newChatContent}
       />
     </div>
+    </MessageSearchProvider>
   );
 }

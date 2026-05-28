@@ -8,6 +8,8 @@ import { PatientMessagesList } from '@/components/PatientMessagesList';
 import { ArrowLeft, MessageCircle, Users } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
+import { MessageSearchProvider } from '@/contexts/MessageSearchContext';
+import { MessageSearchButton } from '@/components/messaging/MessageSearchButton';
 
 export default function MessagesPageClient() {
   const router = useRouter();
@@ -108,6 +110,7 @@ export default function MessagesPageClient() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <MessageSearchButton channel={activeTab === 'doctor-doctor' ? 'doctor' : 'patient'} />
               <button
                 onClick={handleBack}
                 className="btn-secondary flex items-center gap-2"
@@ -120,6 +123,9 @@ export default function MessagesPageClient() {
         </div>
       </header>
 
+      <MessageSearchProvider
+        preferredChannel={activeTab === 'doctor-doctor' ? 'doctor' : 'patient'}
+      >
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-mobile-nav-staff md:pb-6">
         <div className="mb-4 border-b border-gray-200">
           <nav className="flex gap-1" aria-label="Üzenetek fülök">
@@ -169,6 +175,7 @@ export default function MessagesPageClient() {
       </main>
 
       <MobileBottomNav />
+      </MessageSearchProvider>
     </div>
   );
 }

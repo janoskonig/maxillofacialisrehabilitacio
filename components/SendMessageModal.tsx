@@ -10,6 +10,12 @@ import { getMonogram, getLastName } from '@/lib/utils';
 import { MessageTextRenderer } from './MessageTextRenderer';
 import { DocumentRequestSendWizard } from './DocumentRequestSendWizard';
 import { DocumentLinkComposerButton } from './messaging/DocumentLinkComposerButton';
+import { ContextLinkComposerButton } from './messaging/ContextLinkComposerButton';
+import { PendingContextLinksBar } from './messaging/PendingContextLinksBar';
+import type { PendingContextLink } from './messaging/ContextLinkAttachPicker';
+import { useMessageContextActions } from '@/hooks/useMessageContextActions';
+import type { MessageContextLink } from '@/lib/types/messaging';
+import { getCurrentUser } from '@/lib/auth';
 import { ChatMessageBubble, type ChatBubbleMessage } from './messaging/ChatMessageBubble';
 import { ReplyComposerBar } from './messaging/ReplyComposerBar';
 import { useReplyThreadCollapse } from './messaging/useReplyThreadCollapse';
@@ -41,6 +47,7 @@ interface RecentMessage {
   quotedMessage?: QuotedMessagePreview | null;
   replyCount?: number;
   deliveryStatus?: 'sent' | 'delivered' | 'read' | 'failed';
+  contextLinks?: MessageContextLink[];
 }
 
 interface SendMessageModalProps {
@@ -68,6 +75,9 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [showRequestWizard, setShowRequestWizard] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [pendingContextLinks, setPendingContextLinks] = useState<PendingContextLink[]>([]);
+  const { attachLink, removeLink } = useMessageContextActions('patient');
 
   // Slice 0.6: reply state — staff "compose anywhere" modal.
   const replyState = useReplyState();
@@ -75,8 +85,22 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
   // Beteg-váltáskor reply target reset (más szál → más quote).
   useEffect(() => {
     replyState.clearReply();
+    setPendingContextLinks([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPatient?.id]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const loadUser = async () => {
+      try {
+        const user = await getCurrentUser();
+        if (user?.id) setCurrentUserId(user.id);
+      } catch {
+        /* ignore */
+      }
+    };
+    void loadUser();
+  }, [isOpen]);
 
   const startReplyTo = useCallback((msg: RecentMessage) => {
     const senderName = msg.senderType === 'doctor'
@@ -144,6 +168,7 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
       setActiveTab('send');
       setConversationMessages([]);
       setShowRequestWizard(false);
+      setPendingContextLinks([]);
     }
   }, [isOpen]);
 
@@ -328,7 +353,8 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
       
       setConversationMessages([...conversationMessages, pendingMessage]);
       setPendingMessageId(tempId);
-      
+
+      const pendingSnapshot = [...pendingContextLinks];
       const response = await fetch('/api/messages', {
         method: 'POST',
         headers: {
@@ -364,16 +390,36 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
       }
 
       const data = await response.json();
+      const messageId = data.message?.id as string | undefined;
       showToast('Üzenet sikeresen elküldve', 'success');
-      
-      // Frissítjük a pending üzenetet a valódi üzenettel
-      setConversationMessages(prevMessages => {
-        // Eltávolítjuk a pending üzenetet és hozzáadjuk a valódi üzenetet
-        const filtered = prevMessages.filter(m => m.id !== tempId);
-        return [...filtered, { ...data.message, pending: false }];
-      });
+
+      if (messageId && pendingSnapshot.length > 0) {
+        const attached: MessageContextLink[] = [];
+        for (const p of pendingSnapshot) {
+          const link = await attachLink(messageId, p.entityType, p.entityId);
+          if (link) attached.push(link);
+        }
+        setPendingContextLinks([]);
+        setConversationMessages((prevMessages) => {
+          const filtered = prevMessages.filter((m) => m.id !== tempId);
+          const sent = {
+            ...data.message,
+            pending: false,
+            contextLinks: [
+              ...(data.message.contextLinks ?? []),
+              ...attached,
+            ],
+          };
+          return [...filtered, sent];
+        });
+      } else {
+        setConversationMessages((prevMessages) => {
+          const filtered = prevMessages.filter((m) => m.id !== tempId);
+          return [...filtered, { ...data.message, pending: false }];
+        });
+      }
       setPendingMessageId(null);
-      
+
       // Reset form
       if (!messageText) {
         setMessage('');
@@ -468,6 +514,21 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
       }
     },
     [selectedPatient, showToast, replyState, fetchConversation, fetchRecentMessages],
+  );
+
+  const handleRemoveContextLink = useCallback(
+    async (messageId: string, linkId: string) => {
+      const ok = await removeLink(messageId, linkId);
+      if (!ok) return;
+      setConversationMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? { ...m, contextLinks: (m.contextLinks ?? []).filter((l) => l.id !== linkId) }
+            : m,
+        ),
+      );
+    },
+    [removeLink],
   );
 
   if (!isOpen) return null;
@@ -650,7 +711,13 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
                               ? 'failed'
                               : msg.deliveryStatus ?? (msg.readAt ? 'read' : 'sent'),
                           readAt: msg.readAt ?? null,
+                          contextLinks: msg.contextLinks ?? [],
                         };
+
+                        const isFromMe =
+                          !!currentUserId &&
+                          msg.senderType === 'doctor' &&
+                          msg.senderId === currentUserId;
 
                         return (
                           <div
@@ -670,7 +737,10 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
                             </div>
                             <ChatMessageBubble
                               message={bubbleMessage}
+                              currentUserId={currentUserId}
                               showSenderLabel={false}
+                              canRemoveContextLinks={isFromMe && !isPending}
+                              onRemoveContextLink={handleRemoveContextLink}
                               renderText={(text) => (
                                 <MessageTextRenderer
                                   text={text}
@@ -678,7 +748,8 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
                                   patientId={selectedPatient?.id || null}
                                   messageId={msg.id}
                                   senderId={msg.senderId}
-                                  currentUserId={selectedPatient?.id || null}
+                                  currentUserId={currentUserId || undefined}
+                                  contextLinks={msg.contextLinks}
                                   onSendMessage={async (messageText) => {
                                     await handleSendMessage(messageText);
                                   }}
@@ -713,6 +784,12 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
 
                   {/* Message Input */}
                   <div className="border-t bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+                    <PendingContextLinksBar
+                      links={pendingContextLinks}
+                      onRemove={(i) =>
+                        setPendingContextLinks((prev) => prev.filter((_, idx) => idx !== i))
+                      }
+                    />
                     <div className="flex items-end gap-2">
                       <button
                         type="button"
@@ -724,13 +801,23 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
                         <span className="hidden sm:inline text-sm">Bekérés</span>
                       </button>
                       {selectedPatient && (
-                        <DocumentLinkComposerButton
-                          patientId={selectedPatient.id}
-                          chatType="patient-doctor"
-                          messageText={message}
-                          disabled={sending}
-                          onInsert={setMessage}
-                        />
+                        <>
+                          <DocumentLinkComposerButton
+                            patientId={selectedPatient.id}
+                            chatType="patient-doctor"
+                            messageText={message}
+                            disabled={sending}
+                            onInsert={setMessage}
+                          />
+                          <ContextLinkComposerButton
+                            patientId={selectedPatient.id}
+                            pendingLinks={pendingContextLinks}
+                            disabled={sending}
+                            onAddPending={(link) =>
+                              setPendingContextLinks((prev) => [...prev, link])
+                            }
+                          />
+                        </>
                       )}
                       <textarea
                         ref={textareaRef}

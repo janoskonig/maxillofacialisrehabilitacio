@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState, useEffect, useRef, useMemo } from 'react';
+import { useCallback, useState, useEffect, useRef, useMemo, type RefObject } from 'react';
 import { MessageCircle, Send, CheckCheck, Loader2, Users, UserPlus, Edit2, X, Trash2 } from 'lucide-react';
 import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 import { hu } from 'date-fns/locale';
@@ -25,6 +25,10 @@ import { useMessageContextActions } from '@/hooks/useMessageContextActions';
 import type { MessageContextLink } from '@/lib/types/messaging';
 import { useReplyThreadCollapse } from './messaging/useReplyThreadCollapse';
 import { filterMessagesByThreadCollapse } from '@/lib/messaging/reply-thread-visibility';
+import { MessageSearchButton } from './messaging/MessageSearchButton';
+import { useRegisterMessageSearch } from '@/hooks/useRegisterMessageSearch';
+import type { MessageSearchHandler } from '@/contexts/MessageSearchContext';
+import type { MessageSearchHit } from '@/lib/types/messaging';
 
 export function DoctorMessages() {
   const { showToast } = useToast();
@@ -88,17 +92,62 @@ export function DoctorMessages() {
   // Idézet kattintásra: az eredeti `data-message-id` targethez ugrunk az
   // aktuális üzenetlistában. Ha nincs (pl. törölt parent vagy nincs még
   // betöltve), csendben nem csinálunk semmit.
-  const scrollToMessage = useCallback((messageId: string) => {
+  const scrollToMessage = useCallback((messageId: string): boolean => {
     const el = messagesContainerRef.current?.querySelector<HTMLElement>(
       `[data-message-id="${messageId}"]`,
     );
-    if (!el) return;
+    if (!el) return false;
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     el.classList.add('ring-2', 'ring-blue-400', 'rounded-lg');
     window.setTimeout(() => {
       el.classList.remove('ring-2', 'ring-blue-400', 'rounded-lg');
     }, 1600);
+    return true;
   }, []);
+
+  const searchHandler = useMemo<MessageSearchHandler>(() => ({
+    id: 'doctor-messages-inbox',
+    channel: 'doctor',
+    scope: {
+      recipientId: selectedGroupId ? undefined : selectedDoctorId ?? undefined,
+      groupId: selectedGroupId ?? undefined,
+    },
+    messagesContainerRef: messagesContainerRef as RefObject<HTMLElement | null>,
+    scrollToMessage,
+    focusComposer: () => textareaRef.current?.focus(),
+    prepareHit: async (hit: MessageSearchHit) => {
+      if (hit.channel !== 'doctor') return;
+      if (hit.groupId) {
+        if (selectedGroupId !== hit.groupId) {
+          const conv = conversations.find(
+            (c) => c.type === 'group' && c.groupId === hit.groupId,
+          );
+          selectGroup(hit.groupId, conv?.groupName ?? null);
+          await new Promise((r) => setTimeout(r, 400));
+        }
+        return;
+      }
+      const peerId =
+        hit.senderId === currentUserId ? hit.recipientId : hit.senderId;
+      if (peerId && selectedDoctorId !== peerId) {
+        const conv = conversations.find(
+          (c) => c.type === 'individual' && c.doctorId === peerId,
+        );
+        selectDoctor(peerId, conv?.doctorName ?? 'Orvos');
+        await new Promise((r) => setTimeout(r, 400));
+      }
+    },
+  }), [
+    conversations,
+    currentUserId,
+    scrollToMessage,
+    selectDoctor,
+    selectGroup,
+    selectedDoctorId,
+    selectedGroupId,
+  ]);
+
+  useRegisterMessageSearch(searchHandler);
 
   const scrollToFirstReply = useCallback(
     (parentId: string) => {
@@ -495,10 +544,13 @@ export function DoctorMessages() {
     </div>
   ) : (
     <>
-      <h3 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center gap-2 truncate">
-        {selectedGroupId && <Users className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0" />}
-        <span className="truncate">{selectedDoctorId ? selectedDoctorName : (selectedGroupName || 'Csoportos beszélgetés')}</span>
-      </h3>
+      <div className="flex items-center justify-between gap-2 min-w-0">
+        <h3 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center gap-2 truncate min-w-0">
+          {selectedGroupId && <Users className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0" />}
+          <span className="truncate">{selectedDoctorId ? selectedDoctorName : (selectedGroupName || 'Csoportos beszélgetés')}</span>
+        </h3>
+        <MessageSearchButton channel="doctor" />
+      </div>
       {(() => {
         const hasGroupName = Boolean(selectedGroupName?.trim());
         return selectedGroupId && groupParticipants.length > 0 && (!isMobile || !hasGroupName) ? (

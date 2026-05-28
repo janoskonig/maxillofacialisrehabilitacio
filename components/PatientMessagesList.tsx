@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, type RefObject } from 'react';
 import { MessageCircle, Send, Search, User, ArrowRight, Plus, X } from 'lucide-react';
 import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 import { hu } from 'date-fns/locale';
@@ -25,6 +25,14 @@ import { incrementParentReplyCount } from './messaging/reply-count-socket';
 import { useReplyThreadCollapse } from './messaging/useReplyThreadCollapse';
 import { filterMessagesByThreadCollapse } from '@/lib/messaging/reply-thread-visibility';
 import { DocumentLinkComposerButton } from './messaging/DocumentLinkComposerButton';
+import { ContextLinkComposerButton } from './messaging/ContextLinkComposerButton';
+import { PendingContextLinksBar } from './messaging/PendingContextLinksBar';
+import type { PendingContextLink } from './messaging/ContextLinkAttachPicker';
+import { useMessageContextActions } from '@/hooks/useMessageContextActions';
+import type { MessageContextLink, MessageSearchHit } from '@/lib/types/messaging';
+import { MessageSearchButton } from './messaging/MessageSearchButton';
+import { useRegisterMessageSearch } from '@/hooks/useRegisterMessageSearch';
+import type { MessageSearchHandler } from '@/contexts/MessageSearchContext';
 
 interface Message {
   id: string;
@@ -41,6 +49,7 @@ interface Message {
   quotedMessage?: QuotedMessagePreview | null;
   replyCount?: number;
   deliveryStatus?: 'sent' | 'delivered' | 'read' | 'failed';
+  contextLinks?: MessageContextLink[];
 }
 
 interface Patient {
@@ -81,6 +90,8 @@ export function PatientMessagesList() {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesLoadedRef = useRef<Set<string>>(new Set());
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [pendingContextLinks, setPendingContextLinks] = useState<PendingContextLink[]>([]);
+  const { attachLink, removeLink } = useMessageContextActions('patient');
 
   // Hooks must be called unconditionally at the top level
   const breakpoint = useBreakpoint();
@@ -91,6 +102,7 @@ export function PatientMessagesList() {
 
   useEffect(() => {
     replyState.clearReply();
+    setPendingContextLinks([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPatientId]);
 
@@ -109,16 +121,17 @@ export function PatientMessagesList() {
     textareaRef.current?.focus();
   }, [selectedPatientName, replyState]);
 
-  const scrollToMessage = useCallback((messageId: string) => {
+  const scrollToMessage = useCallback((messageId: string): boolean => {
     const el = messagesContainerRef.current?.querySelector<HTMLElement>(
       `[data-message-id="${messageId}"]`,
     );
-    if (!el) return;
+    if (!el) return false;
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     el.classList.add('ring-2', 'ring-blue-400', 'rounded-lg');
     window.setTimeout(() => {
       el.classList.remove('ring-2', 'ring-blue-400', 'rounded-lg');
     }, 1600);
+    return true;
   }, []);
 
   const scrollToFirstReply = useCallback(
@@ -531,7 +544,7 @@ export function PatientMessagesList() {
       text: string,
       replyToMessageId: string | null,
       targetPatientId: string,
-    ): Promise<boolean> => {
+    ): Promise<string | null> => {
       const response = await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -554,7 +567,7 @@ export function PatientMessagesList() {
             ),
           );
           showToast(error.error || 'Túl sok üzenet — próbáld újra később.', 'error');
-          return false;
+          return null;
         }
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
         throw new Error(error.error || 'Hiba az üzenet küldésekor');
@@ -571,12 +584,14 @@ export function PatientMessagesList() {
                   createdAt: new Date(data.message.createdAt),
                   readAt: data.message.readAt ? new Date(data.message.readAt) : null,
                   pending: false,
+                  contextLinks: data.message.contextLinks ?? [],
                 }
               : m,
           ),
         );
+        return data.message.id as string;
       }
-      return true;
+      return null;
     },
     [showToast],
   );
@@ -616,13 +631,32 @@ export function PatientMessagesList() {
       };
       setMessages((prev) => [...prev, pendingMessage]);
 
-      const ok = await postPatientMessage(
+      const pendingSnapshot = [...pendingContextLinks];
+      const messageId = await postPatientMessage(
         tempId,
         textToSend,
         replyToMessageId,
         selectedPatientId,
       );
-      if (!ok) return;
+      if (!messageId) return;
+
+      if (pendingSnapshot.length > 0) {
+        const attached: MessageContextLink[] = [];
+        for (const p of pendingSnapshot) {
+          const link = await attachLink(messageId, p.entityType, p.entityId);
+          if (link) attached.push(link);
+        }
+        if (attached.length > 0) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === messageId
+                ? { ...m, contextLinks: [...(m.contextLinks ?? []), ...attached] }
+                : m,
+            ),
+          );
+        }
+        setPendingContextLinks([]);
+      }
 
       setNewMessage('');
       replyState.clearReply();
@@ -651,13 +685,13 @@ export function PatientMessagesList() {
           ),
         );
 
-        const ok = await postPatientMessage(
+        const messageId = await postPatientMessage(
           failedMessage.id,
           failedMessage.message,
           failedMessage.replyToMessageId ?? null,
           selectedPatientId,
         );
-        if (ok) {
+        if (messageId) {
           replyState.clearReply();
           showToast('Üzenet sikeresen elküldve', 'success');
           fetchConversations();
@@ -672,6 +706,50 @@ export function PatientMessagesList() {
     },
     [postPatientMessage, replyState, selectedPatientId, showToast, fetchConversations],
   );
+
+  const handleRemoveContextLink = useCallback(
+    async (messageId: string, linkId: string) => {
+      const ok = await removeLink(messageId, linkId);
+      if (!ok) return;
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? { ...m, contextLinks: (m.contextLinks ?? []).filter((l) => l.id !== linkId) }
+            : m,
+        ),
+      );
+    },
+    [removeLink],
+  );
+
+  const searchHandler = useMemo<MessageSearchHandler>(
+    () => ({
+      id: 'patient-messages-inbox',
+      channel: 'patient',
+      scope: { patientId: selectedPatientId ?? undefined },
+      messagesContainerRef: messagesContainerRef as RefObject<HTMLElement | null>,
+      scrollToMessage,
+      focusComposer: () => textareaRef.current?.focus(),
+      prepareHit: async (hit: MessageSearchHit) => {
+        if (hit.channel !== 'patient' || !hit.patientId) return;
+        if (selectedPatientId !== hit.patientId) {
+          const conv = conversations.find((c) => c.patientId === hit.patientId);
+          setSelectedPatientId(hit.patientId);
+          setSelectedPatientName(conv?.patientName ?? hit.patientName ?? 'Beteg');
+          messagesLoadedRef.current.clear();
+          await fetchMessages(hit.patientId);
+        }
+      },
+    }),
+    [
+      conversations,
+      fetchMessages,
+      scrollToMessage,
+      selectedPatientId,
+    ],
+  );
+
+  useRegisterMessageSearch(searchHandler);
 
   // Filter conversations
   const filteredConversations = conversations.filter(conv =>
@@ -777,6 +855,7 @@ export function PatientMessagesList() {
         {selectedPatientName}
       </h3>
       <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+        <MessageSearchButton channel="patient" />
         {isConnected && (
           <div className="w-2 h-2 bg-green-500 rounded-full animate-connection-pulse" title="Kapcsolódva" />
         )}
@@ -846,6 +925,7 @@ export function PatientMessagesList() {
                     ? 'failed'
                     : message.deliveryStatus ?? (message.readAt ? 'read' : 'sent'),
                 readAt: message.readAt ?? null,
+                contextLinks: message.contextLinks ?? [],
               };
 
               return (
@@ -870,6 +950,8 @@ export function PatientMessagesList() {
                       message={bubbleMessage}
                       currentUserId={currentUserId}
                       showSenderLabel={false}
+                      canRemoveContextLinks={isFromMe && !isPending}
+                      onRemoveContextLink={handleRemoveContextLink}
                       renderText={(text) => (
                         <MessageTextRenderer
                           text={text}
@@ -878,6 +960,7 @@ export function PatientMessagesList() {
                           messageId={message.id}
                           senderId={message.senderId}
                           currentUserId={currentUserId || undefined}
+                          contextLinks={message.contextLinks}
                           onSendMessage={async (messageText) => {
                             setNewMessage(messageText);
                             await handleSendMessage();
@@ -920,15 +1003,27 @@ export function PatientMessagesList() {
 
       {/* Message Input */}
       <div className="flex-shrink-0 border-t bg-white p-2 sm:p-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-4">
+        <PendingContextLinksBar
+          links={pendingContextLinks}
+          onRemove={(i) => setPendingContextLinks((prev) => prev.filter((_, idx) => idx !== i))}
+        />
         <div className="flex items-end gap-2">
           {selectedPatientId && (
-            <DocumentLinkComposerButton
-              patientId={selectedPatientId}
-              chatType="patient-doctor"
-              messageText={newMessage}
-              disabled={sending}
-              onInsert={setNewMessage}
-            />
+            <>
+              <DocumentLinkComposerButton
+                patientId={selectedPatientId}
+                chatType="patient-doctor"
+                messageText={newMessage}
+                disabled={sending}
+                onInsert={setNewMessage}
+              />
+              <ContextLinkComposerButton
+                patientId={selectedPatientId}
+                pendingLinks={pendingContextLinks}
+                disabled={sending}
+                onAddPending={(link) => setPendingContextLinks((prev) => [...prev, link])}
+              />
+            </>
           )}
           <textarea
             ref={textareaRef}
