@@ -522,7 +522,7 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
       </div>
 
       {/* Messages */}
-      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-2 sm:p-4 bg-gray-50 space-y-3 scroll-smooth">
+      <div ref={messagesContainerRef} className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-2 sm:p-4 bg-gray-50 space-y-3 scroll-smooth">
         {messages.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <MessageCircle className="w-12 h-12 mx-auto mb-2 text-gray-300" />

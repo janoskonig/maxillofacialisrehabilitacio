@@ -129,13 +129,13 @@ export function ChatMessageBubble({
         <div className="text-xs font-medium text-gray-700 mb-1 px-1">{message.senderName}</div>
       )}
 
-      <div className="flex items-end gap-1 max-w-[85%] sm:max-w-[75%]">
-        {/* Reply akció gomb a buborék mellett — csak hover/focus alatt látszódik */}
+      <div className="relative inline-flex w-fit max-w-[85%] sm:max-w-[80%] items-end">
+        {/* Reply akció gomb a buborék mellett — abszolút, hogy ne szűkítse a buborékot */}
         {onReply && isFromMe && (
           <ReplyActionButton onClick={() => onReply(message)} side="left" />
         )}
 
-        <div className={`flex-1 min-w-0 rounded-lg px-3 py-2 ${bubbleStyle}`}>
+        <div className={`min-w-0 max-w-full rounded-lg px-3 py-2 ${bubbleStyle}`}>
           {message.quotedMessage && (
             <div className="mb-2">
               <MessageQuoteBlock
@@ -147,7 +147,7 @@ export function ChatMessageBubble({
             </div>
           )}
 
-          <div className="text-sm whitespace-pre-wrap break-words">
+          <div className="text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
             {renderText ? renderText(message.message, message) : message.message}
           </div>
 
@@ -215,8 +215,8 @@ function ReplyActionButton({ onClick, side }: { onClick: () => void; side: 'left
     <button
       type="button"
       onClick={onClick}
-      className={`opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity p-1 rounded-full bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-300 shadow-sm ${
-        side === 'left' ? 'order-first' : 'order-last'
+      className={`absolute top-1/2 -translate-y-1/2 z-10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity p-1 rounded-full bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-300 shadow-sm ${
+        side === 'left' ? 'right-full mr-1' : 'left-full ml-1'
       }`}
       aria-label="Válasz erre az üzenetre"
       title="Válasz"

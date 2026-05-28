@@ -48,11 +48,11 @@ export function MessageTextRenderer({
     return (
       <>
         {before ? (
-          <p className="whitespace-pre-wrap break-words text-sm">{before}</p>
+          <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm">{before}</p>
         ) : null}
         <ConsiliumPrepMessageCard token={token} />
         {after ? (
-          <p className="whitespace-pre-wrap break-words text-sm mt-1 opacity-90">{after}</p>
+          <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm mt-1 opacity-90">{after}</p>
         ) : null}
       </>
     );
@@ -98,7 +98,7 @@ export function MessageTextRenderer({
         />
 
         {trailingNote ? (
-          <div className="mt-2 whitespace-pre-wrap break-words text-sm opacity-90">
+          <div className="mt-2 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm opacity-90">
             {trailingNote}
           </div>
         ) : null}
@@ -144,11 +144,11 @@ export function MessageTextRenderer({
 
   // If no mentions found, just return the text
   if (parts.length === 0) {
-    return <span className="whitespace-pre-wrap break-words">{text}</span>;
+    return <span className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{text}</span>;
   }
 
   return (
-    <span className="whitespace-pre-wrap break-words">
+    <span className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
       {parts.map((part, index) => {
         if (part.type === 'text') {
           return <span key={index}>{part.content}</span>;
