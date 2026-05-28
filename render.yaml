@@ -2,7 +2,7 @@ services:
   - type: web
     name: maxillofacial-rehab
     env: node
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci && NODE_OPTIONS=--max-old-space-size=6144 npm run build
     startCommand: npm start
     envVars:
       - key: NODE_ENV

@@ -14,6 +14,7 @@ const nextConfig = {
     instrumentationHook: true,
     webpackBuildWorker: true,
     serverSourceMaps: false,
+    enablePrerenderSourceMaps: false,
     optimizePackageImports: ['recharts', 'lucide-react', '@dnd-kit/core', '@dnd-kit/sortable'],
   },
   
