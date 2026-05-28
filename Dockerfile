@@ -11,9 +11,10 @@ FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NODE_ENV=production
-# Limit heap and parallelism for constrained build environments.
-ENV NODE_OPTIONS=--max-old-space-size=3072
-RUN npm run build
+ENV SKIP_BUILD_CHECKS=true
+# Render build VMs have ~2 GB RAM; skip the heavy TS worker and stay under the limit.
+ENV NODE_OPTIONS=--max-old-space-size=1536
+RUN npm run build:render
 
 FROM base AS runner
 ENV NODE_ENV=production

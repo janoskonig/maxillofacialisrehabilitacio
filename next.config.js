@@ -6,8 +6,18 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
 // Sentry integration (if enabled)
 const { withSentryConfig } = require('@sentry/nextjs');
 
+// Render build VMs (~2 GB RAM) OOM during the post-compile ESLint/TS phase.
+// Run lint + typecheck in CI instead; set SKIP_BUILD_CHECKS=true on deploy builds.
+const skipBuildChecks = process.env.SKIP_BUILD_CHECKS === 'true';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  eslint: {
+    ignoreDuringBuilds: skipBuildChecks,
+  },
+  typescript: {
+    ignoreBuildErrors: skipBuildChecks,
+  },
   // Enable instrumentation hook (for Sentry)
   // Build memory: webpackBuildWorker (opt-out custom webpacknél, kézzel kényszeríthető), serverSourceMaps off
   experimental: {
