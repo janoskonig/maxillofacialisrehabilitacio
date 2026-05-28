@@ -13,7 +13,7 @@ import { EpisodePathwayEditor } from '@/components/EpisodePathwayEditor';
 import { EpisodeStepsManager } from '@/components/EpisodeStepsManager';
 import { EpisodeStepProjections } from '@/components/EpisodeStepProjections';
 import { PatientStageSelector } from '@/components/PatientStageSelector';
-import { PatientStageTimeline } from '@/components/PatientStageTimeline';
+import { PatientCareTimeline } from '@/components/PatientCareTimeline';
 import { PatientEpisodeForm } from '@/components/PatientEpisodeForm';
 import { ZsigmondyCrossStages } from '@/components/ZsigmondyCrossStages';
 import { useToast } from '@/contexts/ToastContext';
@@ -273,8 +273,8 @@ export default function PatientStagesPage() {
             />
           )}
 
-          {/* Timeline */}
-          <PatientStageTimeline
+          {/* Egységes timeline (stádium + konzílium + feladatok) */}
+          <PatientCareTimeline
             key={refreshKey}
             patientId={patientId}
             onRefresh={handleStageChanged}

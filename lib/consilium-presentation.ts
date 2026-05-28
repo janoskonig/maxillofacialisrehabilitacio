@@ -200,7 +200,7 @@ function isoDate(d: Date | string | null | undefined): string | null {
   return x.toISOString();
 }
 
-async function loadPatientCareTimeline(patientId: string): Promise<PresentationTimelineEpisode[]> {
+export async function loadPatientCareTimeline(patientId: string): Promise<PresentationTimelineEpisode[]> {
   const pool = getDbPool();
   try {
     const tCheck = await pool.query<{ table_name: string }>(
