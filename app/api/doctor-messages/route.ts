@@ -266,6 +266,7 @@ export const GET = authedHandler(async (req, { auth }) => {
     const messages = await getGroupMessages(groupId, auth.userId, {
       limit,
       offset,
+      viewerRole: auth.role,
     });
 
     return NextResponse.json({
@@ -281,6 +282,7 @@ export const GET = authedHandler(async (req, { auth }) => {
     unreadOnly,
     limit,
     offset,
+    viewerRole: auth.role,
   });
 
   return NextResponse.json({

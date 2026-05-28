@@ -5,6 +5,7 @@ import { X, Upload, FileText, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
 import { MobileBottomSheet } from './mobile/MobileBottomSheet';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { buildDocumentLinkMarker } from '@/lib/messaging/document-link-marker';
 
 interface Patient {
   id: string;
@@ -215,9 +216,12 @@ export function DocumentRequestModal({
       const data = await response.json();
       const document = data.document || data;
 
-      // Üzenet formátum: [DOCUMENT_UPLOADED:tag:patientId?:documentId] (válasz üzenet)
-      const patientIdPart = chatType === 'doctor-doctor' ? `:${targetPatientId}` : '';
-      const messageText = `[DOCUMENT_UPLOADED:${selectedType || ''}${patientIdPart}:${document.id}]`;
+      const messageText = buildDocumentLinkMarker({
+        tag: selectedType || '',
+        patientId: targetPatientId,
+        documentId: document.id,
+        chatType,
+      });
 
       // Callback hívása az üzenet küldéséhez
       onDocumentUploaded(messageText);

@@ -15,7 +15,12 @@ import { MessageQuoteBlock } from '@/components/messaging/MessageQuoteBlock';
 import { ReplyComposerBar } from '@/components/messaging/ReplyComposerBar';
 import { useReplyState } from '@/components/messaging/useReplyState';
 import { buildQuotedMessagePreview } from '@/lib/message-reply';
-import type { QuotedMessagePreview, MessageDeliveryStatusEvent } from '@/lib/types/messaging';
+import type {
+  MessageContextLink,
+  QuotedMessagePreview,
+  MessageDeliveryStatusEvent,
+} from '@/lib/types/messaging';
+import { MessageContextLinksStrip } from '@/components/messaging/MessageContextLinksStrip';
 import {
   applyDeliveryStatusUpdate,
   isPatientChannelDeliveryEvent,
@@ -23,6 +28,7 @@ import {
 import { incrementParentReplyCount } from '@/components/messaging/reply-count-socket';
 import { useReplyThreadCollapse } from '@/components/messaging/useReplyThreadCollapse';
 import { filterMessagesByThreadCollapse } from '@/lib/messaging/reply-thread-visibility';
+import { DocumentLinkComposerButton } from '@/components/messaging/DocumentLinkComposerButton';
 import { replyThreadToggleLabel } from '@/components/messaging/reply-thread-label';
 
 interface Message {
@@ -40,6 +46,7 @@ interface Message {
   quotedMessage?: QuotedMessagePreview | null;
   deliveryStatus?: 'sent' | 'delivered' | 'read' | 'failed';
   replyCount?: number;
+  contextLinks?: MessageContextLink[];
 }
 
 interface Recipient {
@@ -809,6 +816,13 @@ export function PatientMessages() {
                           </div>
                         )}
 
+                        {message.contextLinks && message.contextLinks.length > 0 && (
+                          <MessageContextLinksStrip
+                            links={message.contextLinks}
+                            variant={isMyMessage ? 'bubble-own' : 'bubble-other'}
+                          />
+                        )}
+
                         <div className={`text-sm whitespace-pre-wrap break-words ${isMyMessage ? 'text-white' : 'text-gray-900'}`}>
                           <MessageTextRenderer
                             text={message.message}
@@ -817,6 +831,7 @@ export function PatientMessages() {
                             messageId={message.id}
                             senderId={message.senderId}
                             currentUserId={patientId}
+                            contextLinks={message.contextLinks}
                             onSendMessage={async (messageText) => {
                               setNewMessage(messageText);
                               await handleSendMessage();
@@ -902,6 +917,13 @@ export function PatientMessages() {
       {/* Input Area */}
       <div className="flex-shrink-0 border-t bg-white p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-4">
         <div className="flex items-end gap-2">
+          <DocumentLinkComposerButton
+            chatType="patient-doctor"
+            portalMode
+            messageText={newMessage}
+            disabled={sending}
+            onInsert={setNewMessage}
+          />
           <textarea
             ref={textareaRef}
             value={newMessage}

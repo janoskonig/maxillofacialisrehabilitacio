@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import { getMonogram, getLastName } from '@/lib/utils';
 import { MessageTextRenderer } from './MessageTextRenderer';
 import { DocumentRequestSendWizard } from './DocumentRequestSendWizard';
+import { DocumentLinkComposerButton } from './messaging/DocumentLinkComposerButton';
 import { ChatMessageBubble, type ChatBubbleMessage } from './messaging/ChatMessageBubble';
 import { ReplyComposerBar } from './messaging/ReplyComposerBar';
 import { useReplyThreadCollapse } from './messaging/useReplyThreadCollapse';
@@ -722,6 +723,15 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
                         <FileQuestion className="w-4 h-4 sm:mr-1" />
                         <span className="hidden sm:inline text-sm">Bekérés</span>
                       </button>
+                      {selectedPatient && (
+                        <DocumentLinkComposerButton
+                          patientId={selectedPatient.id}
+                          chatType="patient-doctor"
+                          messageText={message}
+                          disabled={sending}
+                          onInsert={setMessage}
+                        />
+                      )}
                       <textarea
                         ref={textareaRef}
                         value={message}

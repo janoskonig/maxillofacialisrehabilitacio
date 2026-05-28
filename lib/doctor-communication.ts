@@ -7,7 +7,14 @@ import {
   ReplyTargetNotFoundError,
   type DoctorReplyScope,
 } from './message-reply';
-import type { QuotedMessagePreview, ServerDeliveryStatus } from './types/messaging';
+import type {
+  MessageContextLink,
+  QuotedMessagePreview,
+  ServerDeliveryStatus,
+} from './types/messaging';
+import { enrichMessagesWithContextLinks } from './messaging/attach-context-links';
+import { syncDocumentContextLinkFromMarker } from './messaging/sync-context-link-from-marker';
+import type { StaffViewer } from './messaging/context-links';
 import {
   batchDoctorMessageReplyCounts,
   attachReplyCounts,
@@ -46,6 +53,7 @@ export interface DoctorMessage {
     userName: string | null;
     readAt: Date;
   }>;
+  contextLinks?: MessageContextLink[];
 }
 
 export interface CreateDoctorMessageInput {
@@ -255,6 +263,18 @@ async function mapDoctorMessageRows(
   return attachReplyCounts(mapped, replyCountMap);
 }
 
+async function enrichDoctorMessagesWithContextLinks(
+  rows: DoctorMessage[],
+  viewerUserId: string,
+  viewerRole: string,
+): Promise<DoctorMessage[]> {
+  return enrichMessagesWithContextLinks('doctor', rows, {
+    kind: 'staff',
+    userId: viewerUserId,
+    role: viewerRole,
+  });
+}
+
 /**
  * Üzenet küldése orvosnak (1:1 vagy csoport).
  *
@@ -358,6 +378,16 @@ export async function sendDoctorMessage(input: CreateDoctorMessageInput): Promis
     quotedMessage,
   };
 
+  const roleRow = await pool.query('SELECT role FROM users WHERE id = $1', [input.senderId]);
+  const role = (roleRow.rows[0]?.role as string) ?? 'fogpótlástanász';
+  await syncDocumentContextLinkFromMarker({
+    channel: 'doctor',
+    messageId: message.id,
+    messageText: input.message,
+    patientId: mentionedPatientIds[0] ?? '',
+    actor: { kind: 'staff', userId: input.senderId, role },
+  });
+
   return message;
 }
 
@@ -375,6 +405,7 @@ export async function getDoctorMessages(
     unreadOnly?: boolean; // Csak olvasatlan üzenetek
     limit?: number;
     offset?: number;
+    viewerRole?: string;
   }
 ): Promise<DoctorMessage[]> {
   const pool = getDbPool();
@@ -442,8 +473,12 @@ export async function getDoctorMessages(
     }
   }
 
-  // Reply preview-k (Szelet 0.2): batch SELECT a parent üzenetekre.
-  return mapDoctorMessageRows(result.rows, userId, readByMap);
+  const mapped = await mapDoctorMessageRows(result.rows, userId, readByMap);
+  return enrichDoctorMessagesWithContextLinks(
+    mapped,
+    userId,
+    options?.viewerRole ?? 'fogpótlástanász',
+  );
 }
 
 /**
@@ -946,6 +981,7 @@ export async function getGroupMessages(
   options?: {
     limit?: number;
     offset?: number;
+    viewerRole?: string;
   }
 ): Promise<DoctorMessage[]> {
   const pool = getDbPool();
@@ -1006,8 +1042,12 @@ export async function getGroupMessages(
     }
   }
   
-  // Reply preview-k + delivery + reply counts (Fázis 1).
-  return mapDoctorMessageRows(result.rows, userId, readByMap);
+  const mapped = await mapDoctorMessageRows(result.rows, userId, readByMap);
+  return enrichDoctorMessagesWithContextLinks(
+    mapped,
+    userId,
+    options?.viewerRole ?? 'fogpótlástanász',
+  );
 }
 
 /**

@@ -24,6 +24,7 @@ import {
 import { incrementParentReplyCount } from './messaging/reply-count-socket';
 import { useReplyThreadCollapse } from './messaging/useReplyThreadCollapse';
 import { filterMessagesByThreadCollapse } from '@/lib/messaging/reply-thread-visibility';
+import { DocumentLinkComposerButton } from './messaging/DocumentLinkComposerButton';
 
 interface Message {
   id: string;
@@ -920,6 +921,15 @@ export function PatientMessagesList() {
       {/* Message Input */}
       <div className="flex-shrink-0 border-t bg-white p-2 sm:p-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-4">
         <div className="flex items-end gap-2">
+          {selectedPatientId && (
+            <DocumentLinkComposerButton
+              patientId={selectedPatientId}
+              chatType="patient-doctor"
+              messageText={newMessage}
+              disabled={sending}
+              onInsert={setNewMessage}
+            />
+          )}
           <textarea
             ref={textareaRef}
             value={newMessage}

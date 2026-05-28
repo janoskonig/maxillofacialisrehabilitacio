@@ -7,6 +7,9 @@ import { DocumentUploadButton } from './DocumentUploadButton';
 import { DocumentRequestInfoCard } from './DocumentRequestInfoCard';
 import { ConsiliumPrepMessageCard } from './ConsiliumPrepMessageCard';
 import { detectDocumentRequest } from '@/lib/document-request-detector';
+import { parseDocumentLinkMarker } from '@/lib/messaging/document-link-marker';
+import { stripDocumentMarkerIfContextLinked } from '@/lib/messaging/strip-duplicate-document-marker';
+import type { MessageContextLink } from '@/lib/types/messaging';
 
 interface MessageTextRendererProps {
   text: string;
@@ -16,6 +19,8 @@ interface MessageTextRendererProps {
   senderId?: string; // Sender ID to check if current user is recipient
   currentUserId?: string | null; // Current user ID
   onSendMessage?: (messageText: string) => Promise<void>; // Function to send message
+  /** Fázis 2.1: ha van strukturált dokumentum-link, a marker ne duplikáljon. */
+  contextLinks?: MessageContextLink[] | null;
 }
 
 /**
@@ -33,18 +38,20 @@ export function MessageTextRenderer({
   senderId,
   currentUserId,
   onSendMessage,
+  contextLinks,
 }: MessageTextRendererProps) {
-  const lines = (text || '').split(/\r?\n/);
+  const displayText = stripDocumentMarkerIfContextLinked(text, contextLinks);
+  const lines = (displayText || '').split(/\r?\n/);
   const trailingNote = lines.slice(1).join('\n').trim();
 
   // Check for Konzílium előkészítő marker: [CONSILIUM_PREP:<token>]
   // Token is base64url (A-Za-z0-9_-), so the regex is safe and unambiguous.
   const consiliumPrepRegex = /\[CONSILIUM_PREP:([A-Za-z0-9_-]+)\]/;
-  const consiliumPrepMatch = (text || '').match(consiliumPrepRegex);
+  const consiliumPrepMatch = (displayText || '').match(consiliumPrepRegex);
   if (consiliumPrepMatch && typeof consiliumPrepMatch.index === 'number') {
     const token = consiliumPrepMatch[1];
-    const before = (text || '').slice(0, consiliumPrepMatch.index).trim();
-    const after = (text || '').slice(consiliumPrepMatch.index + consiliumPrepMatch[0].length).trim();
+    const before = (displayText || '').slice(0, consiliumPrepMatch.index).trim();
+    const after = (displayText || '').slice(consiliumPrepMatch.index + consiliumPrepMatch[0].length).trim();
     return (
       <>
         {before ? (
@@ -58,25 +65,36 @@ export function MessageTextRenderer({
     );
   }
 
-  // First check for document upload format: [DOCUMENT_UPLOADED:tag:patientId?:documentId]
-  const documentUploadRegex = /\[DOCUMENT_UPLOADED:([^:]*):?([^:]*):?([^\]]*)\]/g;
-  const documentUploadMatch = documentUploadRegex.exec(text);
-  
-  if (documentUploadMatch) {
-    const tag = documentUploadMatch[1] || '';
-    const patientIdFromMatch = documentUploadMatch[2] || null;
-    const documentId = documentUploadMatch[3] || '';
-    
-    if (documentId) {
-      // Render document upload card
-      return (
-        <DocumentRequestCard
-          tag={tag}
-          patientId={patientIdFromMatch || patientId || undefined}
-          documentId={documentId}
-          chatType={chatType}
-        />
-      );
+  const markerStart = (displayText || '').indexOf('[DOCUMENT_UPLOADED:');
+  if (markerStart !== -1) {
+    const markerEnd = (displayText || '').indexOf(']', markerStart);
+    if (markerEnd !== -1) {
+      const markerText = (displayText || '').slice(markerStart, markerEnd + 1);
+      const documentLink = parseDocumentLinkMarker(markerText);
+      if (documentLink) {
+        const before = (displayText || '').slice(0, markerStart).trim();
+        const after = (displayText || '').slice(markerEnd + 1).trim();
+        return (
+          <>
+            {before ? (
+              <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm mb-2">
+                {before}
+              </p>
+            ) : null}
+            <DocumentRequestCard
+              tag={documentLink.tag}
+              patientId={documentLink.patientId || patientId || undefined}
+              documentId={documentLink.documentId}
+              chatType={chatType}
+            />
+            {after ? (
+              <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm mt-2 opacity-90">
+                {after}
+              </p>
+            ) : null}
+          </>
+        );
+      }
     }
   }
 

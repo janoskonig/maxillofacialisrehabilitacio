@@ -74,6 +74,8 @@ export interface DoctorMessage {
     userName: string | null;
     readAt: Date;
   }>;
+  /** Fázis 2.1: strukturált entitás-linkek. */
+  contextLinks?: MessageContextLink[];
 }
 
 export interface DoctorConversation {
@@ -117,3 +119,44 @@ export interface PatientMention {
   nev: string;
   mentionFormat: string;
 }
+
+/** Fázis 2.0 — message_context_links.entity_type */
+export type MessageContextEntityType =
+  | 'patient'
+  | 'episode'
+  | 'work_phase'
+  | 'appointment'
+  | 'document'
+  | 'consilium_session'
+  | 'task';
+
+export interface MessageContextLinkPreview {
+  label: string;
+  subtitle?: string | null;
+  href?: string | null;
+}
+
+export interface MessageContextLink {
+  id: string;
+  channel: MessageChannel;
+  messageId: string;
+  entityType: MessageContextEntityType;
+  entityId: string;
+  createdAt: Date;
+  createdBy: string;
+  createdByName?: string | null;
+  preview?: MessageContextLinkPreview | null;
+}
+
+/** message_audit_events.event_type — context link és egyéb üzenet-mutációk */
+export type MessageAuditEventType =
+  | 'context_link_added'
+  | 'context_link_removed'
+  | 'created'
+  | 'edited'
+  | 'deleted'
+  | 'restored'
+  | 'pinned'
+  | 'unpinned'
+  | 'attachment_added'
+  | 'attachment_removed';

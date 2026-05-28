@@ -17,8 +17,9 @@ import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { Check, CheckCheck, Loader2, AlertTriangle, RotateCcw, CornerUpLeft } from 'lucide-react';
 import type { ReactNode } from 'react';
-import type { QuotedMessagePreview } from '@/lib/types/messaging';
+import type { MessageContextLink, QuotedMessagePreview } from '@/lib/types/messaging';
 import { MessageQuoteBlock } from './MessageQuoteBlock';
+import { MessageContextLinksStrip } from './MessageContextLinksStrip';
 import { replyThreadToggleLabel } from './reply-thread-label';
 
 export type DeliveryStatus = 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
@@ -40,6 +41,8 @@ export interface ChatBubbleMessage {
   readAt?: Date | string | null;
   /** Fázis 1.1: közvetlen válaszok száma. */
   replyCount?: number;
+  /** Fázis 2.1: strukturált entitás-linkek. */
+  contextLinks?: MessageContextLink[];
 }
 
 interface Props {
@@ -81,6 +84,9 @@ interface Props {
    * — a chrome egységes marad, a tartalom a hívó hatáskörében.
    */
   bubbleFooter?: ReactNode;
+  /** Fázis 2.1: staff eltávolíthatja a strukturált linkeket. */
+  onRemoveContextLink?: (messageId: string, linkId: string) => void;
+  canRemoveContextLinks?: boolean;
   className?: string;
 }
 
@@ -95,6 +101,8 @@ export function ChatMessageBubble({
   currentUserId,
   showSenderLabel = true,
   bubbleFooter,
+  onRemoveContextLink,
+  canRemoveContextLinks = false,
   className,
 }: Props) {
   const isFromMe = message.isFromMe;
@@ -145,6 +153,19 @@ export function ChatMessageBubble({
                 senderLabelOverride={quoteSenderOverride}
               />
             </div>
+          )}
+
+          {message.contextLinks && message.contextLinks.length > 0 && (
+            <MessageContextLinksStrip
+              links={message.contextLinks}
+              variant={quoteVariant}
+              canRemove={canRemoveContextLinks}
+              onRemoveLink={
+                onRemoveContextLink
+                  ? (linkId) => onRemoveContextLink(message.id, linkId)
+                  : undefined
+              }
+            />
           )}
 
           <div className="text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]">

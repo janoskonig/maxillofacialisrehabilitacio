@@ -15,6 +15,7 @@ import { detectDocumentRequest } from '@/lib/document-request-detector';
 import { hasEverTreatedPatient } from '@/lib/patient-doctor-access';
 import { parseReplyToMessageId, ReplyTargetNotFoundError, type PatientReplySender } from '@/lib/message-reply';
 import { checkRateLimitAsync, buildRateLimitedResponse } from '@/lib/api/rate-limit';
+import { resolveContextLinkViewer } from '@/lib/messaging/context-link-viewer';
 
 export const dynamic = 'force-dynamic';
 
@@ -463,6 +464,8 @@ export const GET = apiHandler(async (req) => {
     }
   }
 
+  const contextLinkViewer = await resolveContextLinkViewer(req);
+
   const messages = await getPatientMessages(validatedPatientId, {
     unreadOnly,
     limit: validatedLimit,
@@ -470,6 +473,7 @@ export const GET = apiHandler(async (req) => {
     doctorId: filterDoctorId,
     isAdmin: isAdmin,
     isPatientPortal: !!patientSessionId && !auth,
+    contextLinkViewer: contextLinkViewer ?? undefined,
   });
 
   return NextResponse.json({

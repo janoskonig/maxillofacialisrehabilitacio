@@ -9,7 +9,13 @@ import {
   ReplyTargetNotFoundError,
   type PatientReplySender,
 } from './message-reply';
-import type { QuotedMessagePreview, ServerDeliveryStatus } from './types/messaging';
+import type { MessageContextLink, QuotedMessagePreview, ServerDeliveryStatus } from './types/messaging';
+import {
+  enrichMessagesWithContextLinks,
+  type ContextLinkViewer,
+} from './messaging/attach-context-links';
+import { syncDocumentContextLinkFromMarker } from './messaging/sync-context-link-from-marker';
+import type { StaffViewer } from './messaging/context-links';
 import {
   batchPatientMessageReplyCounts,
   attachReplyCounts,
@@ -40,6 +46,8 @@ export interface Message {
   replyCount?: number;
   /** Fázis 1.2: szerveroldali kézbesítési állapot. */
   deliveryStatus?: ServerDeliveryStatus;
+  /** Fázis 2.1: strukturált entitás-linkek. */
+  contextLinks?: MessageContextLink[];
 }
 
 export interface CreateMessageInput {
@@ -335,6 +343,19 @@ export async function sendMessage(input: CreateMessageInput): Promise<Message> {
     createdBy: input.senderEmail,
   });
 
+  if (input.senderType === 'doctor') {
+    const roleRow = await pool.query('SELECT role FROM users WHERE id = $1', [input.senderId]);
+    const role = (roleRow.rows[0]?.role as string) ?? 'fogpótlástanász';
+    const actor: StaffViewer = { kind: 'staff', userId: input.senderId, role };
+    await syncDocumentContextLinkFromMarker({
+      channel: 'patient',
+      messageId: message.id,
+      messageText: validatedMessage,
+      patientId: validatedPatientId,
+      actor,
+    });
+  }
+
   return message;
 }
 
@@ -352,6 +373,7 @@ export async function getPatientMessages(
     doctorId?: string | null;
     isAdmin?: boolean;
     isPatientPortal?: boolean;
+    contextLinkViewer?: ContextLinkViewer;
   }
 ): Promise<Message[]> {
   const pool = getDbPool();
@@ -467,7 +489,8 @@ export async function getPatientMessages(
     deliveryStatus: effectivePatientDeliveryStatus(row, viewerRole),
   }));
 
-  return attachReplyCounts(mapped, replyCountMap);
+  const withCounts = attachReplyCounts(mapped, replyCountMap);
+  return enrichMessagesWithContextLinks('patient', withCounts, options?.contextLinkViewer);
 }
 
 /**

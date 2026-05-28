@@ -290,3 +290,67 @@ Content-Type: application/json
 #   beteg portál): 429 → failed buborék + „Újraküldés”.
 # - Szál összecsukás: összecsukott ősnél a beágyazott válaszok is rejtve.
 ###
+
+###############################################################################
+# [Fázis 2.0] message_context_links — strukturált entitás-link + audit
+#
+# POST/DELETE: csak staff (users tábla). GET: staff + beteg portál (látható
+# linkek szűrése entitás-jogosultság szerint).
+# Audit: message_audit_events (context_link_added / context_link_removed).
+###############################################################################
+
+@messageId = REPLACE_MESSAGE_UUID
+@documentId = REPLACE_PATIENT_DOCUMENT_UUID
+
+###
+# [2.0] Dokumentum link csatolása beteg üzenethez
+###
+
+POST {{host}}/api/messages/{{messageId}}/context
+Cookie: {{authCookie}}
+Content-Type: application/json
+
+{
+  "entityType": "document",
+  "entityId": "{{documentId}}"
+}
+
+###
+# [2.0] Linkek listázása üzenethez
+###
+
+GET {{host}}/api/messages/{{messageId}}/context
+Cookie: {{authCookie}}
+
+###
+# [2.0] Üzenetek egy entitáshoz (beteg csatorna)
+###
+
+GET {{host}}/api/messages/context?entityType=document&entityId={{documentId}}
+Cookie: {{authCookie}}
+
+###
+# [2.0] Orvos csatorna — ugyanaz doctor_messages ID-vel
+###
+
+POST {{host}}/api/doctor-messages/{{messageId}}/context
+Cookie: {{authCookie}}
+Content-Type: application/json
+
+{
+  "entityType": "document",
+  "entityId": "{{documentId}}"
+}
+
+###
+# [2.0] Link törlése (linkId a GET válaszból)
+###
+
+DELETE {{host}}/api/messages/{{messageId}}/context
+Cookie: {{authCookie}}
+Content-Type: application/json
+
+{
+  "linkId": "REPLACE_CONTEXT_LINK_UUID"
+}
+###

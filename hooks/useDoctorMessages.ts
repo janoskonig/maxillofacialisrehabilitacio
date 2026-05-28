@@ -36,6 +36,7 @@ interface UseDoctorMessagesOptions {
 export interface UseDoctorMessagesReturn {
   conversations: DoctorConversation[];
   messages: DoctorMessage[];
+  setMessages: React.Dispatch<React.SetStateAction<DoctorMessage[]>>;
   doctors: Doctor[];
   groupParticipants: GroupParticipant[];
   unreadCount: number;
@@ -66,7 +67,7 @@ export interface UseDoctorMessagesReturn {
   selectDoctor: (doctorId: string, doctorName: string) => void;
   selectGroup: (groupId: string, groupName: string | null) => void;
   clearSelection: () => void;
-  sendMessage: (text: string) => Promise<boolean>;
+  sendMessage: (text: string) => Promise<string | null>;
   /** Fázis 4.1: sikertelen (429 / hálózat) üzenet újraküldése ugyanazzal a clientMessageId-val. */
   retryMessage: (message: DoctorMessage) => Promise<boolean>;
   createGroupConversation: (participantIds: string[]) => Promise<{ groupId: string } | null>;
@@ -693,7 +694,7 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
   };
 
   const sendMessage = async (text: string): Promise<boolean> => {
-    if (!text.trim() || (!selectedDoctorId && !selectedGroupId)) return false;
+    if (!text.trim() || (!selectedDoctorId && !selectedGroupId)) return null;
 
     const replyTargetSnapshot = replyState.replyTarget;
     const replyToMessageId = replyTargetSnapshot?.id ?? null;
@@ -756,7 +757,7 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
             ),
           );
           showToast(error.error || 'Túl sok üzenet — próbáld újra később.', 'error');
-          return false;
+          return null;
         }
 
         // Bármilyen más hiba esetén eltakarítjuk a pending buborékot.
@@ -765,9 +766,18 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
       }
 
       const data = await response.json();
+      const savedId = data.message?.id as string | undefined;
 
       setMessages(prev =>
-        prev.map(m => m.id === tempId ? { ...data.message, pending: false } : m)
+        prev.map(m =>
+          m.id === tempId
+            ? {
+                ...data.message,
+                pending: false,
+                contextLinks: data.message?.contextLinks ?? [],
+              }
+            : m,
+        ),
       );
       setPendingMessageId(null);
       replyState.clearReply();
@@ -783,11 +793,11 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
         fetchConversations();
       }, 500);
 
-      return true;
+      return savedId ?? null;
     } catch (error: any) {
       console.error('Hiba az üzenet küldésekor:', error);
       showToast(error.message || 'Hiba történt az üzenet küldésekor', 'error');
-      return false;
+      return null;
     } finally {
       setSending(false);
     }
@@ -959,6 +969,7 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
   return {
     conversations,
     messages,
+    setMessages,
     doctors,
     groupParticipants,
     unreadCount,

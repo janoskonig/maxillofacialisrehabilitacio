@@ -17,6 +17,12 @@ import { useDoctorMessages } from '@/hooks/useDoctorMessages';
 import { aggregateGroupSenderDeliveryStatus } from '@/lib/messaging/group-delivery-status';
 import { ChatMessageBubble, type ChatBubbleMessage } from './messaging/ChatMessageBubble';
 import { ReplyComposerBar } from './messaging/ReplyComposerBar';
+import { DocumentLinkComposerButton } from './messaging/DocumentLinkComposerButton';
+import { ContextLinkComposerButton } from './messaging/ContextLinkComposerButton';
+import { PendingContextLinksBar } from './messaging/PendingContextLinksBar';
+import type { PendingContextLink } from './messaging/ContextLinkAttachPicker';
+import { useMessageContextActions } from '@/hooks/useMessageContextActions';
+import type { MessageContextLink } from '@/lib/types/messaging';
 import { useReplyThreadCollapse } from './messaging/useReplyThreadCollapse';
 import { filterMessagesByThreadCollapse } from '@/lib/messaging/reply-thread-visibility';
 
@@ -25,7 +31,7 @@ export function DoctorMessages() {
   const { socket, isConnected } = useSocket();
 
   const {
-    conversations, messages, doctors, groupParticipants, unreadCount,
+    conversations, messages, setMessages, doctors, groupParticipants, unreadCount,
     currentUserId, isGroupCreator,
     selectedDoctorId, selectedDoctorName, selectedGroupId, selectedGroupName,
     loading, sending, deletingGroup,
@@ -46,6 +52,8 @@ export function DoctorMessages() {
   const [editingGroupName, setEditingGroupName] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [showAllParticipants, setShowAllParticipants] = useState(false);
+  const [pendingContextLinks, setPendingContextLinks] = useState<PendingContextLink[]>([]);
+  const { attachLink, removeLink } = useMessageContextActions('doctor');
 
   // ── Refs ────────────────────────────────────────────────────────────
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -201,10 +209,43 @@ export function DoctorMessages() {
     }
 
     shouldAutoScrollRef.current = true;
-    const success = await sendMessage(textToSend);
-    if (success && !messageText) {
-      setNewMessage('');
+    const pendingSnapshot = [...pendingContextLinks];
+    const messageId = await sendMessage(textToSend);
+    if (messageId) {
+      if (pendingSnapshot.length > 0) {
+        const attached: MessageContextLink[] = [];
+        for (const p of pendingSnapshot) {
+          const link = await attachLink(messageId, p.entityType, p.entityId);
+          if (link) attached.push(link);
+        }
+        if (attached.length > 0) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === messageId
+                ? { ...m, contextLinks: [...(m.contextLinks ?? []), ...attached] }
+                : m,
+            ),
+          );
+        }
+        setPendingContextLinks([]);
+      }
+      if (!messageText) {
+        setNewMessage('');
+      }
+      replyState.clearReply();
     }
+  };
+
+  const handleRemoveContextLink = async (messageId: string, linkId: string) => {
+    const ok = await removeLink(messageId, linkId);
+    if (!ok) return;
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === messageId
+          ? { ...m, contextLinks: (m.contextLinks ?? []).filter((l) => l.id !== linkId) }
+          : m,
+      ),
+    );
   };
 
   const handleSelectDoctor = (doctorId: string, doctorName: string) => {
@@ -543,6 +584,7 @@ export function DoctorMessages() {
               replyCount: message.replyCount ?? 0,
               deliveryStatus: effectiveDeliveryStatus,
               readAt: message.readAt ?? null,
+              contextLinks: message.contextLinks ?? [],
             };
 
             // Csoport olvasás-vizualizáció a buborék belső footerébe — a
@@ -618,6 +660,8 @@ export function DoctorMessages() {
                     message={bubbleMessage}
                     currentUserId={currentUserId}
                     showSenderLabel={false}
+                    canRemoveContextLinks={isFromMe && !isPending}
+                    onRemoveContextLink={handleRemoveContextLink}
                     renderText={(text) => (
                       <MessageTextRenderer
                         text={text}
@@ -626,6 +670,7 @@ export function DoctorMessages() {
                         messageId={message.id}
                         senderId={message.senderId}
                         currentUserId={currentUserId}
+                        contextLinks={message.contextLinks}
                         onSendMessage={async (messageText) => {
                           await handleSendMessage(messageText);
                         }}
@@ -664,8 +709,23 @@ export function DoctorMessages() {
       )}
 
       {/* Message Input */}
-      <div className="flex-shrink-0 border-t bg-white p-2 sm:p-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-4 relative">
-        <div className="flex items-end gap-2">
+      <div className="flex-shrink-0 border-t bg-white pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-0 relative">
+        <PendingContextLinksBar
+          links={pendingContextLinks}
+          onRemove={(i) => setPendingContextLinks((prev) => prev.filter((_, idx) => idx !== i))}
+        />
+        <div className="flex items-end gap-2 p-2 sm:p-4 sm:pt-2">
+          <DocumentLinkComposerButton
+            chatType="doctor-doctor"
+            messageText={newMessage}
+            disabled={sending}
+            onInsert={setNewMessage}
+          />
+          <ContextLinkComposerButton
+            pendingLinks={pendingContextLinks}
+            disabled={sending}
+            onAddPending={(link) => setPendingContextLinks((prev) => [...prev, link])}
+          />
           <div className="flex-1 relative">
             <textarea
               ref={textareaRef}
