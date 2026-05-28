@@ -22,6 +22,8 @@ interface PatientDocumentsProps {
   canDelete?: boolean;
   onSavePatientBeforeUpload?: () => Promise<string | null>; // Returns patientId or null
   isPatientDirty?: boolean;
+  /** Üzenet kontextus-linkből: dokumentum előnézet megnyitása. */
+  highlightDocumentId?: string | null;
 }
 
 export function PatientDocuments({ 
@@ -31,7 +33,8 @@ export function PatientDocuments({
   canUpload = false, 
   canDelete = false,
   onSavePatientBeforeUpload,
-  isPatientDirty = false
+  isPatientDirty = false,
+  highlightDocumentId = null,
 }: PatientDocumentsProps) {
   const { showToast, confirm: confirmDialog } = useToast();
   const [documents, setDocuments] = useState<PatientDocument[]>([]);
@@ -83,6 +86,15 @@ export function PatientDocuments({
     // Load tags regardless of patientId - tags are global
     loadAvailableTags();
   }, [patientId]);
+
+  useEffect(() => {
+    if (!highlightDocumentId || documents.length === 0) return;
+    const doc = documents.find((d) => d.id === highlightDocumentId);
+    if (doc) {
+      setPreviewDocument(doc);
+      document.getElementById('section-adminisztracio')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [highlightDocumentId, documents]);
 
   const loadAvailableTags = async () => {
     try {

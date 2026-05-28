@@ -104,6 +104,8 @@ interface PatientFormProps {
   showOnlySections?: string[]; // 'alapadatok', 'szemelyes', 'beutalo', 'anamnezis', 'betegvizsgalat', 'ohip14', 'adminisztracio', 'idopont', 'stadium'
   /** Gyors új beteg: rejtett NEAK-hiánylista; személyes szekció szűkített */
   minimalNewPatient?: boolean;
+  /** Üzenetből érkező dokumentum-link: megnyitja az előnézetet betöltés után. */
+  highlightDocumentId?: string | null;
 }
 
 export function PatientForm({
@@ -113,6 +115,7 @@ export function PatientForm({
   isViewOnly = false,
   showOnlySections,
   minimalNewPatient = false,
+  highlightDocumentId = null,
 }: PatientFormProps) {
   const router = useRouter();
   const { confirm: confirmDialog, showToast } = useToast();
@@ -1883,6 +1886,7 @@ export function PatientForm({
             canDelete={userRole === 'admin'}
             onSavePatientBeforeUpload={!isViewOnly ? savePatientSilently : undefined}
             isPatientDirty={!isViewOnly && hasUnsavedChanges()}
+            highlightDocumentId={highlightDocumentId}
           />
         </div>
         )}

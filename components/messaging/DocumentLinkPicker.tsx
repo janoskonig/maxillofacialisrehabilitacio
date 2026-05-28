@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FileText, Image as ImageIcon, Loader2, Search, X } from 'lucide-react';
+import { Loader2, Search, X } from 'lucide-react';
+import { DocumentListThumbnail } from './DocumentListThumbnail';
 import { MobileBottomSheet } from '@/components/mobile/MobileBottomSheet';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import {
@@ -44,11 +45,6 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function docIcon(mimeType: string | null) {
-  if (mimeType?.startsWith('image/')) return ImageIcon;
-  return FileText;
-}
-
 export function DocumentLinkPicker({
   isOpen,
   onClose,
@@ -65,11 +61,13 @@ export function DocumentLinkPicker({
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
 
-  const [patients, setPatients] = useState<PatientOption[]>([]);
-  const [loadingPatients, setLoadingPatients] = useState(false);
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(
     patientId ?? null,
   );
+  const [selectedPatientName, setSelectedPatientName] = useState<string | null>(null);
+  const [patientSearchQuery, setPatientSearchQuery] = useState('');
+  const [patientSearchResults, setPatientSearchResults] = useState<PatientOption[]>([]);
+  const [loadingPatientSearch, setLoadingPatientSearch] = useState(false);
 
   const needsPatientSelection =
     chatType === 'doctor-doctor' && !patientId && !portalMode;
@@ -102,23 +100,49 @@ export function DocumentLinkPicker({
   useEffect(() => {
     if (!isOpen) {
       setQuery('');
+      setPatientSearchQuery('');
+      setPatientSearchResults([]);
       return;
     }
     setSelectedPatientId(patientId ?? null);
+    setSelectedPatientName(null);
+  }, [isOpen, patientId]);
+
+  useEffect(() => {
+    if (!isOpen) return;
     if (portalMode || effectivePatientId) {
       void loadDocuments();
     }
-  }, [isOpen, patientId, effectivePatientId, portalMode, loadDocuments]);
+  }, [isOpen, effectivePatientId, portalMode, loadDocuments]);
 
   useEffect(() => {
-    if (!isOpen || !needsPatientSelection) return;
-    setLoadingPatients(true);
-    fetch('/api/patients?limit=200', { credentials: 'include' })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Beteglista hiba'))))
-      .then((data) => setPatients(data.patients ?? []))
-      .catch(() => setPatients([]))
-      .finally(() => setLoadingPatients(false));
-  }, [isOpen, needsPatientSelection]);
+    if (!isOpen || !needsPatientSelection || selectedPatientId) {
+      setPatientSearchResults([]);
+      return;
+    }
+    const q = patientSearchQuery.trim();
+    if (!q) {
+      setPatientSearchResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setLoadingPatientSearch(true);
+      try {
+        const res = await fetch(
+          `/api/patients?q=${encodeURIComponent(q)}&limit=20`,
+          { credentials: 'include' },
+        );
+        if (!res.ok) throw new Error('Beteglista hiba');
+        const data = await res.json();
+        setPatientSearchResults(data.patients ?? []);
+      } catch {
+        setPatientSearchResults([]);
+      } finally {
+        setLoadingPatientSearch(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [isOpen, needsPatientSelection, patientSearchQuery, selectedPatientId]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -152,27 +176,70 @@ export function DocumentLinkPicker({
       {needsPatientSelection && (
         <div>
           <label className="form-label block mb-1">Beteg</label>
-          {loadingPatients ? (
-            <div className="flex items-center gap-2 text-sm text-gray-500">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Betöltés…
+          {selectedPatientId ? (
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+              <span className="text-sm font-medium text-gray-900 truncate">
+                {selectedPatientName || 'Kiválasztott beteg'}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedPatientId(null);
+                  setSelectedPatientName(null);
+                  setDocuments([]);
+                  setPatientSearchQuery('');
+                }}
+                className="text-sm text-blue-600 hover:text-blue-800 flex-shrink-0"
+              >
+                Módosítás
+              </button>
             </div>
           ) : (
-            <select
-              className="form-input w-full"
-              value={selectedPatientId ?? ''}
-              onChange={(e) => {
-                setSelectedPatientId(e.target.value || null);
-                setDocuments([]);
-              }}
-            >
-              <option value="">Válasszon beteget…</option>
-              {patients.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nev || p.id}
-                </option>
-              ))}
-            </select>
+            <>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="search"
+                  className="form-input w-full pl-9"
+                  placeholder="Beteg keresése név szerint…"
+                  value={patientSearchQuery}
+                  onChange={(e) => setPatientSearchQuery(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              {patientSearchQuery.trim() && (
+                <div className="mt-1 max-h-48 overflow-y-auto border border-gray-200 rounded-lg bg-white">
+                  {loadingPatientSearch ? (
+                    <div className="flex items-center justify-center gap-2 py-4 text-sm text-gray-500">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Keresés…
+                    </div>
+                  ) : patientSearchResults.length === 0 ? (
+                    <p className="py-4 text-center text-sm text-gray-500">Nincs találat</p>
+                  ) : (
+                    <ul className="divide-y divide-gray-100">
+                      {patientSearchResults.map((p) => (
+                        <li key={p.id}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedPatientId(p.id);
+                              setSelectedPatientName(p.nev || p.id);
+                              setPatientSearchQuery('');
+                              setPatientSearchResults([]);
+                              setDocuments([]);
+                            }}
+                            className="w-full text-left px-3 py-2.5 hover:bg-blue-50 transition-colors text-sm font-medium text-gray-900"
+                          >
+                            {p.nev || p.id}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -205,7 +272,6 @@ export function DocumentLinkPicker({
           ) : (
             <ul className="overflow-y-auto max-h-[50vh] sm:max-h-[360px] divide-y divide-gray-100 border border-gray-200 rounded-lg">
               {filtered.map((doc) => {
-                const Icon = docIcon(doc.mimeType);
                 const uploadedAt = doc.uploadedAt
                   ? format(new Date(doc.uploadedAt), 'yyyy. MM. dd.', { locale: hu })
                   : '';
@@ -214,9 +280,15 @@ export function DocumentLinkPicker({
                     <button
                       type="button"
                       onClick={() => handlePick(doc)}
-                      className="w-full text-left px-3 py-3 hover:bg-blue-50 transition-colors flex gap-3 items-start"
+                      className="w-full text-left px-3 py-3 hover:bg-blue-50 transition-colors flex gap-3 items-center"
                     >
-                      <Icon className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                      <DocumentListThumbnail
+                        documentId={doc.id}
+                        filename={doc.filename}
+                        mimeType={doc.mimeType}
+                        patientId={effectivePatientId}
+                        portalMode={portalMode}
+                      />
                       <div className="min-w-0 flex-1">
                         <div className="font-medium text-gray-900 truncate">
                           {doc.filename}

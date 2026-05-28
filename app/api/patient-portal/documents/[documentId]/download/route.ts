@@ -44,12 +44,13 @@ export const GET = apiHandler(async (req, { correlationId, params }) => {
   const fileBuffer = await downloadFile(document.file_path, patientId);
 
   const isImage = document.mime_type && document.mime_type.startsWith('image/');
+  const viewInline = new URL(req.url).searchParams.get('inline') === 'true' || isImage;
 
   return new NextResponse(new Uint8Array(fileBuffer), {
     status: 200,
     headers: {
       'Content-Type': document.mime_type || 'application/octet-stream',
-      'Content-Disposition': isImage
+      'Content-Disposition': viewInline
         ? `inline; filename="${encodeURIComponent(document.filename)}"`
         : `attachment; filename="${encodeURIComponent(document.filename)}"`,
       'Content-Length': document.file_size.toString(),

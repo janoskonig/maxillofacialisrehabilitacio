@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { PatientForm } from '@/components/PatientForm';
 import { Patient, patientStageOptions, PatientStageEntry } from '@/lib/types';
@@ -17,10 +17,14 @@ import { PatientNextConsiliumSessionCard } from '@/components/PatientNextConsili
 
 type TabType = 'alapadatok' | 'anamnezis' | 'adminisztracio' | 'idopont' | 'konzilium' | 'uzenet';
 
+const VALID_TABS: TabType[] = ['alapadatok', 'anamnezis', 'adminisztracio', 'idopont', 'konzilium', 'uzenet'];
+
 export default function PatientViewPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const patientId = params.id as string;
+  const highlightDocumentId = searchParams.get('documentId');
   const [authorized, setAuthorized] = useState(false);
   const [patient, setPatient] = useState<Patient | null>(null);
   const [loading, setLoading] = useState(true);
@@ -94,6 +98,16 @@ export default function PatientViewPage() {
       checkAuth();
     }
   }, [router, patientId]);
+
+  useEffect(() => {
+    if (!authorized) return;
+    const tabParam = searchParams.get('tab');
+    const normalizedTab = tabParam === 'documents' ? 'adminisztracio' : tabParam;
+    if (!normalizedTab || !VALID_TABS.includes(normalizedTab as TabType)) return;
+    const tab = normalizedTab as TabType;
+    setActiveTab(tab);
+    setLoadedTabs((prev) => new Set<TabType>([...Array.from(prev), tab]));
+  }, [authorized, searchParams]);
 
   const handleBack = () => {
     router.back();
@@ -306,6 +320,7 @@ export default function PatientViewPage() {
               onSave={handleSavePatient}
               onCancel={handleBack}
               showOnlySections={['adminisztracio']}
+              highlightDocumentId={highlightDocumentId}
             />
           )}
 

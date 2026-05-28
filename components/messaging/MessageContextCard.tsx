@@ -62,6 +62,7 @@ export function MessageContextCard({
   const label = link.preview?.label ?? ENTITY_LABELS[link.entityType];
   const subtitle = link.preview?.subtitle;
   const href = link.preview?.href;
+  const opensInNewTab = link.entityType === 'document' && !!href;
 
   const isOwn = variant === 'bubble-own';
   const boxClass = isOwn
@@ -91,7 +92,12 @@ export function MessageContextCard({
   return (
     <div className="relative group/link w-full max-w-full">
       {href ? (
-        <Link href={href} className="block hover:opacity-90 transition-opacity">
+        <Link
+          href={href}
+          className="block hover:opacity-90 transition-opacity"
+          target={opensInNewTab ? '_blank' : undefined}
+          rel={opensInNewTab ? 'noopener noreferrer' : undefined}
+        >
           {inner}
         </Link>
       ) : (

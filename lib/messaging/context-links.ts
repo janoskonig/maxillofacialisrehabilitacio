@@ -333,7 +333,7 @@ async function buildLinkPreview(
       if (!r.rows.length) return null;
       return {
         label: r.rows[0].filename,
-        href: `/patients/${r.rows[0].patient_id}/view?tab=documents`,
+        href: `/patients/${r.rows[0].patient_id}/view?tab=adminisztracio&documentId=${entity.entityId}`,
       };
     }
     case 'appointment': {
