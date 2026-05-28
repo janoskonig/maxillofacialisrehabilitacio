@@ -1,30 +1,18 @@
-'use client';
+import { Suspense } from 'react';
+import PatientPortalDashboardPageClient from './PatientPortalDashboardPageClient';
 
-import { useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { PortalDashboard } from '@/components/patient-portal/PortalDashboard';
-import { PortalLayout } from '@/components/patient-portal/PortalLayout';
-import { useToast } from '@/contexts/ToastContext';
+function PatientPortalDashboardFallback() {
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="animate-pulse text-gray-500">Betöltés...</div>
+    </div>
+  );
+}
 
 export default function PatientPortalDashboardPage() {
-  const searchParams = useSearchParams();
-  const { showToast } = useToast();
-
-  useEffect(() => {
-    const verified = searchParams.get('verified');
-    if (verified === 'true') {
-      showToast('Email cím sikeresen megerősítve!', 'success');
-    }
-
-    const impersonated = searchParams.get('impersonated');
-    if (impersonated === 'true') {
-      showToast('Beteg nézetben vagy bejelentkezve', 'info');
-    }
-  }, [searchParams, showToast]);
-
   return (
-    <PortalLayout>
-      <PortalDashboard />
-    </PortalLayout>
+    <Suspense fallback={<PatientPortalDashboardFallback />}>
+      <PatientPortalDashboardPageClient />
+    </Suspense>
   );
 }
