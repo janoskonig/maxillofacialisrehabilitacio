@@ -1,0 +1,16 @@
+node_modules
+.next
+.git
+.env*
+!.env.example
+coverage
+*.md
+.cursor
+.vscode
+.idea
+__tests__
+docs
+database
+scripts
+*.log
+.DS_Store

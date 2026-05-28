@@ -3,11 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=18.0.0"
+    "node": "20.x"
   },
   "scripts": {
     "dev": "tsx server.ts",
     "build": "next build",
+    "prestart": "node scripts/verify-production-build.mjs",
     "build:analyze": "ANALYZE=true next build",
     "start": "NODE_ENV=production tsx server.ts",
     "lint": "next lint",

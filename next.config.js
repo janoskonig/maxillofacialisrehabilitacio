@@ -12,6 +12,8 @@ const nextConfig = {
   // Build memory: webpackBuildWorker (opt-out custom webpacknél, kézzel kényszeríthető), serverSourceMaps off
   experimental: {
     instrumentationHook: true,
+    // Low-memory build: one worker for static generation + isolated webpack workers.
+    cpus: 1,
     webpackBuildWorker: true,
     serverSourceMaps: false,
     enablePrerenderSourceMaps: false,
@@ -69,13 +71,6 @@ const nextConfig = {
     ];
   },
   
-  webpack: (config, { dev }) => {
-    // Build memory: cache memória-típusra állítása (Next Memory guide)
-    if (config.cache !== false && !dev) {
-      config.cache = Object.freeze({ type: 'memory' });
-    }
-    return config;
-  },
 }
 
 // Wrap with Sentry config only if enabled
