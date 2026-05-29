@@ -309,10 +309,16 @@
 
 /* Mobile-specific improvements */
 @media (max-width: 767px) {
-  /* Ensure touch targets are at least 44x44px */
-  button, a, input[type="button"], input[type="submit"] {
+  /* Ensure interactive controls are comfortable touch targets (>= 44x44px).
+     Inline text links (<a>) are intentionally excluded from min-width so they
+     don't get force-widened and overlap surrounding text. */
+  button, input[type="button"], input[type="submit"], [role="button"] {
     min-height: 44px;
     min-width: 44px;
+  }
+
+  a {
+    min-height: 44px;
   }
   
   /* Prevent zoom on input focus (iOS) - !important needed to override Tailwind class specificity */

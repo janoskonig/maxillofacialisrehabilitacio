@@ -127,8 +127,8 @@ export default function MessagesPageClient() {
         preferredChannel={activeTab === 'doctor-doctor' ? 'doctor' : 'patient'}
       >
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-mobile-nav-staff md:pb-6">
-        <div className="mb-4 border-b border-gray-200">
-          <nav className="flex gap-1" aria-label="Üzenetek fülök">
+        <div className="mb-4 border-b border-gray-200 overflow-x-auto scrollbar-hide">
+          <nav className="flex gap-1 min-w-max" aria-label="Üzenetek fülök">
             <button
               onClick={() => setActiveTab('doctor-doctor')}
               className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
