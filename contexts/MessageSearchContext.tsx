@@ -145,16 +145,29 @@ export function MessageSearchProvider({
     return () => window.removeEventListener('keydown', block, true);
   }, [isOpen]);
 
-  const value: MessageSearchContextValue = {
-    isOpen,
-    preferredChannel: channelOverride ?? preferredChannel,
-    activeHandler,
-    openSearch,
-    closeSearch,
-    registerHandler,
-    unregisterHandler,
-    navigateToHit,
-  };
+  const value = useMemo<MessageSearchContextValue>(
+    () => ({
+      isOpen,
+      preferredChannel: channelOverride ?? preferredChannel,
+      activeHandler,
+      openSearch,
+      closeSearch,
+      registerHandler,
+      unregisterHandler,
+      navigateToHit,
+    }),
+    [
+      isOpen,
+      channelOverride,
+      preferredChannel,
+      activeHandler,
+      openSearch,
+      closeSearch,
+      registerHandler,
+      unregisterHandler,
+      navigateToHit,
+    ],
+  );
 
   return (
     <MessageSearchContext.Provider value={value}>
