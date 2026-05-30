@@ -76,6 +76,7 @@ export const POST = apiHandler(async (req) => {
 
   const response = NextResponse.json({
     success: true,
+    token,
     user: {
       email: user.email,
       role: user.role,

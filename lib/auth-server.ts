@@ -33,7 +33,13 @@ export class HttpError extends Error {
  * @returns AuthPayload vagy null, ha nincs érvényes token
  */
 export async function verifyAuth(request: NextRequest): Promise<AuthPayload | null> {
-  const token = request.cookies.get('auth-token')?.value;
+  let token = request.cookies.get('auth-token')?.value;
+
+  if (!token) {
+    const authHeader = request.headers.get('authorization');
+    if (authHeader?.startsWith('Bearer ')) token = authHeader.slice(7);
+  }
+
   if (!token) return null;
 
   try {

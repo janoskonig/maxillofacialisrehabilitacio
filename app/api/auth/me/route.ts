@@ -1,34 +1,14 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { jwtVerify } from 'jose';
+import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
-import { apiHandler } from '@/lib/api/route-handler';
-
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'change-this-to-a-random-secret-in-production'
-);
+import { authedHandler } from '@/lib/api/route-handler';
 
 export const dynamic = 'force-dynamic';
 
-export const GET = apiHandler(async (req) => {
-  const token = req.cookies.get('auth-token')?.value;
-
-  if (!token) {
-    return NextResponse.json(
-      { error: 'Nincs bejelentkezve' },
-      { status: 401 }
-    );
-  }
-
-  const { payload } = await jwtVerify(token, JWT_SECRET);
-
-  const userId = payload.userId as string;
-  const email = payload.email as string;
-  const role = payload.role as string;
-
+export const GET = authedHandler(async (_req, { auth }) => {
   const pool = getDbPool();
   const userResult = await pool.query(
     'SELECT email, role, active, restricted_view, intezmeny, doktor_neve FROM users WHERE id = $1',
-    [userId]
+    [auth.userId]
   );
 
   if (userResult.rows.length === 0 || !userResult.rows[0].active) {
@@ -40,7 +20,7 @@ export const GET = apiHandler(async (req) => {
 
   return NextResponse.json({
     user: {
-      id: userId,
+      id: auth.userId,
       email: userResult.rows[0].email,
       role: userResult.rows[0].role,
       restrictedView: userResult.rows[0].restricted_view || false,
