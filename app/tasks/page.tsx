@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getCurrentUser } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
 import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
+import { QuickTaskForm } from '@/components/QuickTaskForm';
 import { ClipboardList, Loader2, ArrowLeft } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
@@ -26,6 +27,13 @@ export default function StaffTasksPage() {
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
 
+  const loadTasks = useCallback(async () => {
+    const res = await fetch('/api/user-tasks', { credentials: 'include' });
+    if (!res.ok) throw new Error('Betöltés sikertelen');
+    const data = await res.json();
+    setTasks(data.tasks || []);
+  }, []);
+
   useEffect(() => {
     (async () => {
       const user = await getCurrentUser();
@@ -34,10 +42,7 @@ export default function StaffTasksPage() {
         return;
       }
       try {
-        const res = await fetch('/api/user-tasks', { credentials: 'include' });
-        if (!res.ok) throw new Error('Betöltés sikertelen');
-        const data = await res.json();
-        setTasks(data.tasks || []);
+        await loadTasks();
         await fetch('/api/user-tasks/mark-viewed', { method: 'POST', credentials: 'include' }).catch(() => {});
       } catch {
         setTasks([]);
@@ -45,7 +50,7 @@ export default function StaffTasksPage() {
         setLoading(false);
       }
     })();
-  }, [router]);
+  }, [router, loadTasks]);
 
   return (
     <div className="min-h-screen bg-gray-50 pb-mobile-nav-staff md:pb-6">
@@ -64,7 +69,12 @@ export default function StaffTasksPage() {
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-4 py-6">
+      <main className="max-w-3xl mx-auto px-4 py-6 space-y-6">
+        <section className="card p-4">
+          <h2 className="text-sm font-semibold text-gray-900 mb-3">Új teendő</h2>
+          <QuickTaskForm onCreated={() => void loadTasks()} />
+        </section>
+
         {loading ? (
           <div className="flex items-center justify-center py-12 text-gray-500 gap-2">
             <Loader2 className="w-6 h-6 animate-spin" />
@@ -87,9 +97,19 @@ export default function StaffTasksPage() {
                       <p className="text-sm text-gray-600 mt-1 whitespace-pre-wrap">{t.description}</p>
                     )}
                     {t.dueAt ? (
-                      <p className="text-sm font-medium text-amber-900/90 mt-2">
-                        Határidő: {format(new Date(t.dueAt), 'yyyy.MM.dd HH:mm', { locale: hu })}
-                      </p>
+                      (() => {
+                        const overdue = new Date(t.dueAt).getTime() < Date.now();
+                        return (
+                          <p
+                            className={`text-sm font-medium mt-2 ${
+                              overdue ? 'text-red-600' : 'text-amber-900/90'
+                            }`}
+                          >
+                            Határidő: {format(new Date(t.dueAt), 'yyyy.MM.dd HH:mm', { locale: hu })}
+                            {overdue ? ' — lejárt' : ''}
+                          </p>
+                        );
+                      })()
                     ) : null}
                     <p className="text-xs text-gray-400 mt-2">
                       {format(new Date(t.createdAt), 'yyyy.MM.dd HH:mm', { locale: hu })}
@@ -141,7 +161,9 @@ export default function StaffTasksPage() {
                         </Link>
                       </div>
                     )}
-                    {(t.taskType === 'document_upload' || t.taskType === 'meeting_action') && (
+                    {(t.taskType === 'document_upload' ||
+                      t.taskType === 'meeting_action' ||
+                      t.taskType === 'manual') && (
                       <button
                         type="button"
                         className="mt-3 text-sm btn-secondary px-3 py-1"

@@ -32,6 +32,7 @@ import { ClinicalChecklist } from './ClinicalChecklist';
 import { usePatientAutoSave, normalizeToothData, buildSavePayload, type ToothStatus } from '@/hooks/usePatientAutoSave';
 import { usePatientConflictResolution } from '@/hooks/usePatientConflictResolution';
 import { PatientDocuments } from './PatientDocuments';
+import { PatientQuickTaskBlock } from './PatientQuickTaskBlock';
 import { useToast } from '@/contexts/ToastContext';
 import { PatientFormSectionNavigation, Section } from './mobile/PatientFormSectionNavigation';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
@@ -1910,6 +1911,10 @@ export function PatientForm({
             isViewOnly={isViewOnly}
             showToast={showToast}
           />
+        )}
+
+        {shouldShowSection('adminisztracio') && patientId && userRole !== 'technikus' && (
+          <PatientQuickTaskBlock patientId={patientId} />
         )}
 
         {shouldShowSection('adminisztracio') && patientId && (
