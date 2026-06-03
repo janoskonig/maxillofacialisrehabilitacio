@@ -28,6 +28,7 @@ export default function StaffTasksPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [canManage, setCanManage] = useState(false);
 
   const loadTasks = useCallback(async () => {
     const res = await fetch('/api/user-tasks', { credentials: 'include' });
@@ -43,6 +44,7 @@ export default function StaffTasksPage() {
         router.replace('/login');
         return;
       }
+      setCanManage(user.role === 'admin');
       try {
         await loadTasks();
         await fetch('/api/user-tasks/mark-viewed', { method: 'POST', credentials: 'include' }).catch(() => {});
@@ -68,6 +70,11 @@ export default function StaffTasksPage() {
           </button>
           <Logo width={32} height={37} />
           <h1 className="text-lg font-semibold text-gray-900">Feladataim</h1>
+          {canManage && (
+            <Link href="/tasks/overview" className="ml-auto text-sm text-medical-primary hover:underline">
+              Vezetői nézet
+            </Link>
+          )}
         </div>
       </header>
 

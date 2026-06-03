@@ -8,7 +8,7 @@ import { Patient } from '@/lib/types';
 import { getAllPatients, searchPatients, getPatientById } from '@/lib/storage';
 import { PatientList } from '@/components/PatientList';
 import { useToast } from '@/contexts/ToastContext';
-import { Plus, Search, Users, LogOut, Shield, Settings, Calendar, CalendarDays, MessageCircle, Filter, Download, Bell, X, BookOpen, ClipboardList } from 'lucide-react';
+import { Plus, Search, Users, LogOut, Shield, Settings, Calendar, CalendarDays, MessageCircle, Filter, Download, Bell, X, BookOpen, ClipboardList, LayoutDashboard } from 'lucide-react';
 import { getCurrentUser, getUserEmail, getUserRole, logout } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
 import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
@@ -433,6 +433,16 @@ export default function Home() {
                   Feladataim
                   <FeladataimIndicators unviewed={taskUnviewed} viewedOpen={taskViewedOpen} />
                 </button>
+                {userRole === 'admin' && (
+                  <button
+                    type="button"
+                    onClick={() => router.push('/tasks/overview')}
+                    className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2"
+                  >
+                    <LayoutDashboard className="w-3.5 h-3.5" />
+                    Vezetői nézet
+                  </button>
+                )}
                 <button
                   onClick={() => router.push('/settings')}
                   className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2"
