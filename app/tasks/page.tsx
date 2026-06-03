@@ -7,6 +7,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
 import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
 import { QuickTaskForm } from '@/components/QuickTaskForm';
+import { TaskDelegateButton } from '@/components/TaskDelegateButton';
 import { ClipboardList, Loader2, ArrowLeft, UserRound } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
@@ -171,23 +172,29 @@ export default function StaffTasksPage() {
                     {(t.taskType === 'document_upload' ||
                       t.taskType === 'meeting_action' ||
                       t.taskType === 'manual') && (
-                      <button
-                        type="button"
-                        className="mt-3 text-sm btn-secondary px-3 py-1"
-                        onClick={async () => {
-                          const res = await fetch(`/api/user-tasks/${t.id}`, {
-                            method: 'PATCH',
-                            headers: { 'Content-Type': 'application/json' },
-                            credentials: 'include',
-                            body: JSON.stringify({ status: 'done' }),
-                          });
-                          if (res.ok) {
-                            setTasks((prev) => prev.filter((x) => x.id !== t.id));
-                          }
-                        }}
-                      >
-                        Késznek jelölés
-                      </button>
+                      <div className="flex flex-wrap items-start">
+                        <button
+                          type="button"
+                          className="mt-3 text-sm btn-secondary px-3 py-1"
+                          onClick={async () => {
+                            const res = await fetch(`/api/user-tasks/${t.id}`, {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              credentials: 'include',
+                              body: JSON.stringify({ status: 'done' }),
+                            });
+                            if (res.ok) {
+                              setTasks((prev) => prev.filter((x) => x.id !== t.id));
+                            }
+                          }}
+                        >
+                          Késznek jelölés
+                        </button>
+                        <TaskDelegateButton
+                          taskId={t.id}
+                          onDelegated={() => setTasks((prev) => prev.filter((x) => x.id !== t.id))}
+                        />
+                      </div>
                     )}
                   </div>
                 </div>

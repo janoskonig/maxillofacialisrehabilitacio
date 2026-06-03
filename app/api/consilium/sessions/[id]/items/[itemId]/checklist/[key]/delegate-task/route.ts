@@ -48,11 +48,14 @@ export const POST = authedHandler(async (req, { auth, params }) => {
 
   await ensurePatientVisibleForUser(patientId, auth, institutionId);
 
+  // A konzílium vetítésen több intézmény is jelen lehet, ezért a delegálás
+  // intézménytől függetlenül engedélyezett (bármely aktív, nem technikus user).
   const assigneeOk = await assertAssignableStaffUser(
     pool,
     body.assigneeUserId,
     institutionId,
     auth.role,
+    { crossInstitution: true },
   );
   if (!assigneeOk) {
     return NextResponse.json(

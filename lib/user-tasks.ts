@@ -250,6 +250,33 @@ export async function completeDocumentTasksBySourceMessage(params: {
   return updated;
 }
 
+/**
+ * Egy nyitott staff feladat átdelegálása a jelenlegi címzettről egy másik
+ * kollégára. Csak a jelenlegi címzett (`fromUserId`) adhatja át; a feladat
+ * újra olvasatlan (`viewed_at = NULL`) lesz az új címzettnél.
+ */
+export async function delegateStaffTask(params: {
+  taskId: string;
+  fromUserId: string;
+  toUserId: string;
+}): Promise<boolean> {
+  const pool = getDbPool();
+  const result = await pool.query(
+    `UPDATE user_tasks
+       SET assignee_user_id = $3,
+           viewed_at = NULL,
+           metadata = COALESCE(metadata, '{}'::jsonb)
+             || jsonb_build_object('delegatedFromUserId', $2::text, 'delegatedAt', NOW()::text)
+     WHERE id = $1::uuid
+       AND assignee_kind = 'staff'
+       AND assignee_user_id = $2
+       AND status = 'open'
+     RETURNING id`,
+    [params.taskId, params.fromUserId, params.toUserId]
+  );
+  return result.rows.length > 0;
+}
+
 export async function markTaskDoneForStaff(taskId: string, staffUserId: string): Promise<boolean> {
   const pool = getDbPool();
   const result = await pool.query(
