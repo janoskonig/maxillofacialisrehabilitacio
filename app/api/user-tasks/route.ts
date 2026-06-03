@@ -104,6 +104,7 @@ export const POST = authedHandler(async (req, { auth }) => {
     metadata: {
       source: 'manual',
       remind: !!parsed.remind,
+      remindEmail: !!parsed.remindEmail,
       createdByUserId: auth.userId,
     },
     createdByUserId: auth.userId,

@@ -28,6 +28,8 @@ export const manualTaskSchema = z
     patientId: z.string().uuid().optional(),
     /** Emlékeztető kérése a határidő előtt (push). */
     remind: z.boolean().optional(),
+    /** Email emlékeztető kérése a határidő előtt. */
+    remindEmail: z.boolean().optional(),
   })
   .superRefine(refineDueAt);
 

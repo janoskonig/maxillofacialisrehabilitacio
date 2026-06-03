@@ -40,6 +40,7 @@ export function QuickTaskForm({ patientId, onCreated }: QuickTaskFormProps) {
   const [title, setTitle] = useState('');
   const [dueLocal, setDueLocal] = useState('');
   const [remind, setRemind] = useState(false);
+  const [remindEmail, setRemindEmail] = useState(false);
 
   const [delegate, setDelegate] = useState(false);
   const [canDelegate, setCanDelegate] = useState(false);
@@ -97,6 +98,7 @@ export function QuickTaskForm({ patientId, onCreated }: QuickTaskFormProps) {
     setTitle('');
     setDueLocal('');
     setRemind(false);
+    setRemindEmail(false);
     setAssigneeInput('');
     setAssigneeId('');
     setDelegate(false);
@@ -125,6 +127,7 @@ export function QuickTaskForm({ patientId, onCreated }: QuickTaskFormProps) {
       title: title.trim(),
       ...(dueIso ? { dueAt: dueIso } : {}),
       ...(remind ? { remind: true } : {}),
+      ...(remindEmail ? { remindEmail: true } : {}),
       ...(delegate && assigneeId ? { assigneeUserId: assigneeId } : {}),
       ...(patientId ? { patientId } : {}),
     };
@@ -188,15 +191,30 @@ export function QuickTaskForm({ patientId, onCreated }: QuickTaskFormProps) {
             onChange={(e) => setDueLocal(e.target.value)}
           />
         </div>
-        <label className="flex items-center gap-2 text-sm text-gray-700 sm:pt-6">
-          <input
-            type="checkbox"
-            checked={remind}
-            onChange={(e) => setRemind(e.target.checked)}
-          />
-          Emlékeztető a határidő előtt
-        </label>
+        <div className="space-y-1 sm:pt-6">
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={remind}
+              onChange={(e) => setRemind(e.target.checked)}
+            />
+            Push emlékeztető a határidő előtt
+          </label>
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={remindEmail}
+              onChange={(e) => setRemindEmail(e.target.checked)}
+            />
+            Email emlékeztető a határidő előtt
+          </label>
+        </div>
       </div>
+      {(remind || remindEmail) && dueLocal.trim().length === 0 && (
+        <p className="text-xs text-amber-700">
+          Az emlékeztetőhöz adj meg határidőt is.
+        </p>
+      )}
 
       {canDelegate && (
         <label className="flex items-center gap-2 text-sm text-gray-700">

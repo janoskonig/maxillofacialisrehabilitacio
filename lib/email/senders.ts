@@ -1082,3 +1082,60 @@ export async function sendOhipReminderEmail(
       : { timepoint },
   });
 }
+
+/**
+ * Munkatárs feladat-emlékeztető emailje a felelősnek a határidő közeledtével
+ * (vagy lejárta után). A `remindEmail=true` jelölésű kézi feladatokra küldi a
+ * reminder cron.
+ */
+export async function sendTaskReminderEmail(params: {
+  to: string;
+  assigneeName: string | null;
+  title: string;
+  dueAt: Date;
+  overdue: boolean;
+  patientName?: string | null;
+  taskId: string;
+}): Promise<void> {
+  const { to, assigneeName, title, dueAt, overdue, patientName, taskId } = params;
+  const baseUrl = getBaseUrlForEmail();
+  const tasksUrl = `${baseUrl}/tasks`;
+  const dueLabel = formatDateForEmail(dueAt);
+  const greeting = assigneeName?.trim() ? `Kedves ${assigneeName.trim()}` : 'Kedves Kolléga';
+  const heading = overdue ? 'Lejárt teendő' : 'Közelgő teendő határidő';
+  const intro = overdue
+    ? 'Az alábbi teendő határideje lejárt:'
+    : 'Az alábbi teendő határideje közeledik:';
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: ${overdue ? '#dc2626' : '#2563eb'};">${heading}</h2>
+      <p>${greeting}!</p>
+      <p>${intro}</p>
+      <ul>
+        <li><strong>Teendő:</strong> ${title}</li>
+        <li><strong>Határidő:</strong> ${dueLabel}${overdue ? ' (lejárt)' : ''}</li>
+        ${patientName ? `<li><strong>Beteg:</strong> ${patientName}</li>` : ''}
+      </ul>
+      <p style="margin-top: 20px;">
+        <a href="${tasksUrl}" style="display: inline-block; background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+          Feladataim megnyitása
+        </a>
+      </p>
+      <p style="color: #6b7280; font-size: 14px; margin-top: 20px;">
+        Ha a gomb nem működik, másolja be az alábbi linket a böngészőjébe:<br>
+        <a href="${tasksUrl}" style="color: #3b82f6;">${tasksUrl}</a>
+      </p>
+      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to,
+    subject: `${overdue ? 'Lejárt teendő' : 'Teendő emlékeztető'} – Maxillofaciális Rehabilitáció`,
+    html,
+    emailType: 'task_reminder',
+    sentBy: 'system',
+    metadata: { taskId },
+  });
+}

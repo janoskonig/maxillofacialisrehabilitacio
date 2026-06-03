@@ -23,4 +23,5 @@ export {
   sendConsiliumInvitationEmail,
   sendAppointmentReminderEmail,
   sendOhipReminderEmail,
+  sendTaskReminderEmail,
 } from './senders';
