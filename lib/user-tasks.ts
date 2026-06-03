@@ -19,6 +19,8 @@ export type UserTaskRow = {
   completedAt: Date | null;
   viewedAt: Date | null;
   createdAt: Date;
+  /** Csak akkor van kitöltve, ha a lekérdezés a patients táblára joinol. */
+  patientName: string | null;
 };
 
 export type StaffOpenTaskSummary = {
@@ -46,6 +48,7 @@ function mapRow(row: Record<string, unknown>): UserTaskRow {
     completedAt: row.completed_at ? new Date(row.completed_at as string) : null,
     viewedAt: row.viewed_at ? new Date(row.viewed_at as string) : null,
     createdAt: new Date(row.created_at as string),
+    patientName: (row.patient_name as string) ?? null,
   };
 }
 
@@ -97,12 +100,49 @@ export async function insertUserTask(params: {
 export async function listOpenTasksForStaff(userId: string): Promise<UserTaskRow[]> {
   const pool = getDbPool();
   const result = await pool.query(
-    `SELECT * FROM user_tasks
-     WHERE assignee_kind = 'staff' AND assignee_user_id = $1 AND status = 'open'
-     ORDER BY viewed_at NULLS FIRST, due_at NULLS LAST, created_at DESC`,
+    `SELECT t.*, p.nev AS patient_name
+     FROM user_tasks t
+     LEFT JOIN patients p ON p.id = t.patient_id
+     WHERE t.assignee_kind = 'staff' AND t.assignee_user_id = $1 AND t.status = 'open'
+     ORDER BY t.viewed_at NULLS FIRST, t.due_at NULLS LAST, t.created_at DESC`,
     [userId]
   );
   return result.rows.map(mapRow);
+}
+
+export type PatientStaffTaskRow = UserTaskRow & {
+  assigneeName: string | null;
+  assigneeEmail: string | null;
+  creatorName: string | null;
+  creatorEmail: string | null;
+};
+
+/**
+ * Egy beteghez kötött nyitott staff feladatok, a felelős (címzett) és a
+ * létrehozó nevével együtt — a beteg kartonján való megjelenítéshez.
+ */
+export async function listStaffTasksForPatient(
+  patientId: string
+): Promise<PatientStaffTaskRow[]> {
+  const pool = getDbPool();
+  const result = await pool.query(
+    `SELECT t.*,
+            au.doktor_neve AS assignee_name, au.email AS assignee_email,
+            cu.doktor_neve AS creator_name, cu.email AS creator_email
+     FROM user_tasks t
+     LEFT JOIN users au ON au.id = t.assignee_user_id
+     LEFT JOIN users cu ON cu.id = t.created_by_user_id
+     WHERE t.assignee_kind = 'staff' AND t.patient_id = $1 AND t.status = 'open'
+     ORDER BY t.due_at NULLS LAST, t.created_at DESC`,
+    [patientId]
+  );
+  return result.rows.map((row) => ({
+    ...mapRow(row),
+    assigneeName: (row.assignee_name as string) ?? null,
+    assigneeEmail: (row.assignee_email as string) ?? null,
+    creatorName: (row.creator_name as string) ?? null,
+    creatorEmail: (row.creator_email as string) ?? null,
+  }));
 }
 
 export async function getStaffOpenTaskSummary(userId: string): Promise<StaffOpenTaskSummary> {

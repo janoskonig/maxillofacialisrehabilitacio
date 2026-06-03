@@ -14,6 +14,7 @@ function serializeTask(t: UserTaskRow) {
     id: t.id,
     assigneeKind: t.assigneeKind,
     patientId: t.patientId,
+    patientName: t.patientName,
     taskType: t.taskType,
     status: t.status,
     title: t.title,

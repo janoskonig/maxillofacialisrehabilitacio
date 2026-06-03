@@ -7,7 +7,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
 import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
 import { QuickTaskForm } from '@/components/QuickTaskForm';
-import { ClipboardList, Loader2, ArrowLeft } from 'lucide-react';
+import { ClipboardList, Loader2, ArrowLeft, UserRound } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 
@@ -17,6 +17,7 @@ type TaskItem = {
   title: string;
   description: string | null;
   patientId: string | null;
+  patientName: string | null;
   metadata: Record<string, unknown>;
   createdAt: string;
   dueAt?: string | null;
@@ -93,6 +94,12 @@ export default function StaffTasksPage() {
                   <ClipboardList className="w-5 h-5 text-medical-primary flex-shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-gray-900">{t.title}</p>
+                    {(t.patientName || t.patientId) && (
+                      <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-medical-primary/10 px-2 py-0.5 text-xs font-medium text-medical-primary">
+                        <UserRound className="w-3.5 h-3.5" />
+                        Beteg: {t.patientName || 'ismeretlen'}
+                      </span>
+                    )}
                     {t.description && (
                       <p className="text-sm text-gray-600 mt-1 whitespace-pre-wrap">{t.description}</p>
                     )}
