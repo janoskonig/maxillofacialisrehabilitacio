@@ -142,11 +142,11 @@ export function DocumentCard({
     >
       {/* Thumbnail */}
       <div className="relative aspect-square bg-gray-100 group">
-        {isPdf ? (
+        {isPdf && document.id ? (
           <DocumentListThumbnail
             documentId={document.id}
             filename={document.filename}
-            mimeType={document.mimeType}
+            mimeType={document.mimeType ?? null}
             patientId={patientId}
             size="lg"
           />

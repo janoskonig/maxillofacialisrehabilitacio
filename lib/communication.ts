@@ -10,10 +10,8 @@ import {
   type PatientReplySender,
 } from './message-reply';
 import type { MessageContextLink, QuotedMessagePreview, ServerDeliveryStatus } from './types/messaging';
-import {
-  enrichMessagesWithContextLinks,
-  type ContextLinkViewer,
-} from './messaging/attach-context-links';
+import { enrichMessagesWithContextLinks } from './messaging/attach-context-links';
+import type { ContextLinkViewer } from './messaging/context-links';
 import { syncDocumentContextLinkFromMarker } from './messaging/sync-context-link-from-marker';
 import type { StaffViewer } from './messaging/context-links';
 import {

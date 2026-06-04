@@ -693,7 +693,7 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
     setMessages([]);
   };
 
-  const sendMessage = async (text: string): Promise<boolean> => {
+  const sendMessage = async (text: string): Promise<string | null> => {
     if (!text.trim() || (!selectedDoctorId && !selectedGroupId)) return null;
 
     const replyTargetSnapshot = replyState.replyTarget;
