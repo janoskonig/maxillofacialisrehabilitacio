@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { FileText, Upload, Download, Plus, Loader2, X } from 'lucide-react';
+import { FileText, Upload, Download, Plus, Loader2, X, Image as ImageIcon } from 'lucide-react';
 import { DocumentListThumbnail } from '@/components/messaging/DocumentListThumbnail';
 import { getPortalDocumentInlineUrl, isPdfDocument } from '@/lib/document-inline-url';
 import { format } from 'date-fns';
