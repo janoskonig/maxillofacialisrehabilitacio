@@ -1,10 +1,17 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
-import { authedHandler } from '@/lib/api/route-handler';
+import { optionalAuthHandler } from '@/lib/api/route-handler';
 
 export const dynamic = 'force-dynamic';
 
-export const GET = authedHandler(async (_req, { auth }) => {
+export const GET = optionalAuthHandler(async (_req, { auth }) => {
+  if (!auth) {
+    return NextResponse.json(
+      { error: 'Bejelentkezés szükséges' },
+      { status: 401 }
+    );
+  }
+
   const pool = getDbPool();
   const userResult = await pool.query(
     'SELECT email, role, active, restricted_view, intezmeny, doktor_neve FROM users WHERE id = $1',
