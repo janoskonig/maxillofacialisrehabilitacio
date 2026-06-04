@@ -1,3 +1,4 @@
+import { describe, it, expect } from 'vitest';
 import { resolveSchedulingAnchor } from '@/lib/scheduling-anchor';
 
 describe('resolveSchedulingAnchor', () => {

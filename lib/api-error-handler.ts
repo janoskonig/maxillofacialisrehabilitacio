@@ -40,8 +40,34 @@ export function handleApiError(
   let code: string | undefined;
   let details: unknown;
 
+  // HTTP errors (HttpError, etc.) — duck-type status first so bundled route handlers
+  // still map 401/403 when `instanceof Error` fails across duplicate modules.
+  if (
+    error &&
+    typeof error === 'object' &&
+    'status' in error &&
+    typeof (error as { status: unknown }).status === 'number'
+  ) {
+    const httpErr = error as {
+      status: number;
+      message?: string;
+      name?: string;
+      code?: string;
+      details?: unknown;
+    };
+    status = httpErr.status;
+    name = httpErr.name ?? 'HttpError';
+    const isDevelopment = process.env.NODE_ENV === 'development';
+    if (isDevelopment && httpErr.message) {
+      message = httpErr.message;
+    } else if (httpErr.status >= 400 && httpErr.status < 500 && httpErr.message) {
+      message = httpErr.message;
+    }
+    if (httpErr.code) code = httpErr.code;
+    if (httpErr.details !== undefined) details = httpErr.details;
+  }
   // Zod validation error
-  if (error && typeof error === 'object' && 'name' in error && error.name === 'ZodError' && 'errors' in error) {
+  else if (error && typeof error === 'object' && 'name' in error && error.name === 'ZodError' && 'errors' in error) {
     name = 'ValidationError';
     status = 400;
     message = 'Érvénytelen adatok';

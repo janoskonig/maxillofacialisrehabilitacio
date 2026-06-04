@@ -336,8 +336,7 @@ export default function Home() {
     }
   };
 
-  // Ha még nincs autentikálva vagy az ellenőrzés folyamatban van, ne mutassuk a tartalmat
-  if (isCheckingAuth || !isAuthorized) {
+  if (isCheckingAuth) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -346,6 +345,10 @@ export default function Home() {
         </div>
       </div>
     );
+  }
+
+  if (!isAuthorized) {
+    return null;
   }
 
   return (
