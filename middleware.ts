@@ -51,6 +51,20 @@ function getClientIp(req: NextRequest): string {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Unauthenticated visitors to the staff home page go straight to login (no client JS needed).
+  if (pathname === '/') {
+    const token = request.cookies.get('auth-token')?.value;
+    if (!token) {
+      return NextResponse.redirect(new URL('/login', request.url));
+    }
+    try {
+      await jwtVerify(token, JWT_SECRET);
+    } catch {
+      return NextResponse.redirect(new URL('/login', request.url));
+    }
+    return NextResponse.next();
+  }
+
   if (!pathname.startsWith('/api/')) {
     return NextResponse.next();
   }
@@ -106,5 +120,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/api/:path*'],
+  matcher: ['/', '/api/:path*'],
 };

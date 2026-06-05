@@ -126,7 +126,7 @@ export default function Home() {
         if (!user) {
           setIsAuthorized(false);
           setIsCheckingAuth(false);
-          router.replace('/login');
+          window.location.replace('/login');
           return;
         }
         
@@ -159,11 +159,11 @@ export default function Home() {
         console.error('Auth check error:', error);
         setIsAuthorized(false);
         setIsCheckingAuth(false);
-        router.replace('/login');
+        window.location.replace('/login');
       }
     };
     checkAuth();
-  }, [router]);
+  }, []);
 
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -348,7 +348,14 @@ export default function Home() {
   }
 
   if (!isAuthorized) {
-    return null;
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-medical-primary mx-auto mb-4"></div>
+          <p className="text-gray-500">Átirányítás a bejelentkezéshez...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
