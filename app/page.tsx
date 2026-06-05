@@ -203,6 +203,13 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    // Ne töltsünk be adatot és főleg ne írjuk át a böngésző history-t (replaceState),
+    // amíg az auth ellenőrzés fut vagy a felhasználó nincs bejelentkezve. Különben a
+    // history.replaceState elnyomná a checkAuth router.replace('/login') navigációját,
+    // és inkognitóban üres oldalon ragadnánk a login képernyő helyett.
+    if (isCheckingAuth || !isAuthorized) {
+      return;
+    }
     const loadPatientsData = async () => {
       try {
         const viewOption = selectedView !== 'all' ? { view: selectedView } : undefined;
@@ -232,7 +239,7 @@ export default function Home() {
     };
 
     loadPatientsData();
-  }, [searchQuery, selectedView, sortField, sortDirection, refreshKey, page]);
+  }, [searchQuery, selectedView, sortField, sortDirection, refreshKey, page, isAuthorized, isCheckingAuth]);
 
   const loadPatients = useCallback(() => {
     dispatch({ type: 'REFRESH' });
