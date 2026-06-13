@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { computeCompletenessScore } from '@/lib/patient-data-completeness';
+import {
+  computeCompletenessScore,
+  NA_ELIGIBLE_KEYS,
+  naFieldLabel,
+} from '@/lib/patient-data-completeness';
 
 describe('computeCompletenessScore', () => {
   it('is 100 when nothing is missing', () => {
@@ -81,5 +85,24 @@ describe('computeCompletenessScore', () => {
         researchMissing: 0,
       })
     ).toBe(0);
+  });
+});
+
+describe('N/A field eligibility', () => {
+  it('allows the conditional research fields to be marked N/A', () => {
+    for (const key of ['ohipT0', 'tnmStaging', 'brownFuggoleges', 'kovacsDobak', 'radioterapiaDozis']) {
+      expect(NA_ELIGIBLE_KEYS.has(key)).toBe(true);
+    }
+  });
+
+  it('does not allow clinical-minimum fields to be marked N/A', () => {
+    for (const key of ['nev', 'taj', 'email', 'diagnozis', 'doc:op']) {
+      expect(NA_ELIGIBLE_KEYS.has(key)).toBe(false);
+    }
+  });
+
+  it('resolves a human-readable label for eligible keys, null otherwise', () => {
+    expect(naFieldLabel('tnmStaging')).toBe('TNM-staging');
+    expect(naFieldLabel('nev')).toBeNull();
   });
 });

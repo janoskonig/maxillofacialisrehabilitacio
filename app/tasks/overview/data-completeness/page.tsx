@@ -32,6 +32,7 @@ type CompletenessRow = {
   researchMissing: MissingItem[];
   clinicalComplete: boolean;
   researchComplete: boolean;
+  naMarked: MissingItem[];
   applicableCount: number;
   completenessScore: number;
   researchReady: boolean;
@@ -120,6 +121,30 @@ export default function DataCompletenessPage() {
       setRefreshing(false);
     }
   }, [load]);
+
+  /** Egy kutatási mező N/A ("nem értelmezhető / nem ismert") jelölése / visszavonása. */
+  const [naBusy, setNaBusy] = useState<string | null>(null);
+  const markNa = useCallback(
+    async (patientId: string, fieldKey: string, na: boolean) => {
+      const busyKey = `${patientId}:${fieldKey}`;
+      setNaBusy(busyKey);
+      try {
+        const res = await fetch(`/api/patients/${patientId}/field-na`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fieldKey, na }),
+        });
+        if (!res.ok) throw new Error('N/A beállítás sikertelen');
+        await load();
+      } catch {
+        /* hiba esetén a meglévő nézet marad */
+      } finally {
+        setNaBusy(null);
+      }
+    },
+    [load],
+  );
 
   useEffect(() => {
     (async () => {
@@ -384,21 +409,34 @@ export default function DataCompletenessPage() {
                       {missing.length > 0 ? (
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           {missing.map((m) => (
-                            <Link
-                              key={m.key}
-                              href={editHref(p.patientId, m.key)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              title="Pótlás a betegűrlapon (új lapon)"
-                              className={`text-xs rounded-full px-2 py-0.5 border inline-flex items-center gap-1 transition-colors ${
-                                m.group === 'clinical'
-                                  ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
-                                  : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
-                              }`}
-                            >
-                              {m.label}
-                              <ExternalLink className="w-3 h-3 opacity-60" />
-                            </Link>
+                            <span key={m.key} className="inline-flex items-center">
+                              <Link
+                                href={editHref(p.patientId, m.key)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title="Pótlás a betegűrlapon (új lapon)"
+                                className={`text-xs rounded-l-full px-2 py-0.5 border inline-flex items-center gap-1 transition-colors ${
+                                  m.group === 'clinical'
+                                    ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
+                                    : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                                } ${m.group === 'research' ? '' : 'rounded-r-full'}`}
+                              >
+                                {m.label}
+                                <ExternalLink className="w-3 h-3 opacity-60" />
+                              </Link>
+                              {/* Kutatási mező N/A-ként jelölhető (a klinikai minimum nem). */}
+                              {m.group === 'research' && (
+                                <button
+                                  type="button"
+                                  disabled={naBusy === `${p.patientId}:${m.key}`}
+                                  onClick={() => void markNa(p.patientId, m.key, true)}
+                                  title="Jelölés: nem értelmezhető / nem ismert (nem számít hiánynak)"
+                                  className="text-xs rounded-r-full px-1.5 py-0.5 border border-l-0 border-amber-200 bg-white text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                                >
+                                  N/A
+                                </button>
+                              )}
+                            </span>
                           ))}
                         </div>
                       ) : (
@@ -410,6 +448,26 @@ export default function DataCompletenessPage() {
                               ? 'Minden mező rendben'
                               : 'Klinikai minimum teljes'}
                         </p>
+                      )}
+
+                      {/* N/A-ként megjelölt mezők (visszavonható) — csak ha a kutatási
+                          csoport látszik. */}
+                      {group !== 'clinical' && p.naMarked.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          {p.naMarked.map((m) => (
+                            <button
+                              key={`na-${m.key}`}
+                              type="button"
+                              disabled={naBusy === `${p.patientId}:${m.key}`}
+                              onClick={() => void markNa(p.patientId, m.key, false)}
+                              title="N/A visszavonása (újra hiányként számít)"
+                              className="text-xs rounded-full px-2 py-0.5 border border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100 inline-flex items-center gap-1 disabled:opacity-50"
+                            >
+                              {m.label}: N/A
+                              <span className="opacity-60">✕</span>
+                            </button>
+                          ))}
+                        </div>
                       )}
                     </div>
                     <div className="text-xs text-right shrink-0 flex flex-col items-end gap-1">

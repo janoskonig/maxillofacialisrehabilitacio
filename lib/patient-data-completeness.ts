@@ -55,6 +55,8 @@ export type PatientCompletenessRow = {
   researchMissing: MissingItem[];
   clinicalComplete: boolean;
   researchComplete: boolean;
+  /** Explicit N/A-ként ("nem értelmezhető / nem ismert") megjelölt mezők. */
+  naMarked: MissingItem[];
   /** Az adott betegre értelmezhető (klinikai + kutatási) tételek száma. */
   applicableCount: number;
   /** Adat-teljességi pontszám 0–100 (a meglévő / értelmezhető tételek aránya). */
@@ -141,6 +143,19 @@ const RESEARCH_RULES: ResearchRule[] = [
   },
 ];
 
+/**
+ * N/A-ként megjelölhető mező-kulcsok (a feltételes kutatási mezők). A klinikai
+ * minimum mezői (név, TAJ, email…) nem jelölhetők N/A-nak.
+ */
+export const NA_ELIGIBLE_KEYS: ReadonlySet<string> = new Set(
+  RESEARCH_RULES.map((r) => r.key),
+);
+
+/** Egy N/A-jelölhető kulcs ember által olvasható címkéje (UI / API visszajelzéshez). */
+export function naFieldLabel(key: string): string | null {
+  return RESEARCH_RULES.find((r) => r.key === key)?.label ?? null;
+}
+
 export async function getPatientDataCompleteness(
   options?: { patientId?: string },
 ): Promise<PatientCompletenessReport> {
@@ -178,11 +193,17 @@ export async function getPatientDataCompleteness(
         EXISTS (
           SELECT 1 FROM ohip14_responses o
           WHERE o.patient_id = p.id AND o.timepoint = 'T0'
-        ) AS has_ohip_t0
+        ) AS has_ohip_t0,
+        COALESCE(na.keys, ARRAY[]::text[]) AS na_keys
      FROM patients p
      LEFT JOIN patient_anamnesis a ON a.patient_id = p.id
      LEFT JOIN patient_dental_status d ON d.patient_id = p.id
      LEFT JOIN users ku ON ku.id = p.kezeleoorvos_user_id
+     LEFT JOIN LATERAL (
+        SELECT array_agg(field_key) AS keys
+        FROM patient_field_na
+        WHERE patient_id = p.id
+     ) na ON true
      LEFT JOIN LATERAL (
         SELECT COUNT(*)::int AS op_count
         FROM patient_documents pd
@@ -235,11 +256,18 @@ export async function getPatientDataCompleteness(
     }
 
     // --- Kutatási mezők (feltételes) ---
+    // Egy mező "rendezett", ha ki van töltve VAGY explicit N/A-ként megjelölt.
+    const naKeys = new Set<string>((row.na_keys as string[] | null) ?? []);
     const researchMissing: MissingItem[] = [];
+    const naMarked: MissingItem[] = [];
     let researchApplicable = 0;
     for (const rule of RESEARCH_RULES) {
       if (!rule.applicable(row)) continue;
       researchApplicable += 1;
+      if (naKeys.has(rule.key)) {
+        naMarked.push({ key: rule.key, label: rule.label, group: 'research' });
+        continue; // N/A → rendezett, nem hiány
+      }
       if (rule.missing(row)) {
         researchMissing.push({ key: rule.key, label: rule.label, group: 'research' });
       }
@@ -274,6 +302,7 @@ export async function getPatientDataCompleteness(
       researchMissing,
       clinicalComplete: isClinicalComplete,
       researchComplete: isResearchComplete,
+      naMarked,
       applicableCount,
       completenessScore,
       researchReady: isResearchReady,
