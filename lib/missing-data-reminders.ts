@@ -253,16 +253,24 @@ async function resolveReferrer(
   pool: ReturnType<typeof getDbPool>,
   patientId: string
 ): Promise<Recipient | null> {
+  // Elsődlegesen a feloldott FK (megbízható); ha nincs, visszaesünk a
+  // normalizált név-egyezésre (régi, FK nélküli rekordokra).
   const res = await pool.query(
     `SELECT u.id, u.email, u.doktor_neve
        FROM patient_referral pr
        JOIN users u
          ON u.role = $2
         AND u.active IS NOT FALSE
-        AND lower(btrim(u.doktor_neve)) = lower(btrim(pr.beutalo_orvos))
+        AND (
+          u.id = pr.beutalo_orvos_user_id
+          OR (
+            pr.beutalo_orvos_user_id IS NULL
+            AND pr.beutalo_orvos IS NOT NULL
+            AND btrim(pr.beutalo_orvos) <> ''
+            AND lower(btrim(u.doktor_neve)) = lower(btrim(pr.beutalo_orvos))
+          )
+        )
       WHERE pr.patient_id = $1
-        AND pr.beutalo_orvos IS NOT NULL
-        AND btrim(pr.beutalo_orvos) <> ''
       LIMIT 1`,
     [patientId, REFERRER_ROLE]
   );

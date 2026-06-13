@@ -9,6 +9,7 @@ import { logger } from '@/lib/logger';
 import { PATIENT_LIST_FIELDS, PATIENT_SELECT_FIELDS } from '@/lib/queries/patient-fields';
 import { REQUIRED_DOC_TAGS } from '@/lib/clinical-rules';
 import { getPatientCompletenessRow } from '@/lib/patient-data-completeness';
+import { recomputeReferrerUserIdSilent } from '@/lib/recompute-referrer';
 
 type ViewPreset = 'neak_pending' | 'missing_docs';
 
@@ -431,6 +432,9 @@ export const POST = authedHandler(async (req, { auth }) => {
     'patient_created',
     `Patient ID: ${result.rows[0].id}, Name: ${result.rows[0].nev || 'N/A'}`
   );
+
+  // Beutaló orvos szöveges név → user_id FK (statisztika + emlékeztető-célzás).
+  recomputeReferrerUserIdSilent(result.rows[0].id as string);
 
   // Tanácsadó adat-teljességi visszajelzés (nem blokkol) — a kliens mentés
   // után jelezheti a hiányokat. Hiba esetén csendben kihagyjuk.

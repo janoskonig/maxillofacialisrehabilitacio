@@ -7,6 +7,7 @@ import { sendAppointmentTimeSlotFreedNotification } from '@/lib/email';
 import { deleteGoogleCalendarEvent, createGoogleCalendarEvent } from '@/lib/google-calendar';
 import { logActivity, logActivityWithAuth } from '@/lib/activity';
 import { reconcileMissingDataTasksSilent } from '@/lib/missing-data-reminders';
+import { recomputeReferrerUserIdSilent } from '@/lib/recompute-referrer';
 import { getPatientCompletenessRow } from '@/lib/patient-data-completeness';
 import { PATIENT_SELECT_FIELDS } from '@/lib/queries/patient-fields';
 import { logger } from '@/lib/logger';
@@ -780,6 +781,10 @@ export const PUT = authedHandler(async (req, { auth, params, correlationId }) =>
     // 9. Ha az adatpótlással már teljes a beteg, a nyitott 'missing_data'
     //    feladatok azonnal záruljanak le (ne csak a heti cron / kézi pipa).
     reconcileMissingDataTasksSilent(patientId);
+
+    // 9b. Beutaló orvos szöveges név → user_id FK frissítése (statisztika +
+    //     megbízható emlékeztető-célzás). Fire-and-forget, nem blokkol.
+    recomputeReferrerUserIdSilent(patientId);
 
     // 10. Tanácsadó adat-teljességi visszajelzés (nem blokkol) — a kliens
     //     jelezheti a hiányokat mentés után. Hiba esetén csendben kihagyjuk.
