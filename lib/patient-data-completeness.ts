@@ -299,6 +299,17 @@ export async function getPatientDataCompleteness(
   };
 }
 
+/**
+ * Egyetlen beteg adat-teljességi sora (a teljes riporttal azonos logikából).
+ * Mentés utáni tanácsadó visszajelzéshez — nem blokkol, csak jelez.
+ */
+export async function getPatientCompletenessRow(
+  patientId: string,
+): Promise<PatientCompletenessRow | null> {
+  const report = await getPatientDataCompleteness({ patientId });
+  return report.patients[0] ?? null;
+}
+
 /** JSONB-ből érkező fogazati státusz normalizálása a hiány-ellenőrzéshez. */
 function normalizeFogak(v: unknown): Record<string, unknown> | undefined {
   if (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v as object).length > 0) {

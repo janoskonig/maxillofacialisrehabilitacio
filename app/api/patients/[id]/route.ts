@@ -7,6 +7,7 @@ import { sendAppointmentTimeSlotFreedNotification } from '@/lib/email';
 import { deleteGoogleCalendarEvent, createGoogleCalendarEvent } from '@/lib/google-calendar';
 import { logActivity, logActivityWithAuth } from '@/lib/activity';
 import { reconcileMissingDataTasksSilent } from '@/lib/missing-data-reminders';
+import { getPatientCompletenessRow } from '@/lib/patient-data-completeness';
 import { PATIENT_SELECT_FIELDS } from '@/lib/queries/patient-fields';
 import { logger } from '@/lib/logger';
 import type { Pool } from 'pg';
@@ -780,7 +781,24 @@ export const PUT = authedHandler(async (req, { auth, params, correlationId }) =>
     //    feladatok azonnal záruljanak le (ne csak a heti cron / kézi pipa).
     reconcileMissingDataTasksSilent(patientId);
 
-    const response = NextResponse.json({ patient: newPatient }, { status: 200 });
+    // 10. Tanácsadó adat-teljességi visszajelzés (nem blokkol) — a kliens
+    //     jelezheti a hiányokat mentés után. Hiba esetén csendben kihagyjuk.
+    let dataQuality = null;
+    try {
+      const row = await getPatientCompletenessRow(patientId);
+      if (row) {
+        dataQuality = {
+          completenessScore: row.completenessScore,
+          researchReady: row.researchReady,
+          clinicalMissing: row.clinicalMissing,
+          researchMissing: row.researchMissing,
+        };
+      }
+    } catch (qualityError) {
+      logger.error('Failed to compute data quality:', qualityError);
+    }
+
+    const response = NextResponse.json({ patient: newPatient, dataQuality }, { status: 200 });
     response.headers.set('x-correlation-id', correlationId);
     return response;
 });
