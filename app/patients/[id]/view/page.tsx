@@ -109,6 +109,18 @@ export default function PatientViewPage() {
     setLoadedTabs((prev) => new Set<TabType>([...Array.from(prev), tab]));
   }, [authorized, searchParams]);
 
+  // Deep-link horgony (#section-...) → görgetés a szekcióhoz a fül betöltése után.
+  useEffect(() => {
+    if (!authorized || typeof window === 'undefined') return;
+    const hash = window.location.hash;
+    if (!hash || hash.length < 2) return;
+    const timer = setTimeout(() => {
+      const el = document.querySelector(hash);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [authorized, activeTab, loadedTabs]);
+
   const handleBack = () => {
     router.back();
   };

@@ -175,6 +175,18 @@ export default function TaskOverviewPage() {
             Feladataim
           </Link>
         </div>
+        {/* Aloldal-navigáció */}
+        <div className="max-w-6xl mx-auto px-4 flex gap-1">
+          <span className="px-4 py-2 text-sm font-medium text-medical-primary border-b-2 border-medical-primary">
+            Feladatok
+          </span>
+          <Link
+            href="/tasks/overview/data-completeness"
+            className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent"
+          >
+            Adathiány
+          </Link>
+        </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
