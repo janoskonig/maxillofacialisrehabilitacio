@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { patientSchema } from '@/lib/types';
-import { optionalAuthHandler, authedHandler, roleHandler } from '@/lib/api/route-handler';
+import { authedHandler, roleHandler } from '@/lib/api/route-handler';
 import { normalizeToTreatmentTypeCode } from '@/lib/treatment-type-normalize';
 import { sendAppointmentTimeSlotFreedNotification } from '@/lib/email';
 import { deleteGoogleCalendarEvent, createGoogleCalendarEvent } from '@/lib/google-calendar';
@@ -632,7 +632,10 @@ async function trackPatientChanges(
 
 // ─── GET handler ────────────────────────────────────────────────────────────
 
-export const GET = optionalAuthHandler(async (req, { auth, params, correlationId }) => {
+// Requires a valid session: returns a patient's full PII + clinical record. The
+// `technikus` role gets a reduced field set below; an unauthenticated caller must
+// get nothing (middleware.ts does not reject unauthenticated requests).
+export const GET = authedHandler(async (req, { auth, params, correlationId }) => {
     const pool = getDbPool();
     const role = auth?.role || null;
     const userEmail = auth?.email || null;
