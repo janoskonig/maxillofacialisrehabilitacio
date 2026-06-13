@@ -62,7 +62,19 @@ export const GET = roleHandler(['admin'], async (req) => {
           ORDER BY o.completed_at DESC NULLS LAST LIMIT 1) AS ohip_t2_total,
         (SELECT o.total_score FROM ohip14_responses o
           WHERE o.patient_id = p.id AND o.timepoint = 'T3'
-          ORDER BY o.completed_at DESC NULLS LAST LIMIT 1) AS ohip_t3_total
+          ORDER BY o.completed_at DESC NULLS LAST LIMIT 1) AS ohip_t3_total,
+        (SELECT pr.composite_score FROM pro_responses pr
+          WHERE pr.patient_id = p.id AND pr.instrument = 'UWQOL' AND pr.timepoint = 'T0'
+          ORDER BY pr.completed_at DESC NULLS LAST LIMIT 1) AS uwqol_composite_t0,
+        (SELECT pr.composite_score FROM pro_responses pr
+          WHERE pr.patient_id = p.id AND pr.instrument = 'UWQOL' AND pr.timepoint = 'T1'
+          ORDER BY pr.completed_at DESC NULLS LAST LIMIT 1) AS uwqol_composite_t1,
+        (SELECT pr.composite_score FROM pro_responses pr
+          WHERE pr.patient_id = p.id AND pr.instrument = 'UWQOL' AND pr.timepoint = 'T2'
+          ORDER BY pr.completed_at DESC NULLS LAST LIMIT 1) AS uwqol_composite_t2,
+        (SELECT pr.composite_score FROM pro_responses pr
+          WHERE pr.patient_id = p.id AND pr.instrument = 'UWQOL' AND pr.timepoint = 'T3'
+          ORDER BY pr.completed_at DESC NULLS LAST LIMIT 1) AS uwqol_composite_t3
      FROM patients p
      LEFT JOIN patient_anamnesis a ON a.patient_id = p.id`,
   );

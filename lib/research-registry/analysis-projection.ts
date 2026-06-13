@@ -58,6 +58,10 @@ export const ANALYSIS_VARIABLES: AnalysisVariable[] = [
   { key: 'ohip_t1_total', label: 'OHIP-14 összpont (T1)', kind: 'continuous', type: 'numeric', source: 'ohip14_responses (T1)' },
   { key: 'ohip_t2_total', label: 'OHIP-14 összpont (T2)', kind: 'continuous', type: 'numeric', source: 'ohip14_responses (T2)' },
   { key: 'ohip_t3_total', label: 'OHIP-14 összpont (T3)', kind: 'continuous', type: 'numeric', source: 'ohip14_responses (T3)' },
+  { key: 'uwqol_composite_t0', label: 'UW-QOL kompozit (T0)', kind: 'continuous', type: 'numeric', source: 'pro_responses (UWQOL, T0)' },
+  { key: 'uwqol_composite_t1', label: 'UW-QOL kompozit (T1)', kind: 'continuous', type: 'numeric', source: 'pro_responses (UWQOL, T1)' },
+  { key: 'uwqol_composite_t2', label: 'UW-QOL kompozit (T2)', kind: 'continuous', type: 'numeric', source: 'pro_responses (UWQOL, T2)' },
+  { key: 'uwqol_composite_t3', label: 'UW-QOL kompozit (T3)', kind: 'continuous', type: 'numeric', source: 'pro_responses (UWQOL, T3)' },
   { key: 'completeness_score', label: 'Adat-teljességi pontszám (0–100)', kind: 'continuous', type: 'numeric', source: 'patient-data-completeness' },
 ];
 
@@ -110,6 +114,10 @@ export function buildAnalysisRow(row: Record<string, unknown>, salt = ''): Analy
     ohip_t1_total: asNum(row.ohip_t1_total),
     ohip_t2_total: asNum(row.ohip_t2_total),
     ohip_t3_total: asNum(row.ohip_t3_total),
+    uwqol_composite_t0: asNum(row.uwqol_composite_t0),
+    uwqol_composite_t1: asNum(row.uwqol_composite_t1),
+    uwqol_composite_t2: asNum(row.uwqol_composite_t2),
+    uwqol_composite_t3: asNum(row.uwqol_composite_t3),
     completeness_score: asNum(row.completeness_score),
   };
 }
