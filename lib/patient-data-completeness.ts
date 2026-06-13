@@ -1,10 +1,33 @@
 import { getDbPool } from '@/lib/db';
 import {
+  REQUIRED_FIELDS,
   REQUIRED_DOC_RULES,
   getMissingRequiredFields,
   type RequiredField,
 } from '@/lib/clinical-rules';
 import type { Patient } from '@/lib/types';
+import { getPlausibilityWarnings, type PlausibilityWarning } from '@/lib/data-plausibility';
+
+/** Mindig értelmezhető klinikai tételek száma: kötelező mezők + kötelező dokumentumok. */
+const CLINICAL_APPLICABLE = REQUIRED_FIELDS.length + REQUIRED_DOC_RULES.length;
+
+/**
+ * Adat-teljességi pontszám (0–100) az értelmezhető (applicable) tételek arányából.
+ * A nevező az adott betegre értelmezhető klinikai + kutatási mezők száma, a számláló
+ * a meglévők száma. Ha semmi nem értelmezhető (elvi eset), 100-at adunk vissza.
+ */
+export function computeCompletenessScore(input: {
+  clinicalApplicable: number;
+  clinicalMissing: number;
+  researchApplicable: number;
+  researchMissing: number;
+}): number {
+  const applicable = input.clinicalApplicable + input.researchApplicable;
+  if (applicable <= 0) return 100;
+  const present = applicable - (input.clinicalMissing + input.researchMissing);
+  const pct = (present / applicable) * 100;
+  return Math.max(0, Math.min(100, Math.round(pct)));
+}
 
 /**
  * Betegenkénti adat-teljességi (adathiány) riport a Vezetői nézethez.
@@ -33,6 +56,16 @@ export type PatientCompletenessRow = {
   researchMissing: MissingItem[];
   clinicalComplete: boolean;
   researchComplete: boolean;
+  /** Explicit N/A-ként ("nem értelmezhető / nem ismert") megjelölt mezők. */
+  naMarked: MissingItem[];
+  /** Plauzibilitási figyelmeztetések (pl. hibás TAJ-ellenőrzőszám, lehetetlen dátum). */
+  warnings: PlausibilityWarning[];
+  /** Az adott betegre értelmezhető (klinikai + kutatási) tételek száma. */
+  applicableCount: number;
+  /** Adat-teljességi pontszám 0–100 (a meglévő / értelmezhető tételek aránya). */
+  completenessScore: number;
+  /** Elemzésre kész: nincs sem klinikai, sem kutatási hiány. */
+  researchReady: boolean;
 };
 
 export type FieldGapSummary = {
@@ -49,6 +82,12 @@ export type PatientCompletenessReport = {
     clinicalComplete: number;
     clinicalIncomplete: number;
     researchComplete: number;
+    /** Elemzésre kész betegek száma (sem klinikai, sem kutatási hiány). */
+    researchReady: number;
+    /** Plauzibilitási figyelmeztetéssel rendelkező betegek száma. */
+    withWarnings: number;
+    /** Az összes beteg átlagos adat-teljességi pontszáma (0–100). */
+    avgCompletenessScore: number;
     missingOhipT0: number;
     byField: FieldGapSummary[];
   };
@@ -109,6 +148,19 @@ const RESEARCH_RULES: ResearchRule[] = [
   },
 ];
 
+/**
+ * N/A-ként megjelölhető mező-kulcsok (a feltételes kutatási mezők). A klinikai
+ * minimum mezői (név, TAJ, email…) nem jelölhetők N/A-nak.
+ */
+export const NA_ELIGIBLE_KEYS: ReadonlySet<string> = new Set(
+  RESEARCH_RULES.map((r) => r.key),
+);
+
+/** Egy N/A-jelölhető kulcs ember által olvasható címkéje (UI / API visszajelzéshez). */
+export function naFieldLabel(key: string): string | null {
+  return RESEARCH_RULES.find((r) => r.key === key)?.label ?? null;
+}
+
 export async function getPatientDataCompleteness(
   options?: { patientId?: string },
 ): Promise<PatientCompletenessReport> {
@@ -127,6 +179,7 @@ export async function getPatientDataCompleteness(
         p.nev,
         p.nem,
         p.szuletesi_datum,
+        p.halal_datum,
         p.taj,
         p.email,
         ku.doktor_neve AS kezeleoorvos_name,
@@ -146,11 +199,17 @@ export async function getPatientDataCompleteness(
         EXISTS (
           SELECT 1 FROM ohip14_responses o
           WHERE o.patient_id = p.id AND o.timepoint = 'T0'
-        ) AS has_ohip_t0
+        ) AS has_ohip_t0,
+        COALESCE(na.keys, ARRAY[]::text[]) AS na_keys
      FROM patients p
      LEFT JOIN patient_anamnesis a ON a.patient_id = p.id
      LEFT JOIN patient_dental_status d ON d.patient_id = p.id
      LEFT JOIN users ku ON ku.id = p.kezeleoorvos_user_id
+     LEFT JOIN LATERAL (
+        SELECT array_agg(field_key) AS keys
+        FROM patient_field_na
+        WHERE patient_id = p.id
+     ) na ON true
      LEFT JOIN LATERAL (
         SELECT COUNT(*)::int AS op_count
         FROM patient_documents pd
@@ -175,6 +234,9 @@ export async function getPatientDataCompleteness(
 
   let clinicalComplete = 0;
   let researchComplete = 0;
+  let researchReadyCount = 0;
+  let withWarnings = 0;
+  let scoreSum = 0;
   let missingOhipT0 = 0;
 
   const patients: PatientCompletenessRow[] = result.rows.map((row) => {
@@ -201,9 +263,19 @@ export async function getPatientDataCompleteness(
     }
 
     // --- Kutatási mezők (feltételes) ---
+    // Egy mező "rendezett", ha ki van töltve VAGY explicit N/A-ként megjelölt.
+    const naKeys = new Set<string>((row.na_keys as string[] | null) ?? []);
     const researchMissing: MissingItem[] = [];
+    const naMarked: MissingItem[] = [];
+    let researchApplicable = 0;
     for (const rule of RESEARCH_RULES) {
-      if (rule.applicable(row) && rule.missing(row)) {
+      if (!rule.applicable(row)) continue;
+      researchApplicable += 1;
+      if (naKeys.has(rule.key)) {
+        naMarked.push({ key: rule.key, label: rule.label, group: 'research' });
+        continue; // N/A → rendezett, nem hiány
+      }
+      if (rule.missing(row)) {
         researchMissing.push({ key: rule.key, label: rule.label, group: 'research' });
       }
     }
@@ -211,8 +283,28 @@ export async function getPatientDataCompleteness(
     clinicalMissing.forEach(bump);
     researchMissing.forEach(bump);
 
-    if (clinicalMissing.length === 0) clinicalComplete += 1;
-    if (researchMissing.length === 0) researchComplete += 1;
+    const isClinicalComplete = clinicalMissing.length === 0;
+    const isResearchComplete = researchMissing.length === 0;
+    const isResearchReady = isClinicalComplete && isResearchComplete;
+    const applicableCount = CLINICAL_APPLICABLE + researchApplicable;
+    const completenessScore = computeCompletenessScore({
+      clinicalApplicable: CLINICAL_APPLICABLE,
+      clinicalMissing: clinicalMissing.length,
+      researchApplicable,
+      researchMissing: researchMissing.length,
+    });
+
+    const warnings = getPlausibilityWarnings({
+      taj: row.taj as string | null,
+      szuletesiDatum: row.szuletesi_datum ? String(row.szuletesi_datum) : null,
+      halalDatum: row.halal_datum ? String(row.halal_datum) : null,
+    });
+
+    if (isClinicalComplete) clinicalComplete += 1;
+    if (isResearchComplete) researchComplete += 1;
+    if (isResearchReady) researchReadyCount += 1;
+    if (warnings.length > 0) withWarnings += 1;
+    scoreSum += completenessScore;
     if (row.has_ohip_t0 !== true) missingOhipT0 += 1;
 
     return {
@@ -222,8 +314,13 @@ export async function getPatientDataCompleteness(
       etiologia: (row.kezelesre_erkezes_indoka as string) ?? null,
       clinicalMissing,
       researchMissing,
-      clinicalComplete: clinicalMissing.length === 0,
-      researchComplete: researchMissing.length === 0,
+      clinicalComplete: isClinicalComplete,
+      researchComplete: isResearchComplete,
+      naMarked,
+      warnings,
+      applicableCount,
+      completenessScore,
+      researchReady: isResearchReady,
     };
   });
 
@@ -238,10 +335,24 @@ export async function getPatientDataCompleteness(
       clinicalComplete,
       clinicalIncomplete: patients.length - clinicalComplete,
       researchComplete,
+      researchReady: researchReadyCount,
+      withWarnings,
+      avgCompletenessScore: patients.length > 0 ? Math.round(scoreSum / patients.length) : 100,
       missingOhipT0,
       byField,
     },
   };
+}
+
+/**
+ * Egyetlen beteg adat-teljességi sora (a teljes riporttal azonos logikából).
+ * Mentés utáni tanácsadó visszajelzéshez — nem blokkol, csak jelez.
+ */
+export async function getPatientCompletenessRow(
+  patientId: string,
+): Promise<PatientCompletenessRow | null> {
+  const report = await getPatientDataCompleteness({ patientId });
+  return report.patients[0] ?? null;
 }
 
 /** JSONB-ből érkező fogazati státusz normalizálása a hiány-ellenőrzéshez. */

@@ -211,6 +211,12 @@ async function callEndpoint(path, label) {
       );
     }
 
+    // Napi adat-teljességi pillanatkép a trend-grafikonhoz — 06:00 körül.
+    // A végpont idempotens (egy sor / nap), így a tág ablak biztonságos.
+    if (hour === 6) {
+      await callEndpoint('/api/patients/completeness-snapshot/record', 'Completeness snapshot');
+    }
+
     // Admin összegyűjtő email: minden cron futáskor hívjuk; a szerver max. ADMIN_NOTIFICATION_BATCH_INTERVAL_HOURS (alap 3) szerint küld.
     await callEndpoint('/api/admin/daily-summary', 'Admin notification batch summary');
 

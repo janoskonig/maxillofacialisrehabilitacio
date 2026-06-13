@@ -17,7 +17,37 @@ import {
   CheckCircle,
   RefreshCw,
   ExternalLink,
+  Gauge,
+  BadgeCheck,
+  TrendingUp,
 } from 'lucide-react';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
+
+type Snapshot = {
+  snapshotDate: string;
+  total: number;
+  avgScore: number;
+  clinicalComplete: number;
+  researchReady: number;
+  withWarnings: number;
+};
+
+type CohortRow = {
+  key: string;
+  label: string;
+  count: number;
+  avgScore: number;
+  researchReady: number;
+  withWarnings: number;
+};
 
 type MissingItem = { key: string; label: string; group: 'clinical' | 'research' };
 
@@ -30,6 +60,11 @@ type CompletenessRow = {
   researchMissing: MissingItem[];
   clinicalComplete: boolean;
   researchComplete: boolean;
+  naMarked: MissingItem[];
+  warnings: { code: string; field: string; message: string }[];
+  applicableCount: number;
+  completenessScore: number;
+  researchReady: boolean;
 };
 
 type FieldGap = { key: string; label: string; group: 'clinical' | 'research'; count: number };
@@ -41,10 +76,20 @@ type Report = {
     clinicalComplete: number;
     clinicalIncomplete: number;
     researchComplete: number;
+    researchReady: number;
+    withWarnings: number;
+    avgCompletenessScore: number;
     missingOhipT0: number;
     byField: FieldGap[];
   };
 };
+
+/** Teljességi pontszám → badge színosztály (zöld ≥90, sárga ≥70, piros alatta). */
+function scoreColor(score: number): string {
+  if (score >= 90) return 'bg-green-50 text-green-700 border-green-200';
+  if (score >= 70) return 'bg-amber-50 text-amber-700 border-amber-200';
+  return 'bg-red-50 text-red-700 border-red-200';
+}
 
 type GroupFilter = 'clinical' | 'research' | 'all';
 
@@ -84,6 +129,7 @@ export default function DataCompletenessPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [authorized, setAuthorized] = useState(false);
   const [data, setData] = useState<Report | null>(null);
+  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
 
   const [group, setGroup] = useState<GroupFilter>('clinical');
   const [search, setSearch] = useState('');
@@ -94,6 +140,18 @@ export default function DataCompletenessPage() {
     const res = await fetch('/api/patients/data-completeness', { credentials: 'include' });
     if (!res.ok) throw new Error('Betöltés sikertelen');
     setData((await res.json()) as Report);
+    // Trend (best-effort: hiba esetén csak nem rajzolunk grafikont).
+    try {
+      const sres = await fetch('/api/patients/completeness-snapshot?days=90', {
+        credentials: 'include',
+      });
+      if (sres.ok) {
+        const sjson = (await sres.json()) as { snapshots?: Snapshot[] };
+        setSnapshots(sjson.snapshots ?? []);
+      }
+    } catch {
+      /* a trend nem kritikus */
+    }
   }, []);
 
   const refresh = useCallback(async () => {
@@ -106,6 +164,30 @@ export default function DataCompletenessPage() {
       setRefreshing(false);
     }
   }, [load]);
+
+  /** Egy kutatási mező N/A ("nem értelmezhető / nem ismert") jelölése / visszavonása. */
+  const [naBusy, setNaBusy] = useState<string | null>(null);
+  const markNa = useCallback(
+    async (patientId: string, fieldKey: string, na: boolean) => {
+      const busyKey = `${patientId}:${fieldKey}`;
+      setNaBusy(busyKey);
+      try {
+        const res = await fetch(`/api/patients/${patientId}/field-na`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fieldKey, na }),
+        });
+        if (!res.ok) throw new Error('N/A beállítás sikertelen');
+        await load();
+      } catch {
+        /* hiba esetén a meglévő nézet marad */
+      } finally {
+        setNaBusy(null);
+      }
+    },
+    [load],
+  );
 
   useEffect(() => {
     (async () => {
@@ -140,6 +222,34 @@ export default function DataCompletenessPage() {
     },
     [group],
   );
+
+  /** Kohorsz-bontás kezelőorvosonként (kliens oldali aggregáció). */
+  const cohorts = useMemo<CohortRow[]>(() => {
+    if (!data) return [];
+    const map = new Map<
+      string,
+      { count: number; scoreSum: number; researchReady: number; withWarnings: number }
+    >();
+    for (const p of data.patients) {
+      const key = p.kezeleoorvos?.trim() || '— nincs kezelőorvos —';
+      const e = map.get(key) ?? { count: 0, scoreSum: 0, researchReady: 0, withWarnings: 0 };
+      e.count += 1;
+      e.scoreSum += p.completenessScore;
+      if (p.researchReady) e.researchReady += 1;
+      if (p.warnings.length > 0) e.withWarnings += 1;
+      map.set(key, e);
+    }
+    return Array.from(map.entries())
+      .map(([key, v]) => ({
+        key,
+        label: key,
+        count: v.count,
+        avgScore: Math.round(v.scoreSum / v.count),
+        researchReady: v.researchReady,
+        withWarnings: v.withWarnings,
+      }))
+      .sort((a, b) => a.avgScore - b.avgScore || b.count - a.count);
+  }, [data]);
 
   const visibleFieldGaps = useMemo(() => {
     if (!data) return [];
@@ -213,7 +323,7 @@ export default function DataCompletenessPage() {
 
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
         {/* Összegző kártyák */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
           <div className="card p-4 flex items-center gap-3">
             <Users className="w-8 h-8 text-medical-primary" />
             <div>
@@ -242,7 +352,94 @@ export default function DataCompletenessPage() {
               <p className="text-sm text-gray-500">Klinikailag teljes</p>
             </div>
           </div>
+          <div className="card p-4 flex items-center gap-3">
+            <Gauge className="w-8 h-8 text-medical-primary" />
+            <div>
+              <p className="text-2xl font-bold text-gray-900">{summary?.avgCompletenessScore ?? 0}%</p>
+              <p className="text-sm text-gray-500">Átlagos teljesség</p>
+            </div>
+          </div>
+          <div className="card p-4 flex items-center gap-3">
+            <BadgeCheck className="w-8 h-8 text-emerald-600" />
+            <div>
+              <p className="text-2xl font-bold text-emerald-700">{summary?.researchReady ?? 0}</p>
+              <p className="text-sm text-gray-500">Elemzésre kész</p>
+            </div>
+          </div>
         </div>
+
+        {/* Trend: átlagos teljesség az idő függvényében */}
+        {snapshots.length >= 2 && (
+          <section className="card p-4">
+            <h2 className="text-sm font-semibold text-gray-900 mb-3 inline-flex items-center gap-1.5">
+              <TrendingUp className="w-4 h-4 text-medical-primary" />
+              Átlagos adat-teljesség alakulása (utolsó 90 nap)
+            </h2>
+            <div style={{ width: '100%', height: 220 }}>
+              <ResponsiveContainer>
+                <LineChart data={snapshots} margin={{ top: 5, right: 12, bottom: 5, left: -16 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis
+                    dataKey="snapshotDate"
+                    tick={{ fontSize: 11 }}
+                    tickFormatter={(d: string) => d.slice(5)}
+                  />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
+                  <Tooltip
+                    formatter={(v) => [`${v}%`, 'Átlagos teljesség']}
+                    labelFormatter={(d) => String(d)}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="avgScore"
+                    stroke="#2563eb"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
+        )}
+
+        {/* Bontás kezelőorvosonként */}
+        {cohorts.length > 0 && (
+          <section className="card p-4">
+            <h2 className="text-sm font-semibold text-gray-900 mb-3">Bontás kezelőorvosonként</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-500 border-b">
+                    <th className="py-1.5 pr-3 font-medium">Kezelőorvos</th>
+                    <th className="py-1.5 px-3 font-medium text-right">Beteg</th>
+                    <th className="py-1.5 px-3 font-medium text-right">Átlag %</th>
+                    <th className="py-1.5 px-3 font-medium text-right">Elemzésre kész</th>
+                    <th className="py-1.5 pl-3 font-medium text-right">Figyelmeztetés</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cohorts.map((c) => (
+                    <tr key={c.key} className="border-b last:border-0">
+                      <td className="py-1.5 pr-3 text-gray-900">{c.label}</td>
+                      <td className="py-1.5 px-3 text-right text-gray-700">{c.count}</td>
+                      <td className="py-1.5 px-3 text-right">
+                        <span className={`font-semibold rounded-full border px-2 py-0.5 ${scoreColor(c.avgScore)}`}>
+                          {c.avgScore}%
+                        </span>
+                      </td>
+                      <td className="py-1.5 px-3 text-right text-gray-700">
+                        {c.researchReady}/{c.count}
+                      </td>
+                      <td className="py-1.5 pl-3 text-right text-orange-700">
+                        {c.withWarnings > 0 ? c.withWarnings : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
 
         {/* Csoport-váltó */}
         <div className="flex flex-wrap items-center gap-3">
@@ -356,21 +553,34 @@ export default function DataCompletenessPage() {
                       {missing.length > 0 ? (
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           {missing.map((m) => (
-                            <Link
-                              key={m.key}
-                              href={editHref(p.patientId, m.key)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              title="Pótlás a betegűrlapon (új lapon)"
-                              className={`text-xs rounded-full px-2 py-0.5 border inline-flex items-center gap-1 transition-colors ${
-                                m.group === 'clinical'
-                                  ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
-                                  : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
-                              }`}
-                            >
-                              {m.label}
-                              <ExternalLink className="w-3 h-3 opacity-60" />
-                            </Link>
+                            <span key={m.key} className="inline-flex items-center">
+                              <Link
+                                href={editHref(p.patientId, m.key)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title="Pótlás a betegűrlapon (új lapon)"
+                                className={`text-xs rounded-l-full px-2 py-0.5 border inline-flex items-center gap-1 transition-colors ${
+                                  m.group === 'clinical'
+                                    ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
+                                    : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                                } ${m.group === 'research' ? '' : 'rounded-r-full'}`}
+                              >
+                                {m.label}
+                                <ExternalLink className="w-3 h-3 opacity-60" />
+                              </Link>
+                              {/* Kutatási mező N/A-ként jelölhető (a klinikai minimum nem). */}
+                              {m.group === 'research' && (
+                                <button
+                                  type="button"
+                                  disabled={naBusy === `${p.patientId}:${m.key}`}
+                                  onClick={() => void markNa(p.patientId, m.key, true)}
+                                  title="Jelölés: nem értelmezhető / nem ismert (nem számít hiánynak)"
+                                  className="text-xs rounded-r-full px-1.5 py-0.5 border border-l-0 border-amber-200 bg-white text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                                >
+                                  N/A
+                                </button>
+                              )}
+                            </span>
                           ))}
                         </div>
                       ) : (
@@ -383,8 +593,50 @@ export default function DataCompletenessPage() {
                               : 'Klinikai minimum teljes'}
                         </p>
                       )}
+
+                      {/* Plauzibilitási figyelmeztetések (pl. hibás TAJ, lehetetlen dátum). */}
+                      {p.warnings.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {p.warnings.map((w) => (
+                            <span
+                              key={w.code}
+                              title={w.message}
+                              className="text-xs rounded-full px-2 py-0.5 border border-orange-300 bg-orange-50 text-orange-800 inline-flex items-center gap-1"
+                            >
+                              <AlertTriangle className="w-3 h-3" />
+                              {w.message}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* N/A-ként megjelölt mezők (visszavonható) — csak ha a kutatási
+                          csoport látszik. */}
+                      {group !== 'clinical' && p.naMarked.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          {p.naMarked.map((m) => (
+                            <button
+                              key={`na-${m.key}`}
+                              type="button"
+                              disabled={naBusy === `${p.patientId}:${m.key}`}
+                              onClick={() => void markNa(p.patientId, m.key, false)}
+                              title="N/A visszavonása (újra hiányként számít)"
+                              className="text-xs rounded-full px-2 py-0.5 border border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100 inline-flex items-center gap-1 disabled:opacity-50"
+                            >
+                              {m.label}: N/A
+                              <span className="opacity-60">✕</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <div className="text-xs text-right shrink-0">
+                    <div className="text-xs text-right shrink-0 flex flex-col items-end gap-1">
+                      <span
+                        title="Adat-teljességi pontszám (meglévő / értelmezhető mezők)"
+                        className={`font-semibold rounded-full border px-2 py-0.5 ${scoreColor(p.completenessScore)}`}
+                      >
+                        {p.completenessScore}%
+                      </span>
                       {missing.length > 0 && (
                         <span className="font-semibold text-red-600">{missing.length} hiány</span>
                       )}

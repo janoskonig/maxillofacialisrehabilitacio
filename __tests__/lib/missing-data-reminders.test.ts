@@ -4,6 +4,8 @@ import {
   formatMissingSummary,
   doctorActionableMissing,
   PATIENT_FILLABLE_KEYS,
+  shouldEscalate,
+  ESCALATION_AFTER,
 } from '@/lib/missing-data-reminders';
 import type { MissingItem, PatientCompletenessRow } from '@/lib/patient-data-completeness';
 
@@ -67,6 +69,18 @@ describe('formatMissingSummary', () => {
   });
 });
 
+describe('shouldEscalate', () => {
+  it('does not escalate below the threshold', () => {
+    expect(shouldEscalate(0)).toBe(false);
+    expect(shouldEscalate(ESCALATION_AFTER - 1)).toBe(false);
+  });
+
+  it('escalates at or above the threshold', () => {
+    expect(shouldEscalate(ESCALATION_AFTER)).toBe(true);
+    expect(shouldEscalate(ESCALATION_AFTER + 5)).toBe(true);
+  });
+});
+
 describe('doctorActionableMissing', () => {
   const makeRow = (
     clinical: MissingItem[],
@@ -80,6 +94,11 @@ describe('doctorActionableMissing', () => {
     researchMissing: research,
     clinicalComplete: clinical.length === 0,
     researchComplete: research.length === 0,
+    naMarked: [],
+    warnings: [],
+    applicableCount: 9,
+    completenessScore: 100,
+    researchReady: clinical.length === 0 && research.length === 0,
   });
 
   it('excludes patient-fillable items (e.g. OHIP-14 T0)', () => {

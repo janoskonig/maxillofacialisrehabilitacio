@@ -1153,13 +1153,19 @@ export async function sendMissingDataReminderEmail(params: {
   patientId: string;
   missingItems: { label: string; group: 'clinical' | 'research' }[];
   isFollowUp: boolean;
+  /** Admin-eszkaláció: az orvost többszöri emlékeztetőre sem pótolta. */
+  escalation?: boolean;
 }): Promise<void> {
-  const { to, recipientName, patientName, patientId, missingItems, isFollowUp } = params;
+  const { to, recipientName, patientName, patientId, missingItems, isFollowUp, escalation } = params;
   const baseUrl = getBaseUrlForEmail();
   const patientUrl = `${baseUrl}/patients/${patientId}/view`;
   const greeting = recipientName?.trim() ? `Kedves ${recipientName.trim()}` : 'Kedves Kolléga';
-  const heading = isFollowUp ? 'Ismételt emlékeztető – hiányzó betegadatok' : 'Hiányzó betegadatok';
   const betegLabel = patientName?.trim() ? patientName.trim() : 'beteg';
+  const heading = escalation
+    ? 'Eszkaláció – tartósan hiányzó betegadatok'
+    : isFollowUp
+      ? 'Ismételt emlékeztető – hiányzó betegadatok'
+      : 'Hiányzó betegadatok';
 
   const clinical = missingItems.filter((i) => i.group === 'clinical');
   const research = missingItems.filter((i) => i.group === 'research');
@@ -1173,13 +1179,21 @@ export async function sendMissingDataReminderEmail(params: {
     ? `<p style="margin-bottom: 4px;"><strong>Kutatási adatok:</strong></p><ul>${renderList(research)}</ul>`
     : '';
 
-  const intro = isFollowUp
-    ? `Egy hete jeleztük, hogy <strong>${betegLabel}</strong> betegnél hiányzó adatok vannak. Ezek továbbra is pótlásra várnak:`
-    : `<strong>${betegLabel}</strong> betegnél az alábbi adatok hiányoznak, amelyek pótlása az Ön közreműködését igényli:`;
+  const intro = escalation
+    ? `<strong>${betegLabel}</strong> betegnél az érintett orvos(ok) többszöri emlékeztető ellenére sem pótolták az alábbi adatokat. Kérjük, adminisztrátorként intézkedjen (pótlás, a felelős megkeresése, vagy a mező N/A-ként jelölése):`
+    : isFollowUp
+      ? `Egy hete jeleztük, hogy <strong>${betegLabel}</strong> betegnél hiányzó adatok vannak. Ezek továbbra is pótlásra várnak:`
+      : `<strong>${betegLabel}</strong> betegnél az alábbi adatok hiányoznak, amelyek pótlása az Ön közreműködését igényli:`;
+
+  const footer = escalation
+    ? `Amennyiben az adatok pótlásra kerülnek (vagy N/A-ként jelölik), az értesítő automatikusan megszűnik.`
+    : `Amennyiben az adatok pótlásra kerülnek, az értesítő automatikusan megszűnik. Ellenkező esetben egy hét múlva újabb emlékeztetőt küldünk.`;
+
+  const headingColor = escalation ? '#b91c1c' : isFollowUp ? '#dc2626' : '#2563eb';
 
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: ${isFollowUp ? '#dc2626' : '#2563eb'};">${heading}</h2>
+      <h2 style="color: ${headingColor};">${heading}</h2>
       <p>${greeting}!</p>
       <p>${intro}</p>
       ${clinicalBlock}
@@ -1193,20 +1207,23 @@ export async function sendMissingDataReminderEmail(params: {
         Ha a gomb nem működik, másolja be az alábbi linket a böngészőjébe:<br>
         <a href="${patientUrl}" style="color: #3b82f6;">${patientUrl}</a>
       </p>
-      <p style="color: #6b7280; font-size: 13px;">
-        Amennyiben az adatok pótlásra kerülnek, az értesítő automatikusan megszűnik.
-        Ellenkező esetben egy hét múlva újabb emlékeztetőt küldünk.
-      </p>
+      <p style="color: #6b7280; font-size: 13px;">${footer}</p>
       <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
     </div>
   `;
 
+  const subjectPrefix = escalation
+    ? 'Eszkaláció: hiányzó betegadatok'
+    : isFollowUp
+      ? 'Ismételt emlékeztető'
+      : 'Hiányzó betegadatok';
+
   await sendEmail({
     to,
-    subject: `${isFollowUp ? 'Ismételt emlékeztető' : 'Hiányzó betegadatok'} – ${betegLabel} – Maxillofaciális Rehabilitáció`,
+    subject: `${subjectPrefix} – ${betegLabel} – Maxillofaciális Rehabilitáció`,
     html,
-    emailType: 'missing_data_reminder',
+    emailType: escalation ? 'missing_data_escalation' : 'missing_data_reminder',
     sentBy: 'system',
-    metadata: { patientId, isFollowUp },
+    metadata: { patientId, isFollowUp, escalation: !!escalation },
   });
 }
