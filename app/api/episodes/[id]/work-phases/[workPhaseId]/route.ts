@@ -20,9 +20,10 @@ export const DELETE = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász
   const workPhaseId = params.workPhaseId;
   const pool = getDbPool();
 
-  await pool.query('BEGIN');
+  const client = await pool.connect();
   try {
-    const row = await pool.query(
+    await client.query('BEGIN');
+    const row = await client.query(
       `SELECT ewp.id, ewp.episode_id, ewp.work_phase_code, ewp.status,
               pe.status as episode_status
        FROM episode_work_phases ewp
@@ -33,34 +34,34 @@ export const DELETE = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász
     );
 
     if (row.rows.length === 0) {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK');
       return NextResponse.json({ error: 'Munkafázis nem található' }, { status: 404 });
     }
 
     const phase = row.rows[0];
 
     if (phase.episode_status !== 'open') {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK');
       return NextResponse.json({ error: 'Csak aktív epizód munkafázisai törölhetők' }, { status: 400 });
     }
 
     if (phase.status !== 'pending' && phase.status !== 'skipped') {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK');
       return NextResponse.json(
         { error: `Csak várakozó (pending) vagy átugrott (skipped) munkafázis hagyható el. Jelenlegi státusz: ${phase.status}` },
         { status: 400 }
       );
     }
 
-    await pool.query(
+    await client.query(
       `INSERT INTO episode_work_phase_audit (episode_work_phase_id, episode_id, old_status, new_status, changed_by, reason)
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [workPhaseId, episodeId, phase.status, 'deleted', auth.email ?? auth.userId ?? 'unknown', 'Manuálisan törölve']
     );
 
-    await pool.query(`DELETE FROM episode_work_phases WHERE id = $1`, [workPhaseId]);
+    await client.query(`DELETE FROM episode_work_phases WHERE id = $1`, [workPhaseId]);
 
-    await pool.query(
+    await client.query(
       `WITH numbered AS (
         SELECT id, ROW_NUMBER() OVER (ORDER BY COALESCE(seq, pathway_order_index)) - 1 as new_seq
         FROM episode_work_phases WHERE episode_id = $1
@@ -70,7 +71,7 @@ export const DELETE = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász
       [episodeId]
     );
 
-    await pool.query('COMMIT');
+    await client.query('COMMIT');
 
     try {
       await emitSchedulingEvent('episode', episodeId, 'step_deleted');
@@ -80,8 +81,10 @@ export const DELETE = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász
 
     return NextResponse.json({ deleted: true, workPhaseId });
   } catch (txError) {
-    await pool.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => {});
     throw txError;
+  } finally {
+    client.release();
   }
 });
 
@@ -117,9 +120,10 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
     newStatus === undefined &&
     (defaultDaysOffset !== undefined || durationMinutes !== undefined || customLabel !== undefined);
 
-  await pool.query('BEGIN');
+  const client = await pool.connect();
   try {
-    const phaseRow = await pool.query(
+    await client.query('BEGIN');
+    const phaseRow = await client.query(
       `SELECT ewp.id, ewp.episode_id, ewp.work_phase_code, ewp.status, ewp.pathway_order_index,
               pe.status as episode_status
        FROM episode_work_phases ewp
@@ -130,14 +134,14 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
     );
 
     if (phaseRow.rows.length === 0) {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK');
       return NextResponse.json({ error: 'Munkafázis nem található' }, { status: 404 });
     }
 
     const phase = phaseRow.rows[0];
 
     if (phase.episode_status !== 'open') {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK');
       return NextResponse.json({ error: 'Csak aktív epizód munkafázisai módosíthatók' }, { status: 400 });
     }
 
@@ -161,10 +165,10 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
 
       if (sets.length > 0) {
         vals.push(workPhaseId);
-        await pool.query(`UPDATE episode_work_phases SET ${sets.join(', ')} WHERE id = $${pi}`, vals);
+        await client.query(`UPDATE episode_work_phases SET ${sets.join(', ')} WHERE id = $${pi}`, vals);
       }
 
-      await pool.query('COMMIT');
+      await client.query('COMMIT');
 
       try {
         await emitSchedulingEvent('episode', episodeId, 'step_timing_updated');
@@ -173,7 +177,7 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
       }
     } else if (phase.status === 'completed' && newStatus === 'pending') {
       if (typeof reason !== 'string' || reason.trim().length < 5) {
-        await pool.query('ROLLBACK');
+        await client.query('ROLLBACK');
         return NextResponse.json(
           { error: 'Az újranyitáshoz indoklás szükséges (legalább 5 karakter).' },
           { status: 400 }
@@ -182,18 +186,18 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
 
       const stepCode = phase.work_phase_code as string;
 
-      await pool.query(
+      await client.query(
         `UPDATE episode_work_phases SET status = 'pending', completed_at = NULL WHERE id = $1`,
         [workPhaseId]
       );
 
-      await pool.query(
+      await client.query(
         `INSERT INTO episode_work_phase_audit (episode_work_phase_id, episode_id, old_status, new_status, changed_by, reason)
          VALUES ($1, $2, $3, $4, $5, $6)`,
         [workPhaseId, episodeId, 'completed', 'pending', auth.email ?? auth.userId ?? 'unknown', reason.trim()]
       );
 
-      const futureAppts = await pool.query(
+      const futureAppts = await client.query(
         `SELECT a.id, a.time_slot_id FROM appointments a
          WHERE a.episode_id = $1 AND a.step_code = $2
            AND a.start_time > CURRENT_TIMESTAMP
@@ -201,22 +205,22 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
         [episodeId, stepCode]
       );
       for (const ap of futureAppts.rows as Array<{ id: string; time_slot_id: string | null }>) {
-        await pool.query(`UPDATE appointments SET appointment_status = 'cancelled_by_doctor' WHERE id = $1`, [ap.id]);
+        await client.query(`UPDATE appointments SET appointment_status = 'cancelled_by_doctor' WHERE id = $1`, [ap.id]);
         if (ap.time_slot_id) {
-          await pool.query(
+          await client.query(
             `UPDATE available_time_slots SET state = 'free', status = 'available' WHERE id = $1`,
             [ap.time_slot_id]
           );
         }
       }
 
-      await pool.query(
+      await client.query(
         `UPDATE slot_intents SET state = 'expired', updated_at = CURRENT_TIMESTAMP
          WHERE episode_id = $1 AND step_code = $2 AND state = 'open'`,
         [episodeId, stepCode]
       );
 
-      await pool.query('COMMIT');
+      await client.query('COMMIT');
 
       try {
         await projectRemainingSteps(episodeId);
@@ -231,7 +235,7 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
 
       const ttJoin = getToothTreatmentJoin();
       const ttCols = getToothTreatmentSelectCols();
-      const updated = await pool.query(
+      const updated = await client.query(
         `SELECT ${EPISODE_WORK_PHASE_SELECT_COLUMNS}${ttCols} FROM episode_work_phases ewp ${ttJoin} WHERE ewp.id = $1`,
         [workPhaseId]
       );
@@ -247,7 +251,7 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
 
       const allowed = validTransitions[phase.status];
       if (!allowed || !allowed.includes(newStatus)) {
-        await pool.query('ROLLBACK');
+        await client.query('ROLLBACK');
         return NextResponse.json(
           {
             error: `Nem lehetséges: ${phase.status} → ${newStatus}`,
@@ -268,14 +272,14 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
         if (newStatus === 'completed' && typeof completedAtRaw === 'string' && completedAtRaw.length > 0) {
           const parsed = new Date(completedAtRaw);
           if (Number.isNaN(parsed.getTime())) {
-            await pool.query('ROLLBACK');
+            await client.query('ROLLBACK');
             return NextResponse.json(
               { error: 'completedAt érvénytelen dátum (ISO szöveg szükséges).' },
               { status: 400 }
             );
           }
           if (parsed.getTime() > Date.now() + 60_000) {
-            await pool.query('ROLLBACK');
+            await client.query('ROLLBACK');
             return NextResponse.json(
               { error: 'completedAt nem lehet jövőbeli időpont.' },
               { status: 400 }
@@ -290,7 +294,7 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
       // hagyjuk érintetlenül, ha nem lett megadva (pl. egyéni dátum esetén).
       let appointmentIdForLink: string | null | undefined = undefined;
       if (newStatus === 'completed' && typeof completedAppointmentId === 'string' && completedAppointmentId.length > 0) {
-        const apptCheck = await pool.query(
+        const apptCheck = await client.query(
           `SELECT a.id, a.patient_id, ats.start_time
            FROM appointments a
            JOIN available_time_slots ats ON a.time_slot_id = ats.id
@@ -298,13 +302,13 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
           [completedAppointmentId]
         );
         if (apptCheck.rows.length === 0) {
-          await pool.query('ROLLBACK');
+          await client.query('ROLLBACK');
           return NextResponse.json(
             { error: 'A megadott appointment nem található.' },
             { status: 400 }
           );
         }
-        const epPatient = await pool.query(
+        const epPatient = await client.query(
           `SELECT patient_id FROM patient_episodes WHERE id = $1`,
           [episodeId]
         );
@@ -312,7 +316,7 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
           epPatient.rows.length === 0 ||
           epPatient.rows[0].patient_id !== apptCheck.rows[0].patient_id
         ) {
-          await pool.query('ROLLBACK');
+          await client.query('ROLLBACK');
           return NextResponse.json(
             { error: 'A megadott appointment nem ehhez a beteghez tartozik.' },
             { status: 400 }
@@ -322,26 +326,26 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
       }
 
       if (appointmentIdForLink !== undefined) {
-        await pool.query(
+        await client.query(
           `UPDATE episode_work_phases
            SET status = $1, completed_at = $2, appointment_id = $3
            WHERE id = $4`,
           [newStatus, completedAt, appointmentIdForLink, workPhaseId]
         );
       } else {
-        await pool.query(
+        await client.query(
           `UPDATE episode_work_phases SET status = $1, completed_at = $2 WHERE id = $3`,
           [newStatus, completedAt, workPhaseId]
         );
       }
 
-      await pool.query(
+      await client.query(
         `INSERT INTO episode_work_phase_audit (episode_work_phase_id, episode_id, old_status, new_status, changed_by, reason)
          VALUES ($1, $2, $3, $4, $5, $6)`,
         [workPhaseId, episodeId, phase.status, newStatus, auth.email ?? auth.userId ?? 'unknown', reason ?? null]
       );
 
-      await pool.query('COMMIT');
+      await client.query('COMMIT');
 
       try {
         await emitSchedulingEvent(
@@ -356,14 +360,16 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
 
     const ttJoin = getToothTreatmentJoin();
     const ttCols = getToothTreatmentSelectCols();
-    const updated = await pool.query(
+    const updated = await client.query(
       `SELECT ${EPISODE_WORK_PHASE_SELECT_COLUMNS}${ttCols} FROM episode_work_phases ewp ${ttJoin} WHERE ewp.id = $1`,
       [workPhaseId]
     );
 
     return NextResponse.json({ workPhase: updated.rows[0] });
   } catch (txError) {
-    await pool.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => {});
     throw txError;
+  } finally {
+    client.release();
   }
 });

@@ -823,25 +823,25 @@ export const DELETE = roleHandler(['admin'], async (req, { auth, params }) => {
     const appointments = appointmentResult.rows;
 
     // Start transaction
-    await pool.query('BEGIN');
-
+    const client = await pool.connect();
     try {
+      await client.query('BEGIN');
       // Delete appointments and free up time slots
       for (const appointment of appointments) {
         // Delete the appointment
-        await pool.query('DELETE FROM appointments WHERE id = $1', [appointment.id]);
-        
+        await client.query('DELETE FROM appointments WHERE id = $1', [appointment.id]);
+
         // Update time slot status back to available
-        await pool.query(
+        await client.query(
           'UPDATE available_time_slots SET status = $1 WHERE id = $2',
           ['available', appointment.time_slot_id]
         );
       }
 
       // Delete the patient (this will cascade delete appointments due to ON DELETE CASCADE, but we already handled it)
-      await pool.query('DELETE FROM patients WHERE id = $1', [patientId]);
+      await client.query('DELETE FROM patients WHERE id = $1', [patientId]);
 
-      await pool.query('COMMIT');
+      await client.query('COMMIT');
 
       // Send email notifications and handle Google Calendar events for freed time slots
       for (const appointment of appointments) {
@@ -978,7 +978,9 @@ export const DELETE = roleHandler(['admin'], async (req, { auth, params }) => {
         { status: 200 }
       );
     } catch (error) {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK').catch(() => {});
       throw error;
+    } finally {
+      client.release();
     }
 });

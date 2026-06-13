@@ -182,9 +182,9 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
     const oldStartTime = new Date(appointment.old_start_time);
 
     // Start transaction
-    await pool.query('BEGIN');
-
+    const client = await pool.connect();
     try {
+      await client.query('BEGIN');
       // Update appointment to new time slot
       // Build update query dynamically to handle optional appointmentType
       const updateFields: string[] = ['time_slot_id = $1', 'dentist_email = $2'];
@@ -199,8 +199,8 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
       
       updateValues.push(id);
       
-      const updateResult = await pool.query(
-        `UPDATE appointments 
+      const updateResult = await client.query(
+        `UPDATE appointments
          SET ${updateFields.join(', ')}
          WHERE id = $${paramIndex}
          RETURNING 
@@ -215,7 +215,7 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
       );
 
       // Update old time slot status and state back to available/free
-      await pool.query(
+      await client.query(
         `UPDATE available_time_slots SET status = 'available', state = 'free' WHERE id = $1`,
         [appointment.old_time_slot_id]
       );
@@ -223,13 +223,13 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
       // New time slot is already booked (created as booked or updated to booked)
       if (!startTime) {
         // Only update status/state if using existing time slot
-        await pool.query(
+        await client.query(
           `UPDATE available_time_slots SET status = 'booked', state = 'booked' WHERE id = $1`,
           [finalTimeSlotId]
         );
       }
 
-      await pool.query('COMMIT');
+      await client.query('COMMIT');
 
       const updatedAppointment = updateResult.rows[0];
 
@@ -377,8 +377,10 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
 
       return NextResponse.json({ appointment: updatedAppointment });
     } catch (error) {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK').catch(() => {});
       throw error;
+    } finally {
+      client.release();
     }
 });
 
@@ -446,14 +448,14 @@ export const DELETE = authedHandler(async (req, { auth, params }) => {
     }
 
     // Start transaction
-    await pool.query('BEGIN');
-
+    const client = await pool.connect();
     try {
+      await client.query('BEGIN');
       // Delete the appointment
-      await pool.query('DELETE FROM appointments WHERE id = $1', [id]);
+      await client.query('DELETE FROM appointments WHERE id = $1', [id]);
 
       // Update time slot status and state back to available/free
-      await pool.query(
+      await client.query(
         `UPDATE available_time_slots SET status = 'available', state = 'free' WHERE id = $1`,
         [appointment.time_slot_id]
       );
@@ -467,7 +469,7 @@ export const DELETE = authedHandler(async (req, { auth, params }) => {
         if (alternativeIds.length > 0) {
           const validIds = alternativeIds.filter((id: any) => id && typeof id === 'string');
           if (validIds.length > 0) {
-            await pool.query(
+            await client.query(
               `UPDATE available_time_slots SET status = 'available', state = 'free' WHERE id = ANY($1::uuid[])`,
               [validIds]
             );
@@ -477,19 +479,19 @@ export const DELETE = authedHandler(async (req, { auth, params }) => {
 
       // Expire linked slot_intent so "Összes szükséges időpont lefoglalása" can recreate it
       if (appointment.slot_intent_id) {
-        await pool.query(
+        await client.query(
           `UPDATE slot_intents SET state = 'expired', updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND state = 'converted'`,
           [appointment.slot_intent_id]
         );
       }
       if (appointment.episode_id) {
-        await pool.query(
+        await client.query(
           `INSERT INTO scheduling_events (entity_type, entity_id, event_type) VALUES ('episode', $1, 'REPROJECT_INTENTS')`,
           [appointment.episode_id]
         );
       }
 
-      await pool.query('COMMIT');
+      await client.query('COMMIT');
 
       // Send cancellation email notifications and delete Google Calendar event (parallel)
       try {
@@ -584,7 +586,9 @@ export const DELETE = authedHandler(async (req, { auth, params }) => {
 
       return NextResponse.json({ success: true });
     } catch (error) {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK').catch(() => {});
       throw error;
+    } finally {
+      client.release();
     }
 });

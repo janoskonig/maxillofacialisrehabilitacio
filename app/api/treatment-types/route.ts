@@ -19,21 +19,22 @@ export const POST = roleHandler(['admin', 'fogpótlástanász'], async (req, { a
   const data = parsed.data;
 
   const pool = getDbPool();
+  const client = await pool.connect();
   try {
-    await pool.query('BEGIN');
-    const r = await pool.query(
+    await client.query('BEGIN');
+    const r = await client.query(
       `INSERT INTO treatment_types (code, label_hu)
        VALUES ($1, $2)
        RETURNING id, code, label_hu as "labelHu"`,
       [data.code, data.labelHu]
     );
     const row = r.rows[0];
-    await pool.query(
+    await client.query(
       `INSERT INTO care_pathways (name, reason, treatment_type_id, steps_json, work_phases_json, version, priority)
        VALUES ($1, NULL, $2, '[]'::jsonb, '[]'::jsonb, 1, 0)`,
       [row.labelHu, row.id]
     );
-    await pool.query('COMMIT');
+    await client.query('COMMIT');
     console.info('[admin] treatment_type created', {
       id: row.id,
       code: row.code,
@@ -44,7 +45,7 @@ export const POST = roleHandler(['admin', 'fogpótlástanász'], async (req, { a
     invalidateCache('treatment-types');
     return NextResponse.json({ treatmentType: row });
   } catch (err: unknown) {
-    await pool.query('ROLLBACK').catch(() => {});
+    await client.query('ROLLBACK').catch(() => {});
     const msg = String(err ?? '');
     if (msg.includes('unique') || msg.includes('duplicate')) {
       return NextResponse.json(
@@ -53,6 +54,8 @@ export const POST = roleHandler(['admin', 'fogpótlástanász'], async (req, { a
       );
     }
     throw err;
+  } finally {
+    client.release();
   }
 });
 

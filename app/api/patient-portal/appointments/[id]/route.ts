@@ -96,22 +96,22 @@ export const DELETE = apiHandler(async (req, { correlationId, params }) => {
     );
   }
 
-  await pool.query('BEGIN');
-
+  const client = await pool.connect();
   try {
-    await pool.query(
-      `UPDATE appointments 
+    await client.query('BEGIN');
+    await client.query(
+      `UPDATE appointments
        SET appointment_status = $1, completion_notes = $2
        WHERE id = $3`,
       ['cancelled_by_patient', cancellationReason.trim(), params.id]
     );
 
-    await pool.query(
+    await client.query(
       `UPDATE available_time_slots SET status = 'available', state = 'free' WHERE id = $1`,
       [appointment.time_slot_id]
     );
 
-    await pool.query('COMMIT');
+    await client.query('COMMIT');
 
     await queueAdminNotification(
       'appointment_cancelled_by_patient',
@@ -234,7 +234,9 @@ export const DELETE = apiHandler(async (req, { correlationId, params }) => {
       message: 'Időpont sikeresen lemondva!',
     });
   } catch (error) {
-    await pool.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => {});
     throw error;
+  } finally {
+    client.release();
   }
 });

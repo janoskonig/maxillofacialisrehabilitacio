@@ -50,10 +50,10 @@ export const POST = apiHandler(async (req, { correlationId, params }) => {
     );
   }
 
-  await pool.query('BEGIN');
-
+  const client = await pool.connect();
   try {
-    await pool.query(
+    await client.query('BEGIN');
+    await client.query(
       'UPDATE appointments SET approval_status = $1, approved_at = CURRENT_TIMESTAMP WHERE id = $2',
       ['approved', appointment.id]
     );
@@ -66,14 +66,14 @@ export const POST = apiHandler(async (req, { correlationId, params }) => {
     if (alternativeIds.length > 0) {
       const validIds = alternativeIds.filter((id: any) => id && typeof id === 'string');
       if (validIds.length > 0) {
-        await pool.query(
+        await client.query(
           'UPDATE available_time_slots SET status = $1 WHERE id = ANY($2::uuid[])',
           ['available', validIds]
         );
       }
     }
 
-    await pool.query('COMMIT');
+    await client.query('COMMIT');
 
     const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
     const appointmentCim = appointment.cim || DEFAULT_CIM;
@@ -187,7 +187,9 @@ export const POST = apiHandler(async (req, { correlationId, params }) => {
       message: 'Időpont sikeresen elfogadva!',
     });
   } catch (error) {
-    await pool.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => {});
     throw error;
+  } finally {
+    client.release();
   }
 });
