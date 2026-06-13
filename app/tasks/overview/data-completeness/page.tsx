@@ -33,6 +33,7 @@ type CompletenessRow = {
   clinicalComplete: boolean;
   researchComplete: boolean;
   naMarked: MissingItem[];
+  warnings: { code: string; field: string; message: string }[];
   applicableCount: number;
   completenessScore: number;
   researchReady: boolean;
@@ -48,6 +49,7 @@ type Report = {
     clinicalIncomplete: number;
     researchComplete: number;
     researchReady: number;
+    withWarnings: number;
     avgCompletenessScore: number;
     missingOhipT0: number;
     byField: FieldGap[];
@@ -448,6 +450,22 @@ export default function DataCompletenessPage() {
                               ? 'Minden mező rendben'
                               : 'Klinikai minimum teljes'}
                         </p>
+                      )}
+
+                      {/* Plauzibilitási figyelmeztetések (pl. hibás TAJ, lehetetlen dátum). */}
+                      {p.warnings.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {p.warnings.map((w) => (
+                            <span
+                              key={w.code}
+                              title={w.message}
+                              className="text-xs rounded-full px-2 py-0.5 border border-orange-300 bg-orange-50 text-orange-800 inline-flex items-center gap-1"
+                            >
+                              <AlertTriangle className="w-3 h-3" />
+                              {w.message}
+                            </span>
+                          ))}
+                        </div>
                       )}
 
                       {/* N/A-ként megjelölt mezők (visszavonható) — csak ha a kutatási

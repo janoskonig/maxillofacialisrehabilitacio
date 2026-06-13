@@ -10,6 +10,7 @@ import { PATIENT_LIST_FIELDS, PATIENT_SELECT_FIELDS } from '@/lib/queries/patien
 import { REQUIRED_DOC_TAGS } from '@/lib/clinical-rules';
 import { getPatientCompletenessRow } from '@/lib/patient-data-completeness';
 import { recomputeReferrerUserIdSilent } from '@/lib/recompute-referrer';
+import { getPlausibilityWarnings } from '@/lib/data-plausibility';
 
 type ViewPreset = 'neak_pending' | 'missing_docs';
 
@@ -441,12 +442,18 @@ export const POST = authedHandler(async (req, { auth }) => {
   let dataQuality = null;
   try {
     const row = await getPatientCompletenessRow(result.rows[0].id as string);
+    const warnings = getPlausibilityWarnings({
+      taj: validatedPatient.taj,
+      szuletesiDatum: validatedPatient.szuletesiDatum,
+      halalDatum: validatedPatient.halalDatum,
+    });
     if (row) {
       dataQuality = {
         completenessScore: row.completenessScore,
         researchReady: row.researchReady,
         clinicalMissing: row.clinicalMissing,
         researchMissing: row.researchMissing,
+        warnings,
       };
     }
   } catch (qualityError) {

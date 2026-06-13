@@ -6,6 +6,7 @@ import {
   type RequiredField,
 } from '@/lib/clinical-rules';
 import type { Patient } from '@/lib/types';
+import { getPlausibilityWarnings, type PlausibilityWarning } from '@/lib/data-plausibility';
 
 /** Mindig értelmezhető klinikai tételek száma: kötelező mezők + kötelező dokumentumok. */
 const CLINICAL_APPLICABLE = REQUIRED_FIELDS.length + REQUIRED_DOC_RULES.length;
@@ -57,6 +58,8 @@ export type PatientCompletenessRow = {
   researchComplete: boolean;
   /** Explicit N/A-ként ("nem értelmezhető / nem ismert") megjelölt mezők. */
   naMarked: MissingItem[];
+  /** Plauzibilitási figyelmeztetések (pl. hibás TAJ-ellenőrzőszám, lehetetlen dátum). */
+  warnings: PlausibilityWarning[];
   /** Az adott betegre értelmezhető (klinikai + kutatási) tételek száma. */
   applicableCount: number;
   /** Adat-teljességi pontszám 0–100 (a meglévő / értelmezhető tételek aránya). */
@@ -81,6 +84,8 @@ export type PatientCompletenessReport = {
     researchComplete: number;
     /** Elemzésre kész betegek száma (sem klinikai, sem kutatási hiány). */
     researchReady: number;
+    /** Plauzibilitási figyelmeztetéssel rendelkező betegek száma. */
+    withWarnings: number;
     /** Az összes beteg átlagos adat-teljességi pontszáma (0–100). */
     avgCompletenessScore: number;
     missingOhipT0: number;
@@ -174,6 +179,7 @@ export async function getPatientDataCompleteness(
         p.nev,
         p.nem,
         p.szuletesi_datum,
+        p.halal_datum,
         p.taj,
         p.email,
         ku.doktor_neve AS kezeleoorvos_name,
@@ -229,6 +235,7 @@ export async function getPatientDataCompleteness(
   let clinicalComplete = 0;
   let researchComplete = 0;
   let researchReadyCount = 0;
+  let withWarnings = 0;
   let scoreSum = 0;
   let missingOhipT0 = 0;
 
@@ -287,9 +294,16 @@ export async function getPatientDataCompleteness(
       researchMissing: researchMissing.length,
     });
 
+    const warnings = getPlausibilityWarnings({
+      taj: row.taj as string | null,
+      szuletesiDatum: row.szuletesi_datum ? String(row.szuletesi_datum) : null,
+      halalDatum: row.halal_datum ? String(row.halal_datum) : null,
+    });
+
     if (isClinicalComplete) clinicalComplete += 1;
     if (isResearchComplete) researchComplete += 1;
     if (isResearchReady) researchReadyCount += 1;
+    if (warnings.length > 0) withWarnings += 1;
     scoreSum += completenessScore;
     if (row.has_ohip_t0 !== true) missingOhipT0 += 1;
 
@@ -303,6 +317,7 @@ export async function getPatientDataCompleteness(
       clinicalComplete: isClinicalComplete,
       researchComplete: isResearchComplete,
       naMarked,
+      warnings,
       applicableCount,
       completenessScore,
       researchReady: isResearchReady,
@@ -321,6 +336,7 @@ export async function getPatientDataCompleteness(
       clinicalIncomplete: patients.length - clinicalComplete,
       researchComplete,
       researchReady: researchReadyCount,
+      withWarnings,
       avgCompletenessScore: patients.length > 0 ? Math.round(scoreSum / patients.length) : 100,
       missingOhipT0,
       byField,

@@ -81,6 +81,7 @@ describe('doctorActionableMissing', () => {
     clinicalComplete: clinical.length === 0,
     researchComplete: research.length === 0,
     naMarked: [],
+    warnings: [],
     applicableCount: 9,
     completenessScore: 100,
     researchReady: clinical.length === 0 && research.length === 0,

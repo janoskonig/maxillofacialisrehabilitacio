@@ -9,6 +9,7 @@ import { logActivity, logActivityWithAuth } from '@/lib/activity';
 import { reconcileMissingDataTasksSilent } from '@/lib/missing-data-reminders';
 import { recomputeReferrerUserIdSilent } from '@/lib/recompute-referrer';
 import { getPatientCompletenessRow } from '@/lib/patient-data-completeness';
+import { getPlausibilityWarnings } from '@/lib/data-plausibility';
 import { PATIENT_SELECT_FIELDS } from '@/lib/queries/patient-fields';
 import { logger } from '@/lib/logger';
 import type { Pool } from 'pg';
@@ -791,12 +792,18 @@ export const PUT = authedHandler(async (req, { auth, params, correlationId }) =>
     let dataQuality = null;
     try {
       const row = await getPatientCompletenessRow(patientId);
+      const warnings = getPlausibilityWarnings({
+        taj: validatedPatient.taj,
+        szuletesiDatum: validatedPatient.szuletesiDatum,
+        halalDatum: validatedPatient.halalDatum,
+      });
       if (row) {
         dataQuality = {
           completenessScore: row.completenessScore,
           researchReady: row.researchReady,
           clinicalMissing: row.clinicalMissing,
           researchMissing: row.researchMissing,
+          warnings,
         };
       }
     } catch (qualityError) {
