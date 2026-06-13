@@ -6,6 +6,7 @@ import { normalizeToTreatmentTypeCode } from '@/lib/treatment-type-normalize';
 import { sendAppointmentTimeSlotFreedNotification } from '@/lib/email';
 import { deleteGoogleCalendarEvent, createGoogleCalendarEvent } from '@/lib/google-calendar';
 import { logActivity, logActivityWithAuth } from '@/lib/activity';
+import { reconcileMissingDataTasksSilent } from '@/lib/missing-data-reminders';
 import { PATIENT_SELECT_FIELDS } from '@/lib/queries/patient-fields';
 import { logger } from '@/lib/logger';
 import type { Pool } from 'pg';
@@ -774,6 +775,10 @@ export const PUT = authedHandler(async (req, { auth, params, correlationId }) =>
         logger.error('Failed to create patient snapshot:', snapshotError);
       }
     }
+
+    // 9. Ha az adatpótlással már teljes a beteg, a nyitott 'missing_data'
+    //    feladatok azonnal záruljanak le (ne csak a heti cron / kézi pipa).
+    reconcileMissingDataTasksSilent(patientId);
 
     const response = NextResponse.json({ patient: newPatient }, { status: 200 });
     response.headers.set('x-correlation-id', correlationId);

@@ -203,6 +203,52 @@ export async function sendMissingDataReminders(): Promise<MissingDataReminderRes
  * keresünk a `beutalo_orvos` szerepű felhasználók között. Ha nincs egyértelmű
  * találat, `null` (a beutaló orvost kihagyjuk).
  */
+/**
+ * Egyetlen beteg orvosi intézkedést igénylő hiányai (a heti riporttal azonos
+ * forrásból, hogy ne térjen el a logika). Üres tömb = nincs mit pótolniuk az
+ * orvosoknak (a páciens-kitöltendő tételek, pl. OHIP-14, ki vannak szűrve).
+ */
+export async function getDoctorActionableMissingForPatient(
+  patientId: string,
+): Promise<MissingItem[]> {
+  const report = await getPatientDataCompleteness({ patientId });
+  const row = report.patients[0];
+  if (!row) return [];
+  return doctorActionableMissing(row);
+}
+
+/**
+ * A beteghez tartozó nyitott 'missing_data' feladatok lezárása, AMINT a hiányzó
+ * adat bekerült (bárki — staff vagy maga a beteg — pótolta). Így a feladat nem
+ * csak kézi kipipálással szűnik meg. Visszatérés: a lezárt feladatok száma.
+ */
+export async function reconcileMissingDataTasks(patientId: string): Promise<number> {
+  const missing = await getDoctorActionableMissingForPatient(patientId);
+  if (missing.length > 0) return 0;
+
+  const pool = getDbPool();
+  const closed = await pool.query(
+    `UPDATE user_tasks
+        SET status = 'done', completed_at = NOW()
+      WHERE task_type = 'missing_data'
+        AND status = 'open'
+        AND patient_id = $1`,
+    [patientId],
+  );
+  return closed.rowCount ?? 0;
+}
+
+/**
+ * Fire-and-forget burkoló a betegadat-mentési útvonalakhoz — sosem dob, csak
+ * logol (a `recomputeKezeleoorvosSilent` mintájára). A hívó tranzakció
+ * commitja UTÁN hívd, hogy a friss adatot lássa.
+ */
+export function reconcileMissingDataTasksSilent(patientId: string): void {
+  reconcileMissingDataTasks(patientId).catch((err) => {
+    logger.error(`[missing-data-reminders] reconcile hiba (${patientId}):`, err);
+  });
+}
+
 async function resolveReferrer(
   pool: ReturnType<typeof getDbPool>,
   patientId: string
