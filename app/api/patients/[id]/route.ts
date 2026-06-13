@@ -8,6 +8,7 @@ import { deleteGoogleCalendarEvent, createGoogleCalendarEvent } from '@/lib/goog
 import { logActivity, logActivityWithAuth } from '@/lib/activity';
 import { reconcileMissingDataTasksSilent } from '@/lib/missing-data-reminders';
 import { recomputeReferrerUserIdSilent } from '@/lib/recompute-referrer';
+import { recomputeDerivedNumericsSilent } from '@/lib/derived-numerics';
 import { getPatientCompletenessRow } from '@/lib/patient-data-completeness';
 import { getPlausibilityWarnings } from '@/lib/data-plausibility';
 import { PATIENT_SELECT_FIELDS } from '@/lib/queries/patient-fields';
@@ -786,6 +787,9 @@ export const PUT = authedHandler(async (req, { auth, params, correlationId }) =>
     // 9b. Beutaló orvos szöveges név → user_id FK frissítése (statisztika +
     //     megbízható emlékeztető-célzás). Fire-and-forget, nem blokkol.
     recomputeReferrerUserIdSilent(patientId);
+
+    // 9c. Szabad szöveges numerikus mezők → származtatott numerikus oszlopok.
+    recomputeDerivedNumericsSilent(patientId);
 
     // 10. Tanácsadó adat-teljességi visszajelzés (nem blokkol) — a kliens
     //     jelezheti a hiányokat mentés után. Hiba esetén csendben kihagyjuk.
