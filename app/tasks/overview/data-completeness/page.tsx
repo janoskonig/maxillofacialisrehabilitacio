@@ -19,7 +19,35 @@ import {
   ExternalLink,
   Gauge,
   BadgeCheck,
+  TrendingUp,
 } from 'lucide-react';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
+
+type Snapshot = {
+  snapshotDate: string;
+  total: number;
+  avgScore: number;
+  clinicalComplete: number;
+  researchReady: number;
+  withWarnings: number;
+};
+
+type CohortRow = {
+  key: string;
+  label: string;
+  count: number;
+  avgScore: number;
+  researchReady: number;
+  withWarnings: number;
+};
 
 type MissingItem = { key: string; label: string; group: 'clinical' | 'research' };
 
@@ -101,6 +129,7 @@ export default function DataCompletenessPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [authorized, setAuthorized] = useState(false);
   const [data, setData] = useState<Report | null>(null);
+  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
 
   const [group, setGroup] = useState<GroupFilter>('clinical');
   const [search, setSearch] = useState('');
@@ -111,6 +140,18 @@ export default function DataCompletenessPage() {
     const res = await fetch('/api/patients/data-completeness', { credentials: 'include' });
     if (!res.ok) throw new Error('Betöltés sikertelen');
     setData((await res.json()) as Report);
+    // Trend (best-effort: hiba esetén csak nem rajzolunk grafikont).
+    try {
+      const sres = await fetch('/api/patients/completeness-snapshot?days=90', {
+        credentials: 'include',
+      });
+      if (sres.ok) {
+        const sjson = (await sres.json()) as { snapshots?: Snapshot[] };
+        setSnapshots(sjson.snapshots ?? []);
+      }
+    } catch {
+      /* a trend nem kritikus */
+    }
   }, []);
 
   const refresh = useCallback(async () => {
@@ -181,6 +222,34 @@ export default function DataCompletenessPage() {
     },
     [group],
   );
+
+  /** Kohorsz-bontás kezelőorvosonként (kliens oldali aggregáció). */
+  const cohorts = useMemo<CohortRow[]>(() => {
+    if (!data) return [];
+    const map = new Map<
+      string,
+      { count: number; scoreSum: number; researchReady: number; withWarnings: number }
+    >();
+    for (const p of data.patients) {
+      const key = p.kezeleoorvos?.trim() || '— nincs kezelőorvos —';
+      const e = map.get(key) ?? { count: 0, scoreSum: 0, researchReady: 0, withWarnings: 0 };
+      e.count += 1;
+      e.scoreSum += p.completenessScore;
+      if (p.researchReady) e.researchReady += 1;
+      if (p.warnings.length > 0) e.withWarnings += 1;
+      map.set(key, e);
+    }
+    return Array.from(map.entries())
+      .map(([key, v]) => ({
+        key,
+        label: key,
+        count: v.count,
+        avgScore: Math.round(v.scoreSum / v.count),
+        researchReady: v.researchReady,
+        withWarnings: v.withWarnings,
+      }))
+      .sort((a, b) => a.avgScore - b.avgScore || b.count - a.count);
+  }, [data]);
 
   const visibleFieldGaps = useMemo(() => {
     if (!data) return [];
@@ -298,6 +367,79 @@ export default function DataCompletenessPage() {
             </div>
           </div>
         </div>
+
+        {/* Trend: átlagos teljesség az idő függvényében */}
+        {snapshots.length >= 2 && (
+          <section className="card p-4">
+            <h2 className="text-sm font-semibold text-gray-900 mb-3 inline-flex items-center gap-1.5">
+              <TrendingUp className="w-4 h-4 text-medical-primary" />
+              Átlagos adat-teljesség alakulása (utolsó 90 nap)
+            </h2>
+            <div style={{ width: '100%', height: 220 }}>
+              <ResponsiveContainer>
+                <LineChart data={snapshots} margin={{ top: 5, right: 12, bottom: 5, left: -16 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis
+                    dataKey="snapshotDate"
+                    tick={{ fontSize: 11 }}
+                    tickFormatter={(d: string) => d.slice(5)}
+                  />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
+                  <Tooltip
+                    formatter={(v) => [`${v}%`, 'Átlagos teljesség']}
+                    labelFormatter={(d) => String(d)}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="avgScore"
+                    stroke="#2563eb"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
+        )}
+
+        {/* Bontás kezelőorvosonként */}
+        {cohorts.length > 0 && (
+          <section className="card p-4">
+            <h2 className="text-sm font-semibold text-gray-900 mb-3">Bontás kezelőorvosonként</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-500 border-b">
+                    <th className="py-1.5 pr-3 font-medium">Kezelőorvos</th>
+                    <th className="py-1.5 px-3 font-medium text-right">Beteg</th>
+                    <th className="py-1.5 px-3 font-medium text-right">Átlag %</th>
+                    <th className="py-1.5 px-3 font-medium text-right">Elemzésre kész</th>
+                    <th className="py-1.5 pl-3 font-medium text-right">Figyelmeztetés</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cohorts.map((c) => (
+                    <tr key={c.key} className="border-b last:border-0">
+                      <td className="py-1.5 pr-3 text-gray-900">{c.label}</td>
+                      <td className="py-1.5 px-3 text-right text-gray-700">{c.count}</td>
+                      <td className="py-1.5 px-3 text-right">
+                        <span className={`font-semibold rounded-full border px-2 py-0.5 ${scoreColor(c.avgScore)}`}>
+                          {c.avgScore}%
+                        </span>
+                      </td>
+                      <td className="py-1.5 px-3 text-right text-gray-700">
+                        {c.researchReady}/{c.count}
+                      </td>
+                      <td className="py-1.5 pl-3 text-right text-orange-700">
+                        {c.withWarnings > 0 ? c.withWarnings : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
 
         {/* Csoport-váltó */}
         <div className="flex flex-wrap items-center gap-3">
