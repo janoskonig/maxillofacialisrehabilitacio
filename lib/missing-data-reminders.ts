@@ -58,8 +58,22 @@ export function formatMissingSummary(items: MissingItem[]): string {
   return items.map((i) => i.label).join(', ');
 }
 
-function missingItemsOf(row: PatientCompletenessRow): MissingItem[] {
-  return [...row.clinicalMissing, ...row.researchMissing];
+/**
+ * A páciens által kitöltendő tételek, amelyekről az orvosok NEM kapnak
+ * értesítőt / feladatot — ezeket a beteg a portálon pótolja (külön
+ * emlékeztetőkkel, pl. OHIP-14). A kulcsok a getPatientDataCompleteness()
+ * MissingItem.key értékeivel egyeznek.
+ */
+export const PATIENT_FILLABLE_KEYS: ReadonlySet<string> = new Set(['ohipT0']);
+
+/**
+ * Az orvosi intézkedést igénylő hiányok: a teljes hiánylistából kiszűrve a
+ * páciens által kitöltendő tételeket.
+ */
+export function doctorActionableMissing(row: PatientCompletenessRow): MissingItem[] {
+  return [...row.clinicalMissing, ...row.researchMissing].filter(
+    (i) => !PATIENT_FILLABLE_KEYS.has(i.key)
+  );
 }
 
 export async function sendMissingDataReminders(): Promise<MissingDataReminderResult> {
@@ -75,9 +89,11 @@ export async function sendMissingDataReminders(): Promise<MissingDataReminderRes
 
   const report = await getPatientDataCompleteness();
 
-  const incomplete = report.patients.filter((p) => missingItemsOf(p).length > 0);
+  // Csak az orvosi intézkedést igénylő hiányokat vesszük figyelembe — a páciens
+  // által kitöltendő tételek (pl. OHIP-14) nem váltanak ki orvosi értesítőt.
+  const incomplete = report.patients.filter((p) => doctorActionableMissing(p).length > 0);
   const completeIds = report.patients
-    .filter((p) => missingItemsOf(p).length === 0)
+    .filter((p) => doctorActionableMissing(p).length === 0)
     .map((p) => p.patientId);
 
   result.patientsWithMissing = incomplete.length;
@@ -100,7 +116,7 @@ export async function sendMissingDataReminders(): Promise<MissingDataReminderRes
   for (const row of incomplete) {
     const patientId = row.patientId;
     try {
-      const missingItems = missingItemsOf(row);
+      const missingItems = doctorActionableMissing(row);
       const summary = formatMissingSummary(missingItems);
 
       const recipients = dedupeRecipients([

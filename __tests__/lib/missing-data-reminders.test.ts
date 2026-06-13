@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { dedupeRecipients, formatMissingSummary } from '@/lib/missing-data-reminders';
-import type { MissingItem } from '@/lib/patient-data-completeness';
+import {
+  dedupeRecipients,
+  formatMissingSummary,
+  doctorActionableMissing,
+  PATIENT_FILLABLE_KEYS,
+} from '@/lib/missing-data-reminders';
+import type { MissingItem, PatientCompletenessRow } from '@/lib/patient-data-completeness';
 
 describe('dedupeRecipients', () => {
   const referrer = {
@@ -59,5 +64,51 @@ describe('formatMissingSummary', () => {
 
   it('returns empty string for no items', () => {
     expect(formatMissingSummary([])).toBe('');
+  });
+});
+
+describe('doctorActionableMissing', () => {
+  const makeRow = (
+    clinical: MissingItem[],
+    research: MissingItem[]
+  ): PatientCompletenessRow => ({
+    patientId: 'p1',
+    patientName: 'Teszt Elek',
+    kezeleoorvos: null,
+    etiologia: null,
+    clinicalMissing: clinical,
+    researchMissing: research,
+    clinicalComplete: clinical.length === 0,
+    researchComplete: research.length === 0,
+  });
+
+  it('excludes patient-fillable items (e.g. OHIP-14 T0)', () => {
+    const row = makeRow(
+      [{ key: 'taj', label: 'TAJ', group: 'clinical' }],
+      [{ key: 'ohipT0', label: 'OHIP-14 kiindulási (T0) kitöltés', group: 'research' }]
+    );
+    const out = doctorActionableMissing(row);
+    expect(out.map((i) => i.key)).toEqual(['taj']);
+  });
+
+  it('treats a patient whose only gap is OHIP-T0 as having nothing for doctors to do', () => {
+    const row = makeRow(
+      [],
+      [{ key: 'ohipT0', label: 'OHIP-14 kiindulási (T0) kitöltés', group: 'research' }]
+    );
+    expect(doctorActionableMissing(row)).toHaveLength(0);
+  });
+
+  it('keeps clinician-entered research fields', () => {
+    const row = makeRow(
+      [],
+      [{ key: 'tnmStaging', label: 'TNM-staging', group: 'research' }]
+    );
+    expect(doctorActionableMissing(row).map((i) => i.key)).toEqual(['tnmStaging']);
+  });
+
+  it('OHIP-T0 is the patient-fillable key', () => {
+    expect(PATIENT_FILLABLE_KEYS.has('ohipT0')).toBe(true);
+    expect(PATIENT_FILLABLE_KEYS.has('taj')).toBe(false);
   });
 });
