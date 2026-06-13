@@ -28,20 +28,34 @@ const REMINDER_COOLDOWN_DAYS = 7;
 const PROSTHODONTIST_ROLE = 'fogpótlástanász';
 const REFERRER_ROLE = 'beutalo_orvos';
 
+/**
+ * Ennyi (heti) emlékeztető után az érintett orvost már nem nyaggatjuk tovább:
+ * a beteget az adminhoz eszkaláljuk (a feladat nyitva marad).
+ */
+export const ESCALATION_AFTER = 3;
+
+/** Eszkaláljunk-e? — az orvosnak eddig küldött emlékeztetők száma alapján. */
+export function shouldEscalate(priorReminderCount: number): boolean {
+  return priorReminderCount >= ESCALATION_AFTER;
+}
+
 export interface MissingDataReminderResult {
   patientsWithMissing: number;
   emailsSent: number;
   tasksCreated: number;
   tasksClosed: number;
+  escalations: number;
   skipped: number;
   errors: number;
 }
+
+type RecipientRole = typeof REFERRER_ROLE | typeof PROSTHODONTIST_ROLE | 'admin';
 
 type Recipient = {
   userId: string;
   email: string;
   name: string | null;
-  role: typeof REFERRER_ROLE | typeof PROSTHODONTIST_ROLE;
+  role: RecipientRole;
 };
 
 /** Az érintett orvosok deduplikálása user-id alapján (egy orvos egyszer kap értesítőt). */
@@ -83,6 +97,7 @@ export async function sendMissingDataReminders(): Promise<MissingDataReminderRes
     emailsSent: 0,
     tasksCreated: 0,
     tasksClosed: 0,
+    escalations: 0,
     skipped: 0,
     errors: 0,
   };
@@ -129,17 +144,9 @@ export async function sendMissingDataReminders(): Promise<MissingDataReminderRes
         continue;
       }
 
+      let needsEscalation = false;
       for (const recipient of recipients) {
-        // Folyamatban lévő emlékeztető? (7 napon belül már küldtünk ennek a párnak)
-        const recent = await pool.query(
-          `SELECT 1 FROM missing_data_reminder_log
-            WHERE patient_id = $1 AND recipient_user_id = $2
-              AND sent_at > NOW() - INTERVAL '${REMINDER_COOLDOWN_DAYS} days'
-            LIMIT 1`,
-          [patientId, recipient.userId]
-        );
-
-        // Nyitott feladat biztosítása (a cooldowntól függetlenül), hogy a
+        // Nyitott feladat biztosítása (a cooldown / eszkaláció előtt), hogy a
         // teendő látható maradjon, amíg a hiány fennáll.
         const taskCreated = await ensureMissingDataTask(
           pool,
@@ -150,43 +157,58 @@ export async function sendMissingDataReminders(): Promise<MissingDataReminderRes
         );
         if (taskCreated) result.tasksCreated++;
 
-        if (recent.rows.length > 0) {
-          // Még tart a heti cooldown — feladat megvan, e-mailt most nem küldünk.
+        // Eddig hány emlékeztetőt küldtünk ennek az orvosnak erről a betegről?
+        const priorCount = await reminderCount(pool, patientId, recipient.userId);
+
+        if (shouldEscalate(priorCount)) {
+          // Az orvost már elégszer (>= ESCALATION_AFTER) emlékeztettük — nem
+          // nyaggatjuk tovább; a feladata nyitva marad, a beteget eszkaláljuk.
+          needsEscalation = true;
           result.skipped++;
           continue;
         }
 
-        // Volt-e korábbi értesítő ehhez a párhoz? (akkor ez "ismételt" emlékeztető)
-        const prior = await pool.query(
-          `SELECT 1 FROM missing_data_reminder_log
-            WHERE patient_id = $1 AND recipient_user_id = $2 LIMIT 1`,
-          [patientId, recipient.userId]
-        );
-        const isFollowUp = prior.rows.length > 0;
-
-        await sendMissingDataReminderEmail({
-          to: recipient.email,
-          recipientName: recipient.name,
-          patientName: row.patientName,
+        const sent = await sendReminderEmailWithCooldown(
+          pool,
           patientId,
+          row.patientName,
+          recipient,
           missingItems,
-          isFollowUp,
-        });
-
-        await pool.query(
-          `INSERT INTO missing_data_reminder_log
-             (patient_id, recipient_user_id, recipient_role, email_to, missing_summary)
-           VALUES ($1, $2, $3, $4, $5)`,
-          [patientId, recipient.userId, recipient.role, recipient.email, summary]
+          summary,
+          priorCount,
+          false,
         );
+        if (sent) result.emailsSent++;
+        else result.skipped++;
+      }
 
-        await queueAdminNotification(
-          'missing_data_reminder_sent',
-          `${row.patientName ?? 'Beteg'} — ${recipient.name ?? recipient.email} (${recipient.role})`,
-          { patientId, recipientUserId: recipient.userId, role: recipient.role, missing: summary }
-        ).catch(() => {});
+      // Eszkaláció az adminokhoz, ha valamelyik orvos elérte a küszöböt.
+      if (needsEscalation) {
+        const admins = await resolveAdmins(pool);
+        for (const admin of admins) {
+          const taskCreated = await ensureMissingDataTask(
+            pool,
+            patientId,
+            row.patientName,
+            admin,
+            summary
+          );
+          if (taskCreated) result.tasksCreated++;
 
-        result.emailsSent++;
+          const priorCount = await reminderCount(pool, patientId, admin.userId);
+          const sent = await sendReminderEmailWithCooldown(
+            pool,
+            patientId,
+            row.patientName,
+            admin,
+            missingItems,
+            summary,
+            priorCount,
+            true,
+          );
+          if (sent) result.escalations++;
+          else result.skipped++;
+        }
       }
     } catch (err) {
       logger.error(`[missing-data-reminders] Hiba a(z) ${patientId} betegnél:`, err);
@@ -195,6 +217,87 @@ export async function sendMissingDataReminders(): Promise<MissingDataReminderRes
   }
 
   return result;
+}
+
+/** Eddig hány emlékeztetőt logoltunk ennek a (beteg, címzett) párnak. */
+async function reminderCount(
+  pool: ReturnType<typeof getDbPool>,
+  patientId: string,
+  recipientUserId: string,
+): Promise<number> {
+  const res = await pool.query(
+    `SELECT count(*)::int AS c FROM missing_data_reminder_log
+      WHERE patient_id = $1 AND recipient_user_id = $2`,
+    [patientId, recipientUserId],
+  );
+  return (res.rows[0]?.c as number) ?? 0;
+}
+
+/**
+ * E-mail küldése a 7 napos cooldown betartásával + naplózás. Visszatérés: true,
+ * ha most ténylegesen küldtünk e-mailt (false = cooldown miatt kihagyva).
+ */
+async function sendReminderEmailWithCooldown(
+  pool: ReturnType<typeof getDbPool>,
+  patientId: string,
+  patientName: string | null,
+  recipient: Recipient,
+  missingItems: MissingItem[],
+  summary: string,
+  priorCount: number,
+  escalation: boolean,
+): Promise<boolean> {
+  const recent = await pool.query(
+    `SELECT 1 FROM missing_data_reminder_log
+      WHERE patient_id = $1 AND recipient_user_id = $2
+        AND sent_at > NOW() - INTERVAL '${REMINDER_COOLDOWN_DAYS} days'
+      LIMIT 1`,
+    [patientId, recipient.userId],
+  );
+  if (recent.rows.length > 0) return false; // még tart a heti cooldown
+
+  await sendMissingDataReminderEmail({
+    to: recipient.email,
+    recipientName: recipient.name,
+    patientName,
+    patientId,
+    missingItems,
+    isFollowUp: priorCount > 0,
+    escalation,
+  });
+
+  await pool.query(
+    `INSERT INTO missing_data_reminder_log
+       (patient_id, recipient_user_id, recipient_role, email_to, missing_summary)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [patientId, recipient.userId, recipient.role, recipient.email, summary],
+  );
+
+  await queueAdminNotification(
+    escalation ? 'missing_data_escalated' : 'missing_data_reminder_sent',
+    `${patientName ?? 'Beteg'} — ${recipient.name ?? recipient.email} (${recipient.role})`,
+    { patientId, recipientUserId: recipient.userId, role: recipient.role, missing: summary, escalation },
+  ).catch(() => {});
+
+  return true;
+}
+
+/** Aktív admin felhasználók (e-maillel) — az eszkaláció címzettjei. */
+async function resolveAdmins(
+  pool: ReturnType<typeof getDbPool>,
+): Promise<Recipient[]> {
+  const res = await pool.query(
+    `SELECT id, email, doktor_neve
+       FROM users
+      WHERE role = 'admin' AND active IS NOT FALSE
+        AND email IS NOT NULL AND btrim(email) <> ''`,
+  );
+  return res.rows.map((r) => ({
+    userId: r.id as string,
+    email: r.email as string,
+    name: (r.doktor_neve as string) ?? null,
+    role: 'admin' as const,
+  }));
 }
 
 /**

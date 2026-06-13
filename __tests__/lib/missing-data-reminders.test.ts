@@ -4,6 +4,8 @@ import {
   formatMissingSummary,
   doctorActionableMissing,
   PATIENT_FILLABLE_KEYS,
+  shouldEscalate,
+  ESCALATION_AFTER,
 } from '@/lib/missing-data-reminders';
 import type { MissingItem, PatientCompletenessRow } from '@/lib/patient-data-completeness';
 
@@ -64,6 +66,18 @@ describe('formatMissingSummary', () => {
 
   it('returns empty string for no items', () => {
     expect(formatMissingSummary([])).toBe('');
+  });
+});
+
+describe('shouldEscalate', () => {
+  it('does not escalate below the threshold', () => {
+    expect(shouldEscalate(0)).toBe(false);
+    expect(shouldEscalate(ESCALATION_AFTER - 1)).toBe(false);
+  });
+
+  it('escalates at or above the threshold', () => {
+    expect(shouldEscalate(ESCALATION_AFTER)).toBe(true);
+    expect(shouldEscalate(ESCALATION_AFTER + 5)).toBe(true);
   });
 });
 
