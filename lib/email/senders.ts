@@ -1139,3 +1139,74 @@ export async function sendTaskReminderEmail(params: {
     metadata: { taskId },
   });
 }
+
+/**
+ * Hiányzó betegadat-emlékeztető az érintett orvosnak (beutaló orvos vagy a
+ * legutóbbi fogpótlástanász). Felsorolja a beteg hiányzó klinikai és kutatási
+ * adatait, és átirányít a beteg kartonjára. A `isFollowUp` jelzi, ha ez egy
+ * héttel a korábbi értesítő után küldött ismételt emlékeztető.
+ */
+export async function sendMissingDataReminderEmail(params: {
+  to: string;
+  recipientName: string | null;
+  patientName: string | null;
+  patientId: string;
+  missingItems: { label: string; group: 'clinical' | 'research' }[];
+  isFollowUp: boolean;
+}): Promise<void> {
+  const { to, recipientName, patientName, patientId, missingItems, isFollowUp } = params;
+  const baseUrl = getBaseUrlForEmail();
+  const patientUrl = `${baseUrl}/patients/${patientId}/view`;
+  const greeting = recipientName?.trim() ? `Kedves ${recipientName.trim()}` : 'Kedves Kolléga';
+  const heading = isFollowUp ? 'Ismételt emlékeztető – hiányzó betegadatok' : 'Hiányzó betegadatok';
+  const betegLabel = patientName?.trim() ? patientName.trim() : 'beteg';
+
+  const clinical = missingItems.filter((i) => i.group === 'clinical');
+  const research = missingItems.filter((i) => i.group === 'research');
+  const renderList = (items: { label: string }[]) =>
+    items.map((i) => `<li>${i.label}</li>`).join('');
+
+  const clinicalBlock = clinical.length
+    ? `<p style="margin-bottom: 4px;"><strong>Klinikai minimum:</strong></p><ul>${renderList(clinical)}</ul>`
+    : '';
+  const researchBlock = research.length
+    ? `<p style="margin-bottom: 4px;"><strong>Kutatási adatok:</strong></p><ul>${renderList(research)}</ul>`
+    : '';
+
+  const intro = isFollowUp
+    ? `Egy hete jeleztük, hogy <strong>${betegLabel}</strong> betegnél hiányzó adatok vannak. Ezek továbbra is pótlásra várnak:`
+    : `<strong>${betegLabel}</strong> betegnél az alábbi adatok hiányoznak, amelyek pótlása az Ön közreműködését igényli:`;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: ${isFollowUp ? '#dc2626' : '#2563eb'};">${heading}</h2>
+      <p>${greeting}!</p>
+      <p>${intro}</p>
+      ${clinicalBlock}
+      ${researchBlock}
+      <p style="margin-top: 20px;">
+        <a href="${patientUrl}" style="display: inline-block; background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+          Beteg kartonjának megnyitása
+        </a>
+      </p>
+      <p style="color: #6b7280; font-size: 14px; margin-top: 20px;">
+        Ha a gomb nem működik, másolja be az alábbi linket a böngészőjébe:<br>
+        <a href="${patientUrl}" style="color: #3b82f6;">${patientUrl}</a>
+      </p>
+      <p style="color: #6b7280; font-size: 13px;">
+        Amennyiben az adatok pótlásra kerülnek, az értesítő automatikusan megszűnik.
+        Ellenkező esetben egy hét múlva újabb emlékeztetőt küldünk.
+      </p>
+      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to,
+    subject: `${isFollowUp ? 'Ismételt emlékeztető' : 'Hiányzó betegadatok'} – ${betegLabel} – Maxillofaciális Rehabilitáció`,
+    html,
+    emailType: 'missing_data_reminder',
+    sentBy: 'system',
+    metadata: { patientId, isFollowUp },
+  });
+}

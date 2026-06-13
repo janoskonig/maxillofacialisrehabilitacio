@@ -200,6 +200,17 @@ async function callEndpoint(path, label) {
       );
     }
 
+    // Weekly missing-data reminders — Mondays between 07:00-07:59 Budapest time.
+    // The missing_data_reminder_log enforces at most one email per (patient, doctor)
+    // per 7 days, so a wider window is safe; a still-missing field re-notifies next week.
+    if (isMonday && hour === 7) {
+      await callEndpoint('/api/patients/missing-data-reminders', 'Missing-data reminders');
+    } else {
+      console.log(
+        `[${new Date().toISOString()}] Missing-data reminders skipped (isMonday=${isMonday}, hour=${hour}, expected Monday 7).`
+      );
+    }
+
     // Admin összegyűjtő email: minden cron futáskor hívjuk; a szerver max. ADMIN_NOTIFICATION_BATCH_INTERVAL_HOURS (alap 3) szerint küld.
     await callEndpoint('/api/admin/daily-summary', 'Admin notification batch summary');
 
