@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { syncTimeSlotsFromGoogleCalendar, syncMissingAppointmentsToGoogleCalendar } from '@/lib/google-calendar';
 import { apiHandler } from '@/lib/api/route-handler';
+import { requireCronKey } from '@/lib/api/cron-auth';
 import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
@@ -12,16 +13,7 @@ export const GET = apiHandler(async (req, { correlationId }) => {
   const startTime = Date.now();
   logger.info(`[${new Date().toISOString()}] Cron sync started`);
 
-  const apiKey = req.headers.get('x-api-key') || req.nextUrl.searchParams.get('api_key');
-  const expectedApiKey = process.env.GOOGLE_CALENDAR_SYNC_API_KEY;
-
-  if (expectedApiKey && apiKey !== expectedApiKey) {
-    console.warn(`[${new Date().toISOString()}] Unauthorized cron sync attempt`);
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    );
-  }
+  requireCronKey(req, 'GOOGLE_CALENDAR_SYNC_API_KEY');
 
   logger.info(`[${new Date().toISOString()}] Fetching users with Google Calendar enabled...`);
   const pool = getDbPool();

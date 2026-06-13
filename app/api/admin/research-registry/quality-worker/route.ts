@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiHandler } from '@/lib/api/route-handler';
+import { requireCronKey } from '@/lib/api/cron-auth';
 import { getComplianceFeatureFlag } from '@/lib/research-registry/feature-flags';
 import { processQualityRecomputeBatch } from '@/lib/research-registry/quality-queue';
 
@@ -12,13 +13,7 @@ export const dynamic = 'force-dynamic';
  * Optional API key: REGISTRY_QUALITY_WORKER_API_KEY
  */
 async function handleWorker(request: NextRequest) {
-  const apiKey =
-    request.headers.get('x-api-key') || request.nextUrl.searchParams.get('api_key');
-  const expectedKey = process.env.REGISTRY_QUALITY_WORKER_API_KEY;
-
-  if (expectedKey && apiKey !== expectedKey) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  requireCronKey(request, 'REGISTRY_QUALITY_WORKER_API_KEY');
 
   const enabled = await getComplianceFeatureFlag('quality_recompute_queue');
   if (!enabled) {

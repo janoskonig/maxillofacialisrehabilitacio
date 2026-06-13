@@ -5,6 +5,7 @@ import { refreshEpisodeNextStepCache, resolveEpisodeIdFromEvent } from '@/lib/re
 import { refreshEpisodeForecastCache } from '@/lib/refresh-episode-forecast-cache';
 import { logger } from '@/lib/logger';
 import { apiHandler } from '@/lib/api/route-handler';
+import { hasValidCronKey } from '@/lib/api/cron-auth';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -13,10 +14,7 @@ export const dynamic = 'force-dynamic';
 const BATCH_SIZE = 50;
 
 export const POST = apiHandler(async (req) => {
-  const apiKey = req.headers.get('x-api-key') || req.nextUrl.searchParams.get('api_key');
-  const expectedApiKey = process.env.GOOGLE_CALENDAR_SYNC_API_KEY;
-
-  if (expectedApiKey && apiKey !== expectedApiKey) {
+  if (!hasValidCronKey(req, 'GOOGLE_CALENDAR_SYNC_API_KEY')) {
     const auth = await verifyAuth(req);
     if (!auth || auth.role !== 'admin') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

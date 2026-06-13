@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { apiHandler } from '@/lib/api/route-handler';
+import { requireCronKey } from '@/lib/api/cron-auth';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -15,13 +16,9 @@ export const POST = apiHandler(async (req, { correlationId }) => {
 });
 
 async function handleRetention(request: { headers: { get(name: string): string | null }; nextUrl: { searchParams: URLSearchParams } }) {
-  const apiKey = request.headers.get('x-api-key') || request.nextUrl.searchParams.get('api_key');
-  const expectedKey = process.env.EVENT_RETENTION_API_KEY;
-  const retentionDays = parseInt(request.nextUrl.searchParams.get('retentionDays') || '1095', 10);
+  requireCronKey(request, 'EVENT_RETENTION_API_KEY');
 
-  if (expectedKey && apiKey !== expectedKey) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const retentionDays = parseInt(request.nextUrl.searchParams.get('retentionDays') || '1095', 10);
 
   const pool = getDbPool();
   const result = await pool.query('SELECT * FROM drop_old_event_partitions($1)', [retentionDays]);

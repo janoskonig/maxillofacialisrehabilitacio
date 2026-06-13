@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { apiHandler } from '@/lib/api/route-handler';
+import { requireCronKey } from '@/lib/api/cron-auth';
 import { runRebalance } from '@/lib/rebalance-capacity-pools';
 
 export const runtime = 'nodejs';
@@ -20,12 +21,7 @@ export const POST = apiHandler(async (req) => {
 });
 
 async function handleRebalance(request: NextRequest) {
-  const apiKey = request.headers.get('x-api-key') || request.nextUrl.searchParams.get('api_key');
-  const expectedKey = process.env.CAPACITY_REBALANCE_API_KEY;
-
-  if (expectedKey && apiKey !== expectedKey) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  requireCronKey(request, 'CAPACITY_REBALANCE_API_KEY');
 
   const result = await runRebalance();
 

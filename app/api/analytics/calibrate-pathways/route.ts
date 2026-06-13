@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth-server';
 import { calibratePathwayAnalytics } from '@/lib/calibrate-pathway-analytics';
 import { apiHandler } from '@/lib/api/route-handler';
+import { hasValidCronKey } from '@/lib/api/cron-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,10 +19,7 @@ export const POST = apiHandler(async (req) => {
 });
 
 async function handleCalibrate(request: NextRequest) {
-  const apiKey = request.headers.get('x-api-key') || request.nextUrl.searchParams.get('api_key');
-  const expectedApiKey = process.env.GOOGLE_CALENDAR_SYNC_API_KEY;
-
-  if (expectedApiKey && apiKey !== expectedApiKey) {
+  if (!hasValidCronKey(request, 'GOOGLE_CALENDAR_SYNC_API_KEY')) {
     const auth = await verifyAuth(request);
     if (!auth || auth.role !== 'admin') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
