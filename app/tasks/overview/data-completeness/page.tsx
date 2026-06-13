@@ -17,6 +17,8 @@ import {
   CheckCircle,
   RefreshCw,
   ExternalLink,
+  Gauge,
+  BadgeCheck,
 } from 'lucide-react';
 
 type MissingItem = { key: string; label: string; group: 'clinical' | 'research' };
@@ -30,6 +32,9 @@ type CompletenessRow = {
   researchMissing: MissingItem[];
   clinicalComplete: boolean;
   researchComplete: boolean;
+  applicableCount: number;
+  completenessScore: number;
+  researchReady: boolean;
 };
 
 type FieldGap = { key: string; label: string; group: 'clinical' | 'research'; count: number };
@@ -41,10 +46,19 @@ type Report = {
     clinicalComplete: number;
     clinicalIncomplete: number;
     researchComplete: number;
+    researchReady: number;
+    avgCompletenessScore: number;
     missingOhipT0: number;
     byField: FieldGap[];
   };
 };
+
+/** Teljességi pontszám → badge színosztály (zöld ≥90, sárga ≥70, piros alatta). */
+function scoreColor(score: number): string {
+  if (score >= 90) return 'bg-green-50 text-green-700 border-green-200';
+  if (score >= 70) return 'bg-amber-50 text-amber-700 border-amber-200';
+  return 'bg-red-50 text-red-700 border-red-200';
+}
 
 type GroupFilter = 'clinical' | 'research' | 'all';
 
@@ -213,7 +227,7 @@ export default function DataCompletenessPage() {
 
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
         {/* Összegző kártyák */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
           <div className="card p-4 flex items-center gap-3">
             <Users className="w-8 h-8 text-medical-primary" />
             <div>
@@ -240,6 +254,20 @@ export default function DataCompletenessPage() {
             <div>
               <p className="text-2xl font-bold text-green-700">{summary?.clinicalComplete ?? 0}</p>
               <p className="text-sm text-gray-500">Klinikailag teljes</p>
+            </div>
+          </div>
+          <div className="card p-4 flex items-center gap-3">
+            <Gauge className="w-8 h-8 text-medical-primary" />
+            <div>
+              <p className="text-2xl font-bold text-gray-900">{summary?.avgCompletenessScore ?? 0}%</p>
+              <p className="text-sm text-gray-500">Átlagos teljesség</p>
+            </div>
+          </div>
+          <div className="card p-4 flex items-center gap-3">
+            <BadgeCheck className="w-8 h-8 text-emerald-600" />
+            <div>
+              <p className="text-2xl font-bold text-emerald-700">{summary?.researchReady ?? 0}</p>
+              <p className="text-sm text-gray-500">Elemzésre kész</p>
             </div>
           </div>
         </div>
@@ -384,7 +412,13 @@ export default function DataCompletenessPage() {
                         </p>
                       )}
                     </div>
-                    <div className="text-xs text-right shrink-0">
+                    <div className="text-xs text-right shrink-0 flex flex-col items-end gap-1">
+                      <span
+                        title="Adat-teljességi pontszám (meglévő / értelmezhető mezők)"
+                        className={`font-semibold rounded-full border px-2 py-0.5 ${scoreColor(p.completenessScore)}`}
+                      >
+                        {p.completenessScore}%
+                      </span>
                       {missing.length > 0 && (
                         <span className="font-semibold text-red-600">{missing.length} hiány</span>
                       )}

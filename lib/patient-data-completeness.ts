@@ -1,10 +1,32 @@
 import { getDbPool } from '@/lib/db';
 import {
+  REQUIRED_FIELDS,
   REQUIRED_DOC_RULES,
   getMissingRequiredFields,
   type RequiredField,
 } from '@/lib/clinical-rules';
 import type { Patient } from '@/lib/types';
+
+/** Mindig értelmezhető klinikai tételek száma: kötelező mezők + kötelező dokumentumok. */
+const CLINICAL_APPLICABLE = REQUIRED_FIELDS.length + REQUIRED_DOC_RULES.length;
+
+/**
+ * Adat-teljességi pontszám (0–100) az értelmezhető (applicable) tételek arányából.
+ * A nevező az adott betegre értelmezhető klinikai + kutatási mezők száma, a számláló
+ * a meglévők száma. Ha semmi nem értelmezhető (elvi eset), 100-at adunk vissza.
+ */
+export function computeCompletenessScore(input: {
+  clinicalApplicable: number;
+  clinicalMissing: number;
+  researchApplicable: number;
+  researchMissing: number;
+}): number {
+  const applicable = input.clinicalApplicable + input.researchApplicable;
+  if (applicable <= 0) return 100;
+  const present = applicable - (input.clinicalMissing + input.researchMissing);
+  const pct = (present / applicable) * 100;
+  return Math.max(0, Math.min(100, Math.round(pct)));
+}
 
 /**
  * Betegenkénti adat-teljességi (adathiány) riport a Vezetői nézethez.
@@ -33,6 +55,12 @@ export type PatientCompletenessRow = {
   researchMissing: MissingItem[];
   clinicalComplete: boolean;
   researchComplete: boolean;
+  /** Az adott betegre értelmezhető (klinikai + kutatási) tételek száma. */
+  applicableCount: number;
+  /** Adat-teljességi pontszám 0–100 (a meglévő / értelmezhető tételek aránya). */
+  completenessScore: number;
+  /** Elemzésre kész: nincs sem klinikai, sem kutatási hiány. */
+  researchReady: boolean;
 };
 
 export type FieldGapSummary = {
@@ -49,6 +77,10 @@ export type PatientCompletenessReport = {
     clinicalComplete: number;
     clinicalIncomplete: number;
     researchComplete: number;
+    /** Elemzésre kész betegek száma (sem klinikai, sem kutatási hiány). */
+    researchReady: number;
+    /** Az összes beteg átlagos adat-teljességi pontszáma (0–100). */
+    avgCompletenessScore: number;
     missingOhipT0: number;
     byField: FieldGapSummary[];
   };
@@ -175,6 +207,8 @@ export async function getPatientDataCompleteness(
 
   let clinicalComplete = 0;
   let researchComplete = 0;
+  let researchReadyCount = 0;
+  let scoreSum = 0;
   let missingOhipT0 = 0;
 
   const patients: PatientCompletenessRow[] = result.rows.map((row) => {
@@ -202,8 +236,11 @@ export async function getPatientDataCompleteness(
 
     // --- Kutatási mezők (feltételes) ---
     const researchMissing: MissingItem[] = [];
+    let researchApplicable = 0;
     for (const rule of RESEARCH_RULES) {
-      if (rule.applicable(row) && rule.missing(row)) {
+      if (!rule.applicable(row)) continue;
+      researchApplicable += 1;
+      if (rule.missing(row)) {
         researchMissing.push({ key: rule.key, label: rule.label, group: 'research' });
       }
     }
@@ -211,8 +248,21 @@ export async function getPatientDataCompleteness(
     clinicalMissing.forEach(bump);
     researchMissing.forEach(bump);
 
-    if (clinicalMissing.length === 0) clinicalComplete += 1;
-    if (researchMissing.length === 0) researchComplete += 1;
+    const isClinicalComplete = clinicalMissing.length === 0;
+    const isResearchComplete = researchMissing.length === 0;
+    const isResearchReady = isClinicalComplete && isResearchComplete;
+    const applicableCount = CLINICAL_APPLICABLE + researchApplicable;
+    const completenessScore = computeCompletenessScore({
+      clinicalApplicable: CLINICAL_APPLICABLE,
+      clinicalMissing: clinicalMissing.length,
+      researchApplicable,
+      researchMissing: researchMissing.length,
+    });
+
+    if (isClinicalComplete) clinicalComplete += 1;
+    if (isResearchComplete) researchComplete += 1;
+    if (isResearchReady) researchReadyCount += 1;
+    scoreSum += completenessScore;
     if (row.has_ohip_t0 !== true) missingOhipT0 += 1;
 
     return {
@@ -222,8 +272,11 @@ export async function getPatientDataCompleteness(
       etiologia: (row.kezelesre_erkezes_indoka as string) ?? null,
       clinicalMissing,
       researchMissing,
-      clinicalComplete: clinicalMissing.length === 0,
-      researchComplete: researchMissing.length === 0,
+      clinicalComplete: isClinicalComplete,
+      researchComplete: isResearchComplete,
+      applicableCount,
+      completenessScore,
+      researchReady: isResearchReady,
     };
   });
 
@@ -238,6 +291,8 @@ export async function getPatientDataCompleteness(
       clinicalComplete,
       clinicalIncomplete: patients.length - clinicalComplete,
       researchComplete,
+      researchReady: researchReadyCount,
+      avgCompletenessScore: patients.length > 0 ? Math.round(scoreSum / patients.length) : 100,
       missingOhipT0,
       byField,
     },
