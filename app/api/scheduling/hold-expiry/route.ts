@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { runHoldExpiry } from '@/lib/hold-expiry';
 import { apiHandler } from '@/lib/api/route-handler';
+import { requireCronKey } from '@/lib/api/cron-auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,12 +15,7 @@ export const POST = apiHandler(async (req, { correlationId }) => {
 });
 
 async function handleHoldExpiry(request: { headers: { get(name: string): string | null }; nextUrl: { searchParams: URLSearchParams } }) {
-  const apiKey = request.headers.get('x-api-key') || request.nextUrl.searchParams.get('api_key');
-  const expectedKey = process.env.SCHEDULING_HOLD_EXPIRY_API_KEY;
-
-  if (expectedKey && apiKey !== expectedKey) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  requireCronKey(request, 'SCHEDULING_HOLD_EXPIRY_API_KEY');
 
   const result = await runHoldExpiry();
 

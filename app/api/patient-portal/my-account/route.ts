@@ -80,11 +80,11 @@ export const DELETE = apiHandler(async (req) => {
       return NextResponse.json({ error: 'Beteg nem található' }, { status: 404 });
     }
 
-    await pool.query('BEGIN');
-
+    const client = await pool.connect();
     try {
+      await client.query('BEGIN');
       // Cancel upcoming appointments and free time slots
-      const appointmentResult = await pool.query(
+      const appointmentResult = await client.query(
         `SELECT a.id, a.time_slot_id 
          FROM appointments a
          JOIN available_time_slots ats ON a.time_slot_id = ats.id
@@ -93,15 +93,15 @@ export const DELETE = apiHandler(async (req) => {
       );
 
       for (const appointment of appointmentResult.rows) {
-        await pool.query('DELETE FROM appointments WHERE id = $1', [appointment.id]);
-        await pool.query(
+        await client.query('DELETE FROM appointments WHERE id = $1', [appointment.id]);
+        await client.query(
           'UPDATE available_time_slots SET status = $1 WHERE id = $2',
           ['available', appointment.time_slot_id]
         );
       }
 
       // Anonymize contact data (retain medical records per Hungarian law)
-      await pool.query(
+      await client.query(
         `UPDATE patients SET
           email = NULL,
           telefonszam = NULL,
@@ -115,22 +115,24 @@ export const DELETE = apiHandler(async (req) => {
       );
 
       // Delete patient portal tokens
-      await pool.query(
+      await client.query(
         'DELETE FROM patient_portal_tokens WHERE patient_id = $1',
         [patientId]
       );
 
       // Record consent withdrawal
-      await pool.query(
-        `UPDATE gdpr_consents SET withdrawn_at = CURRENT_TIMESTAMP 
+      await client.query(
+        `UPDATE gdpr_consents SET withdrawn_at = CURRENT_TIMESTAMP
          WHERE patient_id = $1 AND withdrawn_at IS NULL`,
         [patientId]
       );
 
-      await pool.query('COMMIT');
+      await client.query('COMMIT');
     } catch (error) {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK').catch(() => {});
       throw error;
+    } finally {
+      client.release();
     }
 
     // Clear the portal session cookie

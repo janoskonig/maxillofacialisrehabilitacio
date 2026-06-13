@@ -7,6 +7,28 @@ const dev = process.env.NODE_ENV !== 'production';
 const hostname = process.env.HOSTNAME || 'localhost';
 const port = parseInt(process.env.PORT || '3000', 10);
 
+// Fail fast in production if JWT_SECRET is missing or left at the source-committed
+// default. middleware.ts / lib/auth-server.ts / lib/socket-auth.ts all fall back to
+// 'change-this-to-a-random-secret-in-production', so booting without a real secret
+// would let anyone forge an admin token. Better to refuse to start than to run wide open.
+const DEFAULT_JWT_SECRET = 'change-this-to-a-random-secret-in-production';
+if (!dev) {
+  const secret = process.env.JWT_SECRET;
+  if (!secret || secret === DEFAULT_JWT_SECRET) {
+    console.error(
+      '[Server] FATAL: JWT_SECRET is unset or still the built-in default in production. ' +
+        'Auth tokens would be forgeable by anyone. Set a strong, unique JWT_SECRET and restart.'
+    );
+    process.exit(1);
+  }
+  if (secret.length < 32) {
+    console.error(
+      '[Server] FATAL: JWT_SECRET is too short (<32 chars) for production. Use a long, random secret.'
+    );
+    process.exit(1);
+  }
+}
+
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 

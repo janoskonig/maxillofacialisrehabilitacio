@@ -103,11 +103,11 @@ export const GET = apiHandler(async (req, { params }) => {
     }
 
     // Start transaction
-    await pool.query('BEGIN');
-
+    const client = await pool.connect();
     try {
+      await client.query('BEGIN');
       // Update appointment status to approved and set approved_at timestamp
-      await pool.query(
+      await client.query(
         `UPDATE appointments SET approval_status = $1, approved_at = CURRENT_TIMESTAMP,
          recorded_at = COALESCE(recorded_at, CURRENT_TIMESTAMP),
          effective_at = CURRENT_TIMESTAMP
@@ -115,8 +115,8 @@ export const GET = apiHandler(async (req, { params }) => {
         ['approved', appointment.id]
       );
 
-      const newRevision = await bumpDomainRevision(pool, 'appointment', appointment.id);
-      await writeAuditEvent(pool, {
+      const newRevision = await bumpDomainRevision(client, 'appointment', appointment.id);
+      await writeAuditEvent(client, {
         entityType: 'appointment',
         entityId: appointment.id,
         action: 'appointment_approved',
@@ -125,7 +125,7 @@ export const GET = apiHandler(async (req, { params }) => {
         oldState: { approvalStatus: 'pending' },
         newState: { approvalStatus: 'approved', domainRevision: newRevision },
       });
-      await invalidateFromSource(pool, 'appointment', appointment.id, {
+      await invalidateFromSource(client, 'appointment', appointment.id, {
         includeMaterialized: true,
         patientId: appointment.patient_id,
       });
@@ -144,14 +144,14 @@ export const GET = apiHandler(async (req, { params }) => {
         const validIds = alternativeIds.filter((id: any) => id && typeof id === 'string');
         if (validIds.length > 0) {
           // Free all alternative time slots
-          await pool.query(
+          await client.query(
             `UPDATE available_time_slots SET status = 'available', state = 'free' WHERE id = ANY($1::uuid[])`,
             [validIds]
           );
         }
       }
 
-      await pool.query('COMMIT');
+      await client.query('COMMIT');
 
       // Recompute kezelőorvos: a jóváhagyással egy 'pending' appointment
       // 'approved' lett, ami az „A-eset" jelölés-rangsort befolyásolhatja.
@@ -376,8 +376,10 @@ export const GET = apiHandler(async (req, { params }) => {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
     } catch (error) {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK').catch(() => {});
       throw error;
+    } finally {
+      client.release();
     }
 });
 

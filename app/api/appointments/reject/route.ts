@@ -23,9 +23,10 @@ export const GET = apiHandler(async (req) => {
   }
 
   const pool = getDbPool();
-
-  // Find appointment by token with patient and time slot info
-  const appointmentResult = await pool.query(
+  const client = await pool.connect();
+  try {
+    // Find appointment by token with patient and time slot info
+    const appointmentResult = await client.query(
     `SELECT a.*, ats.start_time, ats.cim, ats.teremszam,
             p.nev as patient_name, p.email as patient_email, p.nem as patient_nem,
             u.doktor_neve, u.email as dentist_email
@@ -117,18 +118,18 @@ export const GET = apiHandler(async (req) => {
     }
   ).catch(() => {});
 
-  await pool.query('BEGIN');
+  await client.query('BEGIN');
 
   try {
     if (nextAlternativeIndex !== null) {
       const nextAlternativeId = alternativeIds[nextAlternativeIndex];
       
-      await pool.query(
+      await client.query(
         'UPDATE available_time_slots SET status = $1 WHERE id = $2',
         ['available', appointment.time_slot_id]
       );
       
-      const nextAltSlotResult = await pool.query(
+      const nextAltSlotResult = await client.query(
         `SELECT ats.*, u.doktor_neve, u.email as dentist_email
          FROM available_time_slots ats
          JOIN users u ON ats.user_id = u.id
@@ -137,20 +138,20 @@ export const GET = apiHandler(async (req) => {
       );
       
       if (nextAltSlotResult.rows.length === 0 || nextAltSlotResult.rows[0].status !== 'available') {
-        await pool.query(
+        await client.query(
           'UPDATE appointments SET approval_status = $1 WHERE id = $2',
           ['rejected', appointment.id]
         );
         
         const validIds = alternativeIds.filter((id: any) => id && typeof id === 'string');
         if (validIds.length > 0) {
-          await pool.query(
+          await client.query(
             'UPDATE available_time_slots SET status = $1 WHERE id = ANY($2::uuid[])',
             ['available', validIds]
           );
         }
         
-        await pool.query('COMMIT');
+        await client.query('COMMIT');
         
         return new NextResponse(`
           <!DOCTYPE html>
@@ -199,19 +200,19 @@ export const GET = apiHandler(async (req) => {
       
       const nextAltSlot = nextAltSlotResult.rows[0];
       
-      await pool.query(
+      await client.query(
         'UPDATE available_time_slots SET status = $1 WHERE id = $2',
         ['booked', nextAlternativeId]
       );
       
-      await pool.query(
+      await client.query(
         `UPDATE appointments 
          SET time_slot_id = $1, current_alternative_index = $2, approval_status = 'pending'
          WHERE id = $3`,
         [nextAlternativeId, nextAlternativeIndex, appointment.id]
       );
       
-      await pool.query('COMMIT');
+      await client.query('COMMIT');
       
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 
         (req.headers.get('origin') || 'http://localhost:3000');
@@ -222,7 +223,7 @@ export const GET = apiHandler(async (req) => {
       let remainingAlternatives: Array<{ id: string; startTime: Date; cim: string | null; teremszam: string | null }> = [];
       const remainingIds = alternativeIds.slice(nextAlternativeIndex + 1);
       if (remainingIds.length > 0) {
-        const remainingSlotsResult = await pool.query(
+        const remainingSlotsResult = await client.query(
           `SELECT ats.id, ats.start_time, ats.cim, ats.teremszam
            FROM available_time_slots ats
            WHERE ats.id = ANY($1::uuid[])
@@ -304,25 +305,25 @@ export const GET = apiHandler(async (req) => {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
     } else {
-      await pool.query(
+      await client.query(
         'UPDATE appointments SET approval_status = $1 WHERE id = $2',
         ['rejected', appointment.id]
       );
 
-      await pool.query(
+      await client.query(
         'UPDATE available_time_slots SET status = $1 WHERE id = $2',
         ['available', appointment.time_slot_id]
       );
 
       const validIds = alternativeIds.filter((id: any) => id && typeof id === 'string');
       if (validIds.length > 0) {
-        await pool.query(
+        await client.query(
           'UPDATE available_time_slots SET status = $1 WHERE id = ANY($2::uuid[])',
           ['available', validIds]
         );
       }
 
-      await pool.query('COMMIT');
+      await client.query('COMMIT');
 
       const html = `
         <!DOCTYPE html>
@@ -370,7 +371,10 @@ export const GET = apiHandler(async (req) => {
       });
     }
   } catch (error) {
-    await pool.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => {});
     throw error;
+  }
+  } finally {
+    client.release();
   }
 });

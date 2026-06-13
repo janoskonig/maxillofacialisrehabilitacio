@@ -3,6 +3,7 @@
  * Uses advisory lock per episode, batch UPSERT, and pathway hash for drift detection.
  */
 
+import type { PoolClient } from 'pg';
 import { getDbPool } from './db';
 import { computeStepWindow } from './step-window';
 import { slotPoolForStep, type PathwayWorkPhaseTemplate } from './next-step-engine';
@@ -31,6 +32,30 @@ function budapestLocalToUTC(dateISO: string, localHour: number, localMinute: num
   return new Date(`${dateISO}T${String(localHour - 1).padStart(2, '0')}:${String(localMinute).padStart(2, '0')}:00Z`);
 }
 
+/**
+ * Run a query that may legitimately fail (probing for an optional table/column)
+ * inside a SAVEPOINT. Without this, a failed statement inside our transaction would
+ * poison the whole transaction ("current transaction is aborted") instead of being
+ * locally tolerated — the behaviour the old autocommit pool.query() calls relied on.
+ * Returns the fn result, or `fallback` if the statement errored.
+ */
+async function withSavepoint<T>(
+  client: PoolClient,
+  name: string,
+  fn: () => Promise<T>,
+  fallback: T,
+): Promise<T> {
+  await client.query(`SAVEPOINT ${name}`);
+  try {
+    const result = await fn();
+    await client.query(`RELEASE SAVEPOINT ${name}`);
+    return result;
+  } catch {
+    await client.query(`ROLLBACK TO SAVEPOINT ${name}`);
+    return fallback;
+  }
+}
+
 export interface ProjectionResult {
   projected: number;
   pathwayHash?: string;
@@ -39,40 +64,54 @@ export interface ProjectionResult {
 
 export async function projectRemainingSteps(episodeId: string): Promise<ProjectionResult> {
   const pool = getDbPool();
-  await pool.query('BEGIN');
+  // Dedicated client: BEGIN/COMMIT and pg_advisory_xact_lock are connection-scoped,
+  // so every statement of this transaction must run on the SAME connection. Issuing
+  // them via pool.query() would scatter them across arbitrary pooled connections,
+  // turning the "transaction" into a series of autocommits and making the advisory
+  // lock a no-op (it would release the instant its throwaway connection returned).
+  const client = await pool.connect();
   try {
-    await pool.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, [episodeId]);
+    await client.query('BEGIN');
+    await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, [episodeId]);
 
-    const [episodeRow, apptsRow] = await Promise.all([
-      pool.query(
-        `SELECT opened_at, plan_start_date FROM patient_episodes WHERE id = $1 FOR SHARE`,
-        [episodeId]
-      ).catch(() =>
-        pool.query(`SELECT opened_at FROM patient_episodes WHERE id = $1 FOR SHARE`, [episodeId])
-      ),
-      pool.query(
-        `SELECT a.step_code, a.step_seq,
-                COALESCE(a.start_time, ats.start_time) AS start_time,
-                a.appointment_status
-         FROM appointments a
-         LEFT JOIN available_time_slots ats ON a.time_slot_id = ats.id
-         WHERE a.episode_id = $1 AND a.step_code IS NOT NULL
-           AND (a.appointment_status IS NULL OR a.appointment_status = 'completed')
-         ORDER BY a.step_seq ASC`,
-        [episodeId]
-      ),
-    ]);
+    // Sequential (not Promise.all): a single connection runs one statement at a time,
+    // and both reads must share this transaction's lock and snapshot.
+    const episodeRow =
+      (await withSavepoint(
+        client,
+        'sp_episode_cols',
+        () =>
+          client.query(
+            `SELECT opened_at, plan_start_date FROM patient_episodes WHERE id = $1 FOR SHARE`,
+            [episodeId]
+          ),
+        null,
+      )) ??
+      // plan_start_date column may predate migration 039 — fall back without it.
+      (await client.query(`SELECT opened_at FROM patient_episodes WHERE id = $1 FOR SHARE`, [episodeId]));
+    const apptsRow = await client.query(
+      `SELECT a.step_code, a.step_seq,
+              COALESCE(a.start_time, ats.start_time) AS start_time,
+              a.appointment_status
+       FROM appointments a
+       LEFT JOIN available_time_slots ats ON a.time_slot_id = ats.id
+       WHERE a.episode_id = $1 AND a.step_code IS NOT NULL
+         AND (a.appointment_status IS NULL OR a.appointment_status = 'completed')
+       ORDER BY a.step_seq ASC`,
+      [episodeId]
+    );
 
     if (!episodeRow.rows[0]) {
-      await pool.query('COMMIT');
+      await client.query('COMMIT');
       return { projected: 0, reason: 'NO_EPISODE' };
     }
 
     // Multi-pathway: merge steps from all episode_pathways, fall back to legacy care_pathway_id
     let steps: PathwayWorkPhaseTemplate[] = [];
     let pathwayHash = '';
+    await client.query('SAVEPOINT sp_multipw');
     try {
-      const multiPwRow = await pool.query(
+      const multiPwRow = await client.query(
         `SELECT cp.work_phases_json, cp.steps_json
          FROM episode_pathways ep
          JOIN care_pathways cp ON ep.care_pathway_id = cp.id
@@ -90,17 +129,19 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
             allJson.push(chunk);
           }
         }
-        const hashRow = await pool.query(
+        const hashRow = await client.query(
           `SELECT encode(digest($1::text, 'sha256'), 'hex') as h`,
           [JSON.stringify(allJson)]
         );
         pathwayHash = hashRow.rows[0]?.h ?? '';
       }
+      await client.query('RELEASE SAVEPOINT sp_multipw');
     } catch {
       // episode_pathways table might not exist
+      await client.query('ROLLBACK TO SAVEPOINT sp_multipw');
     }
     if (steps.length === 0) {
-      const pathwayRow = await pool.query(
+      const pathwayRow = await client.query(
         `SELECT cp.work_phases_json, cp.steps_json,
                 encode(digest(COALESCE(cp.work_phases_json::text, cp.steps_json::text, '[]'), 'sha256'), 'hex') as pathway_hash
          FROM patient_episodes pe
@@ -109,7 +150,7 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
         [episodeId]
       );
       if (!pathwayRow.rows[0]) {
-        await pool.query('COMMIT');
+        await client.query('COMMIT');
         return { projected: 0, reason: 'NO_PATHWAY' };
       }
       const row = pathwayRow.rows[0];
@@ -121,7 +162,7 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
     }
 
     if (!steps || steps.length === 0) {
-      await pool.query('COMMIT');
+      await client.query('COMMIT');
       return { projected: 0, reason: 'NO_PATHWAY' };
     }
     const epRow = episodeRow.rows[0];
@@ -156,20 +197,23 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
       duration_minutes?: number | null;
     }
     let episodeWorkPhaseRows: EwpRow[] | null = null;
+    await client.query('SAVEPOINT sp_ewp');
     try {
       // Összevont (child) sorok kihagyása — ugyanarra az időpontra tartoznak a primary-hoz; különben az anchor-lánc
       // minden gyerekre külön lépdel, és az offsetek összeadódnának (next-step-engine / worklist már így szűr).
       let mergedIntoFilter = '';
-      try {
-        const col = await pool.query(
-          `SELECT 1 FROM information_schema.columns
-           WHERE table_name = 'episode_work_phases' AND column_name = 'merged_into_episode_work_phase_id' LIMIT 1`
-        );
-        if (col.rows.length > 0) mergedIntoFilter = ' AND merged_into_episode_work_phase_id IS NULL';
-      } catch {
-        /* ignore */
-      }
-      const esResult = await pool.query(
+      const col = await withSavepoint(
+        client,
+        'sp_ewp_col',
+        () =>
+          client.query(
+            `SELECT 1 FROM information_schema.columns
+             WHERE table_name = 'episode_work_phases' AND column_name = 'merged_into_episode_work_phase_id' LIMIT 1`
+          ),
+        null,
+      );
+      if (col && col.rows.length > 0) mergedIntoFilter = ' AND merged_into_episode_work_phase_id IS NULL';
+      const esResult = await client.query(
         `SELECT work_phase_code, COALESCE(seq, pathway_order_index) as step_seq, status, completed_at,
                 default_days_offset, duration_minutes
          FROM episode_work_phases WHERE episode_id = $1${mergedIntoFilter}
@@ -177,8 +221,10 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
         [episodeId]
       );
       if (esResult.rows.length > 0) episodeWorkPhaseRows = esResult.rows as EwpRow[];
+      await client.query('RELEASE SAVEPOINT sp_ewp');
     } catch {
       /* table may not exist */
+      await client.query('ROLLBACK TO SAVEPOINT sp_ewp');
     }
 
     if (episodeWorkPhaseRows) {
@@ -196,7 +242,7 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
     // Expire stale intents: completed or already-booked step_codes, or pathway hash mismatch
     const coveredCodes = [...Array.from(completedStepCodes), ...Array.from(bookedStepCodes)];
     if (coveredCodes.length > 0 || pathwayHash) {
-      await pool.query(
+      await client.query(
         `UPDATE slot_intents SET state = 'expired', updated_at = CURRENT_TIMESTAMP
          WHERE episode_id = $1
            AND state = 'open'
@@ -291,7 +337,7 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
         paramIdx += 9;
       }
 
-      await pool.query(
+      await client.query(
         `INSERT INTO slot_intents
            (episode_id, step_code, step_seq, pool, duration_minutes,
             window_start, window_end, state, source_pathway_hash, expires_at, suggested_start, suggested_end)
@@ -312,7 +358,7 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
 
     // Expire orphan open intents: step_codes no longer pending, or old step_seq mismatches from previous projections
     const projectedKeys = new Set(projections.map((p) => `${p.stepCode}:${p.stepSeq}`));
-    const orphanExpire = await pool.query(
+    const orphanExpire = await client.query(
       `SELECT id, step_code, step_seq FROM slot_intents
        WHERE episode_id = $1 AND state = 'open'`,
       [episodeId]
@@ -321,16 +367,18 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
       .filter((r: { step_code: string; step_seq: number }) => !projectedKeys.has(`${r.step_code}:${r.step_seq}`))
       .map((r: { id: string }) => r.id);
     if (orphanIds.length > 0) {
-      await pool.query(
+      await client.query(
         `UPDATE slot_intents SET state = 'expired', updated_at = CURRENT_TIMESTAMP WHERE id = ANY($1::uuid[])`,
         [orphanIds]
       );
     }
 
-    await pool.query('COMMIT');
+    await client.query('COMMIT');
     return { projected: projections.length, pathwayHash };
   } catch (e) {
-    await pool.query('ROLLBACK');
+    await client.query('ROLLBACK');
     throw e;
+  } finally {
+    client.release();
   }
 }

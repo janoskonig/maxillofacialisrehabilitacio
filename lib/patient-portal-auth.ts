@@ -236,13 +236,15 @@ export async function checkRegistrationRateLimit(ipAddress: string): Promise<boo
     const count = parseInt(result.rows[0].count, 10);
     return count < 3; // Max 3 attempts per hour
   } catch (error: any) {
-    // If table doesn't exist yet, allow the request (migration may not have been run)
+    // If the table doesn't exist yet, allow the request (migration may not have been run).
     if (error?.code === '42P01') {
       console.warn('patient_portal_tokens table does not exist, skipping rate limit check');
       return true;
     }
-    // For other errors, also allow (fail open)
+    // For any other error, fail CLOSED. A transient DB error must not silently disable
+    // the throttle — that would open the email-verification flow to registration/email
+    // bombing. The caller turns `false` into a clean 429 "try again later".
     console.error('Error checking rate limit:', error);
-    return true;
+    return false;
   }
 }

@@ -5,6 +5,7 @@ import { sendAppointmentReminderEmail } from '@/lib/email';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { apiHandler } from '@/lib/api/route-handler';
+import { requireCronKey } from '@/lib/api/cron-auth';
 import { logger } from '@/lib/logger';
 
 const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
@@ -12,15 +13,7 @@ const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
 export const dynamic = 'force-dynamic';
 
 export const GET = apiHandler(async (req, { correlationId }) => {
-  const apiKey = req.headers.get('x-api-key') || req.nextUrl.searchParams.get('apiKey');
-  const expectedApiKey = process.env.APPOINTMENT_REMINDER_API_KEY;
-
-  if (expectedApiKey && apiKey !== expectedApiKey) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    );
-  }
+  requireCronKey(req, 'APPOINTMENT_REMINDER_API_KEY');
 
   const pool = getDbPool();
 

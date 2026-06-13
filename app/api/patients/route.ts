@@ -4,7 +4,7 @@ import { normalizeToTreatmentTypeCode } from '@/lib/treatment-type-normalize';
 import { Patient, patientSchema } from '@/lib/types';
 import { verifyAuth } from '@/lib/auth-server';
 import { logActivity, logActivityWithAuth } from '@/lib/activity';
-import { optionalAuthHandler, authedHandler } from '@/lib/api/route-handler';
+import { authedHandler } from '@/lib/api/route-handler';
 import { logger } from '@/lib/logger';
 import { PATIENT_LIST_FIELDS, PATIENT_SELECT_FIELDS } from '@/lib/queries/patient-fields';
 import { REQUIRED_DOC_TAGS } from '@/lib/clinical-rules';
@@ -83,7 +83,9 @@ const VIEWS: Record<ViewPreset, ViewBuilder> = {
 
 export const dynamic = 'force-dynamic';
 
-export const GET = optionalAuthHandler(async (req, { auth, correlationId }) => {
+// Requires a valid session: this returns the full patient roster (név, TAJ, phone,
+// email). middleware.ts does not block unauthenticated requests, so the handler must.
+export const GET = authedHandler(async (req, { auth, correlationId }) => {
   const pool = getDbPool();
   const searchParams = req.nextUrl.searchParams;
   const query = searchParams.get('q');

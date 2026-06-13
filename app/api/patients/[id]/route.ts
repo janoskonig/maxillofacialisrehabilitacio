@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { patientSchema } from '@/lib/types';
-import { optionalAuthHandler, authedHandler, roleHandler } from '@/lib/api/route-handler';
+import { authedHandler, roleHandler } from '@/lib/api/route-handler';
 import { normalizeToTreatmentTypeCode } from '@/lib/treatment-type-normalize';
 import { sendAppointmentTimeSlotFreedNotification } from '@/lib/email';
 import { deleteGoogleCalendarEvent, createGoogleCalendarEvent } from '@/lib/google-calendar';
@@ -632,7 +632,10 @@ async function trackPatientChanges(
 
 // ─── GET handler ────────────────────────────────────────────────────────────
 
-export const GET = optionalAuthHandler(async (req, { auth, params, correlationId }) => {
+// Requires a valid session: returns a patient's full PII + clinical record. The
+// `technikus` role gets a reduced field set below; an unauthenticated caller must
+// get nothing (middleware.ts does not reject unauthenticated requests).
+export const GET = authedHandler(async (req, { auth, params, correlationId }) => {
     const pool = getDbPool();
     const role = auth?.role || null;
     const userEmail = auth?.email || null;
@@ -820,25 +823,25 @@ export const DELETE = roleHandler(['admin'], async (req, { auth, params }) => {
     const appointments = appointmentResult.rows;
 
     // Start transaction
-    await pool.query('BEGIN');
-
+    const client = await pool.connect();
     try {
+      await client.query('BEGIN');
       // Delete appointments and free up time slots
       for (const appointment of appointments) {
         // Delete the appointment
-        await pool.query('DELETE FROM appointments WHERE id = $1', [appointment.id]);
-        
+        await client.query('DELETE FROM appointments WHERE id = $1', [appointment.id]);
+
         // Update time slot status back to available
-        await pool.query(
+        await client.query(
           'UPDATE available_time_slots SET status = $1 WHERE id = $2',
           ['available', appointment.time_slot_id]
         );
       }
 
       // Delete the patient (this will cascade delete appointments due to ON DELETE CASCADE, but we already handled it)
-      await pool.query('DELETE FROM patients WHERE id = $1', [patientId]);
+      await client.query('DELETE FROM patients WHERE id = $1', [patientId]);
 
-      await pool.query('COMMIT');
+      await client.query('COMMIT');
 
       // Send email notifications and handle Google Calendar events for freed time slots
       for (const appointment of appointments) {
@@ -975,7 +978,9 @@ export const DELETE = roleHandler(['admin'], async (req, { auth, params }) => {
         { status: 200 }
       );
     } catch (error) {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK').catch(() => {});
       throw error;
+    } finally {
+      client.release();
     }
 });

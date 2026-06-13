@@ -159,16 +159,16 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
   const pool = getDbPool();
   const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
 
-  await pool.query('BEGIN');
-
+  const client = await pool.connect();
   try {
-    const patientResult = await pool.query(
+    await client.query('BEGIN');
+    const patientResult = await client.query(
       'SELECT id, email, nev, taj, nem FROM patients WHERE id = $1',
       [patientId]
     );
 
     if (patientResult.rows.length === 0) {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK');
       return NextResponse.json(
         { error: 'Beteg nem található' },
         { status: 404 }
@@ -177,7 +177,7 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
 
     const patient = patientResult.rows[0];
 
-    const timeSlotResult = await pool.query(
+    const timeSlotResult = await client.query(
       `SELECT ats.*, u.email as dentist_email, u.id as dentist_user_id, u.doktor_neve as dentist_name
        FROM available_time_slots ats
        JOIN users u ON ats.user_id = u.id
@@ -187,7 +187,7 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
     );
 
     if (timeSlotResult.rows.length === 0) {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK');
       return NextResponse.json(
         { error: 'Időpont nem található' },
         { status: 404 }
@@ -199,7 +199,7 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
     // G3: Patient portal — only consult/flexible slots
     const slotPurpose = timeSlot.slot_purpose;
     if (slotPurpose !== 'consult' && slotPurpose !== 'flexible') {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK');
       return NextResponse.json(
         {
           error: 'Ez az időpont típusa nem foglalható közvetlenül a páciens portálon. Kérjük, kérjen időpontot az adminisztrációtól.',
@@ -211,7 +211,7 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
 
     const slotState = timeSlot.state ?? (timeSlot.status === 'available' ? 'free' : 'booked');
     if (slotState !== 'free') {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK');
       return NextResponse.json(
         { error: 'Ez az időpont már le van foglalva' },
         { status: 400 }
@@ -220,14 +220,14 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
 
     const startTime = new Date(timeSlot.start_time);
     if (startTime <= new Date()) {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK');
       return NextResponse.json(
         { error: 'Csak jövőbeli időpontot lehet foglalni' },
         { status: 400 }
       );
     }
 
-    const appointmentResult = await pool.query(
+    const appointmentResult = await client.query(
       `INSERT INTO appointments (patient_id, time_slot_id, created_by, dentist_email)
        VALUES ($1, $2, $3, $4)
        ON CONFLICT (time_slot_id) 
@@ -258,7 +258,7 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
     const appointment = appointmentResult.rows[0];
 
     if (!appointment) {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK');
       return NextResponse.json(
         {
           error: 'Ez az időpont már le van foglalva egy aktív foglalással. Kérjük, válasszon másik időpontot.',
@@ -268,12 +268,12 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
       );
     }
 
-    await pool.query(
+    await client.query(
       `UPDATE available_time_slots SET status = 'booked', state = 'booked' WHERE id = $1`,
       [timeSlotId]
     );
 
-    await pool.query('COMMIT');
+    await client.query('COMMIT');
 
     const appointmentCim = timeSlot.cim || DEFAULT_CIM;
     const appointmentTeremszam = timeSlot.teremszam || null;
@@ -434,7 +434,9 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
       message: 'Időpont sikeresen lefoglalva!',
     });
   } catch (error) {
-    await pool.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => {});
     throw error;
+  } finally {
+    client.release();
   }
 }

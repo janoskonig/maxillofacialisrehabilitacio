@@ -119,11 +119,11 @@ export const POST = roleHandler(['admin'], async (req, { auth }) => {
 
   const approvalToken = randomBytes(32).toString('hex');
 
-  await pool.query('BEGIN');
-
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     const alternativeIdsJson = JSON.stringify(alternativeIds);
-    const appointmentResult = await pool.query(
+    const appointmentResult = await client.query(
       `INSERT INTO appointments (patient_id, time_slot_id, created_by, dentist_email, approval_status, approval_token, alternative_time_slot_ids, current_alternative_index, appointment_type)
        VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, NULL, $8)
        RETURNING 
@@ -143,12 +143,12 @@ export const POST = roleHandler(['admin'], async (req, { auth }) => {
 
     const appointment = appointmentResult.rows[0];
 
-    await pool.query(
+    await client.query(
       'UPDATE available_time_slots SET status = $1 WHERE id = $2',
       ['booked', timeSlotId]
     );
 
-    await pool.query('COMMIT');
+    await client.query('COMMIT');
 
     const adminResult = await pool.query(
       'SELECT email FROM users WHERE role = $1 AND active = true',
@@ -215,7 +215,9 @@ export const POST = roleHandler(['admin'], async (req, { auth }) => {
       message: 'Feltételes időpont sikeresen létrehozva. A páciens emailben értesítést kapott.' 
     }, { status: 201 });
   } catch (error) {
-    await pool.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => {});
     throw error;
+  } finally {
+    client.release();
   }
 });
