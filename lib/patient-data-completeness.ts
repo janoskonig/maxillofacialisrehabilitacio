@@ -109,8 +109,17 @@ const RESEARCH_RULES: ResearchRule[] = [
   },
 ];
 
-export async function getPatientDataCompleteness(): Promise<PatientCompletenessReport> {
+export async function getPatientDataCompleteness(
+  options?: { patientId?: string },
+): Promise<PatientCompletenessReport> {
   const pool = getDbPool();
+
+  const params: unknown[] = [];
+  let whereClause = '';
+  if (options?.patientId) {
+    params.push(options.patientId);
+    whereClause = `WHERE p.id = $1`;
+  }
 
   const result = await pool.query(
     `SELECT
@@ -152,7 +161,9 @@ export async function getPatientDataCompleteness(): Promise<PatientCompletenessR
             WHERE lower(tg) = 'op'
           )
      ) op ON true
+     ${whereClause}
      ORDER BY p.nev ASC NULLS LAST`,
+    params,
   );
 
   const fieldGapMap = new Map<string, FieldGapSummary>();

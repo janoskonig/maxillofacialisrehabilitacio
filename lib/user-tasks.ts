@@ -62,7 +62,8 @@ export async function insertUserTask(params: {
     | 'ohip14'
     | 'manual'
     | 'meeting_action'
-    | 'staff_registration_review';
+    | 'staff_registration_review'
+    | 'missing_data';
   title: string;
   description?: string | null;
   metadata?: Record<string, unknown>;

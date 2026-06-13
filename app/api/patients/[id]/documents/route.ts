@@ -4,6 +4,7 @@ import { authedHandler } from '@/lib/api/route-handler';
 import { uploadFile, isFtpConfigured, getMaxFileSize } from '@/lib/ftp-client';
 import { logActivity, logActivityWithAuth } from '@/lib/activity';
 import { logger } from '@/lib/logger';
+import { reconcileMissingDataTasksSilent } from '@/lib/missing-data-reminders';
 import { tagStringIsPortraitTag } from '@/lib/patient-portrait-tag';
 
 // List all documents for a patient
@@ -269,6 +270,9 @@ export const POST = authedHandler(async (req, { auth, params }) => {
     'patient_document_uploaded',
     `Patient ID: ${patientId}, Document: ${file.name}, Size: ${file.size} bytes`
   );
+
+  // OP röntgen feltöltése pótolhat egy hiányt → zárjuk a nyitott feladatokat.
+  reconcileMissingDataTasksSilent(patientId);
 
   return NextResponse.json({ document }, { status: 201 });
 });
