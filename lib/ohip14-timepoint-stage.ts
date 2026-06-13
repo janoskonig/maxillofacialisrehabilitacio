@@ -1,10 +1,24 @@
 import type { OHIP14Timepoint } from './types';
 
 // ── Window constants (days relative to delivery date) ─────────────────
-const WINDOWS: Record<Exclude<OHIP14Timepoint, 'T0'>, { openDays: number; closeDays: number }> = {
-  T1: { openDays: 21, closeDays: 56 },     // 3-8 weeks
-  T2: { openDays: 150, closeDays: 240 },    // 5-8 months
-  T3: { openDays: 912, closeDays: 1460 },   // 2.5-4 years
+//
+// Each delivery-relative timepoint becomes fillable on its OPEN day and stays
+// fillable until the NEXT timepoint opens (T3 has no successor → stays open
+// indefinitely). This removes the gaps that used to exist between windows and
+// guarantees that a skipped earlier timepoint never blocks a later one: when a
+// later window opens, it is fillable regardless of whether the earlier ones
+// were completed.
+const OPEN_DAYS: Record<Exclude<OHIP14Timepoint, 'T0'>, number> = {
+  T1: 21,    // 3 weeks after delivery
+  T2: 150,   // 5 months after delivery
+  T3: 912,   // 2.5 years after delivery
+};
+
+// The timepoint whose opening closes the current one's window (null = open-ended).
+const NEXT_TIMEPOINT: Record<Exclude<OHIP14Timepoint, 'T0'>, Exclude<OHIP14Timepoint, 'T0'> | null> = {
+  T1: 'T2',
+  T2: 'T3',
+  T3: null,
 };
 
 // T0 is allowed for these stages (before prosthetic phase)
@@ -39,8 +53,9 @@ export interface TimepointAvailability {
  *
  * T0  – stage-gated: allowed if current stage is before prosthetic phase
  *        (STAGE_0..STAGE_4) or no stage is set yet.
- * T1/T2/T3 – delivery-date-relative: allowed if `now` falls within the
- *        configured day-window after the delivery date (STAGE_6).
+ * T1/T2/T3 – delivery-date-relative: allowed once `now` reaches the timepoint's
+ *        open day after delivery (STAGE_6) and until the next timepoint opens.
+ *        Missing an earlier timepoint never blocks a later one.
  */
 export function getTimepointAvailability(
   timepoint: OHIP14Timepoint,
@@ -62,7 +77,6 @@ export function getTimepointAvailability(
   }
 
   // T1, T2, T3 — delivery-date relative
-  const win = WINDOWS[timepoint];
   if (!deliveryDate) {
     return {
       allowed: false,
@@ -70,14 +84,20 @@ export function getTimepointAvailability(
     };
   }
 
-  const opensAt = addDays(deliveryDate, win.openDays);
-  const closesAt = addDays(deliveryDate, win.closeDays);
+  const opensAt = addDays(deliveryDate, OPEN_DAYS[timepoint]);
+  const next = NEXT_TIMEPOINT[timepoint];
+  const closesAt = next ? addDays(deliveryDate, OPEN_DAYS[next]) : undefined;
 
   if (now < opensAt) {
     return { allowed: false, reason: `Az időablak még nem nyílt meg.`, opensAt, closesAt };
   }
-  if (now > closesAt) {
-    return { allowed: false, reason: `Az időablak lejárt.`, opensAt, closesAt };
+  if (closesAt && now >= closesAt) {
+    return {
+      allowed: false,
+      reason: `Ez a kérdőív már nem aktuális — egy későbbi timepoint van soron.`,
+      opensAt,
+      closesAt,
+    };
   }
   return { allowed: true, opensAt, closesAt };
 }
