@@ -7,6 +7,7 @@ import { join } from 'path';
 import { SOURCE_OF_TRUTH_REGISTRY } from './source-of-truth-registry';
 import { QUALITY_STATES } from './quality-state';
 import { EXPORT_HASH_SPEC_VERSION } from './export-determinism';
+import { ANALYSIS_CODEBOOK_ENTRIES } from './analysis-projection';
 
 export interface CodebookEntry {
   variable: string;
@@ -38,6 +39,8 @@ function loadStaticRegistry(): CodebookEntry[] {
 export function generateCodebook(version = '1.0.0'): CodebookDocument {
   const staticVars = loadStaticRegistry();
   const derived: CodebookEntry[] = [
+    // Az elemzésre kész adatkészlet változói (egy forrásból, lásd analysis-projection).
+    ...ANALYSIS_CODEBOOK_ENTRIES,
     {
       variable: 'quality_state',
       label: 'Entity quality state',
