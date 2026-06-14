@@ -40,9 +40,11 @@ export const GET = authedHandler(async (req, { auth }) => {
 
   let episodeQuery = `
     SELECT e.id, e.patient_id as "patientId", p.nev as "patientName", e.reason, e.chief_complaint as "chiefComplaint",
-           e.status, e.opened_at as "openedAt", e.closed_at as "closedAt"
+           e.status, e.opened_at as "openedAt", e.closed_at as "closedAt",
+           r.beutalo_intezmeny as "beutaloIntezmeny"
     FROM patient_episodes e
     JOIN patients p ON p.id = e.patient_id
+    LEFT JOIN patient_referral r ON r.patient_id = e.patient_id
     WHERE 1=1
   `;
   const params: (string | number)[] = [];
@@ -85,6 +87,7 @@ export const GET = authedHandler(async (req, { auth }) => {
     status: string;
     openedAt: string;
     closedAt: string | null;
+    beutaloIntezmeny: string | null;
     currentStageCode: string | null;
     currentStageStart: string | null;
   }> = episodesResult.rows.map((r: Record<string, unknown>) => ({
@@ -96,6 +99,7 @@ export const GET = authedHandler(async (req, { auth }) => {
     status: r.status as string,
     openedAt: (r.openedAt as Date)?.toISOString?.() ?? (r.openedAt as string),
     closedAt: r.closedAt ? (r.closedAt as Date)?.toISOString?.() ?? (r.closedAt as string) : null,
+    beutaloIntezmeny: (r.beutaloIntezmeny as string) ?? null,
     currentStageCode: null,
     currentStageStart: null,
   }));

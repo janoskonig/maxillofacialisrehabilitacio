@@ -79,10 +79,13 @@ export function Sidebar({ user, taskSummary, inboxSummary, onLogout, onFeedback 
         <span className="font-semibold text-gray-900">MaxRehab</span>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-4" aria-label="Fő navigáció">
+      <nav className="flex-1 overflow-y-auto px-2 py-3" aria-label="Fő navigáció">
         {groups.map((group) => (
-          <div key={group.id}>
-            <div className="px-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-gray-400">
+          <div
+            key={group.id}
+            className="pt-3 mt-3 border-t border-gray-100 first:border-0 first:mt-0 first:pt-0"
+          >
+            <div className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
               {group.label}
             </div>
             <div className="space-y-0.5">{group.items.map(renderItem)}</div>

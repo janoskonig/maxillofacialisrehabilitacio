@@ -30,6 +30,7 @@ export default function StagesGanttPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('cohort');
   const [reason, setReason] = useState<string>(REASON_OPTIONS[0].value);
   const [status, setStatus] = useState<string>('all');
+  const [intezmeny, setIntezmeny] = useState<string>('all');
   const [patientId, setPatientId] = useState<string>('');
   const [patientSearch, setPatientSearch] = useState('');
   const [patientOptions, setPatientOptions] = useState<PatientOption[]>([]);
@@ -160,6 +161,23 @@ export default function StagesGanttPage() {
     return () => clearTimeout(t);
   }, [viewMode, patientSearch]);
 
+  // Beutaló intézmény szerinti szűrés (kliens oldalon, a betöltött kohorszon)
+  const institutions = Array.from(
+    new Set(episodes.map((e) => e.beutaloIntezmeny).filter((v): v is string => Boolean(v && v.trim())))
+  ).sort((a, b) => a.localeCompare(b, 'hu'));
+  const showIntezmenyFilter = viewMode === 'cohort' && institutions.length > 0;
+  const intezmenyActive = showIntezmenyFilter && intezmeny !== 'all';
+  const filteredEpisodes = intezmenyActive
+    ? episodes.filter((e) => e.beutaloIntezmeny === intezmeny)
+    : episodes;
+  const filteredEpisodeIds = new Set(filteredEpisodes.map((e) => e.id));
+  const filteredIntervals = intezmenyActive
+    ? intervals.filter((i) => filteredEpisodeIds.has(i.episodeId))
+    : intervals;
+  const filteredVirtualWindows = intezmenyActive
+    ? ganttVirtualWindows.filter((v) => filteredEpisodeIds.has(v.episodeId))
+    : ganttVirtualWindows;
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -230,7 +248,10 @@ export default function StagesGanttPage() {
                 <span className="text-sm text-gray-600">Étiológia:</span>
                 <select
                   value={reason}
-                  onChange={(e) => setReason(e.target.value)}
+                  onChange={(e) => {
+                    setReason(e.target.value);
+                    setIntezmeny('all');
+                  }}
                   className="rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:ring-medical-primary focus:border-medical-primary"
                 >
                   {REASON_OPTIONS.map((o) => (
@@ -252,6 +273,23 @@ export default function StagesGanttPage() {
                   <option value="closed">Zárt</option>
                 </select>
               </label>
+              {showIntezmenyFilter && (
+                <label className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">Beutaló intézmény:</span>
+                  <select
+                    value={intezmeny}
+                    onChange={(e) => setIntezmeny(e.target.value)}
+                    className="rounded-md border border-gray-300 px-3 py-1.5 text-sm max-w-[260px] focus:ring-medical-primary focus:border-medical-primary"
+                  >
+                    <option value="all">Összes ({episodes.length})</option>
+                    {institutions.map((inst) => (
+                      <option key={inst} value={inst}>
+                        {inst} ({episodes.filter((e) => e.beutaloIntezmeny === inst).length})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
             </div>
           )}
 
@@ -315,10 +353,10 @@ export default function StagesGanttPage() {
           </div>
         ) : (
           <StagesGanttChart
-            episodes={episodes}
-            intervals={intervals}
+            episodes={filteredEpisodes}
+            intervals={filteredIntervals}
             catalog={catalogForChart.map((c) => ({ code: c.code, labelHu: c.labelHu, orderIndex: c.orderIndex }))}
-            virtualWindows={includeVirtual ? ganttVirtualWindows : []}
+            virtualWindows={includeVirtual ? filteredVirtualWindows : []}
             groupByCurrentStage={viewMode === 'cohort'}
           />
         )}

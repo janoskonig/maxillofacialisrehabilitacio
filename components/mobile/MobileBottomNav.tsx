@@ -66,12 +66,35 @@ export function MobileBottomNav({ user: userProp, taskSummary: taskProp, inboxSu
 
   const role = user.role as Role;
   const primaryTabs = mobileTabs(role);
-  // Az „Egyéb" lapon a nem-elsődleges menüpontok + lábléc + műveletek.
+  // Az „Egyéb" lap a desktop oldalsávval azonos csoportokba tagolva — az
+  // elsődleges fülek (Főoldal/Naptár/Üzenetek) kihagyva.
   const primaryIds = new Set(primaryTabs.map((t) => t.id));
-  const sheetNavItems: NavItem[] = [
-    ...visibleGroups(role).flatMap((g) => g.items).filter((item) => !primaryIds.has(item.id)),
-    ...visibleFooter(role),
-  ];
+  const sheetGroups = visibleGroups(role)
+    .map((g) => ({ id: g.id, label: g.label, items: g.items.filter((item) => !primaryIds.has(item.id)) }))
+    .filter((g) => g.items.length > 0);
+  const footerItems = visibleFooter(role);
+
+  const renderSheetItem = (item: NavItem) => {
+    const Icon = item.icon;
+    const isTasks = item.id === 'tasks';
+    return (
+      <button
+        key={item.id}
+        type="button"
+        onClick={() => handleNavigate(item.path)}
+        aria-label={isTasks ? feladataimTasksAriaLabel(taskUnviewed, taskViewedOpen) : undefined}
+        className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors text-gray-700 hover:bg-gray-100 ${
+          isTasks && taskUnviewed > 0 ? 'ring-2 ring-inset ring-red-400/45' : ''
+        } ${isTasks && taskUnviewed === 0 && taskViewedOpen > 0 ? 'ring-2 ring-inset ring-amber-400/45' : ''}`}
+      >
+        <Icon className="w-5 h-5 flex-shrink-0" />
+        <span className={`font-medium ${isTasks ? 'flex-1 flex items-center min-w-0' : ''}`}>{item.label}</span>
+        {isTasks && (
+          <FeladataimIndicators variant="inline" unviewed={taskUnviewed} viewedOpen={taskViewedOpen} />
+        )}
+      </button>
+    );
+  };
 
   const handleLogout = () => {
     setMoreOpen(false);
@@ -127,49 +150,38 @@ export function MobileBottomNav({ user: userProp, taskSummary: taskProp, inboxSu
       </nav>
 
       <MobileBottomSheet open={moreOpen} onOpenChange={setMoreOpen} type="action">
-        <div className="space-y-1">
-          {sheetNavItems.map((item) => {
-            const Icon = item.icon;
-            const isTasks = item.id === 'tasks';
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => handleNavigate(item.path)}
-                aria-label={isTasks ? feladataimTasksAriaLabel(taskUnviewed, taskViewedOpen) : undefined}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors text-gray-700 hover:bg-gray-100 ${
-                  isTasks && taskUnviewed > 0 ? 'ring-2 ring-inset ring-red-400/45' : ''
-                } ${isTasks && taskUnviewed === 0 && taskViewedOpen > 0 ? 'ring-2 ring-inset ring-amber-400/45' : ''}`}
-              >
-                <Icon className="w-5 h-5 flex-shrink-0" />
-                <span className={`font-medium ${isTasks ? 'flex-1 flex items-center min-w-0' : ''}`}>{item.label}</span>
-                {isTasks && (
-                  <FeladataimIndicators variant="inline" unviewed={taskUnviewed} viewedOpen={taskViewedOpen} />
-                )}
-              </button>
-            );
-          })}
+        <div className="space-y-4">
+          {sheetGroups.map((group) => (
+            <div key={group.id}>
+              <div className="px-4 pb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                {group.label}
+              </div>
+              <div className="space-y-1">{group.items.map(renderSheetItem)}</div>
+            </div>
+          ))}
 
-          <button
-            type="button"
-            onClick={() => {
-              setMoreOpen(false);
-              openFeedback();
-            }}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors text-gray-700 hover:bg-gray-100"
-          >
-            <MessageCircle className="w-5 h-5 flex-shrink-0" />
-            <span className="font-medium">Visszajelzés</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors text-red-700 hover:bg-red-50"
-          >
-            <LogOut className="w-5 h-5 flex-shrink-0" />
-            <span className="font-medium">Kijelentkezés</span>
-          </button>
+          <div className="border-t border-gray-100 pt-3 space-y-1">
+            {footerItems.map(renderSheetItem)}
+            <button
+              type="button"
+              onClick={() => {
+                setMoreOpen(false);
+                openFeedback();
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors text-gray-700 hover:bg-gray-100"
+            >
+              <MessageCircle className="w-5 h-5 flex-shrink-0" />
+              <span className="font-medium">Visszajelzés</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors text-red-700 hover:bg-red-50"
+            >
+              <LogOut className="w-5 h-5 flex-shrink-0" />
+              <span className="font-medium">Kijelentkezés</span>
+            </button>
+          </div>
         </div>
       </MobileBottomSheet>
     </>

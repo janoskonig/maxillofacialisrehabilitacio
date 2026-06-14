@@ -13,6 +13,8 @@ export interface GanttEpisode {
   status: string;
   openedAt: string;
   closedAt: string | null;
+  /** Beutaló intézmény (patient_referral.beutalo_intezmeny) – szűréshez */
+  beutaloIntezmeny?: string | null;
   /** Az aktuális (legutolsó) stádium kódja – az API számolja a stage_events-ből */
   currentStageCode?: string | null;
   /** Mikor lépett az aktuális stádiumba */
