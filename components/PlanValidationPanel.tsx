@@ -29,6 +29,8 @@ interface PlanValidationResponse {
 
 export interface PlanValidationPanelProps {
   episodeId: string;
+  /** Optional — enables the "rebook on worklist" link from sequence-violation flags. */
+  patientId?: string;
   /** Changes whenever the plan steps change → triggers a re-validation. */
   signature: string;
   /** Whether the current user may approve/revoke (write roles). */
@@ -40,7 +42,7 @@ export interface PlanValidationPanelProps {
  * state for an episode. Re-validates whenever `signature` changes (i.e. after any
  * step edit in EpisodeStepsManager).
  */
-export function PlanValidationPanel({ episodeId, signature, canEdit = true }: PlanValidationPanelProps) {
+export function PlanValidationPanel({ episodeId, patientId, signature, canEdit = true }: PlanValidationPanelProps) {
   const [data, setData] = useState<PlanValidationResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
@@ -164,9 +166,19 @@ export function PlanValidationPanel({ episodeId, signature, canEdit = true }: Pl
 
       {(data.sequenceViolations?.length ?? 0) > 0 && (
         <div className="border-t border-amber-200 bg-amber-50">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 text-amber-800 font-medium">
-            <CalendarClock className="w-3.5 h-3.5 shrink-0" />
-            Sorrend-eltérés a lefoglalt időpontokban — újrafoglalás szükséges
+          <div className="flex items-center justify-between gap-2 px-3 py-1.5">
+            <span className="flex items-center gap-1.5 text-amber-800 font-medium">
+              <CalendarClock className="w-3.5 h-3.5 shrink-0" />
+              Sorrend-eltérés a lefoglalt időpontokban — újrafoglalás szükséges
+            </span>
+            {patientId && (
+              <a
+                href={`/patients/${patientId}/view`}
+                className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-amber-800 underline hover:text-amber-900"
+              >
+                Újrafoglalás a munkalistán →
+              </a>
+            )}
           </div>
           <ul className="divide-y divide-amber-100">
             {data.sequenceViolations!.map((v, idx) => (

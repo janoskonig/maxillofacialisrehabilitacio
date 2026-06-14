@@ -107,6 +107,8 @@ function mapWorkPhasesResponse(rows: unknown[] | undefined): EpisodeStep[] {
 
 export interface EpisodeStepsManagerProps {
   episodeId: string;
+  /** Optional — enables the "rebook on worklist" link from sequence-violation flags. */
+  patientId?: string;
   carePathwayId: string | null;
   carePathwayName?: string | null;
   episodePathways?: EpisodePathwayInfo[];
@@ -563,6 +565,7 @@ function TimingEditor({ step, mergedChildCount, saving, onCancel }: {
 
 export function EpisodeStepsManager({
   episodeId,
+  patientId,
   carePathwayId,
   carePathwayName,
   episodePathways: initialEpisodePathways,
@@ -1035,7 +1038,7 @@ export function EpisodeStepsManager({
           ) : (
             <>
               {/* ─── Terv-validáció (WP3) ─────────────────────────────── */}
-              <PlanValidationPanel episodeId={episodeId} signature={planSignature} />
+              <PlanValidationPanel episodeId={episodeId} patientId={patientId} signature={planSignature} />
 
               {/* ─── Step adder panel ─────────────────────────────────── */}
               <div className="mb-4">
