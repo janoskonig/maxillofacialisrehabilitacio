@@ -3,9 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser, type AuthUser } from '@/lib/auth';
-import { Lock, Eye, EyeOff, User, ArrowLeft, Bell, BellOff } from 'lucide-react';
+import { Lock, Eye, EyeOff, User, Bell, BellOff } from 'lucide-react';
 import Link from 'next/link';
-import { Logo } from '@/components/Logo';
+import { AppShell } from '@/components/layout/AppShell';
 import { GoogleCalendarSettings } from '@/components/GoogleCalendarSettings';
 import { usePushNotificationManager } from '@/components/PushNotificationManager';
 
@@ -107,33 +107,22 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between py-4">
-            <div className="flex items-center gap-4">
-              <Link
-                href="/"
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </Link>
-              <Logo width={60} height={69} />
-              <h1 className="text-2xl font-bold text-medical-primary">Beállítások</h1>
-            </div>
-            {user && (
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <User className="w-4 h-4" />
-                <span>{user.email}</span>
-                <span className="text-gray-300">•</span>
-                <span className="capitalize">{user.role}</span>
-              </div>
-            )}
+    <AppShell
+      title="Beállítások"
+      backTo="/"
+      maxWidth="lg"
+      actions={
+        user ? (
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <User className="w-4 h-4" />
+            <span>{user.email}</span>
+            <span className="text-gray-300">•</span>
+            <span className="capitalize">{user.role}</span>
           </div>
-        </div>
-      </header>
-
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        ) : undefined
+      }
+    >
+      <div>
         <div className="card">
           <h2 className="text-xl font-semibold mb-6">Jelszó változtatása</h2>
 
@@ -392,8 +381,8 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }
 

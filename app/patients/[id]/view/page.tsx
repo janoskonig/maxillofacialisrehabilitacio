@@ -5,9 +5,8 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { PatientForm } from '@/components/PatientForm';
 import { Patient, patientStageOptions, PatientStageEntry } from '@/lib/types';
-import { ArrowLeft, User, FileText, Calendar, ClipboardList, MessageCircle, Users } from 'lucide-react';
-import { Logo } from '@/components/Logo';
-import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
+import { User, FileText, Calendar, ClipboardList, MessageCircle, Users } from 'lucide-react';
+import { AppShell } from '@/components/layout/AppShell';
 import { CommunicationLog } from '@/components/CommunicationLog';
 import { PatientMessages } from '@/components/PatientMessages';
 import { DoctorMessagesForPatient } from '@/components/DoctorMessagesForPatient';
@@ -193,79 +192,57 @@ export default function PatientViewPage() {
     : allTabs;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
-          <div className="flex items-center justify-between py-2 sm:py-4">
-            <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
-              <div className="hidden sm:block">
-                <Logo width={50} height={58} />
-              </div>
-              <div className="block sm:hidden">
-                <Logo width={40} height={46} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <h1 className="text-base sm:text-lg lg:text-xl font-bold text-medical-primary truncate">
-                  Beteg profil
-                </h1>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {patient.nev && (
-                    <p className="text-xs sm:text-sm text-gray-600 truncate">{patient.nev}</p>
-                  )}
-                  {currentStage && (() => {
-                    const stageLabel = patientStageOptions.find(opt => opt.value === currentStage.stage)?.label || currentStage.stage;
-                    const getStageColor = (stage: string) => {
-                      const colors: Record<string, string> = {
-                        uj_beteg: 'bg-blue-100 text-blue-800',
-                        onkologiai_kezeles_kesz: 'bg-purple-100 text-purple-800',
-                        arajanlatra_var: 'bg-yellow-100 text-yellow-800',
-                        implantacios_sebeszi_tervezesre_var: 'bg-orange-100 text-orange-800',
-                        fogpotlasra_var: 'bg-amber-100 text-amber-800',
-                        fogpotlas_keszul: 'bg-indigo-100 text-indigo-800',
-                        fogpotlas_kesz: 'bg-green-100 text-green-800',
-                        gondozas_alatt: 'bg-gray-100 text-gray-800',
-                      };
-                      return colors[stage] || 'bg-gray-100 text-gray-800';
-                    };
-                    return (
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStageColor(currentStage.stage)}`}
-                        title={currentStage.notes || stageLabel}
-                      >
-                        {stageLabel}
-                      </span>
-                    );
-                  })()}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-              {userRole === 'admin' && patientId && (
-                <button
-                  onClick={handleImpersonate}
-                  className="btn-secondary flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-sm text-purple-600 hover:text-purple-700"
-                  title="Belépés betegként"
-                >
-                  <User className="w-4 h-4" />
-                  <span className="hidden sm:inline">Belépés betegként</span>
-                </button>
-              )}
-              {/* Mobile nav is at the bottom */}
-              <button
-                onClick={handleBack}
-                className="btn-secondary flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-sm"
+    <AppShell
+      title="Beteg profil"
+      backTo="/"
+      maxWidth="xl"
+      actions={
+        userRole === 'admin' && patientId ? (
+          <button
+            onClick={handleImpersonate}
+            className="btn-secondary flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-sm text-purple-600 hover:text-purple-700"
+            title="Belépés betegként"
+          >
+            <User className="w-4 h-4" />
+            <span className="hidden sm:inline">Belépés betegként</span>
+          </button>
+        ) : undefined
+      }
+    >
+      {/* Beteg neve + aktuális stádium (korábban a fejlécben) */}
+      {(patient.nev || currentStage) && (
+        <div className="mb-4 flex items-center gap-2 flex-wrap">
+          {patient.nev && (
+            <p className="text-xs sm:text-sm text-gray-600 truncate">{patient.nev}</p>
+          )}
+          {currentStage && (() => {
+            const stageLabel = patientStageOptions.find(opt => opt.value === currentStage.stage)?.label || currentStage.stage;
+            const getStageColor = (stage: string) => {
+              const colors: Record<string, string> = {
+                uj_beteg: 'bg-blue-100 text-blue-800',
+                onkologiai_kezeles_kesz: 'bg-purple-100 text-purple-800',
+                arajanlatra_var: 'bg-yellow-100 text-yellow-800',
+                implantacios_sebeszi_tervezesre_var: 'bg-orange-100 text-orange-800',
+                fogpotlasra_var: 'bg-amber-100 text-amber-800',
+                fogpotlas_keszul: 'bg-indigo-100 text-indigo-800',
+                fogpotlas_kesz: 'bg-green-100 text-green-800',
+                gondozas_alatt: 'bg-gray-100 text-gray-800',
+              };
+              return colors[stage] || 'bg-gray-100 text-gray-800';
+            };
+            return (
+              <span
+                className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStageColor(currentStage.stage)}`}
+                title={currentStage.notes || stageLabel}
               >
-                <ArrowLeft className="w-4 h-4" />
-                <span className="hidden sm:inline">Vissza</span>
-              </button>
-            </div>
-          </div>
+                {stageLabel}
+              </span>
+            );
+          })()}
         </div>
-      </header>
+      )}
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-6 pb-mobile-nav-staff md:pb-6">
+      <div>
         {/* Episode & Stage Card */}
         <div className="mb-4 sm:mb-6">
           <EpisodeStageCard
@@ -377,9 +354,7 @@ export default function PatientViewPage() {
             <CommunicationLog patientId={patient.id} patientName={patient.nev || null} />
           )}
         </div>
-      </main>
-
-      <MobileBottomNav />
-    </div>
+      </div>
+    </AppShell>
   );
 }

@@ -10,7 +10,7 @@ import { StageCatalogEditor } from '@/components/admin/StageCatalogEditor';
 import { StepCatalogEditor } from '@/components/admin/StepCatalogEditor';
 import { TreatmentTypesEditor } from '@/components/admin/TreatmentTypesEditor';
 import { ToothTreatmentCatalogEditor } from '@/components/admin/ToothTreatmentCatalogEditor';
-import { Logo } from '@/components/Logo';
+import { AppShell } from '@/components/layout/AppShell';
 import { UserManagementTab } from './_components/UserManagementTab';
 import { PatientMerge } from '@/components/admin/PatientMerge';
 import { DuplicateDetector } from '@/components/admin/DuplicateDetector';
@@ -59,40 +59,31 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center gap-4">
-              <Logo width={60} height={69} />
-              <h1 className="text-2xl font-bold text-medical-primary">Admin felület</h1>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="flex rounded-lg border border-gray-200 overflow-hidden">
-                {currentUser?.role === 'admin' && (
-                  <button onClick={() => setAdminTab('felhasznalok')} className={`px-4 py-2 text-sm font-medium transition-colors ${effectiveTab === 'felhasznalok' ? 'bg-medical-primary text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>
-                    Felhasználók
-                  </button>
-                )}
-                <button onClick={() => setAdminTab('folyamatok')} className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1 ${effectiveTab === 'folyamatok' ? 'bg-medical-primary text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>
-                  <Settings className="w-4 h-4" />
-                  Folyamatok
-                </button>
-                {currentUser?.role === 'admin' && (
-                  <button onClick={() => setAdminTab('merge')} className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1 ${effectiveTab === 'merge' ? 'bg-medical-primary text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>
-                    <Users className="w-4 h-4" />
-                    Összevonás
-                  </button>
-                )}
-              </div>
-              <Link href="/" className="btn-secondary text-sm">Vissza</Link>
-            </div>
-          </div>
+    <AppShell
+      title="Adminisztráció"
+      backTo="/"
+      maxWidth="full"
+      actions={
+        <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+          {currentUser?.role === 'admin' && (
+            <button onClick={() => setAdminTab('felhasznalok')} className={`px-4 py-2 text-sm font-medium transition-colors ${effectiveTab === 'felhasznalok' ? 'bg-medical-primary text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>
+              Felhasználók
+            </button>
+          )}
+          <button onClick={() => setAdminTab('folyamatok')} className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1 ${effectiveTab === 'folyamatok' ? 'bg-medical-primary text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>
+            <Settings className="w-4 h-4" />
+            Folyamatok
+          </button>
+          {currentUser?.role === 'admin' && (
+            <button onClick={() => setAdminTab('merge')} className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1 ${effectiveTab === 'merge' ? 'bg-medical-primary text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>
+              <Users className="w-4 h-4" />
+              Összevonás
+            </button>
+          )}
         </div>
-      </header>
-
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {effectiveTab === 'merge' ? (
+      }
+    >
+      {effectiveTab === 'merge' ? (
           <div className="space-y-8">
             <section className="card" aria-labelledby="section-duplicates">
               <div className="mb-4">
@@ -165,7 +156,6 @@ export default function AdminPage() {
         ) : (
           <UserManagementTab />
         )}
-      </main>
-    </div>
+    </AppShell>
   );
 }

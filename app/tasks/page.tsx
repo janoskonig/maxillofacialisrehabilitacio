@@ -4,11 +4,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getCurrentUser } from '@/lib/auth';
-import { Logo } from '@/components/Logo';
-import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
+import { AppShell } from '@/components/layout/AppShell';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { QuickTaskForm } from '@/components/QuickTaskForm';
 import { TaskDelegateButton } from '@/components/TaskDelegateButton';
-import { ClipboardList, Loader2, ArrowLeft, UserRound } from 'lucide-react';
+import { ClipboardList, Loader2, UserRound } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 
@@ -57,28 +57,19 @@ export default function StaffTasksPage() {
   }, [router, loadTasks]);
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-mobile-nav-staff md:pb-6">
-      <header className="bg-white border-b sticky top-0 z-30 max-md:mobile-safe-top">
-        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => router.push('/')}
-            className="btn-secondary p-2"
-            aria-label="Vissza"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <Logo width={32} height={37} />
-          <h1 className="text-lg font-semibold text-gray-900">Feladataim</h1>
-          {canManage && (
-            <Link href="/tasks/overview" className="ml-auto text-sm text-medical-primary hover:underline">
-              Vezetői nézet
-            </Link>
-          )}
-        </div>
-      </header>
-
-      <main className="max-w-3xl mx-auto px-4 py-6 space-y-6">
+    <AppShell
+      title="Feladataim"
+      backTo="/"
+      maxWidth="md"
+      actions={
+        canManage ? (
+          <Link href="/tasks/overview" className="text-sm text-medical-primary hover:underline">
+            Vezetői nézet
+          </Link>
+        ) : undefined
+      }
+    >
+      <div className="space-y-6">
         <section className="card p-4">
           <h2 className="text-sm font-semibold text-gray-900 mb-3">Új teendő</h2>
           <QuickTaskForm onCreated={() => void loadTasks()} />
@@ -90,10 +81,7 @@ export default function StaffTasksPage() {
             Betöltés...
           </div>
         ) : tasks.length === 0 ? (
-          <div className="card text-center py-12 text-gray-600">
-            <ClipboardList className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-            <p>Nincs nyitott feladat.</p>
-          </div>
+          <EmptyState icon={ClipboardList} title="Nincs nyitott feladat." />
         ) : (
           <ul className="space-y-3">
             {tasks.map((t) => (
@@ -209,9 +197,7 @@ export default function StaffTasksPage() {
             ))}
           </ul>
         )}
-      </main>
-
-      <MobileBottomNav />
-    </div>
+      </div>
+    </AppShell>
   );
 }

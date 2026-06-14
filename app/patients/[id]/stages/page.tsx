@@ -6,9 +6,8 @@ import { getCurrentUser } from '@/lib/auth';
 import { Patient } from '@/lib/types';
 import type { PatientEpisode, PatientStageEntry, StageEventEntry } from '@/lib/types';
 import Link from 'next/link';
-import { ArrowLeft, BarChart3, Calendar } from 'lucide-react';
-import { Logo } from '@/components/Logo';
-import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
+import { BarChart3, Calendar } from 'lucide-react';
+import { AppShell } from '@/components/layout/AppShell';
 import { EpisodePathwayEditor } from '@/components/EpisodePathwayEditor';
 import { EpisodeStepsManager } from '@/components/EpisodeStepsManager';
 import { EpisodeStepProjections } from '@/components/EpisodeStepProjections';
@@ -117,8 +116,6 @@ export default function PatientStagesPage() {
     if (patientId) checkAuth();
   }, [router, patientId, showToast]);
 
-  const handleBack = () => router.back();
-
   const handleStageChanged = () => refreshStagesAndEpisodes();
 
   const activeEpisode = episodes.find((e) => e.status === 'open') ?? null;
@@ -141,47 +138,31 @@ export default function PatientStagesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={handleBack}
-                className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-                aria-label="Vissza"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <Logo />
-            </div>
-            {/* Mobile nav is at the bottom */}
-          </div>
-        </div>
-      </header>
+    <AppShell
+      title="Betegstádiumok"
+      backTo="/"
+      maxWidth="xl"
+      actions={
+        <Link
+          href="/patients/stages/gantt"
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          <BarChart3 className="w-4 h-4" />
+          GANTT nézet
+        </Link>
+      }
+    >
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+          <Calendar className="w-6 h-6 text-medical-primary" />
+          Betegstádiumok - {patient.nev || 'Névtelen beteg'}
+        </h1>
+        <p className="text-gray-600 mt-1">
+          Stádiumok kezelése és timeline megtekintése
+        </p>
+      </div>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-mobile-nav-staff md:pb-6">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <Calendar className="w-6 h-6 text-medical-primary" />
-              Betegstádiumok - {patient.nev || 'Névtelen beteg'}
-            </h1>
-            <p className="text-gray-600 mt-1">
-              Stádiumok kezelése és timeline megtekintése
-            </p>
-          </div>
-          <Link
-            href="/patients/stages/gantt"
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"
-          >
-            <BarChart3 className="w-4 h-4" />
-            GANTT nézet
-          </Link>
-        </div>
-
-        <div className="space-y-6">
+      <div className="space-y-6">
           {/* Epizódok (új modell) */}
           {episodes.length > 0 && (
             <div className="bg-white rounded-lg border border-gray-200 p-4">
@@ -281,9 +262,6 @@ export default function PatientStagesPage() {
             canEditStageStart={userRole === 'admin'}
           />
         </div>
-      </main>
-
-      <MobileBottomNav />
-    </div>
+    </AppShell>
   );
 }

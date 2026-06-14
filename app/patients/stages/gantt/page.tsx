@@ -3,9 +3,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
-import { ArrowLeft, BarChart3, User, Users } from 'lucide-react';
-import { Logo } from '@/components/Logo';
-import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
+import { BarChart3, User, Users } from 'lucide-react';
+import { AppShell } from '@/components/layout/AppShell';
 import { StagesGanttChart, type GanttEpisode, type GanttInterval, type GanttVirtualWindow } from '@/components/StagesGanttChart';
 import type { StageCatalogEntry } from '@/lib/types';
 import { useToast } from '@/contexts/ToastContext';
@@ -161,8 +160,6 @@ export default function StagesGanttPage() {
     return () => clearTimeout(t);
   }, [viewMode, patientSearch]);
 
-  const handleBack = () => router.back();
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -174,37 +171,18 @@ export default function StagesGanttPage() {
   if (!authorized) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={handleBack}
-                className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-                aria-label="Vissza"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <Logo />
-            </div>
-            {/* Mobile nav is at the bottom */}
-          </div>
-        </div>
-      </header>
+    <AppShell title="Stádiumok GANTT" backTo="/" maxWidth="full">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+          <BarChart3 className="w-6 h-6 text-medical-primary" />
+          Stádiumok GANTT
+        </h1>
+        <p className="text-gray-600 mt-1">
+          Ellátási epizódok és stádium intervallumok idővonala (kohorsz vagy egy beteg)
+        </p>
+      </div>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-mobile-nav-staff md:pb-6">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <BarChart3 className="w-6 h-6 text-medical-primary" />
-            Stádiumok GANTT
-          </h1>
-          <p className="text-gray-600 mt-1">
-            Ellátási epizódok és stádium intervallumok idővonala (kohorsz vagy egy beteg)
-          </p>
-        </div>
-
-        {/* Filters */}
+      {/* Filters */}
         <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6 space-y-4">
           <div className="flex flex-wrap items-center gap-4">
             <span className="text-sm font-medium text-gray-700">Nézet:</span>
@@ -344,9 +322,6 @@ export default function StagesGanttPage() {
             groupByCurrentStage={viewMode === 'cohort'}
           />
         )}
-      </main>
-
-      <MobileBottomNav />
-    </div>
+    </AppShell>
   );
 }

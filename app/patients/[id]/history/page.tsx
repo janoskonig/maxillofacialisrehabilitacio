@@ -4,9 +4,8 @@ import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { PatientHistory } from '@/components/PatientHistory';
-import { ArrowLeft, Clock } from 'lucide-react';
-import { Logo } from '@/components/Logo';
-import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
+import { Clock } from 'lucide-react';
+import { AppShell } from '@/components/layout/AppShell';
 
 export default function PatientHistoryPage() {
   const router = useRouter();
@@ -64,10 +63,6 @@ export default function PatientHistoryPage() {
     }
   }, [router, patientId]);
 
-  const handleBack = () => {
-    router.push('/');
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -84,46 +79,17 @@ export default function PatientHistoryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-30 max-md:mobile-safe-top">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <Logo />
-              <div className="hidden md:block h-6 w-px bg-gray-300"></div>
-              <button
-                onClick={handleBack}
-                className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
-              >
-                <ArrowLeft className="w-5 h-5" />
-                <span className="hidden sm:inline">Vissza</span>
-              </button>
-            </div>
-            <div className="flex items-center gap-4">
-            </div>
-          </div>
-        </div>
-      </header>
+    <AppShell title="Páciens életút" backTo="/" maxWidth="xl">
+      <div className="mb-6">
+        {patientName && (
+          <p className="text-gray-600">
+            {patientName}
+          </p>
+        )}
+      </div>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-mobile-nav-staff md:pb-8">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">
-            Páciens életút
-          </h1>
-          {patientName && (
-            <p className="text-gray-600 mt-1">
-              {patientName}
-            </p>
-          )}
-        </div>
-
-        <PatientHistory patientId={patientId} />
-      </main>
-
-      <MobileBottomNav />
-    </div>
+      <PatientHistory patientId={patientId} />
+    </AppShell>
   );
 }
 

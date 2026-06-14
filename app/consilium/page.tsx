@@ -5,8 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowDown, ArrowLeft, ArrowUp, CalendarClock, Mail, Plus, Presentation, Send, Trash2, Users } from 'lucide-react';
 import { getCurrentUser, type AuthUser } from '@/lib/auth';
-import { Logo } from '@/components/Logo';
-import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
+import { AppShell } from '@/components/layout/AppShell';
 import { SendConsiliumPrepLinkModal } from '@/components/SendConsiliumPrepLinkModal';
 import { useToast } from '@/contexts/ToastContext';
 import type { ConsiliumPresentationItem } from '@/lib/consilium-presentation';
@@ -1428,28 +1427,8 @@ export default function ConsiliumPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-soft border-b border-gray-200/60 sticky top-0 z-30 backdrop-blur-sm bg-white/95 max-md:mobile-safe-top">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-2 md:py-3 gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <Logo width={32} height={37} className="md:w-[50px] md:h-[58px] flex-shrink-0" />
-              <div className="min-w-0">
-                <h1 className="text-base md:text-xl font-semibold text-medical-primary truncate">Konzílium</h1>
-                <p className="text-xs text-gray-500 hidden sm:block">Alkalmak, beteglista és vetítés (MVP)</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <Link href="/" className="btn-secondary text-sm px-3 py-2 inline-flex items-center gap-2">
-                <ArrowLeft className="w-4 h-4" />
-                <span className="hidden sm:inline">Főoldal</span>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 md:py-6 pb-mobile-nav-staff md:pb-8 space-y-4">
+    <AppShell title="Konzílium" backTo="/" maxWidth="full">
+      <div className="space-y-4">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <section className="card p-4 space-y-3 lg:col-span-1">
             <div className="flex items-center justify-between gap-2">
@@ -2048,7 +2027,7 @@ export default function ConsiliumPage() {
           MVP: a betegprofil régi „Konzílium” füle és tartalma megmarad; ez az oldal az alkalmakat és a hozzájuk tartozó listát
           külön tárolja.
         </p>
-      </main>
+      </div>
 
       {shareModalState && (
         <SendConsiliumPrepLinkModal
@@ -2061,8 +2040,6 @@ export default function ConsiliumPage() {
           currentEmail={user?.email}
         />
       )}
-
-      <MobileBottomNav />
-    </div>
+    </AppShell>
   );
 }

@@ -4,10 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getCurrentUser } from '@/lib/auth';
-import { Logo } from '@/components/Logo';
-import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
+import { AppShell } from '@/components/layout/AppShell';
 import {
-  ArrowLeft,
   Loader2,
   Users,
   AlertTriangle,
@@ -298,17 +296,14 @@ export default function DataCompletenessPage() {
   const summary = data?.summary;
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-mobile-nav-staff md:pb-6">
-      <header className="bg-white border-b sticky top-0 z-30 max-md:mobile-safe-top">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
-          <button type="button" onClick={() => router.push('/')} className="btn-secondary p-2" aria-label="Vissza">
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <Logo width={32} height={37} />
-          <h1 className="text-lg font-semibold text-gray-900">Vezetői nézet — adathiány</h1>
-        </div>
+    <AppShell
+      title="Vezetői nézet — adathiány"
+      backTo="/"
+      maxWidth="xl"
+    >
+      <div className="space-y-6">
         {/* Aloldal-navigáció */}
-        <div className="max-w-6xl mx-auto px-4 flex gap-1">
+        <div className="flex gap-1 border-b border-gray-200">
           <Link
             href="/tasks/overview"
             className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent"
@@ -319,9 +314,7 @@ export default function DataCompletenessPage() {
             Adathiány
           </span>
         </div>
-      </header>
 
-      <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
         {/* Összegző kártyák */}
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
           <div className="card p-4 flex items-center gap-3">
@@ -647,9 +640,7 @@ export default function DataCompletenessPage() {
             })}
           </ul>
         )}
-      </main>
-
-      <MobileBottomNav />
-    </div>
+      </div>
+    </AppShell>
   );
 }

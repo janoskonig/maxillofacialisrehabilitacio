@@ -6,9 +6,8 @@ import { getCurrentUser } from '@/lib/auth';
 import { CommunicationLog } from '@/components/CommunicationLog';
 import { PatientMessages } from '@/components/PatientMessages';
 import { DoctorMessagesForPatient } from '@/components/DoctorMessagesForPatient';
-import { ArrowLeft, User } from 'lucide-react';
-import { Logo } from '@/components/Logo';
-import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
+import { User } from 'lucide-react';
+import { AppShell } from '@/components/layout/AppShell';
 import { PatientNextConsiliumSessionCard } from '@/components/PatientNextConsiliumSessionCard';
 
 export default function PatientDetailPage() {
@@ -72,10 +71,6 @@ export default function PatientDetailPage() {
     }
   }, [router, patientId]);
 
-  const handleBack = () => {
-    router.push('/');
-  };
-
   const handleImpersonate = async () => {
     if (!patientId) return;
     
@@ -116,64 +111,37 @@ export default function PatientDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between py-4">
-            <div className="flex items-center gap-4">
-              <Logo width={50} height={58} />
-              <div>
-                <h1 className="text-lg sm:text-xl font-bold text-medical-primary">
-                  Beteg részletek
-                </h1>
-                {patientName && (
-                  <p className="text-sm text-gray-600">{patientName}</p>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {userRole === 'admin' && patientId && (
-                <button
-                  onClick={handleImpersonate}
-                  className="btn-secondary flex items-center gap-2 text-purple-600 hover:text-purple-700"
-                  title="Belépés betegként"
-                >
-                  <User className="w-4 h-4" />
-                  <span className="hidden sm:inline">Belépés betegként</span>
-                </button>
-              )}
-              <button
-                onClick={handleBack}
-                className="btn-secondary flex items-center gap-2"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span className="hidden sm:inline">Vissza</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
+    <AppShell
+      title={patientName || 'Beteg részletek'}
+      backTo="/"
+      maxWidth="xl"
+      actions={
+        userRole === 'admin' && patientId ? (
+          <button
+            onClick={handleImpersonate}
+            className="btn-secondary flex items-center gap-2 text-purple-600 hover:text-purple-700"
+            title="Belépés betegként"
+          >
+            <User className="w-4 h-4" />
+            <span className="hidden sm:inline">Belépés betegként</span>
+          </button>
+        ) : undefined
+      }
+    >
+      <div className="space-y-6">
+        {/* Chat Messages - csak ha van email-cím */}
+        {patientEmail && (
+          <PatientMessages patientId={patientId} patientName={patientName} />
+        )}
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-mobile-nav-staff md:pb-6">
-        <div className="space-y-6">
-          {/* Chat Messages - csak ha van email-cím */}
-          {patientEmail && (
-            <PatientMessages patientId={patientId} patientName={patientName} />
-          )}
-          
-          {/* Konzílium – következő alkalom + orvos-orvos üzenetek */}
-          {userRole !== 'technikus' && <PatientNextConsiliumSessionCard patientId={patientId} />}
-          <DoctorMessagesForPatient patientId={patientId} patientName={patientName} />
-          
-          {/* Communication Log - mindig látható */}
-          <CommunicationLog patientId={patientId} patientName={patientName} />
-        </div>
-      </main>
+        {/* Konzílium – következő alkalom + orvos-orvos üzenetek */}
+        {userRole !== 'technikus' && <PatientNextConsiliumSessionCard patientId={patientId} />}
+        <DoctorMessagesForPatient patientId={patientId} patientName={patientName} />
 
-      <MobileBottomNav />
-    </div>
+        {/* Communication Log - mindig látható */}
+        <CommunicationLog patientId={patientId} patientName={patientName} />
+      </div>
+    </AppShell>
   );
 }
 

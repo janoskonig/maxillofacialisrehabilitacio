@@ -7,9 +7,7 @@ import { Patient, patientQuickIntakeSchema } from '@/lib/types';
 import { savePatient } from '@/lib/storage';
 import { PatientForm } from '@/components/PatientForm';
 import { useToast } from '@/contexts/ToastContext';
-import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
-import { ArrowLeft } from 'lucide-react';
-import { Logo } from '@/components/Logo';
+import { AppShell } from '@/components/layout/AppShell';
 
 /** Gyors felvétel: csak alap- és szűkített személyes mezők; a többi a beteg lapon. */
 const NEW_PATIENT_INTAKE_SECTIONS = ['alapadatok', 'szemelyes'] as const;
@@ -114,48 +112,18 @@ export default function NewPatientPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-soft border-b border-gray-200/60 sticky top-0 z-30 backdrop-blur-sm bg-white/95 max-md:mobile-safe-top">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-2 md:py-3">
-            <div className="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
-              <div className="flex-shrink-0">
-                <Logo width={32} height={37} className="md:w-[50px] md:h-[58px]" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <h1 className="text-base md:text-xl font-semibold text-medical-primary truncate tracking-tight">
-                  Új beteg
-                </h1>
-                <p className="text-xs text-gray-500 font-medium mt-0.5 line-clamp-2">
-                  Gyors rögzítés: alapadatok és személyes minimum — részletek a beteg lapon.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleCancel}
-                className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Vissza</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 pb-mobile-nav-staff md:pb-4">
-        <PatientForm
-          patient={null}
-          onSave={handleSave}
-          onCancel={handleCancel}
-          isViewOnly={false}
-          showOnlySections={[...NEW_PATIENT_INTAKE_SECTIONS]}
-          minimalNewPatient
-        />
-      </main>
-
-      <MobileBottomNav />
-    </div>
+    <AppShell title="Új beteg" backTo="/" maxWidth="lg">
+      <p className="text-xs text-gray-500 font-medium mb-4 line-clamp-2">
+        Gyors rögzítés: alapadatok és személyes minimum — részletek a beteg lapon.
+      </p>
+      <PatientForm
+        patient={null}
+        onSave={handleSave}
+        onCancel={handleCancel}
+        isViewOnly={false}
+        showOnlySections={[...NEW_PATIENT_INTAKE_SECTIONS]}
+        minimalNewPatient
+      />
+    </AppShell>
   );
 }

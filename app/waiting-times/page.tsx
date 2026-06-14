@@ -3,11 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
-import { ArrowLeft, Clock, Calendar, User } from 'lucide-react';
+import { Clock, Calendar, User } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
-import { Logo } from '@/components/Logo';
-import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
+import { AppShell } from '@/components/layout/AppShell';
 import { MobileTable } from '@/components/mobile/MobileTable';
 import { MobileKeyValueGrid } from '@/components/mobile/MobileKeyValueGrid';
 
@@ -92,10 +91,6 @@ export default function WaitingTimesPage() {
     fetchData();
   }, [authorized]);
 
-  const handleBack = () => {
-    router.push('/');
-  };
-
   const handlePatientClick = (patientId: string) => {
     router.push(`/patients/${patientId}/view`);
   };
@@ -133,35 +128,8 @@ export default function WaitingTimesPage() {
   const currentData = activeTab === 'elso_konzultacio' ? elsoKonzultacioData : munkafazisData;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between py-4">
-            <div className="flex items-center gap-4">
-              <Logo width={50} height={58} />
-              <div>
-                <h1 className="text-lg sm:text-xl font-bold text-medical-primary">
-                  Várakozási idők
-                </h1>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {/* Mobile nav is at the bottom */}
-              <button
-                onClick={handleBack}
-                className="btn-secondary flex items-center gap-2"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span className="hidden sm:inline">Vissza</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-mobile-nav-staff md:pb-6">
+    <AppShell title="Várakozási idők" backTo="/" maxWidth="xl">
+      <div>
         {/* Tabs */}
         <div className="mb-6 border-b border-gray-200">
           <nav className="flex gap-1" aria-label="Várakozási idők fülök">
@@ -378,10 +346,8 @@ export default function WaitingTimesPage() {
             }}
           />
         )}
-      </main>
-
-      <MobileBottomNav />
-    </div>
+      </div>
+    </AppShell>
   );
 }
 
