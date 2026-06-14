@@ -6,7 +6,6 @@ import { TodaysAppointmentsWidget } from './widgets/TodaysAppointmentsWidget';
 import { PendingApprovalsWidget } from './widgets/PendingApprovalsWidget';
 import { ClipboardList, MessageCircle, CheckCircle2, ChevronRight } from 'lucide-react';
 import { Patient } from '@/lib/types';
-import { IntakeRecommendationBadge } from './widgets/IntakeRecommendationBadge';
 import { EmptyState } from './ui/EmptyState';
 import { useStaffTaskSummary } from '@/hooks/useStaffTaskSummary';
 import { useStaffInboxSummary } from '@/hooks/useStaffInboxSummary';
@@ -31,7 +30,7 @@ interface DashboardProps {
  * nyitott feladatokhoz és olvasatlan üzenetekhez. A korábbi tabos „Dashboard"
  * (GANTT / terhelés / pipeline) kikerült a saját oldalaira.
  */
-export function Dashboard({ userRole }: DashboardProps) {
+export function Dashboard(_props: DashboardProps) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -70,8 +69,6 @@ export function Dashboard({ userRole }: DashboardProps) {
     fetchDashboardData();
   }, []);
 
-  const canSeeStages = userRole === 'admin' || userRole === 'beutalo_orvos' || userRole === 'fogpótlástanász';
-
   if (loading) {
     return (
       <div className="card">
@@ -109,10 +106,7 @@ export function Dashboard({ userRole }: DashboardProps) {
 
   return (
     <section className="space-y-3 md:space-y-4" aria-label="Teendőim">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h2 className="text-heading-3">Teendőim</h2>
-        {canSeeStages && <IntakeRecommendationBadge />}
-      </div>
+      <h2 className="text-heading-3">Teendőim</h2>
 
       {nothingToDo ? (
         <EmptyState

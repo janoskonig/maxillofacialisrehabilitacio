@@ -8,7 +8,8 @@ import { Patient } from '@/lib/types';
 import { getAllPatients, searchPatients, getPatientById } from '@/lib/storage';
 import { PatientList } from '@/components/PatientList';
 import { useToast } from '@/contexts/ToastContext';
-import { Plus, Search, Users, Settings, Calendar, Filter, Download, Bell, X, BookOpen } from 'lucide-react';
+import { Plus, Search, Settings, Calendar, Filter, Download, Bell, X, BookOpen } from 'lucide-react';
+import { IntakeRecommendationBadge } from '@/components/widgets/IntakeRecommendationBadge';
 import { getCurrentUser, getUserEmail, getUserRole } from '@/lib/auth';
 import { AppShell } from '@/components/layout/AppShell';
 import { Dashboard } from '@/components/Dashboard';
@@ -342,13 +343,19 @@ export default function Home() {
       maxWidth="xl"
       actions={
         userRole === 'admin' || userRole === 'fogpótlástanász' || userRole === 'beutalo_orvos' ? (
-          <button
-            onClick={handleNewPatient}
-            className="btn-primary flex items-center gap-1.5 text-sm px-3 py-1.5"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Új beteg
-          </button>
+          <>
+            {/* Kapacitás-jelzés: érdemes-e most új beteget felvenni (desktopon, hely miatt) */}
+            <span className="hidden lg:inline-flex">
+              <IntakeRecommendationBadge />
+            </span>
+            <button
+              onClick={handleNewPatient}
+              className="btn-primary flex items-center gap-1.5 text-sm px-3 py-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Új beteg
+            </button>
+          </>
         ) : undefined
       }
     >
@@ -436,24 +443,18 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Stats */}
-              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
-                <div className="card card-hover p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-medical-primary/10 rounded-lg">
-                      <Users className="w-5 h-5 text-medical-primary" />
-                    </div>
-                    <div>
-                      <p className="text-body-sm text-gray-500">
-                        {searchQuery.trim() || selectedView !== 'all' ? 'Keresési eredmények' : 'Páciensek'}
-                      </p>
-                      <p className="text-2xl font-bold text-gray-900 mt-0.5">
-                        {totalPatients}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              {/* Találatszám — kompakt felirat a lista fölött (a külön „Páciensek" kártya helyett) */}
+              <p className="text-body-sm text-gray-500">
+                {searchQuery.trim() || selectedView !== 'all' ? (
+                  <>
+                    <span className="font-semibold text-gray-900">{totalPatients}</span> találat
+                  </>
+                ) : (
+                  <>
+                    <span className="font-semibold text-gray-900">{totalPatients}</span> páciens
+                  </>
+                )}
+              </p>
 
               {/* Patient List - 25 per page */}
               <PatientList
