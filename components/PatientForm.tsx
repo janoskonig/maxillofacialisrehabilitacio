@@ -1880,7 +1880,7 @@ export function PatientForm({
         )}
 
         {/* Documents Section */}
-        {shouldShowSection('adminisztracio') && userRole !== 'technikus' && (
+        {shouldShowSection('adminisztracio') && (
         <div id="section-adminisztracio" className="scroll-mt-20 sm:scroll-mt-24">
           <PatientDocuments
             patientId={patientId}
@@ -1896,7 +1896,7 @@ export function PatientForm({
         )}
 
         {/* Méltányossági kérelemhez szükséges adatok */}
-        {shouldShowSection('adminisztracio') && patientId && userRole !== 'technikus' && (
+        {shouldShowSection('adminisztracio') && patientId && (
           <MeltanyossagiSection
             register={register}
             watch={watch}
@@ -1909,7 +1909,7 @@ export function PatientForm({
         )}
 
         {/* Árajánlatkérő laborba */}
-        {shouldShowSection('adminisztracio') && patientId && userRole !== 'technikus' && (
+        {shouldShowSection('adminisztracio') && patientId && (
           <ResearchConsentSection
             patientId={patientId}
             isViewOnly={isViewOnly}
@@ -1917,7 +1917,7 @@ export function PatientForm({
           />
         )}
 
-        {shouldShowSection('adminisztracio') && patientId && userRole !== 'technikus' && (
+        {shouldShowSection('adminisztracio') && patientId && (
           <PatientQuickTaskBlock patientId={patientId} />
         )}
 
