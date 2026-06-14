@@ -28,22 +28,53 @@ if (typeof window !== 'undefined' && process.env.ENABLE_SENTRY === 'true') {
 // Shared types & pure utilities (exported for PatientForm and other consumers)
 // ---------------------------------------------------------------------------
 
-export type ToothStatus = { status?: 'D' | 'F' | 'M'; description?: string } | string;
+/** Odontogram alapállapot — egy fog egy alapállapota (a `caries` ettől függetlenül rátehető). */
+export type ToothBase =
+  | 'sound'
+  | 'missing'
+  | 'filled'
+  | 'crown'
+  | 'root_canal'
+  | 'inlay'
+  | 'implant'
+  | 'bridge_abutment'
+  | 'bridge_pontic'
+  | 'root_remnant'
+  | 'impacted'
+  | 'necrotic';
+
+export type ToothConditionObject = {
+  /** Régi modell — visszafelé kompatibilitásra megtartva (D=szuvas, F=tömött, M=hiányzó). */
+  status?: 'D' | 'F' | 'M';
+  description?: string;
+  /** Új odontogram modell. */
+  base?: ToothBase;
+  caries?: boolean;
+  periapical?: boolean;
+  /** Mozgathatóság fokozata: 0–3. */
+  mobility?: number;
+};
+
+export type ToothStatus = ToothConditionObject | string;
 
 export function normalizeToothData(
   value: ToothStatus | undefined
-): { status?: 'D' | 'F' | 'M'; description?: string } | null {
+): ToothConditionObject | null {
   if (!value) return null;
   if (typeof value === 'string') {
     if (value.trim() === '') return null;
     return { description: value };
   }
   if (typeof value === 'object' && value !== null) {
-    const hasStatus = value.status !== undefined && value.status !== null;
-    const hasDescription = value.description !== undefined;
+    const meaningful =
+      value.status != null ||
+      value.description !== undefined ||
+      value.base != null ||
+      value.caries === true ||
+      value.periapical === true ||
+      (value.mobility != null && value.mobility > 0);
 
-    if (hasStatus) return value;
-    if (hasDescription) return value;
+    if (meaningful) return value;
     if (Object.keys(value).length === 0) return value;
     return null;
   }
@@ -75,7 +106,7 @@ export function buildSavePayload(
   vanBeutaloVal: boolean,
   patientId?: string | null
 ): Patient {
-  const normalizedFogak: Record<string, { status?: 'D' | 'F' | 'M'; description?: string }> = {};
+  const normalizedFogak: Record<string, ToothConditionObject> = {};
   for (const [toothNumber, value] of Object.entries(fogakData)) {
     const normalized = normalizeToothData(value);
     if (normalized) normalizedFogak[toothNumber] = normalized;
