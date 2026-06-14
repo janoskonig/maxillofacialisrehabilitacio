@@ -7,6 +7,8 @@ import { createHash } from 'crypto';
 import { getDbPool } from './db';
 import { nextRequiredStep, isBlocked } from './next-step-engine';
 import { normalizePathwayWorkPhaseArray } from './pathway-work-phases-for-episode';
+import { getMergedFilterFragment } from './schema-probe';
+import { projectRemainingVisits, computeCompletionWindow } from './episode-forecast-projection';
 import type { EpisodeForecastItem } from './forecast-types';
 
 export interface EpisodeForecastResult {
@@ -133,6 +135,39 @@ export async function computeInputsHash(episodeId: string): Promise<string> {
 }
 
 /**
+ * Progress inputs for the forecast projection: completed visits and the count of
+ * concretely-remaining plan steps. `remainingSteps` is null when no work phases
+ * have been generated for the episode yet (so the projection falls back to the
+ * pathway heuristic instead of assuming "0 steps left").
+ */
+async function getForecastProgressInputs(
+  pool: Awaited<ReturnType<typeof getDbPool>>,
+  episodeId: string
+): Promise<{ completedVisits: number; remainingSteps: number | null }> {
+  const mergedFilter = await getMergedFilterFragment(pool, 'episode_work_phases');
+  const [apptRes, stepRes] = await Promise.all([
+    pool.query(
+      `SELECT COUNT(*)::int AS c FROM appointments WHERE episode_id = $1 AND appointment_status = 'completed'`,
+      [episodeId]
+    ),
+    pool.query(
+      `SELECT
+         COUNT(*)::int AS total,
+         COUNT(*) FILTER (WHERE status IN ('pending', 'scheduled'))::int AS remaining
+       FROM episode_work_phases ewp
+       WHERE ewp.episode_id = $1 ${mergedFilter}`,
+      [episodeId]
+    ),
+  ]);
+  const completedVisits = apptRes.rows[0]?.c ?? 0;
+  const total = stepRes.rows[0]?.total ?? 0;
+  return {
+    completedVisits,
+    remainingSteps: total > 0 ? (stepRes.rows[0]?.remaining ?? 0) : null,
+  };
+}
+
+/**
  * Compute episode forecast. Returns blocked or ready with ETA fields.
  */
 export async function computeEpisodeForecast(episodeId: string): Promise<EpisodeForecastResult> {
@@ -165,10 +200,12 @@ export async function computeEpisodeForecast(episodeId: string): Promise<Episode
     };
   }
 
-  let remainingVisitsP50: number;
-  let remainingVisitsP80: number;
-  let cadenceDays: number;
-  let assumptions: string[] = ['NO_ANALYTICS_FALLBACK', 'CADENCE_DEFAULTED'];
+  const { completedVisits, remainingSteps } = await getForecastProgressInputs(pool, episodeId);
+
+  let medianVisits: number | null = null;
+  let p80Visits: number | null = null;
+  let medianCadenceDays: number | null = null;
+  let totalWorkSteps: number | null = null;
 
   if (episode.carePathwayId) {
     const [pathwayResult, analyticsResult] = await Promise.all([
@@ -182,35 +219,37 @@ export async function computeEpisodeForecast(episodeId: string): Promise<Episode
     const steps =
       normalizePathwayWorkPhaseArray(prow?.work_phases_json) ??
       normalizePathwayWorkPhaseArray(prow?.steps_json);
-    const analytics = analyticsResult.rows[0];
+    totalWorkSteps = (steps?.filter((s) => s.pool === 'work') ?? []).length || null;
 
+    const analytics = analyticsResult.rows[0];
     if (analytics?.median_visits != null && analytics?.p80_visits != null) {
-      remainingVisitsP50 = Math.max(1, Math.ceil(Number(analytics.median_visits)));
-      remainingVisitsP80 = Math.max(remainingVisitsP50, Math.ceil(Number(analytics.p80_visits)));
-      cadenceDays = analytics.median_cadence_days != null ? Number(analytics.median_cadence_days) : 14;
-      assumptions = ['calibrated-pathway', 'cadence-from-analytics'];
-    } else {
-      const workSteps = (steps?.filter((s) => s.pool === 'work') ?? []).length || 4;
-      remainingVisitsP50 = Math.max(1, Math.ceil(workSteps * 0.6));
-      remainingVisitsP80 = Math.max(remainingVisitsP50, Math.ceil(workSteps * 0.9));
-      cadenceDays = 14;
+      medianVisits = Number(analytics.median_visits);
+      p80Visits = Number(analytics.p80_visits);
+      medianCadenceDays = analytics.median_cadence_days != null ? Number(analytics.median_cadence_days) : null;
     }
-  } else {
-    remainingVisitsP50 = 4;
-    remainingVisitsP80 = 6;
-    cadenceDays = 14;
   }
 
-  const completionWindowStart = new Date(nextStepResult.earliest_date);
-  completionWindowStart.setDate(completionWindowStart.getDate() + remainingVisitsP50 * cadenceDays);
-  const completionWindowEnd = new Date(nextStepResult.latest_date);
-  completionWindowEnd.setDate(completionWindowEnd.getDate() + remainingVisitsP80 * cadenceDays);
+  const projection = projectRemainingVisits({
+    hasCarePathway: Boolean(episode.carePathwayId),
+    medianVisits,
+    p80Visits,
+    medianCadenceDays,
+    completedVisits,
+    remainingSteps,
+    totalWorkSteps,
+  });
+
+  const { start: completionWindowStart, end: completionWindowEnd } = computeCompletionWindow(
+    new Date(nextStepResult.earliest_date),
+    new Date(nextStepResult.latest_date),
+    projection
+  );
 
   return {
     status: 'ready',
-    assumptions,
-    remainingVisitsP50,
-    remainingVisitsP80,
+    assumptions: projection.assumptions,
+    remainingVisitsP50: projection.remainingVisitsP50,
+    remainingVisitsP80: projection.remainingVisitsP80,
     completionWindowStart: completionWindowStart.toISOString(),
     completionWindowEnd: completionWindowEnd.toISOString(),
     stepCode: nextStepResult.work_phase_code,
