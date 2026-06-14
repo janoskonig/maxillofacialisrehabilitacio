@@ -3,7 +3,7 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Logo } from '@/components/Logo';
-import { LogOut, LayoutDashboard, Calendar, FileText, User, MessageCircle, ClipboardList } from 'lucide-react';
+import { LogOut, LayoutDashboard, Calendar, FileText, User, MessageCircle, ClipboardList, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
 import { PortalBottomNav } from './PortalBottomNav';
 
@@ -17,6 +17,11 @@ export function PortalLayout({ children }: PortalLayoutProps) {
   const { showToast } = useToast();
   const [patientName, setPatientName] = useState<string | null>(null);
   const [ohipPending, setOhipPending] = useState(false);
+  const [consent, setConsent] = useState<{
+    needsAction: boolean;
+    needsNoticeAck: boolean;
+    needsResearch: boolean;
+  } | null>(null);
 
   useEffect(() => {
     const ac = new AbortController();
@@ -65,8 +70,29 @@ export function PortalLayout({ children }: PortalLayoutProps) {
       }
     };
 
+    const checkConsentStatus = async () => {
+      try {
+        const res = await fetch('/api/patient-portal/consent-status', {
+          credentials: 'include',
+          signal: ac.signal,
+        });
+        if (ac.signal.aborted || !res.ok) return;
+        const data = await res.json();
+        if (!ac.signal.aborted) {
+          setConsent({
+            needsAction: data.needsAction === true,
+            needsNoticeAck: data.needsNoticeAck === true,
+            needsResearch: data.needsResearch === true,
+          });
+        }
+      } catch (e) {
+        if ((e as Error).name === 'AbortError') return;
+      }
+    };
+
     void fetchPatientInfo();
     void checkOhipStatus();
+    void checkConsentStatus();
     return () => ac.abort();
   }, []);
 
@@ -210,6 +236,30 @@ export function PortalLayout({ children }: PortalLayoutProps) {
           </div>
         </div>
       </nav>
+
+      {/* Consent obligation banner */}
+      {consent?.needsAction && pathname !== '/patient-portal/profile' && (
+        <div className="bg-amber-50 border-b border-amber-200">
+          <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+            <div className="flex items-start gap-2 flex-1 min-w-0">
+              <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-amber-900">
+                {consent.needsNoticeAck && consent.needsResearch
+                  ? 'Kérjük, ismerje meg az adatkezelési tájékoztatót, és nyilatkozzon a kutatási hozzájárulásáról.'
+                  : consent.needsNoticeAck
+                    ? 'Kérjük, ismerje meg és vegye tudomásul az adatkezelési tájékoztatót.'
+                    : 'Kérjük, nyilatkozzon a kutatási hozzájárulásáról.'}
+              </p>
+            </div>
+            <a
+              href="/patient-portal/profile"
+              className="btn-primary text-sm whitespace-nowrap self-start sm:self-auto"
+            >
+              Nyilatkozom
+            </a>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-6 pb-mobile-nav-portal sm:pb-6">

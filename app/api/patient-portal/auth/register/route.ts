@@ -6,6 +6,10 @@ import { sendPatientRegistrationNotificationToAdmins } from '@/lib/email';
 import { Patient, patientSchema } from '@/lib/types';
 import { apiHandler } from '@/lib/api/route-handler';
 import { logger } from '@/lib/logger';
+import { markConsentPending } from '@/lib/research-registry/research-consent-service';
+import { triggerConsentRequest } from '@/lib/consent-reminders';
+import { CURRENT_PRIVACY_POLICY_VERSION } from '@/lib/legal/policy-version';
+import { requiresGuardian } from '@/lib/legal/legal-capacity';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,6 +29,9 @@ export const POST = apiHandler(async (req, { correlationId }) => {
     beutaloIndokolas,
     privacyConsent,
     privacyPolicyVersion,
+    torvenyesKepviseloNev,
+    torvenyesKepviseloKapcsolat,
+    torvenyesKepviseloEmail,
   } = body;
 
   if (!email || !taj) {
@@ -43,7 +50,15 @@ export const POST = apiHandler(async (req, { correlationId }) => {
 
   if (!privacyConsent) {
     return NextResponse.json(
-      { error: 'Az adatvédelmi irányelvek elfogadása kötelező a regisztrációhoz' },
+      { error: 'Az adatvédelmi tájékoztató megismerése és tudomásulvétele kötelező a regisztrációhoz' },
+      { status: 400 }
+    );
+  }
+
+  // Minors require a legal guardian (törvényes képviselő) to declare on their behalf.
+  if (requiresGuardian(szuletesiDatum) && !torvenyesKepviseloNev?.trim()) {
+    return NextResponse.json(
+      { error: 'Kiskorú páciens esetén a törvényes képviselő nevének megadása kötelező.' },
       { status: 400 }
     );
   }
@@ -95,8 +110,8 @@ export const POST = apiHandler(async (req, { correlationId }) => {
 
   const insertResult = await pool.query(
     `INSERT INTO patients (
-      email, 
-      taj, 
+      email,
+      taj,
       nev,
       telefonszam,
       szuletesi_datum,
@@ -104,10 +119,13 @@ export const POST = apiHandler(async (req, { correlationId }) => {
       cim,
       varos,
       iranyitoszam,
-      created_at, 
+      torvenyes_kepviselo_nev,
+      torvenyes_kepviselo_kapcsolat,
+      torvenyes_kepviselo_email,
+      created_at,
       updated_at
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     RETURNING id, email, nev, taj`,
     [
       email.trim(),
@@ -119,26 +137,40 @@ export const POST = apiHandler(async (req, { correlationId }) => {
       cim?.trim() || null,
       varos?.trim() || null,
       iranyitoszam?.trim() || null,
+      torvenyesKepviseloNev?.trim() || null,
+      torvenyesKepviseloKapcsolat?.trim() || null,
+      torvenyesKepviseloEmail?.trim() || null,
     ]
   );
 
   const newPatient = insertResult.rows[0];
 
-  // Record GDPR consent
+  // Record privacy-notice acknowledgement (Art. 13 information duty — NOT consent).
+  // The lawful basis for clinical/health data processing is GDPR 9(2)(h) + 1997.
+  // évi CLIV. tv., so we record that the patient was informed, not "consent".
   try {
+    const minor = requiresGuardian(szuletesiDatum);
+    const onBehalf = minor
+      ? {
+          onBehalfOfMinor: true,
+          guardianName: torvenyesKepviseloNev?.trim() || null,
+          guardianRelation: torvenyesKepviseloKapcsolat?.trim() || null,
+        }
+      : {};
     await pool.query(
-      `INSERT INTO gdpr_consents (patient_id, purpose, policy_version, ip_address, user_agent)
-       VALUES ($1, 'data_processing', $2, $3::inet, $4),
-              ($1, 'health_data_processing', $2, $3::inet, $4)`,
+      `INSERT INTO privacy_notice_acknowledgements
+         (patient_id, policy_version, ip_address, user_agent, on_behalf)
+       VALUES ($1, $2, $3::inet, $4, $5::jsonb)`,
       [
         newPatient.id,
-        privacyPolicyVersion || '1.1',
+        privacyPolicyVersion || CURRENT_PRIVACY_POLICY_VERSION,
         ipAddress,
         req.headers.get('user-agent') || null,
+        JSON.stringify(onBehalf),
       ]
     );
   } catch (consentError) {
-    logger.error('Failed to record GDPR consent:', consentError);
+    logger.error('Failed to record privacy notice acknowledgement:', consentError);
   }
 
   // Insert referral data into patient_referral if provided
@@ -208,6 +240,18 @@ export const POST = apiHandler(async (req, { correlationId }) => {
   } catch (emailError) {
     logger.error('Failed to queue patient registration admin notification:', emailError);
   }
+
+  // A GDPR hozzájárulás regisztrációkor rögzült; a kutatási hozzájárulásról a
+  // páciensnek még nyilatkoznia kell. Felszólítás + a napi cron utánkövetés.
+  try {
+    await markConsentPending(newPatient.id, { email: `patient:${newPatient.id}` }, 'Regisztrációs felszólítás');
+  } catch (consentErr) {
+    logger.error('Failed to mark research consent pending:', consentErr);
+  }
+  await triggerConsentRequest(
+    { id: newPatient.id, email: newPatient.email, nev: newPatient.nev, nem: nem || null },
+    { needsNoticeAck: false, needsResearch: true }
+  );
 
   return NextResponse.json({
     success: true,

@@ -52,6 +52,9 @@ export const patientSchema = z.object({
   cim: z.string().optional().nullable(),
   varos: z.string().optional().nullable(),
   iranyitoszam: z.string().optional().nullable(),
+  torvenyesKepviseloNev: z.string().optional().nullable(),
+  torvenyesKepviseloKapcsolat: z.string().optional().nullable(),
+  torvenyesKepviseloEmail: z.string().optional().nullable(),
 
   beutaloOrvos: z.string().optional().nullable(),
   beutaloIntezmeny: z.string().optional().nullable(),

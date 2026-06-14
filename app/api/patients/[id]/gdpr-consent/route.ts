@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
+import { CURRENT_PRIVACY_POLICY_VERSION } from '@/lib/legal/policy-version';
 import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
@@ -71,8 +72,8 @@ export const POST = authedHandler(async (req, { params, auth }) => {
 
   await pool.query(
     `INSERT INTO gdpr_consents (patient_id, purpose, policy_version, ip_address, user_agent)
-     VALUES ($1, $2, '1.0', $3::inet, $4)`,
-    [patientId, purpose, ipAddress, req.headers.get('user-agent')]
+     VALUES ($1, $2, $3, $4::inet, $5)`,
+    [patientId, purpose, CURRENT_PRIVACY_POLICY_VERSION, ipAddress, req.headers.get('user-agent')]
   );
 
   logger.info(`GDPR consent recorded: patient=${patientId}, purpose=${purpose}, by=${auth.email}`);

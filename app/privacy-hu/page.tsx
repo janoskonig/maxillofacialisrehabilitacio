@@ -1,5 +1,6 @@
 import { Metadata } from 'next';
 import Link from 'next/link';
+import { CURRENT_PRIVACY_POLICY_VERSION } from '@/lib/legal/policy-version';
 
 export const metadata: Metadata = {
   title: 'Adatvédelmi Irányelvek - Maxillofacialis Rehabilitációs Rendszer',
@@ -29,7 +30,7 @@ export default function PrivacyPolicyHu() {
 
           <div className="prose prose-sm max-w-none text-gray-700 space-y-6">
             <p className="text-sm text-gray-600">
-              <strong>Irányelv verzió:</strong> 1.1 &middot; <strong>Hatályba lépés:</strong> 2026. április 3.
+              <strong>Irányelv verzió:</strong> {CURRENT_PRIVACY_POLICY_VERSION} &middot; <strong>Hatályba lépés:</strong> 2026. április 3.
             </p>
 
             <section>

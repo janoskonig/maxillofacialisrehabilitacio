@@ -7,7 +7,13 @@ import type { Pool } from 'pg';
 import { getDbPool } from '@/lib/db';
 import { CONSENT_WITHDRAWAL_POLICY } from './operational-policy';
 
-export type ConsentStatus = 'unknown' | 'pending' | 'granted' | 'withdrawn' | 'expired';
+export type ConsentStatus =
+  | 'unknown'
+  | 'pending'
+  | 'granted'
+  | 'withdrawn'
+  | 'expired'
+  | 'declined';
 
 export interface ConsentWithdrawalPolicy {
   frozenExportPolicy: 'exclude_future_only' | 'tombstone_artifact' | 'hard_delete';

@@ -14,6 +14,11 @@
  *                    Az időablak: jövőbeli ∪ utolsó 30 nap.
  *   Egyik sem: NEM írjuk át a meglévő értéket (recompute „nem vonja vissza").
  *
+ * SEED-ONLY: ha a betegnek KÉZI (ragadós) kezelőorvosa van
+ * (`kezeleoorvos_assigned_at` nem null), a recompute egyáltalán nem nyúl hozzá.
+ * Csak hozzárendelés nélküli (új) betegnél seedel. Lásd
+ * lib/kezeleoorvos-assignment.ts és database/migrations/051.
+ *
  * Hívási helyek (write-side hookok):
  *   - app/api/appointments/route.ts             POST  (új időpont)
  *   - app/api/appointments/approve/route.ts     POST  (jóváhagyás)
@@ -65,9 +70,9 @@ export async function recomputeKezeleoorvos(
   const validatedPatientId = validateUUID(patientId, 'Beteg ID');
   const queryable: DbQueryable = (db as DbQueryable) ?? (getDbPool() as unknown as DbQueryable);
 
-  // Aktuális érték (a változás-detektáláshoz).
+  // Aktuális érték (a változás-detektáláshoz) + kézi hozzárendelés jelzője.
   const currentRes = await queryable.query(
-    `SELECT kezeleoorvos_user_id FROM patients WHERE id = $1`,
+    `SELECT kezeleoorvos_user_id, kezeleoorvos_assigned_at FROM patients WHERE id = $1`,
     [validatedPatientId]
   );
   if (currentRes.rows.length === 0) {
@@ -76,6 +81,14 @@ export async function recomputeKezeleoorvos(
     return { changed: false, userId: null, name: null, source: 'none', previousUserId: null };
   }
   const previousUserId: string | null = currentRes.rows[0].kezeleoorvos_user_id ?? null;
+
+  // Seed-only: ha kézi (ragadós) hozzárendelés van (assigned_at nem null), a
+  // recompute SOHA nem írja felül — ez az „egyféle, számon kérhető kezelőorvos"
+  // elköteleződés lényege. Csak hozzárendelés nélküli (új) betegnél seedelünk.
+  // Lásd: lib/kezeleoorvos-assignment.ts, database/migrations/051.
+  if (currentRes.rows[0].kezeleoorvos_assigned_at != null) {
+    return { changed: false, userId: previousUserId, name: null, source: 'none', previousUserId };
+  }
 
   // B-eset: legutóbb nyitott aktív epizód provider-je.
   const episodeRes = await queryable.query(

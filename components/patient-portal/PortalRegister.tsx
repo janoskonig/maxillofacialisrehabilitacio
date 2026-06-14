@@ -5,6 +5,8 @@ import { Mail, CreditCard, User, Loader2, Phone, Calendar, MapPin, AlertTriangle
 import Link from 'next/link';
 import { useToast } from '@/contexts/ToastContext';
 import { tajHasChecksumError } from '@/lib/taj-validation';
+import { requiresGuardian } from '@/lib/legal/legal-capacity';
+import { CURRENT_PRIVACY_POLICY_VERSION } from '@/lib/legal/policy-version';
 
 export function PortalRegister() {
   const [email, setEmail] = useState('');
@@ -18,9 +20,14 @@ export function PortalRegister() {
   const [iranyitoszam, setIranyitoszam] = useState('');
   const [beutaloOrvos, setBeutaloOrvos] = useState('');
   const [beutaloIndokolas, setBeutaloIndokolas] = useState('');
+  const [torvenyesKepviseloNev, setTorvenyesKepviseloNev] = useState('');
+  const [torvenyesKepviseloKapcsolat, setTorvenyesKepviseloKapcsolat] = useState('');
+  const [torvenyesKepviseloEmail, setTorvenyesKepviseloEmail] = useState('');
   const [privacyConsent, setPrivacyConsent] = useState(false);
   const [loading, setLoading] = useState(false);
   const { showToast } = useToast();
+
+  const isMinor = requiresGuardian(szuletesiDatum || null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,8 +42,13 @@ export function PortalRegister() {
       return;
     }
 
+    if (isMinor && !torvenyesKepviseloNev.trim()) {
+      showToast('Kiskorú páciens esetén a törvényes képviselő nevének megadása kötelező', 'error');
+      return;
+    }
+
     if (!privacyConsent) {
-      showToast('Az adatvédelmi irányelvek elfogadása kötelező a regisztrációhoz', 'error');
+      showToast('Az adatvédelmi tájékoztató tudomásulvétele kötelező a regisztrációhoz', 'error');
       return;
     }
 
@@ -60,8 +72,11 @@ export function PortalRegister() {
           iranyitoszam: iranyitoszam.trim() || undefined,
           beutaloOrvos: beutaloOrvos.trim() || undefined,
           beutaloIndokolas: beutaloIndokolas.trim() || undefined,
+          torvenyesKepviseloNev: torvenyesKepviseloNev.trim() || undefined,
+          torvenyesKepviseloKapcsolat: torvenyesKepviseloKapcsolat.trim() || undefined,
+          torvenyesKepviseloEmail: torvenyesKepviseloEmail.trim() || undefined,
           privacyConsent: true,
-          privacyPolicyVersion: '1.1',
+          privacyPolicyVersion: CURRENT_PRIVACY_POLICY_VERSION,
         }),
       });
 
@@ -318,7 +333,62 @@ export function PortalRegister() {
           </div>
         </div>
 
-        {/* GDPR Consent */}
+        {/* Legal guardian (minors) */}
+        {isMinor && (
+          <div className="border-t pt-4 space-y-4">
+            <p className="text-sm text-amber-800 bg-amber-50 rounded-lg p-3">
+              A megadott születési dátum alapján a páciens kiskorú. A nyilatkozatokat a
+              törvényes képviselő teszi meg — kérjük, adja meg az adatait.
+            </p>
+            <div>
+              <label htmlFor="reg-kepviselo-nev" className="form-label flex items-center gap-2">
+                <User className="w-4 h-4" />
+                Törvényes képviselő neve *
+              </label>
+              <input
+                id="reg-kepviselo-nev"
+                type="text"
+                value={torvenyesKepviseloNev}
+                onChange={(e) => setTorvenyesKepviseloNev(e.target.value)}
+                className="form-input mobile-touch-target"
+                placeholder="Kovács Anna"
+                disabled={loading}
+              />
+            </div>
+            <div>
+              <label htmlFor="reg-kepviselo-kapcsolat" className="form-label flex items-center gap-2">
+                <User className="w-4 h-4" />
+                Kapcsolat a pácienssel
+              </label>
+              <input
+                id="reg-kepviselo-kapcsolat"
+                type="text"
+                value={torvenyesKepviseloKapcsolat}
+                onChange={(e) => setTorvenyesKepviseloKapcsolat(e.target.value)}
+                className="form-input mobile-touch-target"
+                placeholder="szülő / gyám"
+                disabled={loading}
+              />
+            </div>
+            <div>
+              <label htmlFor="reg-kepviselo-email" className="form-label flex items-center gap-2">
+                <Mail className="w-4 h-4" />
+                Törvényes képviselő email címe
+              </label>
+              <input
+                id="reg-kepviselo-email"
+                type="email"
+                value={torvenyesKepviseloEmail}
+                onChange={(e) => setTorvenyesKepviseloEmail(e.target.value)}
+                className="form-input mobile-touch-target"
+                placeholder="kepviselo@example.com"
+                disabled={loading}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Privacy notice acknowledgement */}
         <div className="border-t pt-4">
           <label className="flex items-start gap-3 cursor-pointer">
             <input
@@ -329,11 +399,11 @@ export function PortalRegister() {
               disabled={loading}
             />
             <span className="text-sm text-gray-700">
-              Elolvastam és elfogadom az{' '}
+              {isMinor ? 'A kiskorú törvényes képviselőjeként megismertem és tudomásul vettem az' : 'Megismertem és tudomásul vettem az'}{' '}
               <Link href="/privacy-hu" target="_blank" className="text-medical-primary hover:underline font-medium">
-                Adatvédelmi Irányelveket
-              </Link>{' '}
-              és hozzájárulok személyes és egészségügyi adataim kezeléséhez a kezelés céljából. *
+                adatvédelmi tájékoztatót
+              </Link>
+              . Az ellátási adatkezelés jogalapja a GDPR 9. cikk (2) h) pontja és az 1997. évi CLIV. törvény. *
             </span>
           </label>
         </div>

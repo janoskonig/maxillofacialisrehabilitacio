@@ -4,10 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getCurrentUser } from '@/lib/auth';
-import { Logo } from '@/components/Logo';
-import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
+import { AppShell } from '@/components/layout/AppShell';
 import {
-  ArrowLeft,
   ClipboardList,
   Loader2,
   AlertTriangle,
@@ -163,20 +161,19 @@ export default function TaskOverviewPage() {
   const summary = data?.summary;
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-mobile-nav-staff md:pb-6">
-      <header className="bg-white border-b sticky top-0 z-30 max-md:mobile-safe-top">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
-          <button type="button" onClick={() => router.push('/')} className="btn-secondary p-2" aria-label="Vissza">
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <Logo width={32} height={37} />
-          <h1 className="text-lg font-semibold text-gray-900">Vezetői nézet — feladatok</h1>
-          <Link href="/tasks" className="ml-auto text-sm text-medical-primary hover:underline">
-            Feladataim
-          </Link>
-        </div>
+    <AppShell
+      title="Vezetői nézet — feladatok"
+      backTo="/"
+      maxWidth="xl"
+      actions={
+        <Link href="/tasks" className="text-sm text-medical-primary hover:underline">
+          Feladataim
+        </Link>
+      }
+    >
+      <div className="space-y-6">
         {/* Aloldal-navigáció */}
-        <div className="max-w-6xl mx-auto px-4 flex gap-1">
+        <div className="flex gap-1 border-b border-gray-200">
           <span className="px-4 py-2 text-sm font-medium text-medical-primary border-b-2 border-medical-primary">
             Feladatok
           </span>
@@ -186,10 +183,14 @@ export default function TaskOverviewPage() {
           >
             Adathiány
           </Link>
+          <Link
+            href="/tasks/overview/delegalt-betegek"
+            className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent"
+          >
+            Delegált betegek
+          </Link>
         </div>
-      </header>
 
-      <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
         {/* Összegző kártyák */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="card p-4 flex items-center gap-3">
@@ -354,9 +355,7 @@ export default function TaskOverviewPage() {
             ))}
           </ul>
         )}
-      </main>
-
-      <MobileBottomNav />
-    </div>
+      </div>
+    </AppShell>
   );
 }

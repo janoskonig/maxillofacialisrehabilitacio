@@ -23,6 +23,7 @@ export {
   sendConsiliumInvitationEmail,
   sendAppointmentReminderEmail,
   sendOhipReminderEmail,
+  sendConsentRequestEmail,
   sendTaskReminderEmail,
   sendMissingDataReminderEmail,
 } from './senders';

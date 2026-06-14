@@ -9,6 +9,7 @@ import { logActivity, logActivityWithAuth } from '@/lib/activity';
 import { reconcileMissingDataTasksSilent } from '@/lib/missing-data-reminders';
 import { recomputeReferrerUserIdSilent } from '@/lib/recompute-referrer';
 import { recomputeDerivedNumericsSilent } from '@/lib/derived-numerics';
+import { applyKezeleoorvosFromForm } from '@/lib/kezeleoorvos-assignment';
 import { getPatientCompletenessRow } from '@/lib/patient-data-completeness';
 import { getPlausibilityWarnings } from '@/lib/data-plausibility';
 import { PATIENT_SELECT_FIELDS } from '@/lib/queries/patient-fields';
@@ -760,6 +761,19 @@ export const PUT = authedHandler(async (req, { auth, params, correlationId }) =>
       await trackPatientChanges(pool, req, patientId, oldPatient, validatedPatient, newPatient, userEmail);
     } catch (logError) {
       logger.error('Failed to log activity:', logError);
+    }
+
+    // 7b. Kezelőorvos: a form a nevet küldi → feloldjuk user_id-ra és KÉZI
+    //     (ragadós) hozzárendelést rögzítünk, amit a recompute nem ír felül.
+    //     Üres név → lekapcsolás (a recompute újra seedelhet). Ismeretlen név →
+    //     a fenti UPDATE szabad szövege marad, nincs sticky bélyeg.
+    try {
+      const assign = await applyKezeleoorvosFromForm(patientId, validatedPatient.kezeleoorvos, userId, pool);
+      if (!assign.resolved) {
+        logger.warn(`Kezelőorvos név nem feloldható ismert orvosra (beteg ${patientId}): "${validatedPatient.kezeleoorvos}"`);
+      }
+    } catch (assignErr) {
+      logger.error('Kezelőorvos hozzárendelés sikertelen (update):', assignErr);
     }
 
     // 8. Create snapshot for manual saves
