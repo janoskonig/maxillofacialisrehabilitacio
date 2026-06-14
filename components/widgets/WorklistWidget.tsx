@@ -523,7 +523,7 @@ export function WorklistWidget() {
                       <tr
                         key={`${key}::attempt-${att.appointmentId}`}
                         className={`border-b text-gray-700 dark:text-gray-300 ${
-                          isUnsuccessful ? 'bg-orange-50/40' : isNoShow ? 'bg-gray-50/60 dark:bg-gray-800/60' : 'bg-gray-50/30 dark:bg-gray-800/30'
+                          isUnsuccessful ? 'bg-orange-50/40 dark:bg-orange-950/40' : isNoShow ? 'bg-gray-50/60 dark:bg-gray-800/60' : 'bg-gray-50/30 dark:bg-gray-800/30'
                         }`}
                       >
                         <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400" colSpan={2}>
@@ -600,7 +600,7 @@ export function WorklistWidget() {
                     );
                   })}
                 <tr
-                  className={`border-b ${item.overdueByDays > 0 ? 'bg-red-50/50' : ''} ${state === 'BLOCKED' ? 'opacity-70' : ''}`}
+                  className={`border-b ${item.overdueByDays > 0 ? 'bg-red-50/50 dark:bg-red-950/40' : ''} ${state === 'BLOCKED' ? 'opacity-70' : ''}`}
                 >
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-2">
