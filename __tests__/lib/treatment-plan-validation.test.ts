@@ -3,6 +3,7 @@ import {
   validateTreatmentPlan,
   isPlanApprovable,
   summarizePlanReadiness,
+  aggregatePlanReadiness,
   type PlanStepInput,
   type PlanIssue,
 } from '@/lib/treatment-plan-validation';
@@ -124,5 +125,21 @@ describe('summarizePlanReadiness', () => {
   it('errors win even over an existing approval', () => {
     expect(summarizePlanReadiness([err], true)).toBe('errors');
     expect(summarizePlanReadiness([err, warn], false)).toBe('errors');
+  });
+});
+
+describe('aggregatePlanReadiness', () => {
+  it('returns null for no episodes', () => {
+    expect(aggregatePlanReadiness([])).toBeNull();
+  });
+
+  it('worst state wins (errors > warnings > ready)', () => {
+    expect(aggregatePlanReadiness(['ready', 'errors', 'approved'])).toBe('errors');
+    expect(aggregatePlanReadiness(['ready', 'warnings', 'approved'])).toBe('warnings');
+  });
+
+  it('approved only when all are approved', () => {
+    expect(aggregatePlanReadiness(['approved', 'approved'])).toBe('approved');
+    expect(aggregatePlanReadiness(['approved', 'ready'])).toBe('ready');
   });
 });

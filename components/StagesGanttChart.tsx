@@ -3,6 +3,9 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ChevronDown, ChevronRight } from 'lucide-react';
+import { usePlanReadiness } from '@/hooks/usePlanReadiness';
+import { PlanReadinessBadge } from './PlanReadinessBadge';
+import { aggregatePlanReadiness, type PlanReadinessStatus } from '@/lib/treatment-plan-validation';
 
 export interface GanttEpisode {
   id: string;
@@ -139,6 +142,10 @@ export function StagesGanttChart({
   viewEnd,
   groupByCurrentStage,
 }: StagesGanttChartProps) {
+  // WP6a: plan-readiness badges per patient row (batch-fetched for all episodes).
+  const allEpisodeIds = useMemo(() => episodes.map((e) => e.id), [episodes]);
+  const planReadiness = usePlanReadiness(allEpisodeIds);
+
   const intervalsByEpisode = useMemo(() => {
     const m = new Map<string, GanttInterval[]>();
     for (const iv of intervals) {
@@ -398,6 +405,11 @@ export function StagesGanttChart({
                     const days = row.badgeStageStart ? daysBetween(row.badgeStageStart, nowMs) : null;
                     const episodeCount = row.episodes.length;
                     const isClosedRow = !row.openEpisode;
+                    const rowReadiness = aggregatePlanReadiness(
+                      row.episodes
+                        .map((e) => planReadiness.get(e.id)?.status)
+                        .filter((s): s is PlanReadinessStatus => Boolean(s))
+                    );
                     return (
                       <div
                         key={row.patientId}
@@ -424,6 +436,7 @@ export function StagesGanttChart({
                               {episodeCount} ep.
                             </span>
                           )}
+                          <PlanReadinessBadge status={rowReadiness} />
                         </div>
                         <div className="flex items-center gap-1.5 min-w-0">
                           {row.badgeStageCode ? (

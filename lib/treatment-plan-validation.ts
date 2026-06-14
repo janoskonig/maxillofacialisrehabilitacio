@@ -153,3 +153,16 @@ export function summarizePlanReadiness(issues: PlanIssue[], approved: boolean): 
   if (issues.some((i) => i.level === 'warning')) return 'warnings';
   return 'ready';
 }
+
+/**
+ * Aggregate several episodes' readiness into one row-level badge (a patient row in
+ * the Gantt may span multiple episodes). Worst state wins; "approved" only when all
+ * are approved. Returns null when there is nothing to show.
+ */
+export function aggregatePlanReadiness(statuses: PlanReadinessStatus[]): PlanReadinessStatus | null {
+  if (statuses.length === 0) return null;
+  if (statuses.includes('errors')) return 'errors';
+  if (statuses.includes('warnings')) return 'warnings';
+  if (statuses.every((s) => s === 'approved')) return 'approved';
+  return 'ready';
+}
