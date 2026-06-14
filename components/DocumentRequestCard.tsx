@@ -100,10 +100,10 @@ export function DocumentRequestCard({
 
   if (loading) {
     return (
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 my-2">
+      <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-lg p-4 my-2">
         <div className="flex items-center gap-3">
           <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-          <span className="text-sm text-gray-600">Dokumentum betöltése...</span>
+          <span className="text-sm text-gray-600 dark:text-gray-400">Dokumentum betöltése...</span>
         </div>
       </div>
     );

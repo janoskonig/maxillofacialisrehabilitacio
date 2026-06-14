@@ -38,11 +38,11 @@ const STATUS_LABELS: Record<ConsentStatus, string> = {
 
 function StatusBadge({ status }: { status: ConsentStatus }) {
   const styles: Record<ConsentStatus, string> = {
-    unknown: 'bg-gray-100 text-gray-800',
-    pending: 'bg-amber-100 text-amber-900',
-    granted: 'bg-green-100 text-green-800',
-    withdrawn: 'bg-red-100 text-red-800',
-    expired: 'bg-gray-100 text-gray-600',
+    unknown: 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200',
+    pending: 'bg-amber-100 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200',
+    granted: 'bg-green-100 dark:bg-green-950/50 text-green-800 dark:text-green-300',
+    withdrawn: 'bg-red-100 dark:bg-red-950/50 text-red-800 dark:text-red-300',
+    expired: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400',
   };
   const icons: Record<ConsentStatus, React.ReactNode> = {
     unknown: <AlertCircle className="w-4 h-4" />,
@@ -122,7 +122,7 @@ export function ResearchConsentSection({
   if (loading) {
     return (
       <div className="card mt-4">
-        <p className="text-sm text-gray-500">Kutatási hozzájárulás betöltése…</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">Kutatási hozzájárulás betöltése…</p>
       </div>
     );
   }
@@ -131,21 +131,21 @@ export function ResearchConsentSection({
 
   return (
     <div className="card mt-4">
-      <h4 className="text-lg font-semibold text-gray-900 mb-2 flex items-center">
+      <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2 flex items-center">
         <Shield className="w-5 h-5 mr-2 text-medical-primary" />
         Kutatási regiszter hozzájárulás
       </h4>
-      <p className="text-sm text-gray-600 mb-4">
+      <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
         Anonimizált adatok kutatási célú felhasználásához. A visszavonás a jövőbeli exportokból zár ki.
       </p>
 
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <StatusBadge status={state.consentStatus} />
         {state.researchUsable && (
-          <span className="text-xs text-green-700 font-medium">Kutatásra alkalmas</span>
+          <span className="text-xs text-green-700 dark:text-green-300 font-medium">Kutatásra alkalmas</span>
         )}
         {state.legacyComplianceStatus && (
-          <span className="text-xs text-gray-500">Compliance: {state.legacyComplianceStatus}</span>
+          <span className="text-xs text-gray-500 dark:text-gray-400">Compliance: {state.legacyComplianceStatus}</span>
         )}
       </div>
 
@@ -159,7 +159,7 @@ export function ResearchConsentSection({
             {showText ? 'Szöveg elrejtése' : `Hozzájárulási szöveg (${state.activeVersion.versionLabel})`}
           </button>
           {showText && state.activeVersion.consentBodyHu && (
-            <pre className="mt-2 p-3 bg-gray-50 rounded text-xs whitespace-pre-wrap text-gray-800 max-h-48 overflow-y-auto">
+            <pre className="mt-2 p-3 bg-gray-50 dark:bg-gray-800/60 rounded text-xs whitespace-pre-wrap text-gray-800 dark:text-gray-200 max-h-48 overflow-y-auto">
               {state.activeVersion.consentBodyHu}
             </pre>
           )}
@@ -167,7 +167,7 @@ export function ResearchConsentSection({
       )}
 
       {!isViewOnly && state.consentStatus !== 'granted' && (
-        <div className="mb-4 border-t border-gray-100 pt-4">
+        <div className="mb-4 border-t border-gray-100 dark:border-gray-800 pt-4">
           <label className="form-label">Rögzítés módja</label>
           <select
             className="form-input max-w-xs"
@@ -181,13 +181,13 @@ export function ResearchConsentSection({
             <option value="verbal_documented">Szóbeli, dokumentálva</option>
             <option value="electronic">Elektronikus (nem portál)</option>
           </select>
-          <label className="flex items-start gap-2 mt-3 text-sm text-gray-700">
+          <label className="flex items-start gap-2 mt-3 text-sm text-gray-700 dark:text-gray-300">
             <input
               type="checkbox"
               checked={attestationChecked}
               onChange={(e) => setAttestationChecked(e.target.checked)}
               disabled={submitting}
-              className="mt-1 rounded border-gray-300 text-medical-primary"
+              className="mt-1 rounded border-gray-300 dark:border-gray-700 text-medical-primary"
             />
             <span>
               Megerősítem, hogy a beteget tájékoztattam, és a kutatási hozzájárulást rögzítem.
@@ -223,7 +223,7 @@ export function ResearchConsentSection({
       )}
 
       {!isViewOnly && state.consentStatus === 'granted' && (
-        <div className="mb-4 border-t border-gray-100 pt-4">
+        <div className="mb-4 border-t border-gray-100 dark:border-gray-800 pt-4">
           <label className="form-label">Visszavonás indoka</label>
           <textarea
             className="form-input"
@@ -235,7 +235,7 @@ export function ResearchConsentSection({
           />
           <button
             type="button"
-            className="btn-secondary text-sm mt-2 text-red-700 border-red-200"
+            className="btn-secondary text-sm mt-2 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800"
             disabled={submitting || withdrawReason.trim().length < 3}
             onClick={() =>
               postAction({
@@ -251,11 +251,11 @@ export function ResearchConsentSection({
       )}
 
       {events.length > 0 && (
-        <div className="border-t border-gray-100 pt-3">
-          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+        <div className="border-t border-gray-100 dark:border-gray-800 pt-3">
+          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
             Előzmények
           </p>
-          <ul className="text-xs text-gray-600 space-y-1">
+          <ul className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
             {events.slice(0, 5).map((ev, i) => (
               <li key={i}>
                 {new Date(ev.recordedAt).toLocaleString('hu-HU')} — {ev.newStatus}

@@ -48,9 +48,9 @@ export const EpisodeRow = memo(function EpisodeRow({
   );
 
   return (
-    <div className="flex border-b border-gray-100 bg-white" style={{ minWidth: 0 }}>
-      <div className="flex-shrink-0 sticky left-0 z-10 w-[200px] md:w-[280px] border-r border-gray-200 bg-white px-2 py-2 flex flex-col justify-center gap-1.5 shadow-[2px_0_8px_-4px_rgba(0,0,0,0.08)]">
-        <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden shrink-0">
+    <div className="flex border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900" style={{ minWidth: 0 }}>
+      <div className="flex-shrink-0 sticky left-0 z-10 w-[200px] md:w-[280px] border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-2 py-2 flex flex-col justify-center gap-1.5 shadow-[2px_0_8px_-4px_rgba(0,0,0,0.08)]">
+        <div className="h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden shrink-0">
           <div
             className="h-full bg-emerald-500 rounded-full transition-all"
             style={{ width: `${progressPct}%` }}
@@ -66,16 +66,16 @@ export const EpisodeRow = memo(function EpisodeRow({
           </Link>
         </div>
         {episode.carePathwayName && (
-          <div className="text-[10px] text-gray-500 truncate hidden sm:block">{episode.carePathwayName}</div>
+          <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate hidden sm:block">{episode.carePathwayName}</div>
         )}
         {next && (
-          <div className="text-[10px] text-gray-700 truncate" title={next.step.label}>
+          <div className="text-[10px] text-gray-700 dark:text-gray-300 truncate" title={next.step.label}>
             Köv.: <span className="font-medium">{next.step.label}</span>
-            <span className="text-gray-500"> · {next.relativeLabel}</span>
+            <span className="text-gray-500 dark:text-gray-400"> · {next.relativeLabel}</span>
           </div>
         )}
         {episode.etaHeuristic && (
-          <div className="text-[10px] text-gray-500 flex items-center gap-0.5">
+          <div className="text-[10px] text-gray-500 dark:text-gray-400 flex items-center gap-0.5">
             <Clock className="w-3 h-3 shrink-0" />
             ETA{' '}
             {new Date(episode.etaHeuristic).toLocaleDateString('hu-HU', { month: 'short', day: 'numeric' })}
@@ -83,7 +83,7 @@ export const EpisodeRow = memo(function EpisodeRow({
         )}
       </div>
       <div
-        className="relative flex-shrink-0 border-l border-gray-100/50"
+        className="relative flex-shrink-0 border-l border-gray-100/50 dark:border-gray-800"
         style={{ width: trackMinWidth, height: trackHeight, minHeight: trackHeight }}
         role="region"
         aria-label={`Idővonal: ${episode.patientName}`}

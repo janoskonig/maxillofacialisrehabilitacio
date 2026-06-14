@@ -17,18 +17,18 @@ const PURPOSE_LABELS: Record<string, string> = {
 };
 
 const PURPOSE_COLORS: Record<string, string> = {
-  consult: 'bg-blue-100 text-blue-800',
-  work: 'bg-purple-100 text-purple-800',
-  control: 'bg-teal-100 text-teal-800',
-  flexible: 'bg-yellow-100 text-yellow-800',
+  consult: 'bg-blue-100 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300',
+  work: 'bg-purple-100 dark:bg-purple-950/50 text-purple-800 dark:text-purple-300',
+  control: 'bg-teal-100 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300',
+  flexible: 'bg-yellow-100 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-300',
 };
 
 function SlotPurposeBadge({ purpose }: { purpose?: SlotPurpose | null }) {
   if (!purpose) {
-    return <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-500">(nincs)</span>;
+    return <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">(nincs)</span>;
   }
   return (
-    <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${PURPOSE_COLORS[purpose] || 'bg-gray-100 text-gray-500'}`}>
+    <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${PURPOSE_COLORS[purpose] || 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}>
       {PURPOSE_LABELS[purpose] || purpose}
     </span>
   );
@@ -37,14 +37,14 @@ function SlotPurposeBadge({ purpose }: { purpose?: SlotPurpose | null }) {
 function SlotSourceBadge({ source }: { source?: string | null }) {
   if (source === 'google_calendar') {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-emerald-50 text-emerald-700">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300">
         <Globe className="w-3 h-3" />
         Google
       </span>
     );
   }
   return (
-    <span className="px-2 py-0.5 text-xs rounded-full bg-gray-50 text-gray-500">
+    <span className="px-2 py-0.5 text-xs rounded-full bg-gray-50 dark:bg-gray-800/60 text-gray-500 dark:text-gray-400">
       Manuális
     </span>
   );
@@ -157,8 +157,8 @@ export function TimeSlotsManager() {
 
     return (
       <th
-        className={`px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none ${
-          isActive ? 'bg-gray-100' : ''
+        className={`px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none ${
+          isActive ? 'bg-gray-100 dark:bg-gray-800' : ''
         } ${className || ''}`}
         onClick={() => ts.handleSort(field)}
       >
@@ -177,7 +177,7 @@ export function TimeSlotsManager() {
   if (ts.loading) {
     return (
       <div className="card text-center py-8">
-        <p className="text-gray-500">Betöltés...</p>
+        <p className="text-gray-500 dark:text-gray-400">Betöltés...</p>
       </div>
     );
   }
@@ -195,7 +195,7 @@ export function TimeSlotsManager() {
 
     const renderTableHeader = () => (
       <>
-        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-12">
+        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-12">
           {bookedSlotsInTable.length > 0 && (
             <input
               type="checkbox"
@@ -207,16 +207,16 @@ export function TimeSlotsManager() {
           )}
         </th>
         {renderSortableHeader('Időpont', 'startTime')}
-        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cél</th>
-        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Forrás</th>
+        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Cél</th>
+        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Forrás</th>
         {renderSortableHeader('Cím', 'cim')}
         {renderSortableHeader('Teremszám', 'teremszam')}
         {renderSortableHeader('Fogpótlástanász', 'dentistName')}
         {renderSortableHeader('Státusz', 'status')}
-        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
           Lefoglalva
         </th>
-        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
           Műveletek
         </th>
       </>
@@ -241,8 +241,8 @@ export function TimeSlotsManager() {
           </td>
           <td className="px-6 py-4 whitespace-nowrap">
             <div className="flex items-center">
-              <Clock className={`w-4 h-4 mr-2 ${isPast ? 'text-gray-400' : 'text-gray-400'}`} />
-              <span className={`text-sm ${isPast ? 'text-gray-500' : 'text-gray-900'}`}>
+              <Clock className={`w-4 h-4 mr-2 ${isPast ? 'text-gray-400 dark:text-gray-500' : 'text-gray-400 dark:text-gray-500'}`} />
+              <span className={`text-sm ${isPast ? 'text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-gray-100'}`}>
                 {formatDateTime(slot.startTime)}
               </span>
             </div>
@@ -255,7 +255,7 @@ export function TimeSlotsManager() {
                   const val = e.target.value as SlotPurpose | '';
                   ts.updateSlotPurpose(slot.id, val || null);
                 }}
-                className="text-xs border border-gray-200 rounded px-1.5 py-0.5 bg-white focus:ring-1 focus:ring-blue-400"
+                className="text-xs border border-gray-200 dark:border-gray-800 rounded px-1.5 py-0.5 bg-white dark:bg-gray-900 focus:ring-1 focus:ring-blue-400"
               >
                 <option value="">(nincs)</option>
                 <option value="consult">Konzultáció</option>
@@ -271,17 +271,17 @@ export function TimeSlotsManager() {
             <SlotSourceBadge source={slot.source} />
           </td>
           <td className="px-6 py-4">
-            <span className={`text-sm ${isPast ? 'text-gray-500' : 'text-gray-600'}`}>
+            <span className={`text-sm ${isPast ? 'text-gray-500 dark:text-gray-400' : 'text-gray-600 dark:text-gray-400'}`}>
               {slot.cim || '1088 Budapest, Szentkirályi utca 47'}
             </span>
           </td>
           <td className="px-6 py-4 whitespace-nowrap">
-            <span className={`text-sm ${isPast ? 'text-gray-500' : 'text-gray-600'}`}>
+            <span className={`text-sm ${isPast ? 'text-gray-500 dark:text-gray-400' : 'text-gray-600 dark:text-gray-400'}`}>
               {slot.teremszam || '-'}
             </span>
           </td>
           <td className="px-6 py-4 whitespace-nowrap">
-            <span className={`text-sm ${isPast ? 'text-gray-500' : 'text-gray-600'}`}>
+            <span className={`text-sm ${isPast ? 'text-gray-500 dark:text-gray-400' : 'text-gray-600 dark:text-gray-400'}`}>
               {slot.dentistName || slot.userEmail || '-'}
             </span>
           </td>
@@ -290,11 +290,11 @@ export function TimeSlotsManager() {
               className={`px-2 py-1 text-xs font-medium rounded-full ${
                 slot.status === 'available'
                   ? isPast
-                    ? 'bg-gray-200 text-gray-600'
-                    : 'bg-green-100 text-green-800'
+                    ? 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                    : 'bg-green-100 dark:bg-green-950/50 text-green-800 dark:text-green-300'
                   : isPast
-                    ? 'bg-gray-200 text-gray-600'
-                    : 'bg-red-100 text-red-800'
+                    ? 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                    : 'bg-red-100 dark:bg-red-950/50 text-red-800 dark:text-red-300'
               }`}
             >
               {slot.status === 'available' ? 'Szabad' : 'Lefoglalva'}
@@ -304,12 +304,12 @@ export function TimeSlotsManager() {
             {appointment ? (
               <div className={`text-sm space-y-1 ${isPast ? 'text-gray-500' : ''}`}>
                 <div>
-                  <span className="text-xs font-medium text-gray-500 uppercase">Beteg:</span>
-                  <div className={`font-medium mt-0.5 ${isPast ? 'text-gray-500' : 'text-gray-900'}`}>
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Beteg:</span>
+                  <div className={`font-medium mt-0.5 ${isPast ? 'text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-gray-100'}`}>
                     {appointment.patientName || 'Név nélküli beteg'}
                   </div>
                   {appointment.patientTaj && (
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
                       TAJ: {appointment.patientTaj}
                     </div>
                   )}
@@ -395,11 +395,11 @@ export function TimeSlotsManager() {
           className={`px-2 py-1 text-xs font-medium rounded-full ${
             slot.status === 'available'
               ? isPast
-                ? 'bg-gray-200 text-gray-600'
-                : 'bg-green-100 text-green-800'
+                ? 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                : 'bg-green-100 dark:bg-green-950/50 text-green-800 dark:text-green-300'
               : isPast
-                ? 'bg-gray-200 text-gray-600'
-                : 'bg-red-100 text-red-800'
+                ? 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                : 'bg-red-100 dark:bg-red-950/50 text-red-800 dark:text-red-300'
           }`}
         >
           {slot.status === 'available' ? 'Szabad' : 'Lefoglalva'}
@@ -438,12 +438,12 @@ export function TimeSlotsManager() {
             <div className={`mb-3 p-3 bg-gray-50 rounded-lg ${isPast ? 'text-gray-500' : ''}`}>
               <div className="text-sm space-y-2">
                 <div>
-                  <span className="text-xs font-medium text-gray-500 uppercase">Beteg:</span>
-                  <div className={`font-medium mt-0.5 ${isPast ? 'text-gray-500' : 'text-gray-900'}`}>
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Beteg:</span>
+                  <div className={`font-medium mt-0.5 ${isPast ? 'text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-gray-100'}`}>
                     {appointment.patientName || 'Név nélküli beteg'}
                   </div>
                   {appointment.patientTaj && (
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
                       TAJ: {appointment.patientTaj}
                     </div>
                   )}

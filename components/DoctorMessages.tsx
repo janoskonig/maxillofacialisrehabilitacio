@@ -393,11 +393,11 @@ export function DoctorMessages() {
 
   if (loading) {
     return (
-      <div className="flex h-[calc(100vh-200px)] sm:h-[700px] border border-gray-200 rounded-lg overflow-hidden bg-white">
+      <div className="flex h-[calc(100vh-200px)] sm:h-[700px] border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden bg-white dark:bg-gray-900">
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-500">Betöltés...</p>
+            <p className="text-gray-500 dark:text-gray-400">Betöltés...</p>
           </div>
         </div>
       </div>
@@ -436,9 +436,9 @@ export function DoctorMessages() {
 
   // Conversations list content
   const conversationsListContent = conversations.length === 0 && !loading ? (
-    <div className="p-4 text-center text-gray-500 text-sm">
+    <div className="p-4 text-center text-gray-500 dark:text-gray-400 text-sm">
       Még nincsenek beszélgetések
-      <p className="text-xs mt-2 text-gray-400">Kattintson az &quot;Új beszélgetés&quot; gombra egy orvos kiválasztásához</p>
+      <p className="text-xs mt-2 text-gray-400 dark:text-gray-500">Kattintson az &quot;Új beszélgetés&quot; gombra egy orvos kiválasztásához</p>
     </div>
   ) : (
     conversations.map((conv) => {
@@ -461,24 +461,24 @@ export function DoctorMessages() {
               handleSelectGroup(conv.groupId, conv.groupName || null);
             }
           }}
-          className={`p-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${
+          className={`p-3 border-b border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${
             isSelected ? 'bg-blue-100 border-l-4 border-l-blue-600' : ''
           }`}
         >
           <div className="flex items-center gap-3">
             <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ${
-              conv.type === 'group' ? 'bg-blue-100 text-blue-700' : conv.unreadCount > 0 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+              conv.type === 'group' ? 'bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300' : conv.unreadCount > 0 ? 'bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
             }`}>
               {conv.type === 'group' ? <Users className="w-4 h-4" /> : monogram}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-2">
-                <span className={`text-sm truncate ${conv.unreadCount > 0 ? 'font-semibold text-gray-900' : 'font-medium text-gray-900'}`}>
+                <span className={`text-sm truncate ${conv.unreadCount > 0 ? 'font-semibold text-gray-900 dark:text-gray-100' : 'font-medium text-gray-900 dark:text-gray-100'}`}>
                   {displayName}
                 </span>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   {conv.lastMessage && (
-                    <span className="text-xs text-gray-400">{formatConversationTime(conv.lastMessage.createdAt)}</span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">{formatConversationTime(conv.lastMessage.createdAt)}</span>
                   )}
                   {conv.unreadCount > 0 && (
                     <span className="px-1.5 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full min-w-[20px] text-center">
@@ -488,13 +488,13 @@ export function DoctorMessages() {
                 </div>
               </div>
               {conv.lastMessage && (
-                <p className={`text-xs mt-0.5 truncate ${conv.unreadCount > 0 ? 'text-gray-700 font-medium' : 'text-gray-500'}`}>
+                <p className={`text-xs mt-0.5 truncate ${conv.unreadCount > 0 ? 'text-gray-700 dark:text-gray-300 font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
                   {conv.lastMessage.message.substring(0, 50)}
                   {conv.lastMessage.message.length > 50 ? '...' : ''}
                 </p>
               )}
               {conv.type === 'group' && conv.participantCount && (
-                <p className="text-xs text-gray-400 mt-0.5">
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
                   {conv.participantCount} résztvevő
                 </p>
               )}
@@ -545,7 +545,7 @@ export function DoctorMessages() {
   ) : (
     <>
       <div className="flex items-center justify-between gap-2 min-w-0">
-        <h3 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center gap-2 truncate min-w-0">
+        <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2 truncate min-w-0">
           {selectedGroupId && <Users className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0" />}
           <span className="truncate">{selectedDoctorId ? selectedDoctorName : (selectedGroupName || 'Csoportos beszélgetés')}</span>
         </h3>
@@ -557,11 +557,11 @@ export function DoctorMessages() {
           <div className="mt-2">
             <div className="flex items-center gap-2 flex-wrap">
               <Users className="w-3 h-3 text-blue-600 flex-shrink-0" />
-              <span className="text-xs text-gray-600">Résztvevők:</span>
+              <span className="text-xs text-gray-600 dark:text-gray-400">Résztvevők:</span>
               {(showAllParticipants ? groupParticipants : groupParticipants.slice(0, 2)).map((participant) => (
                 <span
                   key={participant.userId}
-                  className="text-xs text-gray-700 bg-gray-100 px-2 py-0.5 rounded-full"
+                  className="text-xs text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full"
                   title={participant.userEmail}
                 >
                   {participant.userName || participant.userEmail}
@@ -570,7 +570,7 @@ export function DoctorMessages() {
               {groupParticipants.length > 2 && (
                 <button
                   onClick={() => setShowAllParticipants(!showAllParticipants)}
-                  className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                  className="text-xs text-blue-600 dark:text-blue-300 hover:text-blue-700 font-medium"
                 >
                   {showAllParticipants ? 'Kevesebb' : `+${groupParticipants.length - 2} több`}
                 </button>
@@ -586,10 +586,10 @@ export function DoctorMessages() {
   const detailContent = (
     <>
       {/* Messages */}
-      <div ref={messagesContainerRef} className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-2 sm:p-4 bg-gray-50 space-y-3">
+      <div ref={messagesContainerRef} className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-2 sm:p-4 bg-gray-50 dark:bg-gray-800/60 space-y-3">
         {messages.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <MessageCircle className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+            <MessageCircle className="w-12 h-12 mx-auto mb-2 text-gray-300 dark:text-gray-600" />
             <p>Még nincsenek üzenetek</p>
           </div>
         ) : (
@@ -694,18 +694,18 @@ export function DoctorMessages() {
               <div key={message.id} className="msg-row">
                 {showDateSeparator && (
                   <div className="flex items-center gap-3 my-4">
-                    <div className="flex-1 border-t border-gray-300" />
-                    <span className="text-xs font-medium text-gray-500 whitespace-nowrap">{dateSeparatorLabel}</span>
-                    <div className="flex-1 border-t border-gray-300" />
+                    <div className="flex-1 border-t border-gray-300 dark:border-gray-700" />
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">{dateSeparatorLabel}</span>
+                    <div className="flex-1 border-t border-gray-300 dark:border-gray-700" />
                   </div>
                 )}
                 <div className={`flex flex-col ${isFromMe ? 'items-end' : 'items-start'}`}>
                   {!isFromMe && (
                     <div className="flex items-center gap-1.5 mb-1 px-1">
-                      <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-xs font-semibold text-blue-700">
+                      <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-950/50 flex items-center justify-center text-xs font-semibold text-blue-700 dark:text-blue-300">
                         {monogram}
                       </div>
-                      <span className="text-xs font-medium text-gray-700">{lastName}</span>
+                      <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{lastName}</span>
                     </div>
                   )}
                   <ChatMessageBubble
@@ -761,7 +761,7 @@ export function DoctorMessages() {
       )}
 
       {/* Message Input */}
-      <div className="flex-shrink-0 border-t bg-white pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-0 relative">
+      <div className="flex-shrink-0 border-t bg-white dark:bg-gray-900 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-0 relative">
         <PendingContextLinksBar
           links={pendingContextLinks}
           onRemove={(i) => setPendingContextLinks((prev) => prev.filter((_, idx) => idx !== i))}

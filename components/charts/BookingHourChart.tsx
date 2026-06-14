@@ -21,7 +21,7 @@ export function BookingHourChart({ data }: { data: BookingHourRow[] }) {
   const total = data.reduce((sum, d) => sum + d.darab, 0);
   if (total === 0) {
     return (
-      <div className="flex h-56 items-center justify-center text-sm text-gray-500">
+      <div className="flex h-56 items-center justify-center text-sm text-gray-500 dark:text-gray-400">
         Még nincs foglalás óránkénti megoszláshoz.
       </div>
     );
@@ -53,9 +53,9 @@ export function BookingHourChart({ data }: { data: BookingHourRow[] }) {
             const row = payload[0].payload as BookingHourRow;
             const pct = total > 0 ? Math.round((row.darab / total) * 1000) / 10 : 0;
             return (
-              <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm shadow-md">
-                <p className="font-semibold text-gray-900">{row.cimke}</p>
-                <p className="mt-0.5 tabular-nums text-gray-600">
+              <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-3 py-2 text-sm shadow-md">
+                <p className="font-semibold text-gray-900 dark:text-gray-100">{row.cimke}</p>
+                <p className="mt-0.5 tabular-nums text-gray-600 dark:text-gray-400">
                   {row.darab} foglalás · {pct}%
                 </p>
               </div>

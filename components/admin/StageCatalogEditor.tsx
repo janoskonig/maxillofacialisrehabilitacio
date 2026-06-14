@@ -160,18 +160,18 @@ export function StageCatalogEditor() {
     }
   };
 
-  if (loading) return <p className="text-gray-600">Betöltés...</p>;
+  if (loading) return <p className="text-gray-600 dark:text-gray-400">Betöltés...</p>;
 
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold">Stádiumok</h3>
       {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded text-red-800 text-sm">
+        <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded text-red-800 dark:text-red-300 text-sm">
           {error}
         </div>
       )}
       <div className="flex gap-4 items-center">
-        <label className="text-sm font-medium text-gray-700">Szűrő (reason):</label>
+        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Szűrő (reason):</label>
         <select
           value={reasonFilter}
           onChange={(e) => setReasonFilter(e.target.value)}
@@ -186,22 +186,22 @@ export function StageCatalogEditor() {
         </select>
       </div>
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
+          <thead className="bg-gray-50 dark:bg-gray-800/60">
             <tr>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">code</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">reason</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">label_hu</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">order</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">terminal</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Műveletek</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">code</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">reason</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">label_hu</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">order</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">terminal</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Műveletek</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
             {items.map((item) => (
               <tr key={`${item.code}-${item.reason}`}>
                 <td className="px-4 py-2 text-sm font-mono">{item.code}</td>
-                <td className="px-4 py-2 text-sm text-gray-600">{item.reason}</td>
+                <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">{item.reason}</td>
                 <td className="px-4 py-2 text-sm">
                   {editing?.code === item.code && editing?.reason === item.reason ? (
                     <input
@@ -285,7 +285,7 @@ export function StageCatalogEditor() {
         </table>
       </div>
       {creating ? (
-        <div className="p-4 border border-gray-200 rounded-lg bg-gray-50 space-y-2">
+        <div className="p-4 border border-gray-200 dark:border-gray-800 rounded-lg bg-gray-50 dark:bg-gray-800/60 space-y-2">
           <div className="flex gap-2 flex-wrap">
             <input
               type="text"

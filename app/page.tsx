@@ -444,7 +444,7 @@ export default function Home() {
               </div>
 
               {/* Találatszám — kompakt felirat a lista fölött (a külön „Páciensek" kártya helyett) */}
-              <p className="text-body-sm text-gray-500">
+              <p className="text-body-sm text-gray-500 dark:text-gray-400">
                 {searchQuery.trim() || selectedView !== 'all' ? (
                   <>
                     <span className="font-semibold text-gray-900 dark:text-gray-100">{totalPatients}</span> találat

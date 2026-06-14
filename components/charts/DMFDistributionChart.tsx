@@ -16,7 +16,7 @@ interface DMFDistributionChartProps {
 export function DMFDistributionChart({ data, stats }: DMFDistributionChartProps) {
   if (data.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64 text-gray-500">
+      <div className="flex items-center justify-center h-64 text-gray-500 dark:text-gray-400">
         Nincs adat megjelenítésre
       </div>
     );
@@ -26,25 +26,25 @@ export function DMFDistributionChart({ data, stats }: DMFDistributionChartProps)
     <div className="space-y-6">
       {/* Statisztikák */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-          <p className="text-sm text-blue-600 font-medium">Átlag</p>
-          <p className="text-2xl font-bold text-blue-900">{stats.atlag.toFixed(2)}</p>
+        <div className="bg-blue-50 dark:bg-blue-950/40 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+          <p className="text-sm text-blue-600 dark:text-blue-300 font-medium">Átlag</p>
+          <p className="text-2xl font-bold text-blue-900 dark:text-blue-200">{stats.atlag.toFixed(2)}</p>
         </div>
-        <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-          <p className="text-sm text-green-600 font-medium">Medián</p>
-          <p className="text-2xl font-bold text-green-900">{stats.median.toFixed(2)}</p>
+        <div className="bg-green-50 dark:bg-green-950/40 p-4 rounded-lg border border-green-200 dark:border-green-800">
+          <p className="text-sm text-green-600 dark:text-green-300 font-medium">Medián</p>
+          <p className="text-2xl font-bold text-green-900 dark:text-green-200">{stats.median.toFixed(2)}</p>
         </div>
-        <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
-          <p className="text-sm text-purple-600 font-medium">Szórás</p>
-          <p className="text-2xl font-bold text-purple-900">{stats.szoras.toFixed(2)}</p>
+        <div className="bg-purple-50 dark:bg-purple-950/40 p-4 rounded-lg border border-purple-200 dark:border-purple-800">
+          <p className="text-sm text-purple-600 dark:text-purple-300 font-medium">Szórás</p>
+          <p className="text-2xl font-bold text-purple-900 dark:text-purple-200">{stats.szoras.toFixed(2)}</p>
         </div>
-        <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
-          <p className="text-sm text-orange-600 font-medium">Minimum</p>
-          <p className="text-2xl font-bold text-orange-900">{stats.min}</p>
+        <div className="bg-orange-50 dark:bg-orange-950/40 p-4 rounded-lg border border-orange-200 dark:border-orange-800">
+          <p className="text-sm text-orange-600 dark:text-orange-300 font-medium">Minimum</p>
+          <p className="text-2xl font-bold text-orange-900 dark:text-orange-200">{stats.min}</p>
         </div>
-        <div className="bg-red-50 p-4 rounded-lg border border-red-200">
-          <p className="text-sm text-red-600 font-medium">Maximum</p>
-          <p className="text-2xl font-bold text-red-900">{stats.max}</p>
+        <div className="bg-red-50 dark:bg-red-950/40 p-4 rounded-lg border border-red-200 dark:border-red-800">
+          <p className="text-sm text-red-600 dark:text-red-300 font-medium">Maximum</p>
+          <p className="text-2xl font-bold text-red-900 dark:text-red-200">{stats.max}</p>
         </div>
       </div>
 

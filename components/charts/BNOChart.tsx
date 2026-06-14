@@ -17,7 +17,7 @@ export function BNOChart({ data }: BNOChartProps) {
 
   if (topData.length === 0) {
     return (
-      <div className="flex h-64 items-center justify-center text-gray-500">
+      <div className="flex h-64 items-center justify-center text-gray-500 dark:text-gray-400">
         Nincs adat megjelenítésre
       </div>
     );
@@ -39,14 +39,14 @@ export function BNOChart({ data }: BNOChartProps) {
             const row = (payload[0] as TooltipPayloadItem).payload;
             if (!row) return null;
             return (
-              <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm shadow-md">
-                <p className="font-semibold text-gray-900">{row.kod}</p>
+              <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-3 py-2 text-sm shadow-md">
+                <p className="font-semibold text-gray-900 dark:text-gray-100">{row.kod}</p>
                 {row.nev ? (
-                  <p className="mt-0.5 text-gray-700">{row.nev}</p>
+                  <p className="mt-0.5 text-gray-700 dark:text-gray-300">{row.nev}</p>
                 ) : (
-                  <p className="mt-0.5 text-gray-500">Nincs megnevezés a BNO törzsben</p>
+                  <p className="mt-0.5 text-gray-500 dark:text-gray-400">Nincs megnevezés a BNO törzsben</p>
                 )}
-                <p className="mt-1 tabular-nums text-gray-600">{row.elofordulas} előfordulás</p>
+                <p className="mt-1 tabular-nums text-gray-600 dark:text-gray-400">{row.elofordulas} előfordulás</p>
               </div>
             );
           }}

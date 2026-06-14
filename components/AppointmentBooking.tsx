@@ -431,17 +431,17 @@ export function AppointmentBooking({
   const getStatusLabel = useCallback(
     (status: Appointment['appointmentStatus'], isLate?: boolean) => {
       if (isLate) {
-        return { label: 'Késett', color: 'text-orange-600', bgColor: 'bg-orange-50', icon: ClockIcon };
+        return { label: 'Késett', color: 'text-orange-600 dark:text-orange-300', bgColor: 'bg-orange-50 dark:bg-orange-950/40', icon: ClockIcon };
       }
       switch (status) {
         case 'cancelled_by_doctor':
-          return { label: 'Lemondta az orvos', color: 'text-red-600', bgColor: 'bg-red-50', icon: XCircle };
+          return { label: 'Lemondta az orvos', color: 'text-red-600 dark:text-red-300', bgColor: 'bg-red-50 dark:bg-red-950/40', icon: XCircle };
         case 'cancelled_by_patient':
-          return { label: 'Lemondta a beteg', color: 'text-red-600', bgColor: 'bg-red-50', icon: XCircle };
+          return { label: 'Lemondta a beteg', color: 'text-red-600 dark:text-red-300', bgColor: 'bg-red-50 dark:bg-red-950/40', icon: XCircle };
         case 'completed':
-          return { label: 'Sikeresen teljesült', color: 'text-green-600', bgColor: 'bg-green-50', icon: CheckCircle2 };
+          return { label: 'Sikeresen teljesült', color: 'text-green-600 dark:text-green-300', bgColor: 'bg-green-50 dark:bg-green-950/40', icon: CheckCircle2 };
         case 'no_show':
-          return { label: 'Nem jelent meg', color: 'text-red-600', bgColor: 'bg-red-50', icon: AlertCircle };
+          return { label: 'Nem jelent meg', color: 'text-red-600 dark:text-red-300', bgColor: 'bg-red-50 dark:bg-red-950/40', icon: AlertCircle };
         default:
           return null;
       }
@@ -601,7 +601,7 @@ export function AppointmentBooking({
   if (loading) {
     return (
       <div className="card text-center py-8">
-        <p className="text-gray-500">Betöltés...</p>
+        <p className="text-gray-500 dark:text-gray-400">Betöltés...</p>
       </div>
     );
   }
@@ -618,30 +618,30 @@ export function AppointmentBooking({
 
       {mode === 'standard' && editingStatus && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold text-gray-900">Időpont státusz szerkesztése</h3>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Időpont státusz szerkesztése</h3>
               <button
                 onClick={() => {
                   setEditingStatus(null);
                   setStatusForm({ appointmentStatus: null, completionNotes: '', isLate: false });
                 }}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="space-y-4">
               <div>
-                <p className="text-sm text-gray-600 mb-2">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                   <strong>Beteg:</strong> {editingStatus.patientName || 'Név nélküli'}
                 </p>
-                <p className="text-sm text-gray-600 mb-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                   <strong>Időpont:</strong> {formatDateTime(editingStatus.startTime)}
                 </p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Státusz</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Státusz</label>
                 <select
                   value={statusForm.appointmentStatus || ''}
                   onChange={(e) => {
@@ -663,8 +663,8 @@ export function AppointmentBooking({
               </div>
               {statusForm.appointmentStatus === 'completed' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Mi történt? <span className="text-red-600">*</span>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Mi történt? <span className="text-red-600 dark:text-red-300">*</span>
                   </label>
                   <textarea
                     value={statusForm.completionNotes}
@@ -683,7 +683,7 @@ export function AppointmentBooking({
                     onChange={(e) => setStatusForm({ ...statusForm, isLate: e.target.checked })}
                     className="form-checkbox"
                   />
-                  <span className="text-sm font-medium text-gray-700">Késett a beteg</span>
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Késett a beteg</span>
                 </label>
               </div>
               <div className="flex gap-2 justify-end">
@@ -707,30 +707,30 @@ export function AppointmentBooking({
 
       {mode === 'standard' && editingAppointment && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+          <div className="bg-white dark:bg-gray-900 rounded-lg p-6 max-w-md w-full mx-4">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold text-gray-900">Időpont módosítása</h3>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Időpont módosítása</h3>
               <button
                 onClick={() => {
                   setEditingAppointment(null);
                   setNewTimeSlotId('');
                 }}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="space-y-4">
               <div>
-                <p className="text-sm text-gray-600 mb-2">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                   <strong>Beteg:</strong> {editingAppointment.patientName || 'Név nélküli'}
                 </p>
-                <p className="text-sm text-gray-600 mb-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                   <strong>Jelenlegi időpont:</strong> {formatDateTime(editingAppointment.startTime)}
                 </p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Új időpont</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Új időpont</label>
                 <select
                   value={newTimeSlotId}
                   onChange={(e) => setNewTimeSlotId(e.target.value)}
@@ -746,7 +746,7 @@ export function AppointmentBooking({
                   ))}
                 </select>
                 {availableSlotsForModification.length === 0 && (
-                  <p className="text-sm text-gray-500 mt-2">Jelenleg nincs elérhető szabad időpont.</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Jelenleg nincs elérhető szabad időpont.</p>
                 )}
               </div>
               <div className="flex gap-2 justify-end">
@@ -774,10 +774,10 @@ export function AppointmentBooking({
 
       {mode === 'standard' && (
         <div className="card p-6">
-          <h3 className="text-xl font-bold text-gray-900 mb-4">Új időpont foglalása</h3>
+          <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">Új időpont foglalása</h3>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Beteg</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Beteg</label>
               <select
                 value={selectedPatient}
                 onChange={(e) => setSelectedPatient(e.target.value)}
@@ -792,7 +792,7 @@ export function AppointmentBooking({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Szabad időpont</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Szabad időpont</label>
               <select
                 value={selectedSlot}
                 onChange={(e) => setSelectedSlot(e.target.value)}
@@ -809,7 +809,7 @@ export function AppointmentBooking({
                 ))}
               </select>
               {availableSlotsOnly.length === 0 && (
-                <p className="text-sm text-gray-500 mt-2">Jelenleg nincs elérhető szabad időpont.</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Jelenleg nincs elérhető szabad időpont.</p>
               )}
             </div>
             <button
@@ -829,48 +829,48 @@ export function AppointmentBooking({
 
       {mode === 'standard' && (
         <div className="card">
-          <h3 className="text-xl font-bold text-gray-900 mb-4">Lefoglalt időpontjaim</h3>
+          <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">Lefoglalt időpontjaim</h3>
           {appointments.length === 0 ? (
             <div className="text-center py-8">
-              <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500">Még nincs lefoglalt időpont.</p>
+              <Calendar className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
+              <p className="text-gray-500 dark:text-gray-400">Még nincs lefoglalt időpont.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
+                <thead className="bg-gray-50 dark:bg-gray-800/60">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Beteg</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Időpont</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fogpótlástanász</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Státusz</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Műveletek</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Beteg</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Időpont</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Fogpótlástanász</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Státusz</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Műveletek</th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
                   {appointments.map((appointment) => (
-                    <tr key={appointment.id} className="hover:bg-gray-50">
+                    <tr key={appointment.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
-                          <User className="w-4 h-4 text-gray-400 mr-2" />
+                          <User className="w-4 h-4 text-gray-400 dark:text-gray-500 mr-2" />
                           <div>
-                            <div className="text-sm font-medium text-gray-900">
+                            <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                               {appointment.patientName || 'Név nélküli'}
                             </div>
                             {appointment.patientTaj && (
-                              <div className="text-sm text-gray-500">TAJ: {appointment.patientTaj}</div>
+                              <div className="text-sm text-gray-500 dark:text-gray-400">TAJ: {appointment.patientTaj}</div>
                             )}
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
-                          <Clock className="w-4 h-4 text-gray-400 mr-2" />
-                          <span className="text-sm text-gray-900">{formatDateTime(appointment.startTime)}</span>
+                          <Clock className="w-4 h-4 text-gray-400 dark:text-gray-500 mr-2" />
+                          <span className="text-sm text-gray-900 dark:text-gray-100">{formatDateTime(appointment.startTime)}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm text-gray-500">{appointment.dentistEmail}</span>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">{appointment.dentistEmail}</span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {(() => {
@@ -884,10 +884,10 @@ export function AppointmentBooking({
                               </div>
                             );
                           }
-                          return <span className="text-xs text-gray-400">-</span>;
+                          return <span className="text-xs text-gray-400 dark:text-gray-500">-</span>;
                         })()}
                         {appointment.appointmentStatus === 'completed' && appointment.completionNotes && (
-                          <div className="text-xs text-gray-600 mt-1" title={appointment.completionNotes}>
+                          <div className="text-xs text-gray-600 dark:text-gray-400 mt-1" title={appointment.completionNotes}>
                             {appointment.completionNotes.length > 50
                               ? `${appointment.completionNotes.substring(0, 50)}...`
                               : appointment.completionNotes}
@@ -898,7 +898,7 @@ export function AppointmentBooking({
                         <div className="flex items-center justify-end gap-3">
                           <button
                             onClick={() => handleDownloadCalendar(appointment.id)}
-                            className="text-blue-600 hover:text-blue-900 flex items-center gap-1"
+                            className="text-blue-600 dark:text-blue-300 hover:text-blue-900 flex items-center gap-1"
                             title="Naptár fájl letöltése"
                           >
                             <Download className="w-4 h-4" />
@@ -906,7 +906,7 @@ export function AppointmentBooking({
                           </button>
                           <button
                             onClick={() => handleEditStatus(appointment)}
-                            className="text-purple-600 hover:text-purple-900 flex items-center gap-1"
+                            className="text-purple-600 dark:text-purple-300 hover:text-purple-900 flex items-center gap-1"
                             title="Státusz szerkesztése"
                           >
                             <Edit2 className="w-4 h-4" />
@@ -914,7 +914,7 @@ export function AppointmentBooking({
                           </button>
                           <button
                             onClick={() => handleModifyAppointment(appointment)}
-                            className="text-amber-600 hover:text-amber-900 flex items-center gap-1"
+                            className="text-amber-600 dark:text-amber-300 hover:text-amber-900 flex items-center gap-1"
                             title="Időpont módosítása"
                           >
                             <Edit2 className="w-4 h-4" />
@@ -922,7 +922,7 @@ export function AppointmentBooking({
                           </button>
                           <button
                             onClick={() => handleCancelAppointment(appointment.id)}
-                            className="text-red-600 hover:text-red-900 flex items-center gap-1"
+                            className="text-red-600 dark:text-red-300 hover:text-red-900 flex items-center gap-1"
                             title="Időpont lemondása"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -937,8 +937,8 @@ export function AppointmentBooking({
             </div>
           )}
           {appointmentsPagination && appointmentsPagination.totalPages > 1 && (
-            <div className="mt-4 px-6 py-3 flex items-center justify-between border-t border-gray-200">
-              <div className="text-sm text-gray-600">
+            <div className="mt-4 px-6 py-3 flex items-center justify-between border-t border-gray-200 dark:border-gray-800">
+              <div className="text-sm text-gray-600 dark:text-gray-400">
                 Oldal {appointmentsPagination.page} / {appointmentsPagination.totalPages} (összesen{' '}
                 {appointmentsPagination.total} időpont)
               </div>
@@ -948,8 +948,8 @@ export function AppointmentBooking({
                   disabled={appointmentsPagination.page === 1}
                   className={`px-3 py-2 rounded-md text-sm font-medium ${
                     appointmentsPagination.page === 1
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                      ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                      : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 border border-gray-300 dark:border-gray-700'
                   }`}
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -973,7 +973,7 @@ export function AppointmentBooking({
                         className={`px-3 py-2 rounded-md text-sm font-medium ${
                           appointmentsPagination.page === pageNum
                             ? 'bg-blue-600 text-white'
-                            : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                            : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 border border-gray-300 dark:border-gray-700'
                         }`}
                       >
                         {pageNum}
@@ -988,8 +988,8 @@ export function AppointmentBooking({
                   disabled={appointmentsPagination.page === appointmentsPagination.totalPages}
                   className={`px-3 py-2 rounded-md text-sm font-medium ${
                     appointmentsPagination.page === appointmentsPagination.totalPages
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                      ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                      : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 border border-gray-300 dark:border-gray-700'
                   }`}
                 >
                   <ChevronRight className="w-4 h-4" />
@@ -1007,17 +1007,17 @@ export function AppointmentBooking({
       {mode === 'conditional' && (
         <div className="card p-6 border-l-4 border-blue-500">
           <div className="flex items-center gap-2 mb-4">
-            <Mail className="w-5 h-5 text-blue-500" />
-            <h3 className="text-xl font-bold text-gray-900">Feltételes időpontválasztás</h3>
+            <Mail className="w-5 h-5 text-blue-500 dark:text-blue-400" />
+            <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Feltételes időpontválasztás</h3>
           </div>
-          <p className="text-sm text-gray-600 mb-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
             Hozzon létre egy időpontot, amelyet a páciens emailben jóváhagyhat vagy elvethet. A páciens új időpontot is
             kérhet, ha az ajánlott időpont nem megfelelő.
           </p>
           <div className="space-y-4">
             {!propPatientId && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Beteg (csak email címmel rendelkező betegek)
                 </label>
                 <select
@@ -1034,7 +1034,7 @@ export function AppointmentBooking({
                   ))}
                 </select>
                 {patients.length === 0 && (
-                  <p className="text-sm text-amber-600 mt-2 flex items-center gap-1">
+                  <p className="text-sm text-amber-600 dark:text-amber-300 mt-2 flex items-center gap-1">
                     <AlertCircle className="w-4 h-4" />
                     Nincs olyan beteg, akinek email címe lenne. A feltételes időpontválasztáshoz email cím szükséges.
                   </p>
@@ -1042,8 +1042,8 @@ export function AppointmentBooking({
               </div>
             )}
             {propPatientId && (!patientEmail || patientEmail.trim() === '') && (
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded">
-                <p className="text-sm text-amber-800 flex items-center gap-1">
+              <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded">
+                <p className="text-sm text-amber-800 dark:text-amber-300 flex items-center gap-1">
                   <AlertCircle className="w-4 h-4" />A betegnek nincs email címe. A feltételes időpontválasztáshoz
                   email cím szükséges.
                 </p>
@@ -1051,11 +1051,11 @@ export function AppointmentBooking({
             )}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-medium text-gray-700">Szabad időpont</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Szabad időpont</label>
                 <button
                   type="button"
                   onClick={() => setShowNewSlotForm(!showNewSlotForm)}
-                  className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                  className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900/40 transition-colors"
                   disabled={creating || creatingNewSlot}
                 >
                   <Plus className="w-4 h-4" />
@@ -1063,9 +1063,9 @@ export function AppointmentBooking({
                 </button>
               </div>
               {showNewSlotForm && (
-                <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-3">
+                <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-lg space-y-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Dátum és idő</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Dátum és idő</label>
                     <DateTimePicker
                       selected={newSlotDateTime}
                       onChange={(date: Date | null) => setNewSlotDateTime(date)}

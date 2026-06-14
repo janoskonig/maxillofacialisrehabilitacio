@@ -162,7 +162,7 @@ export function ToothTreatmentCatalogEditor() {
     }
   };
 
-  if (loading) return <p className="text-gray-600">Betöltés...</p>;
+  if (loading) return <p className="text-gray-600 dark:text-gray-400">Betöltés...</p>;
 
   return (
     <div className="space-y-4">

@@ -167,8 +167,8 @@ export function PatientHistory({ patientId }: PatientHistoryProps) {
   if (loading) {
     return (
       <div className="card p-8 text-center">
-        <Clock className="w-12 h-12 text-gray-400 mx-auto mb-4 animate-pulse" />
-        <p className="text-gray-500">Betöltés...</p>
+        <Clock className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-4 animate-pulse" />
+        <p className="text-gray-500 dark:text-gray-400">Betöltés...</p>
       </div>
     );
   }
@@ -176,7 +176,7 @@ export function PatientHistory({ patientId }: PatientHistoryProps) {
   if (error) {
     return (
       <div className="card p-6">
-        <div className="text-red-600">
+        <div className="text-red-600 dark:text-red-300">
           <p className="font-medium">Hiba történt</p>
           <p className="text-sm mt-1">{error}</p>
         </div>
@@ -187,8 +187,8 @@ export function PatientHistory({ patientId }: PatientHistoryProps) {
   if (changes.length === 0) {
     return (
       <div className="card p-8 text-center">
-        <Clock className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-        <p className="text-gray-500">Nincsenek változások</p>
+        <Clock className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
+        <p className="text-gray-500 dark:text-gray-400">Nincsenek változások</p>
       </div>
     );
   }
@@ -197,20 +197,20 @@ export function PatientHistory({ patientId }: PatientHistoryProps) {
     <div className="space-y-6">
       {/* Snapshots Section */}
       <div className="card p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
           <FileText className="w-5 h-5 text-medical-primary" />
           Verziók
         </h2>
         
         {snapshotsLoading ? (
           <div className="text-center py-4">
-            <Clock className="w-8 h-8 text-gray-400 mx-auto mb-2 animate-pulse" />
-            <p className="text-sm text-gray-500">Betöltés...</p>
+            <Clock className="w-8 h-8 text-gray-400 dark:text-gray-500 mx-auto mb-2 animate-pulse" />
+            <p className="text-sm text-gray-500 dark:text-gray-400">Betöltés...</p>
           </div>
         ) : snapshots.length === 0 ? (
           <div className="text-center py-4">
-            <p className="text-gray-500">Nincsenek mentett verziók</p>
-            <p className="text-sm text-gray-400 mt-1">
+            <p className="text-gray-500 dark:text-gray-400">Nincsenek mentett verziók</p>
+            <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
               A manuális mentések után itt jelennek meg a verziók.
             </p>
           </div>
@@ -219,17 +219,17 @@ export function PatientHistory({ patientId }: PatientHistoryProps) {
             {snapshots.map((snapshot) => (
               <div
                 key={snapshot.id}
-                className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
+                className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/60 rounded-lg border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
               >
                 <div className="flex-1">
                   <div className="flex items-center gap-3">
-                    <Clock className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm font-medium text-gray-900">
+                    <Clock className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
                       {formatDateTime(snapshot.createdAt)}
                     </span>
                   </div>
                   {snapshot.createdByEmail && (
-                    <div className="flex items-center gap-2 mt-1 text-sm text-gray-600">
+                    <div className="flex items-center gap-2 mt-1 text-sm text-gray-600 dark:text-gray-400">
                       <User className="w-4 h-4" />
                       <span>{getUserDisplayName(snapshot.createdByEmail)}</span>
                     </div>
@@ -252,13 +252,13 @@ export function PatientHistory({ patientId }: PatientHistoryProps) {
       {/* Snapshot Detail Modal */}
       {selectedSnapshot && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                   Snapshot részletek
                 </h3>
-                <p className="text-sm text-gray-600 mt-1">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                   {formatDateTime(selectedSnapshot.createdAt)}
                   {selectedSnapshot.createdByEmail && (
                     <> • {getUserDisplayName(selectedSnapshot.createdByEmail)}</>
@@ -267,18 +267,18 @@ export function PatientHistory({ patientId }: PatientHistoryProps) {
               </div>
               <button
                 onClick={() => setSelectedSnapshot(null)}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                 aria-label="Bezárás"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-6">
-              <pre className="bg-gray-50 p-4 rounded-lg border border-gray-200 text-sm overflow-x-auto">
+              <pre className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-800 text-sm overflow-x-auto">
                 {JSON.stringify(selectedSnapshot.snapshotData, null, 2)}
               </pre>
             </div>
-            <div className="p-6 border-t border-gray-200 flex justify-end">
+            <div className="p-6 border-t border-gray-200 dark:border-gray-800 flex justify-end">
               <button
                 onClick={() => setSelectedSnapshot(null)}
                 className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md transition-colors"
@@ -294,7 +294,7 @@ export function PatientHistory({ patientId }: PatientHistoryProps) {
       <div className="card p-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Mező szűrése
             </label>
             <select
@@ -314,7 +314,7 @@ export function PatientHistory({ patientId }: PatientHistoryProps) {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Felhasználó szűrése
             </label>
             <select
@@ -342,14 +342,14 @@ export function PatientHistory({ patientId }: PatientHistoryProps) {
           })
           .map(([date, dateChanges]) => (
             <div key={date} className="card p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 pb-2 border-b border-gray-200 dark:border-gray-800">
                 {date}
               </h3>
               <div className="space-y-4">
                 {dateChanges.map((change) => (
                   <div
                     key={change.id}
-                    className="flex gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200"
+                    className="flex gap-4 p-4 bg-gray-50 dark:bg-gray-800/60 rounded-lg border border-gray-200 dark:border-gray-800"
                   >
                     {/* Timeline indicator */}
                     <div className="flex-shrink-0">
@@ -360,10 +360,10 @@ export function PatientHistory({ patientId }: PatientHistoryProps) {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between mb-2">
                         <div>
-                          <h4 className="font-medium text-gray-900">
+                          <h4 className="font-medium text-gray-900 dark:text-gray-100">
                             {change.fieldDisplayName}
                           </h4>
-                          <div className="flex items-center gap-2 mt-1 text-sm text-gray-600">
+                          <div className="flex items-center gap-2 mt-1 text-sm text-gray-600 dark:text-gray-400">
                             <User className="w-4 h-4" />
                             <span>{getUserDisplayName(change.changedBy)}</span>
                             <span className="mx-1">•</span>
@@ -375,22 +375,22 @@ export function PatientHistory({ patientId }: PatientHistoryProps) {
 
                       {/* Value change */}
                       <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div className="p-3 bg-red-50 border border-red-200 rounded">
-                          <div className="text-xs font-medium text-red-700 mb-1">
+                        <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded">
+                          <div className="text-xs font-medium text-red-700 dark:text-red-300 mb-1">
                             Régi érték
                           </div>
-                          <div className="text-sm text-gray-800 break-words">
+                          <div className="text-sm text-gray-800 dark:text-gray-200 break-words">
                             {formatValue(change.oldValue)}
                           </div>
                         </div>
                         <div className="flex items-center justify-center">
-                          <ArrowRight className="w-5 h-5 text-gray-400" />
+                          <ArrowRight className="w-5 h-5 text-gray-400 dark:text-gray-500" />
                         </div>
-                        <div className="p-3 bg-green-50 border border-green-200 rounded">
-                          <div className="text-xs font-medium text-green-700 mb-1">
+                        <div className="p-3 bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800 rounded">
+                          <div className="text-xs font-medium text-green-700 dark:text-green-300 mb-1">
                             Új érték
                           </div>
-                          <div className="text-sm text-gray-800 break-words">
+                          <div className="text-sm text-gray-800 dark:text-gray-200 break-words">
                             {formatValue(change.newValue)}
                           </div>
                         </div>

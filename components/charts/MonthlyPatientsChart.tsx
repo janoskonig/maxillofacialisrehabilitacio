@@ -21,7 +21,7 @@ export function MonthlyPatientsChart({ data }: { data: MonthlyPatientsRow[] }) {
   const total = data.reduce((sum, d) => sum + d.darab, 0);
   if (total === 0) {
     return (
-      <div className="flex h-56 items-center justify-center text-sm text-gray-500">
+      <div className="flex h-56 items-center justify-center text-sm text-gray-500 dark:text-gray-400">
         Az utolsó 12 hónapban nem rögzítettünk új beteget.
       </div>
     );
@@ -52,9 +52,9 @@ export function MonthlyPatientsChart({ data }: { data: MonthlyPatientsRow[] }) {
             if (!active || !payload?.length) return null;
             const row = payload[0].payload as MonthlyPatientsRow;
             return (
-              <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm shadow-md">
-                <p className="font-semibold text-gray-900">{row.cimke}</p>
-                <p className="mt-0.5 tabular-nums text-gray-600">
+              <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-3 py-2 text-sm shadow-md">
+                <p className="font-semibold text-gray-900 dark:text-gray-100">{row.cimke}</p>
+                <p className="mt-0.5 tabular-nums text-gray-600 dark:text-gray-400">
                   {row.darab} új beteg
                 </p>
               </div>

@@ -25,7 +25,7 @@ export function StickySubmitBar({
 }: StickySubmitBarProps) {
   return (
     <div
-      className="fixed left-0 right-0 z-[55] bg-white/95 backdrop-blur-sm border-t border-gray-200 shadow-[0_-4px_12px_-2px_rgba(0,0,0,0.06)] px-3 sm:px-6 md:px-8 max-md:bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] md:bottom-0 pb-[env(safe-area-inset-bottom,0px)]"
+      className="fixed left-0 right-0 z-[55] bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-t border-gray-200 dark:border-gray-800 shadow-[0_-4px_12px_-2px_rgba(0,0,0,0.06)] px-3 sm:px-6 md:px-8 max-md:bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] md:bottom-0 pb-[env(safe-area-inset-bottom,0px)]"
       role="region"
       aria-label="Űrlap mentése"
     >

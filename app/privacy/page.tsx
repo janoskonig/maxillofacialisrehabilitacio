@@ -8,9 +8,9 @@ export const metadata: Metadata = {
 
 export default function PrivacyPolicy() {
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-white rounded-lg shadow-sm p-8">
+        <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm p-8">
           <div className="mb-6">
             <Link href="/" className="text-medical-primary hover:underline text-sm">
               ← Back to Home
@@ -18,7 +18,7 @@ export default function PrivacyPolicy() {
           </div>
           
           <div className="mb-6 flex items-center justify-between">
-            <h1 className="text-3xl font-bold text-gray-900">Privacy Policy</h1>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Privacy Policy</h1>
             <Link 
               href="/privacy-hu" 
               className="text-sm text-medical-primary hover:underline"
@@ -27,13 +27,13 @@ export default function PrivacyPolicy() {
             </Link>
           </div>
 
-          <div className="prose prose-sm max-w-none text-gray-700 space-y-6">
-            <p className="text-sm text-gray-600">
+          <div className="prose prose-sm max-w-none text-gray-700 dark:text-gray-300 space-y-6">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
               <strong>Policy Version:</strong> 1.1 &middot; <strong>Effective Date:</strong> April 3, 2026
             </p>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">1. Data Controller</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-3">1. Data Controller</h2>
               <p>
                 The data controller for the Maxillofacialis Rehabilitációs Rendszer (&ldquo;the Service&rdquo;) is:
               </p>
@@ -49,9 +49,9 @@ export default function PrivacyPolicy() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">2. Information We Collect</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-3">2. Information We Collect</h2>
               
-              <h3 className="text-lg font-semibold text-gray-800 mt-4 mb-2">2.1 Patient Information</h3>
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mt-4 mb-2">2.1 Patient Information</h3>
               <p>We collect and store the following patient information:</p>
               <ul className="list-disc pl-6 space-y-1">
                 <li>Personal identification (name, date of birth, gender)</li>
@@ -64,7 +64,7 @@ export default function PrivacyPolicy() {
                 <li>Uploaded medical documents</li>
               </ul>
 
-              <h3 className="text-lg font-semibold text-gray-800 mt-4 mb-2">2.2 Healthcare Provider Account Information</h3>
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mt-4 mb-2">2.2 Healthcare Provider Account Information</h3>
               <p>For healthcare providers using the system, we collect:</p>
               <ul className="list-disc pl-6 space-y-1">
                 <li>Email address (used as username)</li>
@@ -73,7 +73,7 @@ export default function PrivacyPolicy() {
                 <li>Activity logs for security and audit purposes</li>
               </ul>
 
-              <h3 className="text-lg font-semibold text-gray-800 mt-4 mb-2">2.3 Google Calendar Integration</h3>
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mt-4 mb-2">2.3 Google Calendar Integration</h3>
               <p>If you choose to connect your Google Calendar:</p>
               <ul className="list-disc pl-6 space-y-1">
                 <li>OAuth tokens (encrypted at rest with AES-256-GCM)</li>
@@ -81,46 +81,46 @@ export default function PrivacyPolicy() {
                 <li>We do NOT access or store your full calendar data</li>
               </ul>
 
-              <h3 className="text-lg font-semibold text-gray-800 mt-4 mb-2">2.4 Consent Records</h3>
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mt-4 mb-2">2.4 Consent Records</h3>
               <p>We store records of your consent including timestamp, IP address, and the privacy policy version in effect at the time of consent.</p>
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">3. Legal Bases for Processing</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-3">3. Legal Bases for Processing</h2>
               <p>We process personal data based on the following legal grounds under GDPR:</p>
               
               <div className="overflow-x-auto mt-3">
-                <table className="min-w-full text-sm border border-gray-200">
+                <table className="min-w-full text-sm border border-gray-200 dark:border-gray-800">
                   <thead>
-                    <tr className="bg-gray-50">
-                      <th className="border border-gray-200 px-3 py-2 text-left font-semibold">Processing Activity</th>
-                      <th className="border border-gray-200 px-3 py-2 text-left font-semibold">Legal Basis</th>
+                    <tr className="bg-gray-50 dark:bg-gray-800/60">
+                      <th className="border border-gray-200 dark:border-gray-800 px-3 py-2 text-left font-semibold">Processing Activity</th>
+                      <th className="border border-gray-200 dark:border-gray-800 px-3 py-2 text-left font-semibold">Legal Basis</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr>
-                      <td className="border border-gray-200 px-3 py-2">Patient health data processing</td>
-                      <td className="border border-gray-200 px-3 py-2">Art. 9(2)(h) &ndash; Healthcare provision + explicit consent</td>
+                      <td className="border border-gray-200 dark:border-gray-800 px-3 py-2">Patient health data processing</td>
+                      <td className="border border-gray-200 dark:border-gray-800 px-3 py-2">Art. 9(2)(h) &ndash; Healthcare provision + explicit consent</td>
                     </tr>
                     <tr>
-                      <td className="border border-gray-200 px-3 py-2">Staff account management</td>
-                      <td className="border border-gray-200 px-3 py-2">Art. 6(1)(b) &ndash; Contract performance</td>
+                      <td className="border border-gray-200 dark:border-gray-800 px-3 py-2">Staff account management</td>
+                      <td className="border border-gray-200 dark:border-gray-800 px-3 py-2">Art. 6(1)(b) &ndash; Contract performance</td>
                     </tr>
                     <tr>
-                      <td className="border border-gray-200 px-3 py-2">Google Calendar synchronization</td>
-                      <td className="border border-gray-200 px-3 py-2">Art. 6(1)(a) &ndash; Consent</td>
+                      <td className="border border-gray-200 dark:border-gray-800 px-3 py-2">Google Calendar synchronization</td>
+                      <td className="border border-gray-200 dark:border-gray-800 px-3 py-2">Art. 6(1)(a) &ndash; Consent</td>
                     </tr>
                     <tr>
-                      <td className="border border-gray-200 px-3 py-2">Error tracking (Sentry, when enabled)</td>
-                      <td className="border border-gray-200 px-3 py-2">Art. 6(1)(a) &ndash; Consent</td>
+                      <td className="border border-gray-200 dark:border-gray-800 px-3 py-2">Error tracking (Sentry, when enabled)</td>
+                      <td className="border border-gray-200 dark:border-gray-800 px-3 py-2">Art. 6(1)(a) &ndash; Consent</td>
                     </tr>
                     <tr>
-                      <td className="border border-gray-200 px-3 py-2">Email notifications</td>
-                      <td className="border border-gray-200 px-3 py-2">Art. 6(1)(b) &ndash; Necessary for service delivery</td>
+                      <td className="border border-gray-200 dark:border-gray-800 px-3 py-2">Email notifications</td>
+                      <td className="border border-gray-200 dark:border-gray-800 px-3 py-2">Art. 6(1)(b) &ndash; Necessary for service delivery</td>
                     </tr>
                     <tr>
-                      <td className="border border-gray-200 px-3 py-2">Security logging &amp; audit</td>
-                      <td className="border border-gray-200 px-3 py-2">Art. 6(1)(f) &ndash; Legitimate interest (system security)</td>
+                      <td className="border border-gray-200 dark:border-gray-800 px-3 py-2">Security logging &amp; audit</td>
+                      <td className="border border-gray-200 dark:border-gray-800 px-3 py-2">Art. 6(1)(f) &ndash; Legitimate interest (system security)</td>
                     </tr>
                   </tbody>
                 </table>
@@ -128,7 +128,7 @@ export default function PrivacyPolicy() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">4. How We Use Your Information</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-3">4. How We Use Your Information</h2>
               <p>We use the collected information for the following purposes:</p>
               <ul className="list-disc pl-6 space-y-1">
                 <li>Managing patient records and medical appointments</li>
@@ -141,7 +141,7 @@ export default function PrivacyPolicy() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">5. Data Security</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-3">5. Data Security</h2>
               <p>We implement industry-standard security measures to protect your information:</p>
               <ul className="list-disc pl-6 space-y-1">
                 <li>All data is encrypted in transit using HTTPS/TLS</li>
@@ -154,7 +154,7 @@ export default function PrivacyPolicy() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">6. Data Sharing and Disclosure</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-3">6. Data Sharing and Disclosure</h2>
               <p>We do not sell, trade, or rent your personal information. We may share information only in the following circumstances:</p>
               <ul className="list-disc pl-6 space-y-1">
                 <li><strong>Healthcare Providers:</strong> Patient information is accessible to authorized healthcare providers involved in patient care</li>
@@ -165,7 +165,7 @@ export default function PrivacyPolicy() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">7. Data Retention</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-3">7. Data Retention</h2>
               <p>We apply the following retention periods:</p>
               <ul className="list-disc pl-6 space-y-1">
                 <li><strong>Patient medical records:</strong> 30 years from last treatment, as required by Hungarian healthcare law (1997. évi CLIV. törvény)</li>
@@ -177,7 +177,7 @@ export default function PrivacyPolicy() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">8. Your Rights Under GDPR</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-3">8. Your Rights Under GDPR</h2>
               <p>You have the following rights regarding your personal data:</p>
               <ul className="list-disc pl-6 space-y-1">
                 <li><strong>Right of Access (Art. 15):</strong> Request access to your personal data</li>
@@ -208,38 +208,38 @@ export default function PrivacyPolicy() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">9. Third-Party Services and Sub-processors</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-3">9. Third-Party Services and Sub-processors</h2>
               <p>Our system uses the following third-party services (sub-processors):</p>
               
               <div className="overflow-x-auto mt-3">
-                <table className="min-w-full text-sm border border-gray-200">
+                <table className="min-w-full text-sm border border-gray-200 dark:border-gray-800">
                   <thead>
-                    <tr className="bg-gray-50">
-                      <th className="border border-gray-200 px-3 py-2 text-left font-semibold">Service</th>
-                      <th className="border border-gray-200 px-3 py-2 text-left font-semibold">Purpose</th>
-                      <th className="border border-gray-200 px-3 py-2 text-left font-semibold">Data Location</th>
+                    <tr className="bg-gray-50 dark:bg-gray-800/60">
+                      <th className="border border-gray-200 dark:border-gray-800 px-3 py-2 text-left font-semibold">Service</th>
+                      <th className="border border-gray-200 dark:border-gray-800 px-3 py-2 text-left font-semibold">Purpose</th>
+                      <th className="border border-gray-200 dark:border-gray-800 px-3 py-2 text-left font-semibold">Data Location</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr>
-                      <td className="border border-gray-200 px-3 py-2">Google Calendar API</td>
-                      <td className="border border-gray-200 px-3 py-2">Appointment synchronization (optional, consent-based)</td>
-                      <td className="border border-gray-200 px-3 py-2">EU/US (Google SCCs)</td>
+                      <td className="border border-gray-200 dark:border-gray-800 px-3 py-2">Google Calendar API</td>
+                      <td className="border border-gray-200 dark:border-gray-800 px-3 py-2">Appointment synchronization (optional, consent-based)</td>
+                      <td className="border border-gray-200 dark:border-gray-800 px-3 py-2">EU/US (Google SCCs)</td>
                     </tr>
                     <tr>
-                      <td className="border border-gray-200 px-3 py-2">Sentry</td>
-                      <td className="border border-gray-200 px-3 py-2">Error monitoring (optional, consent-based, PII scrubbed)</td>
-                      <td className="border border-gray-200 px-3 py-2">US (Sentry DPA + SCCs)</td>
+                      <td className="border border-gray-200 dark:border-gray-800 px-3 py-2">Sentry</td>
+                      <td className="border border-gray-200 dark:border-gray-800 px-3 py-2">Error monitoring (optional, consent-based, PII scrubbed)</td>
+                      <td className="border border-gray-200 dark:border-gray-800 px-3 py-2">US (Sentry DPA + SCCs)</td>
                     </tr>
                     <tr>
-                      <td className="border border-gray-200 px-3 py-2">SMTP Email Provider</td>
-                      <td className="border border-gray-200 px-3 py-2">Transactional emails (appointments, verification)</td>
-                      <td className="border border-gray-200 px-3 py-2">EU</td>
+                      <td className="border border-gray-200 dark:border-gray-800 px-3 py-2">SMTP Email Provider</td>
+                      <td className="border border-gray-200 dark:border-gray-800 px-3 py-2">Transactional emails (appointments, verification)</td>
+                      <td className="border border-gray-200 dark:border-gray-800 px-3 py-2">EU</td>
                     </tr>
                     <tr>
-                      <td className="border border-gray-200 px-3 py-2">Google Fonts</td>
-                      <td className="border border-gray-200 px-3 py-2">Font delivery (Inter typeface)</td>
-                      <td className="border border-gray-200 px-3 py-2">Global CDN</td>
+                      <td className="border border-gray-200 dark:border-gray-800 px-3 py-2">Google Fonts</td>
+                      <td className="border border-gray-200 dark:border-gray-800 px-3 py-2">Font delivery (Inter typeface)</td>
+                      <td className="border border-gray-200 dark:border-gray-800 px-3 py-2">Global CDN</td>
                     </tr>
                   </tbody>
                 </table>
@@ -252,7 +252,7 @@ export default function PrivacyPolicy() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">10. Cookies and Local Storage</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-3">10. Cookies and Local Storage</h2>
               <p>
                 We use the following cookies and browser storage:
               </p>
@@ -269,7 +269,7 @@ export default function PrivacyPolicy() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">11. Children&apos;s Privacy</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-3">11. Children&apos;s Privacy</h2>
               <p>
                 Our system is designed for use by healthcare providers and may contain information about patients of all ages, 
                 including minors. All patient information, including data of minors, is handled in accordance with GDPR and 
@@ -279,7 +279,7 @@ export default function PrivacyPolicy() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">12. Data Breach Notification</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-3">12. Data Breach Notification</h2>
               <p>
                 In the event of a personal data breach that is likely to result in a risk to your rights and freedoms, 
                 we will notify the NAIH within 72 hours of becoming aware of the breach (Art. 33). If the breach is likely 
@@ -288,7 +288,7 @@ export default function PrivacyPolicy() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">13. Changes to This Privacy Policy</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-3">13. Changes to This Privacy Policy</h2>
               <p>
                 We may update this Privacy Policy from time to time. Material changes will be communicated via email 
                 or in-app notification. The policy version and effective date are displayed at the top of this page. 
@@ -298,7 +298,7 @@ export default function PrivacyPolicy() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">14. Contact Us</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-3">14. Contact Us</h2>
               <p>
                 If you have any questions or concerns about this Privacy Policy or our data practices, please contact us at:
               </p>

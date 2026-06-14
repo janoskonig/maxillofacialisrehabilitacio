@@ -205,7 +205,7 @@ export function CreateGroupChatModal({ isOpen, onClose, onGroupCreated, existing
       {/* Group Name - only for new groups */}
       {!existingGroupId && (
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Csoport neve (opcionális)
           </label>
           <input
@@ -219,10 +219,10 @@ export function CreateGroupChatModal({ isOpen, onClose, onGroupCreated, existing
       )}
 
       {/* Add by Institution */}
-      <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+      <div className="border border-gray-200 dark:border-gray-800 rounded-lg p-4 bg-gray-50 dark:bg-gray-800/60">
         <div className="flex items-center gap-2 mb-3">
-          <Building2 className="w-5 h-5 text-gray-600" />
-          <h3 className="font-medium text-gray-900">Hozzáadás intézmény szerint</h3>
+          <Building2 className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+          <h3 className="font-medium text-gray-900 dark:text-gray-100">Hozzáadás intézmény szerint</h3>
         </div>
         <div className="flex gap-2">
           <select
@@ -256,7 +256,7 @@ export function CreateGroupChatModal({ isOpen, onClose, onGroupCreated, existing
       {/* Search */}
       <div>
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-5 h-5" />
           <input
             type="text"
             value={searchQuery}

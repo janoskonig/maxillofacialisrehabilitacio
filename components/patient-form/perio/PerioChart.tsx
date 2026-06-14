@@ -118,7 +118,7 @@ export function PerioChart({ patientId, isViewOnly }: PerioChartProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-sm text-gray-500 py-4">
+      <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 py-4">
         <Loader2 className="w-4 h-4 animate-spin" /> Parodontális adatok betöltése…
       </div>
     );
@@ -129,14 +129,14 @@ export function PerioChart({ patientId, isViewOnly }: PerioChartProps) {
 
   const renderNumRow = (teeth: number[], surface: PerioSurfaceKey, metric: Metric, label: string) => (
     <div className="flex items-center">
-      <div className="w-[78px] shrink-0 pr-2 text-right text-[11px] text-gray-500">{label}</div>
+      <div className="w-[78px] shrink-0 pr-2 text-right text-[11px] text-gray-500 dark:text-gray-400">{label}</div>
       {teeth.map((tooth) => {
         const site = getSite(getTooth(data, String(tooth)), surface);
         return (
           <div key={tooth} className="flex shrink-0 justify-center gap-0.5" style={{ width: 90 }}>
             {[0, 1, 2].map((i) =>
               isViewOnly ? (
-                <span key={i} className={`${numCellCls} inline-flex items-center justify-center ${metric === 'pd' && site.pd[i] >= 4 ? 'text-red-700 font-semibold' : 'text-gray-700'}`}>
+                <span key={i} className={`${numCellCls} inline-flex items-center justify-center ${metric === 'pd' && site.pd[i] >= 4 ? 'text-red-700 font-semibold' : 'text-gray-700 dark:text-gray-300'}`}>
                   {site[metric][i]}
                 </span>
               ) : (
@@ -158,7 +158,7 @@ export function PerioChart({ patientId, isViewOnly }: PerioChartProps) {
 
   const renderFlagRow = (teeth: number[], surface: PerioSurfaceKey, flag: Flag, label: string, color: string) => (
     <div className="flex items-center">
-      <div className="w-[78px] shrink-0 pr-2 text-right text-[11px] text-gray-500">{label}</div>
+      <div className="w-[78px] shrink-0 pr-2 text-right text-[11px] text-gray-500 dark:text-gray-400">{label}</div>
       {teeth.map((tooth) => {
         const site = getSite(getTooth(data, String(tooth)), surface);
         return (
@@ -193,13 +193,13 @@ export function PerioChart({ patientId, isViewOnly }: PerioChartProps) {
 
   const renderToothMeta = (teeth: number[]) => (
     <div className="flex items-center">
-      <div className="w-[78px] shrink-0 pr-2 text-right text-[11px] text-gray-500">Mob. / Furk.</div>
+      <div className="w-[78px] shrink-0 pr-2 text-right text-[11px] text-gray-500 dark:text-gray-400">Mob. / Furk.</div>
       {teeth.map((tooth) => {
         const t = getTooth(data, String(tooth));
         return (
           <div key={tooth} className="flex shrink-0 justify-center gap-1 items-center" style={{ width: 90 }}>
             {isViewOnly ? (
-              <span className="text-[11px] text-gray-600">
+              <span className="text-[11px] text-gray-600 dark:text-gray-400">
                 {(t.mobility ?? 0) || '–'} / {(t.furcation ?? 0) || '–'}
               </span>
             ) : (
@@ -231,7 +231,7 @@ export function PerioChart({ patientId, isViewOnly }: PerioChartProps) {
   const renderArch = (teeth: number[], oralLabel: string) => (
     <div className="overflow-x-auto pb-2">
       <div className="min-w-max space-y-1">
-        <div className="text-[11px] font-medium text-gray-500 mt-1 mb-1">Bukkális</div>
+        <div className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mt-1 mb-1">Bukkális</div>
         {renderFlagRow(teeth, 'buccal', 'plaque', 'Plakk', '#EF9F27')}
         {renderFlagRow(teeth, 'buccal', 'bop', 'Vérzés', '#E24B4A')}
         {renderNumRow(teeth, 'buccal', 'pd', 'Tasak')}
@@ -241,7 +241,7 @@ export function PerioChart({ patientId, isViewOnly }: PerioChartProps) {
         {renderNumRow(teeth, 'oral', 'pd', 'Tasak')}
         {renderFlagRow(teeth, 'oral', 'bop', 'Vérzés', '#E24B4A')}
         {renderFlagRow(teeth, 'oral', 'plaque', 'Plakk', '#EF9F27')}
-        <div className="text-[11px] font-medium text-gray-500 mt-1 mb-1">{oralLabel}</div>
+        <div className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mt-1 mb-1">{oralLabel}</div>
         {renderToothMeta(teeth)}
       </div>
     </div>
@@ -250,7 +250,7 @@ export function PerioChart({ patientId, isViewOnly }: PerioChartProps) {
   return (
     <div className="space-y-4">
       {error && (
-        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 dark:bg-red-900/20 dark:text-red-300">
+        <div className="text-sm text-red-700 bg-red-50 border border-red-200 dark:border-red-800 rounded px-3 py-2 dark:bg-red-900/20 dark:text-red-300">
           {error}
         </div>
       )}
@@ -267,7 +267,7 @@ export function PerioChart({ patientId, isViewOnly }: PerioChartProps) {
       <div className="flex items-center gap-3 flex-wrap text-xs text-gray-600 dark:text-gray-300">
         <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: '#E24B4A' }} />Vérzés (BOP)</span>
         <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: '#EF9F27' }} />Plakk</span>
-        <span className="text-gray-500">Tasak ≥4 mm pirosan. Mob. = mobilitás, Furk. = furkáció (0–3).</span>
+        <span className="text-gray-500 dark:text-gray-400">Tasak ≥4 mm pirosan. Mob. = mobilitás, Furk. = furkáció (0–3).</span>
       </div>
 
       {!isViewOnly && (
@@ -282,9 +282,9 @@ export function PerioChart({ patientId, isViewOnly }: PerioChartProps) {
             Parodontális státusz mentése
           </button>
           {dirty ? (
-            <span className="text-xs text-amber-600">Nem mentett változások</span>
+            <span className="text-xs text-amber-600 dark:text-amber-300">Nem mentett változások</span>
           ) : savedAt ? (
-            <span className="text-xs text-gray-400">Mentve</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500">Mentve</span>
           ) : null}
         </div>
       )}

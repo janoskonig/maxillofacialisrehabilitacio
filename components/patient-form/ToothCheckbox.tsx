@@ -80,7 +80,7 @@ export function ToothCheckbox({ toothNumber, value, onChange, disabled, idPrefix
     <div className="flex flex-col items-center gap-1">
       <label 
         htmlFor={checkboxId}
-        className="text-xs sm:text-xs text-gray-600 font-medium cursor-pointer"
+        className="text-xs sm:text-xs text-gray-600 dark:text-gray-400 font-medium cursor-pointer"
       >
         {toothNumber}
       </label>

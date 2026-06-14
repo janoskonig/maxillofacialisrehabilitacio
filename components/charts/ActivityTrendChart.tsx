@@ -20,7 +20,7 @@ export function ActivityTrendChart({ data }: { data: ActivityTrendRow[] }) {
   const total = data.reduce((sum, d) => sum + d.darab, 0);
   if (total === 0) {
     return (
-      <div className="flex h-56 items-center justify-center text-sm text-gray-500">
+      <div className="flex h-56 items-center justify-center text-sm text-gray-500 dark:text-gray-400">
         Az utolsó 30 napban nem volt rögzített aktivitás.
       </div>
     );
@@ -31,14 +31,14 @@ export function ActivityTrendChart({ data }: { data: ActivityTrendRow[] }) {
   return (
     <div>
       <div className="mb-2 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs">
-        <span className="text-gray-500">
-          Összes: <span className="font-semibold tabular-nums text-gray-900">{total}</span>
+        <span className="text-gray-500 dark:text-gray-400">
+          Összes: <span className="font-semibold tabular-nums text-gray-900 dark:text-gray-100">{total}</span>
         </span>
-        <span className="text-gray-500">
-          Napi átlag: <span className="font-semibold tabular-nums text-gray-900">{avg}</span>
+        <span className="text-gray-500 dark:text-gray-400">
+          Napi átlag: <span className="font-semibold tabular-nums text-gray-900 dark:text-gray-100">{avg}</span>
         </span>
-        <span className="text-gray-500">
-          Csúcs: <span className="font-semibold tabular-nums text-gray-900">{max}</span>
+        <span className="text-gray-500 dark:text-gray-400">
+          Csúcs: <span className="font-semibold tabular-nums text-gray-900 dark:text-gray-100">{max}</span>
         </span>
       </div>
       <ResponsiveContainer width="100%" height={220}>
@@ -70,9 +70,9 @@ export function ActivityTrendChart({ data }: { data: ActivityTrendRow[] }) {
               if (!active || !payload?.length) return null;
               const row = payload[0].payload as ActivityTrendRow;
               return (
-                <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm shadow-md">
-                  <p className="font-semibold text-gray-900">{row.cimke}</p>
-                  <p className="mt-0.5 tabular-nums text-gray-600">
+                <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-3 py-2 text-sm shadow-md">
+                  <p className="font-semibold text-gray-900 dark:text-gray-100">{row.cimke}</p>
+                  <p className="mt-0.5 tabular-nums text-gray-600 dark:text-gray-400">
                     {row.darab} esemény
                   </p>
                 </div>

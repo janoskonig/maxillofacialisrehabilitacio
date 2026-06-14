@@ -28,21 +28,21 @@ export function ConflictModal({
   
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-md w-full">
         <div className="p-6">
           <div className="flex items-start mb-4">
             <AlertTriangle className="w-6 h-6 text-amber-600 mr-3 mt-0.5 flex-shrink-0" />
             <div className="flex-1">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                 Konfliktus észlelve
               </h3>
-              <p className="text-sm text-gray-700 mb-4">
+              <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">
                 Másik felhasználó módosította a beteg adatait közben. Mit szeretne tenni?
               </p>
               
               {details && (
-                <details className="mb-4 text-xs text-gray-600">
-                  <summary className="cursor-pointer hover:text-gray-800 mb-2">
+                <details className="mb-4 text-xs text-gray-600 dark:text-gray-400">
+                  <summary className="cursor-pointer hover:text-gray-800 dark:hover:text-gray-200 mb-2">
                     Részletek
                   </summary>
                   <div className="pl-4 space-y-1">
@@ -70,7 +70,7 @@ export function ConflictModal({
           <button
             type="button"
             onClick={onDismiss}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400"
             aria-label="Modal bezárása"
           >
             <X className="w-5 h-5" />

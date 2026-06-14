@@ -229,7 +229,7 @@ export function ContextLinkAttachPicker({
       </div>
 
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
         <input
           type="search"
           className="form-input w-full pl-9"
@@ -241,12 +241,12 @@ export function ContextLinkAttachPicker({
 
       {loading ? (
         <div className="flex justify-center py-8">
-          <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+          <Loader2 className="w-6 h-6 animate-spin text-gray-400 dark:text-gray-500" />
         </div>
       ) : error ? (
-        <p className="text-sm text-red-600">{error}</p>
+        <p className="text-sm text-red-600 dark:text-red-300">{error}</p>
       ) : filtered.length === 0 ? (
-        <p className="text-sm text-gray-500 py-4 text-center">Nincs választható elem.</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 py-4 text-center">Nincs választható elem.</p>
       ) : (
         <ul className="overflow-y-auto max-h-[45vh] divide-y border rounded-lg">
           {filtered.map((row) => {
@@ -266,11 +266,11 @@ export function ContextLinkAttachPicker({
                     });
                     onClose();
                   }}
-                  className="w-full text-left px-3 py-2.5 hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="w-full text-left px-3 py-2.5 hover:bg-blue-50 dark:hover:bg-blue-950/40 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <div className="font-medium text-sm truncate">{row.label}</div>
                   {row.subtitle ? (
-                    <div className="text-xs text-gray-500 truncate">{row.subtitle}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{row.subtitle}</div>
                   ) : null}
                 </button>
               </li>
@@ -293,10 +293,10 @@ export function ContextLinkAttachPicker({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" role="dialog" aria-modal>
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[85vh] flex flex-col">
+      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-md max-h-[85vh] flex flex-col">
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <h2 className="text-lg font-semibold">Kontextus csatolása</h2>
-          <button type="button" onClick={onClose} className="p-1 rounded hover:bg-gray-100" aria-label="Bezárás">
+          <button type="button" onClick={onClose} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="Bezárás">
             <X className="w-5 h-5" />
           </button>
         </div>

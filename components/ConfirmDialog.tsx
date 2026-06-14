@@ -26,9 +26,9 @@ export function ConfirmDialog({
   if (!isOpen) return null;
 
   const colors = {
-    danger: 'bg-red-50 border-red-200',
-    warning: 'bg-yellow-50 border-yellow-200',
-    info: 'bg-blue-50 border-blue-200',
+    danger: 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800',
+    warning: 'bg-yellow-50 dark:bg-yellow-950/40 border-yellow-200 dark:border-yellow-800',
+    info: 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800',
   };
 
   const buttonColors = {
@@ -53,12 +53,12 @@ export function ConfirmDialog({
             'text-blue-600'
           }`} />
           <div className="flex-1">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">{title}</h3>
-            <div className="text-sm text-gray-700 mb-4 whitespace-pre-line">{message}</div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">{title}</h3>
+            <div className="text-sm text-gray-700 dark:text-gray-300 mb-4 whitespace-pre-line">{message}</div>
             <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
               <button
                 onClick={onCancel}
-                className="px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors min-h-[44px]"
+                className="px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors min-h-[44px]"
               >
                 {cancelText}
               </button>

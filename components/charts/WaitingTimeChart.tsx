@@ -19,8 +19,8 @@ export function WaitingTimeChart({
 }: WaitingTimeChartProps) {
   return (
     <div className="space-y-6">
-      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-4">
-        <p className="text-sm text-gray-600 mb-2">
+      <div className="bg-gray-50 dark:bg-gray-800/60 p-4 rounded-lg border border-gray-200 dark:border-gray-800 mb-4">
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
           Összesen <span className="font-semibold">{betegSzamaIdoponttal}</span> betegnek van időpontja
         </p>
       </div>

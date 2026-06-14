@@ -63,14 +63,14 @@ const STAGE_COLORS: Record<string, string> = {
 };
 
 const STAGE_BADGE_COLORS: Record<string, string> = {
-  STAGE_0: 'bg-blue-100 text-blue-800 ring-blue-200',
-  STAGE_1: 'bg-blue-100 text-blue-800 ring-blue-200',
-  STAGE_2: 'bg-indigo-100 text-indigo-800 ring-indigo-200',
-  STAGE_3: 'bg-violet-100 text-violet-800 ring-violet-200',
-  STAGE_4: 'bg-amber-100 text-amber-800 ring-amber-200',
-  STAGE_5: 'bg-emerald-100 text-emerald-800 ring-emerald-200',
-  STAGE_6: 'bg-teal-100 text-teal-800 ring-teal-200',
-  STAGE_7: 'bg-slate-100 text-slate-800 ring-slate-200',
+  STAGE_0: 'bg-blue-100 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300 ring-blue-200 dark:ring-blue-800',
+  STAGE_1: 'bg-blue-100 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300 ring-blue-200 dark:ring-blue-800',
+  STAGE_2: 'bg-indigo-100 dark:bg-indigo-950/50 text-indigo-800 dark:text-indigo-300 ring-indigo-200 dark:ring-indigo-800',
+  STAGE_3: 'bg-violet-100 dark:bg-violet-950/50 text-violet-800 dark:text-violet-300 ring-violet-200 dark:ring-violet-800',
+  STAGE_4: 'bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 ring-amber-200 dark:ring-amber-800',
+  STAGE_5: 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-800',
+  STAGE_6: 'bg-teal-100 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300 ring-teal-200 dark:ring-teal-800',
+  STAGE_7: 'bg-slate-100 dark:bg-slate-950/50 text-slate-800 dark:text-slate-300 ring-slate-200 dark:ring-slate-800',
 };
 
 const CLOSED_GROUP_KEY = '__closed__';
@@ -81,7 +81,7 @@ function getStageColor(stageCode: string): string {
 }
 
 function getStageBadgeColor(stageCode: string): string {
-  return STAGE_BADGE_COLORS[stageCode] ?? 'bg-gray-100 text-gray-700 ring-gray-200';
+  return STAGE_BADGE_COLORS[stageCode] ?? 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 ring-gray-200 dark:ring-gray-700';
 }
 
 function daysBetween(fromIso: string, toMs: number): number {
@@ -330,9 +330,9 @@ export function StagesGanttChart({
   const nowMs = Date.now();
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+    <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
       {/* Legend */}
-      <div className="flex flex-wrap gap-2 p-3 border-b border-gray-200 bg-gray-50">
+      <div className="flex flex-wrap gap-2 p-3 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60">
         {catalog
           .slice()
           .sort((a, b) => a.orderIndex - b.orderIndex)

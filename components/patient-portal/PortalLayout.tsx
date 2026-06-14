@@ -115,9 +115,9 @@ export function PortalLayout({ children }: PortalLayoutProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b sticky top-0 z-30 max-sm:mobile-safe-top">
+      <header className="bg-white dark:bg-gray-900 shadow-sm border-b sticky top-0 z-30 max-sm:mobile-safe-top">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8">
           <div className="flex items-center justify-between py-3 sm:py-4">
             <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">

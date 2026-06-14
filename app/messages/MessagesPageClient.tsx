@@ -81,8 +81,8 @@ export default function MessagesPageClient() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-pulse text-gray-500">Betöltés...</div>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
+        <div className="animate-pulse text-gray-500 dark:text-gray-400">Betöltés...</div>
       </div>
     );
   }
@@ -101,14 +101,14 @@ export default function MessagesPageClient() {
       <MessageSearchProvider
         preferredChannel={activeTab === 'doctor-doctor' ? 'doctor' : 'patient'}
       >
-        <div className="mb-4 border-b border-gray-200 overflow-x-auto scrollbar-hide">
+        <div className="mb-4 border-b border-gray-200 dark:border-gray-800 overflow-x-auto scrollbar-hide">
           <nav className="flex gap-1 min-w-max" aria-label="Üzenetek fülök">
             <button
               onClick={() => setActiveTab('doctor-doctor')}
               className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
                 activeTab === 'doctor-doctor'
                   ? 'text-medical-primary border-medical-primary'
-                  : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
+                  : 'text-gray-700 dark:text-gray-300 hover:text-medical-primary border-transparent hover:border-medical-primary'
               }`}
             >
               <Users className="w-4 h-4" />
@@ -124,7 +124,7 @@ export default function MessagesPageClient() {
               className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
                 activeTab === 'doctor-patient'
                   ? 'text-medical-primary border-medical-primary'
-                  : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
+                  : 'text-gray-700 dark:text-gray-300 hover:text-medical-primary border-transparent hover:border-medical-primary'
               }`}
             >
               <MessageCircle className="w-4 h-4" />

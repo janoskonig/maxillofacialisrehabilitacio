@@ -125,7 +125,7 @@ export default function PatientStagesPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
         <div className="flex items-center justify-center h-screen">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-medical-primary"></div>
         </div>

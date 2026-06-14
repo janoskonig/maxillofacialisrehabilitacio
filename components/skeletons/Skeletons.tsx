@@ -7,13 +7,13 @@
  */
 
 export function Shimmer({ className = '' }: { className?: string }) {
-  return <div className={`animate-pulse rounded bg-gray-200 ${className}`} />;
+  return <div className={`animate-pulse rounded bg-gray-200 dark:bg-gray-700 ${className}`} />;
 }
 
 /** Egységes oldalfejléc-csík (a PageHeader helyén). */
 function HeaderBar() {
   return (
-    <div className="border-b border-gray-200 bg-white">
+    <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
       <div className="mx-auto flex h-14 w-full max-w-7xl items-center gap-3 px-4">
         <Shimmer className="h-6 w-6 rounded-md" />
         <Shimmer className="h-5 w-40" />
@@ -29,7 +29,7 @@ function HeaderBar() {
 /** Univerzális lista/oldal skeleton — minden staff útvonal és a páciens-lista alapértelmezett fallbackja. */
 export function PageListSkeleton({ rows = 8 }: { rows?: number }) {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <HeaderBar />
       <div className="mx-auto w-full max-w-5xl px-4 py-6">
         <div className="mb-4 flex items-center gap-3">
@@ -56,7 +56,7 @@ export function PageListSkeleton({ rows = 8 }: { rows?: number }) {
 /** Naptár skeleton — heti rács fejléccel. */
 export function CalendarSkeleton() {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <HeaderBar />
       <div className="mx-auto w-full max-w-5xl px-4 py-6">
         <div className="mb-4 flex items-center justify-between">
@@ -83,7 +83,7 @@ export function CalendarSkeleton() {
 /** Üzenet-nézet skeleton — beszélgetéslista + szál panel. */
 export function MessagesSkeleton() {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <HeaderBar />
       <div className="mx-auto w-full max-w-7xl px-4 py-6">
         <div className="mb-4 flex gap-2">

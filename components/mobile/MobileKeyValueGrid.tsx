@@ -25,8 +25,8 @@ export function MobileKeyValueGrid({ items, className = '' }: MobileKeyValueGrid
     <div className={`grid grid-cols-2 gap-x-4 gap-y-2 ${className}`}>
       {items.map((item, index) => (
         <div key={index}>
-          <div className="text-gray-600 text-sm">{item.key}</div>
-          <div className="text-gray-900 text-sm font-medium mt-0.5">
+          <div className="text-gray-600 dark:text-gray-400 text-sm">{item.key}</div>
+          <div className="text-gray-900 dark:text-gray-100 text-sm font-medium mt-0.5">
             {item.value}
           </div>
         </div>

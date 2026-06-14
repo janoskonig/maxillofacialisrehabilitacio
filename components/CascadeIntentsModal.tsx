@@ -84,33 +84,33 @@ export function CascadeIntentsModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" role="dialog" aria-modal="true" aria-labelledby="cascade-intents-title">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between p-4 border-b">
-          <h2 id="cascade-intents-title" className="text-lg font-semibold text-gray-900">
+          <h2 id="cascade-intents-title" className="text-lg font-semibold text-gray-900 dark:text-gray-100">
             Tervezett lépések eltolása
           </h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 p-1" aria-label="Bezárás">
+          <button onClick={onClose} className="text-gray-500 dark:text-gray-400 hover:text-gray-700 p-1" aria-label="Bezárás">
             <X className="w-5 h-5" />
           </button>
         </div>
         <div className="p-4 overflow-y-auto">
-          <p className="text-sm text-gray-600 mb-3">
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
             Az időpontot {formatDelta(deltaMs)} eltoltad. A következő tervezett lépések (még nem fix) időpontjait is eltoljam ugyanannyival?
           </p>
           <ul className="space-y-2">
             {intents.map((intent) => (
-              <li key={intent.id} className="flex items-center gap-3 p-2 rounded border border-gray-200 hover:bg-gray-50">
+              <li key={intent.id} className="flex items-center gap-3 p-2 rounded border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
                 <input
                   type="checkbox"
                   id={`cascade-${intent.id}`}
                   checked={selected.has(intent.id)}
                   onChange={() => handleToggle(intent.id)}
-                  className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
+                  className="rounded border-gray-300 dark:border-gray-700 text-medical-primary focus:ring-medical-primary"
                 />
                 <label htmlFor={`cascade-${intent.id}`} className="flex-1 cursor-pointer text-sm">
-                  <span className="font-medium text-gray-700">{intent.stepCode}</span>
+                  <span className="font-medium text-gray-700 dark:text-gray-300">{intent.stepCode}</span>
                   {intent.suggestedStart && (
-                    <span className="text-gray-500 ml-2">
+                    <span className="text-gray-500 dark:text-gray-400 ml-2">
                       {formatDateTime(intent.suggestedStart)}
                     </span>
                   )}
@@ -119,7 +119,7 @@ export function CascadeIntentsModal({
             ))}
           </ul>
         </div>
-        <div className="flex gap-2 justify-end p-4 border-t bg-gray-50">
+        <div className="flex gap-2 justify-end p-4 border-t bg-gray-50 dark:bg-gray-800/60">
           <button type="button" onClick={onClose} className="btn-secondary">
             Nem
           </button>

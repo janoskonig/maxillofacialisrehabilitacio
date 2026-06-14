@@ -88,7 +88,7 @@ const SENDER_TYPE_LABEL_HU: Record<string, string> = {
 function ChartSkeleton({ height = 'h-60' }: { height?: string }) {
   return (
     <div
-      className={`${height} animate-pulse rounded-xl bg-gradient-to-br from-gray-100 to-gray-50`}
+      className={`${height} animate-pulse rounded-xl bg-gradient-to-br from-gray-100 to-gray-50 dark:from-gray-800 dark:to-gray-800/60`}
       aria-hidden
     />
   );
@@ -111,7 +111,7 @@ function DistributionBars({
 }) {
   const max = maxInSeries(items);
   if (items.length === 0) {
-    return <p className="text-sm text-gray-500">Nincs megjeleníthető adat.</p>;
+    return <p className="text-sm text-gray-500 dark:text-gray-400">Nincs megjeleníthető adat.</p>;
   }
   return (
     <ul className="space-y-3" role="list">
@@ -122,13 +122,13 @@ function DistributionBars({
         return (
           <li key={idx}>
             <div className="flex justify-between gap-3 text-sm">
-              <span className="truncate text-gray-700" title={label}>
+              <span className="truncate text-gray-700 dark:text-gray-300" title={label}>
                 {label}
               </span>
-              <span className="tabular-nums font-semibold text-gray-900 shrink-0">{item.darab}</span>
+              <span className="tabular-nums font-semibold text-gray-900 dark:text-gray-100 shrink-0">{item.darab}</span>
             </div>
             <div
-              className="mt-1.5 h-2 rounded-full bg-gray-100 overflow-hidden"
+              className="mt-1.5 h-2 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden"
               aria-hidden
             >
               <div
@@ -184,23 +184,23 @@ function KpiCard({
   const isPositive = trendInverted ? (trendPct ?? 0) <= 0 : (trendPct ?? 0) >= 0;
   return (
     <div
-      className={`group relative overflow-hidden rounded-2xl border border-gray-200/80 bg-gradient-to-br p-5 shadow-soft ring-1 transition-shadow duration-300 hover:shadow-soft-md ${ring[accent]}`}
+      className={`group relative overflow-hidden rounded-2xl border border-gray-200/80 dark:border-gray-800 bg-gradient-to-br p-5 shadow-soft ring-1 transition-shadow duration-300 hover:shadow-soft-md ${ring[accent]}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{title}</p>
-          <p className="mt-1 text-3xl font-bold tracking-tight text-gray-900 tabular-nums">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{title}</p>
+          <p className="mt-1 text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100 tabular-nums">
             {value}
           </p>
           {subtitle ? (
-            <p className="mt-1 truncate text-xs text-gray-500" title={subtitle}>
+            <p className="mt-1 truncate text-xs text-gray-500 dark:text-gray-400" title={subtitle}>
               {subtitle}
             </p>
           ) : null}
           {typeof trendPct === 'number' ? (
             <div
               className={`mt-2 inline-flex items-center gap-1 text-xs font-semibold ${
-                isPositive ? 'text-emerald-600' : 'text-rose-600'
+                isPositive ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300'
               }`}
             >
               {isPositive ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
@@ -227,9 +227,9 @@ function MiniStat({
   valueClassName?: string;
 }) {
   return (
-    <div className="rounded-xl border border-gray-100 bg-gray-50/80 px-4 py-3">
-      <p className="text-xs font-medium text-gray-500">{label}</p>
-      <p className={`mt-0.5 text-xl font-bold tabular-nums ${valueClassName ?? 'text-gray-900'}`}>
+    <div className="rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-800/60 px-4 py-3">
+      <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{label}</p>
+      <p className={`mt-0.5 text-xl font-bold tabular-nums ${valueClassName ?? 'text-gray-900 dark:text-gray-100'}`}>
         {value}
       </p>
     </div>
@@ -259,10 +259,10 @@ function SectionShell({
         <div className="flex items-start gap-3">
           <div className="mt-0.5 rounded-lg bg-medical-primary/10 p-2 text-medical-primary">{icon}</div>
           <div>
-            <h2 id={`${id}-heading`} className="text-lg font-semibold text-gray-900">
+            <h2 id={`${id}-heading`} className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               {title}
             </h2>
-            {description ? <p className="mt-0.5 text-sm text-gray-500">{description}</p> : null}
+            {description ? <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">{description}</p> : null}
           </div>
         </div>
       </div>
@@ -276,11 +276,11 @@ function StatsLoadingSkeleton() {
     <div className="space-y-8 animate-pulse" aria-busy="true" aria-label="Statisztikák betöltése">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-28 rounded-2xl bg-gray-200/80" />
+          <div key={i} className="h-28 rounded-2xl bg-gray-200/80 dark:bg-gray-700" />
         ))}
       </div>
-      <div className="h-48 rounded-xl bg-gray-200/70" />
-      <div className="h-64 rounded-xl bg-gray-200/70" />
+      <div className="h-48 rounded-xl bg-gray-200/70 dark:bg-gray-700" />
+      <div className="h-64 rounded-xl bg-gray-200/70 dark:bg-gray-700" />
     </div>
   );
 }
@@ -445,17 +445,17 @@ export default function StatsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100/80 flex items-center justify-center">
-        <p className="text-gray-600">Betöltés...</p>
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100/80 dark:from-gray-950 dark:to-gray-900 flex items-center justify-center">
+        <p className="text-gray-600 dark:text-gray-400">Betöltés...</p>
       </div>
     );
   }
 
   if (!authorized) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100/80 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100/80 dark:from-gray-950 dark:to-gray-900 flex items-center justify-center p-6">
         <div className="card max-w-md w-full text-center shadow-soft-md">
-          <p className="text-gray-700">Nincs jogosultsága a statisztikák megtekintéséhez.</p>
+          <p className="text-gray-700 dark:text-gray-300">Nincs jogosultsága a statisztikák megtekintéséhez.</p>
           <button className="btn-secondary mt-4" onClick={() => router.push('/')}>
             Vissza a főoldalra
           </button>

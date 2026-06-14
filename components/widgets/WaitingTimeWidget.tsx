@@ -72,7 +72,7 @@ export function WaitingTimeWidget() {
   if (loading) {
     return (
       <DashboardWidget title="Várakozási idők" icon={<Clock className="w-5 h-5" />}>
-        <div className="text-center py-4 text-gray-500 text-sm">Betöltés...</div>
+        <div className="text-center py-4 text-gray-500 dark:text-gray-400 text-sm">Betöltés...</div>
       </DashboardWidget>
     );
   }
@@ -87,38 +87,38 @@ export function WaitingTimeWidget() {
       <div className="space-y-4">
         {/* Első konzultáció */}
         {stats.elsoKonzultacio ? (
-          <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-            <div className="text-sm font-semibold text-gray-700 mb-1">
+          <div className="p-3 bg-blue-50 dark:bg-blue-950/40 rounded-lg border border-blue-200 dark:border-blue-800">
+            <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
               Első konzultáció
             </div>
             <div className="text-lg font-bold text-medical-primary">
               {stats.elsoKonzultacio.atlag.toFixed(1)}
               {stats.elsoKonzultacio.szoras !== null && (
-                <span className="text-sm font-normal text-gray-600 ml-1">
+                <span className="text-sm font-normal text-gray-600 dark:text-gray-400 ml-1">
                   ± {stats.elsoKonzultacio.szoras.toFixed(1)} nap
                 </span>
               )}
             </div>
-            <div className="text-xs text-gray-500 mt-1">
+            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               {stats.elsoKonzultacio.betegSzama} beteg alapján
             </div>
             {longWaitingPatients.length > 0 && (
-              <div className="mt-3 pt-3 border-t border-blue-300">
-                <div className="text-xs font-semibold text-red-600 mb-1">
+              <div className="mt-3 pt-3 border-t border-blue-300 dark:border-blue-700">
+                <div className="text-xs font-semibold text-red-600 dark:text-red-300 mb-1">
                   31+ nap várakozás ({longWaitingPatients.length} beteg):
                 </div>
                 <div className="space-y-1">
                   {longWaitingPatients.slice(0, 5).map((patient) => (
                     <div
                       key={patient.patientId}
-                      className="text-xs text-red-700 font-medium truncate"
+                      className="text-xs text-red-700 dark:text-red-300 font-medium truncate"
                       title={`${patient.patientName} - ${patient.waitingTimeDays.toFixed(1)} nap`}
                     >
                       • {patient.patientName || 'Névtelen beteg'} ({patient.waitingTimeDays.toFixed(1)} nap)
                     </div>
                   ))}
                   {longWaitingPatients.length > 5 && (
-                    <div className="text-xs text-red-600 italic">
+                    <div className="text-xs text-red-600 dark:text-red-300 italic">
                       +{longWaitingPatients.length - 5} további beteg
                     </div>
                   )}

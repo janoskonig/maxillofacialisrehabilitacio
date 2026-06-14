@@ -75,14 +75,14 @@ export function MeltanyossagiSection({
             <label className="form-label">Kórtörténeti összefoglaló (3 hónapnál nem régebbi)</label>
             <textarea {...register('kortortenetiOsszefoglalo')} className="form-input min-h-[100px]" placeholder="Kórtörténeti összefoglaló..." readOnly={isViewOnly} rows={4} />
             {errors.kortortenetiOsszefoglalo && (
-              <p className="text-red-500 text-sm mt-1">{errors.kortortenetiOsszefoglalo.message}</p>
+              <p className="text-red-500 dark:text-red-400 text-sm mt-1">{errors.kortortenetiOsszefoglalo.message}</p>
             )}
           </div>
           <div>
             <label className="form-label">Szakorvosi vélemény az eszközrendelés szükségességéről (orvosszakmai indok)</label>
             <textarea {...register('szakorvosiVelemény')} className="form-input min-h-[100px]" placeholder="Szakorvosi vélemény..." readOnly={isViewOnly} rows={4} />
             {errors.szakorvosiVelemény && (
-              <p className="text-red-500 text-sm mt-1">{errors.szakorvosiVelemény.message}</p>
+              <p className="text-red-500 dark:text-red-400 text-sm mt-1">{errors.szakorvosiVelemény.message}</p>
             )}
           </div>
         </div>

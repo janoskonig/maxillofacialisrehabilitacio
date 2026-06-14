@@ -24,7 +24,7 @@ const QUADRANTS = {
 export function ToothPositionsChart({ data }: ToothPositionsChartProps) {
   if (data.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64 text-gray-500">
+      <div className="flex items-center justify-center h-64 text-gray-500 dark:text-gray-400">
         Nincs adat megjelenítésre
       </div>
     );
@@ -103,7 +103,7 @@ export function ToothPositionsChart({ data }: ToothPositionsChartProps) {
       {/* Négy kvadránsos elrendezés - négy bar chart */}
       <div className="grid grid-cols-2 gap-6">
         {/* Bal felső kvadráns */}
-        <div className="border-2 border-gray-400 rounded-lg p-4">
+        <div className="border-2 border-gray-400 dark:border-gray-700 rounded-lg p-4">
           <QuadrantChart 
             title="Jobb felső (18-11)" 
             quadrantData={getQuadrantData(QUADRANTS.topLeft)}
@@ -111,7 +111,7 @@ export function ToothPositionsChart({ data }: ToothPositionsChartProps) {
         </div>
 
         {/* Jobb felső kvadráns */}
-        <div className="border-2 border-gray-400 rounded-lg p-4">
+        <div className="border-2 border-gray-400 dark:border-gray-700 rounded-lg p-4">
           <QuadrantChart 
             title="Bal felső (21-28)" 
             quadrantData={getQuadrantData(QUADRANTS.topRight)}
@@ -119,7 +119,7 @@ export function ToothPositionsChart({ data }: ToothPositionsChartProps) {
         </div>
 
         {/* Bal alsó kvadráns */}
-        <div className="border-2 border-gray-400 rounded-lg p-4">
+        <div className="border-2 border-gray-400 dark:border-gray-700 rounded-lg p-4">
           <QuadrantChart 
             title="Jobb alsó (48-41)" 
             quadrantData={getQuadrantData(QUADRANTS.bottomLeft)}
@@ -127,7 +127,7 @@ export function ToothPositionsChart({ data }: ToothPositionsChartProps) {
         </div>
 
         {/* Jobb alsó kvadráns */}
-        <div className="border-2 border-gray-400 rounded-lg p-4">
+        <div className="border-2 border-gray-400 dark:border-gray-700 rounded-lg p-4">
           <QuadrantChart 
             title="Bal alsó (31-38)" 
             quadrantData={getQuadrantData(QUADRANTS.bottomRight)}

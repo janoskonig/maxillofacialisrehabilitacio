@@ -48,7 +48,7 @@ export function PatientOHIP14View() {
     return (
       <div className="flex flex-col items-center justify-center py-16">
         <Loader2 className="w-10 h-10 animate-spin text-medical-primary" />
-        <p className="mt-4 text-gray-600">Betöltés...</p>
+        <p className="mt-4 text-gray-600 dark:text-gray-400">Betöltés...</p>
       </div>
     );
   }
@@ -59,8 +59,8 @@ export function PatientOHIP14View() {
 
   return (
     <div>
-      <h2 className="text-xl font-semibold text-gray-900 mb-4">OHIP-14 kérdőív</h2>
-      <p className="text-gray-600 mb-6">
+      <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">OHIP-14 kérdőív</h2>
+      <p className="text-gray-600 dark:text-gray-400 mb-6">
         Kérjük, töltse ki a szájegészségével kapcsolatos kérdőívet. A kitöltés a jelenlegi kezelési
         stádiumának megfelelő időpontra érhető el.
       </p>

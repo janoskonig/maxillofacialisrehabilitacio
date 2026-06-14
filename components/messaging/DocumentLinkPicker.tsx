@@ -177,8 +177,8 @@ export function DocumentLinkPicker({
         <div>
           <label className="form-label block mb-1">Beteg</label>
           {selectedPatientId ? (
-            <div className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-              <span className="text-sm font-medium text-gray-900 truncate">
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60 px-3 py-2">
+              <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                 {selectedPatientName || 'Kiválasztott beteg'}
               </span>
               <button
@@ -189,7 +189,7 @@ export function DocumentLinkPicker({
                   setDocuments([]);
                   setPatientSearchQuery('');
                 }}
-                className="text-sm text-blue-600 hover:text-blue-800 flex-shrink-0"
+                className="text-sm text-blue-600 dark:text-blue-300 hover:text-blue-800 flex-shrink-0"
               >
                 Módosítás
               </button>
@@ -197,7 +197,7 @@ export function DocumentLinkPicker({
           ) : (
             <>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
                 <input
                   type="search"
                   className="form-input w-full pl-9"
@@ -208,16 +208,16 @@ export function DocumentLinkPicker({
                 />
               </div>
               {patientSearchQuery.trim() && (
-                <div className="mt-1 max-h-48 overflow-y-auto border border-gray-200 rounded-lg bg-white">
+                <div className="mt-1 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-800 rounded-lg bg-white dark:bg-gray-900">
                   {loadingPatientSearch ? (
-                    <div className="flex items-center justify-center gap-2 py-4 text-sm text-gray-500">
+                    <div className="flex items-center justify-center gap-2 py-4 text-sm text-gray-500 dark:text-gray-400">
                       <Loader2 className="w-4 h-4 animate-spin" />
                       Keresés…
                     </div>
                   ) : patientSearchResults.length === 0 ? (
-                    <p className="py-4 text-center text-sm text-gray-500">Nincs találat</p>
+                    <p className="py-4 text-center text-sm text-gray-500 dark:text-gray-400">Nincs találat</p>
                   ) : (
-                    <ul className="divide-y divide-gray-100">
+                    <ul className="divide-y divide-gray-100 dark:divide-gray-800">
                       {patientSearchResults.map((p) => (
                         <li key={p.id}>
                           <button
@@ -229,7 +229,7 @@ export function DocumentLinkPicker({
                               setPatientSearchResults([]);
                               setDocuments([]);
                             }}
-                            className="w-full text-left px-3 py-2.5 hover:bg-blue-50 transition-colors text-sm font-medium text-gray-900"
+                            className="w-full text-left px-3 py-2.5 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors text-sm font-medium text-gray-900 dark:text-gray-100"
                           >
                             {p.nev || p.id}
                           </button>
@@ -247,7 +247,7 @@ export function DocumentLinkPicker({
       {(portalMode || effectivePatientId) && (
         <>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
             <input
               type="search"
               className="form-input w-full pl-9"
@@ -258,19 +258,19 @@ export function DocumentLinkPicker({
           </div>
 
           {loading ? (
-            <div className="flex justify-center py-8 text-gray-500">
+            <div className="flex justify-center py-8 text-gray-500 dark:text-gray-400">
               <Loader2 className="w-6 h-6 animate-spin" />
             </div>
           ) : error ? (
-            <p className="text-sm text-red-600 py-4">{error}</p>
+            <p className="text-sm text-red-600 dark:text-red-300 py-4">{error}</p>
           ) : filtered.length === 0 ? (
-            <p className="text-sm text-gray-500 py-6 text-center">
+            <p className="text-sm text-gray-500 dark:text-gray-400 py-6 text-center">
               {documents.length === 0
                 ? 'Nincs feltöltött dokumentum ehhez a beteghez.'
                 : 'Nincs találat a keresésre.'}
             </p>
           ) : (
-            <ul className="overflow-y-auto max-h-[50vh] sm:max-h-[360px] divide-y divide-gray-100 border border-gray-200 rounded-lg">
+            <ul className="overflow-y-auto max-h-[50vh] sm:max-h-[360px] divide-y divide-gray-100 dark:divide-gray-800 border border-gray-200 dark:border-gray-800 rounded-lg">
               {filtered.map((doc) => {
                 const uploadedAt = doc.uploadedAt
                   ? format(new Date(doc.uploadedAt), 'yyyy. MM. dd.', { locale: hu })
@@ -280,7 +280,7 @@ export function DocumentLinkPicker({
                     <button
                       type="button"
                       onClick={() => handlePick(doc)}
-                      className="w-full text-left px-3 py-3 hover:bg-blue-50 transition-colors flex gap-3 items-center"
+                      className="w-full text-left px-3 py-3 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors flex gap-3 items-center"
                     >
                       <DocumentListThumbnail
                         documentId={doc.id}
@@ -290,10 +290,10 @@ export function DocumentLinkPicker({
                         portalMode={portalMode}
                       />
                       <div className="min-w-0 flex-1">
-                        <div className="font-medium text-gray-900 truncate">
+                        <div className="font-medium text-gray-900 dark:text-gray-100 truncate">
                           {doc.filename}
                         </div>
-                        <div className="text-xs text-gray-500 mt-0.5 flex flex-wrap gap-x-2">
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 flex flex-wrap gap-x-2">
                           <span>{formatFileSize(doc.fileSize)}</span>
                           {doc.tags?.length > 0 && (
                             <span>{doc.tags.join(', ')}</span>
@@ -311,7 +311,7 @@ export function DocumentLinkPicker({
       )}
 
       {!effectivePatientId && !needsPatientSelection && (
-        <p className="text-sm text-gray-500 py-4">Beteg azonosító hiányzik.</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 py-4">Beteg azonosító hiányzik.</p>
       )}
     </div>
   );
@@ -333,15 +333,15 @@ export function DocumentLinkPicker({
       aria-modal="true"
       aria-labelledby="document-link-picker-title"
     >
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[85vh] flex flex-col">
+      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-md max-h-[85vh] flex flex-col">
         <div className="flex items-center justify-between px-4 py-3 border-b">
-          <h2 id="document-link-picker-title" className="text-lg font-semibold text-gray-900">
+          <h2 id="document-link-picker-title" className="text-lg font-semibold text-gray-900 dark:text-gray-100">
             Dokumentum linkelése
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded hover:bg-gray-100"
+            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
             aria-label="Bezárás"
           >
             <X className="w-5 h-5" />

@@ -299,20 +299,20 @@ export function SendConsiliumPrepLinkModal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-xl max-w-lg w-full max-h-[90vh] flex flex-col shadow-soft-xl"
+        className="bg-white dark:bg-gray-900 rounded-xl max-w-lg w-full max-h-[90vh] flex flex-col shadow-soft-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="border-b px-5 py-3 flex items-center justify-between">
+        <div className="border-b dark:border-gray-800 px-5 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-cyan-700" />
-            <h2 className="text-base font-semibold text-gray-900">
+            <Users className="w-5 h-5 text-cyan-700 dark:text-cyan-300" />
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">
               Konzílium előkészítő küldése
             </h2>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100"
+            className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
             aria-label="Bezárás"
           >
             <X className="w-4 h-4" />
@@ -320,28 +320,28 @@ export function SendConsiliumPrepLinkModal({
         </div>
 
         <div className="p-5 space-y-4 overflow-y-auto">
-          <div className="rounded-md border border-cyan-100 bg-cyan-50/70 px-3 py-2">
-            <p className="text-xs text-cyan-900/70">Beteg</p>
-            <p className="text-sm font-medium text-cyan-950 truncate">
+          <div className="rounded-md border border-cyan-100 dark:border-cyan-800 bg-cyan-50/70 dark:bg-cyan-950/40 px-3 py-2">
+            <p className="text-xs text-cyan-900/70 dark:text-cyan-300">Beteg</p>
+            <p className="text-sm font-medium text-cyan-950 dark:text-cyan-200 truncate">
               {patientName || 'Ismeretlen beteg'}
             </p>
           </div>
 
           <div ref={rootRef} className="relative space-y-2">
-            <label className="text-xs font-medium text-gray-700">Címzett(ek)</label>
-            <div className="flex flex-wrap gap-1.5 items-center min-h-[42px] p-2 rounded-md border border-gray-200 bg-white focus-within:border-cyan-400 focus-within:ring-1 focus-within:ring-cyan-200">
+            <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Címzett(ek)</label>
+            <div className="flex flex-wrap gap-1.5 items-center min-h-[42px] p-2 rounded-md border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 focus-within:border-cyan-400 focus-within:ring-1 focus-within:ring-cyan-200">
               {selected.map((s, idx) => {
                 if (s.kind === 'user') {
                   return (
                     <span
                       key={`u-${s.id}`}
-                      className="inline-flex items-center gap-1 max-w-full rounded-full border border-cyan-200 bg-cyan-50 pl-2 pr-0.5 py-0.5 text-xs text-cyan-900"
+                      className="inline-flex items-center gap-1 max-w-full rounded-full border border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-950/40 pl-2 pr-0.5 py-0.5 text-xs text-cyan-900 dark:text-cyan-200"
                       title={s.email}
                     >
                       <span className="truncate max-w-[200px]">{s.displayName}</span>
                       <button
                         type="button"
-                        className="rounded-full px-1 leading-none text-cyan-700 hover:bg-cyan-100"
+                        className="rounded-full px-1 leading-none text-cyan-700 dark:text-cyan-300 hover:bg-cyan-100 dark:hover:bg-cyan-900/40"
                         onClick={() => removeSelected(idx)}
                         aria-label="Eltávolítás"
                       >
@@ -353,14 +353,14 @@ export function SendConsiliumPrepLinkModal({
                 return (
                   <span
                     key={`e-${s.email}`}
-                    className="inline-flex items-center gap-1 max-w-full rounded-full border border-amber-200 bg-amber-50 pl-2 pr-0.5 py-0.5 text-xs text-amber-900"
+                    className="inline-flex items-center gap-1 max-w-full rounded-full border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 pl-2 pr-0.5 py-0.5 text-xs text-amber-900 dark:text-amber-200"
                     title="Külső e-mail cím — csak e-mail értesítést kap"
                   >
                     <Mail className="w-3 h-3" />
                     <span className="truncate max-w-[200px]">{s.email}</span>
                     <button
                       type="button"
-                      className="rounded-full px-1 leading-none text-amber-700 hover:bg-amber-100"
+                      className="rounded-full px-1 leading-none text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40"
                       onClick={() => removeSelected(idx)}
                       aria-label="Eltávolítás"
                     >
@@ -371,7 +371,7 @@ export function SendConsiliumPrepLinkModal({
               })}
               <input
                 type="text"
-                className="flex-1 min-w-[8rem] border-0 bg-transparent p-1 text-sm outline-none focus:ring-0 placeholder:text-gray-400"
+                className="flex-1 min-w-[8rem] border-0 bg-transparent p-1 text-sm outline-none focus:ring-0 placeholder:text-gray-400 dark:placeholder:text-gray-500 dark:text-gray-100"
                 placeholder={
                   usersLoading
                     ? 'Felhasználók betöltése…'

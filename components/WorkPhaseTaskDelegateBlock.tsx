@@ -223,24 +223,24 @@ export function WorkPhaseTaskDelegateBlock({
   };
 
   return (
-    <div className="mt-2 p-2 rounded border border-indigo-200/80 bg-indigo-50/40 text-xs space-y-2">
+    <div className="mt-2 p-2 rounded border border-indigo-200/80 dark:border-indigo-800 bg-indigo-50/40 dark:bg-indigo-950/40 text-xs space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <span className="font-medium text-indigo-900 flex items-center gap-1">
+        <span className="font-medium text-indigo-900 dark:text-indigo-200 flex items-center gap-1">
           <SendHorizontal className="w-3.5 h-3.5" />
           Feladat: {phaseLabel}
         </span>
-        <button type="button" onClick={onClose} className="text-indigo-700 underline">
+        <button type="button" onClick={onClose} className="text-indigo-700 dark:text-indigo-300 underline">
           Bezár
         </button>
       </div>
 
       {userRole === 'admin' && (
-        <p className="text-[10px] text-indigo-800/80">
+        <p className="text-[10px] text-indigo-800/80 dark:text-indigo-300">
           Admin: feladat kiosztható bármely aktív, nem technikus felhasználónak (intézménytől függetlenül).
         </p>
       )}
 
-      <label className="inline-flex items-center gap-1.5 cursor-pointer font-medium text-indigo-900">
+      <label className="inline-flex items-center gap-1.5 cursor-pointer font-medium text-indigo-900 dark:text-indigo-200">
         <input
           type="checkbox"
           checked={splitMode}
@@ -285,14 +285,14 @@ export function WorkPhaseTaskDelegateBlock({
       </div>
 
       {splitMode ? (
-        <div className="space-y-2 rounded border border-indigo-100 bg-white/60 p-2">
-          <p className="text-[10px] text-gray-600">
+        <div className="space-y-2 rounded border border-indigo-100 dark:border-indigo-800 bg-white/60 dark:bg-gray-800 p-2">
+          <p className="text-[10px] text-gray-600 dark:text-gray-400">
             Minden sor külön Feladataim tétel lesz (pl. implantációs kütyük tételenként).
           </p>
           {splitLines.map((line, idx) => (
-            <div key={line.id} className="flex flex-col gap-1 border-b border-gray-100 pb-2 last:border-0">
+            <div key={line.id} className="flex flex-col gap-1 border-b border-gray-100 dark:border-gray-800 pb-2 last:border-0">
               <div className="flex gap-1 items-start">
-                <span className="text-[10px] text-gray-400 pt-1.5 w-4 shrink-0">{idx + 1}.</span>
+                <span className="text-[10px] text-gray-400 dark:text-gray-500 pt-1.5 w-4 shrink-0">{idx + 1}.</span>
                 <input
                   type="text"
                   className="form-input text-xs py-1 flex-1"
@@ -303,7 +303,7 @@ export function WorkPhaseTaskDelegateBlock({
                 {splitLines.length > 2 && (
                   <button
                     type="button"
-                    className="p-1 text-red-600 hover:bg-red-50 rounded"
+                    className="p-1 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/40 rounded"
                     title="Tétel törlése"
                     onClick={() => setSplitLines((prev) => prev.filter((l) => l.id !== line.id))}
                   >
@@ -330,7 +330,7 @@ export function WorkPhaseTaskDelegateBlock({
           ))}
           <button
             type="button"
-            className="inline-flex items-center gap-1 text-indigo-700 hover:underline"
+            className="inline-flex items-center gap-1 text-indigo-700 dark:text-indigo-300 hover:underline"
             onClick={() => setSplitLines((prev) => [...prev, newSplitLine()])}
           >
             <Plus className="w-3 h-3" />
@@ -346,7 +346,7 @@ export function WorkPhaseTaskDelegateBlock({
 
       {mode === 'staff' && (!splitMode || splitMode) ? (
         <div className="relative space-y-1">
-          <label className="block text-[11px] text-gray-600">
+          <label className="block text-[11px] text-gray-600 dark:text-gray-400">
             {splitMode ? 'Alapértelmezett címzett (opcionális, ha minden sorhoz külön van)' : 'Címzett'}
           </label>
           <input

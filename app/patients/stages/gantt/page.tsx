@@ -180,7 +180,7 @@ export default function StagesGanttPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-medical-primary" />
       </div>
     );
@@ -191,27 +191,27 @@ export default function StagesGanttPage() {
   return (
     <AppShell title="Stádiumok GANTT" backTo="/" maxWidth="full">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
           <BarChart3 className="w-6 h-6 text-medical-primary" />
           Stádiumok GANTT
         </h1>
-        <p className="text-gray-600 mt-1">
+        <p className="text-gray-600 dark:text-gray-400 mt-1">
           Ellátási epizódok és stádium intervallumok idővonala (kohorsz vagy egy beteg)
         </p>
       </div>
 
       {/* Filters */}
-        <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6 space-y-4">
+        <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 mb-6 space-y-4">
           <div className="flex flex-wrap items-center gap-4">
-            <span className="text-sm font-medium text-gray-700">Nézet:</span>
-            <div className="flex rounded-lg border border-gray-200 p-0.5 bg-gray-50">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Nézet:</span>
+            <div className="flex rounded-lg border border-gray-200 dark:border-gray-800 p-0.5 bg-gray-50 dark:bg-gray-800/60">
               <button
                 type="button"
                 onClick={() => setViewMode('cohort')}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                   viewMode === 'cohort'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                 }`}
               >
                 <Users className="w-4 h-4" />
@@ -222,8 +222,8 @@ export default function StagesGanttPage() {
                 onClick={() => setViewMode('patient')}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                   viewMode === 'patient'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                 }`}
               >
                 <User className="w-4 h-4" />
@@ -237,22 +237,22 @@ export default function StagesGanttPage() {
               type="checkbox"
               checked={includeVirtual}
               onChange={(e) => setIncludeVirtual(e.target.checked)}
-              className="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+              className="rounded border-gray-300 dark:border-gray-700 text-amber-600 focus:ring-amber-500"
             />
-            <span className="text-sm text-gray-700">Virtuális időpontok (foglalásra vár)</span>
+            <span className="text-sm text-gray-700 dark:text-gray-300">Virtuális időpontok (foglalásra vár)</span>
           </label>
 
           {viewMode === 'cohort' && (
             <div className="flex flex-wrap items-center gap-4">
               <label className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">Étiológia:</span>
+                <span className="text-sm text-gray-600 dark:text-gray-400">Étiológia:</span>
                 <select
                   value={reason}
                   onChange={(e) => {
                     setReason(e.target.value);
                     setIntezmeny('all');
                   }}
-                  className="rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:ring-medical-primary focus:border-medical-primary"
+                  className="rounded-md border border-gray-300 dark:border-gray-700 px-3 py-1.5 text-sm focus:ring-medical-primary focus:border-medical-primary"
                 >
                   {REASON_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>
@@ -262,11 +262,11 @@ export default function StagesGanttPage() {
                 </select>
               </label>
               <label className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">Státusz:</span>
+                <span className="text-sm text-gray-600 dark:text-gray-400">Státusz:</span>
                 <select
                   value={status}
                   onChange={(e) => setStatus(e.target.value)}
-                  className="rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:ring-medical-primary focus:border-medical-primary"
+                  className="rounded-md border border-gray-300 dark:border-gray-700 px-3 py-1.5 text-sm focus:ring-medical-primary focus:border-medical-primary"
                 >
                   <option value="all">Összes</option>
                   <option value="open">Nyitott</option>

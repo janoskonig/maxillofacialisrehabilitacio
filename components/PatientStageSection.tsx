@@ -84,19 +84,19 @@ export function PatientStageSection({
 
   const getStageColor = (stageOrCode: string) => {
     const legacyColors: Record<string, string> = {
-      uj_beteg: 'bg-blue-100 text-blue-800',
-      onkologiai_kezeles_kesz: 'bg-purple-100 text-purple-800',
-      arajanlatra_var: 'bg-yellow-100 text-yellow-800',
-      implantacios_sebeszi_tervezesre_var: 'bg-orange-100 text-orange-800',
-      fogpotlasra_var: 'bg-amber-100 text-amber-800',
-      fogpotlas_keszul: 'bg-indigo-100 text-indigo-800',
-      fogpotlas_kesz: 'bg-green-100 text-green-800',
-      gondozas_alatt: 'bg-gray-100 text-gray-800',
+      uj_beteg: 'bg-blue-100 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300',
+      onkologiai_kezeles_kesz: 'bg-purple-100 dark:bg-purple-950/50 text-purple-800 dark:text-purple-300',
+      arajanlatra_var: 'bg-yellow-100 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-300',
+      implantacios_sebeszi_tervezesre_var: 'bg-orange-100 dark:bg-orange-950/50 text-orange-800 dark:text-orange-300',
+      fogpotlasra_var: 'bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300',
+      fogpotlas_keszul: 'bg-indigo-100 dark:bg-indigo-950/50 text-indigo-800 dark:text-indigo-300',
+      fogpotlas_kesz: 'bg-green-100 dark:bg-green-950/50 text-green-800 dark:text-green-300',
+      gondozas_alatt: 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200',
     };
     if (legacyColors[stageOrCode]) return legacyColors[stageOrCode];
     const stageNum = stageOrCode.replace('STAGE_', '');
-    const palette = ['bg-blue-100 text-blue-800', 'bg-purple-100 text-purple-800', 'bg-yellow-100 text-yellow-800', 'bg-orange-100 text-orange-800', 'bg-amber-100 text-amber-800', 'bg-indigo-100 text-indigo-800', 'bg-green-100 text-green-800', 'bg-gray-100 text-gray-800'];
-    return palette[parseInt(stageNum, 10) % palette.length] || 'bg-gray-100 text-gray-800';
+    const palette = ['bg-blue-100 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300', 'bg-purple-100 dark:bg-purple-950/50 text-purple-800 dark:text-purple-300', 'bg-yellow-100 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-300', 'bg-orange-100 dark:bg-orange-950/50 text-orange-800 dark:text-orange-300', 'bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300', 'bg-indigo-100 dark:bg-indigo-950/50 text-indigo-800 dark:text-indigo-300', 'bg-green-100 dark:bg-green-950/50 text-green-800 dark:text-green-300', 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200'];
+    return palette[parseInt(stageNum, 10) % palette.length] || 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200';
   };
 
   const stageKey = currentStage && (isStageEventEntry(currentStage) ? currentStage.stageCode : isLegacyStage(currentStage) ? currentStage.stage : null);
@@ -105,10 +105,10 @@ export function PatientStageSection({
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+      <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 sm:p-6">
         <div className="animate-pulse">
-          <div className="h-6 bg-gray-200 rounded w-1/4 mb-4"></div>
-          <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+          <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-4"></div>
+          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
         </div>
       </div>
     );

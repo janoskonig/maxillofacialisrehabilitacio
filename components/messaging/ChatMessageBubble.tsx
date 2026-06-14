@@ -116,9 +116,9 @@ export function ChatMessageBubble({
 
   const bubbleStyle = isFromMe
     ? 'bg-blue-600 text-white'
-    : 'bg-white text-gray-900 border border-gray-200';
+    : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-800';
 
-  const timeStyle = isFromMe ? 'text-blue-100' : 'text-gray-500';
+  const timeStyle = isFromMe ? 'text-blue-100' : 'text-gray-500 dark:text-gray-400';
 
   const quoteVariant: 'bubble-own' | 'bubble-other' = isFromMe ? 'bubble-own' : 'bubble-other';
 
@@ -134,7 +134,7 @@ export function ChatMessageBubble({
       className={`group flex flex-col ${isFromMe ? 'items-end' : 'items-start'} ${className ?? ''}`}
     >
       {!isFromMe && showSenderLabel && message.senderName && (
-        <div className="text-xs font-medium text-gray-700 mb-1 px-1">{message.senderName}</div>
+        <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 px-1">{message.senderName}</div>
       )}
 
       <div className="relative inline-flex w-fit max-w-[85%] sm:max-w-[80%] items-end">
@@ -213,7 +213,7 @@ export function ChatMessageBubble({
           type="button"
           onClick={() => onReplyThreadToggle(message.id)}
           className={`mt-1 text-xs font-medium underline-offset-2 hover:underline ${
-            isFromMe ? 'text-blue-600 self-end' : 'text-gray-600 self-start'
+            isFromMe ? 'text-blue-600 dark:text-blue-300 self-end' : 'text-gray-600 dark:text-gray-400 self-start'
           }`}
         >
           {replyThreadToggleLabel(message.replyCount, replyThreadCollapsed)}
@@ -236,7 +236,7 @@ function ReplyActionButton({ onClick, side }: { onClick: () => void; side: 'left
     <button
       type="button"
       onClick={onClick}
-      className={`absolute top-1/2 -translate-y-1/2 z-10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity p-1 rounded-full bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-300 shadow-sm ${
+      className={`absolute top-1/2 -translate-y-1/2 z-10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity p-1 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 hover:text-blue-600 hover:border-blue-300 dark:hover:border-blue-700 shadow-sm ${
         side === 'left' ? 'right-full mr-1' : 'left-full ml-1'
       }`}
       aria-label="Válasz erre az üzenetre"

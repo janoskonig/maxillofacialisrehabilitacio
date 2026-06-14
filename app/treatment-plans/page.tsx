@@ -45,17 +45,17 @@ export default function TreatmentPlansPage() {
   return (
     <AppShell title="Kezelési tervek" backTo="/" maxWidth="xl">
       <div className="space-y-6">
-      <p className="text-sm text-gray-500">Idővonal, kapacitás-előrejelzés és demand projection</p>
+      <p className="text-sm text-gray-500 dark:text-gray-400">Idővonal, kapacitás-előrejelzés és demand projection</p>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-gray-200 dark:border-gray-800">
         <nav className="flex gap-1" aria-label="Treatment plan tabs">
           <button
             onClick={() => setActiveTab('timeline')}
             className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
               activeTab === 'timeline'
                 ? 'text-medical-primary border-medical-primary'
-                : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
+                : 'text-gray-700 dark:text-gray-300 hover:text-medical-primary border-transparent hover:border-medical-primary'
             }`}
           >
             <BarChart3 className="w-4 h-4" />
@@ -66,7 +66,7 @@ export default function TreatmentPlansPage() {
             className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
               activeTab === 'capacity'
                 ? 'text-medical-primary border-medical-primary'
-                : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
+                : 'text-gray-700 dark:text-gray-300 hover:text-medical-primary border-transparent hover:border-medical-primary'
             }`}
           >
             <TrendingUp className="w-4 h-4" />

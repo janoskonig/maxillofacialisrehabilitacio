@@ -116,11 +116,11 @@ export function PatientFormSectionNavigation({
   if (isMobile) {
     return (
       <>
-        <div className="mobile-header sticky top-16 z-30 bg-white border-b sm:top-[4.5rem]">
+        <div className="mobile-header sticky top-16 z-30 bg-white dark:bg-gray-900 border-b sm:top-[4.5rem]">
           <div className="px-4 py-3">
             {/* Progress indicator */}
             {activeSection && (
-              <div className="text-xs text-gray-600 mb-3 font-medium">
+              <div className="text-xs text-gray-600 dark:text-gray-400 mb-3 font-medium">
                 Szekció {currentSectionNumber}/{totalSections} — {activeSection.label}
               </div>
             )}
@@ -129,7 +129,7 @@ export function PatientFormSectionNavigation({
             <button
               type="button"
               onClick={() => setShowMobileSelector(true)}
-              className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors mobile-touch-target"
+              className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors mobile-touch-target"
             >
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 {activeSection?.icon && (
@@ -137,7 +137,7 @@ export function PatientFormSectionNavigation({
                     {activeSection.icon}
                   </div>
                 )}
-                <span className="text-sm font-medium text-gray-900 truncate">
+                <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                   {activeSection?.label || 'Válasszon szekciót'}
                 </span>
                 {activeSection && sectionErrors[activeSection.id] > 0 && (
@@ -146,7 +146,7 @@ export function PatientFormSectionNavigation({
                   </span>
                 )}
               </div>
-              <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0 ml-2" />
+              <ChevronDown className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0 ml-2" />
             </button>
           </div>
         </div>
@@ -169,7 +169,7 @@ export function PatientFormSectionNavigation({
                   className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors mobile-touch-target ${
                     section.id === activeSectionId
                       ? 'bg-medical-primary/10 text-medical-primary'
-                      : 'hover:bg-gray-50 text-gray-900'
+                      : 'hover:bg-gray-50 dark:hover:bg-gray-800/50 text-gray-900 dark:text-gray-100'
                   }`}
                 >
                   <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -182,7 +182,7 @@ export function PatientFormSectionNavigation({
                       <div className="text-sm font-medium truncate">
                         {section.label}
                       </div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
                         {index + 1} / {totalSections}
                       </div>
                     </div>
@@ -203,15 +203,15 @@ export function PatientFormSectionNavigation({
 
   // Desktop (≥1024): vízszintes stepper — külön scroll konténer, hogy ne vágódjon le a szélén
   return (
-    <div className="mb-8 sticky top-16 z-30 bg-white pt-3 pb-1.5 border-b border-gray-200 -mx-3 sm:-mx-6 px-3 sm:px-6 sm:top-[4.5rem] md:top-[4.75rem] md:pt-4 lg:top-20">
+    <div className="mb-8 sticky top-16 z-30 bg-white dark:bg-gray-900 pt-3 pb-1.5 border-b border-gray-200 dark:border-gray-800 -mx-3 sm:-mx-6 px-3 sm:px-6 sm:top-[4.5rem] md:top-[4.75rem] md:pt-4 lg:top-20">
       {activeSection && (
-        <div className="text-sm text-gray-600 mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <div className="text-sm text-gray-600 dark:text-gray-400 mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <span>
-            Szekció <span className="font-semibold text-gray-800">{currentSectionNumber}</span> /{' '}
+            Szekció <span className="font-semibold text-gray-800 dark:text-gray-200">{currentSectionNumber}</span> /{' '}
             {totalSections}: {activeSection.label}
           </span>
           {sections.length > 6 && (
-            <span className="text-xs text-gray-500 flex items-center gap-0.5">
+            <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-0.5">
               <ChevronRight className="w-3.5 h-3.5" aria-hidden />
               Görgessen, ha nem lát minden lépést
             </span>
@@ -221,7 +221,7 @@ export function PatientFormSectionNavigation({
 
       <div
         ref={stepperScrollRef}
-        className="w-full max-w-full min-w-0 overflow-x-auto overflow-y-visible overscroll-x-contain pb-1 scroll-smooth [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300"
+        className="w-full max-w-full min-w-0 overflow-x-auto overflow-y-visible overscroll-x-contain pb-1 scroll-smooth [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-thumb]:bg-gray-700"
       >
         <div className="flex w-max items-center gap-1 sm:gap-2 pr-2">
           {sections.map((section, index) => {
@@ -239,8 +239,8 @@ export function PatientFormSectionNavigation({
                     isActive
                       ? 'bg-medical-primary text-white shadow-sm'
                       : isCompleted
-                        ? 'bg-green-100 text-green-800 hover:bg-green-200'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        ? 'bg-green-100 dark:bg-green-950/50 text-green-800 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/40'
+                        : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
                   }`}
                 >
                   {section.icon && (
@@ -264,7 +264,7 @@ export function PatientFormSectionNavigation({
                 {index < sections.length - 1 && (
                   <div
                     className={`w-6 sm:w-8 h-1 shrink-0 mx-0.5 sm:mx-1 rounded-full ${
-                      activeIndex > index ? 'bg-green-500' : 'bg-gray-200'
+                      activeIndex > index ? 'bg-green-500' : 'bg-gray-200 dark:bg-gray-700'
                     }`}
                     aria-hidden
                   />

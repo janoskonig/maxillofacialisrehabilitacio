@@ -37,14 +37,14 @@ export const TimelineHeader = memo(function TimelineHeader({
 
   return (
     <div
-      className="relative border-b border-gray-200 bg-gray-50/90 shrink-0"
+      className="relative border-b border-gray-200 dark:border-gray-800 bg-gray-50/90 dark:bg-gray-800/60 shrink-0"
       style={{ height, minWidth: trackMinWidth }}
       role="presentation"
     >
       {months.map((m) => (
         <div
           key={m.key}
-          className="absolute top-0 bottom-0 text-[11px] text-gray-500 border-l border-gray-200 pl-1 pt-1 pointer-events-none select-none"
+          className="absolute top-0 bottom-0 text-[11px] text-gray-500 dark:text-gray-400 border-l border-gray-200 dark:border-gray-800 pl-1 pt-1 pointer-events-none select-none"
           style={{ left: `${Math.max(0, m.left)}%` }}
         >
           {m.label}
