@@ -64,14 +64,6 @@ const SECTION_TAB_MAP: Record<string, TabType> = {
   'section-stadium': 'terv_idopont',
 };
 
-const SCHEDULING_ROLES = ['admin', 'beutalo_orvos', 'fogpótlástanász'];
-const TECHNIKUS_TABS = new Set<TabType>([
-  'attekintes',
-  'torzsadatok',
-  'anamnezis',
-  'adminisztracio',
-  'kommunikacio',
-]);
 
 export default function PatientViewPage() {
   const router = useRouter();
@@ -221,8 +213,6 @@ export default function PatientViewPage() {
     return null;
   }
 
-  const canSchedule = SCHEDULING_ROLES.includes(userRole ?? '');
-
   const allTabs: Array<{ id: TabType; label: string; shortLabel: string; icon: React.ReactNode }> = [
     { id: 'attekintes', label: 'Áttekintés', shortLabel: 'Áttekintés', icon: <LayoutDashboard className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
     { id: 'torzsadatok', label: 'Törzsadatok', shortLabel: 'Törzs', icon: <User className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
@@ -232,9 +222,8 @@ export default function PatientViewPage() {
     { id: 'adminisztracio', label: 'Adminisztráció', shortLabel: 'Admin', icon: <FolderOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
   ];
 
-  const tabs = userRole === 'technikus'
-    ? allTabs.filter((t) => TECHNIKUS_TABS.has(t.id))
-    : allTabs;
+  // Egyelőre mindenki minden fület lát (szerepkör-szűrés kikapcsolva).
+  const tabs = allTabs;
 
   return (
     <AppShell
@@ -258,8 +247,8 @@ export default function PatientViewPage() {
       <PatientHeaderBar
         patient={patient}
         currentStage={currentStage}
-        canSeeNextStep={canSchedule}
-        onGoToScheduling={canSchedule ? () => handleTabChange('terv_idopont') : undefined}
+        canSeeNextStep
+        onGoToScheduling={() => handleTabChange('terv_idopont')}
       />
 
       {/* Fülek */}
@@ -292,7 +281,7 @@ export default function PatientViewPage() {
           <PatientOverviewTab
             patient={patient}
             onGoToTab={(tab) => handleTabChange(tab as TabType)}
-            canSeeClinical={canSchedule}
+            canSeeClinical
           />
         )}
 
@@ -302,7 +291,7 @@ export default function PatientViewPage() {
             isViewOnly={false}
             onSave={handleSavePatient}
             onCancel={handleBack}
-            showOnlySections={userRole === 'technikus' ? ['alapadatok'] : ['alapadatok', 'szemelyes', 'beutalo']}
+            showOnlySections={['alapadatok', 'szemelyes', 'beutalo']}
           />
         )}
 
@@ -312,13 +301,13 @@ export default function PatientViewPage() {
             isViewOnly={false}
             onSave={handleSavePatient}
             onCancel={handleBack}
-            showOnlySections={userRole === 'technikus' ? ['kezelesi_terv'] : ['anamnezis', 'betegvizsgalat', 'ohip14']}
+            showOnlySections={['anamnezis', 'betegvizsgalat', 'ohip14']}
           />
         )}
 
         {activeTab === 'terv_idopont' && loadedTabs.has('terv_idopont') && (
           <>
-            {canSchedule && patient.id && (
+            {patient.id && (
               <div className="space-y-2">
                 <h2 className="text-lg font-semibold text-gray-900">Következő munkafázis – munkalista</h2>
                 <p className="text-sm text-gray-600">
