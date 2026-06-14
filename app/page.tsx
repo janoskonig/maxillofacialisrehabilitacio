@@ -556,17 +556,6 @@ export default function Home() {
 
         </div>
 
-      {/* Mobile FAB for new patient */}
-      {(userRole === 'admin' || userRole === 'fogpótlástanász' || userRole === 'beutalo_orvos') && (
-        <button
-          onClick={handleNewPatient}
-          className="md:hidden fixed right-5 z-40 w-14 h-14 rounded-full bg-gradient-to-r from-medical-primary to-medical-primary-light text-white shadow-lg flex items-center justify-center active:scale-95 transition-transform bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px)+0.75rem)]"
-          aria-label="Új beteg"
-        >
-          <Plus className="w-6 h-6" />
-        </button>
-      )}
-
       {/* Send Message Modal */}
       <SendMessageModal
         isOpen={showMessageModal}
