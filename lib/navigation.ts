@@ -8,6 +8,7 @@ import {
   ClipboardList,
   MessageCircle,
   Activity,
+  Layers,
   CalendarDays,
   CalendarClock,
   Hourglass,
@@ -15,6 +16,7 @@ import {
   Users,
   Shield,
   BarChart3,
+  GanttChartSquare,
   Settings,
   BookOpen,
 } from 'lucide-react';
@@ -58,7 +60,9 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { id: 'tasks', label: 'Feladataim', path: '/tasks', icon: ClipboardList, roles: 'all', match: startsWith('/tasks') },
       { id: 'messages', label: 'Üzenetek', path: '/messages', icon: MessageCircle, roles: 'all', match: startsWith('/messages'), mobilePrimary: true },
+      { id: 'pipeline', label: 'Beteg előkészítés', path: '/patients/pipeline', icon: Layers, roles: 'all', match: startsWith('/patients/pipeline') },
       { id: 'treatment-plans', label: 'Kezelési tervek', path: '/treatment-plans', icon: Activity, roles: ['admin', 'fogpótlástanász', 'beutalo_orvos'], match: startsWith('/treatment-plans') },
+      { id: 'stages-gantt', label: 'Stádium GANTT', path: '/patients/stages/gantt', icon: GanttChartSquare, roles: ['admin', 'fogpótlástanász', 'beutalo_orvos'], match: startsWith('/patients/stages/gantt') },
     ],
   },
   {

@@ -27,7 +27,7 @@ describe('navigation registry', () => {
     expect(ids.sort()).toEqual(allIds.sort());
   });
 
-  it('technikus nem lát admin / konzílium / kezelési terv / időpont-kezelés / leterheltség elemeket', () => {
+  it('technikus nem lát admin / konzílium / kezelési terv / időpont-kezelés / leterheltség / GANTT elemeket, de lát beteg-előkészítést', () => {
     const ids = itemIds('technikus');
     expect(ids).not.toContain('admin');
     expect(ids).not.toContain('admin-stats');
@@ -35,11 +35,13 @@ describe('navigation registry', () => {
     expect(ids).not.toContain('treatment-plans');
     expect(ids).not.toContain('time-slots');
     expect(ids).not.toContain('workload');
+    expect(ids).not.toContain('stages-gantt');
+    expect(ids).toContain('pipeline');
   });
 
-  it('beutalo_orvos: lát konzíliumot, kezelési tervet, leterheltséget; nem lát admin / időpont-kezelés', () => {
+  it('beutalo_orvos: lát konzíliumot, kezelési tervet, leterheltséget, GANTT-ot, pipeline-t; nem lát admin / időpont-kezelés', () => {
     const ids = itemIds('beutalo_orvos');
-    expect(ids).toEqual(expect.arrayContaining(['consilium', 'treatment-plans', 'workload']));
+    expect(ids).toEqual(expect.arrayContaining(['consilium', 'treatment-plans', 'workload', 'stages-gantt', 'pipeline']));
     expect(ids).not.toContain('admin');
     expect(ids).not.toContain('admin-stats');
     expect(ids).not.toContain('time-slots');

@@ -1,41 +1,16 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import dynamic from 'next/dynamic';
-import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { TodaysAppointmentsWidget } from './widgets/TodaysAppointmentsWidget';
 import { PendingApprovalsWidget } from './widgets/PendingApprovalsWidget';
-import { SendMessageWidget } from './widgets/SendMessageWidget';
-import { WaitingTimeWidget } from './widgets/WaitingTimeWidget';
-import { ChevronDown, ChevronUp, LayoutDashboard, Layers, BarChart3, Activity } from 'lucide-react';
+import { ClipboardList, MessageCircle, CheckCircle2, ChevronRight } from 'lucide-react';
 import { Patient } from '@/lib/types';
-import type { GanttEpisode, GanttInterval } from './StagesGanttChart';
 import { IntakeRecommendationBadge } from './widgets/IntakeRecommendationBadge';
-import type { StageCatalogEntry } from '@/lib/types';
+import { EmptyState } from './ui/EmptyState';
+import { useStaffTaskSummary } from '@/hooks/useStaffTaskSummary';
+import { useStaffInboxSummary } from '@/hooks/useStaffInboxSummary';
 
-const TabSkeleton = () => (
-  <div className="card flex items-center justify-center py-12">
-    <div className="animate-spin rounded-full h-8 w-8 border-2 border-medical-primary/20 border-t-medical-primary" />
-    <span className="ml-3 text-body-sm">Betöltés...</span>
-  </div>
-);
-
-const PatientPipelineBoard = dynamic(
-  () => import('./PatientPipelineBoard').then(m => ({ default: m.PatientPipelineBoard })),
-  { ssr: false, loading: TabSkeleton }
-);
-const StagesGanttChart = dynamic(
-  () => import('./StagesGanttChart').then(m => ({ default: m.StagesGanttChart })),
-  { ssr: false, loading: TabSkeleton }
-);
-const WipForecastWidget = dynamic(
-  () => import('./widgets/WipForecastWidget').then(m => ({ default: m.WipForecastWidget })),
-  { ssr: false, loading: TabSkeleton }
-);
-const BusynessOMeter = dynamic(
-  () => import('./widgets/BusynessOMeter').then(m => ({ default: m.BusynessOMeter })),
-  { ssr: false, loading: TabSkeleton }
-);
 interface DashboardData {
   nextAppointments: any[];
   pendingAppointments: any[];
@@ -50,35 +25,25 @@ interface DashboardProps {
   onViewFoto?: (patient: Patient) => void;
 }
 
-const VALID_TABS = ['overview', 'patient-preparation', 'gantt', 'workload'] as const;
-
+/**
+ * Teendő-központú főoldali panel: a napi, ténylegesen elvégzendő dolgokat
+ * emeli ki (jóváhagyásra váró időpontok, mai időpontok) + gyors belépők a
+ * nyitott feladatokhoz és olvasatlan üzenetekhez. A korábbi tabos „Dashboard"
+ * (GANTT / terhelés / pipeline) kikerült a saját oldalaira.
+ */
 export function Dashboard({ userRole }: DashboardProps) {
-  const searchParams = useSearchParams();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'patient-preparation' | 'gantt' | 'workload'>('overview');
 
-  useEffect(() => {
-    const tab = searchParams.get('tab');
-    if (tab && VALID_TABS.includes(tab as (typeof VALID_TABS)[number])) {
-      setActiveTab(tab as (typeof VALID_TABS)[number]);
-    }
-  }, [searchParams]);
-  const [ganttEpisodes, setGanttEpisodes] = useState<GanttEpisode[]>([]);
-  const [ganttIntervals, setGanttIntervals] = useState<GanttInterval[]>([]);
-  const [ganttCatalog, setGanttCatalog] = useState<StageCatalogEntry[]>([]);
-  const [ganttLoading, setGanttLoading] = useState(false);
+  const { summary: taskSummary } = useStaffTaskSummary(true);
+  const { summary: inboxSummary } = useStaffInboxSummary(true);
 
   const refreshData = useCallback(async () => {
     try {
-      const response = await fetch('/api/dashboard', {
-        credentials: 'include',
-      });
+      const response = await fetch('/api/dashboard', { credentials: 'include' });
       if (response.ok) {
-        const dashboardData = await response.json();
-        setData(dashboardData);
+        setData(await response.json());
       }
     } catch (err) {
       console.error('Error refreshing dashboard data:', err);
@@ -89,16 +54,11 @@ export function Dashboard({ userRole }: DashboardProps) {
     const fetchDashboardData = async () => {
       try {
         setLoading(true);
-        const response = await fetch('/api/dashboard', {
-          credentials: 'include',
-        });
-
+        const response = await fetch('/api/dashboard', { credentials: 'include' });
         if (!response.ok) {
           throw new Error('Hiba történt a dashboard adatok betöltésekor');
         }
-
-        const dashboardData = await response.json();
-        setData(dashboardData);
+        setData(await response.json());
         setError(null);
       } catch (err) {
         console.error('Error fetching dashboard data:', err);
@@ -107,47 +67,17 @@ export function Dashboard({ userRole }: DashboardProps) {
         setLoading(false);
       }
     };
-
     fetchDashboardData();
   }, []);
 
   const canSeeStages = userRole === 'admin' || userRole === 'beutalo_orvos' || userRole === 'fogpótlástanász';
-
-  // GANTT adatok (összes beteg) – csak az utolsó 3 hónap, ha a GANTT fül aktív
-  useEffect(() => {
-    if (!canSeeStages || activeTab !== 'gantt') return;
-    setGanttLoading(true);
-    const to = new Date();
-    const from = new Date(to);
-    from.setMonth(from.getMonth() - 3);
-    const q = new URLSearchParams({ status: 'all', from: from.toISOString(), to: to.toISOString() });
-    Promise.all([
-      fetch(`/api/patients/stages/gantt?${q.toString()}`, { credentials: 'include' }).then((r) =>
-        r.ok ? r.json() : { episodes: [], intervals: [] }
-      ),
-      fetch('/api/stage-catalog', { credentials: 'include' }).then((r) =>
-        r.ok ? r.json() : { catalog: [] }
-      ),
-    ])
-      .then(([ganttData, catalogData]) => {
-        setGanttEpisodes(ganttData.episodes ?? []);
-        setGanttIntervals(ganttData.intervals ?? []);
-        setGanttCatalog(catalogData.catalog ?? []);
-      })
-      .catch(() => {
-        setGanttEpisodes([]);
-        setGanttIntervals([]);
-        setGanttCatalog([]);
-      })
-      .finally(() => setGanttLoading(false));
-  }, [canSeeStages, activeTab]);
 
   if (loading) {
     return (
       <div className="card">
         <div className="flex items-center justify-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-2 border-medical-primary/20 border-t-medical-primary"></div>
-          <span className="ml-3 text-body-sm">Dashboard betöltése...</span>
+          <span className="ml-3 text-body-sm">Teendők betöltése...</span>
         </div>
       </div>
     );
@@ -167,167 +97,76 @@ export function Dashboard({ userRole }: DashboardProps) {
     return null;
   }
 
+  const openTasks = taskSummary?.totalOpen ?? 0;
+  const unviewedTasks = taskSummary?.unviewed ?? 0;
+  const unreadMessages = (inboxSummary?.patientUnread ?? 0) + (inboxSummary?.doctorUnread ?? 0);
+  const urgentMessages = (inboxSummary?.patientUnread ?? 0) > 0;
+
+  const hasPending = data.pendingAppointments.length > 0;
+  const hasToday = data.nextAppointments.length > 0;
+  const hasChips = openTasks > 0 || unreadMessages > 0;
+  const nothingToDo = !hasPending && !hasToday && !hasChips;
+
   return (
-    <div className="space-y-2 md:space-y-4">
-      {/* Dashboard Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 md:gap-3 flex-wrap min-w-0">
-          <div className="hidden md:block p-2 bg-medical-primary/10 rounded-lg">
-            <LayoutDashboard className="w-5 h-5 text-medical-primary" />
-          </div>
-          <h2 className="text-lg md:text-2xl font-bold text-gray-900 tracking-tight">Dashboard</h2>
-          {canSeeStages && <IntakeRecommendationBadge />}
-        </div>
-        <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 p-1.5 md:p-2 rounded-lg hover:bg-gray-100 transition-all duration-200"
-        >
-          {isCollapsed ? (
-            <>
-              <ChevronDown className="w-4 h-4" />
-              <span className="hidden sm:inline">Kibontás</span>
-            </>
-          ) : (
-            <>
-              <ChevronUp className="w-4 h-4" />
-              <span className="hidden sm:inline">Összecsukás</span>
-            </>
-          )}
-        </button>
+    <section className="space-y-3 md:space-y-4" aria-label="Teendőim">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h2 className="text-heading-3">Teendőim</h2>
+        {canSeeStages && <IntakeRecommendationBadge />}
       </div>
 
-      {!isCollapsed && (
+      {nothingToDo ? (
+        <EmptyState
+          icon={CheckCircle2}
+          title="Nincs sürgős teendőd."
+          description="Nincs jóváhagyásra váró kérés, mai időpont, nyitott feladat vagy olvasatlan üzenet."
+        />
+      ) : (
         <>
-          {/* Tabs */}
-          <div className="border-b border-gray-200 overflow-x-auto scrollbar-hide scroll-smooth touch-manipulation">
-            <nav className="flex gap-1 w-max" aria-label="Dashboard tabs">
-              <button
-                onClick={() => setActiveTab('overview')}
-                className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
-                  activeTab === 'overview'
-                    ? 'text-medical-primary border-medical-primary'
-                    : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
-                }`}
-              >
-                <LayoutDashboard className="w-4 h-4 hidden sm:block" />
-                Áttekintés
-              </button>
-              <button
-                onClick={() => setActiveTab('patient-preparation')}
-                className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors relative flex-shrink-0 ${
-                  activeTab === 'patient-preparation'
-                    ? 'text-medical-primary border-medical-primary'
-                    : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
-                }`}
-              >
-                <Layers className="w-4 h-4 hidden sm:block" />
-                Beteg előkészítés
-              </button>
-              {canSeeStages && (
-                <button
-                  onClick={() => setActiveTab('gantt')}
-                  className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
-                    activeTab === 'gantt'
-                      ? 'text-medical-primary border-medical-primary'
-                      : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
+          {hasChips && (
+            <div className="flex flex-wrap gap-2">
+              {openTasks > 0 && (
+                <Link
+                  href="/tasks"
+                  className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                    unviewedTasks > 0
+                      ? 'border-medical-error/30 bg-medical-error/5 text-medical-error hover:bg-medical-error/10'
+                      : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
                   }`}
                 >
-                  <BarChart3 className="w-4 h-4 hidden sm:block" />
-                  GANTT
-                </button>
+                  <ClipboardList className="w-4 h-4" />
+                  <span className="font-medium">{openTasks}</span>
+                  nyitott feladat
+                  <ChevronRight className="w-4 h-4 opacity-60" />
+                </Link>
               )}
-              {canSeeStages && (
-                <button
-                  onClick={() => setActiveTab('workload')}
-                  className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
-                    activeTab === 'workload'
-                      ? 'text-medical-primary border-medical-primary'
-                      : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
+              {unreadMessages > 0 && (
+                <Link
+                  href="/messages"
+                  className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                    urgentMessages
+                      ? 'border-medical-error/30 bg-medical-error/5 text-medical-error hover:bg-medical-error/10'
+                      : 'border-medical-warning/30 bg-medical-warning/5 text-medical-warning hover:bg-medical-warning/10'
                   }`}
                 >
-                  <Activity className="w-4 h-4 hidden sm:block" />
-                  Orvos terhelés
-                </button>
+                  <MessageCircle className="w-4 h-4" />
+                  <span className="font-medium">{unreadMessages}</span>
+                  olvasatlan üzenet
+                  <ChevronRight className="w-4 h-4 opacity-60" />
+                </Link>
               )}
-            </nav>
-          </div>
-
-          {/* Tab Content */}
-          {activeTab === 'overview' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-4">
-              {/* Send Message Widget */}
-              <SendMessageWidget />
-
-              {/* Next 3 Appointments Today */}
-              <TodaysAppointmentsWidget 
-                appointments={data.nextAppointments} 
-                onUpdate={refreshData}
-              />
-
-              {/* Pending Appointments */}
-              {data.pendingAppointments.length > 0 && (
-                <PendingApprovalsWidget approvals={data.pendingAppointments} />
-              )}
-
-              {/* Waiting Times Widget */}
-              <WaitingTimeWidget />
             </div>
           )}
 
-          {activeTab === 'workload' && canSeeStages && (
-            <div className="space-y-4">
-              <p className="text-sm text-gray-600">
-                Összefoglaló orvosi terhelési kép a következő időszakra.
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <BusynessOMeter />
-                <WipForecastWidget />
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'patient-preparation' && (
-            <PatientPipelineBoard />
-          )}
-
-          {activeTab === 'gantt' && canSeeStages && (
-            <div className="space-y-4">
-              <p className="text-sm text-gray-600">
-                Az összes beteg ellátási epizódjai és stádium intervallumai idővonalon.
-              </p>
-              {ganttLoading && ganttEpisodes.length === 0 ? (
-                <div className="card flex items-center justify-center py-12">
-                  <div className="animate-spin rounded-full h-8 w-8 border-2 border-medical-primary/20 border-t-medical-primary" />
-                  <span className="ml-3 text-body-sm">GANTT betöltése…</span>
-                </div>
-              ) : (
-                <StagesGanttChart
-                  episodes={ganttEpisodes}
-                  intervals={ganttIntervals}
-                  catalog={Array.from(
-                    ganttCatalog
-                      .slice()
-                      .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0))
-                      .reduce((acc, c) => {
-                        if (!acc.has(c.code)) acc.set(c.code, { code: c.code, labelHu: c.labelHu, orderIndex: c.orderIndex ?? 0 });
-                        return acc;
-                      }, new Map<string, { code: string; labelHu: string; orderIndex: number }>())
-                      .values()
-                  )}
-                  viewStart={(() => {
-                    const end = new Date();
-                    const start = new Date(end);
-                    start.setMonth(start.getMonth() - 3);
-                    return start.toISOString();
-                  })()}
-                  viewEnd={new Date().toISOString()}
-                />
+          {(hasPending || hasToday) && (
+            <div className={`grid gap-4 ${hasPending && hasToday ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
+              {hasPending && <PendingApprovalsWidget approvals={data.pendingAppointments} />}
+              {hasToday && (
+                <TodaysAppointmentsWidget appointments={data.nextAppointments} onUpdate={refreshData} />
               )}
             </div>
           )}
         </>
       )}
-    </div>
+    </section>
   );
 }
-
