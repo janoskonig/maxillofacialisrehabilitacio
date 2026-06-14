@@ -49,6 +49,37 @@ export function PatientHeaderBar({
   canSeeNextStep = true,
 }: PatientHeaderBarProps) {
   const [nextStepLabel, setNextStepLabel] = useState<string | null>(null);
+  const [completeness, setCompleteness] = useState<{
+    score: number;
+    clinicalMissing: number;
+    researchMissing: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!patient.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/patients/${patient.id!}/completeness`, {
+          credentials: 'include',
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && typeof data.score === 'number') {
+          setCompleteness({
+            score: data.score,
+            clinicalMissing: data.clinicalMissing ?? 0,
+            researchMissing: data.researchMissing ?? 0,
+          });
+        }
+      } catch {
+        /* non-critical */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [patient.id]);
 
   useEffect(() => {
     if (!canSeeNextStep || !patient.id) return;
@@ -90,6 +121,21 @@ export function PatientHeaderBar({
   if (age != null) metaParts.push(`${age} é`);
   if (patient.nem) metaParts.push(patient.nem);
 
+  const completenessDot =
+    completeness == null
+      ? ''
+      : completeness.score >= 90
+      ? 'bg-green-500'
+      : completeness.score >= 70
+      ? 'bg-amber-500'
+      : 'bg-red-500';
+  const completenessTitle =
+    completeness == null
+      ? ''
+      : completeness.clinicalMissing + completeness.researchMissing === 0
+      ? 'Adatteljesség: minden értelmezhető adat megvan'
+      : `Adatteljesség — ${completeness.clinicalMissing} klinikai · ${completeness.researchMissing} kutatási hiányzó adat`;
+
   return (
     <div className="bg-white rounded-lg border border-gray-200 px-3 sm:px-4 py-3 mb-4 sm:mb-6">
       <div className="flex items-center gap-3">
@@ -123,6 +169,15 @@ export function PatientHeaderBar({
                 <Phone className="w-3 h-3" />
                 {patient.telefonszam}
               </a>
+            )}
+            {completeness && (
+              <span
+                className="inline-flex items-center gap-1 text-gray-400 dark:text-gray-500"
+                title={completenessTitle}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${completenessDot}`} />
+                Adatteljesség {completeness.score}%
+              </span>
             )}
           </div>
         </div>
