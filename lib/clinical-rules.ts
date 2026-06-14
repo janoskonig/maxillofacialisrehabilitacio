@@ -165,6 +165,8 @@ export interface ChecklistStatus {
   missingDocs: MissingDocRule[]; // Changed to include count details
   hasErrors: boolean; // true if any missing field has severity 'error'
   hasWarnings: boolean; // true if any missing field has severity 'warning'
+  /** Protocol version this result was evaluated against — for traceability when rules change. */
+  protocolVersion: string;
 }
 
 export function getChecklistStatus(
@@ -185,5 +187,6 @@ export function getChecklistStatus(
     missingDocs,
     hasErrors,
     hasWarnings,
+    protocolVersion: PROTOCOL_VERSION,
   };
 }
