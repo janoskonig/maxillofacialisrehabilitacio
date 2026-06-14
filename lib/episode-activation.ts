@@ -5,9 +5,15 @@
  */
 
 import { getDbPool } from './db';
-import type { PathwayWorkPhaseTemplate } from './pathway-work-phases-for-episode';
 import { getPathwayWorkPhasesForEpisode } from './pathway-work-phases-for-episode';
 import { computeStepWindow } from './step-window';
+import { getMergedFilterFragment, probeColumnExists } from './schema-probe';
+import {
+  selectInitialWorkPhasesFromSteps,
+  selectInitialWorkPhasesFromPathway,
+  type EpisodeWorkPhaseLite,
+  type InitialWorkPhase,
+} from './initial-work-phase-selection';
 
 /** Get anchor date: last completed appointment or opened_at */
 async function getAnchor(
@@ -42,36 +48,73 @@ async function getCompletedCount(
 }
 
 /**
- * Create initial slot_intents for next 2 work phases when episode is activated.
+ * Load the curated work phases (episode_work_phases) in scheduling order, merged
+ * children excluded. Returns null when no plan has been generated yet — that is the
+ * signal to fall back to the pathway-template heuristic.
+ */
+async function getCuratedWorkPhases(
+  pool: Awaited<ReturnType<typeof getDbPool>>,
+  episodeId: string
+): Promise<EpisodeWorkPhaseLite[] | null> {
+  const [mergedFilter, hasOffset] = await Promise.all([
+    getMergedFilterFragment(pool, 'episode_work_phases'),
+    probeColumnExists(pool, 'episode_work_phases', 'default_days_offset'),
+  ]);
+  const offsetCol = hasOffset ? ', default_days_offset' : '';
+  const r = await pool.query(
+    `SELECT work_phase_code, pool, duration_minutes, status, pathway_order_index${offsetCol}
+     FROM episode_work_phases ewp
+     WHERE ewp.episode_id = $1 ${mergedFilter}
+     ORDER BY COALESCE(seq, pathway_order_index), pathway_order_index`,
+    [episodeId]
+  );
+  if (r.rows.length === 0) return null;
+  return r.rows.map((row: Record<string, unknown>) => ({
+    workPhaseCode: String(row.work_phase_code),
+    pool: (row.pool as string | null) ?? null,
+    durationMinutes: row.duration_minutes != null ? Number(row.duration_minutes) : null,
+    defaultDaysOffset: row.default_days_offset != null ? Number(row.default_days_offset) : null,
+    status: String(row.status),
+    pathwayOrderIndex: Number(row.pathway_order_index),
+  }));
+}
+
+/**
+ * Create initial slot_intents for the next 2 work phases when an episode is activated.
  * Idempotent: uses UNIQUE(episode_id, step_code, step_seq) — skips if already exists.
  * (DB column remains step_code; value is the work phase code string.)
+ *
+ * WP2 (safe slice): prefers the curated plan (episode_work_phases, skip-aware) as the
+ * source of truth; only when no plan exists yet does it fall back to the old
+ * count-based pathway heuristic.
  */
 export async function createInitialSlotIntentsForEpisode(episodeId: string): Promise<number> {
   const pool = getDbPool();
 
-  const [pathwayWorkPhases, anchor, completedCount] = await Promise.all([
-    getPathwayWorkPhasesForEpisode(pool, episodeId),
+  const [curated, anchor] = await Promise.all([
+    getCuratedWorkPhases(pool, episodeId),
     getAnchor(pool, episodeId),
-    getCompletedCount(pool, episodeId),
   ]);
 
-  if (!pathwayWorkPhases || pathwayWorkPhases.length === 0) return 0;
-
-  const workPhases: { phase: PathwayWorkPhaseTemplate; stepSeq: number }[] = [];
-  for (let i = completedCount; i < pathwayWorkPhases.length && workPhases.length < 2; i++) {
-    const phase = pathwayWorkPhases[i];
-    if (phase.pool === 'work') {
-      workPhases.push({ phase, stepSeq: i });
-    }
+  let selected: InitialWorkPhase[];
+  if (curated) {
+    // Curated plan exists → follow what the doctor actually left to do.
+    selected = selectInitialWorkPhasesFromSteps(curated, 2);
+  } else {
+    // No plan generated yet → fall back to the pathway template by completed count.
+    const [pathwayWorkPhases, completedCount] = await Promise.all([
+      getPathwayWorkPhasesForEpisode(pool, episodeId),
+      getCompletedCount(pool, episodeId),
+    ]);
+    if (!pathwayWorkPhases || pathwayWorkPhases.length === 0) return 0;
+    selected = selectInitialWorkPhasesFromPathway(pathwayWorkPhases, completedCount, 2);
   }
 
-  if (workPhases.length === 0) return 0;
+  if (selected.length === 0) return 0;
 
   let created = 0;
-  for (const { phase, stepSeq } of workPhases) {
-    const offset = phase.default_days_offset ?? 14;
-    const duration = phase.duration_minutes ?? 30;
-    const { windowStart, windowEnd } = computeStepWindow(anchor, offset);
+  for (const phase of selected) {
+    const { windowStart, windowEnd } = computeStepWindow(anchor, phase.defaultDaysOffset);
 
     try {
       const result = await pool.query(
@@ -80,10 +123,10 @@ export async function createInitialSlotIntentsForEpisode(episodeId: string): Pro
          ON CONFLICT (episode_id, step_code, step_seq) DO NOTHING`,
         [
           episodeId,
-          phase.work_phase_code,
-          stepSeq,
+          phase.workPhaseCode,
+          phase.stepSeq,
           phase.pool,
-          duration,
+          phase.durationMinutes,
           windowStart.toISOString(),
           windowEnd.toISOString(),
         ]
