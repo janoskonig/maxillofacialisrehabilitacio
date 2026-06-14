@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { PatientEpisode, StageCatalogEntry, StageSuggestion, EpisodeGetResponse } from '@/lib/types';
 import { REASON_VALUES } from '@/lib/types';
-import { Calendar, ArrowRight, Clock, AlertTriangle, ChevronDown, ChevronUp, Plus, Loader2, Activity, CheckCircle } from 'lucide-react';
+import { Calendar, ArrowRight, Clock, AlertTriangle, ChevronDown, ChevronUp, Plus, Loader2, Activity, CheckCircle, UserRound } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { StageSuggestionModal } from './StageSuggestionModal';
@@ -158,13 +158,11 @@ export function EpisodeStageCard({
           </button>
         </div>
 
-        {/* Episode title + reason */}
+        {/* Episode hero */}
         <div className="mb-4">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium text-gray-900">
-              {activeEpisode.chiefComplaint}
-            </span>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+          <p className="text-base font-medium text-gray-900">{activeEpisode.chiefComplaint}</p>
+          <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+            <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
               {activeEpisode.reason}
             </span>
             {activeEpisode.treatmentTypeLabel && (
@@ -173,22 +171,38 @@ export function EpisodeStageCard({
               </span>
             )}
           </div>
-          <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
-            <span className="flex items-center gap-1">
-              <Calendar className="w-3 h-3" />
-              {format(new Date(activeEpisode.openedAt), 'yyyy. MMM d.', { locale: hu })}
-            </span>
-            {activeEpisode.assignedProviderName && (
-              <span>{activeEpisode.assignedProviderName}</span>
-            )}
+        </div>
+
+        {/* Meta: opened + provider */}
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className="flex items-center gap-2 min-w-0">
+            <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-[11px] text-gray-500 leading-none">Megnyitva</p>
+              <p className="text-sm text-gray-900 mt-0.5 truncate">
+                {format(new Date(activeEpisode.openedAt), 'yyyy. MMM d.', { locale: hu })}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 min-w-0">
+            <UserRound className="w-4 h-4 text-gray-400 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-[11px] text-gray-500 leading-none">Kezelőorvos</p>
+              <p className="text-sm text-gray-900 mt-0.5 truncate">
+                {activeEpisode.assignedProviderName ?? '—'}
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* Stage progress bar */}
+        {/* Stage progress */}
         <div className="mb-4">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center justify-between gap-2 mb-2">
             <span className={`px-3 py-1 rounded-full text-sm font-semibold border ${getStageColor(stageCode)}`}>
               {stageLabel}
+            </span>
+            <span className="text-xs text-gray-500 shrink-0 tabular-nums">
+              {Math.min(stageIndex + 1, totalStages)} / {totalStages} stádium
             </span>
           </div>
           <div className="flex gap-1">
@@ -196,7 +210,11 @@ export function EpisodeStageCard({
               <div
                 key={i}
                 className={`h-2 flex-1 rounded-full transition-colors ${
-                  i <= stageIndex ? 'bg-medical-primary' : 'bg-gray-200'
+                  i < stageIndex
+                    ? 'bg-medical-primary/60'
+                    : i === stageIndex
+                      ? 'bg-medical-primary'
+                      : 'bg-gray-200'
                 }`}
                 title={catalog[i]?.labelHu ?? `STAGE_${i}`}
               />
@@ -229,6 +247,15 @@ export function EpisodeStageCard({
           </div>
         )}
 
+        {/* Primary action — always visible */}
+        <a
+          href={`/patients/${patientId}/stages`}
+          className="inline-flex items-center gap-1.5 mt-1 text-sm font-medium text-medical-primary hover:text-medical-primary-dark"
+        >
+          Teljes stádium kezelés
+          <ArrowRight className="w-3.5 h-3.5" />
+        </a>
+
         {/* Expanded details */}
         {expanded && (
           <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
@@ -255,22 +282,6 @@ export function EpisodeStageCard({
               })}
             </div>
 
-            {/* Version info */}
-            <div className="flex gap-4 text-xs text-gray-400">
-              <span>stageVersion: {activeEpisode.stageVersion ?? 0}</span>
-              <span>snapshotVersion: {activeEpisode.snapshotVersion ?? 0}</span>
-              {activeEpisode.currentRulesetVersion != null && (
-                <span>ruleset: v{activeEpisode.currentRulesetVersion}</span>
-              )}
-            </div>
-
-            <a
-              href={`/patients/${patientId}/stages`}
-              className="inline-flex items-center gap-1 text-sm text-medical-primary hover:text-medical-primary-dark"
-            >
-              Teljes stádium kezelés
-              <ArrowRight className="w-3 h-3" />
-            </a>
           </div>
         )}
       </div>
