@@ -26,9 +26,7 @@ import { ConditionalAppointmentBooking } from './ConditionalAppointmentBooking';
 import { ChainBookingCallout } from './ChainBookingCallout';
 import { getCurrentUser } from '@/lib/auth';
 import { savePatient, ApiError } from '@/lib/storage';
-import { getMissingRequiredFields, REQUIRED_FIELDS } from '@/lib/clinical-rules';
 import { tajHasChecksumError } from '@/lib/taj-validation';
-import { ClinicalChecklist } from './ClinicalChecklist';
 import { usePatientAutoSave, normalizeToothData, buildSavePayload, type ToothStatus } from '@/hooks/usePatientAutoSave';
 import { usePatientConflictResolution } from '@/hooks/usePatientConflictResolution';
 import { PatientDocuments } from './PatientDocuments';
@@ -1686,66 +1684,7 @@ export function PatientForm({
         </div>
       )}
 
-      {/* Missing Required Fields Banner (teljes protokoll — gyors új betegnél rejtve) */}
-      {!minimalNewPatient && (() => {
-        const missingFields = getMissingRequiredFields(currentPatient);
-        if (missingFields.length === 0) return null;
 
-        const errorFields = missingFields.filter(f => f.severity === 'error');
-        const warningFields = missingFields.filter(f => f.severity === 'warning');
-
-        return (
-          <div className={`mb-4 border-l-4 p-4 rounded-md ${
-            errorFields.length > 0
-              ? 'bg-red-50 border-red-400'
-              : 'bg-amber-50 border-amber-400'
-          }`}>
-            <div className="flex items-start">
-              <AlertTriangle className={`w-5 h-5 mr-3 mt-0.5 flex-shrink-0 ${
-                errorFields.length > 0 ? 'text-red-600' : 'text-amber-600'
-              }`} />
-              <div className="flex-1">
-                <h4 className={`text-sm font-semibold mb-2 ${
-                  errorFields.length > 0 ? 'text-red-800' : 'text-amber-800'
-                }`}>
-                  Hiányzó kötelező adatok ({missingFields.length})
-                </h4>
-                <div className="space-y-1">
-                  {missingFields.map((field) => (
-                    <div
-                      key={field.key}
-                      className="text-sm"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          // Scroll to field (simple anchor-based approach)
-                          const fieldElement = document.querySelector(`[name="${field.key}"]`);
-                          if (fieldElement) {
-                            fieldElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            // Focus the field
-                            (fieldElement as HTMLElement).focus();
-                          }
-                        }}
-                        className={`hover:underline ${
-                          field.severity === 'error' ? 'text-red-700' : 'text-amber-700'
-                        }`}
-                      >
-                        • {field.label}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* Clinical Checklist */}
-      {patientId && (
-        <ClinicalChecklist patient={currentPatient} patientId={patientId} />
-      )}
 
       <form id="patient-form" onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         {!isViewOnly && (
