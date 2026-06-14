@@ -7,6 +7,8 @@ import {
   isPlanApprovable,
   type PlanStepInput,
 } from '@/lib/treatment-plan-validation';
+import { detectSequenceViolations, type SequenceStepInput } from '@/lib/plan-sequence-check';
+import { sqlBookedFutureAppointmentsWithEffectiveStep } from '@/lib/episode-plan-read-model';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
 
 export const dynamic = 'force-dynamic';
@@ -50,9 +52,34 @@ async function getApproval(
   };
 }
 
+/** Earliest future booked start per work_phase_code for the episode. */
+async function loadBookedStarts(
+  pool: Awaited<ReturnType<typeof getDbPool>>,
+  episodeId: string
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  try {
+    const res = await pool.query(sqlBookedFutureAppointmentsWithEffectiveStep(), [[episodeId]]);
+    for (const row of res.rows as Array<{ step_code: string | null; effective_start: Date | string }>) {
+      if (!row.step_code) continue;
+      const iso = new Date(row.effective_start).toISOString();
+      const existing = map.get(row.step_code);
+      if (!existing || iso < existing) map.set(row.step_code, iso);
+    }
+  } catch {
+    /* tolerate — sequence check is advisory */
+  }
+  return map;
+}
+
 /**
  * GET /api/episodes/:id/plan-validation
- * → { issues, approvable, approvedAt, approvedBy }
+ * → { issues, approvable, approvedAt, approvedBy, sequenceViolations }
+ *
+ * `sequenceViolations` (Gap A): a már LEFOGLALT időpontok, amelyek a terv
+ * sorrendje elé csúsztak (pl. egy korábbi fázis sikertelenség miatt
+ * visszanyílt). A rendszer ezeket nem mozgatja némán — jelzi, hogy újrafoglalás
+ * kell.
  */
 export const GET = roleHandler([...WRITE_ROLES], async (_req, { params }) => {
   const episodeId = params.id;
@@ -61,14 +88,28 @@ export const GET = roleHandler([...WRITE_ROLES], async (_req, { params }) => {
   const approval = await getApproval(pool, episodeId);
   if (!approval) return NextResponse.json({ error: 'Epizód nem található' }, { status: 404 });
 
-  const steps = await loadPlanSteps(pool, episodeId);
+  const [steps, bookedStarts] = await Promise.all([
+    loadPlanSteps(pool, episodeId),
+    loadBookedStarts(pool, episodeId),
+  ]);
   const issues = validateTreatmentPlan(steps);
+
+  // steps already ordered by COALESCE(seq, pathway_order_index) → array index = plan order.
+  const sequenceSteps: SequenceStepInput[] = steps.map((s, idx) => ({
+    workPhaseCode: s.workPhaseCode,
+    label: s.label,
+    orderIndex: idx,
+    status: s.status,
+    bookedStart: bookedStarts.get(s.workPhaseCode) ?? null,
+  }));
+  const sequenceViolations = detectSequenceViolations(sequenceSteps);
 
   return NextResponse.json({
     issues,
     approvable: isPlanApprovable(issues),
     approvedAt: approval.approvedAt,
     approvedBy: approval.approvedBy,
+    sequenceViolations,
   });
 });
 

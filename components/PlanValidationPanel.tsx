@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Loader2, ShieldCheck, ShieldOff, XCircle } from 'lucide-react';
+import { AlertTriangle, CalendarClock, CheckCircle2, Loader2, ShieldCheck, ShieldOff, XCircle } from 'lucide-react';
 
 interface PlanIssue {
   level: 'error' | 'warning';
@@ -10,11 +10,21 @@ interface PlanIssue {
   workPhaseCode?: string;
 }
 
+interface SequenceViolation {
+  workPhaseCode: string;
+  label?: string | null;
+  bookedStart: string;
+  blockingWorkPhaseCode: string;
+  reason: string;
+  message: string;
+}
+
 interface PlanValidationResponse {
   issues: PlanIssue[];
   approvable: boolean;
   approvedAt: string | null;
   approvedBy: string | null;
+  sequenceViolations?: SequenceViolation[];
 }
 
 export interface PlanValidationPanelProps {
@@ -150,6 +160,23 @@ export function PlanValidationPanel({ episodeId, signature, canEdit = true }: Pl
             </li>
           ))}
         </ul>
+      )}
+
+      {(data.sequenceViolations?.length ?? 0) > 0 && (
+        <div className="border-t border-amber-200 bg-amber-50">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 text-amber-800 font-medium">
+            <CalendarClock className="w-3.5 h-3.5 shrink-0" />
+            Sorrend-eltérés a lefoglalt időpontokban — újrafoglalás szükséges
+          </div>
+          <ul className="divide-y divide-amber-100">
+            {data.sequenceViolations!.map((v, idx) => (
+              <li key={`${v.workPhaseCode}-${idx}`} className="flex items-start gap-2 px-3 py-1.5">
+                <CalendarClock className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
+                <span className="text-gray-700">{v.message}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );
