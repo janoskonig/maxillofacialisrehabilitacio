@@ -3,9 +3,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
-import { ArrowLeft, BarChart3, User, Users } from 'lucide-react';
-import { Logo } from '@/components/Logo';
-import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
+import { BarChart3, User, Users } from 'lucide-react';
+import { AppShell } from '@/components/layout/AppShell';
 import { StagesGanttChart, type GanttEpisode, type GanttInterval, type GanttVirtualWindow } from '@/components/StagesGanttChart';
 import type { StageCatalogEntry } from '@/lib/types';
 import { useToast } from '@/contexts/ToastContext';
@@ -31,6 +30,7 @@ export default function StagesGanttPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('cohort');
   const [reason, setReason] = useState<string>(REASON_OPTIONS[0].value);
   const [status, setStatus] = useState<string>('all');
+  const [intezmeny, setIntezmeny] = useState<string>('all');
   const [patientId, setPatientId] = useState<string>('');
   const [patientSearch, setPatientSearch] = useState('');
   const [patientOptions, setPatientOptions] = useState<PatientOption[]>([]);
@@ -161,7 +161,22 @@ export default function StagesGanttPage() {
     return () => clearTimeout(t);
   }, [viewMode, patientSearch]);
 
-  const handleBack = () => router.back();
+  // Beutaló intézmény szerinti szűrés (kliens oldalon, a betöltött kohorszon)
+  const institutions = Array.from(
+    new Set(episodes.map((e) => e.beutaloIntezmeny).filter((v): v is string => Boolean(v && v.trim())))
+  ).sort((a, b) => a.localeCompare(b, 'hu'));
+  const showIntezmenyFilter = viewMode === 'cohort' && institutions.length > 0;
+  const intezmenyActive = showIntezmenyFilter && intezmeny !== 'all';
+  const filteredEpisodes = intezmenyActive
+    ? episodes.filter((e) => e.beutaloIntezmeny === intezmeny)
+    : episodes;
+  const filteredEpisodeIds = new Set(filteredEpisodes.map((e) => e.id));
+  const filteredIntervals = intezmenyActive
+    ? intervals.filter((i) => filteredEpisodeIds.has(i.episodeId))
+    : intervals;
+  const filteredVirtualWindows = intezmenyActive
+    ? ganttVirtualWindows.filter((v) => filteredEpisodeIds.has(v.episodeId))
+    : ganttVirtualWindows;
 
   if (loading) {
     return (
@@ -174,37 +189,18 @@ export default function StagesGanttPage() {
   if (!authorized) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={handleBack}
-                className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-                aria-label="Vissza"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <Logo />
-            </div>
-            {/* Mobile nav is at the bottom */}
-          </div>
-        </div>
-      </header>
+    <AppShell title="Stádiumok GANTT" backTo="/" maxWidth="full">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+          <BarChart3 className="w-6 h-6 text-medical-primary" />
+          Stádiumok GANTT
+        </h1>
+        <p className="text-gray-600 mt-1">
+          Ellátási epizódok és stádium intervallumok idővonala (kohorsz vagy egy beteg)
+        </p>
+      </div>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-mobile-nav-staff md:pb-6">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <BarChart3 className="w-6 h-6 text-medical-primary" />
-            Stádiumok GANTT
-          </h1>
-          <p className="text-gray-600 mt-1">
-            Ellátási epizódok és stádium intervallumok idővonala (kohorsz vagy egy beteg)
-          </p>
-        </div>
-
-        {/* Filters */}
+      {/* Filters */}
         <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6 space-y-4">
           <div className="flex flex-wrap items-center gap-4">
             <span className="text-sm font-medium text-gray-700">Nézet:</span>
@@ -252,7 +248,10 @@ export default function StagesGanttPage() {
                 <span className="text-sm text-gray-600">Étiológia:</span>
                 <select
                   value={reason}
-                  onChange={(e) => setReason(e.target.value)}
+                  onChange={(e) => {
+                    setReason(e.target.value);
+                    setIntezmeny('all');
+                  }}
                   className="rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:ring-medical-primary focus:border-medical-primary"
                 >
                   {REASON_OPTIONS.map((o) => (
@@ -274,6 +273,23 @@ export default function StagesGanttPage() {
                   <option value="closed">Zárt</option>
                 </select>
               </label>
+              {showIntezmenyFilter && (
+                <label className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">Beutaló intézmény:</span>
+                  <select
+                    value={intezmeny}
+                    onChange={(e) => setIntezmeny(e.target.value)}
+                    className="rounded-md border border-gray-300 px-3 py-1.5 text-sm max-w-[260px] focus:ring-medical-primary focus:border-medical-primary"
+                  >
+                    <option value="all">Összes ({episodes.length})</option>
+                    {institutions.map((inst) => (
+                      <option key={inst} value={inst}>
+                        {inst} ({episodes.filter((e) => e.beutaloIntezmeny === inst).length})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
             </div>
           )}
 
@@ -337,16 +353,13 @@ export default function StagesGanttPage() {
           </div>
         ) : (
           <StagesGanttChart
-            episodes={episodes}
-            intervals={intervals}
+            episodes={filteredEpisodes}
+            intervals={filteredIntervals}
             catalog={catalogForChart.map((c) => ({ code: c.code, labelHu: c.labelHu, orderIndex: c.orderIndex }))}
-            virtualWindows={includeVirtual ? ganttVirtualWindows : []}
+            virtualWindows={includeVirtual ? filteredVirtualWindows : []}
             groupByCurrentStage={viewMode === 'cohort'}
           />
         )}
-      </main>
-
-      <MobileBottomNav />
-    </div>
+    </AppShell>
   );
 }

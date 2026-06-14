@@ -1084,6 +1084,86 @@ export async function sendOhipReminderEmail(
 }
 
 /**
+ * Beleegyezési felszólítás / emlékeztető a páciensnek: GDPR adatkezelési és/vagy
+ * kutatási hozzájárulás megadására. Adaptív szöveg — csak a még hiányzó tételt
+ * említi. Regisztrációkor és a napi emlékeztető cronból is ezt küldjük.
+ */
+export async function sendConsentRequestEmail(
+  patientEmail: string,
+  patientName: string | null,
+  patientNem: string | null,
+  needs: { needsNoticeAck: boolean; needsResearch: boolean },
+  logContext?: { patientId: string; sentBy?: string; isReminder?: boolean },
+): Promise<void> {
+  const greeting = patientGreeting(patientName, patientNem);
+  const baseUrl = getBaseUrlForEmail();
+  const portalUrl = `${baseUrl}/patient-portal/profile`;
+  const privacyUrl = `${baseUrl}/privacy-hu`;
+  const termsUrl = `${baseUrl}/terms-hu`;
+
+  const items: string[] = [];
+  if (needs.needsNoticeAck) {
+    items.push(
+      'az <strong>adatkezelési tájékoztató</strong> megismerése és tudomásulvétele',
+    );
+  }
+  if (needs.needsResearch) {
+    items.push(
+      'a <strong>kutatási regiszter hozzájárulás</strong> elfogadása vagy elutasítása (önkéntes)',
+    );
+  }
+  const itemsHtml = items.map((i) => `<li style="margin-bottom: 6px;">${i}</li>`).join('');
+
+  const intro = logContext?.isReminder
+    ? 'Emlékeztetjük, hogy az alábbi nyilatkozat(ok) megtételére még nem került sor:'
+    : 'A regisztrációt követően kérjük, tegye meg az alábbi nyilatkozato(ka)t:';
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #2563eb;">Nyilatkozat szükséges</h2>
+      <p>${greeting}!</p>
+      <p>${intro}</p>
+      <ul style="font-size: 15px; color: #111827;">${itemsHtml}</ul>
+      <p style="margin-top: 16px;">A nyilatkozatot a páciens portálon, az <strong>Adataim</strong> oldalon teheti meg.</p>
+      <p style="margin-top: 20px;">
+        <a href="${portalUrl}" style="display: inline-block; background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+          Nyilatkozom a portálon
+        </a>
+      </p>
+      <p style="color: #6b7280; font-size: 14px; margin-top: 20px;">
+        Ha a gomb nem működik, másolja be az alábbi linket a böngészőjébe:<br>
+        <a href="${portalUrl}" style="color: #3b82f6;">${portalUrl}</a>
+      </p>
+      <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
+        <p style="color: #6b7280; font-size: 12px; line-height: 1.6; margin: 0;">
+          A kutatási hozzájárulás önkéntes, és bármikor visszavonható; elutasítása nem befolyásolja az Ön ellátását.
+          Az adatkezelési tájékoztató megismerése az ellátás dokumentálásához és nyújtásához kapcsolódik;
+          az ellátási adatkezelés jogalapja a GDPR 9. cikk (2) h) pontja és az 1997. évi CLIV. törvény.
+        </p>
+        <p style="color: #6b7280; font-size: 12px; margin-top: 8px;">
+          <a href="${privacyUrl}" style="color: #3b82f6;">Adatvédelmi Irányelvek</a> &middot;
+          <a href="${termsUrl}" style="color: #3b82f6;">Felhasználási Feltételek</a>
+        </p>
+      </div>
+    </div>
+  `;
+
+  await sendEmail({
+    to: patientEmail,
+    subject: 'Nyilatkozat szükséges – Maxillofaciális Rehabilitáció',
+    html,
+    emailType: 'consent_request',
+    sentBy: logContext?.sentBy ?? 'system',
+    metadata: {
+      patientId: logContext?.patientId ?? null,
+      needsNoticeAck: needs.needsNoticeAck,
+      needsResearch: needs.needsResearch,
+      isReminder: logContext?.isReminder ?? false,
+    },
+  });
+}
+
+/**
  * Munkatárs feladat-emlékeztető emailje a felelősnek a határidő közeledtével
  * (vagy lejárta után). A `remindEmail=true` jelölésű kézi feladatokra küldi a
  * reminder cron.

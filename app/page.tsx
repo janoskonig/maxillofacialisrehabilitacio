@@ -8,16 +8,11 @@ import { Patient } from '@/lib/types';
 import { getAllPatients, searchPatients, getPatientById } from '@/lib/storage';
 import { PatientList } from '@/components/PatientList';
 import { useToast } from '@/contexts/ToastContext';
-import { Plus, Search, Users, LogOut, Shield, Settings, Calendar, CalendarDays, MessageCircle, Filter, Download, Bell, X, BookOpen, ClipboardList, LayoutDashboard } from 'lucide-react';
-import { getCurrentUser, getUserEmail, getUserRole, logout } from '@/lib/auth';
-import { Logo } from '@/components/Logo';
-import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
+import { Plus, Search, Settings, Calendar, Filter, Download, Bell, X, BookOpen } from 'lucide-react';
+import { IntakeRecommendationBadge } from '@/components/widgets/IntakeRecommendationBadge';
+import { getCurrentUser, getUserEmail, getUserRole } from '@/lib/auth';
+import { AppShell } from '@/components/layout/AppShell';
 import { Dashboard } from '@/components/Dashboard';
-import { FeedbackButtonTrigger } from '@/components/FeedbackButton';
-import { useStaffTaskSummary } from '@/hooks/useStaffTaskSummary';
-import { useStaffInboxSummary } from '@/hooks/useStaffInboxSummary';
-import { FeladataimIndicators, feladataimTasksAriaLabel } from '@/components/staff/FeladataimIndicators';
-import { UzenetekIndicators, uzenetekAriaLabel } from '@/components/staff/UzenetekIndicators';
 
 const OPImageViewer = dynamic(() => import('@/components/OPImageViewer').then(mod => ({ default: mod.OPImageViewer })), {
   loading: () => <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"><p className="text-white">Kép betöltése...</p></div>,
@@ -100,7 +95,6 @@ export default function Home() {
   const searchDebounceRef = useRef<NodeJS.Timeout>();
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<UserRoleType>('admin');
-  const [userInstitution, setUserInstitution] = useState<string | null>(null);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [opViewerPatient, setOpViewerPatient] = useState<Patient | null>(null);
@@ -108,14 +102,6 @@ export default function Home() {
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [showPWAAnnouncement, setShowPWAAnnouncement] = useState(false);
   const { showToast, confirm: confirmDialog } = useToast();
-
-  const { summary: staffTaskSummary } = useStaffTaskSummary(isAuthorized && !isCheckingAuth);
-  const taskUnviewed = staffTaskSummary?.unviewed ?? 0;
-  const taskViewedOpen = staffTaskSummary?.viewedOpen ?? 0;
-
-  const { summary: inboxSummary } = useStaffInboxSummary(isAuthorized && !isCheckingAuth);
-  const patientUnread = inboxSummary?.patientUnread ?? 0;
-  const doctorUnread = inboxSummary?.doctorUnread ?? 0;
 
   useEffect(() => {
     // Check authentication
@@ -132,10 +118,8 @@ export default function Home() {
         
         const email = user.email;
         const role = user.role;
-        const intezmeny = user.intezmeny || null;
         setUserEmail(email);
         setUserRole(role);
-        setUserInstitution(intezmeny);
         setIsAuthorized(true);
         setIsCheckingAuth(false);
         // Ne töltse be automatikusan a betegeket - csak kereséskor
@@ -279,11 +263,6 @@ export default function Home() {
     dispatch({ type: 'TOGGLE_SORT', field });
   }, []);
 
-  const handleLogout = () => {
-    logout();
-    router.push('/login');
-  };
-
   const handleDeletePatient = async (patient: Patient) => {
     if (!patient.id) {
       showToast('Hiba: A beteg ID nem található', 'error');
@@ -345,10 +324,10 @@ export default function Home() {
 
   if (isCheckingAuth) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-medical-primary mx-auto mb-4"></div>
-          <p className="text-gray-500">Betöltés...</p>
+          <p className="text-gray-500 dark:text-gray-400">Betöltés...</p>
         </div>
       </div>
     );
@@ -359,120 +338,27 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-soft border-b border-gray-200/60 sticky top-0 z-30 backdrop-blur-sm bg-white/95 max-md:mobile-safe-top">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-2 md:py-3">
-            <div className="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
-              <div className="flex-shrink-0">
-                <Logo width={32} height={37} className="md:w-[50px] md:h-[58px]" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <h1 className="text-base md:text-xl font-semibold text-medical-primary truncate tracking-tight">
-                  Maxillofaciális Rehabilitáció
-                </h1>
-                <p className="text-xs text-gray-500 hidden sm:block font-medium mt-0.5">
-                  BETEGREGISZTER ÉS IDŐPONTKEZELŐ
-                </p>
-                {false && userRole === 'beutalo_orvos' && userInstitution && (
-                  <p className="text-xs font-semibold text-medical-error mt-0.5 truncate badge badge-error inline-block px-2 py-0.5 mt-1">
-                    SEBÉSZ MÓD (csak a {userInstitution} páciensei)
-                  </p>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {/* Desktop-only nav is below */}
-              {/* Desktop Navigation */}
-              <div className="hidden md:flex gap-2">
-                <FeedbackButtonTrigger />
-                {userRole === 'admin' && (
-                  <button
-                    onClick={() => router.push('/admin')}
-                    className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2"
-                  >
-                    <Shield className="w-3.5 h-3.5" />
-                    Admin
-                  </button>
-                )}
-                <button
-                  onClick={() => router.push('/calendar')}
-                  className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2"
-                >
-                  <CalendarDays className="w-3.5 h-3.5" />
-                  Naptár
-                </button>
-                {userRole !== 'technikus' && (
-                  <button
-                    onClick={() => router.push('/consilium')}
-                    className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2"
-                  >
-                    <Users className="w-3.5 h-3.5" />
-                    Konzílium
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => router.push('/messages')}
-                  className={`btn-secondary flex items-center gap-1.5 text-sm px-3 py-2 relative ${
-                    patientUnread > 0
-                      ? 'ring-2 ring-red-400/55'
-                      : doctorUnread > 0
-                        ? 'ring-2 ring-amber-400/55'
-                        : ''
-                  }`}
-                  aria-label={uzenetekAriaLabel(patientUnread, doctorUnread)}
-                >
-                  <MessageCircle className="w-3.5 h-3.5" />
-                  Üzenetek
-                  <UzenetekIndicators patientUnread={patientUnread} doctorUnread={doctorUnread} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => router.push('/tasks')}
-                  className={`btn-secondary flex items-center gap-1.5 text-sm px-3 py-2 relative ${
-                    taskUnviewed > 0
-                      ? 'ring-2 ring-red-400/55'
-                      : taskViewedOpen > 0
-                        ? 'ring-2 ring-amber-400/55'
-                        : ''
-                  }`}
-                  aria-label={feladataimTasksAriaLabel(taskUnviewed, taskViewedOpen)}
-                >
-                  <ClipboardList className="w-3.5 h-3.5" />
-                  Feladataim
-                  <FeladataimIndicators unviewed={taskUnviewed} viewedOpen={taskViewedOpen} />
-                </button>
-                {userRole === 'admin' && (
-                  <button
-                    type="button"
-                    onClick={() => router.push('/tasks/overview')}
-                    className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2"
-                  >
-                    <LayoutDashboard className="w-3.5 h-3.5" />
-                    Vezetői nézet
-                  </button>
-                )}
-                <button
-                  onClick={() => router.push('/settings')}
-                  className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2"
-                >
-                  <Settings className="w-3.5 h-3.5" />
-                  Beállítások
-                </button>
-                <button
-                  onClick={handleLogout}
-                  className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                  Kijelentkezés
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 md:py-4 pb-mobile-nav-staff md:pb-4">
+    <AppShell
+      title="Főoldal"
+      maxWidth="xl"
+      actions={
+        userRole === 'admin' || userRole === 'fogpótlástanász' || userRole === 'beutalo_orvos' ? (
+          <>
+            {/* Kapacitás-jelzés: érdemes-e most új beteget felvenni (desktopon, hely miatt) */}
+            <span className="hidden lg:inline-flex">
+              <IntakeRecommendationBadge />
+            </span>
+            <button
+              onClick={handleNewPatient}
+              className="btn-primary flex items-center gap-1.5 text-sm px-3 py-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Új beteg
+            </button>
+          </>
+        ) : undefined
+      }
+    >
         <div className="space-y-2 md:space-y-3">
           {/* Header - hidden on mobile to save space */}
           <div className="hidden md:flex flex-row justify-between items-center gap-4">
@@ -484,25 +370,14 @@ export default function Home() {
                 </p>
               )}
             </div>
-            <div className="flex gap-1.5">
-              {(userRole === 'admin' || userRole === 'fogpótlástanász' || userRole === 'beutalo_orvos') && (
-                <button
-                  onClick={handleNewPatient}
-                  className="btn-primary flex items-center gap-1.5 text-sm px-3 py-1.5"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Új beteg
-                </button>
-              )}
-            </div>
           </div>
 
           {/* PWA Announcement Banner */}
           {showPWAAnnouncement && (
-            <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg shadow-sm p-4 relative">
+            <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/40 border border-blue-200 dark:border-blue-900 rounded-lg shadow-sm p-4 relative">
               <button
                 onClick={handleDismissPWAAnnouncement}
-                className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 transition-colors"
+                className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors"
                 aria-label="Bezárás"
               >
                 <X className="w-5 h-5" />
@@ -510,18 +385,18 @@ export default function Home() {
               <div className="flex items-start gap-3 pr-8">
                 <div className="flex-shrink-0 mt-0.5">
                   <div className="flex items-center gap-2">
-                    <Download className="w-5 h-5 text-blue-600" />
-                    <Bell className="w-5 h-5 text-indigo-600" />
+                    <Download className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    <Bell className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                   </div>
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-sm font-semibold text-gray-900 mb-1">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">
                     Új funkciók: Telepíthető alkalmazás és push értesítések
                   </h3>
-                  <p className="text-sm text-gray-700 mb-2">
+                  <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
                     Az alkalmazás mostantól <strong>telepíthető</strong> asztali és mobil eszközökre, és <strong>push értesítéseket</strong> is küldhet időpont foglalásokról, üzenetekről és emlékeztetőkről.
                   </p>
-                  <div className="flex flex-wrap gap-2 text-xs text-gray-600">
+                  <div className="flex flex-wrap gap-2 text-xs text-gray-600 dark:text-gray-400">
                     <span className="flex items-center gap-1">
                       <Download className="w-3.5 h-3.5" />
                       Telepíthető PWA
@@ -557,7 +432,7 @@ export default function Home() {
               <div className="space-y-3">
                 {/* Search */}
                 <div className="relative">
-                  <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 z-10" />
+                  <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-5 h-5 z-10" />
                   <input
                     type="text"
                     placeholder="Keresés név, TAJ szám vagy telefon alapján..."
@@ -568,24 +443,18 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Stats */}
-              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
-                <div className="card card-hover p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-medical-primary/10 rounded-lg">
-                      <Users className="w-5 h-5 text-medical-primary" />
-                    </div>
-                    <div>
-                      <p className="text-body-sm text-gray-500">
-                        {searchQuery.trim() || selectedView !== 'all' ? 'Keresési eredmények' : 'Páciensek'}
-                      </p>
-                      <p className="text-2xl font-bold text-gray-900 mt-0.5">
-                        {totalPatients}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              {/* Találatszám — kompakt felirat a lista fölött (a külön „Páciensek" kártya helyett) */}
+              <p className="text-body-sm text-gray-500">
+                {searchQuery.trim() || selectedView !== 'all' ? (
+                  <>
+                    <span className="font-semibold text-gray-900 dark:text-gray-100">{totalPatients}</span> találat
+                  </>
+                ) : (
+                  <>
+                    <span className="font-semibold text-gray-900 dark:text-gray-100">{totalPatients}</span> páciens
+                  </>
+                )}
+              </p>
 
               {/* Patient List - 25 per page */}
               <PatientList
@@ -607,7 +476,7 @@ export default function Home() {
               {/* Pagination - 25 per page */}
               {totalPatients > 0 && (
                 <div className="flex flex-wrap items-center justify-between gap-3 py-3">
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
                     {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, totalPatients)} / Összesen {totalPatients}
                   </p>
                   <div className="flex items-center gap-2">
@@ -634,31 +503,31 @@ export default function Home() {
               {/* Empty state */}
               {totalPatients === 0 && !searchQuery.trim() && selectedView === 'all' && (
                 <div className="card text-center py-12">
-                  <Search className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  <Search className="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                     Keresés a betegek között
                   </h3>
-                  <p className="text-gray-600 mb-4">
+                  <p className="text-gray-600 dark:text-gray-400 mb-4">
                     Kezdjen el gépelni a keresőmezőben, vagy válasszon szűrőt a listához.
                   </p>
                 </div>
               )}
 
               {/* Footer */}
-              <div className="mt-8 pt-6 border-t border-gray-200 flex flex-col items-center gap-3">
+              <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-800 flex flex-col items-center gap-3">
                 <Link
                   href="/docs/kezelesi-ut-utmutato"
-                  className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-medical-primary transition-colors"
+                  className="inline-flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 hover:text-medical-primary transition-colors"
                 >
                   <BookOpen className="w-4 h-4" />
                   Kezelési út és ütemezés — Használati útmutató
                 </Link>
                 <div className="flex gap-4 text-xs">
-                  <Link href="/privacy" className="text-gray-400 hover:text-gray-600 transition-colors">
+                  <Link href="/privacy" className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
                     Privacy Policy
                   </Link>
-                  <span className="text-gray-300">|</span>
-                  <Link href="/terms" className="text-gray-400 hover:text-gray-600 transition-colors">
+                  <span className="text-gray-300 dark:text-gray-700">|</span>
+                  <Link href="/terms" className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
                     Terms of Service
                   </Link>
                 </div>
@@ -686,26 +555,12 @@ export default function Home() {
       )}
 
         </div>
-      </main>
-
-      {/* Mobile FAB for new patient */}
-      {(userRole === 'admin' || userRole === 'fogpótlástanász' || userRole === 'beutalo_orvos') && (
-        <button
-          onClick={handleNewPatient}
-          className="md:hidden fixed right-5 z-40 w-14 h-14 rounded-full bg-gradient-to-r from-medical-primary to-medical-primary-light text-white shadow-lg flex items-center justify-center active:scale-95 transition-transform bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px)+0.75rem)]"
-          aria-label="Új beteg"
-        >
-          <Plus className="w-6 h-6" />
-        </button>
-      )}
 
       {/* Send Message Modal */}
       <SendMessageModal
         isOpen={showMessageModal}
         onClose={() => setShowMessageModal(false)}
       />
-
-      <MobileBottomNav />
-    </div>
+    </AppShell>
   );
 }

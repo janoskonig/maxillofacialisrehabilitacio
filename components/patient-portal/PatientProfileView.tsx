@@ -8,6 +8,7 @@ import { hu } from 'date-fns/locale';
 import Link from 'next/link';
 import { useToast } from '@/contexts/ToastContext';
 import { ResearchConsentCard } from '@/components/patient-portal/ResearchConsentCard';
+import { PrivacyNoticeCard } from '@/components/patient-portal/PrivacyNoticeCard';
 
 interface Patient {
   id: string;
@@ -495,6 +496,8 @@ export function PatientProfileView() {
           </div>
         )}
       </div>
+
+      <PrivacyNoticeCard />
 
       <ResearchConsentCard />
 

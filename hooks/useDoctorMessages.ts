@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { DoctorMessage, DoctorConversation } from '@/lib/types';
 import { getCurrentUser } from '@/lib/auth';
 import { useToast } from '@/contexts/ToastContext';
@@ -104,6 +104,12 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
   const [deletingGroup, setDeletingGroup] = useState(false);
   const [pendingMessageId, setPendingMessageId] = useState<string | null>(null);
 
+  // A conversations legfrissebb pillanatképe a socket-handlerek számára.
+  const conversationsRef = useRef<DoctorConversation[]>([]);
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
+
   // ── Reply state (Slice 0.5) ─────────────────────────────────────────
   const replyState = useReplyState();
 
@@ -161,6 +167,42 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
     } catch (error) {
       console.error('Hiba az olvasatlan üzenetek számának lekérdezésekor:', error);
     }
+  };
+
+  // Célzott, lokális frissítés bejövő (nem aktív szálú) üzenetnél — két
+  // hálózati hívás (fetchConversations + fetchUnreadCount) helyett. Csak akkor
+  // esik vissza teljes újratöltésre, ha a szál még nincs a listában.
+  const applyIncomingDoctorMessageToConversations = (
+    msg: DoctorMessage,
+    match: { groupId?: string | null; doctorId?: string },
+  ) => {
+    const isMatch = (c: DoctorConversation) =>
+      match.groupId
+        ? c.type === 'group' && c.groupId === match.groupId
+        : c.type !== 'group' && c.doctorId === match.doctorId;
+
+    if (!conversationsRef.current.some(isMatch)) {
+      fetchConversations();
+      fetchUnreadCount();
+      return;
+    }
+
+    setConversations((prev) => {
+      const idx = prev.findIndex(isMatch);
+      if (idx === -1) return prev;
+      const existing = prev[idx];
+      const updated: DoctorConversation = {
+        ...existing,
+        lastMessage: {
+          ...msg,
+          createdAt: new Date(msg.createdAt),
+          readAt: msg.readAt ? new Date(msg.readAt) : null,
+        },
+        unreadCount: existing.unreadCount + 1,
+      };
+      return [updated, ...prev.slice(0, idx), ...prev.slice(idx + 1)];
+    });
+    setUnreadCount((prev) => prev + 1);
   };
 
   const fetchMessages = async () => {
@@ -609,15 +651,13 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
       if (data.groupId) {
         // Group: csak ha jelenleg a megfelelő szálban vagyunk.
         if (data.groupId !== selectedGroupId) {
-          fetchConversations();
-          fetchUnreadCount();
+          applyIncomingDoctorMessageToConversations(msg, { groupId: data.groupId });
           return;
         }
       } else {
         // 1:1: csak ha jelenleg a feladóval beszélünk.
         if (!selectedDoctorId || msg.senderId !== selectedDoctorId) {
-          fetchConversations();
-          fetchUnreadCount();
+          applyIncomingDoctorMessageToConversations(msg, { doctorId: msg.senderId });
           return;
         }
       }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyPatientPortalSession, clearPatientPortalSession } from '@/lib/patient-portal-server';
 import { apiHandler } from '@/lib/api/route-handler';
+import { writeAuditEvent } from '@/lib/research-registry/audit-events';
 import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
@@ -126,6 +127,17 @@ export const DELETE = apiHandler(async (req) => {
          WHERE patient_id = $1 AND withdrawn_at IS NULL`,
         [patientId]
       );
+
+      // Append-only audit record of the self-service deletion (Art. 17 trail).
+      await writeAuditEvent(client, {
+        entityType: 'patient',
+        entityId: patientId,
+        action: 'patient_self_deletion',
+        actorId: `patient:${patientId}`,
+        reason: 'GDPR Art. 17 self-service account deletion',
+        oldState: { intakeStatus: 'active' },
+        newState: { intakeStatus: 'DELETED', contactDataAnonymized: true },
+      });
 
       await client.query('COMMIT');
     } catch (error) {

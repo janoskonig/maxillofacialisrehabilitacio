@@ -15,12 +15,12 @@ export function MobileSkeletonCard({ lines = 3, className = '' }: MobileSkeleton
   return (
     <div className={`mobile-card ${className}`}>
       {/* Title skeleton */}
-      <div className="animate-pulse bg-gray-200 rounded h-5 w-3/4 mb-3" />
+      <div className="animate-pulse bg-gray-200 dark:bg-gray-800 rounded h-5 w-3/4 mb-3" />
       
       {/* Value lines skeleton */}
       <div className="space-y-2">
         {Array.from({ length: lines }).map((_, index) => (
-          <div key={index} className="animate-pulse bg-gray-200 rounded h-4" />
+          <div key={index} className="animate-pulse bg-gray-200 dark:bg-gray-800 rounded h-4" />
         ))}
       </div>
     </div>

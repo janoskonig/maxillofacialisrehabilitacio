@@ -87,17 +87,17 @@ function PatientCardComponent({
 
   const getStatusInfo = (status?: AppointmentInfo['appointmentStatus'], isLate?: boolean) => {
     if (isLate) {
-      return { label: 'Késett', color: 'text-orange-600', bgColor: 'bg-orange-50', icon: ClockIcon };
+      return { label: 'Késett', color: 'text-orange-600 dark:text-orange-400', bgColor: 'bg-orange-50 dark:bg-orange-950/40', icon: ClockIcon };
     }
     switch (status) {
       case 'cancelled_by_doctor':
-        return { label: 'Lemondva (orvos)', color: 'text-red-600', bgColor: 'bg-red-50', icon: XCircle };
+        return { label: 'Lemondva (orvos)', color: 'text-red-600 dark:text-red-400', bgColor: 'bg-red-50 dark:bg-red-950/40', icon: XCircle };
       case 'cancelled_by_patient':
-        return { label: 'Lemondva (beteg)', color: 'text-orange-600', bgColor: 'bg-orange-50', icon: XCircle };
+        return { label: 'Lemondva (beteg)', color: 'text-orange-600 dark:text-orange-400', bgColor: 'bg-orange-50 dark:bg-orange-950/40', icon: XCircle };
       case 'completed':
-        return { label: 'Teljesült', color: 'text-green-600', bgColor: 'bg-green-50', icon: CheckCircle2 };
+        return { label: 'Teljesült', color: 'text-green-600 dark:text-green-400', bgColor: 'bg-green-50 dark:bg-green-950/40', icon: CheckCircle2 };
       case 'no_show':
-        return { label: 'Nem jelent meg', color: 'text-red-700', bgColor: 'bg-red-100', icon: XCircle };
+        return { label: 'Nem jelent meg', color: 'text-red-700 dark:text-red-400', bgColor: 'bg-red-100 dark:bg-red-900', icon: XCircle };
       default:
         return null;
     }
@@ -112,26 +112,26 @@ function PatientCardComponent({
 
   const getStageColor = (stageValue: string) => {
     const legacy: Record<string, string> = {
-      uj_beteg: 'bg-blue-100 text-blue-800',
-      onkologiai_kezeles_kesz: 'bg-purple-100 text-purple-800',
-      arajanlatra_var: 'bg-yellow-100 text-yellow-800',
-      implantacios_sebeszi_tervezesre_var: 'bg-orange-100 text-orange-800',
-      fogpotlasra_var: 'bg-amber-100 text-amber-800',
-      fogpotlas_keszul: 'bg-indigo-100 text-indigo-800',
-      fogpotlas_kesz: 'bg-green-100 text-green-800',
-      gondozas_alatt: 'bg-gray-100 text-gray-800',
+      uj_beteg: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+      onkologiai_kezeles_kesz: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
+      arajanlatra_var: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
+      implantacios_sebeszi_tervezesre_var: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
+      fogpotlasra_var: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300',
+      fogpotlas_keszul: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300',
+      fogpotlas_kesz: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+      gondozas_alatt: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
     };
     const byCode: Record<string, string> = {
-      STAGE_0: 'bg-blue-100 text-blue-800',
-      STAGE_1: 'bg-blue-200 text-blue-900',
-      STAGE_2: 'bg-yellow-100 text-yellow-800',
-      STAGE_3: 'bg-violet-100 text-violet-800',
-      STAGE_4: 'bg-amber-100 text-amber-800',
-      STAGE_5: 'bg-indigo-100 text-indigo-800',
-      STAGE_6: 'bg-green-100 text-green-800',
-      STAGE_7: 'bg-gray-100 text-gray-800',
+      STAGE_0: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+      STAGE_1: 'bg-blue-200 text-blue-900 dark:bg-blue-900 dark:text-blue-300',
+      STAGE_2: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
+      STAGE_3: 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-300',
+      STAGE_4: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300',
+      STAGE_5: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300',
+      STAGE_6: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+      STAGE_7: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
     };
-    return legacy[stageValue] ?? byCode[stageValue] ?? 'bg-gray-100 text-gray-800';
+    return legacy[stageValue] ?? byCode[stageValue] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
   };
 
   return (
@@ -148,11 +148,11 @@ function PatientCardComponent({
           )}
           <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="text-base font-semibold text-gray-900 truncate">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 truncate">
               {patient.nev || 'Név nélküli beteg'}
             </h3>
             {patient.halalDatum && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-200 text-gray-700 flex-shrink-0" title={`Halál dátuma: ${formatDateForDisplay(patient.halalDatum)}`}>
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 flex-shrink-0" title={`Halál dátuma: ${formatDateForDisplay(patient.halalDatum)}`}>
                 ✝
               </span>
             )}
@@ -166,10 +166,10 @@ function PatientCardComponent({
             )}
           </div>
           {userRole !== 'technikus' && patient.taj && (
-            <p className="text-sm text-gray-600 mt-0.5">TAJ: {patient.taj}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">TAJ: {patient.taj}</p>
           )}
           {userRole !== 'technikus' && patient.halalDatum && (
-            <p className="text-sm text-gray-600 mt-0.5">Halál dátuma: {formatDateForDisplay(patient.halalDatum)}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">Halál dátuma: {formatDateForDisplay(patient.halalDatum)}</p>
           )}
           </div>
         </div>
@@ -177,7 +177,7 @@ function PatientCardComponent({
           {patient.id && (
             <button
               onClick={handleHistoryClick}
-              className="p-1.5 text-purple-600 hover:bg-purple-50 rounded"
+              className="p-1.5 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/40 rounded"
               title="Életút megtekintése"
             >
               <History className="w-4 h-4" />
@@ -186,7 +186,7 @@ function PatientCardComponent({
           {opDocumentCount > 0 && (
             <button
               onClick={() => onViewOP?.(patient)}
-              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
+              className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded"
               title={`${opDocumentCount} OP dokumentum`}
             >
               <Image className="w-4 h-4" />
@@ -195,7 +195,7 @@ function PatientCardComponent({
           {fotoDocumentCount > 0 && (
             <button
               onClick={() => onViewFoto?.(patient)}
-              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
+              className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded"
               title={`${fotoDocumentCount} Foto dokumentum`}
             >
               <Camera className="w-4 h-4" />
@@ -207,13 +207,13 @@ function PatientCardComponent({
       {userRole !== 'technikus' && (
       <div className="space-y-1.5">
         {patient.telefonszam && (
-          <div className="flex items-center gap-2 text-sm text-gray-600">
+          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
             <Phone className="w-4 h-4 flex-shrink-0" />
             <span className="truncate">{patient.telefonszam}</span>
           </div>
         )}
         {patient.email && (
-          <div className="flex items-center gap-2 text-sm text-gray-600">
+          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
             <Mail className="w-4 h-4 flex-shrink-0" />
             <span className="truncate">{patient.email}</span>
           </div>
@@ -223,11 +223,11 @@ function PatientCardComponent({
 
       {/* Appointment Info */}
       {appointment && (
-        <div className={`${statusInfo?.bgColor || 'bg-gray-50'} rounded-lg p-3 border border-gray-200/50`}>
+        <div className={`${statusInfo?.bgColor || 'bg-gray-50 dark:bg-gray-800'} rounded-lg p-3 border border-gray-200/50 dark:border-gray-800`}>
           <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-gray-600" />
+            <Calendar className="w-4 h-4 text-gray-600 dark:text-gray-400" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900">
+              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
                 {new Date(appointment.startTime).toLocaleString('hu-HU', {
                   year: 'numeric',
                   month: 'long',
@@ -237,7 +237,7 @@ function PatientCardComponent({
                 })}
               </p>
               {appointment.dentistName && (
-                <p className="text-xs text-gray-600 mt-0.5">{appointment.dentistName}</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">{appointment.dentistName}</p>
               )}
               {statusInfo && (
                 <div className="flex items-center gap-1 mt-1">
@@ -253,7 +253,7 @@ function PatientCardComponent({
       )}
 
       {/* Additional Info */}
-      <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+      <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 dark:text-gray-400">
         {patient.kezeleoorvos && (
           <div>
             <span className="font-medium">Orvos: </span>
@@ -265,20 +265,20 @@ function PatientCardComponent({
             <span className="font-medium">Létrehozva: </span>
             <span>{formatDateForDisplay(patient.createdAt)}</span>
             {patient.createdBy ? (
-              <span className="text-gray-500 ml-1">({patient.createdBy.split('@')[0]})</span>
+              <span className="text-gray-500 dark:text-gray-400 ml-1">({patient.createdBy.split('@')[0]})</span>
             ) : (
-              <span className="text-gray-500 ml-1">(A beteg regisztrált)</span>
+              <span className="text-gray-500 dark:text-gray-400 ml-1">(A beteg regisztrált)</span>
             )}
           </div>
         )}
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-2 pt-3 border-t border-gray-100">
+      <div className="flex items-center gap-2 pt-3 border-t border-gray-100 dark:border-gray-800">
         {userRole === 'admin' && patient.id && (
           <button
             onClick={handleImpersonate}
-            className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-all duration-200"
+            className="p-2 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/40 rounded-lg transition-all duration-200"
             title="Belépés betegként"
           >
             <User className="w-4 h-4" />

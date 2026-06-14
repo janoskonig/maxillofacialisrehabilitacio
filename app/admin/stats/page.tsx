@@ -2,10 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import dynamic from 'next/dynamic';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser, type AuthUser } from '@/lib/auth';
-import { Logo } from '@/components/Logo';
+import { AppShell } from '@/components/layout/AppShell';
 import {
   Users,
   UserCheck,
@@ -16,12 +15,10 @@ import {
   FileText,
   TrendingUp,
   TrendingDown,
-  ArrowLeft,
   LayoutDashboard,
   Server,
   Stethoscope,
   RefreshCw,
-  BarChart3,
   AlertTriangle,
   XCircle,
   CheckCircle2,
@@ -468,81 +465,64 @@ export default function StatsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-gray-50 to-gray-100/90">
-      <header className="sticky top-0 z-20 border-b border-gray-200/80 bg-white/80 shadow-sm backdrop-blur-md">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-4">
-              <Logo width={56} height={64} />
-              <div>
-                <div className="flex items-center gap-2">
-                  <BarChart3 className="h-6 w-6 text-medical-primary" aria-hidden />
-                  <h1 className="text-2xl font-bold tracking-tight text-gray-900">Statisztikák</h1>
-                </div>
-                <p className="mt-0.5 text-sm text-gray-500">
-                  Rendszer- és szakmai mutatók egy helyen — csak adminisztrátorok számára.
-                </p>
-              </div>
-            </div>
-            {currentUser && (
-              <p className="text-sm text-gray-500 sm:text-right">
-                Bejelentkezve: <span className="font-medium text-gray-700">{currentUser.email}</span>
-              </p>
-            )}
-          </div>
-
-          <nav
-            className="-mx-4 flex gap-1 overflow-x-auto border-t border-gray-100 px-4 pb-3 pt-3 sm:mx-0 sm:px-0"
-            aria-label="Statisztika szakaszok"
+    <AppShell
+      title="Statisztikák"
+      backTo="/admin"
+      maxWidth="xl"
+      actions={
+        <div className="flex items-center gap-3">
+          <span
+            className="hidden text-xs text-gray-500 sm:inline-flex sm:items-center sm:gap-1"
+            aria-live="polite"
+            title={stats?.generaltAt ?? ''}
           >
-            {TAB_CONFIG.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => handleTab(t.id, t.anchor)}
-                className={`inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                  activeTab === t.id
-                    ? 'bg-medical-primary text-white shadow-soft'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900'
-                }`}
-              >
-                {t.icon}
-                {t.label}
-              </button>
-            ))}
-          </nav>
+            <Clock className="h-3.5 w-3.5" />
+            Frissítve: <span className="font-medium text-gray-700">{lastUpdatedLabel}</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => loadStats()}
+            disabled={statsLoading}
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-soft transition-colors hover:bg-gray-50 disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${statsLoading ? 'animate-spin' : ''}`} />
+            Frissítés
+          </button>
         </div>
-      </header>
+      }
+    >
+      <div>
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-gray-500">
+            Rendszer- és szakmai mutatók egy helyen — csak adminisztrátorok számára.
+          </p>
+          {currentUser && (
+            <p className="text-sm text-gray-500 sm:text-right">
+              Bejelentkezve: <span className="font-medium text-gray-700">{currentUser.email}</span>
+            </p>
+          )}
+        </div>
 
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <Link
-            href="/admin"
-            className="inline-flex w-fit items-center gap-2 text-sm font-medium text-gray-600 transition-colors hover:text-medical-primary"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Vissza az admin felületre
-          </Link>
-          <div className="flex items-center gap-3 self-start sm:self-auto">
-            <span
-              className="hidden text-xs text-gray-500 sm:inline-flex sm:items-center sm:gap-1"
-              aria-live="polite"
-              title={stats?.generaltAt ?? ''}
-            >
-              <Clock className="h-3.5 w-3.5" />
-              Frissítve: <span className="font-medium text-gray-700">{lastUpdatedLabel}</span>
-            </span>
+        <nav
+          className="mb-8 flex gap-1 overflow-x-auto pb-1"
+          aria-label="Statisztika szakaszok"
+        >
+          {TAB_CONFIG.map((t) => (
             <button
+              key={t.id}
               type="button"
-              onClick={() => loadStats()}
-              disabled={statsLoading}
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-soft transition-colors hover:bg-gray-50 disabled:opacity-50"
+              onClick={() => handleTab(t.id, t.anchor)}
+              className={`inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                activeTab === t.id
+                  ? 'bg-medical-primary text-white shadow-soft'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900'
+              }`}
             >
-              <RefreshCw className={`h-4 w-4 ${statsLoading ? 'animate-spin' : ''}`} />
-              Frissítés
+              {t.icon}
+              {t.label}
             </button>
-          </div>
-        </div>
+          ))}
+        </nav>
 
         {statsLoading && !stats ? (
           <StatsLoadingSkeleton />
@@ -1201,7 +1181,7 @@ export default function StatsPage() {
             </div>
           </div>
         ) : null}
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }

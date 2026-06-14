@@ -31,16 +31,16 @@ export function DashboardWidget({
       className={`card card-hover ${className} animate-fade-in ${onClick ? 'cursor-pointer' : ''}`}
       onClick={onClick}
     >
-      <div className="flex items-center justify-between p-3 md:p-4 border-b border-gray-100">
+      <div className="flex items-center justify-between p-3 md:p-4 border-b border-gray-100 dark:border-gray-800">
         <div className="flex items-center gap-2 md:gap-3">
           {icon && <div className="text-medical-primary flex-shrink-0">{icon}</div>}
-          <h3 className="text-base md:text-lg font-semibold text-gray-900">{title}</h3>
+          <h3 className="text-base md:text-lg font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
         </div>
         <div className="flex items-center gap-2">
           {collapsible && (
             <button
               onClick={() => setIsCollapsed(!isCollapsed)}
-              className="text-gray-400 hover:text-gray-600 p-1.5 rounded-md hover:bg-gray-100 transition-all duration-200"
+              className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
               aria-label={isCollapsed ? 'Kibontás' : 'Összecsukás'}
             >
               {isCollapsed ? '▼' : '▲'}
@@ -49,7 +49,7 @@ export function DashboardWidget({
           {onClose && (
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 p-1.5 rounded-md hover:bg-gray-100 transition-all duration-200"
+              className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
               aria-label="Bezárás"
             >
               <X className="w-4 h-4" />

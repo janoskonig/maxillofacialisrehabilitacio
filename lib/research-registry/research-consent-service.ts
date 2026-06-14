@@ -48,6 +48,13 @@ export interface ConsentEventRow {
   versionLabel: string | null;
 }
 
+export interface ConsentRequestContext {
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  /** Guardian declaring on behalf of a minor, recorded for demonstrability. */
+  onBehalf?: { onBehalfOfMinor: boolean; guardianName?: string | null; guardianRelation?: string | null } | null;
+}
+
 async function insertConsentEvent(
   db: Db,
   input: {
@@ -61,13 +68,15 @@ async function insertConsentEvent(
     actorEmail?: string | null;
     reason?: string | null;
     metadata?: Record<string, unknown>;
+    ipAddress?: string | null;
+    userAgent?: string | null;
   }
 ): Promise<void> {
   await db.query(
     `INSERT INTO patient_consent_events (
        patient_id, event_type, consent_version_id, previous_status, new_status,
-       capture_method, actor_id, actor_email, reason, metadata
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+       capture_method, actor_id, actor_email, reason, metadata, ip_address, user_agent
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::inet, $12)`,
     [
       input.patientId,
       input.eventType,
@@ -79,6 +88,8 @@ async function insertConsentEvent(
       input.actorEmail ?? null,
       input.reason ?? null,
       JSON.stringify(input.metadata ?? {}),
+      input.ipAddress ?? null,
+      input.userAgent ?? null,
     ]
   );
 }
@@ -234,6 +245,7 @@ export async function grantResearchConsent(
     reason?: string;
     consentVersionId?: string;
     attestation?: string;
+    context?: ConsentRequestContext;
   },
   pool?: Db
 ): Promise<PatientConsentState> {
@@ -315,7 +327,9 @@ export async function grantResearchConsent(
     actorId: input.actor.id,
     actorEmail: input.actor.email,
     reason: input.reason,
-    metadata: { attestation: input.attestation ?? null },
+    metadata: { attestation: input.attestation ?? null, onBehalf: input.context?.onBehalf ?? null },
+    ipAddress: input.context?.ipAddress ?? null,
+    userAgent: input.context?.userAgent ?? null,
   });
 
   await writeAuditEvent(db, {
@@ -336,12 +350,65 @@ export async function grantResearchConsent(
   return (await getPatientConsentState(patientId, db))!;
 }
 
+export async function declineResearchConsent(
+  patientId: string,
+  input: {
+    actor: { id?: string; email?: string };
+    reason?: string;
+    captureMethod?: ConsentCaptureMethod;
+    context?: ConsentRequestContext;
+  },
+  pool?: Db
+): Promise<PatientConsentState> {
+  const db = pool ?? getDbPool();
+  const current = await getPatientConsentState(patientId, db);
+  if (!current) throw new Error('Patient not found');
+  if (current.consentStatus === 'declined') {
+    return current;
+  }
+
+  const version = await getActiveConsentVersion(db);
+  await db.query(
+    `UPDATE patients SET consent_status = 'declined' WHERE id = $1`,
+    [patientId]
+  );
+
+  await insertConsentEvent(db, {
+    patientId,
+    eventType: 'declined',
+    consentVersionId: version?.id ?? null,
+    previousStatus: current.consentStatus,
+    newStatus: 'declined',
+    captureMethod: input.captureMethod ?? 'patient_portal',
+    actorId: input.actor.id,
+    actorEmail: input.actor.email,
+    reason: input.reason,
+    metadata: { onBehalf: input.context?.onBehalf ?? null },
+    ipAddress: input.context?.ipAddress ?? null,
+    userAgent: input.context?.userAgent ?? null,
+  });
+
+  await writeAuditEvent(db, {
+    entityType: 'patient',
+    entityId: patientId,
+    action: 'research_consent_declined',
+    actorId: input.actor.id,
+    actorEmail: input.actor.email,
+    reason: input.reason,
+    oldState: { consentStatus: current.consentStatus },
+    newState: { consentStatus: 'declined' },
+  });
+
+  return (await getPatientConsentState(patientId, db))!;
+}
+
 export async function withdrawResearchConsent(
   patientId: string,
   input: {
     actor: { id?: string; email?: string };
     reason?: string;
     captureMethod?: ConsentCaptureMethod;
+    context?: ConsentRequestContext;
   },
   pool?: Db
 ): Promise<PatientConsentState> {
@@ -362,6 +429,9 @@ export async function withdrawResearchConsent(
     actorId: input.actor.id,
     actorEmail: input.actor.email,
     reason: input.reason,
+    metadata: { onBehalf: input.context?.onBehalf ?? null },
+    ipAddress: input.context?.ipAddress ?? null,
+    userAgent: input.context?.userAgent ?? null,
   });
 
   await writeAuditEvent(db, {

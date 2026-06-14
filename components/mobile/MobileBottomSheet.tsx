@@ -138,7 +138,7 @@ export function MobileBottomSheet({
       <div
         ref={contentRef}
         className="
-          relative bg-white w-full max-w-2xl
+          relative bg-white dark:bg-gray-900 w-full max-w-2xl
           rounded-t-lg max-h-[85vh] md:rounded-lg md:max-h-[90vh]
           animate-slide-up md:animate-scale-in
           flex flex-col shadow-2xl md:shadow-xl
@@ -151,19 +151,19 @@ export function MobileBottomSheet({
       >
         {/* Handle bar (mobile only) */}
         <div className="flex justify-center pt-2 pb-1 md:hidden">
-          <div className="w-12 h-1 bg-gray-300 rounded-full" />
+          <div className="w-12 h-1 bg-gray-300 dark:bg-gray-700 rounded-full" />
         </div>
 
         {/* Header */}
         {(title || description) && (
-          <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
+          <div className="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-800">
             {title && (
-              <h2 id="bottomsheet-title" className="text-lg font-semibold text-gray-900">
+              <h2 id="bottomsheet-title" className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                 {title}
               </h2>
             )}
             {description && (
-              <p id="bottomsheet-description" className="mt-1 text-sm text-gray-600">
+              <p id="bottomsheet-description" className="mt-1 text-sm text-gray-600 dark:text-gray-400">
                 {description}
               </p>
             )}
@@ -179,7 +179,7 @@ export function MobileBottomSheet({
         <button
           type="button"
           onClick={() => onOpenChange(false)}
-          className="hidden md:block absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors mobile-touch-target"
+          className="hidden md:block absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors mobile-touch-target"
           aria-label="Bezárás"
         >
           <X className="w-5 h-5" />

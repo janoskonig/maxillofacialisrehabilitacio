@@ -11,6 +11,8 @@ interface IntakeData {
   explain: {
     viewMode: ViewMode;
     busynessScore: number;
+    backlogPct: number;
+    remainingVisitsP80: number;
     nearCriticalIfNewStarts: boolean;
     wipCount: number;
     wipCompletionP80Max: string | null;
@@ -93,6 +95,11 @@ function humanizeReason(code: string, viewMode: ViewMode): string {
     return viewMode === 'TEAM'
       ? 'A folyamatban lévő kezelések befejezése a szokásosnál távolabbra esik'
       : 'Saját folyamatban lévő kezelések befejezése a szokásosnál távolabbra esik';
+
+  if (/^BACKLOG_\d+$/.test(code))
+    return viewMode === 'TEAM'
+      ? 'Sok félkész beteg vár még le nem foglalt kezelési lépésekre (rejtett hátralévő munka)'
+      : 'Sok félkész betegednek van még le nem foglalt hátralévő kezelési lépése';
 
   return code;
 }

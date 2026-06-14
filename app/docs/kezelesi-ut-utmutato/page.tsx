@@ -232,6 +232,85 @@ export default function KezelesiUtUtmutatoPage() {
                 Ha a kezelési terv szerinti időablakban (a következő lépésre megadott legkorábbi–legkésőbbi időszakban) nincs szabad <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">work</code> slot, a rendszer <strong>BLOCKED_CAPACITY</strong> jelzést ad. Ez figyelmeztet, hogy a beteg kezelése akadályozott — további szabad időpontok kiírása szükséges.
               </p>
             </section>
+
+            {/* Főoldal — Teendőim */}
+            <section>
+              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">8. Főoldal — „Teendőim" panel</h2>
+              <p>
+                A főoldal nem egy tabos áttekintő widget, hanem egy <strong>teendő-központú panel</strong>: csak a napi, ténylegesen elvégzendő dolgokat mutatja, üres kártyák nélkül.
+              </p>
+              <h3 className="text-lg font-medium text-gray-800 mt-4 mb-2">Mit látsz itt</h3>
+              <ul className="list-disc pl-6 space-y-1 mt-2">
+                <li><strong>Jóváhagyásra váró időpontok</strong> és <strong>mai időpontok</strong> — csak akkor jelennek meg, ha van ilyen.</li>
+                <li><strong>Gyors belépő chipek</strong> a nyitott feladatokhoz (<code className="bg-gray-100 px-1 py-0.5 rounded text-xs">/tasks</code>) és az olvasatlan üzenetekhez (<code className="bg-gray-100 px-1 py-0.5 rounded text-xs">/messages</code>). Sürgősség szerint színezve: nem látott feladat, illetve olvasatlan beteg-üzenet → pirossal. Nullánál a chip nem jelenik meg.</li>
+                <li>Ha nincs teendő → tiszta <strong>„Nincs sürgős teendőd"</strong> állapot.</li>
+              </ul>
+              <h3 className="text-lg font-medium text-gray-800 mt-4 mb-2">A nehéz nézetek külön oldalra kerültek</h3>
+              <p>A korábbi főoldali tabokat (GANTT, terhelés, pipeline) a bal oldali navigációból éred el:</p>
+              <ul className="list-disc pl-6 space-y-1 mt-2">
+                <li><strong>Beteg előkészítés</strong> — <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">/patients/pipeline</code></li>
+                <li><strong>Stádium GANTT</strong> — <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">/patients/stages/gantt</code></li>
+                <li><strong>Orvos terhelés</strong> — <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">/workload</code></li>
+              </ul>
+            </section>
+
+            {/* Kezelőorvos és delegált betegek */}
+            <section>
+              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">9. Kezelőorvos és delegált betegek</h2>
+              <p>
+                Minden betegnek <strong>egyetlen kezelőorvosa</strong> lehet — egyetlen forrás (<code className="bg-gray-100 px-1 py-0.5 rounded text-xs">patients.kezeleoorvos_user_id</code>), kézi, „ragadós" hozzárendeléssel. Így minden delegált beteg számon kérhető egy konkrét orvoson.
+              </p>
+              <h3 className="text-lg font-medium text-gray-800 mt-4 mb-2">Hozzárendelés</h3>
+              <p>
+                A beteg-űrlapon a <strong>kezelőorvos</strong> mezőből választasz (a dropdown az ismert fogpótlástanász/admin orvosokat listázza, a név alapján oldódik fel). Amint kézzel beállítottad, az éjszakai automatikus újraszámolás (recompute) <strong>nem írja felül</strong> — szemben a régi, automatikusan seedelt értékkel. Ha üresre állítod, a hozzárendelés törlődik, és a recompute újra seedelhet.
+              </p>
+              <h3 className="text-lg font-medium text-gray-800 mt-4 mb-2">Delegált betegek munkalista</h3>
+              <p>
+                A <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">/tasks/overview</code> oldalon a <strong>„Delegált betegek"</strong> fülön orvosonként látszik, hol tart minden delegált beteg:
+              </p>
+              <ul className="list-disc pl-6 space-y-1 mt-2">
+                <li><strong>Fogpótlástanász</strong>: csak a saját delegált betegeit látja.</li>
+                <li><strong>Admin</strong>: minden orvos betegeit, orvosonként csoportosítva.</li>
+                <li>Oszlopok: nyitott epizód, következő időpont, utolsó találkozás, delegálva (mikor / ki által).</li>
+                <li><strong>„Elakadt" jelzés</strong> (sárga sor): van nyitott epizód, de <strong>nincs jövőbeli időpont</strong> — ezzel a beteggel tenni kell valamit.</li>
+              </ul>
+            </section>
+
+            {/* Beleegyezések és adatkezelési nyilatkozatok */}
+            <section>
+              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">10. Beleegyezések és adatkezelési nyilatkozatok</h2>
+              <p>Két, jogilag <strong>külön</strong> dolgot kezelünk — ne keverd össze őket:</p>
+              <ol className="list-decimal pl-6 space-y-2 mt-2">
+                <li>
+                  <strong>Adatvédelmi tájékoztató tudomásulvétele</strong> — a GDPR 13. cikk szerinti <em>tájékoztatási kötelezettség</em>, <strong>nem</strong> beleegyezés. A beteg az aktuális tájékoztató-verziót nyugtázza (jelenleg <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">1.1</code>). A verzió emelésekor a rendszer mindenkit újra megkér a nyugtázásra.
+                </li>
+                <li>
+                  <strong>Kutatási hozzájárulás</strong> (<code className="bg-gray-100 px-1 py-0.5 rounded text-xs">consent_status</code>) — valódi GDPR 9. cikk (2) a) szerinti beleegyezés. <em>Eldöntöttnek</em> számít: granted / declined / withdrawn / expired. <em>Még nyitott</em>: unknown / pending.
+                </li>
+              </ol>
+              <h3 className="text-lg font-medium text-gray-800 mt-4 mb-2">Emlékeztetők</h3>
+              <p>
+                Regisztrációkor egyszeri felkérés megy ki. Ezután egy <strong>napi cron</strong> újraküldi a felkérést mindenkinek, akinek még van nyitott nyilatkozata (tájékoztató-nyugtázás és/vagy kutatási döntés), kb. <strong>20 órás cooldownnal</strong> (így legfeljebb naponta egyszer).
+              </p>
+              <h3 className="text-lg font-medium text-gray-800 mt-4 mb-2">Kiskorúak / cselekvőképesség</h3>
+              <p>
+                <strong>18 év alatt</strong> törvényes képviselő (gondviselő) nyilatkozik a beteg helyett.
+              </p>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 my-4">
+                <p className="text-sm text-amber-900">
+                  <strong>Nyitott jogi kérdés:</strong> a kiadott tájékoztató jelenleg 16 évet említ, a magyar cselekvőképesség viszont általában 18 év. A korhatár egyetlen konstans (<code className="bg-amber-100 px-1 py-0.5 rounded text-xs">GUARDIAN_REQUIRED_BELOW_AGE</code>), amelyet a DPO/jogász egyeztetése után kell véglegesíteni.
+                </p>
+              </div>
+              <h3 className="text-lg font-medium text-gray-800 mt-4 mb-2">Kutatási export — etikai kapu</h3>
+              <p>Kutatási (kohorsz) export csak akkor indítható, ha <strong>mindkettő</strong> teljesül:</p>
+              <ul className="list-disc pl-6 space-y-1 mt-2">
+                <li>érvényes <strong>kutatásetikai engedély (ETT TUKEB)</strong> van rögzítve (<code className="bg-gray-100 px-1 py-0.5 rounded text-xs">ethics_approvals</code> tábla), és</li>
+                <li>a <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">RESEARCH_EXPORT_MODE</code> engedélyezett.</li>
+              </ul>
+              <p className="mt-2">
+                Enélkül a kutatási export tiltott — a <strong>klinikai statisztika CSV</strong> viszont továbbra is elérhető. Az export csak a kutatásra ténylegesen felhasználható (granted, nem visszavont) betegeket viszi.
+              </p>
+            </section>
           </div>
 
           <div className="mt-12 pt-6 border-t border-gray-200">

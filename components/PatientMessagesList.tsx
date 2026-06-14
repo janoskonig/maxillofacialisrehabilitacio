@@ -89,6 +89,8 @@ export function PatientMessagesList() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesLoadedRef = useRef<Set<string>>(new Set());
+  // A conversations legfrissebb pillanatképe a socket-handlerek számára (renderfüggetlen).
+  const conversationsRef = useRef<Conversation[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [pendingContextLinks, setPendingContextLinks] = useState<PendingContextLink[]>([]);
   const { attachLink, removeLink } = useMessageContextActions('patient');
@@ -215,6 +217,38 @@ export function PatientMessagesList() {
     }
   }, [showToast]);
 
+  // conversationsRef szinkronban tartása (a socket-handlerek a ref-et olvassák).
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
+
+  // Célzott, lokális frissítés bejövő üzenetnél — teljes refetch helyett.
+  // Csak akkor esik vissza teljes újratöltésre, ha a beszélgetés még ismeretlen (új szál).
+  const applyIncomingMessageToConversations = useCallback(
+    (message: Message, patientId: string, isActiveConversation: boolean) => {
+      const known = conversationsRef.current.some((c) => c.patientId === patientId);
+      if (!known) {
+        fetchConversations();
+        return;
+      }
+      setConversations((prev) => {
+        const idx = prev.findIndex((c) => c.patientId === patientId);
+        if (idx === -1) return prev;
+        const existing = prev[idx];
+        const incrementUnread =
+          !isActiveConversation && message.senderType === 'patient' && !message.readAt;
+        const updated: Conversation = {
+          ...existing,
+          lastMessage: message,
+          unreadCount: incrementUnread ? existing.unreadCount + 1 : existing.unreadCount,
+        };
+        // A frissített beszélgetés a lista tetejére kerül (mint a szerver rendezése).
+        return [updated, ...prev.slice(0, idx), ...prev.slice(idx + 1)];
+      });
+    },
+    [fetchConversations],
+  );
+
   // Fetch available patients for new chat
   const fetchAvailablePatients = useCallback(async () => {
     if (!showPatientSelector) return;
@@ -252,14 +286,17 @@ export function PatientMessagesList() {
   // Initial load
   useEffect(() => {
     fetchConversations();
-    
+
+    // Biztonsági poll a socket-frissítések mellé — de csak ha a fül látható,
+    // így háttérben nincs felesleges hálózati/CPU terhelés.
     const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       fetchConversations();
       if (selectedPatientId) {
         fetchMessages(selectedPatientId);
       }
     }, 15_000);
-    
+
     return () => clearInterval(interval);
   }, [fetchConversations]);
 
@@ -377,9 +414,15 @@ export function PatientMessagesList() {
     if (!socket || !selectedPatientId) return;
 
     const handleNewMessage = (data: { message: Message; patientId: string }) => {
+      const normalizedMessage: Message = {
+        ...data.message,
+        createdAt: new Date(data.message.createdAt),
+        readAt: data.message.readAt ? new Date(data.message.readAt) : null,
+      };
+
       if (data.patientId !== selectedPatientId) {
-        // Update conversations list if message is for another patient
-        fetchConversations();
+        // Másik beteg szála: csak az érintett beszélgetést frissítjük lokálisan.
+        applyIncomingMessageToConversations(normalizedMessage, data.patientId, false);
         return;
       }
 
@@ -404,9 +447,9 @@ export function PatientMessagesList() {
       if (data.message.senderType === 'patient' && !data.message.readAt) {
         setUnreadCount(prev => prev + 1);
       }
-      
-      // Refresh conversations to update last message
-      fetchConversations();
+
+      // A nyitott beszélgetés utolsó üzenetét lokálisan frissítjük (nincs hálózati kör).
+      applyIncomingMessageToConversations(normalizedMessage, data.patientId, true);
     };
 
     const handleMessageRead = (data: { messageId: string; patientId: string }) => {
@@ -437,7 +480,7 @@ export function PatientMessagesList() {
       socket.off('message-read', handleMessageRead);
       socket.off('message-delivery-status', handleDeliveryStatus);
     };
-  }, [socket, selectedPatientId, fetchConversations]);
+  }, [socket, selectedPatientId, applyIncomingMessageToConversations]);
 
   // Auto-mark patient messages as read when conversation opens
   // Egyszerűbb és megbízhatóbb: amikor a beszélgetés megnyílik, jelöljük olvasottnak az összes olvasatlant
@@ -929,7 +972,7 @@ export function PatientMessagesList() {
               };
 
               return (
-                <div key={message.id}>
+                <div key={message.id} className="msg-row">
                   {showDateSeparator && (
                     <div className="flex items-center gap-3 my-4">
                       <div className="flex-1 border-t border-gray-300" />

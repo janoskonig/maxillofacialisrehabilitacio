@@ -121,7 +121,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
     
     return (
       <th 
-        className={`px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-200/50 select-none transition-colors duration-150 ${
+        className={`px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-200/50 dark:hover:bg-gray-800 select-none transition-colors duration-150 ${
           isActive ? 'bg-medical-primary/10 text-medical-primary' : ''
         } ${className || ''}`}
         onClick={() => onSort?.(field)}
@@ -129,7 +129,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
         <div className="flex items-center gap-1.5">
           <span>{label}</span>
           {SortIcon && (
-            <SortIcon className={`w-3.5 h-3.5 ${isActive ? 'text-medical-primary' : 'text-gray-400'}`} />
+            <SortIcon className={`w-3.5 h-3.5 ${isActive ? 'text-medical-primary' : 'text-gray-400 dark:text-gray-500'}`} />
           )}
         </div>
       </th>
@@ -139,9 +139,9 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
   // Empty state
   const emptyState = (
     <div className="card text-center py-6">
-      <FileText className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-      <h3 className="text-base font-medium text-gray-900 mb-1">Nincs találat</h3>
-      <p className="text-sm text-gray-500">
+      <FileText className="w-8 h-8 text-gray-400 dark:text-gray-500 mx-auto mb-2" />
+      <h3 className="text-base font-medium text-gray-900 dark:text-gray-100 mb-1">Nincs találat</h3>
+      <p className="text-sm text-gray-500 dark:text-gray-400">
         {patients.length === 0 
           ? "Kezdje az első betegadat hozzáadásával."
           : "Próbálja módosítani a keresési feltételeket."
@@ -156,26 +156,26 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
       {renderSortableHeader(searchQuery.trim() ? 'Keresési eredmény' : 'Beteg', 'nev')}
       {userRole !== 'technikus' && (
       <>
-      <th className="px-3 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider w-20">
+      <th className="px-3 py-3 text-center text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider w-20">
         Foto
       </th>
-      <th className="px-3 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider w-20">
+      <th className="px-3 py-3 text-center text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider w-20">
         OP
       </th>
-      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
         Stádium
       </th>
-      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
         TAJ szám
       </th>
-      <th className="px-2 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-32">
+      <th className="px-2 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider w-32">
         Kapcsolat
       </th>
       </>
       )}
       {userRole !== 'technikus' && renderSortableHeader('Következő időpont', 'idopont', 'w-32')}
       {userRole !== 'technikus' && renderSortableHeader('Létrehozva', 'createdAt')}
-      <th className="px-3 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+      <th className="px-3 py-3 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
         Műveletek
       </th>
     </>
@@ -186,11 +186,11 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
     const hasNoDoctor = !patient.kezeleoorvos;
     const isEven = index % 2 === 0;
     return `transition-all duration-150 ${
-      hasNoDoctor 
-        ? "bg-red-50/50 hover:bg-red-100/70 border-l-2 border-l-medical-error" 
-        : isEven 
-          ? "bg-white hover:bg-gray-50/80" 
-          : "bg-gray-50/30 hover:bg-gray-100/60"
+      hasNoDoctor
+        ? "bg-red-50/50 dark:bg-red-950/40 hover:bg-red-100/70 dark:hover:bg-red-950/60 border-l-2 border-l-medical-error"
+        : isEven
+          ? "bg-white dark:bg-gray-900 hover:bg-gray-50/80 dark:hover:bg-gray-800"
+          : "bg-gray-50/30 dark:bg-gray-800/30 hover:bg-gray-100/60 dark:hover:bg-gray-800/60"
     }`;
   };
 
@@ -216,7 +216,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                     <div className="ml-3">
                       <div className="flex items-center gap-2">
                         <div
-                          className="text-sm font-semibold text-gray-900 cursor-pointer text-medical-primary hover:text-medical-primary-dark hover:underline transition-colors"
+                          className="text-sm font-semibold text-gray-900 dark:text-gray-100 cursor-pointer text-medical-primary hover:text-medical-primary-dark hover:underline transition-colors"
                           onClick={() => {
                             // Ha van szerkesztési jogosultság, akkor szerkesztés, különben csak megtekintés
                             if (canEdit && onEdit) {
@@ -230,12 +230,12 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                           {patient.nev}
                         </div>
                         {patient.halalDatum && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-200 text-gray-700" title={`Halál dátuma: ${formatDateForDisplay(patient.halalDatum)}`}>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300" title={`Halál dátuma: ${formatDateForDisplay(patient.halalDatum)}`}>
                             ✝
                           </span>
                         )}
                       </div>
-                      <div className="text-xs text-gray-500 mt-0.5">
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                         {userRole !== 'technikus' && (
                           <>
                             {patient.nem === 'ferfi' ? 'Férfi' : patient.nem === 'no' ? 'Nő' : ''} 
@@ -244,7 +244,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                               return age !== null ? ` • ${age} éves` : '';
                             })()}
                             {patient.halalDatum && (
-                              <span className="text-gray-600 ml-1">• Halál: {formatDateForDisplay(patient.halalDatum)}</span>
+                              <span className="text-gray-600 dark:text-gray-400 ml-1">• Halál: {formatDateForDisplay(patient.halalDatum)}</span>
                             )}
                           </>
                         )}
@@ -272,7 +272,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                       <span className="ml-1 text-xs font-medium">{fotoDocuments[patient.id || '']}</span>
                     </button>
                   ) : (
-                    <span className="text-xs text-gray-300">-</span>
+                    <span className="text-xs text-gray-300 dark:text-gray-600">-</span>
                   )}
                 </td>
                 <td className="px-3 py-2 text-center">
@@ -293,38 +293,38 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                       <span className="ml-1 text-xs font-medium">{opDocuments[patient.id || '']}</span>
                     </button>
                   ) : (
-                    <span className="text-xs text-gray-300">-</span>
+                    <span className="text-xs text-gray-300 dark:text-gray-600">-</span>
                   )}
                 </td>
                 <td className="px-3 py-2 whitespace-nowrap">
                   {(() => {
                     const patientStage = stages[patient.id || ''];
                     if (!patientStage) {
-                      return <span className="text-xs text-gray-400">-</span>;
+                      return <span className="text-xs text-gray-400 dark:text-gray-500">-</span>;
                     }
                     const label = patientStage.stageLabel ?? patientStageOptions.find(opt => opt.value === patientStage.stage)?.label ?? patientStage.stage;
                     const getStageColor = (stage: string) => {
                       const legacy: Record<string, string> = {
-                        uj_beteg: 'bg-blue-100 text-blue-800',
-                        onkologiai_kezeles_kesz: 'bg-purple-100 text-purple-800',
-                        arajanlatra_var: 'bg-yellow-100 text-yellow-800',
-                        implantacios_sebeszi_tervezesre_var: 'bg-orange-100 text-orange-800',
-                        fogpotlasra_var: 'bg-amber-100 text-amber-800',
-                        fogpotlas_keszul: 'bg-indigo-100 text-indigo-800',
-                        fogpotlas_kesz: 'bg-green-100 text-green-800',
-                        gondozas_alatt: 'bg-gray-100 text-gray-800',
+                        uj_beteg: 'bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300',
+                        onkologiai_kezeles_kesz: 'bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300',
+                        arajanlatra_var: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-300',
+                        implantacios_sebeszi_tervezesre_var: 'bg-orange-100 text-orange-800 dark:bg-orange-950/40 dark:text-orange-300',
+                        fogpotlasra_var: 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300',
+                        fogpotlas_keszul: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300',
+                        fogpotlas_kesz: 'bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-300',
+                        gondozas_alatt: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
                       };
                       const byCode: Record<string, string> = {
-                        STAGE_0: 'bg-blue-100 text-blue-800',
-                        STAGE_1: 'bg-blue-200 text-blue-900',
-                        STAGE_2: 'bg-yellow-100 text-yellow-800',
-                        STAGE_3: 'bg-violet-100 text-violet-800',
-                        STAGE_4: 'bg-amber-100 text-amber-800',
-                        STAGE_5: 'bg-indigo-100 text-indigo-800',
-                        STAGE_6: 'bg-green-100 text-green-800',
-                        STAGE_7: 'bg-gray-100 text-gray-800',
+                        STAGE_0: 'bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300',
+                        STAGE_1: 'bg-blue-200 text-blue-900 dark:bg-blue-900 dark:text-blue-200',
+                        STAGE_2: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-300',
+                        STAGE_3: 'bg-violet-100 text-violet-800 dark:bg-violet-950/40 dark:text-violet-300',
+                        STAGE_4: 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300',
+                        STAGE_5: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300',
+                        STAGE_6: 'bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-300',
+                        STAGE_7: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
                       };
-                      return legacy[stage] ?? byCode[stage] ?? 'bg-gray-100 text-gray-800';
+                      return legacy[stage] ?? byCode[stage] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
                     };
                     return (
                       <span
@@ -337,22 +337,22 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                   })()}
                 </td>
                 <td className="px-3 py-2 whitespace-nowrap">
-                  <div className="text-xs text-gray-900">{patient.taj || '-'}</div>
+                  <div className="text-xs text-gray-900 dark:text-gray-100">{patient.taj || '-'}</div>
                 </td>
                 <td className="px-2 py-2 whitespace-nowrap w-32">
                   <div 
-                    className="flex items-center text-xs text-gray-900 truncate"
+                    className="flex items-center text-xs text-gray-900 dark:text-gray-100 truncate"
                     title={patient.email ? `Telefon: ${patient.telefonszam || '-'}\nEmail: ${patient.email}` : `Telefon: ${patient.telefonszam || '-'}`}
                   >
-                    <Phone className="w-3 h-3 mr-0.5 text-gray-400 flex-shrink-0" />
+                    <Phone className="w-3 h-3 mr-0.5 text-gray-400 dark:text-gray-500 flex-shrink-0" />
                     <span className="truncate">{patient.telefonszam || '-'}</span>
                   </div>
                   {patient.email && (
                     <div 
-                      className="flex items-center text-xs text-gray-500 truncate"
+                      className="flex items-center text-xs text-gray-500 dark:text-gray-400 truncate"
                       title={patient.email}
                     >
-                      <Mail className="w-2.5 h-2.5 mr-0.5 text-gray-400 flex-shrink-0" />
+                      <Mail className="w-2.5 h-2.5 mr-0.5 text-gray-400 dark:text-gray-500 flex-shrink-0" />
                       <span className="truncate">{patient.email}</span>
                     </div>
                   )}
@@ -362,10 +362,10 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                 {userRole !== 'technikus' && (
                 <td className="px-2 py-2 w-32">
                   {loadingAppointments ? (
-                    <div className="text-xs text-gray-500">...</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">...</div>
                   ) : appointments[patient.id || ''] ? (
                     <div className="text-xs">
-                      <div className="flex items-center text-gray-900 mb-0.5">
+                      <div className="flex items-center text-gray-900 dark:text-gray-100 mb-0.5">
                         <Clock className="w-3 h-3 mr-0.5 text-medical-primary flex-shrink-0" />
                         <span className="font-medium">
                           {(() => {
@@ -387,7 +387,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                         </span>
                       </div>
                       {appointments[patient.id || ''].dentistEmail && (
-                        <div className="text-xs text-gray-600 truncate" title={appointments[patient.id || ''].dentistEmail || undefined}>
+                        <div className="text-xs text-gray-600 dark:text-gray-400 truncate" title={appointments[patient.id || ''].dentistEmail || undefined}>
                           {appointments[patient.id || ''].dentistName || appointments[patient.id || ''].dentistEmail}
                         </div>
                       )}
@@ -395,7 +395,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                         const apt = appointments[patient.id || ''];
                         if (apt.isLate) {
                           return (
-                            <div className="flex items-center gap-0.5 mt-0.5 text-orange-600" title="Késett a beteg">
+                            <div className="flex items-center gap-0.5 mt-0.5 text-orange-600 dark:text-orange-400" title="Késett a beteg">
                               <ClockIcon className="w-2.5 h-2.5" />
                               <span className="text-xs">Késett</span>
                             </div>
@@ -403,7 +403,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                         }
                         if (apt.appointmentStatus === 'cancelled_by_doctor') {
                           return (
-                            <div className="flex items-center gap-0.5 mt-0.5 text-red-600" title="Lemondta az orvos">
+                            <div className="flex items-center gap-0.5 mt-0.5 text-red-600 dark:text-red-400" title="Lemondta az orvos">
                               <XCircle className="w-2.5 h-2.5" />
                               <span className="text-xs">Lemondta az orvos</span>
                             </div>
@@ -411,7 +411,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                         }
                         if (apt.appointmentStatus === 'cancelled_by_patient') {
                           return (
-                            <div className="flex items-center gap-0.5 mt-0.5 text-red-600" title="Lemondta a beteg">
+                            <div className="flex items-center gap-0.5 mt-0.5 text-red-600 dark:text-red-400" title="Lemondta a beteg">
                               <XCircle className="w-2.5 h-2.5" />
                               <span className="text-xs">Lemondta a beteg</span>
                             </div>
@@ -419,7 +419,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                         }
                         if (apt.appointmentStatus === 'completed') {
                           return (
-                            <div className="flex items-center gap-0.5 mt-0.5 text-green-600" title={apt.completionNotes || 'Sikeresen teljesült'}>
+                            <div className="flex items-center gap-0.5 mt-0.5 text-green-600 dark:text-green-400" title={apt.completionNotes || 'Sikeresen teljesült'}>
                               <CheckCircle2 className="w-2.5 h-2.5" />
                               <span className="text-xs">Teljesült</span>
                             </div>
@@ -427,7 +427,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                         }
                         if (apt.appointmentStatus === 'no_show') {
                           return (
-                            <div className="flex items-center gap-0.5 mt-0.5 text-red-600" title="Nem jelent meg">
+                            <div className="flex items-center gap-0.5 mt-0.5 text-red-600 dark:text-red-400" title="Nem jelent meg">
                               <AlertCircle className="w-2.5 h-2.5" />
                               <span className="text-xs">Nem jelent meg</span>
                             </div>
@@ -437,25 +437,25 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                       })()}
                     </div>
                   ) : (
-                    <div className="text-xs text-gray-400">-</div>
+                    <div className="text-xs text-gray-400 dark:text-gray-500">-</div>
                   )}
                 </td>
                 )}
                 {userRole !== 'technikus' && (
                 <td className="px-3 py-2 whitespace-nowrap">
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
                     {patient.createdAt && (
                       <div className="flex items-center mb-0.5">
-                        <Calendar className="w-3 h-3 mr-1 text-gray-400" />
+                        <Calendar className="w-3 h-3 mr-1 text-gray-400 dark:text-gray-500" />
                         {formatDateForDisplay(patient.createdAt)}
                       </div>
                     )}
                     {patient.createdBy ? (
-                      <div className="text-xs text-gray-600 truncate" title={patient.createdBy}>
+                      <div className="text-xs text-gray-600 dark:text-gray-400 truncate" title={patient.createdBy}>
                         {patient.createdBy.split('@')[0]}
                       </div>
                     ) : (
-                      <div className="text-xs text-gray-600">
+                      <div className="text-xs text-gray-600 dark:text-gray-400">
                         A beteg regisztrált
                       </div>
                     )}
@@ -466,14 +466,14 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                   <div className="flex justify-end space-x-1.5">
                     <button
                       onClick={() => router.push(`/patients/${patient.id}`)}
-                      className="text-blue-600 hover:text-blue-800"
+                      className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
                       title={patient.email ? "Kapcsolattartás (chat és érintkezési napló)" : "Kapcsolattartás (érintkezési napló - nincs email-cím)"}
                     >
                       <MessageCircle className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={() => onView(patient)}
-                      className="text-medical-primary hover:text-blue-700"
+                      className="text-medical-primary hover:text-blue-700 dark:hover:text-blue-400"
                       title="Beteg megtekintése"
                     >
                       <Eye className="w-3.5 h-3.5" />
@@ -481,7 +481,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                     {canEdit && onEdit && (
                       <button
                         onClick={() => onEdit(patient)}
-                        className="text-medical-accent hover:text-amber-600"
+                        className="text-medical-accent hover:text-amber-600 dark:hover:text-amber-400"
                         title="Beteg szerkesztése"
                       >
                         <Pencil className="w-3.5 h-3.5" />
@@ -490,7 +490,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                     {canDelete && onDelete && (
                       <button
                         onClick={() => onDelete(patient)}
-                        className="text-red-600 hover:text-red-800"
+                        className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
                         title="Beteg törlése"
                       >
                         <Trash2 className="w-3.5 h-3.5" />

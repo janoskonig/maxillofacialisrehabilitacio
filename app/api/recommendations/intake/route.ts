@@ -11,14 +11,19 @@ import {
   WORKLOAD_EXCLUDED_NAME_PATTERNS,
   buildWorkloadExclusionClause,
 } from '@/lib/workload-exclusions';
+import {
+  evaluateIntakePolicy,
+  computeBacklogPct,
+  INTAKE_STOP_BUSYNESS_PCT,
+} from '@/lib/intake-policy';
 
 export const dynamic = 'force-dynamic';
 
-// Az intake ajánlás a protetikai (STAGE_5) terhelésre néz.
-// A score mértékegysége utilizáció % (foglalt+hold / heti penzum 30 napra
-// vetítve), nincs felső korlát.
-const INTAKE_STOP_BUSYNESS_PCT = 200; // 2× heti penzum fölött → STOP
-const INTAKE_CAUTION_BUSYNESS_PCT = 150; // 1.5–2× heti penzum között → CAUTION
+// Az intake ajánlás a protetikai (STAGE_5) terhelésre néz. KÉT terhelést:
+//  • busynessScore  — a már LEFOGLALT percek (naptári nyomás).
+//  • backlogPct     — a félkész betegek MÉG LE NEM FOGLALT hátralévő munkája
+//                     (WP1 forecast remaining-visits-ből). A döntés a szigorúbb
+//                     tényezőt veszi (lib/intake-policy.ts).
 
 // Két nézet:
 //  • PERSONAL → a bejelentkezett kezelő orvos saját kapacitására.
@@ -83,7 +88,7 @@ export const GET = authedHandler(async (_req, { auth }) => {
   }
 
   // ── Per-orvos kapacitás-, foglalás-, WIP-számok ──────────────────────────
-  const [slotStatsRows, bookedStatsRows, wipRows, worklistRows] = await Promise.all([
+  const [slotStatsRows, bookedStatsRows, wipRows, worklistRows, remainingByDoctorRows] = await Promise.all([
     pool.query(
       `SELECT ats.user_id,
               COALESCE(SUM(COALESCE(ats.duration_minutes, 30)), 0)::int as available_minutes,
@@ -145,16 +150,37 @@ export const GET = authedHandler(async (_req, { auth }) => {
        GROUP BY enc.provider_id`,
       [scopedDoctorIds]
     ),
+    // Per-orvos hátralévő (le nem foglalt) munka: a WP1 forecast remaining-visits
+    // (P80) összege a nyitott protetikai epizódokra. Ez a backlog nyersanyaga.
+    pool.query(
+      `SELECT COALESCE(pe.assigned_provider_id, ect.user_id) as user_id,
+              COALESCE(SUM(efc.remaining_visits_p80), 0)::int as remaining_p80
+       FROM patient_episodes pe
+       JOIN episode_forecast_cache efc ON efc.episode_id = pe.id AND efc.status = 'ready'
+       LEFT JOIN (SELECT DISTINCT ON (episode_id) episode_id, stage_code FROM stage_events ORDER BY episode_id, at DESC) se ON pe.id = se.episode_id
+       LEFT JOIN episode_care_team ect ON pe.id = ect.episode_id AND ect.is_primary = true
+       WHERE pe.status = 'open' AND se.stage_code IN (${prostheticStagesIn})
+         AND (pe.assigned_provider_id = ANY($1) OR ect.user_id = ANY($1))
+       GROUP BY COALESCE(pe.assigned_provider_id, ect.user_id)`,
+      [scopedDoctorIds]
+    ),
   ]);
 
   const slotMap = new Map(slotStatsRows.rows.map((r: any) => [r.user_id, r]));
   const bookedMap = new Map(bookedStatsRows.rows.map((r: any) => [r.user_id, r]));
   const wipMap = new Map(wipRows.rows.map((r: any) => [r.user_id, r.cnt as number]));
   const worklistMap = new Map(worklistRows.rows.map((r: any) => [r.user_id, r.cnt as number]));
+  const remainingMap = new Map(
+    remainingByDoctorRows.rows.map((r: any) => [r.user_id, r.remaining_p80 as number])
+  );
 
   let busynessScore = 0;
   let busiestDoctorId: string | null = null;
   let nearCriticalIfNewStarts = false;
+  // Backlog: a legterheltebb orvos hátralévő-munka %-a (a busynesshez hasonlóan
+  // a maximumot vesszük), és a teljes scope hátralévő vizitjei (tájékoztató).
+  let backlogPct = 0;
+  let remainingVisitsP80 = 0;
 
   for (const docId of scopedDoctorIds) {
     const slot = slotMap.get(docId) as { available_minutes?: number; booked_minutes?: number; held_minutes?: number } | undefined;
@@ -164,6 +190,7 @@ export const GET = authedHandler(async (_req, { auth }) => {
     const heldMinutes = slot?.held_minutes ?? 0;
     const wipCnt = wipMap.get(docId) ?? 0;
     const worklistCnt = worklistMap.get(docId) ?? 0;
+    const docRemainingVisits = remainingMap.get(docId) ?? 0;
 
     const { utilizationPct: score } = computeDoctorWorkloadScore({
       horizonDays,
@@ -175,6 +202,11 @@ export const GET = authedHandler(async (_req, { auth }) => {
       busynessScore = score;
       busiestDoctorId = docId;
     }
+    // Per-orvos backlog (1 orvosra normálva); a legnagyobb hajtja a döntést.
+    const docBacklogPct = computeBacklogPct(docRemainingVisits, 1, horizonDays);
+    if (docBacklogPct > backlogPct) backlogPct = docBacklogPct;
+    remainingVisitsP80 += docRemainingVisits;
+
     if (score >= INTAKE_STOP_BUSYNESS_PCT) nearCriticalIfNewStarts = true;
     if (availableMinutes === 0 && wipCnt + worklistCnt > 0) nearCriticalIfNewStarts = true;
   }
@@ -243,34 +275,14 @@ export const GET = authedHandler(async (_req, { auth }) => {
         )
       : null;
 
-  const reasons: string[] = [];
-  let recommendation: 'GO' | 'CAUTION' | 'STOP' = 'GO';
-
-  if (
-    busynessScore >= INTAKE_STOP_BUSYNESS_PCT ||
-    nearCriticalIfNewStarts ||
-    (wipP80DaysFromNow != null && wipP80DaysFromNow > 28)
-  ) {
-    recommendation = 'STOP';
-    if (busynessScore >= INTAKE_STOP_BUSYNESS_PCT) reasons.push(`BUSYNESS_${busynessScore}`);
-    if (nearCriticalIfNewStarts) reasons.push('NEAR_CRITICAL_IF_NEW_STARTS');
-    if (wipP80DaysFromNow != null && wipP80DaysFromNow > 28) {
-      reasons.push(`WIP_P80_END_+${wipP80DaysFromNow}D`);
-    }
-  } else if (
-    (busynessScore >= INTAKE_CAUTION_BUSYNESS_PCT && busynessScore < INTAKE_STOP_BUSYNESS_PCT) ||
-    (wipP80DaysFromNow != null && wipP80DaysFromNow > 14 && wipP80DaysFromNow <= 28)
-  ) {
-    recommendation = 'CAUTION';
-    if (busynessScore >= INTAKE_CAUTION_BUSYNESS_PCT && busynessScore < INTAKE_STOP_BUSYNESS_PCT) {
-      reasons.push(`BUSYNESS_${busynessScore}`);
-    }
-    if (wipP80DaysFromNow != null && wipP80DaysFromNow > 14 && wipP80DaysFromNow <= 28) {
-      reasons.push(`WIP_P80_END_+${wipP80DaysFromNow}D`);
-    }
-  } else {
-    reasons.push('OK');
-  }
+  // A döntés tiszta kiértékelése: naptári foglaltság + hátralévő munka (backlog)
+  // + WIP-horizon; a szigorúbb tényező nyer (lib/intake-policy.ts).
+  const { recommendation, reasons } = evaluateIntakePolicy({
+    busynessScore,
+    backlogPct,
+    nearCriticalIfNewStarts,
+    wipP80DaysFromNow,
+  });
 
   // ── „mikor fogadhatunk újra új beteget?" – hibrid heurisztika ──
   // 1) Foglaltság-kifutás: a legterheltebb releváns orvos jövőbeli foglalt
@@ -319,6 +331,8 @@ export const GET = authedHandler(async (_req, { auth }) => {
     explain: {
       viewMode,
       busynessScore,
+      backlogPct,
+      remainingVisitsP80,
       nearCriticalIfNewStarts,
       wipCount,
       wipCompletionP80Max,

@@ -64,7 +64,7 @@ export const POST = roleHandler(['admin', 'fogpótlástanász'], async (req, { a
 
   if (body.source === 'patients' || (!body.rows?.length && body.source !== 'custom')) {
     try {
-      assertResearchExportModeAllowsCohortExport();
+      await assertResearchExportModeAllowsCohortExport(pool);
     } catch (e) {
       if (e instanceof ResearchExportBlockedError) {
         return NextResponse.json({ error: e.message }, { status: 403 });

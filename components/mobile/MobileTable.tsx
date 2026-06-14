@@ -103,13 +103,13 @@ function MobileTableComponent<T>({
     return (
       <div className={`card p-0 overflow-hidden ${className}`}>
         <div className="animate-pulse">
-          <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
-            <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+          <div className="border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800 px-4 py-3">
+            <div className="h-4 bg-gray-200 dark:bg-gray-800 rounded w-1/4"></div>
           </div>
           {Array.from({ length: skeletonCount }).map((_, index) => (
-            <div key={index} className="border-b border-gray-200 px-4 py-3">
-              <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-              <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+            <div key={index} className="border-b border-gray-200 dark:border-gray-800 px-4 py-3">
+              <div className="h-4 bg-gray-200 dark:bg-gray-800 rounded w-3/4 mb-2"></div>
+              <div className="h-4 bg-gray-200 dark:bg-gray-800 rounded w-1/2"></div>
             </div>
           ))}
         </div>
@@ -123,8 +123,8 @@ function MobileTableComponent<T>({
     }
     return (
       <div className="card text-center py-8">
-        <div className="text-gray-400 mb-2">Nincs találat</div>
-        <p className="text-sm text-gray-500">Nincsenek megjeleníthető elemek</p>
+        <div className="text-gray-400 dark:text-gray-500 mb-2">Nincs találat</div>
+        <p className="text-sm text-gray-500 dark:text-gray-400">Nincsenek megjeleníthető elemek</p>
       </div>
     );
   }
@@ -178,18 +178,18 @@ function MobileTableComponent<T>({
     return (
       <div className={`card p-0 overflow-hidden ${className}`}>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
             {renderHeader && (
-              <thead className="bg-gradient-to-r from-gray-50 to-gray-100/50">
+              <thead className="bg-gradient-to-r from-gray-50 to-gray-100/50 dark:from-gray-800 dark:to-gray-800">
                 <tr>
                   {renderHeader()}
                 </tr>
               </thead>
             )}
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
               {items.map((item, index) => {
                 const rowContent = renderRow(item, index);
-                const defaultClassName = 'hover:bg-gray-50';
+                const defaultClassName = 'hover:bg-gray-50 dark:hover:bg-gray-800';
                 const customClassName = rowClassName ? rowClassName(item, index) : '';
                 const finalClassName = customClassName ? `${defaultClassName} ${customClassName}` : defaultClassName;
                 return (
@@ -209,15 +209,15 @@ function MobileTableComponent<T>({
   return (
     <div className={`card p-0 overflow-hidden ${className}`}>
       <div ref={scrollParentRef} className="overflow-auto" style={{ maxHeight: '80vh' }}>
-        <table className="min-w-full divide-y divide-gray-200">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
           {renderHeader && (
-            <thead className="bg-gradient-to-r from-gray-50 to-gray-100/50 sticky top-0 z-10">
+            <thead className="bg-gradient-to-r from-gray-50 to-gray-100/50 dark:from-gray-800 dark:to-gray-800 sticky top-0 z-10">
               <tr>
                 {renderHeader()}
               </tr>
             </thead>
           )}
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
             {tableVirtualizer.getVirtualItems().length > 0 && tableVirtualizer.getVirtualItems()[0].start > 0 && (
               <tr>
                 <td colSpan={100} style={{ height: tableVirtualizer.getVirtualItems()[0].start, padding: 0 }} />
@@ -225,7 +225,7 @@ function MobileTableComponent<T>({
             )}
             {tableVirtualizer.getVirtualItems().map((virtualItem) => {
               const item = items[virtualItem.index];
-              const defaultClassName = 'hover:bg-gray-50';
+              const defaultClassName = 'hover:bg-gray-50 dark:hover:bg-gray-800';
               const customClassName = rowClassName ? rowClassName(item, virtualItem.index) : '';
               const finalClassName = customClassName ? `${defaultClassName} ${customClassName}` : defaultClassName;
               return (

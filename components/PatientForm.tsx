@@ -1780,6 +1780,7 @@ export function PatientForm({
         {shouldShowSection('alapadatok') && (
           <AlapadatokSection
             register={register}
+            watch={watch}
             errors={errors}
             isViewOnly={isViewOnly}
             handleTAJChange={handleTAJChange}
@@ -1809,6 +1810,7 @@ export function PatientForm({
         {shouldShowSection('beutalo') && (
           <BeutaloSection
             register={register}
+            watch={watch}
             isViewOnly={isViewOnly}
             vanBeutalo={vanBeutalo}
             onVanBeutaloChange={() => setVanBeutalo((prev) => !prev)}
@@ -1861,6 +1863,7 @@ export function PatientForm({
         {shouldShowSection('betegvizsgalat') && (
           <ImplantatumokSection
             register={register}
+            watch={watch}
             isViewOnly={isViewOnly}
             implantatumok={implantatumok}
             handleToothToggle={handleToothToggle}
@@ -1896,6 +1899,7 @@ export function PatientForm({
         {shouldShowSection('adminisztracio') && patientId && userRole !== 'technikus' && (
           <MeltanyossagiSection
             register={register}
+            watch={watch}
             errors={errors}
             isViewOnly={isViewOnly}
             patientId={patientId}

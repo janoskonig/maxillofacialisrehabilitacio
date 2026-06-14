@@ -211,6 +211,13 @@ async function callEndpoint(path, label) {
       );
     }
 
+    // Napi beleegyezési emlékeztető — 09:00 Budapest körül.
+    // A consent_reminder_log ~20h cooldownja garantál legfeljebb napi egy emailt
+    // páciensenként, így a tág ablak biztonságos.
+    if (hour === 9) {
+      await callEndpoint('/api/patients/consent-reminders', 'Consent reminders');
+    }
+
     // Napi adat-teljességi pillanatkép a trend-grafikonhoz — 06:00 körül.
     // A végpont idempotens (egy sor / nap), így a tág ablak biztonságos.
     if (hour === 6) {

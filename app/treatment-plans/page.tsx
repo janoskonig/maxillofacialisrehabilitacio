@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { getCurrentUser, type AuthUser } from '@/lib/auth';
 import { TreatmentPlanGantt } from '@/components/TreatmentPlanGantt';
 import { CapacityForecastChart } from '@/components/charts/CapacityForecastChart';
-import { BarChart3, Calendar, TrendingUp } from 'lucide-react';
+import { AppShell } from '@/components/layout/AppShell';
+import { BarChart3, TrendingUp } from 'lucide-react';
 
 type Tab = 'timeline' | 'capacity';
 
@@ -42,17 +43,9 @@ export default function TreatmentPlansPage() {
   if (!user) return null;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="p-2 bg-medical-primary/10 rounded-lg">
-          <Calendar className="w-5 h-5 text-medical-primary" />
-        </div>
-        <div>
-          <h1 className="text-heading-2">Kezelési tervek</h1>
-          <p className="text-sm text-gray-500">Idővonal, kapacitás-előrejelzés és demand projection</p>
-        </div>
-      </div>
+    <AppShell title="Kezelési tervek" backTo="/" maxWidth="xl">
+      <div className="space-y-6">
+      <p className="text-sm text-gray-500">Idővonal, kapacitás-előrejelzés és demand projection</p>
 
       {/* Tabs */}
       <div className="border-b border-gray-200">
@@ -85,6 +78,7 @@ export default function TreatmentPlansPage() {
       {/* Tab Content */}
       {activeTab === 'timeline' && <TreatmentPlanGantt />}
       {activeTab === 'capacity' && <CapacityForecastChart />}
-    </div>
+      </div>
+    </AppShell>
   );
 }

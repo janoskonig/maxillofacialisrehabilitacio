@@ -766,19 +766,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
         episodeIds={integrityEpisodeIds}
         onRepaired={fetchWorklist}
       />
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead>
-            <tr>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Epizód / Stage</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Következő munkafázis</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Késés a tervhez képest</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Ablak (terv szerint)</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Státusz</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 w-24">Művelet</th>
-            </tr>
-          </thead>
-          <tbody>
+      <div className="space-y-2.5">
             {sortedItems.map((item, index) => {
               const key = getWorklistItemKey(item);
               const { state } = deriveWorklistRowState(item, local, key);
@@ -798,137 +786,107 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                   {isFirstRowOfEpisode &&
                     item.stepStatus !== 'completed' &&
                     item.stepStatus !== 'skipped' && (
-                      <tr key={`${key}::plan-start`} className="bg-slate-50/80">
-                        <td colSpan={6} className="px-3 py-1">
-                          <PlanStartDateControl
-                            episodeId={item.episodeId}
-                            planStartDate={item.planStartDate}
-                            onSaved={fetchWorklist}
-                          />
-                        </td>
-                      </tr>
+                      <div key={`${key}::plan-start`} className="px-1 pt-1">
+                        <PlanStartDateControl
+                          episodeId={item.episodeId}
+                          planStartDate={item.planStartDate}
+                          onSaved={fetchWorklist}
+                        />
+                      </div>
                     )}
-                  {priorAttempts.map((att) => {
-                    const isUnsuccessful = att.status === 'unsuccessful';
-                    const isNoShow = att.status === 'no_show';
-                    const isCompleted = att.status === 'completed';
-                    return (
-                      <tr
-                        key={`${key}::attempt-${att.appointmentId}`}
-                        className={`border-b text-gray-700 ${
-                          isUnsuccessful
-                            ? 'bg-orange-50/40'
-                            : isNoShow
-                              ? 'bg-gray-50/60'
-                              : 'bg-gray-50/30'
-                        }`}
-                      >
-                        <td className="px-3 py-2 text-xs text-gray-500">
-                          <span className="opacity-60">↳ előzmény</span>
-                        </td>
-                        <td className="px-3 py-2 text-sm">
-                          <div className="flex items-center gap-2">
-                            <span className="text-gray-700">{stepLabelForModal}</span>
-                            <span className="text-xs px-1.5 py-0.5 rounded bg-gray-200 text-gray-700">
-                              {att.attemptNumber}. próba
-                            </span>
-                          </div>
-                          {isUnsuccessful && att.failedReason && (
+                  {priorAttempts.length > 0 && (
+                    <details className="rounded-lg border border-gray-200 bg-gray-50/60 px-3 py-2">
+                      <summary className="cursor-pointer select-none text-xs text-gray-600 flex items-center gap-1.5">
+                        <AlertTriangle className="w-3 h-3 text-orange-500" />
+                        {priorAttempts.length} korábbi próba
+                      </summary>
+                      <div className="mt-2 space-y-1.5">
+                        {priorAttempts.map((att) => {
+                          const isUnsuccessful = att.status === 'unsuccessful';
+                          const isNoShow = att.status === 'no_show';
+                          const isCompleted = att.status === 'completed';
+                          return (
                             <div
-                              className="text-xs text-orange-800 mt-0.5 italic line-clamp-2"
-                              title={att.failedReason}
+                              key={`${key}::attempt-${att.appointmentId}`}
+                              className="flex items-start justify-between gap-2"
                             >
-                              „{att.failedReason}"
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-xs px-1.5 py-0.5 rounded bg-gray-200 text-gray-700">
+                                    {att.attemptNumber}. próba
+                                  </span>
+                                  <span
+                                    className={`text-xs px-2 py-0.5 rounded inline-flex items-center gap-1 ${
+                                      isUnsuccessful
+                                        ? 'bg-orange-100 text-orange-800'
+                                        : isNoShow
+                                          ? 'bg-gray-200 text-gray-700'
+                                          : 'bg-gray-100 text-gray-600'
+                                    }`}
+                                  >
+                                    {isUnsuccessful && (
+                                      <>
+                                        <AlertTriangle className="w-3 h-3" />
+                                        SIKERTELEN
+                                      </>
+                                    )}
+                                    {isNoShow && 'NEM JELENT MEG'}
+                                    {isCompleted && '✓ KÉSZ (régebbi)'}
+                                  </span>
+                                  <span className="text-xs text-gray-500">
+                                    {att.startTime
+                                      ? new Date(att.startTime).toLocaleString('hu-HU', {
+                                          month: 'short',
+                                          day: 'numeric',
+                                          hour: '2-digit',
+                                          minute: '2-digit',
+                                        })
+                                      : '–'}
+                                    {att.providerEmail && <span className="text-gray-400"> · {att.providerEmail}</span>}
+                                  </span>
+                                </div>
+                                {isUnsuccessful && att.failedReason && (
+                                  <div
+                                    className="text-xs text-orange-800 mt-0.5 italic line-clamp-2"
+                                    title={att.failedReason}
+                                  >
+                                    „{att.failedReason}"
+                                  </div>
+                                )}
+                              </div>
+                              {isUnsuccessful && (
+                                <button
+                                  type="button"
+                                  onClick={() => setRevertModalCtx({ item, attempt: att })}
+                                  className="shrink-0 text-xs text-gray-600 hover:text-gray-900 hover:underline font-medium flex items-center gap-0.5"
+                                  title="Sikertelen-jelölés visszavonása (tévedés esetén)"
+                                >
+                                  <Undo2 className="w-3 h-3" />
+                                  Visszavonás
+                                </button>
+                              )}
                             </div>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-sm text-gray-400">–</td>
-                        <td className="px-3 py-2 text-sm text-gray-600">
-                          {att.startTime
-                            ? new Date(att.startTime).toLocaleString('hu-HU', {
-                                month: 'short',
-                                day: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })
-                            : '–'}
-                          {att.providerEmail && (
-                            <span className="block text-xs text-gray-500 truncate">
-                              {att.providerEmail}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2">
-                          <span
-                            className={`text-xs px-2 py-0.5 rounded w-fit inline-flex items-center gap-1 ${
-                              isUnsuccessful
-                                ? 'bg-orange-100 text-orange-800'
-                                : isNoShow
-                                  ? 'bg-gray-200 text-gray-700'
-                                  : 'bg-gray-100 text-gray-600'
-                            }`}
-                          >
-                            {isUnsuccessful && (
-                              <>
-                                <AlertTriangle className="w-3 h-3" />
-                                SIKERTELEN
-                              </>
-                            )}
-                            {isNoShow && 'NEM JELENT MEG'}
-                            {isCompleted && '✓ KÉSZ (régebbi)'}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2">
-                          {isUnsuccessful ? (
-                            <button
-                              type="button"
-                              onClick={() => setRevertModalCtx({ item, attempt: att })}
-                              className="text-xs text-gray-600 hover:text-gray-900 hover:underline font-medium text-left flex items-center gap-0.5"
-                              title="Sikertelen-jelölés visszavonása (tévedés esetén)"
-                            >
-                              <Undo2 className="w-3 h-3" />
-                              Visszavonás
-                            </button>
-                          ) : (
-                            <span className="text-xs text-gray-400">—</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  <tr
-                    className={`border-b ${item.overdueByDays > 0 && state !== 'COMPLETED' && state !== 'SKIPPED' ? 'bg-red-50/50' : ''} ${state === 'BLOCKED' ? 'opacity-70' : ''} ${state === 'COMPLETED' ? 'opacity-60' : ''} ${state === 'SKIPPED' ? 'opacity-40' : ''}`}
+                          );
+                        })}
+                      </div>
+                    </details>
+                  )}
+                  <div
+                    className={`rounded-lg border bg-white px-3.5 py-3 ${item.overdueByDays > 0 && state !== 'COMPLETED' && state !== 'SKIPPED' ? 'border-red-200' : 'border-gray-200'} ${state === 'COMPLETED' ? 'opacity-70' : ''} ${state === 'SKIPPED' ? 'opacity-50' : ''}`}
                   >
-                  <td className="px-3 py-2 text-sm text-gray-600">
-                    {item.currentStage}
-                    <span className="ml-1 text-xs text-gray-400">#{item.episodeId.slice(0, 8)}</span>
-                  </td>
-                  <td className="px-3 py-2">
-                    <WorklistMergedPhaseCell item={item} />
-                    {priorAttempts.length > 0 && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <WorklistMergedPhaseCell item={item} />
+                      {priorAttempts.length > 0 && (
+                        <span
+                          className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-800"
+                          title={`${priorAttempts.length} korábbi próba (sikertelen vagy meg nem jelent)`}
+                        >
+                          <AlertTriangle className="w-3 h-3" />
+                          {currentAttempt}. próba
+                        </span>
+                      )}
                       <span
-                        className="ml-1 inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-800 align-middle"
-                        title={`${priorAttempts.length} korábbi próba (sikertelen vagy meg nem jelent)`}
-                      >
-                        <AlertTriangle className="w-3 h-3" />
-                        {currentAttempt}. próba
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-sm">
-                    {item.overdueByDays > 0 ? (
-                      <span className="text-red-600 font-medium">+{item.overdueByDays} nap</span>
-                    ) : (
-                      <span className="text-gray-600">–</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-sm text-gray-600">
-                    {ablakStart && ablakEnd ? formatShortDateRange(ablakStart, ablakEnd) : '–'}
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="flex flex-col gap-0.5">
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded w-fit ${
+                        className={`text-xs px-2 py-0.5 rounded ${
                           state === 'COMPLETED'
                             ? 'bg-gray-100 text-gray-600'
                             : state === 'SKIPPED'
@@ -947,23 +905,22 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                         }`}
                       >
                         {state === 'COMPLETED' ? '✓ KÉSZ' : state === 'SKIPPED' ? 'KIHAGYVA' : state === 'BOOKED' ? 'LEFOGLALVA' : state}
-                        {state === 'BLOCKED' && item.blockedReason && (
-                          <span className="ml-1 truncate max-w-[100px] inline-block" title={item.blockedReason}>
-                            {item.blockedReason.slice(0, 15)}…
-                          </span>
-                        )}
                       </span>
+                    </div>
+                    <div className="mt-1.5 flex items-center gap-x-4 gap-y-1 flex-wrap text-xs text-gray-500">
+                      <span className="text-gray-400">{item.currentStage} · #{item.episodeId.slice(0, 8)}</span>
+                      <span>Terv: {ablakStart && ablakEnd ? formatShortDateRange(ablakStart, ablakEnd) : '–'}</span>
+                      {item.overdueByDays > 0 && state !== 'COMPLETED' && state !== 'SKIPPED' && (
+                        <span className="text-red-600 font-medium">+{item.overdueByDays} nap késés</span>
+                      )}
                       {state === 'COMPLETED' && item.windowStart && (
-                        <span className="text-xs text-gray-500 flex items-center gap-1">
+                        <span className="inline-flex items-center gap-1">
                           <CalendarCheck className="w-3 h-3" />
-                          {new Date(item.windowStart).toLocaleString('hu-HU', {
-                            month: 'short',
-                            day: 'numeric',
-                          })}
+                          {new Date(item.windowStart).toLocaleString('hu-HU', { month: 'short', day: 'numeric' })}
                         </span>
                       )}
                       {state === 'BOOKED' && item.bookedAppointmentStartTime && (
-                        <span className="text-xs text-blue-700 flex items-center gap-1">
+                        <span className="inline-flex items-center gap-1 text-blue-700">
                           <CalendarCheck className="w-3 h-3" />
                           {new Date(item.bookedAppointmentStartTime).toLocaleString('hu-HU', {
                             month: 'short',
@@ -972,22 +929,25 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                             minute: '2-digit',
                           })}
                           {item.bookedAppointmentProviderEmail && (
-                            <span className="text-gray-500 ml-1">· {item.bookedAppointmentProviderEmail}</span>
+                            <span className="text-gray-500"> · {item.bookedAppointmentProviderEmail}</span>
                           )}
                         </span>
                       )}
+                      {state === 'BLOCKED' && item.blockedReason && (
+                        <span className="text-gray-600" title={item.blockedReason}>
+                          {item.blockedReason}
+                        </span>
+                      )}
                       {state === 'BLOCKED' && item.blockedCode === 'NO_CARE_PATHWAY' && item.suggestedTreatmentTypeLabel && (
-                        <span className="text-xs text-gray-600">
-                          Javasolt kezeléstípus: {item.suggestedTreatmentTypeLabel}
+                        <span className="text-gray-600">
+                          Javasolt: {item.suggestedTreatmentTypeLabel}
                           {item.suggestedTreatmentTypeCode && (
                             <span className="text-gray-500"> ({item.suggestedTreatmentTypeCode})</span>
                           )}
                         </span>
                       )}
                     </div>
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="flex flex-col gap-1">
+                    <div className="mt-2.5 pt-2.5 border-t border-gray-100 flex items-center gap-x-4 gap-y-1.5 flex-wrap">
                       {state === 'COMPLETED' && (
                         <>
                           {item.currentAppointmentId && (
@@ -1188,25 +1148,20 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                         <span className="text-sm text-gray-500">Foglalás…</span>
                       )}
                     </div>
-                  </td>
-                </tr>
+                  </div>
                 {delegateItemKey === key && item.workPhaseId && (
-                  <tr className="bg-indigo-50/30">
-                    <td colSpan={5} className="px-3 py-2">
-                      <WorkPhaseTaskDelegateBlock
-                        episodeId={item.episodeId}
-                        workPhaseId={item.workPhaseId}
-                        phaseLabel={item.stepLabel ?? item.nextStep}
-                        onClose={() => setDelegateItemKey(null)}
-                      />
-                    </td>
-                  </tr>
+                  <div className="rounded-lg border border-indigo-100 bg-indigo-50/30 px-3 py-2">
+                    <WorkPhaseTaskDelegateBlock
+                      episodeId={item.episodeId}
+                      workPhaseId={item.workPhaseId}
+                      phaseLabel={item.stepLabel ?? item.nextStep}
+                      onClose={() => setDelegateItemKey(null)}
+                    />
+                  </div>
                 )}
                 </Fragment>
               );
             })}
-          </tbody>
-        </table>
       </div>
 
       {override429 && (

@@ -12,6 +12,10 @@ import { getPatientCompletenessRow } from '@/lib/patient-data-completeness';
 import { recomputeReferrerUserIdSilent } from '@/lib/recompute-referrer';
 import { recomputeDerivedNumericsSilent } from '@/lib/derived-numerics';
 import { getPlausibilityWarnings } from '@/lib/data-plausibility';
+import { markConsentPending } from '@/lib/research-registry/research-consent-service';
+import { triggerConsentRequest } from '@/lib/consent-reminders';
+import { requiresGuardian } from '@/lib/legal/legal-capacity';
+import { applyKezeleoorvosFromForm } from '@/lib/kezeleoorvos-assignment';
 
 type ViewPreset = 'neak_pending' | 'missing_docs';
 
@@ -375,18 +379,27 @@ export const POST = authedHandler(async (req, { auth }) => {
   }
   
   const p = validatedPatient;
+
+  // Minors require a legal guardian (törvényes képviselő) for declarations.
+  if (requiresGuardian(p.szuletesiDatum) && !p.torvenyesKepviseloNev?.trim()) {
+    return NextResponse.json(
+      { error: 'Kiskorú páciens esetén a törvényes képviselő nevének megadása kötelező.' },
+      { status: 400 }
+    );
+  }
+
   const client = await pool.connect();
   let result;
   try {
     await client.query('BEGIN');
 
     const coreResult = await client.query(
-      `INSERT INTO patients (${p.id ? 'id, ' : ''}nev, taj, telefonszam, szuletesi_datum, nem, email, cim, varos, iranyitoszam, kezeleoorvos, kezeleoorvos_intezete, felvetel_datuma, halal_datum, created_by)
-       VALUES (${p.id ? '$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15' : '$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14'})
+      `INSERT INTO patients (${p.id ? 'id, ' : ''}nev, taj, telefonszam, szuletesi_datum, nem, email, cim, varos, iranyitoszam, kezeleoorvos, kezeleoorvos_intezete, felvetel_datuma, halal_datum, torvenyes_kepviselo_nev, torvenyes_kepviselo_kapcsolat, torvenyes_kepviselo_email, created_by)
+       VALUES (${p.id ? '$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18' : '$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17'})
        RETURNING id`,
       p.id
-        ? [p.id, p.nev||null, p.taj||null, p.telefonszam||null, p.szuletesiDatum||null, p.nem||null, p.email||null, p.cim||null, p.varos||null, p.iranyitoszam||null, p.kezeleoorvos||null, p.kezeleoorvosIntezete||null, p.felvetelDatuma||null, p.halalDatum||null, userEmail]
-        : [p.nev||null, p.taj||null, p.telefonszam||null, p.szuletesiDatum||null, p.nem||null, p.email||null, p.cim||null, p.varos||null, p.iranyitoszam||null, p.kezeleoorvos||null, p.kezeleoorvosIntezete||null, p.felvetelDatuma||null, p.halalDatum||null, userEmail]
+        ? [p.id, p.nev||null, p.taj||null, p.telefonszam||null, p.szuletesiDatum||null, p.nem||null, p.email||null, p.cim||null, p.varos||null, p.iranyitoszam||null, p.kezeleoorvos||null, p.kezeleoorvosIntezete||null, p.felvetelDatuma||null, p.halalDatum||null, p.torvenyesKepviseloNev||null, p.torvenyesKepviseloKapcsolat||null, p.torvenyesKepviseloEmail||null, userEmail]
+        : [p.nev||null, p.taj||null, p.telefonszam||null, p.szuletesiDatum||null, p.nem||null, p.email||null, p.cim||null, p.varos||null, p.iranyitoszam||null, p.kezeleoorvos||null, p.kezeleoorvosIntezete||null, p.felvetelDatuma||null, p.halalDatum||null, p.torvenyesKepviseloNev||null, p.torvenyesKepviseloKapcsolat||null, p.torvenyesKepviseloEmail||null, userEmail]
     );
     const newId = coreResult.rows[0].id;
 
@@ -415,6 +428,19 @@ export const POST = authedHandler(async (req, { auth }) => {
 
     await client.query('COMMIT');
 
+    // Kezelőorvos: a form a nevet küldi → feloldjuk user_id-ra és KÉZI
+    // (ragadós) hozzárendelést rögzítünk, amit a recompute nem ír felül.
+    // Ha a név nem oldható fel ismert orvosra, a fenti INSERT szabad szövege
+    // marad, és a recompute továbbra is seedelhet (assigned_at NULL).
+    try {
+      const assign = await applyKezeleoorvosFromForm(newId, p.kezeleoorvos, auth.userId, pool);
+      if (!assign.resolved) {
+        logger.warn(`Kezelőorvos név nem feloldható ismert orvosra (beteg ${newId}): "${p.kezeleoorvos}"`);
+      }
+    } catch (assignErr) {
+      logger.error('Kezelőorvos hozzárendelés sikertelen (create):', assignErr);
+    }
+
     result = await pool.query(
       `SELECT ${PATIENT_SELECT_FIELDS} FROM patients_full WHERE id = $1`,
       [newId]
@@ -440,6 +466,31 @@ export const POST = authedHandler(async (req, { auth }) => {
 
   // Szabad szöveges numerikus mezők → származtatott numerikus oszlopok.
   recomputeDerivedNumericsSilent(result.rows[0].id as string);
+
+  // Beleegyezési felszólítás: a személyzet által felvett páciensnél sem GDPR,
+  // sem kutatási hozzájárulás nincs rögzítve — kérjük, hogy nyilatkozzon.
+  // Nem blokkol; hiba esetén a napi cron úgyis újrapróbálja.
+  const createdPatient = result.rows[0];
+  if (createdPatient.email) {
+    try {
+      await markConsentPending(
+        createdPatient.id as string,
+        { email: userEmail },
+        'Regisztrációs felszólítás'
+      );
+    } catch (consentErr) {
+      logger.error('Failed to mark consent pending:', consentErr);
+    }
+    await triggerConsentRequest(
+      {
+        id: createdPatient.id as string,
+        email: createdPatient.email as string,
+        nev: (createdPatient.nev as string) ?? null,
+        nem: (createdPatient.nem as string) ?? null,
+      },
+      { needsNoticeAck: true, needsResearch: true }
+    );
+  }
 
   // Tanácsadó adat-teljességi visszajelzés (nem blokkol) — a kliens mentés
   // után jelezheti a hiányokat. Hiba esetén csendben kihagyjuk.

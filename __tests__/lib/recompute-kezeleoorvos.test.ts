@@ -63,6 +63,36 @@ describe('recomputeKezeleoorvos', () => {
     });
   });
 
+  describe('seed-only: kézi hozzárendelés érintetlen', () => {
+    it('no-op when patient has a manual (sticky) assignment (assigned_at set)', async () => {
+      const { db, query } = makeDb([
+        { rows: [{ kezeleoorvos_user_id: DR_A_ID, kezeleoorvos_assigned_at: '2026-01-01T00:00:00Z' }] },
+      ]);
+      const result = await recomputeKezeleoorvos(PATIENT_ID, db);
+      expect(result).toEqual({
+        changed: false,
+        userId: DR_A_ID,
+        name: null,
+        source: 'none',
+        previousUserId: DR_A_ID,
+      });
+      // Only the existence/state check — no episode/appointment lookup, no UPDATE.
+      expect(query).toHaveBeenCalledTimes(1);
+    });
+
+    it('still seeds when there is no manual assignment (assigned_at null)', async () => {
+      const { db, query } = makeDb([
+        { rows: [{ kezeleoorvos_user_id: null, kezeleoorvos_assigned_at: null }] },
+        { rows: [{ user_id: DR_B_ID, name: 'Dr. B' }] }, // B-eset epizód
+        { rows: [], rowCount: 1 }, // UPDATE
+      ]);
+      const result = await recomputeKezeleoorvos(PATIENT_ID, db);
+      expect(result.changed).toBe(true);
+      expect(result.userId).toBe(DR_B_ID);
+      expect(query).toHaveBeenCalledTimes(3);
+    });
+  });
+
   describe('B-eset: epizód provider nyer', () => {
     it('writes episode provider when previous value differs', async () => {
       const { db, query, calls } = makeDb([

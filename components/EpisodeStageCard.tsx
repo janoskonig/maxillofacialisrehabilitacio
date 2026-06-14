@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { PatientEpisode, StageCatalogEntry, StageSuggestion, EpisodeGetResponse } from '@/lib/types';
 import { REASON_VALUES } from '@/lib/types';
-import { Calendar, ArrowRight, Clock, AlertTriangle, ChevronDown, ChevronUp, Plus, Loader2, Activity, CheckCircle } from 'lucide-react';
+import { Calendar, ArrowRight, ChevronRight, Clock, AlertTriangle, ChevronDown, ChevronUp, Plus, Loader2, Activity, CheckCircle, UserRound } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { StageSuggestionModal } from './StageSuggestionModal';
@@ -39,6 +39,7 @@ export function EpisodeStageCard({
   const [episodes, setEpisodes] = useState<PatientEpisode[]>([]);
   const [activeEpisode, setActiveEpisode] = useState<EpisodeGetResponse | null>(null);
   const [catalog, setCatalog] = useState<StageCatalogEntry[]>([]);
+  const [enteredByStage, setEnteredByStage] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
   const [showSuggestionModal, setShowSuggestionModal] = useState(false);
@@ -72,9 +73,29 @@ export function EpisodeStageCard({
               setCatalog(catData.catalog ?? []);
             }
           }
+
+          // Stádium-belépési dátumok a horizontális idővonalhoz (mikor lépett be).
+          try {
+            const stagesRes = await fetch(`/api/patients/${patientId}/stages`, { credentials: 'include' });
+            if (stagesRes.ok) {
+              const sd = await stagesRes.json();
+              const epEntry = (sd.timeline?.episodes ?? []).find(
+                (e: { episodeId: string }) => e.episodeId === openEp.id
+              );
+              const map: Record<string, string> = {};
+              // `stages` desc sorrendben jön → az utolsó felülírás a legkorábbi belépés.
+              for (const ev of (epEntry?.stages ?? []) as Array<{ stageCode: string; at: string }>) {
+                map[ev.stageCode] = ev.at;
+              }
+              setEnteredByStage(map);
+            }
+          } catch {
+            /* non-critical */
+          }
         }
       } else {
         setActiveEpisode(null);
+        setEnteredByStage({});
       }
     } catch (error) {
       console.error('Error fetching episode data:', error);
@@ -140,7 +161,8 @@ export function EpisodeStageCard({
   const stageLabel = activeEpisode.currentStageLabel ?? getStageLabel(stageCode);
   const suggestion = activeEpisode.stageSuggestion;
   const stageIndex = parseInt(stageCode.replace('STAGE_', ''), 10);
-  const totalStages = catalog.length || 8;
+  const orderedStages = [...catalog].sort((a, b) => a.orderIndex - b.orderIndex);
+  const currentIdx = orderedStages.findIndex((c) => c.code === stageCode);
 
   return (
     <>
@@ -158,13 +180,11 @@ export function EpisodeStageCard({
           </button>
         </div>
 
-        {/* Episode title + reason */}
+        {/* Episode hero */}
         <div className="mb-4">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium text-gray-900">
-              {activeEpisode.chiefComplaint}
-            </span>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+          <p className="text-base font-medium text-gray-900">{activeEpisode.chiefComplaint}</p>
+          <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+            <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
               {activeEpisode.reason}
             </span>
             {activeEpisode.treatmentTypeLabel && (
@@ -173,39 +193,100 @@ export function EpisodeStageCard({
               </span>
             )}
           </div>
-          <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
-            <span className="flex items-center gap-1">
-              <Calendar className="w-3 h-3" />
-              {format(new Date(activeEpisode.openedAt), 'yyyy. MMM d.', { locale: hu })}
-            </span>
-            {activeEpisode.assignedProviderName && (
-              <span>{activeEpisode.assignedProviderName}</span>
-            )}
+        </div>
+
+        {/* Meta: opened + provider */}
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className="flex items-center gap-2 min-w-0">
+            <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-[11px] text-gray-500 leading-none">Megnyitva</p>
+              <p className="text-sm text-gray-900 mt-0.5 truncate">
+                {format(new Date(activeEpisode.openedAt), 'yyyy. MMM d.', { locale: hu })}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 min-w-0">
+            <UserRound className="w-4 h-4 text-gray-400 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-[11px] text-gray-500 leading-none">Kezelőorvos</p>
+              <p className="text-sm text-gray-900 mt-0.5 truncate">
+                {activeEpisode.assignedProviderName ?? '—'}
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* Stage progress bar */}
+        {/* Stage progress — horizontal timeline (mikor lépett be az egyes stádiumokba) */}
         <div className="mb-4">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center justify-between gap-2 mb-2">
             <span className={`px-3 py-1 rounded-full text-sm font-semibold border ${getStageColor(stageCode)}`}>
               {stageLabel}
             </span>
+            {orderedStages.length > 0 && currentIdx >= 0 && (
+              <span className="text-xs text-gray-500 shrink-0 tabular-nums">
+                {currentIdx + 1} / {orderedStages.length} stádium
+              </span>
+            )}
           </div>
-          <div className="flex gap-1">
-            {Array.from({ length: totalStages }).map((_, i) => (
-              <div
-                key={i}
-                className={`h-2 flex-1 rounded-full transition-colors ${
-                  i <= stageIndex ? 'bg-medical-primary' : 'bg-gray-200'
-                }`}
-                title={catalog[i]?.labelHu ?? `STAGE_${i}`}
-              />
-            ))}
-          </div>
-          <div className="flex justify-between text-[10px] text-gray-400 mt-1 px-0.5">
-            <span>Kezdet</span>
-            <span>Gondozás</span>
-          </div>
+
+          {orderedStages.length > 0 ? (
+            <div className="overflow-x-auto -mx-1 px-1 pb-1">
+              <div className="flex items-start min-w-max pt-1">
+                {orderedStages.map((cat, i) => {
+                  const isCurrent = i === currentIdx;
+                  const isPast = currentIdx >= 0 && i < currentIdx;
+                  const entered = enteredByStage[cat.code];
+                  const isLast = i === orderedStages.length - 1;
+                  return (
+                    <div key={cat.code} className="flex flex-col items-center" style={{ width: 90 }}>
+                      <div className="flex items-center w-full h-4">
+                        <div
+                          className={`h-0.5 flex-1 ${
+                            i === 0 ? 'opacity-0' : isPast || isCurrent ? 'bg-medical-primary' : 'bg-gray-200'
+                          }`}
+                        />
+                        <div
+                          className={`w-3.5 h-3.5 rounded-full shrink-0 border-2 ${
+                            isCurrent
+                              ? 'bg-white border-medical-primary ring-2 ring-medical-primary/30'
+                              : isPast
+                                ? 'bg-medical-primary border-medical-primary'
+                                : 'bg-white border-gray-300'
+                          }`}
+                          title={cat.labelHu}
+                        />
+                        {isLast ? (
+                          <div className="flex-1 flex items-center">
+                            <ChevronRight
+                              className={`w-4 h-4 -ml-0.5 ${isPast || isCurrent ? 'text-medical-primary' : 'text-gray-300'}`}
+                            />
+                          </div>
+                        ) : (
+                          <div className={`h-0.5 flex-1 ${isPast ? 'bg-medical-primary' : 'bg-gray-200'}`} />
+                        )}
+                      </div>
+                      <p
+                        className={`mt-1.5 text-center text-[11px] leading-tight px-0.5 ${
+                          isCurrent ? 'font-semibold text-gray-900' : isPast ? 'text-gray-600' : 'text-gray-400'
+                        }`}
+                      >
+                        {cat.labelHu}
+                      </p>
+                      <p className="mt-0.5 text-center text-[10px] text-gray-400 h-3">
+                        {entered ? format(new Date(entered), 'MMM d.', { locale: hu }) : ''}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="flex justify-between text-[10px] text-gray-400 mt-1 px-0.5">
+              <span>Kezdet</span>
+              <span>Gondozás</span>
+            </div>
+          )}
         </div>
 
         {/* Stage suggestion banner */}
@@ -228,6 +309,15 @@ export function EpisodeStageCard({
             </div>
           </div>
         )}
+
+        {/* Primary action — always visible */}
+        <a
+          href={`/patients/${patientId}/stages`}
+          className="inline-flex items-center gap-1.5 mt-1 text-sm font-medium text-medical-primary hover:text-medical-primary-dark"
+        >
+          Teljes stádium kezelés
+          <ArrowRight className="w-3.5 h-3.5" />
+        </a>
 
         {/* Expanded details */}
         {expanded && (
@@ -255,22 +345,6 @@ export function EpisodeStageCard({
               })}
             </div>
 
-            {/* Version info */}
-            <div className="flex gap-4 text-xs text-gray-400">
-              <span>stageVersion: {activeEpisode.stageVersion ?? 0}</span>
-              <span>snapshotVersion: {activeEpisode.snapshotVersion ?? 0}</span>
-              {activeEpisode.currentRulesetVersion != null && (
-                <span>ruleset: v{activeEpisode.currentRulesetVersion}</span>
-              )}
-            </div>
-
-            <a
-              href={`/patients/${patientId}/stages`}
-              className="inline-flex items-center gap-1 text-sm text-medical-primary hover:text-medical-primary-dark"
-            >
-              Teljes stádium kezelés
-              <ArrowRight className="w-3 h-3" />
-            </a>
           </div>
         )}
       </div>

@@ -52,6 +52,9 @@ export const patientSchema = z.object({
   cim: z.string().optional().nullable(),
   varos: z.string().optional().nullable(),
   iranyitoszam: z.string().optional().nullable(),
+  torvenyesKepviseloNev: z.string().optional().nullable(),
+  torvenyesKepviseloKapcsolat: z.string().optional().nullable(),
+  torvenyesKepviseloEmail: z.string().optional().nullable(),
 
   beutaloOrvos: z.string().optional().nullable(),
   beutaloIntezmeny: z.string().optional().nullable(),
@@ -95,8 +98,18 @@ export const patientSchema = z.object({
     z.union([
       z.string(),
       z.object({
+        // Régi modell — visszafelé kompatibilitásra megtartva.
         status: z.enum(['D', 'F', 'M']).optional(),
-        description: z.string().optional()
+        description: z.string().optional(),
+        // Új odontogram modell.
+        base: z.enum([
+          'sound', 'missing', 'filled', 'crown', 'root_canal', 'inlay',
+          'implant', 'bridge_abutment', 'bridge_pontic', 'root_remnant',
+          'impacted', 'necrotic',
+        ]).optional(),
+        caries: z.boolean().optional(),
+        periapical: z.boolean().optional(),
+        mobility: z.number().int().min(0).max(3).optional(),
       })
     ])
   ).optional(),

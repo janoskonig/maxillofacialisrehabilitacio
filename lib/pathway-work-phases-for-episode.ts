@@ -52,6 +52,44 @@ export function normalizePathwayWorkPhaseArray(raw: unknown): PathwayWorkPhaseTe
   return out.length > 0 ? out : null;
 }
 
+/** Two templates are "the same step with different parameters" — a merge conflict. */
+function templatesConflict(a: PathwayWorkPhaseTemplate, b: PathwayWorkPhaseTemplate): boolean {
+  return (
+    a.pool !== b.pool ||
+    a.duration_minutes !== b.duration_minutes ||
+    a.default_days_offset !== b.default_days_offset
+  );
+}
+
+/**
+ * Deduplicate merged multi-pathway templates by `work_phase_code`, preserving order.
+ * First occurrence wins (earlier pathway by ordinal has precedence). When a later
+ * occurrence carries different parameters it is dropped and the conflict is logged,
+ * so two pathways defining the same code with different durations/offsets no longer
+ * silently produce duplicate steps.
+ */
+export function dedupePathwayWorkPhases(templates: PathwayWorkPhaseTemplate[]): PathwayWorkPhaseTemplate[] {
+  const seen = new Map<string, PathwayWorkPhaseTemplate>();
+  const out: PathwayWorkPhaseTemplate[] = [];
+  for (const t of templates) {
+    const existing = seen.get(t.work_phase_code);
+    if (!existing) {
+      seen.set(t.work_phase_code, t);
+      out.push(t);
+      continue;
+    }
+    if (templatesConflict(existing, t)) {
+      console.warn(
+        `[pathway-merge] conflicting duplicate work_phase_code "${t.work_phase_code}" dropped; ` +
+          `kept pool=${existing.pool}/dur=${existing.duration_minutes}/offset=${existing.default_days_offset}, ` +
+          `dropped pool=${t.pool}/dur=${t.duration_minutes}/offset=${t.default_days_offset}`
+      );
+    }
+    // duplicate (identical or conflicting) → keep the first, drop this one
+  }
+  return out;
+}
+
 /**
  * Templates from care_pathways columns: non-empty work_phases_json wins; otherwise legacy steps_json.
  * (Using `work_phases_json ?? steps_json` before normalize is wrong when canonical column is `[]`.)
@@ -88,7 +126,8 @@ export async function getPathwayWorkPhasesForEpisode(
         const arr = pathwayTemplatesFromCarePathwayRow(row);
         if (arr) merged.push(...arr);
       }
-      return merged.length > 0 ? merged : null;
+      if (merged.length === 0) return null;
+      return dedupePathwayWorkPhases(merged);
     }
   } catch {
     /* episode_pathways may be missing */

@@ -5,9 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { DoctorMessages } from '@/components/DoctorMessages';
 import { PatientMessagesList } from '@/components/PatientMessagesList';
-import { ArrowLeft, MessageCircle, Users } from 'lucide-react';
-import { Logo } from '@/components/Logo';
-import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
+import { MessageCircle, Users } from 'lucide-react';
+import { AppShell } from '@/components/layout/AppShell';
 import { MessageSearchProvider } from '@/contexts/MessageSearchContext';
 import { MessageSearchButton } from '@/components/messaging/MessageSearchButton';
 
@@ -80,10 +79,6 @@ export default function MessagesPageClient() {
     return () => clearInterval(interval);
   }, [authorized]);
 
-  const handleBack = () => {
-    router.push('/');
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -97,36 +92,15 @@ export default function MessagesPageClient() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between py-4">
-            <div className="flex items-center gap-4">
-              <Logo width={50} height={58} />
-              <div>
-                <h1 className="text-lg sm:text-xl font-bold text-medical-primary">
-                  Üzenetek
-                </h1>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <MessageSearchButton channel={activeTab === 'doctor-doctor' ? 'doctor' : 'patient'} />
-              <button
-                onClick={handleBack}
-                className="btn-secondary flex items-center gap-2"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span className="hidden sm:inline">Vissza</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-
+    <AppShell
+      title="Üzenetek"
+      backTo="/"
+      maxWidth="xl"
+      actions={<MessageSearchButton channel={activeTab === 'doctor-doctor' ? 'doctor' : 'patient'} />}
+    >
       <MessageSearchProvider
         preferredChannel={activeTab === 'doctor-doctor' ? 'doctor' : 'patient'}
       >
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-mobile-nav-staff md:pb-6">
         <div className="mb-4 border-b border-gray-200 overflow-x-auto scrollbar-hide">
           <nav className="flex gap-1 min-w-max" aria-label="Üzenetek fülök">
             <button
@@ -172,10 +146,7 @@ export default function MessagesPageClient() {
             <PatientMessagesList key="doctor-patient" />
           )}
         </div>
-      </main>
-
-      <MobileBottomNav />
       </MessageSearchProvider>
-    </div>
+    </AppShell>
   );
 }

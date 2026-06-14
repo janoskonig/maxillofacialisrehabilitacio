@@ -73,6 +73,15 @@ export interface IntakeRecommendationResponse {
   explain: {
     viewMode: IntakeViewMode;
     busynessScore: number;
+    /**
+     * A félkész betegek MÉG LE NEM FOGLALT hátralévő munkája a havi kapacitás
+     * %-ában (a legterheltebb releváns orvosra). A naptári `busynessScore` mellett
+     * ez a "rejtett" terhelés, ami megakadályozza, hogy túl sok félkész beteg
+     * mellé újat vegyünk fel. 0 = nincs hátralék / nincs forecast adat.
+     */
+    backlogPct: number;
+    /** A figyelembe vett hátralévő (P80) vizitek száma a releváns scope-ban. */
+    remainingVisitsP80: number;
     nearCriticalIfNewStarts: boolean;
     wipCount: number;
     wipCompletionP80Max: string | null;

@@ -1,14 +1,16 @@
 'use client';
 
-import { Dispatch, SetStateAction } from 'react';
+import { Dispatch, SetStateAction, useState } from 'react';
 import { UseFormRegister, UseFormWatch, UseFormSetValue, FieldErrors } from 'react-hook-form';
 import { Patient, kezelesiTervOptions, fabianFejerdyProtetikaiOsztalyOptions } from '@/lib/types';
 import { REQUIRED_FIELDS } from '@/lib/clinical-rules';
-import { normalizeToothData, type ToothStatus } from '@/hooks/usePatientAutoSave';
+import { type ToothStatus } from '@/hooks/usePatientAutoSave';
 import { Calendar, Download } from 'lucide-react';
-import { ToothCheckbox, getToothState } from './ToothCheckbox';
 import { ToothTreatmentProvider, ToothTreatmentInline } from '../ToothTreatmentPanel';
 import { OPInlinePreview } from '../OPInlinePreview';
+import { Odontogram } from './odontogram/Odontogram';
+import { readConditions, computeDMFT, BASE_LABELS, isPresent } from './odontogram/tooth-conditions';
+import { PerioChart } from './perio/PerioChart';
 
 interface BetegvizsgalatSectionProps {
   register: UseFormRegister<Patient>;
@@ -40,9 +42,6 @@ export function BetegvizsgalatSection({
   isViewOnly,
   fogak,
   setFogak,
-  handleToothStatusToggle,
-  handleToothStatusSelect,
-  handleToothStatusDetailsChange,
   felsoFogpotlasVan,
   felsoFogpotlasElegedett,
   alsoFogpotlasVan,
@@ -53,6 +52,7 @@ export function BetegvizsgalatSection({
   showToast,
   sectionErrors,
 }: BetegvizsgalatSectionProps) {
+  const [showPerio, setShowPerio] = useState(false);
   return (
     <div id="section-betegvizsgalat" className="card scroll-mt-20 sm:scroll-mt-24">
       <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
@@ -72,165 +72,22 @@ export function BetegvizsgalatSection({
 
         {/* Fogazati státusz */}
         <div className="border-t pt-4 mt-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-            <div className="flex items-center gap-2">
-              <h5 className="text-base sm:text-md font-semibold text-gray-900">Felvételi státusz</h5>
-              {REQUIRED_FIELDS.some(f => f.key === 'meglevoFogak') && (
-                <span className="text-medical-error text-sm">*</span>
-              )}
-            </div>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  if (isViewOnly) return;
-                  setFogak(prev => {
-                    const upperTeeth = [11, 12, 13, 14, 15, 16, 17, 18, 21, 22, 23, 24, 25, 26, 27, 28];
-                    const upperTeethStr = upperTeeth.map(t => t.toString());
-                    
-                    const allMissing = upperTeethStr.every(tooth => {
-                      const value = prev[tooth];
-                      const normalized = normalizeToothData(value);
-                      return normalized?.status === 'M';
-                    });
-                    
-                    const newState = { ...prev };
-                    if (allMissing) {
-                      upperTeethStr.forEach(tooth => {
-                        delete newState[tooth];
-                      });
-                    } else {
-                      upperTeeth.forEach(tooth => {
-                        newState[tooth.toString()] = { status: 'M' };
-                      });
-                    }
-                    return newState;
-                  });
-                }}
-                disabled={isViewOnly}
-                className="px-4 py-2 sm:px-3 sm:py-1.5 text-sm sm:text-xs rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0"
-                title="Felső állcsont összes fogát hiányzónak jelöli / visszaállítja"
-              >
-                Felső teljes fogatlanság
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (isViewOnly) return;
-                  setFogak(prev => {
-                    const lowerTeeth = [31, 32, 33, 34, 35, 36, 37, 38, 41, 42, 43, 44, 45, 46, 47, 48];
-                    const lowerTeethStr = lowerTeeth.map(t => t.toString());
-                    
-                    const allMissing = lowerTeethStr.every(tooth => {
-                      const value = prev[tooth];
-                      const normalized = normalizeToothData(value);
-                      return normalized?.status === 'M';
-                    });
-                    
-                    const newState = { ...prev };
-                    if (allMissing) {
-                      lowerTeethStr.forEach(tooth => {
-                        delete newState[tooth];
-                      });
-                    } else {
-                      lowerTeeth.forEach(tooth => {
-                        newState[tooth.toString()] = { status: 'M' };
-                      });
-                    }
-                    return newState;
-                  });
-                }}
-                disabled={isViewOnly}
-                className="px-4 py-2 sm:px-3 sm:py-1.5 text-sm sm:text-xs rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0"
-                title="Alsó állcsont összes fogát hiányzónak jelöli / visszaállítja"
-              >
-                Alsó teljes fogatlanság
-              </button>
-            </div>
+          <div className="flex items-center gap-2 mb-3">
+            <h5 className="text-base sm:text-md font-semibold text-gray-900">Felvételi státusz</h5>
+            {REQUIRED_FIELDS.some(f => f.key === 'meglevoFogak') && (
+              <span className="text-medical-error text-sm">*</span>
+            )}
           </div>
-          <p className="text-sm text-gray-600 mb-3">Kattintás: jelen van → hiányzik → alaphelyzet. Jelen lévő fogaknál D (szuvas) vagy F (tömött) kiválasztható.</p>
-          <div className="bg-gray-50 p-3 sm:p-4 rounded-lg overflow-x-auto">
-            {/* Felső sor */}
-            <div className="flex justify-between mb-2 min-w-[600px] sm:min-w-0">
-              <div className="flex gap-1 sm:gap-1">
-                {[18, 17, 16, 15, 14, 13, 12, 11].map(tooth => {
-                  const toothStr = tooth.toString();
-                  return (
-                    <ToothCheckbox
-                      key={tooth}
-                      toothNumber={toothStr}
-                      value={fogak[toothStr]}
-                      onChange={() => handleToothStatusToggle(toothStr)}
-                      disabled={isViewOnly}
-                    />
-                  );
-                })}
-              </div>
-              <div className="flex gap-1 sm:gap-1">
-                {[21, 22, 23, 24, 25, 26, 27, 28].map(tooth => {
-                  const toothStr = tooth.toString();
-                  return (
-                    <ToothCheckbox
-                      key={tooth}
-                      toothNumber={toothStr}
-                      value={fogak[toothStr]}
-                      onChange={() => handleToothStatusToggle(toothStr)}
-                      disabled={isViewOnly}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-            {/* Alsó sor */}
-            <div className="flex justify-between min-w-[600px] sm:min-w-0">
-              <div className="flex gap-1 sm:gap-1">
-                {[48, 47, 46, 45, 44, 43, 42, 41].map(tooth => {
-                  const toothStr = tooth.toString();
-                  return (
-                    <ToothCheckbox
-                      key={tooth}
-                      toothNumber={toothStr}
-                      value={fogak[toothStr]}
-                      onChange={() => handleToothStatusToggle(toothStr)}
-                      disabled={isViewOnly}
-                    />
-                  );
-                })}
-              </div>
-              <div className="flex gap-1 sm:gap-1">
-                {[31, 32, 33, 34, 35, 36, 37, 38].map(tooth => {
-                  const toothStr = tooth.toString();
-                  return (
-                    <ToothCheckbox
-                      key={tooth}
-                      toothNumber={toothStr}
-                      value={fogak[toothStr]}
-                      onChange={() => handleToothStatusToggle(toothStr)}
-                      disabled={isViewOnly}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+          <p className="text-sm text-gray-600 mb-3">
+            Kattintson egy fogra a státusza beállításához (ép, hiányzó, tömött, korona,
+            gyökértömött, implantátum stb.). A szuvasodás külön rátehető.
+          </p>
+          <Odontogram fogak={fogak} setFogak={setFogak} editing={!isViewOnly} isViewOnly={isViewOnly} />
 
           {/* DMF-T index számolás és megjelenítés */}
           {(() => {
-            let dCount = 0;
-            let fCount = 0;
-            let mCount = 0;
-            
-            Object.values(fogak).forEach(value => {
-              const normalized = normalizeToothData(value);
-              if (normalized) {
-                if (normalized.status === 'D') dCount++;
-                else if (normalized.status === 'F') fCount++;
-                else if (normalized.status === 'M') mCount++;
-              }
-            });
-            
-            const dmft = dCount + fCount + mCount;
-            
+            const { d: dCount, f: fCount, m: mCount, dmft } = computeDMFT(fogak);
+
             return (
               <div className="mt-4 p-3 sm:p-4 bg-blue-50 rounded-lg border border-blue-200">
                 <h6 className="font-semibold text-gray-900 mb-2 text-sm sm:text-base">DMF-T index</h6>
@@ -257,74 +114,34 @@ export function BetegvizsgalatSection({
             );
           })()}
 
-          {/* Fog státusz részletek */}
+          {/* Fogankénti kezelési igények */}
           {(() => {
-            const presentTeeth = Object.keys(fogak).filter(toothNumber => {
-              const value = fogak[toothNumber];
-              const state = getToothState(value);
-              return state === 'present';
-            });
-            
+            const presentTeeth = Object.keys(fogak)
+              .filter((toothNumber) => isPresent(readConditions(fogak[toothNumber])))
+              .sort();
+
             if (presentTeeth.length === 0) return null;
 
             const content = (
-            <div className="space-y-3 sm:space-y-4 mt-4">
-                <h6 className="font-medium text-gray-700 text-sm sm:text-base">Fogak állapota</h6>
-                {presentTeeth.sort().map(toothNumber => {
-                  const value = fogak[toothNumber];
-                  const normalized = normalizeToothData(value);
-                  const description = normalized?.description || '';
-                  const status = normalized?.status;
-                  
+              <div className="space-y-3 sm:space-y-4 mt-4">
+                <h6 className="font-medium text-gray-700 text-sm sm:text-base">Fogankénti kezelési igények</h6>
+                {presentTeeth.map((toothNumber) => {
+                  const c = readConditions(fogak[toothNumber]);
                   return (
-                <div key={toothNumber} className="border border-gray-200 rounded-md p-3 sm:p-4">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
-                        <label className="form-label font-medium text-sm sm:text-base">
-                          {toothNumber}. fog – állapot
-                        </label>
-                        {!isViewOnly && (
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleToothStatusSelect(toothNumber, 'D')}
-                              className={`px-3 py-2 sm:px-2 sm:py-1 text-sm sm:text-xs rounded border min-h-[44px] sm:min-h-0 ${
-                                status === 'D'
-                                  ? 'bg-red-100 border-red-400 text-red-700 font-semibold'
-                                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-                              }`}
-                              title="Szuvas (D)"
-                            >
-                              D
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleToothStatusSelect(toothNumber, 'F')}
-                              className={`px-3 py-2 sm:px-2 sm:py-1 text-sm sm:text-xs rounded border min-h-[44px] sm:min-h-0 ${
-                                status === 'F'
-                                  ? 'bg-blue-100 border-blue-400 text-blue-700 font-semibold'
-                                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-                              }`}
-                              title="Tömött (F)"
-                            >
-                              F
-                            </button>
-                          </div>
-                        )}
+                    <div key={toothNumber} className="border border-gray-200 rounded-md p-3 sm:p-4">
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
+                        <span className="font-medium text-sm sm:text-base text-gray-900">{toothNumber}. fog</span>
+                        <span className="text-xs text-gray-500">
+                          {BASE_LABELS[c.base]}
+                          {c.caries ? ' · szuvas' : ''}
+                        </span>
+                        {c.description && <span className="text-xs text-gray-500">· {c.description}</span>}
                       </div>
-                      <textarea
-                        value={description}
-                        onChange={(e) => handleToothStatusDetailsChange(toothNumber, e.target.value)}
-                        rows={2}
-                        className="form-input text-base sm:text-sm"
-                        placeholder="Pl. korona, hídtag, gyökércsapos felépítmény, egyéb részletek"
-                        readOnly={isViewOnly}
-                      />
-                      {/* Per-tooth treatment needs */}
                       <ToothTreatmentInline toothNumber={toothNumber} isViewOnly={isViewOnly} />
-                </div>
+                    </div>
                   );
                 })}
-            </div>
+              </div>
             );
 
             return patientId ? (
@@ -333,6 +150,32 @@ export function BetegvizsgalatSection({
               </ToothTreatmentProvider>
             ) : content;
           })()}
+
+          {/* Parodontális státusz — opcionális, alapból kikapcsolva */}
+          {patientId && (
+            <div className="border-t pt-4 mt-4">
+              <div className="flex items-center gap-3 mb-3 flex-wrap">
+                <span className="text-base sm:text-md font-semibold text-gray-900">Parodontális státusz</span>
+                <button
+                  type="button"
+                  onClick={() => setShowPerio((v) => !v)}
+                  role="switch"
+                  aria-checked={showPerio}
+                  className="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300"
+                >
+                  <span
+                    className={`relative inline-block w-9 h-5 rounded-full transition-colors ${showPerio ? 'bg-medical-primary' : 'bg-gray-300 dark:bg-gray-600'}`}
+                  >
+                    <span
+                      className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${showPerio ? 'right-0.5' : 'left-0.5'}`}
+                    />
+                  </span>
+                  {showPerio ? 'bekapcsolva' : 'parodontális státuszfelvétel'}
+                </button>
+              </div>
+              {showPerio && <PerioChart patientId={patientId} isViewOnly={isViewOnly} />}
+            </div>
+          )}
 
           {/* Export PDF button */}
           {patientId && (Object.keys(fogak).length > 0 || patient?.felsoFogpotlasVan || patient?.alsoFogpotlasVan || (patient?.meglevoImplantatumok && Object.keys(patient.meglevoImplantatumok).length > 0)) && (

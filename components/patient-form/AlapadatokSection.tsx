@@ -1,12 +1,15 @@
 'use client';
 
-import { UseFormRegister, FieldErrors } from 'react-hook-form';
+import { useState } from 'react';
+import { UseFormRegister, FieldErrors, UseFormWatch } from 'react-hook-form';
 import { Patient } from '@/lib/types';
 import { REQUIRED_FIELDS } from '@/lib/clinical-rules';
 import { User, AlertTriangle } from 'lucide-react';
+import { ReadField, ReadGrid, SectionShell, isEmptyValue } from './read/ReadView';
 
 interface AlapadatokSectionProps {
   register: UseFormRegister<Patient>;
+  watch: UseFormWatch<Patient>;
   errors: FieldErrors<Patient>;
   isViewOnly: boolean;
   handleTAJChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -20,114 +23,124 @@ interface AlapadatokSectionProps {
 
 export function AlapadatokSection({
   register,
+  watch,
   errors,
   isViewOnly,
   handleTAJChange,
   handlePhoneChange,
-  sectionErrors,
   userRole,
   tajChecksumWarning,
   minimalNewPatient = false,
 }: AlapadatokSectionProps) {
   const isTechnikus = userRole === 'technikus';
+  const [editing, setEditing] = useState(false);
   const req = (key: keyof Patient) =>
     minimalNewPatient
       ? key === 'nev' || key === 'taj'
       : REQUIRED_FIELDS.some(f => f.key === key);
 
+  const nev = watch('nev');
+  const taj = watch('taj');
+  const telefonszam = watch('telefonszam');
+  const email = watch('email');
+
+  // Hiányzó adatok száma a látható mezőkből.
+  const missingCount = [
+    { v: nev, req: req('nev'), show: true },
+    { v: taj, req: req('taj'), show: !isTechnikus },
+    { v: telefonszam, req: false, show: !isTechnikus },
+    { v: email, req: req('email'), show: !isTechnikus },
+  ].filter(f => f.show && isEmptyValue(f.v)).length;
+
   return (
-    <div id="section-alapadatok" className="card scroll-mt-20 sm:scroll-mt-24">
-      <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-        <User className="w-5 h-5 mr-2 text-medical-primary" />
-        ALAPADATOK
-        {sectionErrors['alapadatok'] > 0 && (
-          <span className="ml-2 px-2 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full">
-            {sectionErrors['alapadatok']}
-          </span>
-        )}
-      </h4>
-      <div className="space-y-4">
-        <div>
-          <label className={`form-label ${req('nev') ? 'form-label-required' : ''}`}>
-            NÉV
-          </label>
-          <input
-            {...register('nev')}
-            className="form-input"
-            placeholder="Teljes név"
-            readOnly={isViewOnly}
-          />
-          {errors.nev && (
-            <p className="text-red-500 text-sm mt-1">{errors.nev.message}</p>
+    <SectionShell
+      id="alapadatok"
+      title="Alapadatok"
+      icon={<User className="w-5 h-5" />}
+      missingCount={missingCount}
+      editing={editing}
+      onToggleEdit={() => setEditing(e => !e)}
+      isViewOnly={isViewOnly}
+    >
+      {editing ? (
+        <div className="space-y-4">
+          <div>
+            <label className={`form-label ${req('nev') ? 'form-label-required' : ''}`}>Név</label>
+            <input
+              {...register('nev')}
+              className="form-input"
+              placeholder="Teljes név"
+              readOnly={isViewOnly}
+            />
+            {errors.nev && <p className="text-red-500 text-sm mt-1">{errors.nev.message}</p>}
+          </div>
+          {!isTechnikus && (
+            <>
+              <div>
+                <label className={`form-label ${req('taj') ? 'form-label-required' : ''}`}>TAJ</label>
+                <input
+                  {...register('taj')}
+                  onChange={handleTAJChange}
+                  className={`form-input ${errors.taj ? 'border-red-500' : tajChecksumWarning ? 'border-amber-400' : ''}`}
+                  placeholder="000-000-000"
+                  readOnly={isViewOnly}
+                />
+                {errors.taj ? (
+                  <p className="text-red-500 text-sm mt-1">{errors.taj.message}</p>
+                ) : tajChecksumWarning ? (
+                  <p className="text-amber-600 text-xs mt-1 flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                    Az ellenőrző számjegy nem megfelelő. Kérjük, ellenőrizze a TAJ számot.
+                  </p>
+                ) : (
+                  <p className="text-gray-500 text-xs mt-1">Formátum: XXX-XXX-XXX (9 számjegy)</p>
+                )}
+              </div>
+              <div>
+                <label className="form-label">
+                  Telefonszám
+                  {minimalNewPatient && <span className="font-normal text-gray-500"> (opcionális)</span>}
+                </label>
+                <input
+                  {...register('telefonszam')}
+                  onChange={handlePhoneChange}
+                  className={`form-input ${errors.telefonszam ? 'border-red-500' : ''}`}
+                  placeholder="+36..."
+                  readOnly={isViewOnly}
+                />
+                {errors.telefonszam && (
+                  <p className="text-red-500 text-sm mt-1">{errors.telefonszam.message}</p>
+                )}
+              </div>
+              <div>
+                <label className={`form-label ${req('email') ? 'form-label-required' : ''}`}>
+                  Email
+                  {minimalNewPatient && <span className="font-normal text-gray-500"> (opcionális)</span>}
+                </label>
+                <input
+                  {...register('email')}
+                  type="email"
+                  className={`form-input ${errors.email ? 'border-red-500' : ''}`}
+                  placeholder="nev@example.com"
+                  readOnly={isViewOnly}
+                />
+                {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>}
+              </div>
+            </>
           )}
         </div>
-        {!isTechnikus && (
-        <>
-        <div>
-          <label className={`form-label ${req('taj') ? 'form-label-required' : ''}`}>
-            TAJ
-          </label>
-          <input
-            {...register('taj')}
-            onChange={handleTAJChange}
-            className={`form-input ${errors.taj ? 'border-red-500' : tajChecksumWarning ? 'border-amber-400' : ''}`}
-            placeholder="000-000-000"
-            readOnly={isViewOnly}
-          />
-          {errors.taj ? (
-            <p className="text-red-500 text-sm mt-1">{errors.taj.message}</p>
-          ) : tajChecksumWarning ? (
-            <p className="text-amber-600 text-xs mt-1 flex items-center gap-1">
-              <AlertTriangle className="w-3 h-3 flex-shrink-0" />
-              Az ellenőrző számjegy nem megfelelő. Kérjük, ellenőrizze a TAJ számot.
-            </p>
-          ) : (
-            <p className="text-gray-500 text-xs mt-1">Formátum: XXX-XXX-XXX (9 számjegy)</p>
+      ) : (
+        <ReadGrid>
+          <ReadField label="Név" value={nev} required={req('nev')} full />
+          {!isTechnikus && (
+            <>
+              <ReadField label="TAJ" value={taj} required={req('taj')} />
+              <ReadField label="Telefonszám" value={telefonszam} accent />
+              <ReadField label="Email" value={email} required={req('email')} accent full />
+            </>
           )}
-        </div>
-        <div>
-          <label className="form-label">
-            TELEFONSZÁM
-            {minimalNewPatient && (
-              <span className="font-normal text-gray-500"> (opcionális)</span>
-            )}
-          </label>
-          <input
-            {...register('telefonszam')}
-            onChange={handlePhoneChange}
-            className={`form-input ${errors.telefonszam ? 'border-red-500' : ''}`}
-            placeholder="+36..."
-            readOnly={isViewOnly}
-          />
-          {errors.telefonszam ? (
-            <p className="text-red-500 text-sm mt-1">{errors.telefonszam.message}</p>
-          ) : (
-            <p className="text-gray-500 text-xs mt-1">Formátum: +36XXXXXXXXX (pl. +36123456789)</p>
-          )}
-        </div>
-        <div>
-          <label className={`form-label ${req('email') ? 'form-label-required' : ''}`}>
-            EMAIL
-            {minimalNewPatient && (
-              <span className="font-normal text-gray-500"> (opcionális)</span>
-            )}
-          </label>
-          <input
-            {...register('email')}
-            type="email"
-            className={`form-input ${errors.email ? 'border-red-500' : ''}`}
-            placeholder="nev@example.com"
-            readOnly={isViewOnly}
-          />
-          {errors.email ? (
-            <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>
-          ) : (
-            <p className="text-gray-500 text-xs mt-1">Formátum: nev@example.com</p>
-          )}
-        </div>
-        </>
-        )}
-      </div>
-    </div>
+        </ReadGrid>
+      )}
+    </SectionShell>
   );
 }
