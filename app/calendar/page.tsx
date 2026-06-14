@@ -87,8 +87,8 @@ export default function CalendarPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-500">Betöltés...</p>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
+        <p className="text-gray-500 dark:text-gray-400">Betöltés...</p>
       </div>
     );
   }
@@ -154,15 +154,15 @@ export default function CalendarPage() {
           )}
 
           {/* Google Calendar Settings Info */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
             <div className="flex items-start gap-3">
-              <Settings className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <Settings className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
-                <p className="text-sm text-blue-900">
+                <p className="text-sm text-blue-900 dark:text-blue-200">
                   A Google Naptár beállítása a{' '}
                   <button
                     onClick={() => router.push('/settings')}
-                    className="text-blue-700 hover:text-blue-900 underline font-medium"
+                    className="text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-100 underline font-medium"
                   >
                     Beállítások
                   </button>
@@ -182,14 +182,14 @@ export default function CalendarPage() {
           onClick={() => setSelectedAppointment(null)}
         >
           <div
-            className="bg-white rounded-none md:rounded-lg max-w-md w-full h-full md:h-auto max-h-[100vh] md:max-h-[90vh] overflow-y-auto p-4 md:p-6"
+            className="bg-white dark:bg-gray-900 rounded-none md:rounded-lg max-w-md w-full h-full md:h-auto max-h-[100vh] md:max-h-[90vh] overflow-y-auto p-4 md:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-gray-900">Időpont részletei</h3>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Időpont részletei</h3>
               <button
                 onClick={() => setSelectedAppointment(null)}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -197,24 +197,24 @@ export default function CalendarPage() {
 
             <div className="space-y-3">
               <div>
-                <label className="text-xs font-medium text-gray-500">Beteg neve</label>
-                <p className="text-sm text-gray-900 mt-1">
+                <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Beteg neve</label>
+                <p className="text-sm text-gray-900 dark:text-gray-100 mt-1">
                   {selectedAppointment.patientName || 'Név nélküli'}
                 </p>
               </div>
 
               {selectedAppointment.patientTaj && (
                 <div>
-                  <label className="text-xs font-medium text-gray-500">TAJ szám</label>
-                  <p className="text-sm text-gray-900 mt-1">
+                  <label className="text-xs font-medium text-gray-500 dark:text-gray-400">TAJ szám</label>
+                  <p className="text-sm text-gray-900 dark:text-gray-100 mt-1">
                     {selectedAppointment.patientTaj}
                   </p>
                 </div>
               )}
 
               <div>
-                <label className="text-xs font-medium text-gray-500">Időpont</label>
-                <p className="text-sm text-gray-900 mt-1">
+                <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Időpont</label>
+                <p className="text-sm text-gray-900 dark:text-gray-100 mt-1">
                   {new Date(selectedAppointment.startTime).toLocaleString('hu-HU', {
                     year: 'numeric',
                     month: 'long',
@@ -227,8 +227,8 @@ export default function CalendarPage() {
 
               {selectedAppointment.dentistName && (
                 <div>
-                  <label className="text-xs font-medium text-gray-500">Fogpótlástanász</label>
-                  <p className="text-sm text-gray-900 mt-1">
+                  <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Fogpótlástanász</label>
+                  <p className="text-sm text-gray-900 dark:text-gray-100 mt-1">
                     {selectedAppointment.dentistName}
                   </p>
                 </div>
@@ -236,8 +236,8 @@ export default function CalendarPage() {
 
               {selectedAppointment.cim && (
                 <div>
-                  <label className="text-xs font-medium text-gray-500">Cím</label>
-                  <p className="text-sm text-gray-900 mt-1">
+                  <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Cím</label>
+                  <p className="text-sm text-gray-900 dark:text-gray-100 mt-1">
                     {selectedAppointment.cim}
                     {selectedAppointment.teremszam && ` (Terem: ${selectedAppointment.teremszam})`}
                   </p>
@@ -246,8 +246,8 @@ export default function CalendarPage() {
 
               {selectedAppointment.appointmentStatus && (
                 <div>
-                  <label className="text-xs font-medium text-gray-500">Státusz</label>
-                  <p className="text-sm text-gray-900 mt-1">
+                  <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Státusz</label>
+                  <p className="text-sm text-gray-900 dark:text-gray-100 mt-1">
                     {selectedAppointment.appointmentStatus === 'completed' && 'Teljesült'}
                     {selectedAppointment.appointmentStatus === 'cancelled_by_doctor' && 'Lemondva (orvos)'}
                     {selectedAppointment.appointmentStatus === 'cancelled_by_patient' && 'Lemondva (beteg)'}

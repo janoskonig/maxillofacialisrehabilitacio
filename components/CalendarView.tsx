@@ -161,6 +161,13 @@ export function CalendarView({ onAppointmentClick }: CalendarViewProps) {
     setCurrentDate(new Date());
   };
 
+  // Tapping a day (esp. on mobile, where month cells only show a count) opens that
+  // day in the detailed day view.
+  const handleDateClick = (date: Date) => {
+    setCurrentDate(date);
+    setViewType('day');
+  };
+
   const getDateLabel = () => {
     switch (viewType) {
       case 'month':
@@ -177,8 +184,8 @@ export function CalendarView({ onAppointmentClick }: CalendarViewProps) {
   if (loading && appointments.length === 0) {
     return (
       <div className="card p-8 text-center">
-        <CalendarIcon className="w-12 h-12 text-gray-400 mx-auto mb-4 animate-pulse" />
-        <p className="text-gray-500">Betöltés...</p>
+        <CalendarIcon className="w-12 h-12 text-gray-400 dark:text-gray-600 mx-auto mb-4 animate-pulse" />
+        <p className="text-gray-500 dark:text-gray-400">Betöltés...</p>
       </div>
     );
   }
@@ -202,7 +209,7 @@ export function CalendarView({ onAppointmentClick }: CalendarViewProps) {
           >
             <ChevronRight className="w-5 h-5" />
           </button>
-          <h2 className="text-base sm:text-xl font-bold text-gray-900 min-w-0 flex-1 truncate">
+          <h2 className="text-base sm:text-xl font-bold text-gray-900 dark:text-gray-100 min-w-0 flex-1 truncate">
             {getDateLabel()}
           </h2>
           <button
@@ -215,33 +222,33 @@ export function CalendarView({ onAppointmentClick }: CalendarViewProps) {
 
         <div className="flex items-center gap-2 flex-wrap">
           {/* View type switcher */}
-          <div className="flex rounded-lg border overflow-hidden flex-1 sm:flex-initial">
+          <div className="flex rounded-lg border border-gray-300 dark:border-gray-700 divide-x divide-gray-300 dark:divide-gray-700 overflow-hidden flex-1 sm:flex-initial">
             <button
               onClick={() => setViewType('month')}
               className={`px-3 py-1.5 text-sm font-medium transition-colors ${
                 viewType === 'month'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-50'
+                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
               }`}
             >
               Hónap
             </button>
             <button
               onClick={() => setViewType('week')}
-              className={`px-3 py-1.5 text-sm font-medium transition-colors border-l ${
+              className={`px-3 py-1.5 text-sm font-medium transition-colors ${
                 viewType === 'week'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-50'
+                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
               }`}
             >
               Hét
             </button>
             <button
               onClick={() => setViewType('day')}
-              className={`px-3 py-1.5 text-sm font-medium transition-colors border-l ${
+              className={`px-3 py-1.5 text-sm font-medium transition-colors ${
                 viewType === 'day'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-50'
+                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
               }`}
             >
               Nap
@@ -254,9 +261,9 @@ export function CalendarView({ onAppointmentClick }: CalendarViewProps) {
               type="checkbox"
               checked={includeVirtual}
               onChange={(e) => setIncludeVirtual(e.target.checked)}
-              className="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+              className="rounded border-gray-300 dark:border-gray-600 dark:bg-gray-800 text-amber-600 focus:ring-amber-500"
             />
-            <span className="text-sm text-gray-700">Virtuális időpontok</span>
+            <span className="text-sm text-gray-700 dark:text-gray-300">Virtuális időpontok</span>
           </label>
 
           {/* Filters */}
@@ -276,7 +283,7 @@ export function CalendarView({ onAppointmentClick }: CalendarViewProps) {
 
       {/* Error message */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+        <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded">
           {error}
         </div>
       )}
@@ -290,6 +297,7 @@ export function CalendarView({ onAppointmentClick }: CalendarViewProps) {
           virtualAppointments={includeVirtual ? virtualAppointments : []}
           virtualAppointmentsByDate={includeVirtual ? virtualAppointmentsByDate : {}}
           includeVirtual={includeVirtual}
+          onDateClick={handleDateClick}
           onAppointmentClick={onAppointmentClick}
         />
       )}

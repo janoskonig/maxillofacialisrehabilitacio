@@ -203,8 +203,8 @@ export default function PatientViewPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-pulse text-gray-500">Betöltés...</div>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
+        <div className="animate-pulse text-gray-500 dark:text-gray-400">Betöltés...</div>
       </div>
     );
   }
@@ -252,7 +252,7 @@ export default function PatientViewPage() {
       />
 
       {/* Fülek */}
-      <div className="mb-4 sm:mb-6 border-b border-gray-200 -mx-2 sm:mx-0">
+      <div className="mb-4 sm:mb-6 border-b border-gray-200 dark:border-gray-800 -mx-2 sm:mx-0">
         <nav
           className="flex gap-0.5 sm:gap-1 overflow-x-auto scrollbar-hide px-2 sm:px-0"
           aria-label="Betegkarton fülök"
@@ -264,7 +264,7 @@ export default function PatientViewPage() {
               className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
                 activeTab === tab.id
                   ? 'text-medical-primary border-medical-primary'
-                  : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
+                  : 'text-gray-700 dark:text-gray-300 hover:text-medical-primary border-transparent hover:border-medical-primary'
               }`}
             >
               {tab.icon}
@@ -309,8 +309,8 @@ export default function PatientViewPage() {
           <>
             {patient.id && (
               <div className="space-y-2">
-                <h2 className="text-lg font-semibold text-gray-900">Következő munkafázis – munkalista</h2>
-                <p className="text-sm text-gray-600">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Következő munkafázis – munkalista</h2>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
                   A beteg WIP epizódjainak következő munkafázisai. Foglalás egy kattintással.
                 </p>
                 <PatientWorklistWidget patientId={patient.id} patientName={patient.nev} visible={true} />
