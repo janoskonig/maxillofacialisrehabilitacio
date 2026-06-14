@@ -371,15 +371,15 @@ export function WorkPhaseTaskDelegateBlock({
             autoComplete="off"
           />
           {listOpen && assigneeInput.trim().length > 0 && !institutionUsersLoading && (
-            <ul className="absolute z-20 left-0 right-0 mt-0.5 max-h-36 overflow-auto rounded border border-gray-200 bg-white shadow text-[11px]">
+            <ul className="absolute z-20 left-0 right-0 mt-0.5 max-h-36 overflow-auto rounded border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow text-[11px]">
               {suggestions.length === 0 ? (
-                <li className="px-2 py-1.5 text-gray-500">Nincs találat</li>
+                <li className="px-2 py-1.5 text-gray-500 dark:text-gray-400">Nincs találat</li>
               ) : (
                 suggestions.map((u) => (
                   <li key={u.id}>
                     <button
                       type="button"
-                      className="w-full text-left px-2 py-1.5 hover:bg-gray-50"
+                      className="w-full text-left px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800/50"
                       onMouseDown={(ev) => ev.preventDefault()}
                       onClick={() => pickUser(u)}
                     >
@@ -394,7 +394,7 @@ export function WorkPhaseTaskDelegateBlock({
       ) : mode === 'external' ? (
         <div className="space-y-2">
           <div>
-            <label className="block text-[11px] text-gray-600 mb-0.5">Külső címzett / kapcsolat</label>
+            <label className="block text-[11px] text-gray-600 dark:text-gray-400 mb-0.5">Külső címzett / kapcsolat</label>
             <textarea
               className="form-input text-xs py-1 w-full min-h-[48px]"
               rows={2}
@@ -404,7 +404,7 @@ export function WorkPhaseTaskDelegateBlock({
             />
           </div>
           <div>
-            <label className="block text-[11px] text-gray-600 mb-0.5 flex items-center gap-1">
+            <label className="block text-[11px] text-gray-600 dark:text-gray-400 mb-0.5 flex items-center gap-1">
               <UserRound className="w-3 h-3" />
               Kinél maradjon a feladat a Feladataim listán
             </label>
@@ -427,7 +427,7 @@ export function WorkPhaseTaskDelegateBlock({
 
       <div className="grid gap-2 sm:grid-cols-2">
         <div>
-          <label className="block text-[11px] text-gray-600 mb-0.5">Megjegyzés (opcionális)</label>
+          <label className="block text-[11px] text-gray-600 dark:text-gray-400 mb-0.5">Megjegyzés (opcionális)</label>
           <textarea
             className="form-input text-xs py-1 w-full min-h-[40px]"
             rows={2}
@@ -436,7 +436,7 @@ export function WorkPhaseTaskDelegateBlock({
           />
         </div>
         <div>
-          <label className="block text-[11px] text-gray-600 mb-0.5">Határidő (opcionális)</label>
+          <label className="block text-[11px] text-gray-600 dark:text-gray-400 mb-0.5">Határidő (opcionális)</label>
           <input
             type="datetime-local"
             className="form-input text-xs py-1 w-full"

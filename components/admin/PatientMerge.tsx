@@ -191,22 +191,22 @@ export function PatientMerge() {
     onRemove: () => void;
     compact?: boolean;
   }) => (
-    <div className={`border-2 rounded-lg p-3 ${compact ? 'p-2.5' : 'p-4'} ${color === 'green' ? 'border-green-400 bg-green-50' : 'border-red-400 bg-red-50'}`}>
+    <div className={`border-2 rounded-lg p-3 ${compact ? 'p-2.5' : 'p-4'} ${color === 'green' ? 'border-green-400 dark:border-green-700 bg-green-50 dark:bg-green-950/40' : 'border-red-400 dark:border-red-700 bg-red-50 dark:bg-red-950/40'}`}>
       <div className="flex items-center justify-between mb-1.5">
-        <span className={`text-xs font-bold uppercase tracking-wide ${color === 'green' ? 'text-green-700' : 'text-red-700'}`}>
+        <span className={`text-xs font-bold uppercase tracking-wide ${color === 'green' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
           {label}
         </span>
-        <button onClick={onRemove} className="text-gray-400 hover:text-gray-600 transition-colors" title="Eltávolítás">
+        <button onClick={onRemove} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors" title="Eltávolítás">
           <X className="w-4 h-4" />
         </button>
       </div>
-      <p className={`font-semibold text-gray-900 ${compact ? 'text-base' : 'text-lg'}`}>{patient.nev}</p>
-      <div className={`mt-1.5 ${compact ? 'flex flex-wrap gap-x-4 gap-y-0.5' : 'space-y-1'} text-sm text-gray-600`}>
-        <p>TAJ: <span className="font-medium text-gray-800">{patient.taj || '—'}</span></p>
-        <p>Szül.: <span className="font-medium text-gray-800">{formatDate(patient.szuletesiDatum)}</span></p>
-        <p>Tel.: <span className="font-medium text-gray-800">{patient.telefonszam || '—'}</span></p>
-        {!compact && <p>Email: <span className="font-medium text-gray-800">{patient.email || '—'}</span></p>}
-        <p>Rögzítve: <span className="font-medium text-gray-800">{formatDate(patient.createdAt)}</span></p>
+      <p className={`font-semibold text-gray-900 dark:text-gray-100 ${compact ? 'text-base' : 'text-lg'}`}>{patient.nev}</p>
+      <div className={`mt-1.5 ${compact ? 'flex flex-wrap gap-x-4 gap-y-0.5' : 'space-y-1'} text-sm text-gray-600 dark:text-gray-400`}>
+        <p>TAJ: <span className="font-medium text-gray-800 dark:text-gray-200">{patient.taj || '—'}</span></p>
+        <p>Szül.: <span className="font-medium text-gray-800 dark:text-gray-200">{formatDate(patient.szuletesiDatum)}</span></p>
+        <p>Tel.: <span className="font-medium text-gray-800 dark:text-gray-200">{patient.telefonszam || '—'}</span></p>
+        {!compact && <p>Email: <span className="font-medium text-gray-800 dark:text-gray-200">{patient.email || '—'}</span></p>}
+        <p>Rögzítve: <span className="font-medium text-gray-800 dark:text-gray-200">{formatDate(patient.createdAt)}</span></p>
       </div>
     </div>
   );
@@ -218,16 +218,16 @@ export function PatientMerge() {
   }) => {
     if (results.length === 0) return null;
     return (
-      <ul className="mt-2 border rounded-lg divide-y max-h-60 overflow-y-auto bg-white shadow-sm">
+      <ul className="mt-2 border rounded-lg divide-y max-h-60 overflow-y-auto bg-white dark:bg-gray-900 shadow-sm">
         {results.map((p) => (
           <li key={p.id}>
             <button
               onClick={() => onSelect(p)}
-              className={`w-full text-left px-4 py-2.5 transition-colors ${color === 'green' ? 'hover:bg-green-50' : 'hover:bg-red-50'}`}
+              className={`w-full text-left px-4 py-2.5 transition-colors ${color === 'green' ? 'hover:bg-green-50 dark:hover:bg-green-900/40' : 'hover:bg-red-50 dark:hover:bg-red-900/40'}`}
             >
-              <span className="font-medium text-gray-900">{p.nev}</span>
-              <span className="text-xs text-gray-500 ml-2">TAJ: {p.taj || '—'}</span>
-              {p.szuletesiDatum && <span className="text-xs text-gray-500 ml-2">Szül.: {formatDate(p.szuletesiDatum)}</span>}
+              <span className="font-medium text-gray-900 dark:text-gray-100">{p.nev}</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">TAJ: {p.taj || '—'}</span>
+              {p.szuletesiDatum && <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">Szül.: {formatDate(p.szuletesiDatum)}</span>}
             </button>
           </li>
         ))}
@@ -239,9 +239,9 @@ export function PatientMerge() {
     return (
       <div className="text-center py-8">
         <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-        <h3 className="text-xl font-semibold text-gray-900 mb-2">Összevonás sikeres!</h3>
-        <p className="text-gray-600 mb-2">{successMsg}</p>
-        <p className="text-sm text-gray-500 mb-6">{mergedCount} profil lett egyesítve egyetlen páciensbe.</p>
+        <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">Összevonás sikeres!</h3>
+        <p className="text-gray-600 dark:text-gray-400 mb-2">{successMsg}</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">{mergedCount} profil lett egyesítve egyetlen páciensbe.</p>
         <button onClick={reset} className="btn-primary">
           Újabb összevonás
         </button>
@@ -252,12 +252,12 @@ export function PatientMerge() {
   if (step === 'confirm') {
     return (
       <div>
-        <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
+        <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-lg p-4 mb-6">
           <div className="flex items-start gap-3">
-            <AlertTriangle className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
+            <AlertTriangle className="w-6 h-6 text-amber-600 dark:text-amber-300 shrink-0 mt-0.5" />
             <div>
-              <h3 className="font-semibold text-amber-900 mb-1">Figyelem! Ez a művelet nem visszavonható!</h3>
-              <p className="text-sm text-amber-800">
+              <h3 className="font-semibold text-amber-900 dark:text-amber-200 mb-1">Figyelem! Ez a művelet nem visszavonható!</h3>
+              <p className="text-sm text-amber-800 dark:text-amber-300">
                 {secondaryPatients.length === 1 ? (
                   <>A <strong>„{secondaryPatients[0].nev}"</strong> páciens összes adata átkerül a <strong>„{primaryPatient?.nev}"</strong> pácienshez, majd a másodlagos profil törlésre kerül.</>
                 ) : (
@@ -269,11 +269,11 @@ export function PatientMerge() {
         </div>
 
         {oldestIsNotPrimary && (
-          <div className="bg-blue-50 border border-blue-300 rounded-lg p-4 mb-6">
+          <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-300 dark:border-blue-700 rounded-lg p-4 mb-6">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-start gap-3">
-                <Repeat className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-                <p className="text-sm text-blue-800">
+                <Repeat className="w-5 h-5 text-blue-600 dark:text-blue-300 shrink-0 mt-0.5" />
+                <p className="text-sm text-blue-800 dark:text-blue-300">
                   A kiválasztott elsődleges profil <strong>nem a legrégebbi</strong>. Javasoljuk, hogy a legkorábban létrehozott profilt tartsd meg.
                 </p>
               </div>
@@ -289,7 +289,7 @@ export function PatientMerge() {
 
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-4 items-start mb-6">
           <div className="space-y-3">
-            <h4 className="text-sm font-semibold text-red-700 uppercase tracking-wide">
+            <h4 className="text-sm font-semibold text-red-700 dark:text-red-300 uppercase tracking-wide">
               Törlendő ({secondaryPatients.length} profil)
             </h4>
             {secondaryPatients.map((p, i) => (
@@ -307,39 +307,39 @@ export function PatientMerge() {
             ))}
           </div>
           <div className="flex justify-center pt-8">
-            <ArrowRight className="w-8 h-8 text-gray-400" />
+            <ArrowRight className="w-8 h-8 text-gray-400 dark:text-gray-500" />
           </div>
           <div>
-            <h4 className="text-sm font-semibold text-green-700 uppercase tracking-wide mb-3">
+            <h4 className="text-sm font-semibold text-green-700 dark:text-green-300 uppercase tracking-wide mb-3">
               Eredmény összevonás után
             </h4>
             {primaryPatient && (
-              <div className="border-2 border-green-400 bg-green-50 rounded-lg p-4">
+              <div className="border-2 border-green-400 dark:border-green-700 bg-green-50 dark:bg-green-950/40 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold uppercase tracking-wide text-green-700 flex items-center gap-1.5">
+                  <span className="text-xs font-bold uppercase tracking-wide text-green-700 dark:text-green-300 flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5" />
                     Egyesített profil
                   </span>
-                  <button onClick={() => { setPrimaryPatient(null); setStep('search'); }} className="text-gray-400 hover:text-gray-600 transition-colors" title="Eltávolítás">
+                  <button onClick={() => { setPrimaryPatient(null); setStep('search'); }} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors" title="Eltávolítás">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
-                <p className="font-semibold text-gray-900 text-lg">{primaryPatient.nev}</p>
+                <p className="font-semibold text-gray-900 dark:text-gray-100 text-lg">{primaryPatient.nev}</p>
                 <div className="mt-2 space-y-1.5 text-sm">
                   {mergedPreview?.map((f) => (
                     <div key={f.label} className="flex items-start gap-1">
-                      <span className="text-gray-600">{f.label}:</span>
+                      <span className="text-gray-600 dark:text-gray-400">{f.label}:</span>
                       {f.source === 'secondary' && f.value !== '—' ? (
-                        <span className="font-medium text-green-700 bg-green-100 px-1.5 py-0.5 rounded text-xs">
+                        <span className="font-medium text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-950/50 px-1.5 py-0.5 rounded text-xs">
                           {f.value} ← {f.sourceName}
                         </span>
                       ) : (
-                        <span className={`font-medium ${f.value === '—' ? 'text-gray-400' : 'text-gray-800'}`}>{f.value}</span>
+                        <span className={`font-medium ${f.value === '—' ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'}`}>{f.value}</span>
                       )}
                     </div>
                   ))}
                 </div>
-                <p className="mt-3 text-xs text-green-700 bg-green-100 rounded px-2 py-1.5">
+                <p className="mt-3 text-xs text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-950/50 rounded px-2 py-1.5">
                   + Összes dokumentum, időpont, epizód, üzenet és egyéb adat átkerül a törlendő profilokból.
                 </p>
               </div>
@@ -348,7 +348,7 @@ export function PatientMerge() {
         </div>
 
         {error && (
-          <div className="bg-red-50 border border-red-300 rounded-lg p-3 mb-4 text-sm text-red-800">
+          <div className="bg-red-50 dark:bg-red-950/40 border border-red-300 dark:border-red-700 rounded-lg p-3 mb-4 text-sm text-red-800 dark:text-red-300">
             {error}
           </div>
         )}
@@ -371,7 +371,7 @@ export function PatientMerge() {
 
   return (
     <div>
-      <p className="text-sm text-gray-600 mb-6">
+      <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
         Válaszd ki az <strong>elsődleges</strong> (megmaradó) pácienst, majd add hozzá az összes <strong>duplikált</strong> profilt.
         Az összevonáskor minden adat átkerül az elsődlegeshez, a duplikátumok törlésre kerülnek.
       </p>
@@ -379,7 +379,7 @@ export function PatientMerge() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Primary patient */}
         <div>
-          <label className="block text-sm font-semibold text-green-700 mb-2">
+          <label className="block text-sm font-semibold text-green-700 dark:text-green-300 mb-2">
             Megmaradó páciens (elsődleges)
           </label>
           {primaryPatient ? (
@@ -387,13 +387,13 @@ export function PatientMerge() {
           ) : (
             <div>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
                 <input
                   type="text"
                   value={searchPrimary}
                   onChange={(e) => setSearchPrimary(e.target.value)}
                   placeholder="Keresés név, TAJ, telefon..."
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-sm"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-sm"
                 />
               </div>
               <SearchDropdown
@@ -407,7 +407,7 @@ export function PatientMerge() {
 
         {/* Secondary patients */}
         <div>
-          <label className="block text-sm font-semibold text-red-700 mb-2">
+          <label className="block text-sm font-semibold text-red-700 dark:text-red-300 mb-2">
             Törlendő duplikátumok
             {secondaryPatients.length > 0 && (
               <span className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs bg-red-600 text-white rounded-full">
@@ -419,15 +419,15 @@ export function PatientMerge() {
           {secondaryPatients.length > 0 && (
             <div className="space-y-2 mb-3">
               {secondaryPatients.map((p) => (
-                <div key={p.id} className="flex items-center gap-2 border border-red-300 bg-red-50 rounded-lg px-3 py-2">
+                <div key={p.id} className="flex items-center gap-2 border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-950/40 rounded-lg px-3 py-2">
                   <div className="flex-1 min-w-0">
-                    <span className="font-medium text-gray-900 text-sm">{p.nev}</span>
-                    <span className="text-xs text-gray-500 ml-2">TAJ: {p.taj || '—'}</span>
-                    {p.szuletesiDatum && <span className="text-xs text-gray-500 ml-2">Szül.: {formatDate(p.szuletesiDatum)}</span>}
+                    <span className="font-medium text-gray-900 dark:text-gray-100 text-sm">{p.nev}</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">TAJ: {p.taj || '—'}</span>
+                    {p.szuletesiDatum && <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">Szül.: {formatDate(p.szuletesiDatum)}</span>}
                   </div>
                   <button
                     onClick={() => removeSecondary(p.id)}
-                    className="text-red-400 hover:text-red-600 transition-colors shrink-0"
+                    className="text-red-400 dark:text-red-300 hover:text-red-600 transition-colors shrink-0"
                     title="Eltávolítás"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -439,13 +439,13 @@ export function PatientMerge() {
 
           <div>
             <div className="relative">
-              <Plus className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Plus className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
               <input
                 type="text"
                 value={searchSecondary}
                 onChange={(e) => setSearchSecondary(e.target.value)}
                 placeholder={secondaryPatients.length === 0 ? 'Keresés név, TAJ, telefon...' : 'Még egy duplikátum hozzáadása...'}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm"
               />
             </div>
             <SearchDropdown
@@ -470,7 +470,7 @@ export function PatientMerge() {
       )}
 
       {error && (
-        <div className="mt-4 bg-red-50 border border-red-300 rounded-lg p-3 text-sm text-red-800">
+        <div className="mt-4 bg-red-50 dark:bg-red-950/40 border border-red-300 dark:border-red-700 rounded-lg p-3 text-sm text-red-800 dark:text-red-300">
           {error}
         </div>
       )}

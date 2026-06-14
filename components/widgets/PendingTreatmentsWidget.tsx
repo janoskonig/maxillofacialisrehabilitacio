@@ -27,8 +27,8 @@ export function PendingTreatmentsWidget({ treatments }: PendingTreatmentsWidgetP
   if (treatments.length === 0) {
     return (
       <DashboardWidget title="Függőben lévő kezelések" icon={<AlertCircle className="w-5 h-5" />}>
-        <div className="text-center py-6 text-gray-500">
-          <FileText className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+        <div className="text-center py-6 text-gray-500 dark:text-gray-400">
+          <FileText className="w-12 h-12 mx-auto mb-2 text-gray-300 dark:text-gray-600" />
           <p className="text-sm">Nincsenek függőben lévő kezelések</p>
         </div>
       </DashboardWidget>

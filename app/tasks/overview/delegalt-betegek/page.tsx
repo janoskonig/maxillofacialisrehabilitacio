@@ -92,8 +92,8 @@ export default function DelegaltBetegekPage() {
 
   if (loading || authorized === null) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="flex items-center gap-2 text-gray-500">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
+        <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
           <Loader2 className="w-6 h-6 animate-spin" />
           Betöltés…
         </div>
@@ -103,9 +103,9 @@ export default function DelegaltBetegekPage() {
 
   if (!authorized) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-6">
         <div className="card max-w-md w-full text-center p-6">
-          <p className="text-gray-700">Nincs jogosultságod a munkalistához.</p>
+          <p className="text-gray-700 dark:text-gray-300">Nincs jogosultságod a munkalistához.</p>
           <button className="btn-secondary mt-4" onClick={() => router.push('/')}>
             Vissza a főoldalra
           </button>
@@ -121,10 +121,10 @@ export default function DelegaltBetegekPage() {
       maxWidth="xl"
     >
       <div className="space-y-6">
-        <div className="flex gap-1 border-b border-gray-200">
+        <div className="flex gap-1 border-b border-gray-200 dark:border-gray-800">
           <Link
             href="/tasks/overview"
-            className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent"
+            className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 border-b-2 border-transparent"
           >
             Feladatok
           </Link>
@@ -138,30 +138,30 @@ export default function DelegaltBetegekPage() {
           <div className="card p-4 flex items-center gap-3">
             <UserRound className="w-8 h-8 text-medical-primary" />
             <div>
-              <p className="text-2xl font-bold text-gray-900">{patients.length}</p>
-              <p className="text-sm text-gray-500">Delegált beteg</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{patients.length}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Delegált beteg</p>
             </div>
           </div>
           <div className="card p-4 flex items-center gap-3">
             <AlertTriangle className={`w-8 h-8 ${stalledCount > 0 ? 'text-amber-500' : 'text-gray-300'}`} />
             <div>
-              <p className="text-2xl font-bold text-gray-900">{stalledCount}</p>
-              <p className="text-sm text-gray-500">Elakadt (nincs köv. időpont)</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stalledCount}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Elakadt (nincs köv. időpont)</p>
             </div>
           </div>
           {scope === 'all' && (
             <div className="card p-4 flex items-center gap-3">
               <Stethoscope className="w-8 h-8 text-medical-primary" />
               <div>
-                <p className="text-2xl font-bold text-gray-900">{groups.length}</p>
-                <p className="text-sm text-gray-500">Orvos</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{groups.length}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Orvos</p>
               </div>
             </div>
           )}
         </div>
 
         {patients.length === 0 && (
-          <div className="card p-8 text-center text-gray-500">
+          <div className="card p-8 text-center text-gray-500 dark:text-gray-400">
             Nincs delegált beteg.
           </div>
         )}
@@ -169,16 +169,16 @@ export default function DelegaltBetegekPage() {
         {groups.map((g) => (
           <section key={g.doctorName} className="card overflow-hidden">
             {scope === 'all' && (
-              <div className="px-4 py-3 bg-gray-50 border-b flex items-center gap-2">
+              <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/60 border-b flex items-center gap-2">
                 <Stethoscope className="w-4 h-4 text-medical-primary" />
-                <h2 className="font-semibold text-gray-900">{g.doctorName}</h2>
-                <span className="text-sm text-gray-500">({g.rows.length})</span>
+                <h2 className="font-semibold text-gray-900 dark:text-gray-100">{g.doctorName}</h2>
+                <span className="text-sm text-gray-500 dark:text-gray-400">({g.rows.length})</span>
               </div>
             )}
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-gray-500 border-b">
+                  <tr className="text-left text-gray-500 dark:text-gray-400 border-b">
                     <th className="px-4 py-2 font-medium">Beteg</th>
                     <th className="px-4 py-2 font-medium">Nyitott epizód</th>
                     <th className="px-4 py-2 font-medium">Köv. időpont</th>
@@ -191,29 +191,29 @@ export default function DelegaltBetegekPage() {
                   {g.rows.map((p) => (
                     <tr
                       key={p.id}
-                      className={`border-b last:border-0 ${p.stalled ? 'bg-amber-50' : ''}`}
+                      className={`border-b last:border-0 ${p.stalled ? 'bg-amber-50 dark:bg-amber-950/40' : ''}`}
                     >
                       <td className="px-4 py-2">
                         <div className="flex items-center gap-2">
                           {p.stalled && <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />}
-                          <span className="font-medium text-gray-900">{p.nev ?? 'Név nélkül'}</span>
+                          <span className="font-medium text-gray-900 dark:text-gray-100">{p.nev ?? 'Név nélkül'}</span>
                         </div>
-                        {p.intezmeny && <div className="text-xs text-gray-400">{p.intezmeny}</div>}
+                        {p.intezmeny && <div className="text-xs text-gray-400 dark:text-gray-500">{p.intezmeny}</div>}
                       </td>
-                      <td className="px-4 py-2 text-gray-700">{p.openEpisodes}</td>
+                      <td className="px-4 py-2 text-gray-700 dark:text-gray-300">{p.openEpisodes}</td>
                       <td className="px-4 py-2">
-                        <span className={`inline-flex items-center gap-1 ${p.nextAppt ? 'text-gray-700' : 'text-amber-600'}`}>
+                        <span className={`inline-flex items-center gap-1 ${p.nextAppt ? 'text-gray-700 dark:text-gray-300' : 'text-amber-600 dark:text-amber-300'}`}>
                           <CalendarClock className="w-3.5 h-3.5" />
                           {fmtDate(p.nextAppt)}
                         </span>
                       </td>
-                      <td className="px-4 py-2 text-gray-500">
+                      <td className="px-4 py-2 text-gray-500 dark:text-gray-400">
                         <span className="inline-flex items-center gap-1">
                           <CalendarCheck className="w-3.5 h-3.5" />
                           {fmtDate(p.lastAppt)}
                         </span>
                       </td>
-                      <td className="px-4 py-2 text-gray-500 text-xs">
+                      <td className="px-4 py-2 text-gray-500 dark:text-gray-400 text-xs">
                         {fmtDate(p.assignedAt)}
                         {p.assignedByName ? ` · ${p.assignedByName}` : ''}
                       </td>

@@ -168,14 +168,14 @@ export function PipelineStatsSection({ onDataChange }: Props) {
     >
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
-          <div className="mt-0.5 rounded-lg bg-indigo-100 p-2 text-indigo-700">
+          <div className="mt-0.5 rounded-lg bg-indigo-100 dark:bg-indigo-950/50 p-2 text-indigo-700 dark:text-indigo-300">
             <GitBranch className="h-5 w-5" />
           </div>
           <div>
-            <h2 id="stats-pipeline-heading" className="text-lg font-semibold text-gray-900">
+            <h2 id="stats-pipeline-heading" className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               Folyamat és munkafázisok
             </h2>
-            <p className="mt-0.5 text-sm text-gray-500">
+            <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
               Episode élettartam, work-phase pipeline és „ragadt" lépések.
             </p>
           </div>
@@ -184,7 +184,7 @@ export function PipelineStatsSection({ onDataChange }: Props) {
           type="button"
           onClick={load}
           disabled={loading}
-          className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-soft transition-colors hover:bg-gray-50 disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 shadow-soft transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50 disabled:opacity-50"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           Frissítés
@@ -194,7 +194,7 @@ export function PipelineStatsSection({ onDataChange }: Props) {
       {loading && !data ? (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-28 animate-pulse rounded-xl bg-gray-100" />
+            <div key={i} className="h-28 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-800" />
           ))}
         </div>
       ) : unavailable ? (

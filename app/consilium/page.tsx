@@ -50,10 +50,10 @@ function rsvpResponseLabelHu(r: InvitationStatusRow['response']): string {
 }
 
 function rsvpResponseBadgeClass(r: InvitationStatusRow['response']): string {
-  if (r === 'going') return 'bg-emerald-100 text-emerald-900 border-emerald-200';
-  if (r === 'late') return 'bg-amber-100 text-amber-900 border-amber-200';
-  if (r === 'reschedule') return 'bg-indigo-100 text-indigo-900 border-indigo-200';
-  return 'bg-gray-100 text-gray-700 border-gray-200';
+  if (r === 'going') return 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-900 dark:text-emerald-200 border-emerald-200 dark:border-emerald-800';
+  if (r === 'late') return 'bg-amber-100 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 border-amber-200 dark:border-amber-800';
+  if (r === 'reschedule') return 'bg-indigo-100 dark:bg-indigo-950/50 text-indigo-900 dark:text-indigo-200 border-indigo-200 dark:border-indigo-800';
+  return 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-800';
 }
 
 function localDateTimeToIso(local: string): string | null {
@@ -247,32 +247,32 @@ function ConsiliumAttendeeTagField({
   };
 
   if (usersLoading && attendees.length === 0 && availableUsers.length === 0) {
-    return <p className="text-xs text-gray-500">Felhasználók betöltése…</p>;
+    return <p className="text-xs text-gray-500 dark:text-gray-400">Felhasználók betöltése…</p>;
   }
 
   return (
     <div ref={rootRef} className="relative space-y-2">
-      <label className="text-[10px] text-gray-500 uppercase tracking-wide">Jelenlévők</label>
+      <label className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wide">Jelenlévők</label>
       <div
-        className={`flex flex-wrap gap-1.5 items-center min-h-[42px] p-2 rounded-md border border-gray-200 bg-white ${
+        className={`flex flex-wrap gap-1.5 items-center min-h-[42px] p-2 rounded-md border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 ${
           rosterReadonly ? '' : 'focus-within:border-medical-primary/40 focus-within:ring-1 focus-within:ring-medical-primary/20'
         }`}
       >
         {attendees.map((a) => (
           <span
             key={a.id}
-            className="inline-flex items-center gap-1 max-w-full rounded-full border border-gray-200 bg-medical-primary/5 pl-1.5 pr-0.5 py-0.5 text-xs text-gray-800"
+            className="inline-flex items-center gap-1 max-w-full rounded-full border border-gray-200 dark:border-gray-800 bg-medical-primary/5 pl-1.5 pr-0.5 py-0.5 text-xs text-gray-800 dark:text-gray-200"
           >
             {presenceEditable ? (
               <input
                 type="checkbox"
                 checked={a.present}
                 onChange={() => togglePresent(a.id)}
-                className="rounded border-gray-300 shrink-0"
+                className="rounded border-gray-300 dark:border-gray-700 shrink-0"
                 title="Jelen volt az értekezleten"
               />
             ) : (
-              <span className="text-[10px] text-gray-500 shrink-0 w-4 text-center" title="Jelenlét">
+              <span className="text-[10px] text-gray-500 dark:text-gray-400 shrink-0 w-4 text-center" title="Jelenlét">
                 {a.present ? '✓' : '○'}
               </span>
             )}
@@ -282,7 +282,7 @@ function ConsiliumAttendeeTagField({
             {!rosterReadonly && (
               <button
                 type="button"
-                className="shrink-0 rounded-full px-1 leading-none text-gray-500 hover:bg-red-50 hover:text-red-700"
+                className="shrink-0 rounded-full px-1 leading-none text-gray-500 dark:text-gray-400 hover:bg-red-50 dark:hover:bg-red-900/40 hover:text-red-700"
                 aria-label="Eltávolítás a jelenlévők listáról"
                 title="A meghívó és RSVP adatok megmaradnak a Meghívók szekcióban"
                 onClick={() => remove(a.id)}
@@ -295,7 +295,7 @@ function ConsiliumAttendeeTagField({
         {!rosterReadonly && (
           <input
             type="text"
-            className="flex-1 min-w-[8rem] border-0 bg-transparent p-1 text-sm outline-none focus:ring-0 placeholder:text-gray-400"
+            className="flex-1 min-w-[8rem] border-0 bg-transparent p-1 text-sm outline-none focus:ring-0 placeholder:text-gray-400 dark:placeholder:text-gray-500"
             placeholder={
               availableUsers.length === 0 ? 'Minden felhasználó már a listán' : 'Kezdőbetűk, név vagy e-mail…'
             }
@@ -314,9 +314,9 @@ function ConsiliumAttendeeTagField({
         )}
       </div>
       {!rosterReadonly && open && q.trim() && (
-        <ul className="absolute z-30 left-0 right-0 mt-0.5 max-w-lg rounded-md border border-gray-200 bg-white py-1 shadow-lg max-h-52 overflow-auto">
+        <ul className="absolute z-30 left-0 right-0 mt-0.5 max-w-lg rounded-md border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 py-1 shadow-lg max-h-52 overflow-auto">
           {filtered.length === 0 ? (
-            <li className="px-3 py-2 text-xs text-gray-500">Nincs találat — próbálj más betűket.</li>
+            <li className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">Nincs találat — próbálj más betűket.</li>
           ) : (
             filtered.map((u, i) => {
               const org = u.intezmeny?.trim();
@@ -324,13 +324,13 @@ function ConsiliumAttendeeTagField({
                 <li key={u.id}>
                   <button
                     type="button"
-                    className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 ${i === highlight ? 'bg-gray-50' : ''}`}
+                    className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-800/50 ${i === highlight ? 'bg-gray-50 dark:bg-gray-800/60' : ''}`}
                     onMouseEnter={() => setHighlight(i)}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => pick(u)}
                   >
-                    <span className="font-medium text-gray-900">{institutionUserDisplayName(u)}</span>
-                    <span className="text-gray-500">
+                    <span className="font-medium text-gray-900 dark:text-gray-100">{institutionUserDisplayName(u)}</span>
+                    <span className="text-gray-500 dark:text-gray-400">
                       {' '}
                       ({institutionRoleShortHu(u.role)}
                       {org ? ` · ${org}` : ''})
@@ -407,7 +407,7 @@ function ConsiliumItemPrepCommentsReadonly({
                   {list.map((cm) => (
                     <li
                       key={cm.id}
-                      className="text-xs text-gray-800 bg-white border border-cyan-100/80 rounded-md px-2 py-1.5 shadow-sm"
+                      className="text-xs text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-900 border border-cyan-100/80 dark:border-cyan-900/60 rounded-md px-2 py-1.5 shadow-sm"
                     >
                       <span className="text-[10px] text-cyan-700/75">
                         {formatConsiliumHuDateTime(cm.createdAt)} · {cm.authorDisplay}
@@ -428,9 +428,9 @@ function ConsiliumItemPrepCommentsReadonly({
                 {list.map((cm) => (
                   <li
                     key={cm.id}
-                    className="text-xs text-gray-800 bg-amber-50/80 border border-amber-100 rounded-md px-2 py-1.5"
+                    className="text-xs text-gray-800 dark:text-gray-200 bg-amber-50/80 dark:bg-amber-950/40 border border-amber-100 dark:border-amber-900/60 rounded-md px-2 py-1.5"
                   >
-                    <span className="text-[10px] text-amber-800/70">
+                    <span className="text-[10px] text-amber-800/70 dark:text-amber-300/70">
                       {formatConsiliumHuDateTime(cm.createdAt)} · {cm.authorDisplay}
                     </span>
                     <p className="whitespace-pre-wrap mt-0.5 leading-snug">{cm.body}</p>
@@ -501,10 +501,10 @@ function ConsiliumItemChecklist({
 
   return (
     <div className="space-y-2">
-      <p className="text-xs text-gray-600">
+      <p className="text-xs text-gray-600 dark:text-gray-400">
         Napirendi pontok — címke, pipa, és pontonként rögzíthető válasz / megállapodás.
       </p>
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-gray-500 dark:text-gray-400">
         Bármikor bővítheted vagy szerkesztheted — nem kell betegfelvételkor mindent begépelni.
       </p>
       {!readonly && (
@@ -527,7 +527,7 @@ function ConsiliumItemChecklist({
         </div>
       )}
       <ul className="space-y-2">
-        {entries.length === 0 && <li className="text-xs text-gray-500">Még nincs felírva pont.</li>}
+        {entries.length === 0 && <li className="text-xs text-gray-500 dark:text-gray-400">Még nincs felírva pont.</li>}
         {entries.map((c, idx) => (
           <ChecklistRowEditor
             key={c.key}
@@ -689,7 +689,7 @@ function ChecklistRowEditor({
   };
 
   return (
-    <li className="flex items-start gap-2 text-sm text-gray-800 border border-gray-100 rounded-md p-2 bg-gray-50/80">
+    <li className="flex items-start gap-2 text-sm text-gray-800 dark:text-gray-200 border border-gray-100 dark:border-gray-800 rounded-md p-2 bg-gray-50/80 dark:bg-gray-800/60">
       <input
         type="checkbox"
         className="mt-1.5 shrink-0"
@@ -706,7 +706,7 @@ function ChecklistRowEditor({
           onBlur={() => void saveLabel()}
         />
         <div>
-          <label className="text-[10px] text-gray-500 uppercase tracking-wide">Válasz / megállapodás</label>
+          <label className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wide">Válasz / megállapodás</label>
           <textarea
             className="form-input text-sm w-full min-h-[72px] mt-0.5"
             placeholder="Mit hangzott el a pontról, döntés, teendő…"
@@ -717,8 +717,8 @@ function ChecklistRowEditor({
           />
         </div>
         {(entry.delegatedTasks?.length ?? 0) > 0 && (
-          <div className="rounded-md border border-amber-200 bg-amber-50/70 px-2 py-1.5">
-            <p className="text-[10px] text-amber-800/80 uppercase tracking-wide mb-1">Delegált feladatok</p>
+          <div className="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-950/40 px-2 py-1.5">
+            <p className="text-[10px] text-amber-800/80 dark:text-amber-300 uppercase tracking-wide mb-1">Delegált feladatok</p>
             <ul className="space-y-2">
               {[...(entry.delegatedTasks ?? [])]
                 .sort((a, b) => {
@@ -730,23 +730,23 @@ function ChecklistRowEditor({
                   const showCancel = !readonly && canCancelDelegatedTask(task, staffUserId, staffRole);
                   const badgeClass =
                     task.status === 'done'
-                      ? 'bg-emerald-100 text-emerald-900 border-emerald-200'
+                      ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-900 dark:text-emerald-200 border-emerald-200 dark:border-emerald-800'
                       : task.status === 'cancelled'
-                        ? 'bg-gray-100 text-gray-600 border-gray-200'
-                        : 'bg-amber-100 text-amber-900 border-amber-200';
+                        ? 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-800'
+                        : 'bg-amber-100 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 border-amber-200 dark:border-amber-800';
                   return (
-                    <li key={task.id} className="text-xs text-amber-900 border border-amber-100/80 rounded-md px-2 py-1.5 bg-white/80">
+                    <li key={task.id} className="text-xs text-amber-900 dark:text-amber-200 border border-amber-100/80 dark:border-amber-900/60 rounded-md px-2 py-1.5 bg-white/80 dark:bg-gray-900/80">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <p className="flex flex-wrap items-center gap-1.5">
                             <span className="font-medium">{task.assigneeName}</span>
-                            <span className="text-amber-800/70">· küldve {new Date(task.createdAt).toLocaleString('hu-HU')}</span>
+                            <span className="text-amber-800/70 dark:text-amber-300/70">· küldve {new Date(task.createdAt).toLocaleString('hu-HU')}</span>
                             <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border shrink-0 ${badgeClass}`}>
                               {delegatedTaskStatusLabelHu(task.status)}
                             </span>
                           </p>
                           {task.note ? (
-                            <p className="text-[11px] text-amber-800/80">Megjegyzés: {task.note}</p>
+                            <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80">Megjegyzés: {task.note}</p>
                           ) : (
                             <p className="text-[11px] text-amber-700/65 italic">Nincs megjegyzés.</p>
                           )}
@@ -762,7 +762,7 @@ function ChecklistRowEditor({
                             </p>
                           ) : null}
                           {task.status === 'cancelled' && task.completedAt ? (
-                            <p className="text-[11px] text-gray-600 mt-0.5">
+                            <p className="text-[11px] text-gray-600 dark:text-gray-400 mt-0.5">
                               Visszavonva: {new Date(task.completedAt).toLocaleString('hu-HU')}
                             </p>
                           ) : null}
@@ -785,7 +785,7 @@ function ChecklistRowEditor({
           </div>
         )}
         {!entry.key.startsWith('pt-') && (
-          <p className="text-[10px] text-gray-400 truncate" title={entry.key}>
+          <p className="text-[10px] text-gray-400 dark:text-gray-500 truncate" title={entry.key}>
             Kulcs: {entry.key}
           </p>
         )}
@@ -794,7 +794,7 @@ function ChecklistRowEditor({
         <div className="shrink-0 pt-1 flex items-center gap-2">
           <button
             type="button"
-            className="text-xs text-gray-700 hover:text-gray-900 disabled:opacity-40"
+            className="text-xs text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 disabled:opacity-40"
             disabled={!canMoveUp}
             onClick={() => onMove('up')}
             title="Mozgatás fel"
@@ -803,7 +803,7 @@ function ChecklistRowEditor({
           </button>
           <button
             type="button"
-            className="text-xs text-gray-700 hover:text-gray-900 disabled:opacity-40"
+            className="text-xs text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 disabled:opacity-40"
             disabled={!canMoveDown}
             onClick={() => onMove('down')}
             title="Mozgatás le"
@@ -1404,19 +1404,19 @@ export default function ConsiliumPage() {
 
   if (loadingUser) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-500">Betöltés...</div>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
+        <div className="text-gray-500 dark:text-gray-400">Betöltés...</div>
       </div>
     );
   }
 
   if (!canUseConsilium) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center px-4">
         <div className="max-w-md w-full card p-6 text-center space-y-3">
           <Users className="w-10 h-10 mx-auto text-medical-primary" />
-          <h1 className="text-lg font-semibold text-gray-900">Konzílium</h1>
-          <p className="text-sm text-gray-600">Ehhez a szerepkörhöz ez a modul nem elérhető.</p>
+          <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Konzílium</h1>
+          <p className="text-sm text-gray-600 dark:text-gray-400">Ehhez a szerepkörhöz ez a modul nem elérhető.</p>
           <Link href="/" className="btn-secondary inline-flex items-center justify-center gap-2">
             <ArrowLeft className="w-4 h-4" />
             Vissza a főoldalra
@@ -1432,14 +1432,14 @@ export default function ConsiliumPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <section className="card p-4 space-y-3 lg:col-span-1">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold text-gray-900">Alkalmak</h2>
+              <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Alkalmak</h2>
               <button type="button" className="btn-secondary text-xs px-2 py-1" onClick={loadSessions} disabled={loadingSessions}>
                 Frissítés
               </button>
             </div>
             <div className="space-y-2 max-h-[520px] overflow-auto pr-1">
-              {loadingSessions && <p className="text-sm text-gray-500">Betöltés...</p>}
-              {!loadingSessions && sessions.length === 0 && <p className="text-sm text-gray-500">Még nincs alkalom.</p>}
+              {loadingSessions && <p className="text-sm text-gray-500 dark:text-gray-400">Betöltés...</p>}
+              {!loadingSessions && sessions.length === 0 && <p className="text-sm text-gray-500 dark:text-gray-400">Még nincs alkalom.</p>}
               {sessions.map((s) => {
                 const active = s.id === selectedSessionId;
                 return (
@@ -1448,26 +1448,26 @@ export default function ConsiliumPage() {
                     type="button"
                     onClick={() => setSelectedSessionId(s.id)}
                     className={`w-full text-left rounded-lg border px-3 py-2 transition ${
-                      active ? 'border-medical-primary bg-medical-primary/5' : 'border-gray-200 hover:border-gray-300'
+                      active ? 'border-medical-primary bg-medical-primary/5' : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-gray-900 truncate">{s.title}</p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{s.title}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
                           {new Date(s.scheduledAt).toLocaleString('hu-HU')} · {s.status}
                         </p>
-                        <p className="text-xs text-gray-600 mt-1">
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                           {s.itemCount} beteg · {s.discussedCount ?? 0} megbeszélve · {s.openCount ?? 0} még nem
                         </p>
                       </div>
                       <span
                         className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${
                           s.status === 'draft'
-                            ? 'bg-gray-100 text-gray-700'
+                            ? 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
                             : s.status === 'active'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-slate-100 text-slate-700'
+                              ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
                         }`}
                       >
                         {s.status}
@@ -1480,14 +1480,14 @@ export default function ConsiliumPage() {
           </section>
 
           <section className="card p-4 space-y-3 lg:col-span-2">
-            <h2 className="text-sm font-semibold text-gray-900">Új alkalom</h2>
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Új alkalom</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-gray-600">Cím</label>
+                <label className="text-xs text-gray-600 dark:text-gray-400">Cím</label>
                 <input className="form-input mt-1" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="pl. Heti konzílium" />
               </div>
               <div>
-                <label className="text-xs text-gray-600">Időpont</label>
+                <label className="text-xs text-gray-600 dark:text-gray-400">Időpont</label>
                 <input
                   className="form-input mt-1"
                   type="datetime-local"
@@ -1501,9 +1501,9 @@ export default function ConsiliumPage() {
               Létrehozás
             </button>
 
-            <div className="border-t border-gray-200 pt-4 space-y-3">
+            <div className="border-t border-gray-200 dark:border-gray-800 pt-4 space-y-3">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-                <h3 className="text-sm font-semibold text-gray-900">Kiválasztott alkalom</h3>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Kiválasztott alkalom</h3>
                 {selectedSession && (
                   <div className="flex flex-wrap gap-2">
                     <Link
@@ -1543,16 +1543,16 @@ export default function ConsiliumPage() {
                 )}
               </div>
 
-              {!selectedSession && <p className="text-sm text-gray-500">Válassz egy alkalmat a bal oldali listából.</p>}
+              {!selectedSession && <p className="text-sm text-gray-500 dark:text-gray-400">Válassz egy alkalmat a bal oldali listából.</p>}
 
               {selectedSession && selectedSession.status === 'closed' && (
-                <p className="text-xs text-gray-600">
+                <p className="text-xs text-gray-600 dark:text-gray-400">
                   Lezárt alkalom: csak olvasható. A vetítés továbbra is elérhető, de szerkesztés nem engedélyezett.
                 </p>
               )}
 
               {selectedSession && sessionDetail && (
-                <p className="text-xs text-gray-600 rounded-md border border-gray-200 bg-white/80 px-2.5 py-2">
+                <p className="text-xs text-gray-600 dark:text-gray-400 rounded-md border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 px-2.5 py-2">
                   Nyomon követés: konzílium időpontja{' '}
                   <strong>{sessionDetail.scheduledAtChangeCount}</strong> alkalommal módosult
                   {sessionDetail.scheduledAtChangeCount === 0 ? ' (még nem)' : ''}; meghívó email összesen{' '}
@@ -1563,10 +1563,10 @@ export default function ConsiliumPage() {
 
               {selectedSession && sessionDetail && selectedSession.status !== 'closed' && (
                 <div className="rounded-lg border border-indigo-100 bg-indigo-50/40 p-3 space-y-2">
-                  <h4 className="text-sm font-semibold text-gray-900">Konzílium időpont módosítása</h4>
+                  <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Konzílium időpont módosítása</h4>
                   <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto] gap-2 items-end">
                     <div>
-                      <label className="text-xs text-gray-600">Új időpont</label>
+                      <label className="text-xs text-gray-600 dark:text-gray-400">Új időpont</label>
                       <input
                         type="datetime-local"
                         className="form-input mt-1"
@@ -1594,7 +1594,7 @@ export default function ConsiliumPage() {
                           <button
                             key={proposal.proposedAt}
                             type="button"
-                            className="text-xs px-2 py-1 rounded-md border border-indigo-200 bg-white text-indigo-900 hover:bg-indigo-50 disabled:opacity-50"
+                            className="text-xs px-2 py-1 rounded-md border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-gray-900 text-indigo-900 dark:text-indigo-200 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 disabled:opacity-50"
                             disabled={savingSchedule}
                             onClick={() => void saveSessionScheduledAt(proposal.proposedAt)}
                             title={`Javasolta: ${proposal.attendeeNames.join(', ')}`}
@@ -1609,7 +1609,7 @@ export default function ConsiliumPage() {
                       </div>
                     </div>
                   ) : (
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
                       Még nincs RSVP-ben javasolt időpont; az alkalom tetszőleges időpontra átállítható.
                     </p>
                   )}
@@ -1617,31 +1617,31 @@ export default function ConsiliumPage() {
               )}
 
               {selectedSession && (sessionDetail || loadingItems) && (
-                <div className="rounded-lg border border-gray-200 bg-gray-50/80 p-3 space-y-2">
+                <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-800/60 p-3 space-y-2">
                   <div className="flex items-start justify-between gap-2 flex-wrap">
-                    <h4 className="text-sm font-semibold text-gray-900">Ki volt ott az értekezleten</h4>
+                    <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Ki volt ott az értekezleten</h4>
                     {sessionDetail && sessionDetail.attendees.some((a) => a.present) && (
                       <button
                         type="button"
-                        className="text-xs text-gray-700 hover:text-red-800 hover:underline shrink-0"
+                        className="text-xs text-gray-700 dark:text-gray-300 hover:text-red-800 dark:hover:text-red-300 hover:underline shrink-0"
                         onClick={clearAllPresence}
                       >
                         Jelenlét törlése (mindenki)
                       </button>
                     )}
                   </div>
-                  <p className="text-xs text-gray-600">
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
                     Intézményi felhasználók (nem a beteglista): gépelj név- vagy e-mail-részletet, válassz a javaslatok közül.
                     A pipa azt jelenti, <strong>ott volt</strong> a konzíliumon — ez külön a meghívótól és az RSVP-től. A × csak a
                     jelenlévők listáról veszi le a nevet; a kiküldött meghívó és válasz a „Meghívók és RSVP” szekcióban megmarad.
                     Lezárt alkalomnál is módosítható a pipa (utólagos javítás).
                   </p>
-                  {loadingItems && !sessionDetail && <p className="text-xs text-gray-500">Betöltés…</p>}
+                  {loadingItems && !sessionDetail && <p className="text-xs text-gray-500 dark:text-gray-400">Betöltés…</p>}
                   {sessionDetail &&
                     !institutionUsersLoading &&
                     institutionUsers.length === 0 &&
                     sessionDetail.attendees.length === 0 ? (
-                      <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded px-2 py-1.5">
+                      <p className="text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-100 dark:border-amber-900/60 rounded px-2 py-1.5">
                         Nincs listázható aktív felhasználó a rendszerben.
                       </p>
                     ) : sessionDetail ? (

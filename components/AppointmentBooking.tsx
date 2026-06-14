@@ -1076,7 +1076,7 @@ export function AppointmentBooking({
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Teremszám (opcionális)</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Teremszám (opcionális)</label>
                     <input
                       type="text"
                       value={newSlotTeremszam}
@@ -1118,13 +1118,13 @@ export function AppointmentBooking({
                 })}
               </select>
               {availableSlotsOnly.length === 0 && !showNewSlotForm && (
-                <p className="text-sm text-gray-500 mt-2">Jelenleg nincs elérhető szabad időpont.</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Jelenleg nincs elérhető szabad időpont.</p>
               )}
             </div>
 
             {/* Időpont típusa */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Időpont típusa</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Időpont típusa</label>
               <select
                 value={selectedAppointmentType || ''}
                 onChange={(e) => setSelectedAppointmentType((e.target.value as any) || null)}
@@ -1141,18 +1141,18 @@ export function AppointmentBooking({
             {/* Alternatív időpontok */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-medium text-gray-700">Alternatív időpontok (opcionális)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Alternatív időpontok (opcionális)</label>
                 <button
                   type="button"
                   onClick={addAlternativeSlot}
-                  className="flex items-center gap-1 px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
+                  className="flex items-center gap-1 px-3 py-1 text-sm bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                   disabled={creating}
                 >
                   <Plus className="w-4 h-4" />
                   Hozzáadás
                 </button>
               </div>
-              <p className="text-xs text-gray-500 mb-2">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                 Ha a beteg elutasítja az első időpontot, automatikusan az első alternatívát fogjuk felajánlani, majd a
                 másodikat stb.
               </p>
@@ -1190,7 +1190,7 @@ export function AppointmentBooking({
                       <button
                         type="button"
                         onClick={() => removeAlternativeSlot(index)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
+                        className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/40 rounded transition-colors"
                         disabled={creating}
                       >
                         <X className="w-4 h-4" />
@@ -1226,8 +1226,8 @@ export function AppointmentBooking({
       {mode === 'conditional' && (
         <div className="card">
           <div className="flex items-center gap-2 mb-4">
-            <Calendar className="w-5 h-5 text-gray-500" />
-            <h3 className="text-xl font-bold text-gray-900">
+            <Calendar className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+            <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">
               {propPatientId ? 'Jóváhagyásra váró időpontok (ehhez a beteghez)' : 'Jóváhagyásra váró időpontok'}
             </h3>
           </div>
@@ -1237,36 +1237,36 @@ export function AppointmentBooking({
               <>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
-                    <User className="w-4 h-4 text-gray-400 mr-2" />
+                    <User className="w-4 h-4 text-gray-400 dark:text-gray-500 mr-2" />
                     <div>
-                      <div className="text-sm font-medium text-gray-900">
+                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                         {appointment.patientName || 'Név nélküli'}
                       </div>
                       {appointment.patientTaj && (
-                        <div className="text-sm text-gray-500">TAJ: {appointment.patientTaj}</div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400">TAJ: {appointment.patientTaj}</div>
                       )}
                     </div>
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
-                    <Mail className="w-4 h-4 text-gray-400 mr-2" />
-                    <span className="text-sm text-gray-900">{appointment.patientEmail || 'Nincs email'}</span>
+                    <Mail className="w-4 h-4 text-gray-400 dark:text-gray-500 mr-2" />
+                    <span className="text-sm text-gray-900 dark:text-gray-100">{appointment.patientEmail || 'Nincs email'}</span>
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
-                    <Clock className="w-4 h-4 text-gray-400 mr-2" />
-                    <span className="text-sm text-gray-900">{formatDateTime(appointment.startTime)}</span>
+                    <Clock className="w-4 h-4 text-gray-400 dark:text-gray-500 mr-2" />
+                    <span className="text-sm text-gray-900 dark:text-gray-100">{formatDateTime(appointment.startTime)}</span>
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="text-sm text-gray-500">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
                     {new Date(appointment.createdAt).toLocaleString('hu-HU')}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-300">
                     Várakozik
                   </span>
                 </td>
@@ -1276,12 +1276,12 @@ export function AppointmentBooking({
               <div className="mobile-card">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                    <h3 className="text-base font-semibold text-gray-900 truncate">
+                    <User className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                    <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 truncate">
                       {appointment.patientName || 'Név nélküli'}
                     </h3>
                   </div>
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 flex-shrink-0">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-300 flex-shrink-0">
                     Várakozik
                   </span>
                 </div>
@@ -1298,17 +1298,17 @@ export function AppointmentBooking({
             keyExtractor={(appointment) => appointment.id}
             emptyState={
               <div className="text-center py-8">
-                <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-500">Jelenleg nincs jóváhagyásra váró időpont.</p>
+                <Calendar className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
+                <p className="text-gray-500 dark:text-gray-400">Jelenleg nincs jóváhagyásra váró időpont.</p>
               </div>
             }
             renderHeader={() => (
               <>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Beteg</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Időpont</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Létrehozva</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Státusz</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Beteg</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Email</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Időpont</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Létrehozva</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Státusz</th>
               </>
             )}
           />
@@ -1322,8 +1322,8 @@ export function AppointmentBooking({
       {mode === 'conditional' && rejectedAppointments.length > 0 && (
         <div className="card mt-6">
           <div className="flex items-center gap-2 mb-4">
-            <Calendar className="w-5 h-5 text-gray-500" />
-            <h3 className="text-xl font-bold text-gray-900">
+            <Calendar className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+            <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">
               {propPatientId ? 'Elutasított időpontok (ehhez a beteghez)' : 'Elutasított időpontok'}
             </h3>
           </div>
@@ -1333,31 +1333,31 @@ export function AppointmentBooking({
               <>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
-                    <User className="w-4 h-4 text-gray-400 mr-2" />
+                    <User className="w-4 h-4 text-gray-400 dark:text-gray-500 mr-2" />
                     <div>
-                      <div className="text-sm font-medium text-gray-900">
+                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                         {appointment.patientName || 'Név nélküli'}
                       </div>
                       {appointment.patientTaj && (
-                        <div className="text-sm text-gray-500">TAJ: {appointment.patientTaj}</div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400">TAJ: {appointment.patientTaj}</div>
                       )}
                     </div>
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
-                    <Mail className="w-4 h-4 text-gray-400 mr-2" />
-                    <span className="text-sm text-gray-900">{appointment.patientEmail || 'Nincs email'}</span>
+                    <Mail className="w-4 h-4 text-gray-400 dark:text-gray-500 mr-2" />
+                    <span className="text-sm text-gray-900 dark:text-gray-100">{appointment.patientEmail || 'Nincs email'}</span>
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
-                    <Clock className="w-4 h-4 text-gray-400 mr-2" />
-                    <span className="text-sm text-gray-900">{formatDateTime(appointment.startTime)}</span>
+                    <Clock className="w-4 h-4 text-gray-400 dark:text-gray-500 mr-2" />
+                    <span className="text-sm text-gray-900 dark:text-gray-100">{formatDateTime(appointment.startTime)}</span>
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="text-sm text-gray-500">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
                     {new Date(appointment.createdAt).toLocaleString('hu-HU')}
                   </span>
                 </td>
@@ -1372,8 +1372,8 @@ export function AppointmentBooking({
               <div className="mobile-card">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                    <h3 className="text-base font-semibold text-gray-900 truncate">
+                    <User className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                    <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 truncate">
                       {appointment.patientName || 'Név nélküli'}
                     </h3>
                   </div>
@@ -1394,11 +1394,11 @@ export function AppointmentBooking({
             keyExtractor={(appointment) => appointment.id}
             renderHeader={() => (
               <>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Beteg</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Időpont</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Létrehozva</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Státusz</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Beteg</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Email</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Időpont</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Létrehozva</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Státusz</th>
               </>
             )}
           />

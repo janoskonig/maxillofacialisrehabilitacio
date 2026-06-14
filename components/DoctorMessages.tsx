@@ -462,7 +462,7 @@ export function DoctorMessages() {
             }
           }}
           className={`p-3 border-b border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${
-            isSelected ? 'bg-blue-100 border-l-4 border-l-blue-600' : ''
+            isSelected ? 'bg-blue-100 dark:bg-blue-950/50 border-l-4 border-l-blue-600' : ''
           }`}
         >
           <div className="flex items-center gap-3">
@@ -827,15 +827,15 @@ export function DoctorMessages() {
   // New chat content
   const newChatContent = (
     <>
-      <div className="p-3 sm:p-4 border-b border-gray-200 bg-gray-50">
+      <div className="p-3 sm:p-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base sm:text-lg font-semibold text-gray-900">Új beszélgetés</h3>
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">Új beszélgetés</h3>
           <button
             onClick={() => {
               setShowNewChat(false);
               setNewChatRecipients([]);
             }}
-            className="p-1 hover:bg-gray-200 rounded transition-colors mobile-touch-target"
+            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors mobile-touch-target"
           >
             <X className="w-5 h-5" />
           </button>
@@ -853,9 +853,9 @@ export function DoctorMessages() {
           </button>
         )}
       </div>
-      <div className="flex-1 flex items-center justify-center text-gray-500">
+      <div className="flex-1 flex items-center justify-center text-gray-500 dark:text-gray-400">
         <div className="text-center">
-          <MessageCircle className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+          <MessageCircle className="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
           <p>Válasszon címzett(ek)et a beszélgetéshez</p>
         </div>
       </div>
@@ -873,18 +873,18 @@ export function DoctorMessages() {
         className="form-input w-full mb-2"
         autoFocus
       />
-      <div className="max-h-60 overflow-y-auto border border-gray-200 rounded">
+      <div className="max-h-60 overflow-y-auto border border-gray-200 dark:border-gray-800 rounded">
         {filteredDoctors.map((doctor) => (
           <div
             key={doctor.id}
             onClick={() => handleSelectDoctor(doctor.id, doctor.name)}
-            className={`p-2 cursor-pointer hover:bg-gray-50 ${
-              selectedDoctorId === doctor.id ? 'bg-blue-50' : ''
+            className={`p-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 ${
+              selectedDoctorId === doctor.id ? 'bg-blue-50 dark:bg-blue-950/40' : ''
             }`}
           >
             <div className="font-medium text-sm">{doctor.name}</div>
             {doctor.intezmeny && (
-              <div className="text-xs text-gray-500">{doctor.intezmeny}</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">{doctor.intezmeny}</div>
             )}
           </div>
         ))}

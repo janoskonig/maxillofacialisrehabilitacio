@@ -53,11 +53,11 @@ export function CapacityForecastChart() {
       {/* Controls */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-gray-500" />
+          <TrendingUp className="w-4 h-4 text-gray-500 dark:text-gray-400" />
           <select
             value={pool}
             onChange={(e) => setPool(e.target.value as Pool)}
-            className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-medical-primary/20 focus:border-medical-primary"
+            className="text-sm border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-medical-primary/20 focus:border-medical-primary"
           >
             {Object.entries(POOL_LABELS).map(([k, v]) => (
               <option key={k} value={k}>{v}</option>
@@ -65,7 +65,7 @@ export function CapacityForecastChart() {
           </select>
         </div>
         {overloadedWeeks > 0 && (
-          <span className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1">
+          <span className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg px-2.5 py-1">
             <AlertTriangle className="w-3.5 h-3.5" />
             {overloadedWeeks} hét túlterhelt
           </span>
@@ -75,18 +75,18 @@ export function CapacityForecastChart() {
       {loading && (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="w-6 h-6 animate-spin text-medical-primary" />
-          <span className="ml-2 text-sm text-gray-500">Kapacitás betöltése…</span>
+          <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">Kapacitás betöltése…</span>
         </div>
       )}
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">{error}</div>
+        <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-lg p-4 text-sm text-red-700 dark:text-red-300">{error}</div>
       )}
 
       {!loading && !error && weeks.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-4">
           {/* Legend */}
-          <div className="flex items-center gap-4 mb-4 text-xs text-gray-600">
+          <div className="flex items-center gap-4 mb-4 text-xs text-gray-600 dark:text-gray-400">
             <span className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded bg-emerald-400" />
               Szabad kapacitás (supply)
@@ -132,13 +132,13 @@ export function CapacityForecastChart() {
                     </div>
                   </div>
                   {/* Week label */}
-                  <div className="text-[9px] text-gray-400 truncate w-full text-center leading-tight">
+                  <div className="text-[9px] text-gray-400 dark:text-gray-500 truncate w-full text-center leading-tight">
                     {w.weekLabel.split(' – ')[0]}
                   </div>
 
                   {/* Tooltip */}
-                  <div className="absolute z-20 bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block w-44 p-2 bg-white border border-gray-200 rounded-lg shadow-lg text-xs">
-                    <div className="font-semibold text-gray-900 mb-1">{w.weekLabel}</div>
+                  <div className="absolute z-20 bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block w-44 p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-800 rounded-lg shadow-lg text-xs">
+                    <div className="font-semibold text-gray-900 dark:text-gray-100 mb-1">{w.weekLabel}</div>
                     <div className="text-emerald-700">Supply: {w.supply}</div>
                     <div className="text-blue-700">Foglalt: {w.hardDemand}</div>
                     <div className="text-amber-700">Tervezett: {w.softDemand}</div>
@@ -151,14 +151,14 @@ export function CapacityForecastChart() {
             })}
           </div>
 
-          <p className="text-[10px] text-gray-400 mt-3 text-center">
+          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-3 text-center">
             Kereslet a legkorábbi esedékesség hete alapján (window_start)
           </p>
         </div>
       )}
 
       {!loading && !error && weeks.length === 0 && (
-        <div className="text-center py-8 text-gray-500 text-sm">
+        <div className="text-center py-8 text-gray-500 dark:text-gray-400 text-sm">
           Nincs kapacitás adat a kiválasztott poolhoz.
         </div>
       )}

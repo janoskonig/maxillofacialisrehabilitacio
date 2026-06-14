@@ -224,25 +224,25 @@ export function DocumentRequestSendWizard({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col"
+        className="bg-white dark:bg-gray-900 rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b">
-          <h2 className="text-lg font-semibold text-gray-900">Dokumentum bekérése</h2>
-          <button type="button" onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Dokumentum bekérése</h2>
+          <button type="button" onClick={onClose} className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 rounded-lg">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <div className="p-4 overflow-y-auto space-y-4 flex-1">
           {patientName && (
-            <p className="text-sm text-gray-600">
-              Beteg: <span className="font-medium text-gray-900">{patientName}</span>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Beteg: <span className="font-medium text-gray-900 dark:text-gray-100">{patientName}</span>
             </p>
           )}
 
           <div>
-            <p className="text-sm font-medium text-gray-700 mb-2">Kinek szól a kérés?</p>
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Kinek szól a kérés?</p>
             <div className="space-y-2">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -278,7 +278,7 @@ export function DocumentRequestSendWizard({
             <div>
               <label className="form-label">Kolléga</label>
               {loadingDoctors ? (
-                <div className="flex items-center gap-2 text-gray-500 text-sm py-2">
+                <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-sm py-2">
                   <Loader2 className="w-4 h-4 animate-spin" />
                   Betöltés...
                 </div>
@@ -300,15 +300,15 @@ export function DocumentRequestSendWizard({
           )}
 
           <div>
-            <p className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-2">
               <Tag className="w-4 h-4 text-medical-primary" />
               Címke
             </p>
-            <p className="text-xs text-gray-500 mb-3">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
               Ugyanazok a címkék, mint a dokumentumfeltöltésnél; a bekért fájl ezzel a címkével kerül mentésre.
             </p>
             {loadingTags ? (
-              <div className="flex items-center gap-2 text-gray-500 text-sm py-2">
+              <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-sm py-2">
                 <Loader2 className="w-4 h-4 animate-spin" />
                 Címkék betöltése...
               </div>
@@ -326,7 +326,7 @@ export function DocumentRequestSendWizard({
                         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                           sel
                             ? 'bg-medical-primary text-white border-medical-primary'
-                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                            : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50'
                         }`}
                       >
                         <Icon className="w-3.5 h-3.5 flex-shrink-0 opacity-90" />
@@ -374,7 +374,7 @@ export function DocumentRequestSendWizard({
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 px-4 py-3 border-t bg-gray-50">
+        <div className="flex justify-end gap-2 px-4 py-3 border-t bg-gray-50 dark:bg-gray-800/60">
           <button type="button" className="btn-secondary" onClick={onClose} disabled={submitting}>
             Mégse
           </button>

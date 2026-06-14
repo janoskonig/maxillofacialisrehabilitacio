@@ -135,7 +135,7 @@ export function PatientMention({ text, cursorPosition, onSelect }: PatientMentio
   return (
     <div
       ref={suggestionsRef}
-      className="absolute z-50 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+      className="absolute z-50 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg shadow-lg max-h-60 overflow-y-auto"
       style={{
         bottom: '100%',
         left: 0,
@@ -150,12 +150,12 @@ export function PatientMention({ text, cursorPosition, onSelect }: PatientMentio
           onMouseEnter={() => setSelectedIndex(index)}
           className={`px-3 py-2 cursor-pointer ${
             index === selectedIndex
-              ? 'bg-blue-100 text-blue-900'
-              : 'hover:bg-gray-50 text-gray-900'
+              ? 'bg-blue-100 dark:bg-blue-950/50 text-blue-900 dark:text-blue-200'
+              : 'hover:bg-gray-50 dark:hover:bg-gray-800/50 text-gray-900 dark:text-gray-100'
           }`}
         >
           <div className="font-medium">{patient.nev}</div>
-          <div className="text-xs text-gray-500">{patient.mentionFormat}</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">{patient.mentionFormat}</div>
         </div>
       ))}
     </div>

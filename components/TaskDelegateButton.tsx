@@ -123,10 +123,10 @@ export function TaskDelegateButton({ taskId, onDelegated }: TaskDelegateButtonPr
   }
 
   return (
-    <div className="mt-3 rounded border border-gray-200 bg-gray-50 p-3">
+    <div className="mt-3 rounded border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60 p-3">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium text-gray-700">Delegálás kollégának</span>
-        <button type="button" className="text-gray-400 hover:text-gray-600" onClick={closePicker} aria-label="Mégse">
+        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Delegálás kollégának</span>
+        <button type="button" className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400" onClick={closePicker} aria-label="Mégse">
           <X className="w-4 h-4" />
         </button>
       </div>

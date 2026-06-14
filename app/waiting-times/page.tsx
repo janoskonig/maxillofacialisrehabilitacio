@@ -115,8 +115,8 @@ export default function WaitingTimesPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-pulse text-gray-500">Betöltés...</div>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
+        <div className="animate-pulse text-gray-500 dark:text-gray-400">Betöltés...</div>
       </div>
     );
   }
@@ -131,14 +131,14 @@ export default function WaitingTimesPage() {
     <AppShell title="Várakozási idők" backTo="/" maxWidth="xl">
       <div>
         {/* Tabs */}
-        <div className="mb-6 border-b border-gray-200">
+        <div className="mb-6 border-b border-gray-200 dark:border-gray-800">
           <nav className="flex gap-1" aria-label="Várakozási idők fülök">
             <button
               onClick={() => setActiveTab('elso_konzultacio')}
               className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
                 activeTab === 'elso_konzultacio'
                   ? 'border-medical-primary text-medical-primary'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-700'
               }`}
             >
               <Calendar className="w-4 h-4" />
@@ -154,7 +154,7 @@ export default function WaitingTimesPage() {
               className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
                 activeTab === 'munkafazis'
                   ? 'border-medical-primary text-medical-primary'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-700'
               }`}
             >
               <Clock className="w-4 h-4" />
@@ -170,7 +170,7 @@ export default function WaitingTimesPage() {
 
         {/* Content */}
         {loadingData ? (
-          <div className="text-center py-12 text-gray-500">
+          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
             <div className="animate-pulse">Adatok betöltése...</div>
           </div>
         ) : (
@@ -189,12 +189,12 @@ export default function WaitingTimesPage() {
                       </div>
                       <div className="ml-4">
                         <div className={`text-sm font-medium ${
-                          isLongWaiting ? 'text-red-700 font-bold' : 'text-gray-900'
+                          isLongWaiting ? 'text-red-700 dark:text-red-300 font-bold' : 'text-gray-900 dark:text-gray-100'
                         }`}>
                           {item.patientName || 'Névtelen beteg'}
                         </div>
                         {item.patientTaj && (
-                          <div className="text-sm text-gray-500">
+                          <div className="text-sm text-gray-500 dark:text-gray-400">
                             TAJ: {item.patientTaj}
                           </div>
                         )}
@@ -203,10 +203,10 @@ export default function WaitingTimesPage() {
                   </td>
                   {activeTab === 'elso_konzultacio' ? (
                     <>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                         {formatDateOnly(item.currentDate)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                         {item.firstConsultationDate
                           ? formatDate(item.firstConsultationDate)
                           : '-'}
@@ -223,12 +223,12 @@ export default function WaitingTimesPage() {
                     </>
                   ) : (
                     <>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                         {item.lastAppointmentDate
                           ? formatDate(item.lastAppointmentDate)
                           : '-'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                         {item.nextWorkPhaseDate
                           ? formatDate(item.nextWorkPhaseDate)
                           : '-'}
@@ -248,8 +248,8 @@ export default function WaitingTimesPage() {
             renderCard={(item) => {
               const isLongWaiting = activeTab === 'elso_konzultacio' && item.waitingTimeDays > 31;
               return (
-                <div 
-                  className={`mobile-card cursor-pointer ${isLongWaiting ? 'bg-red-50 border-red-200' : ''}`}
+                <div
+                  className={`mobile-card cursor-pointer ${isLongWaiting ? 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800' : ''}`}
                   onClick={() => handlePatientClick(item.patientId)}
                 >
                   {/* Top row: Beteg név + Várakozási idő */}
@@ -262,12 +262,12 @@ export default function WaitingTimesPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <h3 className={`text-base font-semibold truncate ${
-                          isLongWaiting ? 'text-red-700' : 'text-gray-900'
+                          isLongWaiting ? 'text-red-700 dark:text-red-300' : 'text-gray-900 dark:text-gray-100'
                         }`}>
                           {item.patientName || 'Névtelen beteg'}
                         </h3>
                         {item.patientTaj && (
-                          <div className="text-sm text-gray-500">
+                          <div className="text-sm text-gray-500 dark:text-gray-400">
                             TAJ: {item.patientTaj}
                           </div>
                         )}
@@ -301,37 +301,37 @@ export default function WaitingTimesPage() {
             }}
             keyExtractor={(item) => item.patientId}
             emptyState={
-              <div className="text-center py-12 text-gray-500">
+              <div className="text-center py-12 text-gray-500 dark:text-gray-400">
                 <p>Nincs elérhető adat</p>
               </div>
             }
             loading={loadingData}
             renderHeader={() => (
               <>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Beteg
                 </th>
                 {activeTab === 'elso_konzultacio' ? (
                   <>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       Foglalás dátuma
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       Első konzultáció időpontja
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       Várakozási idő
                     </th>
                   </>
                 ) : (
                   <>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       Foglalás dátuma
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       Következő munkafázis időpontja
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       Várakozási idő
                     </th>
                   </>
@@ -340,8 +340,8 @@ export default function WaitingTimesPage() {
             )}
             rowClassName={(item) => {
               const isLongWaiting = activeTab === 'elso_konzultacio' && item.waitingTimeDays > 31;
-              return `hover:bg-gray-50 cursor-pointer transition-colors ${
-                isLongWaiting ? 'bg-red-50 hover:bg-red-100' : ''
+              return `hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors ${
+                isLongWaiting ? 'bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-900/40' : ''
               }`;
             }}
           />

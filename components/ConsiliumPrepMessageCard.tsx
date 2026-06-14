@@ -141,7 +141,7 @@ export function ConsiliumPrepMessageCard({ token }: ConsiliumPrepMessageCardProp
     return (
       <div className="my-2 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60 p-3 max-w-md">
         <div className="flex items-start gap-2">
-          <div className="p-1.5 bg-gray-200 dark:bg-gray-800 rounded-md text-gray-700 dark:text-gray-300 flex-shrink-0">
+          <div className="p-1.5 bg-gray-200 dark:bg-gray-700 rounded-md text-gray-700 dark:text-gray-300 flex-shrink-0">
             <Lock className="w-4 h-4" />
           </div>
           <div className="min-w-0">

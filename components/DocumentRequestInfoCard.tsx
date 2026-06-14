@@ -160,7 +160,7 @@ export function DocumentRequestInfoCard({
   return (
     <>
       <div 
-        className="bg-amber-50 border-2 border-amber-200 rounded-lg p-4 my-2 cursor-pointer hover:bg-amber-100 transition-colors"
+        className="bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-200 dark:border-amber-800 rounded-lg p-4 my-2 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
         onClick={() => setShowModal(true)}
       >
         <div className="flex items-start gap-3">
@@ -173,7 +173,7 @@ export function DocumentRequestInfoCard({
             </div>
             
             <div className="space-y-1.5 mb-3">
-              <div className="text-xs text-amber-800 font-medium">
+              <div className="text-xs text-amber-800 dark:text-amber-300 font-medium">
                 <span className="font-semibold">Típus:</span> {documentTypeLabel}
               </div>
               
@@ -182,7 +182,7 @@ export function DocumentRequestInfoCard({
                   <span className="font-semibold">Beteg:</span> Betöltés...
                 </div>
               ) : displayPatientName ? (
-                <div className="text-xs text-amber-800">
+                <div className="text-xs text-amber-800 dark:text-amber-300">
                   <span className="font-semibold">Beteg:</span> {displayPatientName}
                 </div>
               ) : null}

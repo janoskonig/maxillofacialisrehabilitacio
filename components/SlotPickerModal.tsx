@@ -283,9 +283,9 @@ export function SlotPickerModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="slot-picker-title">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between p-4 border-b">
-          <h2 id="slot-picker-title" className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+          <h2 id="slot-picker-title" className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
             {retryContext && <AlertTriangle className="w-5 h-5 text-orange-600" aria-hidden="true" />}
             {!retryContext && rescheduleFromIso && (
               <CalendarClock className="w-5 h-5 text-amber-600" aria-hidden="true" />
@@ -297,7 +297,7 @@ export function SlotPickerModal({
                 : 'Időpont választás'}
             {patientName ? ` – ${patientName}` : ''}
           </h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 p-1" aria-label="Bezárás">
+          <button onClick={onClose} className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 p-1" aria-label="Bezárás">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -328,13 +328,13 @@ export function SlotPickerModal({
         )}
 
         {rescheduleFromLabel && (
-          <div className="px-4 py-2 border-b bg-amber-50 text-sm text-amber-900 flex items-start gap-2">
+          <div className="px-4 py-2 border-b bg-amber-50 dark:bg-amber-950/40 text-sm text-amber-900 dark:text-amber-200 flex items-start gap-2">
             <CalendarClock className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-700" aria-hidden="true" />
             <div>
               <div>
                 <span className="font-medium">Jelenleg foglalt:</span> {rescheduleFromLabel}
               </div>
-              <div className="text-xs text-amber-800/90">
+              <div className="text-xs text-amber-800/90 dark:text-amber-300">
                 Új időpont választása esetén a jelenlegi foglalás automatikusan törlődik (slot felszabadul), és helyette
                 az új idő jön létre — egy lépésben.
               </div>
@@ -342,24 +342,24 @@ export function SlotPickerModal({
           </div>
         )}
 
-        <div className="flex flex-wrap gap-2 p-4 border-b bg-gray-50 items-center">
+        <div className="flex flex-wrap gap-2 p-4 border-b bg-gray-50 dark:bg-gray-800/60 items-center">
           <span className="px-2 py-1 rounded text-xs font-medium bg-medical-primary/20 text-medical-primary">{pool}</span>
-          <span className="px-2 py-1 rounded text-xs font-medium bg-gray-200">{durationMinutes} perc</span>
-          <span className="px-2 py-1 rounded text-xs font-medium bg-gray-200">
+          <span className="px-2 py-1 rounded text-xs font-medium bg-gray-200 dark:bg-gray-700">{durationMinutes} perc</span>
+          <span className="px-2 py-1 rounded text-xs font-medium bg-gray-200 dark:bg-gray-700">
             {windowStartISO} – {windowEndISO}
           </span>
           {useNearestFreeSlots && (
-            <span className="w-full text-xs text-gray-600">
+            <span className="w-full text-xs text-gray-600 dark:text-gray-400">
               A lista a lehető legkorábbi szabad időpontokat mutatja (nem csak az ajánlott ablak végéig).
             </span>
           )}
           <label className="flex items-center gap-1.5">
-            <span className="text-xs font-medium text-gray-600">Orvos:</span>
+            <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Orvos:</span>
             <select
               value={selectedProviderId ?? ''}
               onChange={(e) => setSelectedProviderId(e.target.value || undefined)}
               disabled={!!providerId}
-              className="text-xs rounded border border-gray-300 bg-white px-2 py-1.5 min-w-[140px] focus:outline-none focus:ring-2 focus:ring-medical-primary/50 disabled:opacity-70 disabled:cursor-not-allowed"
+              className="text-xs rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1.5 min-w-[140px] focus:outline-none focus:ring-2 focus:ring-medical-primary/50 disabled:opacity-70 disabled:cursor-not-allowed"
               aria-label="Orvos szűrő"
             >
               {!providerId && <option value="">Összes orvos</option>}
@@ -370,7 +370,7 @@ export function SlotPickerModal({
               ))}
             </select>
             {providerId && (
-              <span className="text-xs text-gray-500" title="Csak a kijelölt orvos slotjai foglalhatók">zárolva</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400" title="Csak a kijelölt orvos slotjai foglalhatók">zárolva</span>
             )}
           </label>
         </div>
@@ -383,13 +383,13 @@ export function SlotPickerModal({
             </div>
           )}
           {slotError && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm" role="alert">
+            <div className="p-4 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-md text-red-700 dark:text-red-300 text-sm" role="alert">
               {slotError}
             </div>
           )}
           {!loading && !slotError && slots.length === 0 && !showCreateForm && (
-            <div className="text-center py-8 text-gray-500">
-              <Calendar className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+              <Calendar className="w-12 h-12 mx-auto mb-3 text-gray-400 dark:text-gray-500" />
               <p className="font-medium">Csak a kiírt szabad időpontok jelennek meg.</p>
               <p className="text-sm mt-1">
                 {providerId
@@ -414,35 +414,35 @@ export function SlotPickerModal({
                 Új szabad időpont kiírása és lefoglalása
               </button>
             ) : (
-              <div className="p-4 border border-gray-200 rounded-lg bg-gray-50 space-y-3">
-                <p className="text-sm font-medium text-gray-700">Új szabad időpont kiírása és lefoglalása</p>
+              <div className="p-4 border border-gray-200 dark:border-gray-800 rounded-lg bg-gray-50 dark:bg-gray-800/60 space-y-3">
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Új szabad időpont kiírása és lefoglalása</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <label className="block">
-                    <span className="text-xs text-gray-600">Dátum</span>
+                    <span className="text-xs text-gray-600 dark:text-gray-400">Dátum</span>
                     <input
                       type="date"
                       value={createDate}
                       onChange={(e) => setCreateDate(e.target.value)}
                       min={windowStartISO.slice(0, 10)}
-                      className="mt-0.5 block w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                      className="mt-0.5 block w-full rounded border border-gray-300 dark:border-gray-700 px-2 py-1.5 text-sm"
                     />
                   </label>
                   <label className="block">
-                    <span className="text-xs text-gray-600">Idő</span>
+                    <span className="text-xs text-gray-600 dark:text-gray-400">Idő</span>
                     <input
                       type="time"
                       value={createTime}
                       onChange={(e) => setCreateTime(e.target.value)}
-                      className="mt-0.5 block w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                      className="mt-0.5 block w-full rounded border border-gray-300 dark:border-gray-700 px-2 py-1.5 text-sm"
                     />
                   </label>
                 </div>
                 <label className="block">
-                  <span className="text-xs text-gray-600">Orvos</span>
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Orvos</span>
                   <select
                     value={createProviderId}
                     onChange={(e) => setCreateProviderId(e.target.value)}
-                    className="mt-0.5 block w-full rounded border border-gray-300 px-2 py-1.5 text-sm bg-white"
+                    className="mt-0.5 block w-full rounded border border-gray-300 dark:border-gray-700 px-2 py-1.5 text-sm bg-white dark:bg-gray-800"
                   >
                     {doctors.map((d) => (
                       <option key={d.id} value={d.id}>{d.name}</option>
@@ -464,7 +464,7 @@ export function SlotPickerModal({
                   <button
                     type="button"
                     onClick={() => { setShowCreateForm(false); setCreateError(null); }}
-                    className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                    className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50"
                   >
                     Mégse
                   </button>

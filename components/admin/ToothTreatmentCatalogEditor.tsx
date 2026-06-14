@@ -167,29 +167,29 @@ export function ToothTreatmentCatalogEditor() {
   return (
     <div className="space-y-4">
       {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded text-red-800 text-sm">
+        <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded text-red-800 dark:text-red-300 text-sm">
           {error}
         </div>
       )}
 
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
+          <thead className="bg-gray-50 dark:bg-gray-800/60">
             <tr>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">code</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Név (HU)</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Sorrend</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Alapért. kezelési út</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Aktív</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Műveletek</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">code</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Név (HU)</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Sorrend</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Alapért. kezelési út</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Aktív</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Műveletek</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
             {items.map((item) => {
               const isEditing = editingCode === item.code;
               return (
                 <tr key={item.code} className={!item.isActive ? 'opacity-50' : ''}>
-                  <td className="px-4 py-2 text-sm font-mono text-gray-700">{item.code}</td>
+                  <td className="px-4 py-2 text-sm font-mono text-gray-700 dark:text-gray-300">{item.code}</td>
                   <td className="px-4 py-2 text-sm">
                     {isEditing && editState ? (
                       <input
@@ -289,10 +289,10 @@ export function ToothTreatmentCatalogEditor() {
       </div>
 
       {creating ? (
-        <div className="p-4 border border-gray-200 rounded-lg bg-gray-50 space-y-2">
+        <div className="p-4 border border-gray-200 dark:border-gray-800 rounded-lg bg-gray-50 dark:bg-gray-800/60 space-y-2">
           <div className="flex gap-2 flex-wrap items-end">
             <div>
-              <label className="text-xs text-gray-500 block">code</label>
+              <label className="text-xs text-gray-500 dark:text-gray-400 block">code</label>
               <input
                 type="text"
                 placeholder="code (a-z, 0-9, _)"
@@ -302,7 +302,7 @@ export function ToothTreatmentCatalogEditor() {
               />
             </div>
             <div>
-              <label className="text-xs text-gray-500 block">Név (HU)</label>
+              <label className="text-xs text-gray-500 dark:text-gray-400 block">Név (HU)</label>
               <input
                 type="text"
                 placeholder="pl. Tömés"
@@ -312,7 +312,7 @@ export function ToothTreatmentCatalogEditor() {
               />
             </div>
             <div>
-              <label className="text-xs text-gray-500 block">Sorrend</label>
+              <label className="text-xs text-gray-500 dark:text-gray-400 block">Sorrend</label>
               <input
                 type="number"
                 value={newSortOrder}

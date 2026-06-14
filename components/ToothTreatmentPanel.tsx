@@ -36,9 +36,9 @@ function formatUserOption(u: InstitutionUserRow): string {
 }
 
 const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
-  pending: { bg: 'bg-amber-100', text: 'text-amber-800', label: 'Függőben' },
-  episode_linked: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Epizódhoz kötve' },
-  completed: { bg: 'bg-green-100', text: 'text-green-800', label: 'Kész' },
+  pending: { bg: 'bg-amber-100 dark:bg-amber-950/50', text: 'text-amber-800 dark:text-amber-300', label: 'Függőben' },
+  episode_linked: { bg: 'bg-blue-100 dark:bg-blue-950/50', text: 'text-blue-800 dark:text-blue-300', label: 'Epizódhoz kötve' },
+  completed: { bg: 'bg-green-100 dark:bg-green-950/50', text: 'text-green-800 dark:text-green-300', label: 'Kész' },
 };
 
 // ---- Context: load treatments + catalog once, share across all tooth cards ----
@@ -326,7 +326,7 @@ function ToothTreatmentDelegateBlock({
 
       {mode === 'staff' ? (
         <div className="relative space-y-1">
-          <label className="block text-[11px] text-gray-600">Címzett</label>
+          <label className="block text-[11px] text-gray-600 dark:text-gray-400">Címzett</label>
           <input
             type="text"
             className="form-input text-xs py-1 w-full"
@@ -351,17 +351,17 @@ function ToothTreatmentDelegateBlock({
           />
           {listOpen && assigneeInput.trim().length > 0 && !institutionUsersLoading && (
             <ul
-              className="absolute z-20 left-0 right-0 mt-0.5 max-h-36 overflow-auto rounded border border-gray-200 bg-white shadow text-[11px]"
+              className="absolute z-20 left-0 right-0 mt-0.5 max-h-36 overflow-auto rounded border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow text-[11px]"
               role="listbox"
             >
               {suggestions.length === 0 ? (
-                <li className="px-2 py-1.5 text-gray-500">Nincs találat</li>
+                <li className="px-2 py-1.5 text-gray-500 dark:text-gray-400">Nincs találat</li>
               ) : (
                 suggestions.map((u) => (
                   <li key={u.id}>
                     <button
                       type="button"
-                      className="w-full text-left px-2 py-1.5 hover:bg-gray-50"
+                      className="w-full text-left px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800/50"
                       onMouseDown={(ev) => ev.preventDefault()}
                       onClick={() => pickUser(u)}
                     >
@@ -376,7 +376,7 @@ function ToothTreatmentDelegateBlock({
       ) : (
         <div className="space-y-2">
           <div>
-            <label className="block text-[11px] text-gray-600 mb-0.5">Külső címzett / kapcsolat</label>
+            <label className="block text-[11px] text-gray-600 dark:text-gray-400 mb-0.5">Külső címzett / kapcsolat</label>
             <textarea
               className="form-input text-xs py-1 w-full min-h-[48px]"
               rows={2}
@@ -386,7 +386,7 @@ function ToothTreatmentDelegateBlock({
             />
           </div>
           <div>
-            <label className="block text-[11px] text-gray-600 mb-0.5 flex items-center gap-1">
+            <label className="block text-[11px] text-gray-600 dark:text-gray-400 mb-0.5 flex items-center gap-1">
               <UserRound className="w-3 h-3" />
               Kinél maradjon a feladat a Feladataim listán
             </label>
@@ -403,7 +403,7 @@ function ToothTreatmentDelegateBlock({
                 </option>
               ))}
             </select>
-            <p className="text-[10px] text-gray-500 mt-0.5">
+            <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
               A külső fél nem kap bejelentkezést; a választott kolléga (vagy te) látja a feladatot és lezárhatja, ha
               megtörtént az egyeztetés.
             </p>
@@ -413,7 +413,7 @@ function ToothTreatmentDelegateBlock({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div>
-          <label className="block text-[11px] text-gray-600 mb-0.5">Megjegyzés (opcionális)</label>
+          <label className="block text-[11px] text-gray-600 dark:text-gray-400 mb-0.5">Megjegyzés (opcionális)</label>
           <input
             className="form-input text-xs py-1 w-full"
             value={note}
@@ -422,7 +422,7 @@ function ToothTreatmentDelegateBlock({
           />
         </div>
         <div>
-          <label className="block text-[11px] text-gray-600 mb-0.5">Határidő (opcionális)</label>
+          <label className="block text-[11px] text-gray-600 dark:text-gray-400 mb-0.5">Határidő (opcionális)</label>
           <input
             type="datetime-local"
             className="form-input text-xs py-1 w-full"
@@ -433,7 +433,7 @@ function ToothTreatmentDelegateBlock({
       </div>
 
       {feedback && (
-        <p className={feedback.ok ? 'text-green-800' : 'text-red-700'}>{feedback.msg}</p>
+        <p className={feedback.ok ? 'text-green-800 dark:text-green-300' : 'text-red-700 dark:text-red-300'}>{feedback.msg}</p>
       )}
 
       <button
@@ -559,7 +559,7 @@ export function ToothTreatmentInline({ toothNumber, isViewOnly }: ToothTreatment
   return (
     <div className="mt-2 space-y-1.5">
       {error && (
-        <div className="p-1.5 bg-red-50 border border-red-200 rounded text-red-800 text-xs">
+        <div className="p-1.5 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded text-red-800 dark:text-red-300 text-xs">
           {error}
           <button type="button" onClick={() => setError(null)} className="ml-2 underline">Bezár</button>
         </div>
@@ -570,7 +570,7 @@ export function ToothTreatmentInline({ toothNumber, isViewOnly }: ToothTreatment
         const statusInfo = STATUS_COLORS[t.status] ?? STATUS_COLORS.pending;
         const openDel = (t.openDelegatedTasks?.length ?? 0) > 0;
         return (
-          <div key={t.id} className="text-sm bg-gray-50 rounded px-2 py-1 space-y-1">
+          <div key={t.id} className="text-sm bg-gray-50 dark:bg-gray-800/60 rounded px-2 py-1 space-y-1">
             <div className="flex items-center gap-2">
               <span className={`px-1.5 py-0.5 rounded text-xs whitespace-nowrap ${statusInfo.bg} ${statusInfo.text}`}>
                 {statusInfo.label}
@@ -578,7 +578,7 @@ export function ToothTreatmentInline({ toothNumber, isViewOnly }: ToothTreatment
               <span className="font-medium text-sm">{t.labelHu ?? t.treatmentCode}</span>
               {openDel && (
                 <span
-                  className="text-[10px] px-1 py-0.5 rounded bg-indigo-100 text-indigo-900"
+                  className="text-[10px] px-1 py-0.5 rounded bg-indigo-100 dark:bg-indigo-950/50 text-indigo-900 dark:text-indigo-200"
                   title="Ehhez a kezeléshez már van nyitott, delegált feladat"
                 >
                   Feladat: {t.openDelegatedTasks!.length}
@@ -592,7 +592,7 @@ export function ToothTreatmentInline({ toothNumber, isViewOnly }: ToothTreatment
                       onClick={() =>
                         setDelegateTreatmentId((cur) => (cur === t.id ? null : t.id))
                       }
-                      className="px-1.5 py-0.5 bg-indigo-100 text-indigo-900 rounded text-xs hover:bg-indigo-200 flex items-center gap-1"
+                      className="px-1.5 py-0.5 bg-indigo-100 dark:bg-indigo-950/50 text-indigo-900 dark:text-indigo-200 rounded text-xs hover:bg-indigo-200 dark:hover:bg-indigo-900/40 flex items-center gap-1"
                       title="Feladat küldése egy kollégának vagy külső koordináció rögzítése"
                     >
                       <SendHorizontal className="w-3 h-3" />
@@ -652,15 +652,15 @@ export function ToothTreatmentInline({ toothNumber, isViewOnly }: ToothTreatment
 
       {/* Completed (collapsed) */}
       {completed.length > 0 && (
-        <details className="text-xs text-gray-400">
-          <summary className="cursor-pointer hover:text-gray-600">{completed.length} befejezett</summary>
+        <details className="text-xs text-gray-400 dark:text-gray-500">
+          <summary className="cursor-pointer hover:text-gray-600 dark:hover:text-gray-400">{completed.length} befejezett</summary>
           <div className="mt-1 space-y-0.5 pl-1">
             {completed.map((t) => (
               <div key={t.id} className="flex gap-1 items-center flex-wrap">
                 <Check className="w-3 h-3 text-green-500 shrink-0" />
                 <span>{t.labelHu ?? t.treatmentCode}</span>
                 {t.status !== 'completed' && t.pathwayClosed ? (
-                  <span className="text-gray-400">(munkafázisban lezárva)</span>
+                  <span className="text-gray-400 dark:text-gray-500">(munkafázisban lezárva)</span>
                 ) : null}
               </div>
             ))}
@@ -703,7 +703,7 @@ export function ToothTreatmentInline({ toothNumber, isViewOnly }: ToothTreatment
             <button
               type="button"
               onClick={() => setAdding(true)}
-              className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded px-1.5 py-0.5 transition-colors"
+              className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded px-1.5 py-0.5 transition-colors"
             >
               <Plus className="w-3 h-3" />
               Kezelés hozzáadása

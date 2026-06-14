@@ -159,8 +159,8 @@ export function CommunicationLog({ patientId, patientName }: CommunicationLogPro
     return (
       <div className="card p-6">
         <div className="animate-pulse space-y-4">
-          <div className="h-4 bg-gray-200 rounded w-1/4"></div>
-          <div className="h-20 bg-gray-200 rounded"></div>
+          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4"></div>
+          <div className="h-20 bg-gray-200 dark:bg-gray-700 rounded"></div>
         </div>
       </div>
     );
@@ -171,7 +171,7 @@ export function CommunicationLog({ patientId, patientName }: CommunicationLogPro
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <MessageSquare className="w-5 h-5 text-purple-600" />
-          <h3 className="text-lg font-semibold text-gray-900">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
             Érintkezési napló {patientName && `- ${patientName}`}
           </h3>
         </div>
@@ -185,7 +185,7 @@ export function CommunicationLog({ patientId, patientName }: CommunicationLogPro
       </div>
 
       <div className="flex items-center gap-2">
-        <Filter className="w-4 h-4 text-gray-500" />
+        <Filter className="w-4 h-4 text-gray-500 dark:text-gray-400" />
         <select
           value={filterType}
           onChange={(e) => setFilterType(e.target.value as CommunicationType | 'all')}
@@ -285,39 +285,39 @@ export function CommunicationLog({ patientId, patientName }: CommunicationLogPro
 
       <div className="space-y-3 max-h-96 overflow-y-auto">
         {logs.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <MessageSquare className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+            <MessageSquare className="w-12 h-12 mx-auto mb-2 text-gray-300 dark:text-gray-600" />
             <p>Még nincsenek érintkezési bejegyzések</p>
           </div>
         ) : (
           logs.map((log) => (
             <div
               key={log.id}
-              className="border rounded-lg p-4 bg-white border-l-4 border-l-purple-500"
+              className="border rounded-lg p-4 bg-white dark:bg-gray-900 border-l-4 border-l-purple-500"
             >
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center gap-2">
                   {getIcon(log.communicationType)}
-                  <span className="font-semibold text-gray-900">
+                  <span className="font-semibold text-gray-900 dark:text-gray-100">
                     {communicationTypeLabels[log.communicationType]}
                   </span>
-                  <span className="text-sm text-gray-500">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
                     ({directionLabels[log.direction]})
                   </span>
                 </div>
-                <div className="text-sm text-gray-500">
+                <div className="text-sm text-gray-500 dark:text-gray-400">
                   {format(new Date(log.createdAt), 'yyyy. MM. dd. HH:mm', { locale: hu })}
                 </div>
               </div>
               {log.subject && (
                 <div className="mb-2">
-                  <span className="text-sm font-medium text-gray-700">Tárgy: </span>
-                  <span className="text-sm text-gray-900">{log.subject}</span>
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Tárgy: </span>
+                  <span className="text-sm text-gray-900 dark:text-gray-100">{log.subject}</span>
                 </div>
               )}
-              <div className="text-gray-700 whitespace-pre-wrap">{log.content}</div>
+              <div className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{log.content}</div>
               {log.createdBy && (
-                <div className="mt-2 text-xs text-gray-500">
+                <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                   Létrehozta: {log.createdBy}
                 </div>
               )}

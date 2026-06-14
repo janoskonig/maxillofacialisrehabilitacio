@@ -638,10 +638,10 @@ export function PatientMessages() {
   if (loading) {
     return (
       <div className="card">
-        <div className="flex h-[calc(100vh-200px)] sm:h-[700px] border border-gray-200 rounded-lg overflow-hidden bg-white items-center justify-center">
+        <div className="flex h-[calc(100vh-200px)] sm:h-[700px] border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden bg-white dark:bg-gray-900 items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-500">Betöltés...</p>
+            <p className="text-gray-500 dark:text-gray-400">Betöltés...</p>
           </div>
         </div>
       </div>
@@ -650,7 +650,7 @@ export function PatientMessages() {
 
   if (!patientId) {
     return (
-      <div className="card p-6 text-center text-gray-500">
+      <div className="card p-6 text-center text-gray-500 dark:text-gray-400">
         <p>Beteg adatok betöltése...</p>
       </div>
     );
@@ -665,9 +665,9 @@ export function PatientMessages() {
 
   // Conversations list
   const conversationsListContent = conversations.length === 0 && !loading ? (
-    <div className="p-4 text-center text-gray-500 text-sm">
+    <div className="p-4 text-center text-gray-500 dark:text-gray-400 text-sm">
       Még nincsenek beszélgetések
-      <p className="text-xs mt-2 text-gray-400">Kattintson az &quot;Új beszélgetés&quot; gombra egy orvos kiválasztásához</p>
+      <p className="text-xs mt-2 text-gray-400 dark:text-gray-500">Kattintson az &quot;Új beszélgetés&quot; gombra egy orvos kiválasztásához</p>
     </div>
   ) : (
     conversations.map((conv) => {
@@ -679,29 +679,29 @@ export function PatientMessages() {
         <div
           key={conv.doctorId}
           onClick={() => handleSelectDoctor(conv.doctorId, conv.doctorName)}
-          className={`p-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${
-            isSelected ? 'bg-blue-100 border-l-4 border-l-blue-600' : ''
+          className={`p-3 border-b border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${
+            isSelected ? 'bg-blue-100 dark:bg-blue-950/50 border-l-4 border-l-blue-600' : ''
           }`}
         >
           <div className="flex items-center gap-3">
             <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ${
-              conv.unreadCount > 0 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+              conv.unreadCount > 0 ? 'bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
             }`}>
               {monogram}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <span className={`text-sm truncate ${conv.unreadCount > 0 ? 'font-semibold text-gray-900' : 'font-medium text-gray-900'}`}>
+                  <span className={`text-sm truncate ${conv.unreadCount > 0 ? 'font-semibold text-gray-900 dark:text-gray-100' : 'font-medium text-gray-900 dark:text-gray-100'}`}>
                     {conv.doctorName}
                   </span>
                   {recipient?.type === 'treating_doctor' && (
-                    <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full flex-shrink-0">Kezelőorvos</span>
+                    <span className="text-[10px] text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded-full flex-shrink-0">Kezelőorvos</span>
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   {conv.lastMessage && (
-                    <span className="text-xs text-gray-400">{formatConversationTime(conv.lastMessage.createdAt)}</span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">{formatConversationTime(conv.lastMessage.createdAt)}</span>
                   )}
                   {conv.unreadCount > 0 && (
                     <span className="px-1.5 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full min-w-[20px] text-center">
@@ -711,7 +711,7 @@ export function PatientMessages() {
                 </div>
               </div>
               {conv.lastMessage && (
-                <p className={`text-xs mt-0.5 truncate ${conv.unreadCount > 0 ? 'text-gray-700 font-medium' : 'text-gray-500'}`}>
+                <p className={`text-xs mt-0.5 truncate ${conv.unreadCount > 0 ? 'text-gray-700 dark:text-gray-300 font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
                   {conv.lastMessage.senderType === 'patient' ? 'Ön: ' : ''}
                   {conv.lastMessage.message.substring(0, 50)}
                   {conv.lastMessage.message.length > 50 ? '...' : ''}
@@ -727,16 +727,16 @@ export function PatientMessages() {
   // Detail header
   const detailHeaderContent = (
     <>
-      <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">
+      <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
         {selectedDoctorName || 'Üzenetek'}
       </h3>
       {(() => {
         const recipient = recipients.find(r => r.id === selectedDoctorId);
         if (recipient?.type === 'treating_doctor') {
-          return <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full mt-1 inline-block">Kezelőorvos</span>;
+          return <span className="text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 rounded-full mt-1 inline-block">Kezelőorvos</span>;
         }
         if (recipient?.type === 'admin') {
-          return <span className="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full mt-1 inline-block">Admin</span>;
+          return <span className="text-xs text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded-full mt-1 inline-block">Admin</span>;
         }
         return null;
       })()}
@@ -757,10 +757,10 @@ export function PatientMessages() {
         {messagesLoading ? (
           <div className="text-center py-12">
             <Loader2 className="w-8 h-8 mx-auto mb-2 text-gray-300 animate-spin" />
-            <p className="text-sm text-gray-500">Üzenetek betöltése...</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Üzenetek betöltése...</p>
           </div>
         ) : messages.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
+          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
             <MessageCircle className="w-16 h-16 mx-auto mb-4 text-gray-300" />
             <p className="text-base font-medium">Még nincsenek üzenetek</p>
             <p className="text-sm mt-2">Küldjön üzenetet!</p>
@@ -799,9 +799,9 @@ export function PatientMessages() {
               <div key={message.id}>
                 {showDateSeparator && (
                   <div className="flex items-center gap-3 my-4">
-                    <div className="flex-1 border-t border-gray-300" />
-                    <span className="text-xs font-medium text-gray-500 whitespace-nowrap">{dateSeparatorLabel}</span>
-                    <div className="flex-1 border-t border-gray-300" />
+                    <div className="flex-1 border-t border-gray-300 dark:border-gray-700" />
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">{dateSeparatorLabel}</span>
+                    <div className="flex-1 border-t border-gray-300 dark:border-gray-700" />
                   </div>
                 )}
               <div
@@ -810,7 +810,7 @@ export function PatientMessages() {
               >
                 <div className={`flex gap-2 max-w-[80%] sm:max-w-[70%] ${isMyMessage ? 'flex-row-reverse' : 'flex-row'}`}>
                   {isTheirMessage && (
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-semibold">
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 flex items-center justify-center text-xs font-semibold">
                       {monogram}
                     </div>
                   )}

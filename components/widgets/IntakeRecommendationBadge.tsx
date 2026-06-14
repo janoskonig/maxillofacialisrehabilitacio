@@ -23,19 +23,19 @@ interface IntakeData {
 
 const BADGE_CONFIG = {
   GO: {
-    bgClass: 'bg-green-100 text-green-800 border-green-200',
+    bgClass: 'bg-green-100 dark:bg-green-950/50 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800',
     icon: CheckCircle,
-    iconClass: 'text-green-600',
+    iconClass: 'text-green-600 dark:text-green-300',
   },
   CAUTION: {
-    bgClass: 'bg-amber-100 text-amber-800 border-amber-200',
+    bgClass: 'bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800',
     icon: AlertTriangle,
-    iconClass: 'text-amber-600',
+    iconClass: 'text-amber-600 dark:text-amber-300',
   },
   STOP: {
-    bgClass: 'bg-red-100 text-red-800 border-red-200',
+    bgClass: 'bg-red-100 dark:bg-red-950/50 text-red-800 dark:text-red-300 border-red-200 dark:border-red-800',
     icon: XCircle,
-    iconClass: 'text-red-600',
+    iconClass: 'text-red-600 dark:text-red-300',
   },
 } as const;
 

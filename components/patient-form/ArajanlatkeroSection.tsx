@@ -231,7 +231,7 @@ export function ArajanlatkeroSection({
         {/* Új árajánlatkérő létrehozása */}
         {!isViewOnly && (
           <div className={`${labQuoteRequests.length > 0 ? 'border-t pt-4' : ''}`}>
-            <h5 className="text-md font-semibold text-gray-900 mb-3">Új árajánlatkérő</h5>
+            <h5 className="text-md font-semibold text-gray-900 dark:text-gray-100 mb-3">Új árajánlatkérő</h5>
             <div className="space-y-4">
               <div>
                 <label className="form-label">

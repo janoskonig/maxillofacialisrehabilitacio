@@ -145,7 +145,7 @@ export default function PatientStagesPage() {
       actions={
         <Link
           href="/patients/stages/gantt"
-          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50"
         >
           <BarChart3 className="w-4 h-4" />
           GANTT nézet
@@ -153,11 +153,11 @@ export default function PatientStagesPage() {
       }
     >
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
           <Calendar className="w-6 h-6 text-medical-primary" />
           Betegstádiumok - {patient.nev || 'Névtelen beteg'}
         </h1>
-        <p className="text-gray-600 mt-1">
+        <p className="text-gray-600 dark:text-gray-400 mt-1">
           Stádiumok kezelése és timeline megtekintése
         </p>
       </div>
@@ -165,20 +165,20 @@ export default function PatientStagesPage() {
       <div className="space-y-6">
           {/* Epizódok (új modell) */}
           {episodes.length > 0 && (
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Ellátási epizódok</h3>
-              <ul className="space-y-1 text-sm text-gray-700">
+            <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Ellátási epizódok</h3>
+              <ul className="space-y-1 text-sm text-gray-700 dark:text-gray-300">
                 {episodes.slice(0, 10).map((ep) => (
                   <li key={ep.id} className="flex items-center gap-2 flex-wrap">
-                    <span className={ep.status === 'open' ? 'text-green-600 font-medium' : 'text-gray-500'}>
+                    <span className={ep.status === 'open' ? 'text-green-600 dark:text-green-400 font-medium' : 'text-gray-500 dark:text-gray-400'}>
                       {ep.status === 'open' ? '● Aktív' : '○ Zárt'}
                     </span>
                     <span>{ep.chiefComplaint}</span>
-                    <span className="text-gray-400">
+                    <span className="text-gray-400 dark:text-gray-500">
                       {new Date(ep.openedAt).toLocaleDateString('hu-HU')}
                     </span>
                     {(ep.carePathwayName || ep.assignedProviderName) && (
-                      <span className="text-gray-500 text-xs">
+                      <span className="text-gray-500 dark:text-gray-400 text-xs">
                         {[ep.carePathwayName, ep.assignedProviderName].filter(Boolean).join(' · ')}
                       </span>
                     )}
@@ -202,8 +202,8 @@ export default function PatientStagesPage() {
 
           {/* Kezelési utak és felelős orvos (epizód szerkesztése) */}
           {(userRole === 'admin' || userRole === 'fogpótlástanász') && activeEpisode && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50/50">
-              <p className="text-xs font-medium text-amber-800 px-4 pt-3 pb-1">
+            <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/30">
+              <p className="text-xs font-medium text-amber-800 dark:text-amber-300 px-4 pt-3 pb-1">
                 Aktív epizód beállításai — Kezelési utak és felelős orvos itt választható ehhez az epizódhoz
               </p>
               <EpisodePathwayEditor

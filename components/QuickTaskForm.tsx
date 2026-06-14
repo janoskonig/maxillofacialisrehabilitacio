@@ -183,7 +183,7 @@ export function QuickTaskForm({ patientId, onCreated }: QuickTaskFormProps) {
 
       <div className="grid gap-2 sm:grid-cols-2">
         <div>
-          <label className="block text-xs text-gray-600 mb-0.5">Határidő (opcionális)</label>
+          <label className="block text-xs text-gray-600 dark:text-gray-400 mb-0.5">Határidő (opcionális)</label>
           <input
             type="datetime-local"
             className="form-input w-full text-sm py-1"
@@ -192,7 +192,7 @@ export function QuickTaskForm({ patientId, onCreated }: QuickTaskFormProps) {
           />
         </div>
         <div className="space-y-1 sm:pt-6">
-          <label className="flex items-center gap-2 text-sm text-gray-700">
+          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
             <input
               type="checkbox"
               checked={remind}
@@ -200,7 +200,7 @@ export function QuickTaskForm({ patientId, onCreated }: QuickTaskFormProps) {
             />
             Push emlékeztető a határidő előtt
           </label>
-          <label className="flex items-center gap-2 text-sm text-gray-700">
+          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
             <input
               type="checkbox"
               checked={remindEmail}
@@ -217,7 +217,7 @@ export function QuickTaskForm({ patientId, onCreated }: QuickTaskFormProps) {
       )}
 
       {canDelegate && (
-        <label className="flex items-center gap-2 text-sm text-gray-700">
+        <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
           <input
             type="checkbox"
             checked={delegate}
@@ -257,15 +257,15 @@ export function QuickTaskForm({ patientId, onCreated }: QuickTaskFormProps) {
             }}
           />
           {listOpen && assigneeInput.trim().length > 0 && !usersLoading && (
-            <ul className="absolute z-20 left-0 right-0 mt-0.5 max-h-40 overflow-auto rounded border border-gray-200 bg-white shadow text-sm">
+            <ul className="absolute z-20 left-0 right-0 mt-0.5 max-h-40 overflow-auto rounded border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow text-sm">
               {suggestions.length === 0 ? (
-                <li className="px-2 py-1.5 text-gray-500">Nincs találat</li>
+                <li className="px-2 py-1.5 text-gray-500 dark:text-gray-400">Nincs találat</li>
               ) : (
                 suggestions.map((u) => (
                   <li key={u.id}>
                     <button
                       type="button"
-                      className="w-full text-left px-2 py-1.5 hover:bg-gray-50"
+                      className="w-full text-left px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800/50"
                       onMouseDown={(ev) => ev.preventDefault()}
                       onClick={() => pickUser(u)}
                     >

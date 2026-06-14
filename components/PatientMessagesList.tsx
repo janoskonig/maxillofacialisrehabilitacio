@@ -1117,21 +1117,21 @@ export function PatientMessagesList() {
   const newChatContent = showPatientSelector ? (
     <>
       {/* New Chat Header */}
-      <div className="p-3 sm:p-4 border-b border-gray-200 bg-gray-50">
+      <div className="p-3 sm:p-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base sm:text-lg font-semibold text-gray-900">Új beszélgetés</h3>
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">Új beszélgetés</h3>
           <button
             onClick={() => {
               setShowPatientSelector(false);
               setPatientSearchQuery('');
             }}
-            className="p-1 hover:bg-gray-200 rounded transition-colors mobile-touch-target"
+            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors mobile-touch-target"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
         <div className="relative mb-3">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
           <input
             type="text"
             value={patientSearchQuery}
@@ -1142,11 +1142,11 @@ export function PatientMessagesList() {
           />
         </div>
         {patientSearchQuery && (
-          <div className="max-h-60 overflow-y-auto border border-gray-200 rounded bg-white">
+          <div className="max-h-60 overflow-y-auto border border-gray-200 dark:border-gray-800 rounded bg-white dark:bg-gray-900">
             {loadingPatients ? (
-              <div className="p-4 text-center text-gray-500 text-sm">Betöltés...</div>
+              <div className="p-4 text-center text-gray-500 dark:text-gray-400 text-sm">Betöltés...</div>
             ) : availablePatients.length === 0 ? (
-              <div className="p-4 text-center text-gray-500 text-sm">Nincs találat</div>
+              <div className="p-4 text-center text-gray-500 dark:text-gray-400 text-sm">Nincs találat</div>
             ) : (
               availablePatients
                 .filter(p => 
@@ -1170,11 +1170,11 @@ export function PatientMessagesList() {
                       // Refresh conversations to include new patient
                       setTimeout(() => fetchConversations(), 500);
                     }}
-                    className="p-2 cursor-pointer hover:bg-gray-50 border-b border-gray-100 last:border-b-0 mobile-touch-target"
+                    className="p-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800 last:border-b-0 mobile-touch-target"
                   >
                     <div className="font-medium text-sm">{patient.nev}</div>
                     {patient.email && (
-                      <div className="text-xs text-gray-500">{patient.email}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{patient.email}</div>
                     )}
                   </div>
                 ))
@@ -1182,9 +1182,9 @@ export function PatientMessagesList() {
           </div>
         )}
       </div>
-      <div className="flex-1 flex items-center justify-center text-gray-500">
+      <div className="flex-1 flex items-center justify-center text-gray-500 dark:text-gray-400">
         <div className="text-center">
-          <MessageCircle className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+          <MessageCircle className="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
           <p>Válasszon beteget a beszélgetéshez</p>
         </div>
       </div>
@@ -1194,7 +1194,7 @@ export function PatientMessagesList() {
   // List header content (search)
   const listHeaderContent = (
     <div className="relative">
-      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
       <input
         type="text"
         placeholder="Beteg keresése..."

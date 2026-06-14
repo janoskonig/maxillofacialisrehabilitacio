@@ -269,39 +269,39 @@ export function CreateGroupChatModal({ isOpen, onClose, onGroupCreated, existing
 
       {/* Selected Count */}
       {selectedDoctors.size > 0 && (
-        <div className="text-sm text-gray-600">
+        <div className="text-sm text-gray-600 dark:text-gray-400">
           {selectedDoctors.size} orvos kiválasztva
         </div>
       )}
 
       {/* Doctors List */}
-      <div className="border border-gray-200 rounded-lg max-h-64 overflow-y-auto">
+      <div className="border border-gray-200 dark:border-gray-800 rounded-lg max-h-64 overflow-y-auto">
         {filteredDoctors.length === 0 ? (
-          <div className="p-4 text-center text-gray-500 text-sm">
+          <div className="p-4 text-center text-gray-500 dark:text-gray-400 text-sm">
             Nincs találat
           </div>
         ) : (
-          <div className="divide-y divide-gray-200">
+          <div className="divide-y divide-gray-200 dark:divide-gray-800">
             {filteredDoctors.map((doctor) => {
               const isSelected = selectedDoctors.has(doctor.id);
               return (
                 <div
                   key={doctor.id}
                   onClick={() => handleToggleDoctor(doctor.id)}
-                  className={`p-3 cursor-pointer hover:bg-gray-50 transition-colors mobile-touch-target ${
-                    isSelected ? 'bg-blue-50' : ''
+                  className={`p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors mobile-touch-target ${
+                    isSelected ? 'bg-blue-50 dark:bg-blue-950/40' : ''
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
-                      <div className="font-medium text-gray-900">{doctor.name}</div>
-                      <div className="text-sm text-gray-500">{doctor.email}</div>
+                      <div className="font-medium text-gray-900 dark:text-gray-100">{doctor.name}</div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">{doctor.email}</div>
                       {doctor.intezmeny && (
-                        <div className="text-xs text-gray-400 mt-0.5">{doctor.intezmeny}</div>
+                        <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{doctor.intezmeny}</div>
                       )}
                     </div>
                     {isSelected && (
-                      <Check className="w-5 h-5 text-blue-600" />
+                      <Check className="w-5 h-5 text-blue-600 dark:text-blue-300" />
                     )}
                   </div>
                 </div>
@@ -354,7 +354,7 @@ export function CreateGroupChatModal({ isOpen, onClose, onGroupCreated, existing
         <div className="space-y-4 pb-4">
           {modalContent}
         </div>
-        <div className="flex items-center gap-3 pt-4 border-t bg-gray-50 -mx-4 -mb-4 px-4 pb-4 mobile-safe-bottom">
+        <div className="flex items-center gap-3 pt-4 border-t bg-gray-50 dark:bg-gray-800/60 -mx-4 -mb-4 px-4 pb-4 mobile-safe-bottom">
           {modalActions}
         </div>
       </MobileBottomSheet>
@@ -364,18 +364,18 @@ export function CreateGroupChatModal({ isOpen, onClose, onGroupCreated, existing
   // Desktop: Modal
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b">
           <div className="flex items-center gap-3">
-            <Users className="w-6 h-6 text-blue-600" />
-            <h2 className="text-xl font-bold text-gray-900">
+            <Users className="w-6 h-6 text-blue-600 dark:text-blue-300" />
+            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
               {modalTitle}
             </h2>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -387,7 +387,7 @@ export function CreateGroupChatModal({ isOpen, onClose, onGroupCreated, existing
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 p-6 border-t bg-gray-50">
+        <div className="flex items-center justify-end gap-3 p-6 border-t bg-gray-50 dark:bg-gray-800/60">
           {modalActions}
         </div>
       </div>

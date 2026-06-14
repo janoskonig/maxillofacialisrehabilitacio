@@ -139,18 +139,18 @@ export function ReassignStepModal({
       aria-modal="true"
       aria-labelledby="reassign-step-title"
     >
-      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b">
           <h2
             id="reassign-step-title"
-            className="text-lg font-semibold text-gray-900 flex items-center gap-2"
+            className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2"
           >
             <Shuffle className="w-5 h-5 text-medical-primary" />
             Foglalás áthelyezése másik fázisra
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 p-1"
+            className="text-gray-500 dark:text-gray-400 hover:text-gray-700 p-1"
             aria-label="Bezárás"
             type="button"
             disabled={submitting}
@@ -160,15 +160,15 @@ export function ReassignStepModal({
         </div>
 
         <div className="p-4 space-y-4">
-          <div className="text-sm text-gray-700 bg-amber-50 border border-amber-200 p-3 rounded flex gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-700 flex-shrink-0 mt-0.5" />
+          <div className="text-sm text-gray-700 dark:text-gray-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-3 rounded flex gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-700 dark:text-amber-300 flex-shrink-0 mt-0.5" />
             <div>
-              <div className="font-medium text-amber-900">
+              <div className="font-medium text-amber-900 dark:text-amber-200">
                 {isPastBooking
                   ? 'Múltbeli snapshot-rögzítés javítása'
                   : 'Óvatos adatmozgatás'}
               </div>
-              <div className="text-xs text-amber-900/80 mt-1">
+              <div className="text-xs text-amber-900/80 dark:text-amber-200/80 mt-1">
                 {isPastBooking ? (
                   <>
                     Az időpont (slot) nem változik, csak a fázis-hovatartozás
@@ -192,34 +192,34 @@ export function ReassignStepModal({
             </div>
           </div>
 
-          <div className="text-sm text-gray-700 bg-gray-50 border border-gray-200 p-3 rounded space-y-1">
+          <div className="text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 p-3 rounded space-y-1">
             <div className="flex justify-between gap-2">
-              <span className="text-xs text-gray-500">Jelenlegi fázis</span>
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-gray-500 dark:text-gray-400">Jelenlegi fázis</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">
                 pool: <code>{sourceItem.pool}</code>
               </span>
             </div>
-            <div className="font-medium text-gray-900">{currentLabel}</div>
-            <div className="text-xs text-gray-600">
+            <div className="font-medium text-gray-900 dark:text-gray-100">{currentLabel}</div>
+            <div className="text-xs text-gray-600 dark:text-gray-400">
               Időpont: <strong>{formatDateTime(bookedStart)}</strong>
             </div>
           </div>
 
           <div>
-            <div className="text-sm font-medium text-gray-700 mb-2">
+            <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Cél fázis
-              <span className="text-xs text-gray-500 font-normal ml-1">
+              <span className="text-xs text-gray-500 dark:text-gray-400 font-normal ml-1">
                 (azonos pool, még nincs foglalása)
               </span>
             </div>
             {filteredCandidates.length === 0 ? (
-              <div className="text-sm text-gray-500 italic bg-gray-50 border border-gray-200 rounded p-3">
+              <div className="text-sm text-gray-500 dark:text-gray-400 italic bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 rounded p-3">
                 Nincs olyan másik munkafázis ebben az epizódban, ami
                 jelöltnek számít (azonos <code>pool</code>, nincs
                 BOOKED‑állapotban, nem completed/skipped).
               </div>
             ) : (
-              <div className="border border-gray-200 rounded divide-y divide-gray-100 max-h-64 overflow-y-auto">
+              <div className="border border-gray-200 dark:border-gray-800 rounded divide-y divide-gray-100 dark:divide-gray-800 max-h-64 overflow-y-auto">
                 {filteredCandidates.map((c) => {
                   const isSelected = selectedId === c.workPhaseId;
                   const windowStart =
@@ -228,7 +228,7 @@ export function ReassignStepModal({
                   return (
                     <label
                       key={c.workPhaseId}
-                      className={`flex items-start gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50 ${
+                      className={`flex items-start gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 ${
                         isSelected ? 'bg-medical-primary/5' : ''
                       }`}
                     >
@@ -241,18 +241,18 @@ export function ReassignStepModal({
                         disabled={submitting}
                       />
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm text-gray-900 font-medium flex items-center gap-1.5">
+                        <div className="text-sm text-gray-900 dark:text-gray-100 font-medium flex items-center gap-1.5">
                           <span>{c.stepLabel || c.stepCode}</span>
                           {c.status && (
                             <span
                               className={`text-[10px] px-1 py-0.5 rounded font-medium ${
                                 c.status === 'completed'
-                                  ? 'bg-green-100 text-green-800'
+                                  ? 'bg-green-100 dark:bg-green-950/50 text-green-800 dark:text-green-300'
                                   : c.status === 'scheduled'
-                                    ? 'bg-blue-100 text-blue-800'
+                                    ? 'bg-blue-100 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300'
                                     : c.status === 'skipped'
-                                      ? 'bg-gray-200 text-gray-700'
-                                      : 'bg-amber-100 text-amber-800'
+                                      ? 'bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
+                                      : 'bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300'
                               }`}
                             >
                               {c.status === 'completed'
@@ -265,7 +265,7 @@ export function ReassignStepModal({
                             </span>
                           )}
                         </div>
-                        <div className="text-xs text-gray-600 truncate">
+                        <div className="text-xs text-gray-600 dark:text-gray-400 truncate">
                           {windowStart || windowEnd ? (
                             <>
                               Terv szerinti ablak:{' '}
@@ -274,7 +274,7 @@ export function ReassignStepModal({
                               </strong>
                             </>
                           ) : (
-                            <span className="italic text-gray-500">
+                            <span className="italic text-gray-500 dark:text-gray-400">
                               {c.status === 'completed'
                                 ? 'Lezárt fázis'
                                 : 'Nincs ablak'}

@@ -56,7 +56,7 @@ export function RecentActivityFeed({ activities, maxItems = 10 }: RecentActivity
   if (activities.length === 0) {
     return (
       <DashboardWidget title="Legutóbbi aktivitás" icon={<Activity className="w-5 h-5" />}>
-        <div className="text-center py-6 text-gray-500">
+        <div className="text-center py-6 text-gray-500 dark:text-gray-400">
           <Activity className="w-12 h-12 mx-auto mb-2 text-gray-300" />
           <p className="text-sm">Nincs aktivitás</p>
         </div>
@@ -75,8 +75,8 @@ export function RecentActivityFeed({ activities, maxItems = 10 }: RecentActivity
             <div
               key={activity.id}
               className={`p-3 rounded-lg border ${
-                patientId ? 'cursor-pointer hover:bg-gray-50' : ''
-              } border-gray-200 transition-colors`}
+                patientId ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50' : ''
+              } border-gray-200 dark:border-gray-800 transition-colors`}
               onClick={() => {
                 if (patientId) {
                   router.push(`/?patientId=${patientId}`);
@@ -91,24 +91,24 @@ export function RecentActivityFeed({ activities, maxItems = 10 }: RecentActivity
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2 mb-1">
-                    <div className="font-medium text-sm sm:text-base text-gray-900">
+                    <div className="font-medium text-sm sm:text-base text-gray-900 dark:text-gray-100">
                       {getActionLabel(activity.action)}
                     </div>
-                    <div className="flex items-center gap-1 text-xs text-gray-500 flex-shrink-0">
+                    <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
                       <Clock className="w-3 h-3" />
                       <span>{formatDistanceToNow(createdAt, { addSuffix: true, locale: hu })}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-gray-600">
+                  <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
                     <User className="w-3 h-3" />
                     <span className="truncate">{activity.userEmail}</span>
                   </div>
                   {activity.detail && (
-                    <div className="text-xs text-gray-500 mt-1 line-clamp-2">
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
                       {activity.detail}
                     </div>
                   )}
-                  <div className="text-xs text-gray-400 mt-1">
+                  <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                     {format(createdAt, 'yyyy. MMMM d. HH:mm', { locale: hu })}
                   </div>
                 </div>

@@ -512,7 +512,7 @@ export function DocumentAnnotationsOverlay({
       } ${
         toolbarOnDark
           ? 'border-white/30 bg-white/10 text-white hover:bg-white/15'
-          : 'border-gray-300 bg-white text-gray-900'
+          : 'border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100'
       }`}
     >
       {showAnnotations ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
@@ -561,7 +561,7 @@ export function DocumentAnnotationsOverlay({
               className={`flex items-center gap-1 px-2 py-1 rounded border ${
                 toolbarOnDark
                   ? 'border-white/30 bg-white/10 text-white hover:bg-white/15'
-                  : 'border-gray-300 bg-white text-gray-900'
+                  : 'border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100'
               }`}
             >
               <Check className="w-4 h-4" />
@@ -575,7 +575,7 @@ export function DocumentAnnotationsOverlay({
                   ? 'bg-medical-primary text-white border-medical-primary'
                   : toolbarOnDark
                     ? 'bg-white/10 border-white/30 text-white hover:bg-white/15'
-                    : 'bg-white border-gray-300 text-gray-900'
+                    : 'bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100'
               }`}
             >
               <Pencil className="w-4 h-4" />
@@ -589,7 +589,7 @@ export function DocumentAnnotationsOverlay({
                   ? 'bg-medical-primary text-white border-medical-primary'
                   : toolbarOnDark
                     ? 'bg-white/10 border-white/30 text-white hover:bg-white/15'
-                    : 'bg-white border-gray-300 text-gray-900'
+                    : 'bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100'
               }`}
             >
               <Type className="w-4 h-4" />
@@ -613,7 +613,7 @@ export function DocumentAnnotationsOverlay({
                 className={
                   toolbarOnDark
                     ? 'px-2 py-1 rounded border border-white/30 bg-white/10 text-white hover:bg-white/15'
-                    : 'px-2 py-1 rounded border border-gray-300 bg-white text-gray-900'
+                    : 'px-2 py-1 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100'
                 }
               >
                 Vázlat törlése
@@ -691,11 +691,11 @@ export function DocumentAnnotationsOverlay({
                       }}
                     >
                       <div
-                        className="rounded-md px-2 py-1 text-left shadow-md bg-white/95 text-gray-900 text-sm select-text"
+                        className="rounded-md px-2 py-1 text-left shadow-md bg-white/95 dark:bg-gray-900/95 text-gray-900 dark:text-gray-100 text-sm select-text"
                         style={{ border }}
                       >
                         <p className="whitespace-pre-wrap break-words">{p.text}</p>
-                        <p className="text-[10px] text-gray-600 mt-1 border-t border-gray-200 pt-0.5">
+                        <p className="text-[10px] text-gray-600 dark:text-gray-400 mt-1 border-t border-gray-200 dark:border-gray-800 pt-0.5">
                           {ann.createdByName || ann.createdBy}
                           {ann.createdAt ? ` · ${formatAnnotationDateTime(ann.createdAt)}` : ''}
                         </p>
@@ -719,7 +719,7 @@ export function DocumentAnnotationsOverlay({
               className={`lg:hidden w-full shrink-0 rounded-lg border px-3 py-2 text-left text-sm font-medium ${
                 compact
                   ? 'border-white/25 bg-zinc-900 text-zinc-100'
-                  : 'border-gray-200 bg-white text-gray-800'
+                  : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200'
               }`}
               onClick={() => setMobileNotesExpanded((o) => !o)}
             >
@@ -731,21 +731,21 @@ export function DocumentAnnotationsOverlay({
               className={`min-w-0 w-full lg:w-56 shrink-0 rounded-lg border p-2 text-xs overflow-y-auto ${
                 compact
                   ? 'border-white/25 bg-zinc-900 text-zinc-100 max-h-[42vh] lg:max-h-[min(85dvh,900px)] lg:w-52 shadow-lg shadow-black/50 p-2.5'
-                  : 'border-gray-200 bg-white text-gray-900 max-h-[42vh] lg:max-h-[min(85dvh,900px)]'
+                  : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 max-h-[42vh] lg:max-h-[min(85dvh,900px)]'
               } ${mobileNotesExpanded ? '' : 'max-lg:hidden'} lg:block`}
             >
             <p
               className={`font-semibold mb-2 ${mobileNotesExpanded ? 'max-lg:hidden' : ''} ${
-                compact ? 'text-white' : 'text-gray-700'
+                compact ? 'text-white' : 'text-gray-700 dark:text-gray-300'
               }`}
             >
               Jegyzetek / rajzok
             </p>
             {draftPaths.length > 0 && (
               <div
-                className={`mb-2 pb-2 border-b ${compact ? 'border-white/20' : 'border-gray-200'}`}
+                className={`mb-2 pb-2 border-b ${compact ? 'border-white/20' : 'border-gray-200 dark:border-gray-800'}`}
               >
-                <p className={compact ? 'text-amber-300' : 'text-amber-800'}>
+                <p className={compact ? 'text-amber-300' : 'text-amber-800 dark:text-amber-300'}>
                   Vázlat (nem mentett vonalak)
                 </p>
               </div>
@@ -766,13 +766,13 @@ export function DocumentAnnotationsOverlay({
                         className={
                           compact
                             ? 'p-1 rounded shrink-0 text-zinc-300 hover:bg-white/10'
-                            : 'p-1 rounded shrink-0 text-gray-600 hover:bg-gray-100'
+                            : 'p-1 rounded shrink-0 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
                         }
                       >
                         {allHidden ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                       </button>
                       <span
-                        className={`font-medium truncate text-[11px] ${compact ? 'text-zinc-100' : 'text-gray-800'}`}
+                        className={`font-medium truncate text-[11px] ${compact ? 'text-zinc-100' : 'text-gray-800 dark:text-gray-200'}`}
                         title={authorLabel}
                       >
                         {authorLabel}
@@ -780,7 +780,7 @@ export function DocumentAnnotationsOverlay({
                     </div>
                     <ul
                       className={`space-y-1.5 pl-1 border-l border-dashed ml-1.5 ${
-                        compact ? 'border-white/15' : 'border-gray-200'
+                        compact ? 'border-white/15' : 'border-gray-200 dark:border-gray-800'
                       }`}
                     >
                       {group.map((ann) => {
@@ -794,7 +794,7 @@ export function DocumentAnnotationsOverlay({
                               className={
                                 compact
                                   ? 'p-0.5 rounded shrink-0 text-zinc-400 hover:bg-white/10 mt-0.5'
-                                  : 'p-0.5 rounded shrink-0 text-gray-500 hover:bg-gray-100 mt-0.5'
+                                  : 'p-0.5 rounded shrink-0 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 mt-0.5'
                               }
                             >
                               {hidden ? (
@@ -815,16 +815,16 @@ export function DocumentAnnotationsOverlay({
                                           : 'hover:bg-white/10'
                                       }`
                                     : `w-full text-left rounded px-1.5 py-1 transition-colors ${
-                                        selectedId === ann.id ? 'bg-blue-50' : 'hover:bg-gray-50'
+                                        selectedId === ann.id ? 'bg-blue-50 dark:bg-blue-950/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
                                       }`
                                 }
                               >
                                 <span
-                                  className={`font-medium block ${compact ? 'text-white' : 'text-gray-800'}`}
+                                  className={`font-medium block ${compact ? 'text-white' : 'text-gray-800 dark:text-gray-200'}`}
                                 >
                                   {ann.kind === 'freehand' ? 'Szabadkézi' : 'Szöveg'}
                                 </span>
-                                <span className={`block ${compact ? 'text-zinc-400' : 'text-gray-400'}`}>
+                                <span className={`block ${compact ? 'text-zinc-400' : 'text-gray-400 dark:text-gray-500'}`}>
                                   {ann.createdAt ? formatAnnotationDateTime(ann.createdAt) : ''}
                                 </span>
                               </button>
@@ -833,7 +833,7 @@ export function DocumentAnnotationsOverlay({
                                   type="button"
                                   onClick={() => deleteAnnotation(ann.id)}
                                   className={`mt-0.5 flex items-center gap-1 hover:underline text-[10px] ${
-                                    compact ? 'text-red-400' : 'text-red-600'
+                                    compact ? 'text-red-400' : 'text-red-600 dark:text-red-300'
                                   }`}
                                 >
                                   <Trash2 className="w-3 h-3" />
@@ -874,13 +874,13 @@ export function DocumentAnnotationsOverlay({
               className={`w-full max-w-[400px] max-h-[min(85dvh,520px)] overflow-y-auto rounded-lg border p-3 shadow-xl ${
                 compact
                   ? 'border-white/25 bg-zinc-900 text-zinc-100'
-                  : 'border-gray-300 bg-white text-gray-900'
+                  : 'border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100'
               }`}
             >
               <label
                 id={textDialogTitleId}
                 htmlFor={`${textDialogTitleId}-input`}
-                className={`block text-sm font-medium mb-1 ${compact ? 'text-zinc-200' : 'text-gray-700'}`}
+                className={`block text-sm font-medium mb-1 ${compact ? 'text-zinc-200' : 'text-gray-700 dark:text-gray-300'}`}
               >
                 Szöveg a képen
               </label>
@@ -892,7 +892,7 @@ export function DocumentAnnotationsOverlay({
                 className={`w-full border rounded p-2 text-sm min-h-[80px] ${
                   compact
                     ? 'border-white/25 bg-black/40 text-zinc-100 placeholder:text-zinc-500'
-                    : 'border-gray-300 bg-white text-gray-900'
+                    : 'border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100'
                 }`}
                 value={pendingTextValue}
                 onChange={(e) => setPendingTextValue(e.target.value)}
@@ -903,7 +903,7 @@ export function DocumentAnnotationsOverlay({
                   className={
                     compact
                       ? 'px-3 py-2 rounded border border-white/30 text-white hover:bg-white/10 w-full sm:w-auto'
-                      : 'px-3 py-2 border border-gray-300 rounded text-gray-900 w-full sm:w-auto'
+                      : 'px-3 py-2 border border-gray-300 dark:border-gray-700 rounded text-gray-900 dark:text-gray-100 w-full sm:w-auto'
                   }
                   onClick={() => {
                     setPendingText(null);

@@ -86,30 +86,30 @@ function ToothCell({
   const activeTreatments = toothTreatments.filter((t) => !isToothTreatmentPathwayDone(t));
   const completedTreatments = toothTreatments.filter((t) => isToothTreatmentPathwayDone(t));
 
-  let bgColor = 'bg-white';
-  let borderColor = 'border-gray-300';
-  let textColor = 'text-gray-700';
+  let bgColor = 'bg-white dark:bg-gray-900';
+  let borderColor = 'border-gray-300 dark:border-gray-700';
+  let textColor = 'text-gray-700 dark:text-gray-300';
 
   if (isSelected) {
     borderColor = 'border-medical-primary ring-2 ring-medical-primary/30';
   }
 
   if (isMissing) {
-    bgColor = 'bg-gray-100';
-    textColor = 'text-gray-400';
-    borderColor = isSelected ? 'border-medical-primary ring-2 ring-medical-primary/30' : 'border-gray-300';
+    bgColor = 'bg-gray-100 dark:bg-gray-800';
+    textColor = 'text-gray-400 dark:text-gray-500';
+    borderColor = isSelected ? 'border-medical-primary ring-2 ring-medical-primary/30' : 'border-gray-300 dark:border-gray-700';
   } else if (isD) {
-    bgColor = 'bg-red-50';
-    borderColor = isSelected ? 'border-medical-primary ring-2 ring-medical-primary/30' : 'border-red-300';
-    textColor = 'text-red-700';
+    bgColor = 'bg-red-50 dark:bg-red-950/40';
+    borderColor = isSelected ? 'border-medical-primary ring-2 ring-medical-primary/30' : 'border-red-300 dark:border-red-700';
+    textColor = 'text-red-700 dark:text-red-300';
   } else if (isF) {
-    bgColor = 'bg-blue-50';
-    borderColor = isSelected ? 'border-medical-primary ring-2 ring-medical-primary/30' : 'border-blue-300';
-    textColor = 'text-blue-700';
+    bgColor = 'bg-blue-50 dark:bg-blue-950/40';
+    borderColor = isSelected ? 'border-medical-primary ring-2 ring-medical-primary/30' : 'border-blue-300 dark:border-blue-700';
+    textColor = 'text-blue-700 dark:text-blue-300';
   } else if (isPresent) {
-    bgColor = 'bg-green-50';
-    borderColor = isSelected ? 'border-medical-primary ring-2 ring-medical-primary/30' : 'border-green-300';
-    textColor = 'text-green-700';
+    bgColor = 'bg-green-50 dark:bg-green-950/40';
+    borderColor = isSelected ? 'border-medical-primary ring-2 ring-medical-primary/30' : 'border-green-300 dark:border-green-700';
+    textColor = 'text-green-700 dark:text-green-300';
   }
 
   return (
@@ -158,7 +158,7 @@ function ToothGrid({
   onSelect: (t: string) => void;
 }) {
   return (
-    <div className="bg-gray-50 p-3 sm:p-4 rounded-lg overflow-x-auto">
+    <div className="bg-gray-50 dark:bg-gray-800/60 p-3 sm:p-4 rounded-lg overflow-x-auto">
       <div className="flex justify-between mb-1.5 min-w-[540px] sm:min-w-0">
         <div className="flex gap-0.5 sm:gap-1">
           {UPPER_LEFT.map((t) => (
@@ -209,20 +209,20 @@ export function ZsigmondyCrossStages({ patientId, patientName, meglevoFogak }: Z
           : 'Nincs adat';
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
-      <h3 className="text-base font-semibold text-gray-900 mb-3">
+    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
+      <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">
         Zsigmondy-kereszt — Foganként kezelési igények
       </h3>
 
       <OPInlinePreview patientId={patientId} patientName={patientName} />
 
-      <div className="flex flex-wrap gap-3 mb-3 text-xs text-gray-500">
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-50 border border-green-300" /> Jelen van</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-50 border border-red-300" /> Szuvas (D)</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-blue-50 border border-blue-300" /> Tömött (F)</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-gray-100 border border-gray-300" /> Hiányzik (M)</span>
-        <span className="flex items-center gap-1"><span className="relative w-3 h-3 rounded bg-white border border-gray-300"><span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-500" /></span> Nyitott kezelési igény</span>
-        <span className="flex items-center gap-1"><span className="relative w-3 h-3 rounded bg-white border border-gray-300"><span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-600" /></span> Befejezett kezelés (pipa a fogon)</span>
+      <div className="flex flex-wrap gap-3 mb-3 text-xs text-gray-500 dark:text-gray-400">
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-50 dark:bg-green-950/40 border border-green-300 dark:border-green-700" /> Jelen van</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-50 dark:bg-red-950/40 border border-red-300 dark:border-red-700" /> Szuvas (D)</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-blue-50 dark:bg-blue-950/40 border border-blue-300 dark:border-blue-700" /> Tömött (F)</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700" /> Hiányzik (M)</span>
+        <span className="flex items-center gap-1"><span className="relative w-3 h-3 rounded bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700"><span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-500" /></span> Nyitott kezelési igény</span>
+        <span className="flex items-center gap-1"><span className="relative w-3 h-3 rounded bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700"><span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-600" /></span> Befejezett kezelés (pipa a fogon)</span>
       </div>
 
       <TreatmentSummaryProvider patientId={patientId}>
@@ -230,21 +230,21 @@ export function ZsigmondyCrossStages({ patientId, patientName, meglevoFogak }: Z
       </TreatmentSummaryProvider>
 
       {selectedTooth && (
-        <div className="mt-4 border border-gray-200 rounded-lg p-3">
+        <div className="mt-4 border border-gray-200 dark:border-gray-800 rounded-lg p-3">
           <div className="flex items-center justify-between mb-2">
-            <h4 className="font-semibold text-gray-900">
-              {selectedTooth}. fog — <span className="font-normal text-gray-600">{statusLabel}</span>
+            <h4 className="font-semibold text-gray-900 dark:text-gray-100">
+              {selectedTooth}. fog — <span className="font-normal text-gray-600 dark:text-gray-400">{statusLabel}</span>
             </h4>
             <button
               type="button"
               onClick={() => setSelectedTooth(null)}
-              className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1"
+              className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 px-2 py-1"
             >
               Bezár
             </button>
           </div>
           {normalized?.description && (
-            <p className="text-sm text-gray-600 mb-2">{normalized.description}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{normalized.description}</p>
           )}
           <ToothTreatmentProvider patientId={patientId}>
             <ToothTreatmentInline toothNumber={selectedTooth} />

@@ -105,15 +105,15 @@ function DocumentUploadCard({ title, description, tag, icon, onUpload, uploadedD
   );
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-5">
+    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 sm:p-5">
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2 sm:gap-3">
-          <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
+          <div className="p-2 bg-blue-50 dark:bg-blue-950/40 rounded-lg text-blue-600 dark:text-blue-300">
             {icon}
           </div>
           <div>
-            <h3 className="text-sm sm:text-base font-semibold text-gray-900">{title}</h3>
-            <p className="text-xs sm:text-sm text-gray-600 mt-0.5">{description}</p>
+            <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-0.5">{description}</p>
           </div>
         </div>
         {!showUpload && (
@@ -128,16 +128,16 @@ function DocumentUploadCard({ title, description, tag, icon, onUpload, uploadedD
       </div>
 
       {showUpload && (
-        <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+        <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800/60 rounded-lg border border-gray-200 dark:border-gray-800">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs sm:text-sm font-medium text-gray-700">Fájl feltöltése</span>
+            <span className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">Fájl feltöltése</span>
             <button
               onClick={() => {
                 setShowUpload(false);
                 setSelectedFiles([]);
                 setDescriptionText('');
               }}
-              className="text-gray-400 hover:text-gray-600"
+              className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400"
             >
               <X className="w-4 h-4" />
             </button>
@@ -164,10 +164,10 @@ function DocumentUploadCard({ title, description, tag, icon, onUpload, uploadedD
           </button>
           {selectedFiles.length > 0 && (
             <div className="mb-2">
-              <div className="mb-2 p-2 bg-white border border-gray-200 rounded text-xs max-h-24 overflow-y-auto">
+              <div className="mb-2 p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-800 rounded text-xs max-h-24 overflow-y-auto">
                 <ul className="space-y-1">
                   {selectedFiles.map((file, index) => (
-                    <li key={index} className="text-gray-700 truncate">{file.name}</li>
+                    <li key={index} className="text-gray-700 dark:text-gray-300 truncate">{file.name}</li>
                   ))}
                 </ul>
               </div>
@@ -206,9 +206,9 @@ function DocumentUploadCard({ title, description, tag, icon, onUpload, uploadedD
 
       {/* Uploaded documents count */}
       {documentsWithTag.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-gray-200">
-          <p className="text-xs sm:text-sm text-gray-600">
-            Feltöltött dokumentumok: <span className="font-semibold text-gray-900">{documentsWithTag.length}</span>
+        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-800">
+          <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+            Feltöltött dokumentumok: <span className="font-semibold text-gray-900 dark:text-gray-100">{documentsWithTag.length}</span>
           </p>
         </div>
       )}
@@ -301,10 +301,10 @@ function GeneralDocumentUploadForm({
       
       {selectedFiles.length > 0 && (
         <>
-          <div className="p-2 bg-white border border-gray-200 rounded text-xs max-h-24 overflow-y-auto">
+          <div className="p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-800 rounded text-xs max-h-24 overflow-y-auto">
             <ul className="space-y-1">
               {selectedFiles.map((file, index) => (
-                <li key={index} className="text-gray-700 truncate">{file.name}</li>
+                <li key={index} className="text-gray-700 dark:text-gray-300 truncate">{file.name}</li>
               ))}
             </ul>
           </div>
@@ -321,7 +321,7 @@ function GeneralDocumentUploadForm({
               required
               disabled={uploading}
             />
-            <p className="text-[10px] sm:text-xs text-gray-500 mt-1">
+            <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mt-1">
               Kérjük, adja meg, hogy milyen típusú dokumentumot tölt fel
             </p>
           </div>
@@ -472,7 +472,7 @@ export function PatientDocumentsList() {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-medical-primary"></div>
-        <span className="ml-3 text-gray-600">Betöltés...</span>
+        <span className="ml-3 text-gray-600 dark:text-gray-400">Betöltés...</span>
       </div>
     );
   }
@@ -481,11 +481,11 @@ export function PatientDocumentsList() {
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
         <div className="flex-1 min-w-0">
-          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 flex items-center gap-2">
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
             <FileText className="w-5 h-5 sm:w-6 sm:h-6 lg:w-8 lg:h-8 text-medical-primary flex-shrink-0" />
             Dokumentumok
           </h1>
-          <p className="text-sm sm:text-base text-gray-600 mt-1 sm:mt-2">
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mt-1 sm:mt-2">
             Itt találhatja az összes dokumentumát és tölthet fel újakat.
           </p>
         </div>
@@ -493,7 +493,7 @@ export function PatientDocumentsList() {
 
       {/* Document Upload Cards */}
       <div className="space-y-4">
-        <h2 className="text-base sm:text-lg font-semibold text-gray-900">
+        <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">
           Dokumentumok feltöltése
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -536,15 +536,15 @@ export function PatientDocumentsList() {
         </div>
 
         {/* General Document Upload */}
-        <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-5">
+        <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 sm:p-5">
           <div className="flex items-start justify-between mb-3">
             <div className="flex items-center gap-2 sm:gap-3">
-              <div className="p-2 bg-gray-50 rounded-lg text-gray-600">
+              <div className="p-2 bg-gray-50 dark:bg-gray-800/60 rounded-lg text-gray-600 dark:text-gray-400">
                 <FileText className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
               <div>
-                <h3 className="text-sm sm:text-base font-semibold text-gray-900">Egyéb dokumentum</h3>
-                <p className="text-xs sm:text-sm text-gray-600 mt-0.5">Más típusú dokumentum feltöltése</p>
+                <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-gray-100">Egyéb dokumentum</h3>
+                <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-0.5">Más típusú dokumentum feltöltése</p>
               </div>
             </div>
           </div>
@@ -557,14 +557,14 @@ export function PatientDocumentsList() {
       </div>
 
       {/* All Documents List */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
-        <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">
+      <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 sm:p-6">
+        <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 sm:mb-4">
           Összes dokumentum
         </h2>
 
         {documents.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+            <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
             <p className="text-sm">Még nincsenek dokumentumok</p>
           </div>
         ) : (
@@ -574,11 +574,11 @@ export function PatientDocumentsList() {
               return (
                 <div
                   key={doc.id}
-                  className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow"
+                  className="border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden hover:shadow-md transition-shadow"
                 >
                   {/* Thumbnail */}
                   <div
-                    className="relative aspect-square bg-gray-100 cursor-pointer group"
+                    className="relative aspect-square bg-gray-100 dark:bg-gray-800 cursor-pointer group"
                     onClick={() => {
                       const url = isPdf
                         ? getPortalDocumentInlineUrl(doc.id)
@@ -600,16 +600,16 @@ export function PatientDocumentsList() {
                   <div className="p-3 sm:p-4">
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm sm:text-base text-gray-900 truncate mb-1" title={doc.filename}>
+                        <p className="font-medium text-sm sm:text-base text-gray-900 dark:text-gray-100 truncate mb-1" title={doc.filename}>
                           {doc.filename}
                         </p>
                         {doc.description && (
-                          <p className="text-xs sm:text-sm text-gray-600 line-clamp-2 mb-2">{doc.description}</p>
+                          <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-2">{doc.description}</p>
                         )}
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-2 text-[10px] sm:text-xs text-gray-500 mb-2 flex-wrap">
+                    <div className="flex items-center gap-2 text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mb-2 flex-wrap">
                       <span>{formatFileSize(doc.fileSize)}</span>
                       <span>•</span>
                       <span>{format(new Date(doc.uploadedAt), 'yyyy. MMMM d.', { locale: hu })}</span>
@@ -628,7 +628,7 @@ export function PatientDocumentsList() {
                         {doc.tags.map((tag, idx) => (
                           <span
                             key={idx}
-                            className="px-1.5 sm:px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] sm:text-xs"
+                            className="px-1.5 sm:px-2 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded text-[10px] sm:text-xs"
                           >
                             {tag}
                           </span>

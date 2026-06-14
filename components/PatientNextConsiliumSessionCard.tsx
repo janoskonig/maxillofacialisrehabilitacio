@@ -84,27 +84,27 @@ export function PatientNextConsiliumSessionCard({ patientId }: { patientId: stri
     : null;
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+    <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 shadow-sm">
       <div className="flex items-start gap-3">
         <div className="rounded-md bg-medical-primary/10 p-2 text-medical-primary">
           <CalendarPlus className="h-5 w-5" aria-hidden />
         </div>
         <div className="min-w-0 flex-1 space-y-2">
           <div>
-            <h3 className="text-sm font-semibold text-gray-900">Konzílium – következő megbeszélés</h3>
-            <p className="text-xs text-gray-600 mt-0.5">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Konzílium – következő megbeszélés</h3>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
               A pácienst egy kattintással felveheted a legkorábbi, még vázlat állapotú, jövőbeli alkalom beteglistájára
               (ugyanaz, mint a Konzílium modulban).
             </p>
           </div>
 
           {loading ? (
-            <p className="text-xs text-gray-500 flex items-center gap-2">
+            <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               Betöltés…
             </p>
           ) : !session ? (
-            <p className="text-xs text-gray-600">
+            <p className="text-xs text-gray-600 dark:text-gray-400">
               Jelenleg nincs olyan vázlat alkalom, amelynek időpontja még nem múlt el. Hozz létre egyet, vagy állíts vissza
               vázlatba a{' '}
               <Link href="/consilium" className="text-medical-primary underline font-medium">
@@ -114,12 +114,12 @@ export function PatientNextConsiliumSessionCard({ patientId }: { patientId: stri
             </p>
           ) : (
             <>
-              <p className="text-sm text-gray-800">
+              <p className="text-sm text-gray-800 dark:text-gray-200">
                 <span className="font-medium">{session.title}</span>
-                <span className="text-gray-500"> · {when}</span>
+                <span className="text-gray-500 dark:text-gray-400"> · {when}</span>
               </p>
               {alreadyOnList ? (
-                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded px-2 py-1.5">
+                <p className="text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-100 dark:border-amber-800 rounded px-2 py-1.5">
                   Ez a beteg már szerepel ennek az alkalomnak a listáján.
                 </p>
               ) : null}

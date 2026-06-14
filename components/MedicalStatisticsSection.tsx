@@ -6,39 +6,39 @@ import type { MedicalStats } from '@/lib/types';
 
 // Lazy load heavy chart components (recharts is large)
 const BNOChart = dynamic(() => import('./charts/BNOChart').then(mod => ({ default: mod.BNOChart })), {
-  loading: () => <div className="h-64 flex items-center justify-center"><p className="text-gray-500">Diagram betöltése...</p></div>
+  loading: () => <div className="h-64 flex items-center justify-center"><p className="text-gray-500 dark:text-gray-400">Diagram betöltése...</p></div>
 });
 
 const ReferringDoctorsChart = dynamic(() => import('./charts/ReferringDoctorsChart').then(mod => ({ default: mod.ReferringDoctorsChart })), {
-  loading: () => <div className="h-64 flex items-center justify-center"><p className="text-gray-500">Diagram betöltése...</p></div>
+  loading: () => <div className="h-64 flex items-center justify-center"><p className="text-gray-500 dark:text-gray-400">Diagram betöltése...</p></div>
 });
 
 const DMFDistributionChart = dynamic(() => import('./charts/DMFDistributionChart').then(mod => ({ default: mod.DMFDistributionChart })), {
-  loading: () => <div className="h-64 flex items-center justify-center"><p className="text-gray-500">Diagram betöltése...</p></div>
+  loading: () => <div className="h-64 flex items-center justify-center"><p className="text-gray-500 dark:text-gray-400">Diagram betöltése...</p></div>
 });
 
 const ToothPositionsChart = dynamic(() => import('./charts/ToothPositionsChart').then(mod => ({ default: mod.ToothPositionsChart })), {
-  loading: () => <div className="h-64 flex items-center justify-center"><p className="text-gray-500">Diagram betöltése...</p></div>
+  loading: () => <div className="h-64 flex items-center justify-center"><p className="text-gray-500 dark:text-gray-400">Diagram betöltése...</p></div>
 });
 
 const ImplantPositionsChart = dynamic(() => import('./charts/ImplantPositionsChart').then(mod => ({ default: mod.ImplantPositionsChart })), {
-  loading: () => <div className="h-64 flex items-center justify-center"><p className="text-gray-500">Diagram betöltése...</p></div>
+  loading: () => <div className="h-64 flex items-center justify-center"><p className="text-gray-500 dark:text-gray-400">Diagram betöltése...</p></div>
 });
 
 const WaitingTimeChart = dynamic(() => import('./charts/WaitingTimeChart').then(mod => ({ default: mod.WaitingTimeChart })), {
-  loading: () => <div className="h-64 flex items-center justify-center"><p className="text-gray-500">Diagram betöltése...</p></div>
+  loading: () => <div className="h-64 flex items-center justify-center"><p className="text-gray-500 dark:text-gray-400">Diagram betöltése...</p></div>
 });
 
 const DoctorWorkloadChart = dynamic(() => import('./charts/DoctorWorkloadChart').then(mod => ({ default: mod.DoctorWorkloadChart })), {
-  loading: () => <div className="h-64 flex items-center justify-center"><p className="text-gray-500">Diagram betöltése...</p></div>
+  loading: () => <div className="h-64 flex items-center justify-center"><p className="text-gray-500 dark:text-gray-400">Diagram betöltése...</p></div>
 });
 
 const OHIP14StatsChart = dynamic(() => import('./charts/OHIP14StatsChart').then(mod => ({ default: mod.OHIP14StatsChart })), {
-  loading: () => <div className="h-64 flex items-center justify-center"><p className="text-gray-500">Diagram betöltése...</p></div>
+  loading: () => <div className="h-64 flex items-center justify-center"><p className="text-gray-500 dark:text-gray-400">Diagram betöltése...</p></div>
 });
 
 const TreatmentPlanStatsChart = dynamic(() => import('./charts/TreatmentPlanStatsChart').then(mod => ({ default: mod.TreatmentPlanStatsChart })), {
-  loading: () => <div className="h-64 flex items-center justify-center"><p className="text-gray-500">Diagram betöltése...</p></div>
+  loading: () => <div className="h-64 flex items-center justify-center"><p className="text-gray-500 dark:text-gray-400">Diagram betöltése...</p></div>
 });
 
 export function MedicalStatisticsSection() {
@@ -74,15 +74,15 @@ export function MedicalStatisticsSection() {
   if (loading) {
     return (
       <div className="card text-center py-12">
-        <p className="text-gray-600">Szakmai statisztikák betöltése...</p>
+        <p className="text-gray-600 dark:text-gray-400">Szakmai statisztikák betöltése...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="card bg-red-50 border-red-200 text-center py-12">
-        <p className="text-red-800">{error}</p>
+      <div className="card bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800 text-center py-12">
+        <p className="text-red-800 dark:text-red-300">{error}</p>
       </div>
     );
   }
@@ -107,65 +107,65 @@ export function MedicalStatisticsSection() {
 
       <div className="card">
         <h2 className="text-xl font-semibold mb-4">OHIP-14 (minőségélet / szájhigiénés hatás)</h2>
-        <p className="text-sm text-gray-500 mb-4">
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
           Kitöltések és összpontszám-statisztikák időpontonként (T0–T3). Az átlag és a medián csak olyan
           kitöltéseknél számított, ahol a teljes pontszám rögzítve van.
         </p>
         <OHIP14StatsChart ohip14={stats.ohip14} />
 
         {/* T0 → T3 javulás összegzés */}
-        <div className="mt-6 rounded-xl border border-gray-200/80 bg-gradient-to-br from-emerald-50/40 to-white p-4">
-          <h3 className="mb-2 text-sm font-semibold text-gray-900">T0 → T3 változás</h3>
+        <div className="mt-6 rounded-xl border border-gray-200/80 dark:border-gray-800 bg-gradient-to-br from-emerald-50/40 to-white p-4">
+          <h3 className="mb-2 text-sm font-semibold text-gray-900 dark:text-gray-100">T0 → T3 változás</h3>
           {stats.ohip14.t0t3Delta.parosSzam === 0 ? (
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
               Még nincs olyan beteg, akinél T0 és T3 is kitöltött; a delta nem számítható.
             </p>
           ) : (
             <>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div>
-                  <p className="text-xs text-gray-500">Páros (T0+T3)</p>
-                  <p className="text-xl font-bold tabular-nums text-gray-900">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Páros (T0+T3)</p>
+                  <p className="text-xl font-bold tabular-nums text-gray-900 dark:text-gray-100">
                     {stats.ohip14.t0t3Delta.parosSzam}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">Medián Δ</p>
-                  <p className="text-xl font-bold tabular-nums text-emerald-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Medián Δ</p>
+                  <p className="text-xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
                     {stats.ohip14.t0t3Delta.medianDelta ?? '—'}
                   </p>
-                  <p className="text-[10px] text-gray-400">negatív = javulás</p>
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500">negatív = javulás</p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">Javulók</p>
-                  <p className="text-xl font-bold tabular-nums text-emerald-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Javulók</p>
+                  <p className="text-xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
                     {stats.ohip14.t0t3Delta.javulokSzama}
                     {stats.ohip14.t0t3Delta.parosSzam > 0 ? (
-                      <span className="ml-1 text-xs font-normal text-gray-500">
+                      <span className="ml-1 text-xs font-normal text-gray-500 dark:text-gray-400">
                         ({Math.round((stats.ohip14.t0t3Delta.javulokSzama / stats.ohip14.t0t3Delta.parosSzam) * 100)}%)
                       </span>
                     ) : null}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">Romlók</p>
-                  <p className="text-xl font-bold tabular-nums text-rose-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Romlók</p>
+                  <p className="text-xl font-bold tabular-nums text-rose-700 dark:text-rose-300">
                     {stats.ohip14.t0t3Delta.romlokSzama}
                     {stats.ohip14.t0t3Delta.parosSzam > 0 ? (
-                      <span className="ml-1 text-xs font-normal text-gray-500">
+                      <span className="ml-1 text-xs font-normal text-gray-500 dark:text-gray-400">
                         ({Math.round((stats.ohip14.t0t3Delta.romlokSzama / stats.ohip14.t0t3Delta.parosSzam) * 100)}%)
                       </span>
                     ) : null}
                   </p>
                 </div>
               </div>
-              <p className="mt-3 text-xs text-gray-500">
+              <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
                 Átlag Δ: {stats.ohip14.t0t3Delta.atlagDelta ?? '—'} · szórás:{' '}
                 {stats.ohip14.t0t3Delta.szorasDelta ?? '—'} · tartomány:{' '}
                 {stats.ohip14.t0t3Delta.minDelta ?? '—'} … {stats.ohip14.t0t3Delta.maxDelta ?? '—'}
               </p>
               <div className="mt-4">
-                <h4 className="mb-2 text-xs font-semibold text-gray-700">Δ hisztogram</h4>
+                <h4 className="mb-2 text-xs font-semibold text-gray-700 dark:text-gray-300">Δ hisztogram</h4>
                 <ul className="space-y-1.5">
                   {stats.ohip14.t0t3Delta.hisztogram.map((b) => {
                     const max = Math.max(
@@ -177,10 +177,10 @@ export function MedicalStatisticsSection() {
                     return (
                       <li key={b.savIdx}>
                         <div className="flex justify-between text-xs">
-                          <span className="text-gray-700">{b.sav}</span>
-                          <span className="tabular-nums font-semibold text-gray-900">{b.darab}</span>
+                          <span className="text-gray-700 dark:text-gray-300">{b.sav}</span>
+                          <span className="tabular-nums font-semibold text-gray-900 dark:text-gray-100">{b.darab}</span>
                         </div>
-                        <div className="mt-0.5 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                        <div className="mt-0.5 h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
                           <div
                             className={`h-full rounded-full transition-[width] duration-500 ${
                               isImprovement
@@ -204,46 +204,46 @@ export function MedicalStatisticsSection() {
 
       <div className="card">
         <h2 className="text-xl font-semibold mb-4">Kiosztott kezelési tervek</h2>
-        <p className="text-sm text-gray-500 mb-4">
-          A <code className="text-xs bg-gray-100 px-1 rounded">patient_treatment_plans</code> táblában tárolt
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+          A <code className="text-xs bg-gray-100 dark:bg-gray-800 px-1 rounded">patient_treatment_plans</code> táblában tárolt
           felső / alsó állcsonti és arcot érintő tervsorok összesítése; fogpótlás típusok a törzs alapján felcímkézve.
         </p>
         <TreatmentPlanStatsChart treatmentPlans={stats.treatmentPlans} />
 
         {/* Készültség per beteg */}
-        <div className="mt-6 rounded-xl border border-gray-200/80 bg-gradient-to-br from-violet-50/40 to-white p-4">
-          <h3 className="mb-3 text-sm font-semibold text-gray-900">Készültség per beteg</h3>
-          <p className="mb-3 text-xs text-gray-500">
+        <div className="mt-6 rounded-xl border border-gray-200/80 dark:border-gray-800 bg-gradient-to-br from-violet-50/40 to-white p-4">
+          <h3 className="mb-3 text-sm font-semibold text-gray-900 dark:text-gray-100">Készültség per beteg</h3>
+          <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
             (kész elem / összes elem) per beteg arány aggregátuma — csak azok a betegek, akiknél van
             legalább 1 elem az adott rácsban.
           </p>
-          <div className="overflow-x-auto rounded-lg border border-gray-200">
-            <table className="min-w-full divide-y divide-gray-200 text-sm">
-              <thead className="bg-gray-50/90">
+          <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-800">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800 text-sm">
+              <thead className="bg-gray-50/90 dark:bg-gray-800/60">
                 <tr>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600">Rács</th>
-                  <th className="px-3 py-2 text-right font-semibold text-gray-600">Minta (beteg)</th>
-                  <th className="px-3 py-2 text-right font-semibold text-gray-600">Átlag %</th>
-                  <th className="px-3 py-2 text-right font-semibold text-gray-600">Medián %</th>
-                  <th className="px-3 py-2 text-right font-semibold text-gray-600">Teljesen kész</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Rács</th>
+                  <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-400">Minta (beteg)</th>
+                  <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-400">Átlag %</th>
+                  <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-400">Medián %</th>
+                  <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-400">Teljesen kész</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 bg-white">
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-800 bg-white dark:bg-gray-900">
                 {(['felso', 'also', 'arcot'] as const).map((key) => {
                   const row = stats.treatmentPlans.keszultseg[key];
                   const label = key === 'felso' ? 'Felső állcsont' : key === 'also' ? 'Alsó állcsont' : 'Arcot érintő';
                   return (
                     <tr key={key}>
-                      <td className="px-3 py-2 text-gray-800">{label}</td>
+                      <td className="px-3 py-2 text-gray-800 dark:text-gray-200">{label}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{row.mintaSzam}</td>
-                      <td className="px-3 py-2 text-right tabular-nums font-semibold text-emerald-700">
+                      <td className="px-3 py-2 text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-300">
                         {row.atlagPct ?? '—'}%
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums">{row.medianPct ?? '—'}%</td>
                       <td className="px-3 py-2 text-right tabular-nums">
                         {row.teljesenKesz}
                         {row.mintaSzam > 0 ? (
-                          <span className="ml-1 text-xs text-gray-500">
+                          <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">
                             ({Math.round((row.teljesenKesz / row.mintaSzam) * 100)}%)
                           </span>
                         ) : null}

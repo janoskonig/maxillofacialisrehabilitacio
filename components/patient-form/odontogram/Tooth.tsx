@@ -99,7 +99,7 @@ export function Tooth({
   return (
     <div className="flex flex-col items-center" style={{ width: size }}>
       {showNumber && numberPosition === 'above' && (
-        <span className="text-[9.5px] leading-none mb-0.5 text-gray-400">{fdi}</span>
+        <span className="text-[9.5px] leading-none mb-0.5 text-gray-400 dark:text-gray-500">{fdi}</span>
       )}
       <svg
         width={size}
@@ -201,7 +201,7 @@ export function Tooth({
         )}
       </svg>
       {showNumber && numberPosition === 'below' && (
-        <span className="text-[9.5px] leading-none mt-0.5 text-gray-400">{fdi}</span>
+        <span className="text-[9.5px] leading-none mt-0.5 text-gray-400 dark:text-gray-500">{fdi}</span>
       )}
     </div>
   );

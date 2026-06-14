@@ -275,11 +275,11 @@ export default function StagesGanttPage() {
               </label>
               {showIntezmenyFilter && (
                 <label className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">Beutaló intézmény:</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Beutaló intézmény:</span>
                   <select
                     value={intezmeny}
                     onChange={(e) => setIntezmeny(e.target.value)}
-                    className="rounded-md border border-gray-300 px-3 py-1.5 text-sm max-w-[260px] focus:ring-medical-primary focus:border-medical-primary"
+                    className="rounded-md border border-gray-300 dark:border-gray-700 px-3 py-1.5 text-sm max-w-[260px] focus:ring-medical-primary focus:border-medical-primary"
                   >
                     <option value="all">Összes ({episodes.length})</option>
                     {institutions.map((inst) => (
@@ -296,22 +296,22 @@ export default function StagesGanttPage() {
           {viewMode === 'patient' && (
             <div className="flex flex-wrap items-center gap-4">
               <label className="flex flex-col gap-1">
-                <span className="text-sm text-gray-600">Beteg keresése / kiválasztása</span>
+                <span className="text-sm text-gray-600 dark:text-gray-400">Beteg keresése / kiválasztása</span>
                 <input
                   type="text"
                   value={patientSearch}
                   onChange={(e) => setPatientSearch(e.target.value)}
                   placeholder="Név vagy azonosító..."
-                  className="rounded-md border border-gray-300 px-3 py-1.5 text-sm w-64 focus:ring-medical-primary focus:border-medical-primary"
+                  className="rounded-md border border-gray-300 dark:border-gray-700 px-3 py-1.5 text-sm w-64 focus:ring-medical-primary focus:border-medical-primary"
                 />
               </label>
               {patientOptions.length > 0 && (
                 <div className="flex flex-col gap-1">
-                  <span className="text-sm text-gray-600">Válassz beteget:</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Válassz beteget:</span>
                   <select
                     value={patientId}
                     onChange={(e) => setPatientId(e.target.value)}
-                    className="rounded-md border border-gray-300 px-3 py-1.5 text-sm min-w-[220px] focus:ring-medical-primary focus:border-medical-primary"
+                    className="rounded-md border border-gray-300 dark:border-gray-700 px-3 py-1.5 text-sm min-w-[220px] focus:ring-medical-primary focus:border-medical-primary"
                   >
                     <option value="">–</option>
                     {patientOptions.map((p) => (
@@ -348,7 +348,7 @@ export default function StagesGanttPage() {
 
         {/* Chart */}
         {dataLoading && episodes.length === 0 ? (
-          <div className="bg-white rounded-lg border border-gray-200 p-12 text-center text-gray-500">
+          <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-12 text-center text-gray-500 dark:text-gray-400">
             GANTT adatok betöltése…
           </div>
         ) : (
