@@ -14,6 +14,8 @@ import {
   type EpisodeWorkPhaseLite,
   type InitialWorkPhase,
 } from './initial-work-phase-selection';
+import { isAutoGenerateWorkPhasesEnabled } from './work-phase-flags';
+import { generateEpisodeWorkPhases } from './generate-episode-work-phases';
 
 /** Get anchor date: last completed appointment or opened_at */
 async function getAnchor(
@@ -91,10 +93,18 @@ async function getCuratedWorkPhases(
 export async function createInitialSlotIntentsForEpisode(episodeId: string): Promise<number> {
   const pool = getDbPool();
 
-  const [curated, anchor] = await Promise.all([
-    getCuratedWorkPhases(pool, episodeId),
-    getAnchor(pool, episodeId),
-  ]);
+  let curated = await getCuratedWorkPhases(pool, episodeId);
+
+  // WP2 (flag-gated, default off): auto-generate the plan from the pathway on
+  // activation so there is always a curated plan to schedule against.
+  if (!curated && isAutoGenerateWorkPhasesEnabled()) {
+    const gen = await generateEpisodeWorkPhases(pool, episodeId);
+    if (gen.status === 'ok' && gen.totalGenerated > 0) {
+      curated = await getCuratedWorkPhases(pool, episodeId);
+    }
+  }
+
+  const anchor = await getAnchor(pool, episodeId);
 
   let selected: InitialWorkPhase[];
   if (curated) {

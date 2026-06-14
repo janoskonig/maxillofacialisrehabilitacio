@@ -43,6 +43,7 @@
     "episode-plan:phase3-link": "node scripts/episode-plan-phase3-link-appointments.js",
     "migrate:025-backfill": "node scripts/migrate-025-backfill-work-phase-id.js",
     "backfill:kezeleoorvos": "node scripts/backfill-kezeleoorvos.js",
+    "backfill:work-phases": "tsx scripts/backfill-episode-work-phases.ts",
     "report:booking-consistency": "node scripts/run-booking-consistency-report.js",
     "registry:legacy-backfill": "node scripts/registry-legacy-backfill.js",
     "registry:legacy-backfill:dry-run": "node scripts/registry-legacy-backfill.js --dry-run",
