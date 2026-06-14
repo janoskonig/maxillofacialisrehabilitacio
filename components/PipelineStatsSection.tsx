@@ -198,7 +198,7 @@ export function PipelineStatsSection({ onDataChange }: Props) {
           ))}
         </div>
       ) : unavailable ? (
-        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/80 p-3 text-sm text-amber-800">
+        <div className="flex items-start gap-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/80 p-3 text-sm text-amber-800 dark:text-amber-300">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
             A pipeline adatok nem érhetők el — a 016-os migráció (patient_episodes / episode_work_phases)
@@ -206,7 +206,7 @@ export function PipelineStatsSection({ onDataChange }: Props) {
           </span>
         </div>
       ) : error ? (
-        <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50/80 p-3 text-sm text-rose-800">
+        <div className="flex items-start gap-2 rounded-lg border border-rose-200 dark:border-rose-800 bg-rose-50/80 p-3 text-sm text-rose-800 dark:text-rose-300">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>
@@ -214,63 +214,63 @@ export function PipelineStatsSection({ onDataChange }: Props) {
         <div className="space-y-6">
           {/* ── Episode lifetime + status ── */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <div className="rounded-xl border border-gray-200/80 bg-gradient-to-br from-indigo-50/60 to-white p-4">
-              <div className="mb-2 flex items-center gap-2 text-indigo-800">
+            <div className="rounded-xl border border-gray-200/80 dark:border-gray-800/80 bg-gradient-to-br from-indigo-50/60 to-white p-4">
+              <div className="mb-2 flex items-center gap-2 text-indigo-800 dark:text-indigo-300">
                 <CheckCircle2 className="h-4 w-4" />
                 <h3 className="text-sm font-semibold">Lezárt episode-ok</h3>
               </div>
-              <p className="text-2xl font-bold tabular-nums text-gray-900">
+              <p className="text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-100">
                 {fmtInt(data.episodeLifetime.lezart.mintaSzam)}
               </p>
               <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                <dt className="text-gray-500">Átlag</dt>
+                <dt className="text-gray-500 dark:text-gray-400">Átlag</dt>
                 <dd className="text-right tabular-nums">{fmtNum(data.episodeLifetime.lezart.atlagNapok, ' nap')}</dd>
-                <dt className="text-gray-500">Medián</dt>
+                <dt className="text-gray-500 dark:text-gray-400">Medián</dt>
                 <dd className="text-right tabular-nums">{fmtNum(data.episodeLifetime.lezart.medianNapok, ' nap')}</dd>
-                <dt className="text-gray-500">P25–P75</dt>
+                <dt className="text-gray-500 dark:text-gray-400">P25–P75</dt>
                 <dd className="text-right tabular-nums">
                   {fmtNum(data.episodeLifetime.lezart.p25Napok)}–{fmtNum(data.episodeLifetime.lezart.p75Napok, ' nap')}
                 </dd>
-                <dt className="text-gray-500">Min–Max</dt>
+                <dt className="text-gray-500 dark:text-gray-400">Min–Max</dt>
                 <dd className="text-right tabular-nums">
                   {fmtNum(data.episodeLifetime.lezart.minNapok)}–{fmtNum(data.episodeLifetime.lezart.maxNapok, ' nap')}
                 </dd>
               </dl>
             </div>
 
-            <div className="rounded-xl border border-gray-200/80 bg-gradient-to-br from-sky-50/60 to-white p-4">
-              <div className="mb-2 flex items-center gap-2 text-sky-800">
+            <div className="rounded-xl border border-gray-200/80 dark:border-gray-800/80 bg-gradient-to-br from-sky-50/60 to-white p-4">
+              <div className="mb-2 flex items-center gap-2 text-sky-800 dark:text-sky-300">
                 <Clock className="h-4 w-4" />
                 <h3 className="text-sm font-semibold">Nyitott episode-ok kora</h3>
               </div>
-              <p className="text-2xl font-bold tabular-nums text-gray-900">
+              <p className="text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-100">
                 {fmtInt(data.episodeLifetime.nyitott.mintaSzam)}
               </p>
               <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                <dt className="text-gray-500">Átlag</dt>
+                <dt className="text-gray-500 dark:text-gray-400">Átlag</dt>
                 <dd className="text-right tabular-nums">{fmtNum(data.episodeLifetime.nyitott.atlagNapok, ' nap')}</dd>
-                <dt className="text-gray-500">Medián</dt>
+                <dt className="text-gray-500 dark:text-gray-400">Medián</dt>
                 <dd className="text-right tabular-nums">{fmtNum(data.episodeLifetime.nyitott.medianNapok, ' nap')}</dd>
-                <dt className="text-gray-500">P75</dt>
+                <dt className="text-gray-500 dark:text-gray-400">P75</dt>
                 <dd className="text-right tabular-nums">{fmtNum(data.episodeLifetime.nyitott.p75Napok, ' nap')}</dd>
-                <dt className="text-gray-500">Legrégebb</dt>
+                <dt className="text-gray-500 dark:text-gray-400">Legrégebb</dt>
                 <dd className="text-right tabular-nums">{fmtNum(data.episodeLifetime.nyitott.maxNapok, ' nap')}</dd>
               </dl>
             </div>
 
-            <div className="rounded-xl border border-gray-200/80 bg-white p-4">
-              <div className="mb-2 flex items-center gap-2 text-gray-700">
+            <div className="rounded-xl border border-gray-200/80 dark:border-gray-800/80 bg-white dark:bg-gray-900 p-4">
+              <div className="mb-2 flex items-center gap-2 text-gray-700 dark:text-gray-300">
                 <Layers className="h-4 w-4" />
                 <h3 className="text-sm font-semibold">Episode-ok státusz szerint</h3>
               </div>
               <ul className="mt-2 space-y-2">
                 {data.episodeStatus.length === 0 ? (
-                  <li className="text-sm text-gray-500">Nincs adat.</li>
+                  <li className="text-sm text-gray-500 dark:text-gray-400">Nincs adat.</li>
                 ) : (
                   data.episodeStatus.map((s) => (
                     <li key={s.status} className="flex items-center justify-between text-sm">
-                      <span className="text-gray-700">{STATUS_LABEL_HU[s.status] ?? s.status}</span>
-                      <span className="font-semibold tabular-nums text-gray-900">{fmtInt(s.darab)}</span>
+                      <span className="text-gray-700 dark:text-gray-300">{STATUS_LABEL_HU[s.status] ?? s.status}</span>
+                      <span className="font-semibold tabular-nums text-gray-900 dark:text-gray-100">{fmtInt(s.darab)}</span>
                     </li>
                   ))
                 )}
@@ -280,8 +280,8 @@ export function PipelineStatsSection({ onDataChange }: Props) {
 
           {/* ── Stuck work phases warning ── */}
           {data.stuckWorkPhases.osszes > 0 ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4">
-              <div className="mb-2 flex items-center gap-2 text-amber-900">
+            <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/70 p-4">
+              <div className="mb-2 flex items-center gap-2 text-amber-900 dark:text-amber-200">
                 <AlertTriangle className="h-4 w-4" />
                 <h3 className="text-sm font-semibold">
                   „Ragadt" munkafázisok ({data.stuckWorkPhases.kuszobNapok}+ napja nyitva):{' '}
@@ -289,32 +289,32 @@ export function PipelineStatsSection({ onDataChange }: Props) {
                 </h3>
               </div>
               {data.stuckWorkPhases.top.length === 0 ? (
-                <p className="text-xs text-amber-800">Nincs részletes bontás.</p>
+                <p className="text-xs text-amber-800 dark:text-amber-300">Nincs részletes bontás.</p>
               ) : (
-                <div className="overflow-x-auto rounded-lg border border-amber-200/70 bg-white">
+                <div className="overflow-x-auto rounded-lg border border-amber-200/70 bg-white dark:bg-gray-900">
                   <table className="min-w-full divide-y divide-amber-100 text-xs">
                     <thead className="bg-amber-50/60">
                       <tr>
-                        <th className="px-3 py-2 text-left font-semibold text-amber-900">Munkafázis</th>
-                        <th className="px-3 py-2 text-left font-semibold text-amber-900">Státusz</th>
-                        <th className="px-3 py-2 text-right font-semibold text-amber-900">Darab</th>
-                        <th className="px-3 py-2 text-right font-semibold text-amber-900">Legidősebb</th>
+                        <th className="px-3 py-2 text-left font-semibold text-amber-900 dark:text-amber-200">Munkafázis</th>
+                        <th className="px-3 py-2 text-left font-semibold text-amber-900 dark:text-amber-200">Státusz</th>
+                        <th className="px-3 py-2 text-right font-semibold text-amber-900 dark:text-amber-200">Darab</th>
+                        <th className="px-3 py-2 text-right font-semibold text-amber-900 dark:text-amber-200">Legidősebb</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-amber-50">
                       {data.stuckWorkPhases.top.map((s, idx) => (
                         <tr key={`${s.workPhaseCode}-${s.status}-${idx}`}>
-                          <td className="px-3 py-1.5 text-gray-800">
-                            {s.labelHu ?? <span className="font-mono text-gray-500">{s.workPhaseCode}</span>}
+                          <td className="px-3 py-1.5 text-gray-800 dark:text-gray-200">
+                            {s.labelHu ?? <span className="font-mono text-gray-500 dark:text-gray-400">{s.workPhaseCode}</span>}
                             {s.labelHu ? (
-                              <span className="ml-1 text-[10px] text-gray-400">{s.workPhaseCode}</span>
+                              <span className="ml-1 text-[10px] text-gray-400 dark:text-gray-500">{s.workPhaseCode}</span>
                             ) : null}
                           </td>
-                          <td className="px-3 py-1.5 text-gray-700">{STATUS_LABEL_HU[s.status] ?? s.status}</td>
-                          <td className="px-3 py-1.5 text-right tabular-nums font-medium text-gray-900">
+                          <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300">{STATUS_LABEL_HU[s.status] ?? s.status}</td>
+                          <td className="px-3 py-1.5 text-right tabular-nums font-medium text-gray-900 dark:text-gray-100">
                             {fmtInt(s.darab)}
                           </td>
-                          <td className="px-3 py-1.5 text-right tabular-nums text-amber-900">
+                          <td className="px-3 py-1.5 text-right tabular-nums text-amber-900 dark:text-amber-200">
                             {fmtNum(s.legidosebbNapok, ' nap')}
                           </td>
                         </tr>
@@ -325,53 +325,53 @@ export function PipelineStatsSection({ onDataChange }: Props) {
               )}
             </div>
           ) : (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 text-xs text-emerald-800">
+            <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/60 p-3 text-xs text-emerald-800 dark:text-emerald-300">
               Nincs {data.stuckWorkPhases.kuszobNapok}+ napja nyitva álló pending/scheduled munkafázis.
             </div>
           )}
 
           {/* ── Work phase totals + matrix ── */}
           <div>
-            <h3 className="mb-3 text-sm font-semibold text-gray-800">
+            <h3 className="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-200">
               Munkafázis pipeline (top 15 kód)
             </h3>
-            <div className="overflow-x-auto rounded-xl border border-gray-200">
-              <table className="min-w-full divide-y divide-gray-200 text-xs">
-                <thead className="bg-gray-50/90">
+            <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-800">
+              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800 text-xs">
+                <thead className="bg-gray-50/90 dark:bg-gray-800/90">
                   <tr>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Munkafázis</th>
-                    <th className="px-3 py-2 text-right font-semibold text-gray-600">Összes</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Munkafázis</th>
+                    <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-400">Összes</th>
                     {WP_STATUS_ORDER.map((s) => (
-                      <th key={s} className="px-3 py-2 text-right font-semibold text-gray-600">
+                      <th key={s} className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-400">
                         {STATUS_LABEL_HU[s] ?? s}
                       </th>
                     ))}
-                    <th className="px-3 py-2 text-right font-semibold text-gray-600">Kész %</th>
+                    <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-400">Kész %</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 bg-white">
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-800 bg-white dark:bg-gray-900">
                   {data.workPhaseTotals.map((w, idx) => {
                     const cells = matrixByCode.get(w.workPhaseCode) ?? new Map<string, number>();
                     return (
-                      <tr key={w.workPhaseCode} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/40'}>
-                        <td className="px-3 py-1.5 text-gray-800">
-                          {w.labelHu ?? <span className="font-mono text-gray-500">{w.workPhaseCode}</span>}
+                      <tr key={w.workPhaseCode} className={idx % 2 === 0 ? 'bg-white dark:bg-gray-900' : 'bg-gray-50/40 dark:bg-gray-800/40'}>
+                        <td className="px-3 py-1.5 text-gray-800 dark:text-gray-200">
+                          {w.labelHu ?? <span className="font-mono text-gray-500 dark:text-gray-400">{w.workPhaseCode}</span>}
                           {w.labelHu ? (
-                            <span className="ml-1 text-[10px] text-gray-400">{w.workPhaseCode}</span>
+                            <span className="ml-1 text-[10px] text-gray-400 dark:text-gray-500">{w.workPhaseCode}</span>
                           ) : null}
                         </td>
-                        <td className="px-3 py-1.5 text-right tabular-nums font-medium text-gray-900">
+                        <td className="px-3 py-1.5 text-right tabular-nums font-medium text-gray-900 dark:text-gray-100">
                           {fmtInt(w.osszes)}
                         </td>
                         {WP_STATUS_ORDER.map((s) => (
-                          <td key={s} className="px-3 py-1.5 text-right tabular-nums text-gray-700">
+                          <td key={s} className="px-3 py-1.5 text-right tabular-nums text-gray-700 dark:text-gray-300">
                             {fmtInt(cells.get(s) ?? (s === 'completed' ? w.kesz
                               : s === 'pending' ? w.pending
                               : s === 'scheduled' ? w.scheduled
                               : w.skipped))}
                           </td>
                         ))}
-                        <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-emerald-700">
+                        <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-300">
                           {w.keszPct.toLocaleString('hu-HU', { maximumFractionDigits: 1 })}%
                         </td>
                       </tr>

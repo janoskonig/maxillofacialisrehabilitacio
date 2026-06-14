@@ -312,7 +312,7 @@ export function SendConsiliumPrepLinkModal({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+            className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
             aria-label="Bezárás"
           >
             <X className="w-4 h-4" />

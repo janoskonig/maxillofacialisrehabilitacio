@@ -261,7 +261,7 @@ export function CalendarView({ onAppointmentClick }: CalendarViewProps) {
               type="checkbox"
               checked={includeVirtual}
               onChange={(e) => setIncludeVirtual(e.target.checked)}
-              className="rounded border-gray-300 dark:border-gray-600 dark:bg-gray-800 text-amber-600 focus:ring-amber-500"
+              className="rounded border-gray-300 dark:border-gray-600 dark:bg-gray-800 text-amber-600 dark:text-amber-300 focus:ring-amber-500"
             />
             <span className="text-sm text-gray-700 dark:text-gray-300">Virtuális időpontok</span>
           </label>

@@ -136,7 +136,7 @@ export function PerioChart({ patientId, isViewOnly }: PerioChartProps) {
           <div key={tooth} className="flex shrink-0 justify-center gap-0.5" style={{ width: 90 }}>
             {[0, 1, 2].map((i) =>
               isViewOnly ? (
-                <span key={i} className={`${numCellCls} inline-flex items-center justify-center ${metric === 'pd' && site.pd[i] >= 4 ? 'text-red-700 font-semibold' : 'text-gray-700 dark:text-gray-300'}`}>
+                <span key={i} className={`${numCellCls} inline-flex items-center justify-center ${metric === 'pd' && site.pd[i] >= 4 ? 'text-red-700 dark:text-red-300 font-semibold' : 'text-gray-700 dark:text-gray-300'}`}>
                   {site[metric][i]}
                 </span>
               ) : (
@@ -146,7 +146,7 @@ export function PerioChart({ patientId, isViewOnly }: PerioChartProps) {
                   value={site[metric][i] === 0 ? '' : site[metric][i]}
                   placeholder="0"
                   onChange={(e) => setNum(String(tooth), surface, metric, i, e.target.value)}
-                  className={`${numCellCls} ${metric === 'pd' && site.pd[i] >= 4 ? 'text-red-700 font-semibold' : ''}`}
+                  className={`${numCellCls} ${metric === 'pd' && site.pd[i] >= 4 ? 'text-red-700 dark:text-red-300 font-semibold' : ''}`}
                 />
               )
             )}

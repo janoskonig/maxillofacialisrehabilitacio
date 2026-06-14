@@ -387,29 +387,29 @@ function ConsiliumItemPrepCommentsReadonly({
   const hasAny = (prepComments?.length ?? 0) > 0;
 
   return (
-    <div className="rounded-lg border border-cyan-200 bg-gradient-to-b from-cyan-50/90 to-white px-3 py-2.5 space-y-2">
+    <div className="rounded-lg border border-cyan-200 dark:border-cyan-800 bg-gradient-to-b from-cyan-50/90 to-white px-3 py-2.5 space-y-2">
       <div>
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-cyan-900/85">Előkészítő megjegyzések</p>
-        <p className="text-[11px] text-cyan-800/55 mt-0.5">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-cyan-900/85 dark:text-cyan-200/85">Előkészítő megjegyzések</p>
+        <p className="text-[11px] text-cyan-800/55 dark:text-cyan-300/55 mt-0.5">
           Linken írt hozzászólások — az élő ülésen rögzített verdiktet nem váltják ki.
         </p>
       </div>
       {!hasAny ? (
-        <p className="text-xs text-cyan-800/45">Még nincs előkészítő hozzászólás.</p>
+        <p className="text-xs text-cyan-800/45 dark:text-cyan-300/45">Még nincs előkészítő hozzászólás.</p>
       ) : (
         <div className="space-y-3">
           {keysWithComments.map((row) => {
             const list = byKey.get(row.key) ?? [];
             return (
-              <div key={row.key} className="border-b border-cyan-100 pb-2 last:border-0 last:pb-0 space-y-1.5">
-                <p className="text-xs font-medium text-cyan-950">{row.label}</p>
+              <div key={row.key} className="border-b border-cyan-100 dark:border-cyan-800 pb-2 last:border-0 last:pb-0 space-y-1.5">
+                <p className="text-xs font-medium text-cyan-950 dark:text-cyan-200">{row.label}</p>
                 <ul className="space-y-1.5">
                   {list.map((cm) => (
                     <li
                       key={cm.id}
                       className="text-xs text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-900 border border-cyan-100/80 dark:border-cyan-900/60 rounded-md px-2 py-1.5 shadow-sm"
                     >
-                      <span className="text-[10px] text-cyan-700/75">
+                      <span className="text-[10px] text-cyan-700/75 dark:text-cyan-300/75">
                         {formatConsiliumHuDateTime(cm.createdAt)} · {cm.authorDisplay}
                       </span>
                       <p className="whitespace-pre-wrap mt-0.5 leading-snug">{cm.body}</p>
@@ -420,8 +420,8 @@ function ConsiliumItemPrepCommentsReadonly({
             );
           })}
           {Array.from(orphanByKey.entries()).map(([key, list]) => (
-            <div key={`orphan-${key}`} className="border-b border-amber-100 pb-2 last:border-0 space-y-1.5">
-              <p className="text-xs font-medium text-amber-900">
+            <div key={`orphan-${key}`} className="border-b border-amber-100 dark:border-amber-800 pb-2 last:border-0 space-y-1.5">
+              <p className="text-xs font-medium text-amber-900 dark:text-amber-200">
                 Törölt vagy átnevezett pont <span className="font-mono text-[10px] opacity-70">({key})</span>
               </p>
               <ul className="space-y-1.5">
@@ -748,16 +748,16 @@ function ChecklistRowEditor({
                           {task.note ? (
                             <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80">Megjegyzés: {task.note}</p>
                           ) : (
-                            <p className="text-[11px] text-amber-700/65 italic">Nincs megjegyzés.</p>
+                            <p className="text-[11px] text-amber-700/65 dark:text-amber-300/65 italic">Nincs megjegyzés.</p>
                           )}
                           {task.dueAt ? (
-                            <p className="text-[11px] text-amber-900/85 mt-0.5">
+                            <p className="text-[11px] text-amber-900/85 dark:text-amber-200/85 mt-0.5">
                               Határidő:{' '}
                               {new Date(task.dueAt).toLocaleString('hu-HU', { dateStyle: 'medium', timeStyle: 'short' })}
                             </p>
                           ) : null}
                           {task.status === 'done' && task.completedAt ? (
-                            <p className="text-[11px] text-emerald-800/90 mt-0.5">
+                            <p className="text-[11px] text-emerald-800/90 dark:text-emerald-300/90 mt-0.5">
                               Késznek jelölve: {new Date(task.completedAt).toLocaleString('hu-HU')}
                             </p>
                           ) : null}
@@ -771,7 +771,7 @@ function ChecklistRowEditor({
                           <button
                             type="button"
                             disabled={cancellingTaskId === task.id}
-                            className="shrink-0 text-[11px] text-red-700 hover:underline disabled:opacity-40"
+                            className="shrink-0 text-[11px] text-red-700 dark:text-red-300 hover:underline disabled:opacity-40"
                             onClick={() => void cancelDelegatedTask(task.id)}
                           >
                             {cancellingTaskId === task.id ? '…' : 'Visszavonás'}
@@ -810,7 +810,7 @@ function ChecklistRowEditor({
           >
             <ArrowDown className="w-3.5 h-3.5" />
           </button>
-          <button type="button" className="text-xs text-red-600 hover:underline" onClick={() => void remove()}>
+          <button type="button" className="text-xs text-red-600 dark:text-red-300 hover:underline" onClick={() => void remove()}>
             Törlés
           </button>
         </div>
@@ -1533,7 +1533,7 @@ export default function ConsiliumPage() {
                     )}
                     <button
                       type="button"
-                      className="btn-secondary text-xs px-3 py-1.5 inline-flex items-center gap-1 text-red-700"
+                      className="btn-secondary text-xs px-3 py-1.5 inline-flex items-center gap-1 text-red-700 dark:text-red-300"
                       onClick={() => deleteSession(selectedSession.id, selectedSession.status)}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -1562,7 +1562,7 @@ export default function ConsiliumPage() {
               )}
 
               {selectedSession && sessionDetail && selectedSession.status !== 'closed' && (
-                <div className="rounded-lg border border-indigo-100 bg-indigo-50/40 p-3 space-y-2">
+                <div className="rounded-lg border border-indigo-100 dark:border-indigo-800 bg-indigo-50/40 dark:bg-indigo-950/40 p-3 space-y-2">
                   <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Konzílium időpont módosítása</h4>
                   <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto] gap-2 items-end">
                     <div>
@@ -1586,7 +1586,7 @@ export default function ConsiliumPage() {
                   </div>
                   {rescheduleProposals.length > 0 ? (
                     <div className="space-y-1.5 pt-1">
-                      <p className="text-xs text-indigo-900/85">
+                      <p className="text-xs text-indigo-900/85 dark:text-indigo-200/85">
                         RSVP-ben javasolt időpontok ({rescheduleProposals.length}):
                       </p>
                       <div className="flex flex-wrap gap-1.5">
@@ -1659,13 +1659,13 @@ export default function ConsiliumPage() {
               )}
 
               {selectedSession && sessionDetail && (
-                <div className="rounded-lg border border-cyan-100 bg-cyan-50/40 p-3 space-y-2">
+                <div className="rounded-lg border border-cyan-100 dark:border-cyan-800 bg-cyan-50/40 dark:bg-cyan-950/40 p-3 space-y-2">
                   <div className="flex items-start justify-between gap-2 flex-wrap">
                     <div className="min-w-0">
-                      <h4 className="text-sm font-semibold text-gray-900 inline-flex items-center gap-1.5">
-                        <Mail className="w-4 h-4 text-cyan-700" /> Meghívók és RSVP
+                      <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 inline-flex items-center gap-1.5">
+                        <Mail className="w-4 h-4 text-cyan-700 dark:text-cyan-300" /> Meghívók és RSVP
                       </h4>
-                      <p className="text-xs text-gray-600 mt-0.5">
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
                         Email-meghívót küld a jelenlévőknek. A címzettek a levélből egy kattintással
                         jelezhetik: <em>Ott leszek</em> / <em>Kések</em> / <em>Máskor lenne jó</em>. Minden sikeres
                         kiküldés növeli a számlálót (újraküldés is).
@@ -1691,7 +1691,7 @@ export default function ConsiliumPage() {
                         )}
                         <button
                           type="button"
-                          className="text-xs text-gray-700 hover:underline"
+                          className="text-xs text-gray-700 dark:text-gray-300 hover:underline"
                           onClick={() => setInvitationsExpanded((v) => !v)}
                         >
                           {invitationsExpanded ? 'Kevesebb' : 'Részletek'}
@@ -1701,34 +1701,34 @@ export default function ConsiliumPage() {
                   </div>
 
                   {sessionDetail.attendees.length === 0 && invitationRosterRows.length === 0 ? (
-                    <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded px-2 py-1.5">
+                    <p className="text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-100 rounded px-2 py-1.5">
                       Adj hozzá legalább egy jelenlévőt, mielőtt meghívót küldenél.
                     </p>
                   ) : invitationRosterRows.length > 0 || sessionDetail.attendees.length > 0 ? (
                     <div className="flex flex-wrap gap-1.5 text-[11px]">
-                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-emerald-900">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 text-emerald-900 dark:text-emerald-200">
                         Ott leszek: <strong>{invitationSummary.going}</strong>
                       </span>
-                      <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-amber-900">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 text-amber-900 dark:text-amber-200">
                         Kések: <strong>{invitationSummary.late}</strong>
                       </span>
-                      <span className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-indigo-900">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 text-indigo-900 dark:text-indigo-200">
                         Máskor: <strong>{invitationSummary.reschedule}</strong>
                       </span>
-                      <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-2 py-0.5 text-gray-700">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-2 py-0.5 text-gray-700 dark:text-gray-300">
                         Még nem válaszolt: <strong>{invitationSummary.pending}</strong>
                       </span>
-                      <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-gray-600">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60 px-2 py-0.5 text-gray-600 dark:text-gray-400">
                         Nincs meghívó: <strong>{invitationSummary.notInvited}</strong>
                       </span>
                     </div>
                   ) : null}
 
                   {invitationsExpanded && (
-                    <div className="space-y-2 pt-2 border-t border-cyan-100">
+                    <div className="space-y-2 pt-2 border-t border-cyan-100 dark:border-cyan-800">
                       {selectedSession.status !== 'closed' && (
                         <div>
-                          <label className="text-[11px] uppercase tracking-wide text-gray-500">
+                          <label className="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400">
                             Üzenet a meghívóhoz (opcionális)
                           </label>
                           <textarea
@@ -1738,16 +1738,16 @@ export default function ConsiliumPage() {
                             maxLength={1000}
                             onChange={(e) => setInvitationNote(e.target.value)}
                           />
-                          <p className="text-[11px] text-gray-400 text-right">
+                          <p className="text-[11px] text-gray-400 dark:text-gray-500 text-right">
                             {invitationNote.length}/1000
                           </p>
                         </div>
                       )}
 
                       {loadingInvitations && invitations.length === 0 ? (
-                        <p className="text-xs text-gray-500">Meghívók betöltése…</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Meghívók betöltése…</p>
                       ) : (
-                        <ul className="divide-y divide-cyan-100 rounded-md border border-cyan-100 bg-white">
+                        <ul className="divide-y divide-cyan-100 dark:divide-cyan-800 rounded-md border border-cyan-100 dark:border-cyan-800 bg-white dark:bg-gray-900">
                           {invitationRosterRows.map((a) => {
                             const inv = activeInvitationsByAttendeeId.get(a.id);
                             const responded = inv?.respondedAt ? inv.response : null;
@@ -1755,19 +1755,19 @@ export default function ConsiliumPage() {
                             return (
                               <li key={a.id} className="px-3 py-2 flex items-start gap-2 text-sm">
                                 <div className="min-w-0 flex-1">
-                                  <p className="font-medium text-gray-900 truncate">{a.name}</p>
+                                  <p className="font-medium text-gray-900 dark:text-gray-100 truncate">{a.name}</p>
                                   {!a.onAttendeeList && (
-                                    <p className="text-[10px] text-gray-500 italic">
+                                    <p className="text-[10px] text-gray-500 dark:text-gray-400 italic">
                                       Nincs a jelenlévők listán (meghívó megmaradt)
                                     </p>
                                   )}
                                   {inv?.attendeeEmail && (
-                                    <p className="text-[11px] text-gray-500 truncate">
+                                    <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
                                       {inv.attendeeEmail}
                                     </p>
                                   )}
                                   {sent && inv && (
-                                    <p className="text-[11px] text-gray-500 mt-0.5">
+                                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
                                       Küldve: {new Date(inv.sentAt!).toLocaleString('hu-HU')}
                                       {inv.sendCount > 1 ? ` · ${inv.sendCount}× kiküldve összesen` : ''}
                                       {inv.respondedAt
@@ -1776,7 +1776,7 @@ export default function ConsiliumPage() {
                                     </p>
                                   )}
                                   {inv?.response === 'reschedule' && inv.proposedAt && (
-                                    <p className="text-[11px] text-indigo-800 mt-0.5">
+                                    <p className="text-[11px] text-indigo-800 dark:text-indigo-300 mt-0.5">
                                       Javasolt időpont:{' '}
                                       <strong>
                                         {new Date(inv.proposedAt).toLocaleString('hu-HU', {
@@ -1801,7 +1801,7 @@ export default function ConsiliumPage() {
                                   <button
                                     type="button"
                                     disabled={sendingInvitations}
-                                    className="shrink-0 text-[11px] text-cyan-800 hover:underline disabled:opacity-40"
+                                    className="shrink-0 text-[11px] text-cyan-800 dark:text-cyan-300 hover:underline disabled:opacity-40"
                                     onClick={() =>
                                       void sendInvitations({
                                         attendeeIds: [a.id],
@@ -1817,7 +1817,7 @@ export default function ConsiliumPage() {
                                   <button
                                     type="button"
                                     disabled={sendingInvitations}
-                                    className="shrink-0 text-[11px] text-cyan-800 hover:underline disabled:opacity-40"
+                                    className="shrink-0 text-[11px] text-cyan-800 dark:text-cyan-300 hover:underline disabled:opacity-40"
                                     onClick={() =>
                                       void sendInvitations({
                                         attendeeIds: [a.id],
@@ -1840,7 +1840,7 @@ export default function ConsiliumPage() {
 
               {selectedSession && selectedSession.status !== 'closed' && (
                 <div className="space-y-2">
-                  <label className="text-xs text-gray-600">Beteg keresése (min. 2 karakter)</label>
+                  <label className="text-xs text-gray-600 dark:text-gray-400">Beteg keresése (min. 2 karakter)</label>
                   <input
                     className="form-input"
                     value={patientQuery}
@@ -1848,23 +1848,23 @@ export default function ConsiliumPage() {
                     placeholder="Név / TAJ / telefon..."
                   />
                   {patientHits.length > 0 && (
-                    <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 bg-white">
+                    <div className="border border-gray-200 dark:border-gray-800 rounded-lg divide-y divide-gray-100 dark:divide-gray-800 bg-white dark:bg-gray-900">
                       {patientHits.map((p) => (
                         <button
                           key={p.id}
                           type="button"
-                          className="w-full text-left px-3 py-2 hover:bg-gray-50"
+                          className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800/50"
                           onClick={() => addPatientToSession(p.id)}
                           disabled={selectedSession.status !== 'draft'}
                         >
-                          <p className="text-sm font-medium text-gray-900">{p.nev || 'Névtelen'}</p>
-                          <p className="text-xs text-gray-500">{p.taj ? `TAJ: ${p.taj}` : p.id}</p>
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{p.nev || 'Névtelen'}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">{p.taj ? `TAJ: ${p.taj}` : p.id}</p>
                         </button>
                       ))}
                     </div>
                   )}
                   {selectedSession.status !== 'draft' && (
-                    <p className="text-xs text-gray-600">Aktív alkalom alatt új beteg nem adható hozzá (stabil vetítés-index).</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Aktív alkalom alatt új beteg nem adható hozzá (stabil vetítés-index).</p>
                   )}
                 </div>
               )}
@@ -1872,22 +1872,22 @@ export default function ConsiliumPage() {
               {selectedSession && (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <CalendarClock className="w-4 h-4 text-gray-500" />
-                    <h4 className="text-sm font-semibold text-gray-900">Beteglista</h4>
+                    <CalendarClock className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                    <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Beteglista</h4>
                   </div>
-                  {loadingItems && <p className="text-sm text-gray-500">Elemek betöltése...</p>}
-                  {!loadingItems && items.length === 0 && <p className="text-sm text-gray-500">Még nincs beteg az alkalmon.</p>}
+                  {loadingItems && <p className="text-sm text-gray-500 dark:text-gray-400">Elemek betöltése...</p>}
+                  {!loadingItems && items.length === 0 && <p className="text-sm text-gray-500 dark:text-gray-400">Még nincs beteg az alkalmon.</p>}
                   <div className="space-y-3">
                     {items.map((it) => {
                       const name = it.patientSummary?.name || 'Ismeretlen beteg';
                       const readonly = selectedSession.status === 'closed';
                       const listLocked = selectedSession.status !== 'draft';
                       return (
-                        <div key={it.id} className="border border-gray-200 rounded-lg p-3 bg-white space-y-2">
+                        <div key={it.id} className="border border-gray-200 dark:border-gray-800 rounded-lg p-3 bg-white dark:bg-gray-900 space-y-2">
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
-                              <p className="text-sm font-semibold text-gray-900 truncate">{name}</p>
-                              <p className="text-xs text-gray-500">
+                              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{name}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
                                 #{it.sortOrder} · {it.patientSummary?.missingPatient ? 'Beteg rekord hiányzik / nem látható' : it.patientId}
                               </p>
                             </div>
@@ -1896,7 +1896,7 @@ export default function ConsiliumPage() {
                                 {draftTransferTargets.length > 0 && (
                                   <>
                                     <select
-                                      className="text-xs border border-gray-200 rounded px-1.5 py-1 bg-white"
+                                      className="text-xs border border-gray-200 dark:border-gray-800 rounded px-1.5 py-1 bg-white dark:bg-gray-900"
                                       value={moveTargetByItemId[it.id] ?? draftTransferTargets[0].id}
                                       onChange={(e) =>
                                         setMoveTargetByItemId((prev) => ({
@@ -1922,7 +1922,7 @@ export default function ConsiliumPage() {
                                 )}
                                 <button
                                   type="button"
-                                  className="text-xs text-red-700 hover:underline"
+                                  className="text-xs text-red-700 dark:text-red-300 hover:underline"
                                   onClick={() => removeItem(it.id)}
                                 >
                                   Eltávolítás
@@ -1933,7 +1933,7 @@ export default function ConsiliumPage() {
 
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                             <div>
-                              <label className="flex items-center gap-2 text-sm text-gray-800 mt-1">
+                              <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200 mt-1">
                                 <input
                                   type="checkbox"
                                   checked={!!it.discussionState?.discussed}
@@ -1958,7 +1958,7 @@ export default function ConsiliumPage() {
                                 Megbeszélve
                               </label>
                             </div>
-                            <div className="text-xs text-gray-600 md:self-end">
+                            <div className="text-xs text-gray-600 dark:text-gray-400 md:self-end">
                               Média: OP kép {it.mediaSummary?.opPreview?.imageCount ?? 0}/{it.mediaSummary?.opPreview?.totalCount ?? 0} · Foto{' '}
                               {it.mediaSummary?.photoPreview?.imageCount ?? 0}/{it.mediaSummary?.photoPreview?.totalCount ?? 0}
                               {it.mediaSummary?.error ? ' · média összegzés részben hibás' : ''}
@@ -1982,10 +1982,10 @@ export default function ConsiliumPage() {
                           />
 
                           {selectedSession.status !== 'closed' && (
-                            <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
+                            <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
                               <button
                                 type="button"
-                                className="text-xs px-2 py-1 rounded-md border border-gray-200 bg-white text-gray-800 hover:bg-gray-50"
+                                className="text-xs px-2 py-1 rounded-md border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800/50"
                                 onClick={() => void copyPrepLinkForItem(it.id)}
                               >
                                 Előkészítő link másolása
@@ -2006,7 +2006,7 @@ export default function ConsiliumPage() {
                               </button>
                               <button
                                 type="button"
-                                className="text-xs px-2 py-1 rounded-md text-red-700 hover:bg-red-50"
+                                className="text-xs px-2 py-1 rounded-md text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/40"
                                 onClick={() => void revokePrepLinksForItem(it.id)}
                               >
                                 Előkészítő linkek visszavonása
@@ -2023,7 +2023,7 @@ export default function ConsiliumPage() {
           </section>
         </div>
 
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-gray-500 dark:text-gray-400">
           MVP: a betegprofil régi „Konzílium” füle és tartalma megmarad; ez az oldal az alkalmakat és a hozzájuk tartozó listát
           külön tárolja.
         </p>

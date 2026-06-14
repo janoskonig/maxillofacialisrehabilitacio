@@ -67,9 +67,9 @@ export function MessageContextCard({
   const isOwn = variant === 'bubble-own';
   const boxClass = isOwn
     ? 'bg-blue-500/30 border-blue-400/50 text-white'
-    : 'bg-gray-50 border-gray-200 text-gray-900';
-  const metaClass = isOwn ? 'text-blue-100' : 'text-gray-500';
-  const typeClass = isOwn ? 'text-blue-200' : 'text-blue-600';
+    : 'bg-gray-50 dark:bg-gray-800/60 border-gray-200 dark:border-gray-800 text-gray-900 dark:text-gray-100';
+  const metaClass = isOwn ? 'text-blue-100' : 'text-gray-500 dark:text-gray-400';
+  const typeClass = isOwn ? 'text-blue-200' : 'text-blue-600 dark:text-blue-300';
 
   const inner = (
     <div
@@ -112,7 +112,7 @@ export function MessageContextCard({
             onRemove(link.id);
           }}
           className={`absolute -top-1 -right-1 w-5 h-5 rounded-full text-xs font-bold shadow ${
-            isOwn ? 'bg-white text-blue-700' : 'bg-gray-700 text-white'
+            isOwn ? 'bg-white dark:bg-gray-900 text-blue-700 dark:text-blue-300' : 'bg-gray-700 text-white'
           } opacity-0 group-hover/link:opacity-100 focus-visible:opacity-100`}
           aria-label="Link eltávolítása"
           title="Link eltávolítása"

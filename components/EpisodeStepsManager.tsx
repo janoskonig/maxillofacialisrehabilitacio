@@ -381,7 +381,7 @@ function SortableStepRow({
           {canUnskip && !mergeMode && (
             <button
               onClick={onUnskipConfirm}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-600 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
               title="Visszaállítás"
             >
               <RotateCcw className="w-3 h-3" />
@@ -964,8 +964,8 @@ export function EpisodeStepsManager({
   };
 
   const getPathwayColor = (sourceId: string | null): string => {
-    if (!sourceId) return 'bg-gray-100 text-gray-600';
-    return pathwayColorMap.get(sourceId) ?? 'bg-gray-100 text-gray-600';
+    if (!sourceId) return 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400';
+    return pathwayColorMap.get(sourceId) ?? 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400';
   };
 
   const filteredCatalog = useMemo(() => {
@@ -1148,7 +1148,7 @@ export function EpisodeStepsManager({
                         <button
                           type="button"
                           onClick={() => setAdderTab('freetext')}
-                          className="mt-2 text-xs text-gray-500 hover:text-medical-primary inline-flex items-center gap-1"
+                          className="mt-2 text-xs text-gray-500 dark:text-gray-400 hover:text-medical-primary inline-flex items-center gap-1"
                         >
                           <PenLine className="w-3 h-3" />
                           Haladó: egyedi megnevezésű munkafázis
@@ -1162,7 +1162,7 @@ export function EpisodeStepsManager({
                         <button
                           type="button"
                           onClick={() => setAdderTab('catalog')}
-                          className="text-xs text-gray-500 hover:text-medical-primary"
+                          className="text-xs text-gray-500 dark:text-gray-400 hover:text-medical-primary"
                         >
                           ← Vissza a katalógushoz
                         </button>
@@ -1171,13 +1171,13 @@ export function EpisodeStepsManager({
                           value={freeLabel}
                           onChange={(e) => setFreeLabel(e.target.value)}
                           placeholder="Munkafázis megnevezése (pl. Ideiglenes korona)"
-                          className="w-full text-sm border border-gray-300 rounded-md px-3 py-1.5"
+                          className="w-full text-sm border border-gray-300 dark:border-gray-700 rounded-md px-3 py-1.5"
                         />
                         <div className="flex items-center gap-2">
                           <select
                             value={freePool}
                             onChange={(e) => setFreePool(e.target.value)}
-                            className="text-sm border border-gray-300 rounded-md px-2 py-1.5"
+                            className="text-sm border border-gray-300 dark:border-gray-700 rounded-md px-2 py-1.5"
                           >
                             <option value="consult">Konzultáció</option>
                             <option value="work">Munkafázis</option>
@@ -1190,9 +1190,9 @@ export function EpisodeStepsManager({
                               onChange={(e) => setFreeDuration(Math.max(5, parseInt(e.target.value) || 30))}
                               min={5}
                               step={5}
-                              className="w-16 text-sm border border-gray-300 rounded-md px-2 py-1.5 text-center"
+                              className="w-16 text-sm border border-gray-300 dark:border-gray-700 rounded-md px-2 py-1.5 text-center"
                             />
-                            <span className="text-xs text-gray-500">perc</span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">perc</span>
                           </div>
                           <button
                             onClick={addFreeTextStep}
@@ -1210,7 +1210,7 @@ export function EpisodeStepsManager({
                     {adderTab === 'tooth' && (
                       <div>
                         {availableToothTreatments.length === 0 ? (
-                          <p className="text-xs text-gray-500 py-2 text-center">Nincs hozzáadható fogkezelés (mindegyik már a munkafázis-sorban van)</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 py-2 text-center">Nincs hozzáadható fogkezelés (mindegyik már a munkafázis-sorban van)</p>
                         ) : (
                           <div className="max-h-48 overflow-y-auto space-y-0.5">
                             {availableToothTreatments.map((tt) => (
@@ -1218,11 +1218,11 @@ export function EpisodeStepsManager({
                                 key={tt.id}
                                 onClick={() => addToothTreatmentStep(tt)}
                                 disabled={addingStep}
-                                className="w-full text-left flex items-center gap-2 px-2.5 py-2 rounded-md hover:bg-white hover:shadow-sm transition-all text-sm disabled:opacity-50 group"
+                                className="w-full text-left flex items-center gap-2 px-2.5 py-2 rounded-md hover:bg-white dark:hover:bg-gray-800 hover:shadow-sm transition-all text-sm disabled:opacity-50 group"
                               >
-                                <Plus className="w-3.5 h-3.5 text-teal-400 group-hover:text-teal-600 shrink-0" />
-                                <span className="font-medium text-gray-800 group-hover:text-teal-700">{tt.labelHu}</span>
-                                <span className="text-xs text-teal-600 ml-1">fog #{tt.toothNumber}</span>
+                                <Plus className="w-3.5 h-3.5 text-teal-400 dark:text-teal-500 group-hover:text-teal-600 shrink-0" />
+                                <span className="font-medium text-gray-800 dark:text-gray-200 group-hover:text-teal-700">{tt.labelHu}</span>
+                                <span className="text-xs text-teal-600 dark:text-teal-300 ml-1">fog #{tt.toothNumber}</span>
                               </button>
                             ))}
                           </div>
@@ -1235,9 +1235,9 @@ export function EpisodeStepsManager({
 
               {/* ─── Merge mode toolbar ──────────────────────────────── */}
               {mergeMode && (
-                <div className="mb-3 flex items-center gap-2 p-2 rounded-lg bg-violet-50 border border-violet-200">
-                  <Merge className="w-4 h-4 text-violet-600" />
-                  <span className="text-sm text-violet-700">Jelölje ki a munkafázisokat, amelyeket egy időpontra szeretne összevonni.</span>
+                <div className="mb-3 flex items-center gap-2 p-2 rounded-lg bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-800">
+                  <Merge className="w-4 h-4 text-violet-600 dark:text-violet-300" />
+                  <span className="text-sm text-violet-700 dark:text-violet-300">Jelölje ki a munkafázisokat, amelyeket egy időpontra szeretne összevonni.</span>
                   <div className="flex-1" />
                   <button
                     onClick={handleMergeConfirm}
@@ -1249,7 +1249,7 @@ export function EpisodeStepsManager({
                   </button>
                   <button
                     onClick={() => { setMergeMode(false); setMergeSelection(new Set()); }}
-                    className="px-2 py-1 text-xs text-violet-600 hover:text-violet-800"
+                    className="px-2 py-1 text-xs text-violet-600 dark:text-violet-300 hover:text-violet-800"
                   >
                     Mégse
                   </button>
@@ -1258,10 +1258,10 @@ export function EpisodeStepsManager({
 
               {/* ─── Step list with DnD ──────────────────────────────── */}
               {primarySteps.length === 0 ? (
-                <p className="text-sm text-gray-500 py-2">Még nincsenek munkafázisok. Adjon hozzá a fenti űrlapon.</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 py-2">Még nincsenek munkafázisok. Adjon hozzá a fenti űrlapon.</p>
               ) : (
                 <div className="space-y-1">
-                  <p className="text-xs text-gray-500 mb-2">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                     Húzza a munkafázisokat a kívánt sorrendbe. A kukával elhagyhatja a felesleges elemeket.
                   </p>
                   {mounted ? (
@@ -1310,7 +1310,7 @@ export function EpisodeStepsManager({
                   ) : (
                     <div className="animate-pulse space-y-2">
                       {primarySteps.map((_, i) => (
-                        <div key={i} className="h-12 bg-gray-100 rounded-lg" />
+                        <div key={i} className="h-12 bg-gray-100 dark:bg-gray-800 rounded-lg" />
                       ))}
                     </div>
                   )}

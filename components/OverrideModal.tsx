@@ -73,25 +73,25 @@ export function OverrideModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" role="dialog" aria-modal="true" aria-labelledby="override-modal-title">
-      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b">
-          <h2 id="override-modal-title" className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5 text-amber-500" />
+          <h2 id="override-modal-title" className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-amber-500 dark:text-amber-400" />
             Override szükséges
           </h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 p-1" aria-label="Bezárás">
+          <button onClick={onClose} className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 p-1" aria-label="Bezárás">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <div className="p-4 space-y-4">
-          <p className="text-sm text-gray-700">{error}</p>
+          <p className="text-sm text-gray-700 dark:text-gray-300">{error}</p>
           {overrideHint && (
-            <p className="text-sm text-gray-600 bg-gray-50 p-2 rounded">{overrideHint}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/60 p-2 rounded">{overrideHint}</p>
           )}
 
           {existingAppointment && (
-            <div className="text-sm text-gray-600 bg-amber-50 p-2 rounded">
+            <div className="text-sm text-gray-600 dark:text-gray-400 bg-amber-50 dark:bg-amber-950/40 p-2 rounded">
               <span className="font-medium">Jelenlegi foglalás:</span>{' '}
               {new Date(existingAppointment.startTime).toLocaleString('hu-HU')}
               {existingAppointment.providerName && ` – ${existingAppointment.providerName}`}
@@ -99,7 +99,7 @@ export function OverrideModal({
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Kategória *</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Kategória *</label>
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
@@ -113,7 +113,7 @@ export function OverrideModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Indoklás (min 10 karakter) *</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Indoklás (min 10 karakter) *</label>
             <textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}
@@ -128,7 +128,7 @@ export function OverrideModal({
                   key={r}
                   type="button"
                   onClick={() => handleQuickReason(r)}
-                  className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-700"
+                  className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
                 >
                   {r}
                 </button>

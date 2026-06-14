@@ -817,7 +817,7 @@ export function PatientMessages() {
                   
                   <div className={`flex flex-col ${isMyMessage ? 'items-end' : 'items-start'}`}>
                     {isTheirMessage && (
-                      <div className="text-xs font-medium text-gray-600 mb-1 px-1">
+                      <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 px-1">
                         {lastName}
                       </div>
                     )}
@@ -827,7 +827,7 @@ export function PatientMessages() {
                         <button
                           type="button"
                           onClick={() => startReplyTo(message)}
-                          className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity p-1 rounded-full bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-300 shadow-sm flex-shrink-0"
+                          className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity p-1 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 hover:text-blue-600 hover:border-blue-300 shadow-sm flex-shrink-0"
                           aria-label="Válasz erre az üzenetre"
                           title="Válasz"
                         >
@@ -840,8 +840,8 @@ export function PatientMessages() {
                           isMyMessage
                             ? 'bg-green-500 text-white rounded-br-md'
                             : isUnread
-                            ? 'bg-white text-gray-900 border-2 border-blue-400 shadow-md'
-                            : 'bg-white text-gray-900 border border-gray-200'
+                            ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border-2 border-blue-400 shadow-md'
+                            : 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-800'
                         }`}
                       >
                         {/* Slice 0.6: idézet előnézet a buborékon belül */}
@@ -867,7 +867,7 @@ export function PatientMessages() {
                           />
                         )}
 
-                        <div className={`text-sm whitespace-pre-wrap break-words ${isMyMessage ? 'text-white' : 'text-gray-900'}`}>
+                        <div className={`text-sm whitespace-pre-wrap break-words ${isMyMessage ? 'text-white' : 'text-gray-900 dark:text-gray-100'}`}>
                           <MessageTextRenderer
                             text={message.message}
                             chatType="patient-doctor"
@@ -884,7 +884,7 @@ export function PatientMessages() {
                         </div>
 
                         <div className={`flex items-center gap-1.5 mt-1.5 ${isMyMessage ? 'justify-end' : 'justify-start'}`}>
-                          <span className={`text-[10px] ${isMyMessage ? 'text-green-100' : 'text-gray-500'}`}>
+                          <span className={`text-[10px] ${isMyMessage ? 'text-green-100' : 'text-gray-500 dark:text-gray-400'}`}>
                             {format(new Date(message.createdAt), 'HH:mm', { locale: hu })}
                           </span>
                           {isMyMessage && (
@@ -927,7 +927,7 @@ export function PatientMessages() {
                         type="button"
                         onClick={() => handleReplyThreadToggle(message.id)}
                         className={`mt-1 text-xs font-medium underline-offset-2 hover:underline ${
-                          isMyMessage ? 'text-green-700' : 'text-gray-600'
+                          isMyMessage ? 'text-green-700 dark:text-green-300' : 'text-gray-600 dark:text-gray-400'
                         }`}
                       >
                         {replyThreadToggleLabel(message.replyCount ?? 0, isCollapsed(message.id))}
@@ -959,7 +959,7 @@ export function PatientMessages() {
       )}
 
       {/* Input Area */}
-      <div className="flex-shrink-0 border-t bg-white p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-4">
+      <div className="flex-shrink-0 border-t bg-white dark:bg-gray-900 p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-4">
         <div className="flex items-end gap-2">
           <DocumentLinkComposerButton
             chatType="patient-doctor"
@@ -983,7 +983,7 @@ export function PatientMessages() {
                 handleSendMessage();
               }
             }}
-            className="form-input flex-1 resize-none rounded-xl border-gray-300 focus:border-blue-500 focus:ring-blue-500 min-h-[44px]"
+            className="form-input flex-1 resize-none rounded-xl border-gray-300 dark:border-gray-700 focus:border-blue-500 focus:ring-blue-500 min-h-[44px]"
             rows={2}
             placeholder="Írja be üzenetét..."
             disabled={sending}
@@ -1008,21 +1008,21 @@ export function PatientMessages() {
   // New chat content
   const newChatContent = (
     <>
-      <div className="p-3 sm:p-4 border-b border-gray-200 bg-gray-50">
+      <div className="p-3 sm:p-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-base sm:text-lg font-semibold text-gray-900">Új beszélgetés</h3>
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">Új beszélgetés</h3>
           <button
             onClick={() => {
               setShowNewChat(false);
               setDoctorSearchQuery('');
             }}
-            className="p-1 hover:bg-gray-200 rounded transition-colors mobile-touch-target"
+            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors mobile-touch-target"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
           <input
             type="text"
             value={doctorSearchQuery}
@@ -1035,7 +1035,7 @@ export function PatientMessages() {
       </div>
       <div className="flex-1 overflow-y-auto">
         {filteredRecipients.length === 0 ? (
-          <div className="p-4 text-center text-gray-500 text-sm">
+          <div className="p-4 text-center text-gray-500 dark:text-gray-400 text-sm">
             {doctorSearchQuery ? 'Nincs találat' : 'Minden orvossal van már beszélgetése'}
           </div>
         ) : (
@@ -1043,20 +1043,20 @@ export function PatientMessages() {
             <div
               key={recipient.id}
               onClick={() => handleSelectDoctor(recipient.id, recipient.name)}
-              className="p-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors"
+              className="p-3 border-b border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
             >
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-sm font-semibold flex-shrink-0">
+                <div className="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 flex items-center justify-center text-sm font-semibold flex-shrink-0">
                   {getMonogram(recipient.name)}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-medium text-gray-900 truncate">{recipient.name}</span>
+                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{recipient.name}</span>
                     {recipient.type === 'treating_doctor' && (
-                      <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full flex-shrink-0">Kezelőorvos</span>
+                      <span className="text-[10px] text-blue-600 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded-full flex-shrink-0">Kezelőorvos</span>
                     )}
                     {recipient.type === 'admin' && (
-                      <span className="text-[10px] text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded-full flex-shrink-0">Admin</span>
+                      <span className="text-[10px] text-purple-600 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 px-1.5 py-0.5 rounded-full flex-shrink-0">Admin</span>
                     )}
                   </div>
                 </div>

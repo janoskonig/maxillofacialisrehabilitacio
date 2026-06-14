@@ -140,7 +140,7 @@ export function DuplicateDetector() {
 
       {groups.length === 0 && !error && (
         <div className="text-center py-6">
-          <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3" />
+          <CheckCircle className="w-12 h-12 text-green-500 dark:text-green-400 mx-auto mb-3" />
           <p className="text-gray-600 dark:text-gray-400 font-medium">Nincs duplikátum!</p>
         </div>
       )}

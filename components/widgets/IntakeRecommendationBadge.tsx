@@ -138,7 +138,7 @@ export function IntakeRecommendationBadge() {
         <Icon className={`w-4 h-4 ${config.iconClass}`} />
         <span>{label}</span>
         <span className="font-semibold">{sublabel}</span>
-        <HelpCircle className="w-3.5 h-3.5 text-gray-500" />
+        <HelpCircle className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
       </button>
 
       {showTooltip && (
@@ -148,9 +148,9 @@ export function IntakeRecommendationBadge() {
             aria-hidden
             onClick={() => setShowTooltip(false)}
           />
-          <div className="absolute right-0 top-full mt-1 z-20 w-64 p-3 bg-white border border-gray-200 rounded-lg shadow-lg text-left">
-            <p className="text-xs font-medium text-gray-700 mb-2">Miért ez a javaslat?</p>
-            <ul className="text-xs text-gray-600 space-y-1">
+          <div className="absolute right-0 top-full mt-1 z-20 w-64 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-800 rounded-lg shadow-lg text-left">
+            <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Miért ez a javaslat?</p>
+            <ul className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
               {topReasons.map((r) => (
                 <li key={r}>• {humanizeReason(r, data.explain.viewMode)}</li>
               ))}

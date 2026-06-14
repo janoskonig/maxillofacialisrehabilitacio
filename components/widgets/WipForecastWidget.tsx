@@ -125,7 +125,7 @@ export function WipForecastWidget() {
                 </div>
               ))}
             </div>
-            <div className="text-xs text-gray-500 pt-1 border-t border-gray-100">
+            <div className="text-xs text-gray-500 dark:text-gray-400 pt-1 border-t border-gray-100 dark:border-gray-800">
               Összesen {data.wipCount} aktív kezelés
               {data.wipCompletionP80Max && (
                 <> · legkésőbb ~{formatShortDate(data.wipCompletionP80Max)}</>
@@ -133,7 +133,7 @@ export function WipForecastWidget() {
             </div>
           </>
         ) : (
-          <div className="text-sm text-gray-500">Nincs folyamatban lévő kezelés</div>
+          <div className="text-sm text-gray-500 dark:text-gray-400">Nincs folyamatban lévő kezelés</div>
         )}
       </div>
     </DashboardWidget>

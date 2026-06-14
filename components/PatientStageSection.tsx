@@ -115,9 +115,9 @@ export function PatientStageSection({
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 sm:p-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
           <Calendar className="w-5 h-5 text-medical-primary" />
           Betegstádium
         </h3>
@@ -139,19 +139,19 @@ export function PatientStageSection({
               {getStageLabel(stageKey)}
             </span>
             {stageDate && (
-              <span className="text-sm text-gray-600 flex items-center gap-1">
+              <span className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1">
                 <Clock className="w-4 h-4" />
                 {format(new Date(stageDate), 'yyyy. MMMM d.', { locale: hu })}
               </span>
             )}
           </div>
           {stageNote && (
-            <p className="text-sm text-gray-700">{stageNote}</p>
+            <p className="text-sm text-gray-700 dark:text-gray-300">{stageNote}</p>
           )}
         </div>
       ) : (
         <div className="text-center py-4">
-          <p className="text-gray-500 text-sm">Még nincs stádium beállítva.</p>
+          <p className="text-gray-500 dark:text-gray-400 text-sm">Még nincs stádium beállítva.</p>
           <button
             onClick={() => router.push(`/patients/${patientId}/stages`)}
             className="mt-2 text-sm text-medical-primary hover:text-medical-primary-dark"

@@ -238,7 +238,7 @@ export function ZsigmondyCrossStages({ patientId, patientName, meglevoFogak }: Z
             <button
               type="button"
               onClick={() => setSelectedTooth(null)}
-              className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 px-2 py-1"
+              className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 px-2 py-1"
             >
               Bezár
             </button>

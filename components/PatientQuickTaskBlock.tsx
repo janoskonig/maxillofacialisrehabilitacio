@@ -54,18 +54,18 @@ export function PatientQuickTaskBlock({ patientId }: PatientQuickTaskBlockProps)
 
   return (
     <div className="card p-4">
-      <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2 mb-3">
+      <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2 mb-3">
         <ClipboardList className="w-5 h-5 text-medical-primary" />
         Feladatok
       </h3>
 
       {loading ? (
-        <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
+        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 py-2">
           <Loader2 className="w-4 h-4 animate-spin" />
           Betöltés…
         </div>
       ) : tasks.length === 0 ? (
-        <p className="text-sm text-gray-500 mb-4">Ehhez a beteghez nincs nyitott feladat.</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Ehhez a beteghez nincs nyitott feladat.</p>
       ) : (
         <ul className="space-y-2 mb-4">
           {tasks.map((t) => {
@@ -73,10 +73,10 @@ export function PatientQuickTaskBlock({ patientId }: PatientQuickTaskBlockProps)
             const delegated =
               t.creatorEmail && t.assigneeEmail && t.creatorEmail !== t.assigneeEmail;
             return (
-              <li key={t.id} className="rounded border border-gray-200 bg-gray-50 px-3 py-2">
-                <p className="text-sm font-medium text-gray-900">{t.title}</p>
+              <li key={t.id} className="rounded border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60 px-3 py-2">
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{t.title}</p>
                 {t.description && (
-                  <p className="text-xs text-gray-600 mt-0.5 whitespace-pre-wrap">{t.description}</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5 whitespace-pre-wrap">{t.description}</p>
                 )}
                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                   <span className="inline-flex items-center gap-1 font-medium text-medical-primary">
@@ -84,12 +84,12 @@ export function PatientQuickTaskBlock({ patientId }: PatientQuickTaskBlockProps)
                     Felelős: {assigneeLabel(t)}
                   </span>
                   {delegated && (
-                    <span className="text-gray-500">
+                    <span className="text-gray-500 dark:text-gray-400">
                       Kiosztotta: {t.creatorName?.trim() || t.creatorEmail}
                     </span>
                   )}
                   {t.dueAt && (
-                    <span className={overdue ? 'font-medium text-red-600' : 'text-amber-900/90'}>
+                    <span className={overdue ? 'font-medium text-red-600 dark:text-red-300' : 'text-amber-900/90'}>
                       Határidő: {format(new Date(t.dueAt), 'yyyy.MM.dd HH:mm', { locale: hu })}
                       {overdue ? ' — lejárt' : ''}
                     </span>
@@ -101,8 +101,8 @@ export function PatientQuickTaskBlock({ patientId }: PatientQuickTaskBlockProps)
         </ul>
       )}
 
-      <h4 className="text-sm font-semibold text-gray-900 mb-2">Feladat hozzáadása</h4>
-      <p className="text-sm text-gray-600 mb-3">
+      <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">Feladat hozzáadása</h4>
+      <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
         A teendő ehhez a beteghez kötve jön létre, és a felelős Feladataim listáján jelenik meg.
       </p>
       <QuickTaskForm patientId={patientId} onCreated={() => void loadTasks()} />

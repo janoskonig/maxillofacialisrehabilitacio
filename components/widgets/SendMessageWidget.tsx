@@ -68,22 +68,22 @@ export function SendMessageWidget() {
       >
         <div className="flex items-center justify-center py-4">
           {loading ? (
-            <div className="text-center text-gray-500 text-sm">Betöltés...</div>
+            <div className="text-center text-gray-500 dark:text-gray-400 text-sm">Betöltés...</div>
           ) : totalUnreadCount > 0 ? (
             <div className="text-center">
-              <div className="text-lg font-semibold text-red-600 mb-1">
+              <div className="text-lg font-semibold text-red-600 dark:text-red-300 mb-1">
                 {totalUnreadCount} olvasatlan üzenet
               </div>
-              <div className="text-xs text-gray-500">
+              <div className="text-xs text-gray-500 dark:text-gray-400">
                 Kattintson az üzenetek megtekintéséhez
               </div>
             </div>
           ) : (
             <div className="text-center">
-              <div className="text-lg font-semibold text-green-600 mb-1">
+              <div className="text-lg font-semibold text-green-600 dark:text-green-300 mb-1">
                 Nincs olvasatlan üzenet
               </div>
-              <div className="text-xs text-gray-500">
+              <div className="text-xs text-gray-500 dark:text-gray-400">
                 Minden üzenet elolvasva
               </div>
             </div>

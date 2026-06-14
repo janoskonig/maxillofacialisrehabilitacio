@@ -279,19 +279,19 @@ function ToothTreatmentDelegateBlock({
   };
 
   return (
-    <div className="mt-2 p-2 rounded border border-indigo-200/80 bg-indigo-50/40 text-xs space-y-2">
+    <div className="mt-2 p-2 rounded border border-indigo-200/80 dark:border-indigo-800 bg-indigo-50/40 dark:bg-indigo-950/40 text-xs space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <span className="font-medium text-indigo-900 flex items-center gap-1">
+        <span className="font-medium text-indigo-900 dark:text-indigo-200 flex items-center gap-1">
           <SendHorizontal className="w-3.5 h-3.5" />
           Feladatként küldés
         </span>
-        <button type="button" onClick={onClose} className="text-indigo-700 underline">
+        <button type="button" onClick={onClose} className="text-indigo-700 dark:text-indigo-300 underline">
           Bezár
         </button>
       </div>
 
       {userRole === 'admin' && (
-        <p className="text-[10px] text-indigo-800/80">
+        <p className="text-[10px] text-indigo-800/80 dark:text-indigo-300">
           Admin: feladat kiosztható bármely aktív, nem technikus felhasználónak.
         </p>
       )}
@@ -614,7 +614,7 @@ export function ToothTreatmentInline({ toothNumber, isViewOnly }: ToothTreatment
                       <button
                         type="button"
                         onClick={() => handleDelete(t.id)}
-                        className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-xs hover:bg-red-200"
+                        className="px-1.5 py-0.5 bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-300 rounded text-xs hover:bg-red-200"
                         title="Törlés"
                       >
                         <X className="w-3 h-3" />
@@ -625,7 +625,7 @@ export function ToothTreatmentInline({ toothNumber, isViewOnly }: ToothTreatment
                     <button
                       type="button"
                       onClick={() => handleComplete(t.id)}
-                      className="px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-xs hover:bg-green-200 flex items-center gap-1"
+                      className="px-1.5 py-0.5 bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-300 rounded text-xs hover:bg-green-200 flex items-center gap-1"
                       title="Késznek jelölés"
                     >
                       <Check className="w-3 h-3" />
@@ -657,7 +657,7 @@ export function ToothTreatmentInline({ toothNumber, isViewOnly }: ToothTreatment
           <div className="mt-1 space-y-0.5 pl-1">
             {completed.map((t) => (
               <div key={t.id} className="flex gap-1 items-center flex-wrap">
-                <Check className="w-3 h-3 text-green-500 shrink-0" />
+                <Check className="w-3 h-3 text-green-500 dark:text-green-400 shrink-0" />
                 <span>{t.labelHu ?? t.treatmentCode}</span>
                 {t.status !== 'completed' && t.pathwayClosed ? (
                   <span className="text-gray-400 dark:text-gray-500">(munkafázisban lezárva)</span>

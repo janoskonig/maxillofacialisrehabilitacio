@@ -197,7 +197,7 @@ export function PatientAppointmentsList() {
   const getStatusBadge = (appointment: Appointment) => {
     if (appointment.approvalStatus === 'pending') {
       return (
-        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-orange-100 text-orange-700 rounded">
+        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-orange-100 dark:bg-orange-950/50 text-orange-700 dark:text-orange-300 rounded">
           <AlertCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
           <span className="hidden xs:inline">Jóváhagyásra vár</span>
           <span className="xs:hidden">Vár</span>
@@ -206,7 +206,7 @@ export function PatientAppointmentsList() {
     }
     if (appointment.approvalStatus === 'rejected') {
       return (
-        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-red-100 text-red-700 rounded">
+        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-300 rounded">
           <XCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
           <span className="hidden xs:inline">Elutasítva</span>
           <span className="xs:hidden">Elutas.</span>
@@ -215,7 +215,7 @@ export function PatientAppointmentsList() {
     }
     if (appointment.approvalStatus === 'approved') {
       return (
-        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-green-100 text-green-700 rounded">
+        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-300 rounded">
           <CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
           <span className="hidden xs:inline">Jóváhagyva</span>
           <span className="xs:hidden">OK</span>
@@ -224,7 +224,7 @@ export function PatientAppointmentsList() {
     }
     if (appointment.appointmentStatus === 'completed') {
       return (
-        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-blue-100 text-blue-700 rounded">
+        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 rounded">
           <CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
           <span className="hidden xs:inline">Lezárva</span>
           <span className="xs:hidden">Lezárva</span>
@@ -233,7 +233,7 @@ export function PatientAppointmentsList() {
     }
     if (appointment.appointmentStatus === 'cancelled_by_doctor' || appointment.appointmentStatus === 'cancelled_by_patient') {
       return (
-        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-gray-100 text-gray-700 rounded">
+        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded">
           <XCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
           <span className="hidden xs:inline">Törölve</span>
           <span className="xs:hidden">Törölve</span>
@@ -282,7 +282,7 @@ export function PatientAppointmentsList() {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-medical-primary"></div>
-        <span className="ml-3 text-gray-600">Betöltés...</span>
+        <span className="ml-3 text-gray-600 dark:text-gray-400">Betöltés...</span>
       </div>
     );
   }
@@ -291,11 +291,11 @@ export function PatientAppointmentsList() {
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
         <div className="flex-1 min-w-0">
-          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 flex items-center gap-2">
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
             <Calendar className="w-5 h-5 sm:w-6 sm:h-6 lg:w-8 lg:h-8 text-medical-primary flex-shrink-0" />
             Időpontok
           </h1>
-          <p className="text-sm sm:text-base text-gray-600 mt-1 sm:mt-2">
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mt-1 sm:mt-2">
             Itt találhatja az összes időpontját és foglalhat új időpontot.
           </p>
         </div>
@@ -303,8 +303,8 @@ export function PatientAppointmentsList() {
 
       {/* Upcoming Appointments */}
       {upcomingAppointments.length > 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
-          <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">
+        <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 sm:p-6">
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 sm:mb-4">
             Következő időpontok
           </h2>
           <div className="space-y-2 sm:space-y-3">
@@ -313,24 +313,24 @@ export function PatientAppointmentsList() {
               return (
                 <div
                   key={appointment.id}
-                  className="p-3 sm:p-4 rounded-lg border border-gray-200 hover:bg-gray-50"
+                  className="p-3 sm:p-4 rounded-lg border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50"
                 >
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2 flex-wrap">
-                        <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
-                        <span className="font-semibold text-sm sm:text-base text-gray-900">
+                        <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 dark:text-gray-400 flex-shrink-0" />
+                        <span className="font-semibold text-sm sm:text-base text-gray-900 dark:text-gray-100">
                           {format(startTime, 'yyyy. MMMM d. EEEE, HH:mm', { locale: hu })}
                         </span>
                         {getStatusBadge(appointment)}
                       </div>
                       {appointment.dentistName && (
-                        <p className="text-xs sm:text-sm text-gray-600 mb-1 truncate">
+                        <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1 truncate">
                           Orvos: {appointment.dentistName}
                         </p>
                       )}
                       {(appointment.cim || appointment.teremszam) && (
-                        <div className="flex items-center gap-1 text-xs sm:text-sm text-gray-600">
+                        <div className="flex items-center gap-1 text-xs sm:text-sm text-gray-600 dark:text-gray-400">
                           <MapPin className="w-3 h-3 flex-shrink-0" />
                           <span className="truncate">
                             {appointment.cim}
@@ -359,8 +359,8 @@ export function PatientAppointmentsList() {
 
       {/* Past Appointments */}
       {pastAppointments.length > 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
-          <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">
+        <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 sm:p-6">
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 sm:mb-4">
             Korábbi időpontok ({pastAppointments.length})
           </h2>
           <div className="space-y-2 sm:space-y-3">
@@ -369,24 +369,24 @@ export function PatientAppointmentsList() {
               return (
                 <div
                   key={appointment.id}
-                  className="p-3 sm:p-4 rounded-lg border border-gray-200 bg-gray-50"
+                  className="p-3 sm:p-4 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60"
                 >
                   <div className="flex items-start justify-between gap-2 sm:gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2 flex-wrap">
-                        <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" />
-                        <span className="font-semibold text-sm sm:text-base text-gray-700">
+                        <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                        <span className="font-semibold text-sm sm:text-base text-gray-700 dark:text-gray-300">
                           {format(startTime, 'yyyy. MMMM d. EEEE, HH:mm', { locale: hu })}
                         </span>
                         {getStatusBadge(appointment)}
                       </div>
                       {appointment.dentistName && (
-                        <p className="text-xs sm:text-sm text-gray-600 mb-1 truncate">
+                        <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1 truncate">
                           Orvos: {appointment.dentistName}
                         </p>
                       )}
                       {(appointment.cim || appointment.teremszam) && (
-                        <div className="flex items-center gap-1 text-xs sm:text-sm text-gray-600">
+                        <div className="flex items-center gap-1 text-xs sm:text-sm text-gray-600 dark:text-gray-400">
                           <MapPin className="w-3 h-3 flex-shrink-0" />
                           <span className="truncate">
                             {appointment.cim}
@@ -403,15 +403,15 @@ export function PatientAppointmentsList() {
           
           {/* Pagination */}
           {totalPastPages > 1 && (
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 sm:mt-6 pt-3 sm:pt-4 border-t border-gray-200">
-              <div className="text-xs sm:text-sm text-gray-600">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 sm:mt-6 pt-3 sm:pt-4 border-t border-gray-200 dark:border-gray-800">
+              <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
                 {startIndex + 1}-{Math.min(endIndex, pastAppointments.length)} / {pastAppointments.length} időpont
               </div>
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <button
                   onClick={() => setPastAppointmentsPage(prev => Math.max(1, prev - 1))}
                   disabled={pastAppointmentsPage === 1}
-                  className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                  className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                 >
                   <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   <span className="hidden xs:inline">Előző</span>
@@ -424,7 +424,7 @@ export function PatientAppointmentsList() {
                       className={`px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium rounded-md ${
                         page === pastAppointmentsPage
                           ? 'bg-medical-primary text-white'
-                          : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                          : 'text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50'
                       }`}
                     >
                       {page}
@@ -434,7 +434,7 @@ export function PatientAppointmentsList() {
                 <button
                   onClick={() => setPastAppointmentsPage(prev => Math.min(totalPastPages, prev + 1))}
                   disabled={pastAppointmentsPage === totalPastPages}
-                  className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                  className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                 >
                   <span className="hidden xs:inline">Következő</span>
                   <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -447,30 +447,30 @@ export function PatientAppointmentsList() {
 
       {/* Empty State */}
       {appointments.length === 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 p-8 sm:p-12 text-center">
+        <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-8 sm:p-12 text-center">
           <Calendar className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 text-gray-300" />
-          <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
             Nincsenek időpontok
           </h3>
-          <p className="text-sm sm:text-base text-gray-600">
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
             Még nincs rögzített időpontja. Foglaljon időpontot az alábbi szabad időpontok közül.
           </p>
         </div>
       )}
 
       {/* Available Time Slots Section - Last Section */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+      <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3 sm:mb-4">
-          <h2 className="text-base sm:text-lg font-semibold text-gray-900">
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">
             Szabad időpontok
           </h2>
           {doctors.length > 0 && (
             <label className="flex items-center gap-2 text-sm">
-              <span className="text-gray-600">Orvos:</span>
+              <span className="text-gray-600 dark:text-gray-400">Orvos:</span>
               <select
                 value={selectedDoctorEmail ?? ''}
                 onChange={(e) => setSelectedDoctorEmail(e.target.value || null)}
-                className="border border-gray-300 rounded-md px-2 py-1.5 text-gray-900 bg-white min-w-[160px]"
+                className="border border-gray-300 dark:border-gray-700 rounded-md px-2 py-1.5 text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-900 min-w-[160px]"
               >
                 <option value="">Összes orvos</option>
                 {doctors.map((d) => (
@@ -485,7 +485,7 @@ export function PatientAppointmentsList() {
         {loadingSlots ? (
           <div className="flex items-center justify-center py-8">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-medical-primary"></div>
-            <span className="ml-3 text-gray-600">Betöltés...</span>
+            <span className="ml-3 text-gray-600 dark:text-gray-400">Betöltés...</span>
           </div>
         ) : availableSlots.length > 0 ? (
           <div className="space-y-2 sm:space-y-3">
@@ -496,22 +496,22 @@ export function PatientAppointmentsList() {
               return (
                 <div
                   key={slot.id}
-                  className="p-3 sm:p-4 rounded-lg border-l-4 border-green-500 bg-white hover:bg-green-50 transition-colors"
+                  className="p-3 sm:p-4 rounded-lg border-l-4 border-green-500 bg-white dark:bg-gray-900 hover:bg-green-50 dark:hover:bg-green-950/40 transition-colors"
                 >
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2 flex-wrap">
-                        <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-600 flex-shrink-0" />
-                        <span className="font-semibold text-sm sm:text-base text-gray-900">
+                        <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-600 dark:text-green-300 flex-shrink-0" />
+                        <span className="font-semibold text-sm sm:text-base text-gray-900 dark:text-gray-100">
                           {format(startTime, 'yyyy. MMMM d. EEEE, HH:mm', { locale: hu })}
                         </span>
                       </div>
                       {slot.dentistName && (
-                        <p className="text-xs sm:text-sm text-gray-600 mb-1 truncate">
+                        <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1 truncate">
                           Orvos: {slot.dentistName}
                         </p>
                       )}
-                      <div className="flex items-center gap-1 text-xs sm:text-sm text-gray-600">
+                      <div className="flex items-center gap-1 text-xs sm:text-sm text-gray-600 dark:text-gray-400">
                         <MapPin className="w-3 h-3 flex-shrink-0" />
                         <span className="truncate">
                           {displayCim}
@@ -533,14 +533,14 @@ export function PatientAppointmentsList() {
         ) : (
           <div className="text-center py-6 sm:py-8">
             <Calendar className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-2 sm:mb-3 text-gray-300" />
-            <p className="text-sm sm:text-base text-gray-600">
+            <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
               Jelenleg nincs elérhető szabad időpont.
             </p>
           </div>
         )}
         {slotsPagination && slotsPagination.totalPages > 1 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 sm:mt-6 pt-3 sm:pt-4 border-t border-gray-200">
-            <div className="text-xs sm:text-sm text-gray-600">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 sm:mt-6 pt-3 sm:pt-4 border-t border-gray-200 dark:border-gray-800">
+            <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
               {(slotsPagination.page - 1) * slotsPagination.limit + 1}-
               {Math.min(slotsPagination.page * slotsPagination.limit, slotsPagination.total)} / {slotsPagination.total} időpont
             </div>
@@ -548,7 +548,7 @@ export function PatientAppointmentsList() {
               <button
                 onClick={() => setSlotsPage((prev) => Math.max(1, prev - 1))}
                 disabled={slotsPagination.page === 1}
-                className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
               >
                 <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 <span className="hidden xs:inline">Előző</span>
@@ -561,7 +561,7 @@ export function PatientAppointmentsList() {
                     className={`px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium rounded-md ${
                       page === slotsPagination.page
                         ? 'bg-medical-primary text-white'
-                        : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                        : 'text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50'
                     }`}
                   >
                     {page}
@@ -571,7 +571,7 @@ export function PatientAppointmentsList() {
               <button
                 onClick={() => setSlotsPage((prev) => Math.min(slotsPagination.totalPages, prev + 1))}
                 disabled={slotsPagination.page === slotsPagination.totalPages}
-                className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
               >
                 <span className="hidden xs:inline">Következő</span>
                 <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />

@@ -546,7 +546,7 @@ export function DoctorMessages() {
     <>
       <div className="flex items-center justify-between gap-2 min-w-0">
         <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2 truncate min-w-0">
-          {selectedGroupId && <Users className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0" />}
+          {selectedGroupId && <Users className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 dark:text-blue-300 flex-shrink-0" />}
           <span className="truncate">{selectedDoctorId ? selectedDoctorName : (selectedGroupName || 'Csoportos beszélgetés')}</span>
         </h3>
         <MessageSearchButton channel="doctor" />
@@ -556,7 +556,7 @@ export function DoctorMessages() {
         return selectedGroupId && groupParticipants.length > 0 && (!isMobile || !hasGroupName) ? (
           <div className="mt-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <Users className="w-3 h-3 text-blue-600 flex-shrink-0" />
+              <Users className="w-3 h-3 text-blue-600 dark:text-blue-300 flex-shrink-0" />
               <span className="text-xs text-gray-600 dark:text-gray-400">Résztvevők:</span>
               {(showAllParticipants ? groupParticipants : groupParticipants.slice(0, 2)).map((participant) => (
                 <span

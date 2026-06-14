@@ -105,7 +105,7 @@ export default function StaffTasksPage() {
                         return (
                           <p
                             className={`text-sm font-medium mt-2 ${
-                              overdue ? 'text-red-600' : 'text-amber-900/90'
+                              overdue ? 'text-red-600 dark:text-red-300' : 'text-amber-900/90'
                             }`}
                           >
                             Határidő: {format(new Date(t.dueAt), 'yyyy.MM.dd HH:mm', { locale: hu })}
@@ -114,7 +114,7 @@ export default function StaffTasksPage() {
                         );
                       })()
                     ) : null}
-                    <p className="text-xs text-gray-400 mt-2">
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
                       {format(new Date(t.createdAt), 'yyyy.MM.dd HH:mm', { locale: hu })}
                     </p>
                     {t.patientId && (
@@ -127,7 +127,7 @@ export default function StaffTasksPage() {
                         </Link>
                         <Link
                           href={`/messages?patientId=${t.patientId}`}
-                          className="text-sm text-gray-600 hover:underline"
+                          className="text-sm text-gray-600 dark:text-gray-400 hover:underline"
                         >
                           Üzenetek
                         </Link>

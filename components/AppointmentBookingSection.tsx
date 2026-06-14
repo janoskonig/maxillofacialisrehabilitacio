@@ -542,7 +542,7 @@ export function AppointmentBookingSection({
                   setNewModifyDateTime(null);
                   setNewModifyTeremszam('');
                 }}
-                className="text-gray-400 dark:text-gray-500 hover:text-gray-600"
+                className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -711,7 +711,7 @@ export function AppointmentBookingSection({
                     appointmentType: null,
                   });
                 }}
-                className="text-gray-400 dark:text-gray-500 hover:text-gray-600"
+                className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -761,7 +761,7 @@ export function AppointmentBookingSection({
               {statusForm.appointmentStatus === 'completed' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Mi történt? <span className="text-red-600">*</span>
+                    Mi történt? <span className="text-red-600 dark:text-red-300">*</span>
                   </label>
                   <textarea
                     value={statusForm.completionNotes}
@@ -831,7 +831,7 @@ export function AppointmentBookingSection({
 
       {loadError && (
         <div className="mb-4 flex items-start gap-2 p-3 rounded-md bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-300">
-          <AlertCircle className="w-4 h-4 mt-0.5 text-red-600 flex-shrink-0" />
+          <AlertCircle className="w-4 h-4 mt-0.5 text-red-600 dark:text-red-300 flex-shrink-0" />
           <div className="flex-1">
             <div className="font-medium">Nem sikerült betölteni az időpontokat</div>
             <div className="text-xs text-red-700/90 mt-0.5">{loadError}</div>
@@ -860,13 +860,13 @@ export function AppointmentBookingSection({
                 'flex items-center justify-between p-3 bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800 rounded-md';
               let metaBorder = 'border-green-200 dark:border-green-800';
               let LeadIcon: typeof CheckCircle2 = CheckCircle2;
-              let leadIconClass = 'text-green-600';
+              let leadIconClass = 'text-green-600 dark:text-green-300';
               if (st === 'cancelled_by_doctor' || st === 'cancelled_by_patient') {
                 cardWrap =
                   'flex items-center justify-between p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-md';
                 metaBorder = 'border-red-200 dark:border-red-800';
                 LeadIcon = XCircle;
-                leadIconClass = 'text-red-600';
+                leadIconClass = 'text-red-600 dark:text-red-300';
               } else if (st === 'no_show') {
                 cardWrap =
                   'flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/60 border border-gray-300 dark:border-gray-700 rounded-md';
@@ -878,7 +878,7 @@ export function AppointmentBookingSection({
                   'flex items-center justify-between p-3 bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800 rounded-md';
                 metaBorder = 'border-orange-200 dark:border-orange-800';
                 LeadIcon = AlertTriangle;
-                leadIconClass = 'text-orange-600';
+                leadIconClass = 'text-orange-600 dark:text-orange-300';
               }
               const canMarkUnsuccessful =
                 !!appointment.episodeId &&
@@ -977,7 +977,7 @@ export function AppointmentBookingSection({
                       {(() => {
                         if (appointment.isLate) {
                           return (
-                            <div className="flex items-center gap-1 mt-1 text-orange-600">
+                            <div className="flex items-center gap-1 mt-1 text-orange-600 dark:text-orange-300">
                               <ClockIcon className="w-3 h-3" />
                               <span>Késett a beteg</span>
                             </div>
@@ -985,7 +985,7 @@ export function AppointmentBookingSection({
                         }
                         if (appointment.appointmentStatus === 'cancelled_by_doctor') {
                           return (
-                            <div className="flex items-center gap-1 mt-1 text-red-600">
+                            <div className="flex items-center gap-1 mt-1 text-red-600 dark:text-red-300">
                               <XCircle className="w-3 h-3" />
                               <span>Lemondta az orvos</span>
                             </div>
@@ -993,7 +993,7 @@ export function AppointmentBookingSection({
                         }
                         if (appointment.appointmentStatus === 'cancelled_by_patient') {
                           return (
-                            <div className="flex items-center gap-1 mt-1 text-red-600">
+                            <div className="flex items-center gap-1 mt-1 text-red-600 dark:text-red-300">
                               <XCircle className="w-3 h-3" />
                               <span>Lemondta a beteg</span>
                             </div>
@@ -1002,7 +1002,7 @@ export function AppointmentBookingSection({
                         if (appointment.appointmentStatus === 'completed') {
                           return (
                             <div className="mt-1">
-                              <div className="flex items-center gap-1 text-green-600">
+                              <div className="flex items-center gap-1 text-green-600 dark:text-green-300">
                                 <CheckCircle2 className="w-3 h-3" />
                                 <span>Sikeresen teljesült</span>
                               </div>
@@ -1016,7 +1016,7 @@ export function AppointmentBookingSection({
                         }
                         if (appointment.appointmentStatus === 'no_show') {
                           return (
-                            <div className="flex items-center gap-1 mt-1 text-red-600">
+                            <div className="flex items-center gap-1 mt-1 text-red-600 dark:text-red-300">
                               <AlertCircle className="w-3 h-3" />
                               <span>Nem jelent meg</span>
                             </div>
@@ -1025,12 +1025,12 @@ export function AppointmentBookingSection({
                         if (appointment.appointmentStatus === 'unsuccessful') {
                           return (
                             <div className="mt-1">
-                              <div className="flex items-center gap-1 text-orange-700">
+                              <div className="flex items-center gap-1 text-orange-700 dark:text-orange-300">
                                 <AlertTriangle className="w-3 h-3" />
                                 <span>Sikertelen próba — ismétlés szükséges</span>
                               </div>
                               {appointment.attemptFailedReason && (
-                                <div className="text-xs text-orange-900 mt-0.5 whitespace-pre-wrap break-words">
+                                <div className="text-xs text-orange-900 dark:text-orange-200 mt-0.5 whitespace-pre-wrap break-words">
                                   {appointment.attemptFailedReason}
                                 </div>
                               )}
@@ -1045,7 +1045,7 @@ export function AppointmentBookingSection({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleDownloadCalendar(appointment.id)}
-                    className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                    className="text-sm text-blue-600 dark:text-blue-300 hover:text-blue-800 flex items-center gap-1"
                     title="Naptár fájl letöltése"
                   >
                     <Download className="w-4 h-4" />
@@ -1055,7 +1055,7 @@ export function AppointmentBookingSection({
                     <>
                       <button
                         onClick={() => handleModifyAppointment(appointment)}
-                        className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                        className="text-sm text-blue-600 dark:text-blue-300 hover:text-blue-800 flex items-center gap-1"
                         title="Időpont módosítása"
                       >
                         <Edit2 className="w-4 h-4" />
@@ -1065,7 +1065,7 @@ export function AppointmentBookingSection({
                         <button
                           onClick={() => handleOpenReassign(appointment)}
                           disabled={reassignLoading === appointment.id}
-                          className="text-sm text-purple-700 hover:text-purple-900 flex items-center gap-1 disabled:opacity-50"
+                          className="text-sm text-purple-700 dark:text-purple-300 hover:text-purple-900 flex items-center gap-1 disabled:opacity-50"
                           title="A foglalás fázis-hovatartozásának módosítása (snapshot átkötése másik munkafázisra)"
                         >
                           <Shuffle className="w-4 h-4" />
@@ -1078,7 +1078,7 @@ export function AppointmentBookingSection({
                         <button
                           type="button"
                           onClick={() => setUnsuccessfulModalAppointment(appointment)}
-                          className="text-sm text-orange-700 hover:text-orange-900 flex items-center gap-1"
+                          className="text-sm text-orange-700 dark:text-orange-300 hover:text-orange-900 flex items-center gap-1"
                           title="A próba sikertelen volt — új próba szükséges (indok kötelező)"
                         >
                           <AlertTriangle className="w-4 h-4" />
@@ -1090,7 +1090,7 @@ export function AppointmentBookingSection({
                           <button
                             type="button"
                             onClick={() => setRevertModalAppointment(appointment)}
-                            className="text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 flex items-center gap-1"
+                            className="text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 flex items-center gap-1"
                             title="Sikertelen-jelölés visszavonása (tévedés esetén)"
                           >
                             <Undo2 className="w-4 h-4" />
@@ -1099,7 +1099,7 @@ export function AppointmentBookingSection({
                         )}
                       <button
                         onClick={() => handleEditStatus(appointment)}
-                        className="text-sm text-purple-600 hover:text-purple-800 flex items-center gap-1"
+                        className="text-sm text-purple-600 dark:text-purple-300 hover:text-purple-800 flex items-center gap-1"
                         title="Státusz szerkesztése"
                       >
                         <Edit2 className="w-4 h-4" />
@@ -1107,7 +1107,7 @@ export function AppointmentBookingSection({
                       </button>
                       <button
                         onClick={() => handleCancelAppointment(appointment.id)}
-                        className="text-sm text-red-600 hover:text-red-800 flex items-center gap-1"
+                        className="text-sm text-red-600 dark:text-red-300 hover:text-red-800 flex items-center gap-1"
                         title="Időpont lemondása"
                       >
                         <X className="w-4 h-4" />
@@ -1128,13 +1128,13 @@ export function AppointmentBookingSection({
         <div className="space-y-4">
           {/* New slot creation for fogpótlástanász and admin */}
           {(userRole === 'fogpótlástanász' || userRole === 'admin') && (
-            <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
+            <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-md">
               <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-medium text-gray-900">Új időpont kiírása és foglalása</h4>
+                <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">Új időpont kiírása és foglalása</h4>
                 {!showNewSlotForm && (
                   <button
                     onClick={() => setShowNewSlotForm(true)}
-                    className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                    className="text-sm text-blue-600 dark:text-blue-300 hover:text-blue-800 flex items-center gap-1"
                   >
                     <Plus className="w-4 h-4" />
                     Új időpont
@@ -1228,7 +1228,7 @@ export function AppointmentBookingSection({
 
           {/* Existing slot selection */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Szabad időpont kiválasztása
             </label>
             {availableSlotsOnly.length > 0 ? (
@@ -1253,17 +1253,17 @@ export function AppointmentBookingSection({
                 })}
               </select>
             ) : loadError ? (
-              <div className="p-4 bg-amber-50 border border-amber-200 rounded-md">
-                <p className="text-sm text-amber-900 flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-amber-700" />
+              <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-md">
+                <p className="text-sm text-amber-900 dark:text-amber-200 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-700 dark:text-amber-300" />
                   A betöltés most nem sikerült — a fenti hibasávban tudod
                   újrapróbálni.
                 </p>
               </div>
             ) : (
-              <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
-                <p className="text-sm text-gray-600 flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-gray-400" />
+              <div className="p-4 bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 rounded-md">
+                <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-gray-400 dark:text-gray-500" />
                   Jelenleg nincs elérhető szabad időpont.
                 </p>
               </div>
@@ -1271,8 +1271,8 @@ export function AppointmentBookingSection({
           </div>
           {selectedSlot && (
             <div className="space-y-3">
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
-                <div className="text-sm text-gray-700">
+              <div className="p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-md">
+                <div className="text-sm text-gray-700 dark:text-gray-300">
                   <span className="font-medium">Kiválasztott időpont:</span>{' '}
                   {formatDateTime(availableSlotsOnly.find(s => s.id === selectedSlot)?.startTime || '')}
                 </div>
@@ -1283,16 +1283,16 @@ export function AppointmentBookingSection({
                       {(() => {
                         const displayCim = selectedSlotData?.cim || DEFAULT_CIM;
                         return (
-                          <div className="text-sm text-gray-600 mt-1">
+                          <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                             <span className="font-medium">Cím:</span> {displayCim}
                           </div>
                         );
                       })()}
-                      <div className="text-sm text-gray-600 mt-1">
+                      <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                         <span className="font-medium">Teremszám:</span> {selectedSlotData?.teremszam || 'Nincs megadva'}
                       </div>
                       {selectedSlotData?.userEmail && (
-                        <div className="text-sm text-gray-600 mt-1">
+                        <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                           <span className="font-medium">Fogpótlástanász:</span> {selectedSlotData.userEmail}
                         </div>
                       )}
@@ -1302,12 +1302,12 @@ export function AppointmentBookingSection({
               </div>
               
               {/* Cím és teremszám módosítása */}
-              <div className="p-3 bg-gray-50 border border-gray-200 rounded-md">
-                <h5 className="text-sm font-medium text-gray-700 mb-2">Cím és teremszám módosítása (opcionális)</h5>
+              <div className="p-3 bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 rounded-md">
+                <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Cím és teremszám módosítása (opcionális)</h5>
                 <div className="space-y-2">
                   {availableCims.length > 1 ? (
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
                         Cím
                       </label>
                       <select
@@ -1321,12 +1321,12 @@ export function AppointmentBookingSection({
                       </select>
                     </div>
                   ) : (
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
                       <span className="font-medium">Cím:</span> {DEFAULT_CIM}
                     </div>
                   )}
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
                       Teremszám
                     </label>
                     <input
@@ -1338,7 +1338,7 @@ export function AppointmentBookingSection({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
                       Időpont típusa
                     </label>
                     <select
@@ -1359,7 +1359,7 @@ export function AppointmentBookingSection({
           {availableSlotsOnly.length > 0 && (
             <div>
               {(isNewPatient || isPatientDirty) && (
-                <p className="text-xs text-gray-600 mb-2">
+                <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
                   A foglalás előtt elmentjük a beteg adatait (ugyanaz, mint az alsó „Beteg mentése”), majd
                   megerősítésként lefoglaljuk a választott időpontot.
                 </p>

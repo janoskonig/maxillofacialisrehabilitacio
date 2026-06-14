@@ -447,7 +447,7 @@ export function WorkPhaseTaskDelegateBlock({
       </div>
 
       {feedback && (
-        <p className={feedback.ok ? 'text-green-700' : 'text-red-700'}>{feedback.msg}</p>
+        <p className={feedback.ok ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}>{feedback.msg}</p>
       )}
 
       <button

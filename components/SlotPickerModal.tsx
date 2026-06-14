@@ -286,9 +286,9 @@ export function SlotPickerModal({
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between p-4 border-b">
           <h2 id="slot-picker-title" className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-            {retryContext && <AlertTriangle className="w-5 h-5 text-orange-600" aria-hidden="true" />}
+            {retryContext && <AlertTriangle className="w-5 h-5 text-orange-600 dark:text-orange-300" aria-hidden="true" />}
             {!retryContext && rescheduleFromIso && (
-              <CalendarClock className="w-5 h-5 text-amber-600" aria-hidden="true" />
+              <CalendarClock className="w-5 h-5 text-amber-600 dark:text-amber-300" aria-hidden="true" />
             )}
             {retryContext
               ? `${retryContext.nextAttemptNumber}. próba foglalása`
@@ -303,8 +303,8 @@ export function SlotPickerModal({
         </div>
 
         {retryContext && (
-          <div className="px-4 py-2 border-b bg-orange-50 text-sm text-orange-900 flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0 text-orange-700" aria-hidden="true" />
+          <div className="px-4 py-2 border-b bg-orange-50 dark:bg-orange-950/40 text-sm text-orange-900 dark:text-orange-200 flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0 text-orange-700 dark:text-orange-300" aria-hidden="true" />
             <div className="min-w-0">
               <div className="font-medium">
                 {retryContext.previousAttemptNumber}. próba sikertelen volt
@@ -329,7 +329,7 @@ export function SlotPickerModal({
 
         {rescheduleFromLabel && (
           <div className="px-4 py-2 border-b bg-amber-50 dark:bg-amber-950/40 text-sm text-amber-900 dark:text-amber-200 flex items-start gap-2">
-            <CalendarClock className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-700" aria-hidden="true" />
+            <CalendarClock className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-700 dark:text-amber-300" aria-hidden="true" />
             <div>
               <div>
                 <span className="font-medium">Jelenleg foglalt:</span> {rescheduleFromLabel}
@@ -450,7 +450,7 @@ export function SlotPickerModal({
                   </select>
                 </label>
                 {createError && (
-                  <p className="text-sm text-red-600" role="alert">{createError}</p>
+                  <p className="text-sm text-red-600 dark:text-red-300" role="alert">{createError}</p>
                 )}
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -478,10 +478,10 @@ export function SlotPickerModal({
                 const demand = getDemandForDay(day);
                 return (
                 <div key={day}>
-                  <div className="sticky top-0 bg-white py-2 font-medium text-gray-700 border-b flex items-center justify-between">
+                  <div className="sticky top-0 bg-white dark:bg-gray-900 py-2 font-medium text-gray-700 dark:text-gray-300 border-b flex items-center justify-between">
                     <span>{new Date(day).toLocaleDateString('hu-HU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
                     {demand > 0 && (
-                      <span className="flex items-center gap-1 text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full" title="Erre a hétre ennyi beteg demand projection-je esik">
+                      <span className="flex items-center gap-1 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-full" title="Erre a hétre ennyi beteg demand projection-je esik">
                         <Users className="w-3 h-3" />
                         {demand} tervezett
                       </span>
@@ -498,11 +498,11 @@ export function SlotPickerModal({
                           onClick={() => handleSelectSlot(slot.id)}
                           disabled={posting}
                           className={`flex flex-col items-start p-3 rounded-lg border text-left transition-colors ${
-                            isSelected ? 'border-medical-primary bg-medical-primary/10' : 'border-gray-200 hover:border-medical-primary/50 hover:bg-gray-50'
+                            isSelected ? 'border-medical-primary bg-medical-primary/10' : 'border-gray-200 dark:border-gray-800 hover:border-medical-primary/50 hover:bg-gray-50 dark:hover:bg-gray-800/50'
                           } ${posting ? 'opacity-70' : ''}`}
                         >
-                          <span className="text-lg font-semibold text-gray-900">{time}</span>
-                          <span className="text-xs text-gray-600 mt-0.5 truncate w-full">
+                          <span className="text-lg font-semibold text-gray-900 dark:text-gray-100">{time}</span>
+                          <span className="text-xs text-gray-600 dark:text-gray-400 mt-0.5 truncate w-full">
                             {slot.dentistName ?? slot.dentistEmail ?? '–'}
                           </span>
                         </button>

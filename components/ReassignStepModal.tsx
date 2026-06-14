@@ -150,7 +150,7 @@ export function ReassignStepModal({
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-500 dark:text-gray-400 hover:text-gray-700 p-1"
+            className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 p-1"
             aria-label="Bezárás"
             type="button"
             disabled={submitting}
@@ -281,13 +281,13 @@ export function ReassignStepModal({
                             </span>
                           )}
                           {c.stepSeq != null && (
-                            <span className="ml-1 text-gray-500">
+                            <span className="ml-1 text-gray-500 dark:text-gray-400">
                               · seq {c.stepSeq}
                             </span>
                           )}
                         </div>
                         {c.status === 'completed' && (
-                          <div className="text-xs text-blue-700 mt-0.5">
+                          <div className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">
                             ℹ Lezárt fázis — az átrendezés csak az
                             <code className="mx-0.5">appointment_id</code>
                             snapshot-ot frissíti, a fázis státusza nem változik.
@@ -299,7 +299,7 @@ export function ReassignStepModal({
                           c.status !== 'completed' &&
                           (new Date(bookedStart) < new Date(windowStart) ||
                             new Date(bookedStart) > new Date(windowEnd)) && (
-                            <div className="text-xs text-amber-700 mt-0.5">
+                            <div className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
                               ⚠ A foglalás időpontja kívül esik a fázis
                               tervezett ablakán — az átrendezés engedélyezett,
                               de fontolja meg.
@@ -316,10 +316,10 @@ export function ReassignStepModal({
           <div>
             <label
               htmlFor="reassign-reason"
-              className="text-sm font-medium text-gray-700"
+              className="text-sm font-medium text-gray-700 dark:text-gray-300"
             >
               Indoklás{' '}
-              <span className="text-xs text-gray-500 font-normal">
+              <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">
                 (kötelező, min. {MIN_REASON_LENGTH} karakter)
               </span>
             </label>
@@ -329,24 +329,24 @@ export function ReassignStepModal({
               onChange={(e) => setReason(e.target.value)}
               rows={2}
               disabled={submitting}
-              className="mt-1 w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-medical-primary/30"
+              className="mt-1 w-full border border-gray-300 dark:border-gray-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-medical-primary/30"
               placeholder="Pl. a foglalás valójában Kontroll 2-re vonatkozik, nem Kontroll 3-ra."
             />
           </div>
 
           {submitError && (
-            <div className="text-sm text-red-700 bg-red-50 border border-red-200 p-2 rounded">
+            <div className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 p-2 rounded">
               {submitError}
             </div>
           )}
         </div>
 
-        <div className="flex justify-end gap-2 p-4 border-t bg-gray-50">
+        <div className="flex justify-end gap-2 p-4 border-t bg-gray-50 dark:bg-gray-800/60">
           <button
             type="button"
             onClick={onClose}
             disabled={submitting}
-            className="px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded disabled:opacity-50"
+            className="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded disabled:opacity-50"
           >
             Mégse
           </button>

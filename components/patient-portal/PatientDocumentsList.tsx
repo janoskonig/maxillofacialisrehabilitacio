@@ -310,7 +310,7 @@ function GeneralDocumentUploadForm({
           </div>
           <div>
             <label className="form-label text-xs sm:text-sm">
-              Dokumentum leírása <span className="text-red-500">*</span> (minden fájlhoz ugyanaz)
+              Dokumentum leírása <span className="text-red-500 dark:text-red-400">*</span> (minden fájlhoz ugyanaz)
             </label>
             <textarea
               value={description}

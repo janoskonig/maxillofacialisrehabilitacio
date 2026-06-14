@@ -1190,7 +1190,7 @@ export function AppointmentBooking({
                       <button
                         type="button"
                         onClick={() => removeAlternativeSlot(index)}
-                        className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/40 rounded transition-colors"
+                        className="p-2 text-red-600 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/40 rounded transition-colors"
                         disabled={creating}
                       >
                         <X className="w-4 h-4" />
@@ -1362,7 +1362,7 @@ export function AppointmentBooking({
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-950/50 text-red-800 dark:text-red-300">
                     Elutasítva
                   </span>
                 </td>
@@ -1377,7 +1377,7 @@ export function AppointmentBooking({
                       {appointment.patientName || 'Név nélküli'}
                     </h3>
                   </div>
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 flex-shrink-0">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-950/50 text-red-800 dark:text-red-300 flex-shrink-0">
                     Elutasítva
                   </span>
                 </div>

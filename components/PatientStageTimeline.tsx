@@ -154,19 +154,19 @@ export function PatientStageTimeline({
 
   const getStageColor = (stageOrCode: string) => {
     const legacyColors: Record<string, string> = {
-      uj_beteg: 'bg-blue-100 text-blue-800',
-      onkologiai_kezeles_kesz: 'bg-purple-100 text-purple-800',
-      arajanlatra_var: 'bg-yellow-100 text-yellow-800',
-      implantacios_sebeszi_tervezesre_var: 'bg-orange-100 text-orange-800',
-      fogpotlasra_var: 'bg-amber-100 text-amber-800',
-      fogpotlas_keszul: 'bg-indigo-100 text-indigo-800',
-      fogpotlas_kesz: 'bg-green-100 text-green-800',
-      gondozas_alatt: 'bg-gray-100 text-gray-800',
+      uj_beteg: 'bg-blue-100 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300',
+      onkologiai_kezeles_kesz: 'bg-purple-100 dark:bg-purple-950/50 text-purple-800 dark:text-purple-300',
+      arajanlatra_var: 'bg-yellow-100 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-300',
+      implantacios_sebeszi_tervezesre_var: 'bg-orange-100 dark:bg-orange-950/50 text-orange-800 dark:text-orange-300',
+      fogpotlasra_var: 'bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300',
+      fogpotlas_keszul: 'bg-indigo-100 dark:bg-indigo-950/50 text-indigo-800 dark:text-indigo-300',
+      fogpotlas_kesz: 'bg-green-100 dark:bg-green-950/50 text-green-800 dark:text-green-300',
+      gondozas_alatt: 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200',
     };
     if (legacyColors[stageOrCode]) return legacyColors[stageOrCode];
     const stageNum = stageOrCode.replace('STAGE_', '');
-    const palette = ['bg-blue-100 text-blue-800', 'bg-purple-100 text-purple-800', 'bg-yellow-100 text-yellow-800', 'bg-orange-100 text-orange-800', 'bg-amber-100 text-amber-800', 'bg-indigo-100 text-indigo-800', 'bg-green-100 text-green-800', 'bg-gray-100 text-gray-800'];
-    return palette[parseInt(stageNum, 10) % palette.length] || 'bg-gray-100 text-gray-800';
+    const palette = ['bg-blue-100 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300', 'bg-purple-100 dark:bg-purple-950/50 text-purple-800 dark:text-purple-300', 'bg-yellow-100 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-300', 'bg-orange-100 dark:bg-orange-950/50 text-orange-800 dark:text-orange-300', 'bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300', 'bg-indigo-100 dark:bg-indigo-950/50 text-indigo-800 dark:text-indigo-300', 'bg-green-100 dark:bg-green-950/50 text-green-800 dark:text-green-300', 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200'];
+    return palette[parseInt(stageNum, 10) % palette.length] || 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200';
   };
 
   const currentStage = timeline?.currentStage;
@@ -182,11 +182,11 @@ export function PatientStageTimeline({
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
+      <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-6">
         <div className="animate-pulse space-y-4">
-          <div className="h-6 bg-gray-200 rounded w-1/4"></div>
-          <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-          <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+          <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/4"></div>
+          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
+          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/3"></div>
         </div>
       </div>
     );
@@ -194,16 +194,16 @@ export function PatientStageTimeline({
 
   if (!timeline) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <p className="text-gray-500">Nincs stádium információ.</p>
+      <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-6">
+        <p className="text-gray-500 dark:text-gray-400">Nincs stádium információ.</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 sm:p-6">
       <div className="flex items-center justify-between mb-6">
-        <h3 className="text-lg font-semibold text-gray-900">Stádium Timeline</h3>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Stádium Timeline</h3>
         <button
           onClick={fetchTimeline}
           className="text-sm text-medical-primary hover:text-medical-primary-dark"
@@ -216,7 +216,7 @@ export function PatientStageTimeline({
       <div className="mb-6 p-4 bg-medical-primary/10 border border-medical-primary/20 rounded-lg">
         <div className="flex items-center gap-2 mb-2">
           <Calendar className="w-5 h-5 text-medical-primary" />
-          <span className="text-sm font-medium text-gray-600">Jelenlegi stádium</span>
+          <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Jelenlegi stádium</span>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           {hasCurrentStageData && currentStageKey ? (
@@ -224,11 +224,11 @@ export function PatientStageTimeline({
               {getStageLabel(currentStageKey)}
             </span>
           ) : hasCurrentStageData ? (
-            <span className="px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-700">
+            <span className="px-3 py-1 rounded-full text-sm font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
               Stádium nincs megadva
             </span>
           ) : (
-            <span className="text-sm text-gray-500">Még nincs stádium rögzítve</span>
+            <span className="text-sm text-gray-500 dark:text-gray-400">Még nincs stádium rögzítve</span>
           )}
           {hasCurrentStageData && currentStageDate && (
             <>
@@ -238,17 +238,17 @@ export function PatientStageTimeline({
                     type="datetime-local"
                     value={editAtValue}
                     onChange={(e) => setEditAtValue(e.target.value)}
-                    className="rounded border border-gray-300 px-2 py-1 text-sm"
+                    className="rounded border border-gray-300 dark:border-gray-700 px-2 py-1 text-sm"
                   />
-                  <button type="button" onClick={saveStageStart} disabled={saving} className="p-1 text-green-600 hover:bg-green-50 rounded" title="Mentés">
+                  <button type="button" onClick={saveStageStart} disabled={saving} className="p-1 text-green-600 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-950/40 rounded" title="Mentés">
                     <Check className="w-4 h-4" />
                   </button>
-                  <button type="button" onClick={cancelEditStageStart} disabled={saving} className="p-1 text-gray-500 hover:bg-gray-100 rounded" title="Mégse">
+                  <button type="button" onClick={cancelEditStageStart} disabled={saving} className="p-1 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded" title="Mégse">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
               ) : (
-                <span className="text-sm text-gray-600 flex items-center gap-1">
+                <span className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1">
                   <Clock className="w-4 h-4" />
                   {format(new Date(currentStageDate), 'yyyy. MMMM d. HH:mm', { locale: hu })}
                   {canEditStageStart &&
@@ -257,7 +257,7 @@ export function PatientStageTimeline({
                     <button
                       type="button"
                       onClick={() => startEditStageStart((currentStage as { id: string }).id, currentStageDate)}
-                      className="ml-1 p-1 text-gray-400 hover:text-medical-primary hover:bg-medical-primary/10 rounded"
+                      className="ml-1 p-1 text-gray-400 dark:text-gray-500 hover:text-medical-primary hover:bg-medical-primary/10 rounded"
                       title="Stádium kezdetének szerkesztése"
                     >
                       <Pencil className="w-3.5 h-3.5" />
@@ -269,44 +269,44 @@ export function PatientStageTimeline({
           )}
         </div>
         {hasCurrentStageData && currentStageNote && (
-          <p className="text-sm text-gray-700 mt-2">{currentStageNote}</p>
+          <p className="text-sm text-gray-700 dark:text-gray-300 mt-2">{currentStageNote}</p>
         )}
       </div>
 
       {/* Episodes */}
       {timeline.episodes && timeline.episodes.length > 0 && (
         <div className="space-y-4">
-          <h4 className="text-base font-medium text-gray-900 mb-3">Epizódok</h4>
+          <h4 className="text-base font-medium text-gray-900 dark:text-gray-100 mb-3">Epizódok</h4>
           {timeline.episodes.map((episode, episodeIndex) => {
             const isExpanded = expandedEpisodes.has(episode.episodeId);
             return (
               <div
                 key={episode.episodeId}
-                className="border border-gray-200 rounded-lg overflow-hidden"
+                className="border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden"
               >
                 <button
                   onClick={() => toggleEpisode(episode.episodeId)}
-                  className="w-full px-4 py-3 bg-gray-50 hover:bg-gray-100 flex items-center justify-between transition-colors"
+                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800/60 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-between transition-colors"
                 >
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-medium text-gray-900">
+                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
                       {'episode' in episode && episode.episode?.chiefComplaint
                         ? episode.episode.chiefComplaint
                         : `Epizód ${episodeIndex + 1}`}
                     </span>
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
                       {format(new Date(episode.startDate), 'yyyy. MMMM d.', { locale: hu })}
                       {episode.endDate &&
                         ` - ${format(new Date(episode.endDate), 'yyyy. MMMM d.', { locale: hu })}`}
                     </span>
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
                       ({episode.stages.length} stádium)
                     </span>
                   </div>
                   {isExpanded ? (
-                    <ChevronUp className="w-5 h-5 text-gray-500" />
+                    <ChevronUp className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                   ) : (
-                    <ChevronDown className="w-5 h-5 text-gray-500" />
+                    <ChevronDown className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                   )}
                 </button>
 
@@ -323,7 +323,7 @@ export function PatientStageTimeline({
                       return (
                         <div
                           key={id}
-                          className="flex items-start gap-4 pb-3 border-b border-gray-100 last:border-b-0 last:pb-0"
+                          className="flex items-start gap-4 pb-3 border-b border-gray-100 dark:border-gray-800 last:border-b-0 last:pb-0"
                         >
                           <div className="flex-shrink-0 w-2 h-2 rounded-full bg-medical-primary mt-2" />
                           <div className="flex-1 min-w-0">
@@ -337,13 +337,13 @@ export function PatientStageTimeline({
                                     type="datetime-local"
                                     value={editAtValue}
                                     onChange={(e) => setEditAtValue(e.target.value)}
-                                    className="rounded border border-gray-300 px-2 py-1 text-xs"
+                                    className="rounded border border-gray-300 dark:border-gray-700 px-2 py-1 text-xs"
                                   />
                                   <button
                                     type="button"
                                     onClick={saveStageStart}
                                     disabled={saving}
-                                    className="p-1 text-green-600 hover:bg-green-50 rounded"
+                                    className="p-1 text-green-600 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-950/40 rounded"
                                     title="Mentés"
                                   >
                                     <Check className="w-4 h-4" />
@@ -352,7 +352,7 @@ export function PatientStageTimeline({
                                     type="button"
                                     onClick={cancelEditStageStart}
                                     disabled={saving}
-                                    className="p-1 text-gray-500 hover:bg-gray-100 rounded"
+                                    className="p-1 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
                                     title="Mégse"
                                   >
                                     <X className="w-4 h-4" />
@@ -361,7 +361,7 @@ export function PatientStageTimeline({
                               ) : (
                                 <>
                                   {date && (
-                                    <span className="text-xs text-gray-500">
+                                    <span className="text-xs text-gray-500 dark:text-gray-400">
                                       {format(new Date(date), 'yyyy. MMMM d. HH:mm', { locale: hu })}
                                     </span>
                                   )}
@@ -369,7 +369,7 @@ export function PatientStageTimeline({
                                     <button
                                       type="button"
                                       onClick={() => startEditStageStart(id, date!)}
-                                      className="p-1 text-gray-400 hover:text-medical-primary hover:bg-medical-primary/10 rounded"
+                                      className="p-1 text-gray-400 dark:text-gray-500 hover:text-medical-primary hover:bg-medical-primary/10 rounded"
                                       title="Stádium kezdetének szerkesztése"
                                     >
                                       <Pencil className="w-3.5 h-3.5" />
@@ -378,8 +378,8 @@ export function PatientStageTimeline({
                                 </>
                               )}
                             </div>
-                            {note && <p className="text-sm text-gray-600 mt-1">{note}</p>}
-                            {createdBy && <p className="text-xs text-gray-400 mt-1">{createdBy}</p>}
+                            {note && <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{note}</p>}
+                            {createdBy && <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{createdBy}</p>}
                           </div>
                         </div>
                       );
@@ -395,7 +395,7 @@ export function PatientStageTimeline({
       {/* Full History (if no episodes) */}
       {(!timeline.episodes || timeline.episodes.length === 0) && timeline.history && timeline.history.length > 0 && (
         <div className="space-y-3">
-          <h4 className="text-base font-medium text-gray-900 mb-3">Teljes történet</h4>
+          <h4 className="text-base font-medium text-gray-900 dark:text-gray-100 mb-3">Teljes történet</h4>
           {timeline.history.map((stage: unknown, idx: number) => {
             const key = isStageEventEntry(stage) ? stage.stageCode : isLegacyStage(stage) ? stage.stage : String(idx);
             const date = isStageEventEntry(stage) ? stage.at : isLegacyStage(stage) ? stage.stageDate : null;
@@ -405,7 +405,7 @@ export function PatientStageTimeline({
             const isNewModelWithId = typeof id === 'string' && canPatchStageEventId(id) && !!date;
             const isEditing = editingEventId === id;
             return (
-              <div key={id} className="flex items-start gap-4 pb-3 border-b border-gray-100 last:border-b-0 last:pb-0">
+              <div key={id} className="flex items-start gap-4 pb-3 border-b border-gray-100 dark:border-gray-800 last:border-b-0 last:pb-0">
                 <div className="flex-shrink-0 w-2 h-2 rounded-full bg-medical-primary mt-2" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -418,19 +418,19 @@ export function PatientStageTimeline({
                           type="datetime-local"
                           value={editAtValue}
                           onChange={(e) => setEditAtValue(e.target.value)}
-                          className="rounded border border-gray-300 px-2 py-1 text-xs"
+                          className="rounded border border-gray-300 dark:border-gray-700 px-2 py-1 text-xs"
                         />
-                        <button type="button" onClick={saveStageStart} disabled={saving} className="p-1 text-green-600 hover:bg-green-50 rounded" title="Mentés">
+                        <button type="button" onClick={saveStageStart} disabled={saving} className="p-1 text-green-600 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-950/40 rounded" title="Mentés">
                           <Check className="w-4 h-4" />
                         </button>
-                        <button type="button" onClick={cancelEditStageStart} disabled={saving} className="p-1 text-gray-500 hover:bg-gray-100 rounded" title="Mégse">
+                        <button type="button" onClick={cancelEditStageStart} disabled={saving} className="p-1 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded" title="Mégse">
                           <X className="w-4 h-4" />
                         </button>
                       </div>
                     ) : (
                       <>
                         {date && (
-                          <span className="text-xs text-gray-500">
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
                             {format(new Date(date), 'yyyy. MMMM d. HH:mm', { locale: hu })}
                           </span>
                         )}
@@ -438,7 +438,7 @@ export function PatientStageTimeline({
                           <button
                             type="button"
                             onClick={() => startEditStageStart(id, date!)}
-                            className="p-1 text-gray-400 hover:text-medical-primary hover:bg-medical-primary/10 rounded"
+                            className="p-1 text-gray-400 dark:text-gray-500 hover:text-medical-primary hover:bg-medical-primary/10 rounded"
                             title="Stádium kezdetének szerkesztése"
                           >
                             <Pencil className="w-3.5 h-3.5" />
@@ -447,8 +447,8 @@ export function PatientStageTimeline({
                       </>
                     )}
                   </div>
-                  {note && <p className="text-sm text-gray-600 mt-1">{note}</p>}
-                  {createdBy && <p className="text-xs text-gray-400 mt-1">{createdBy}</p>}
+                  {note && <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{note}</p>}
+                  {createdBy && <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{createdBy}</p>}
                 </div>
               </div>
             );
@@ -457,7 +457,7 @@ export function PatientStageTimeline({
       )}
 
       {(!timeline.history || timeline.history.length === 0) && (
-        <p className="text-gray-500 text-center py-8">Még nincs stádium bejegyzés.</p>
+        <p className="text-gray-500 dark:text-gray-400 text-center py-8">Még nincs stádium bejegyzés.</p>
       )}
     </div>
   );

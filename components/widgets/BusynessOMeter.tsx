@@ -56,10 +56,10 @@ const LEVEL_LABELS: Record<Level, string> = {
 };
 
 const LEVEL_TEXT_COLORS: Record<Level, string> = {
-  low: 'text-green-700',
-  medium: 'text-yellow-700',
-  high: 'text-orange-700',
-  critical: 'text-red-700',
+  low: 'text-green-700 dark:text-green-300',
+  medium: 'text-yellow-700 dark:text-yellow-300',
+  high: 'text-orange-700 dark:text-orange-300',
+  critical: 'text-red-700 dark:text-red-300',
   unavailable: 'text-gray-500 dark:text-gray-400',
 };
 
@@ -331,9 +331,9 @@ function DetailRow({
 }) {
   const valueClass =
     highlight === 'critical'
-      ? 'text-red-700 font-semibold'
+      ? 'text-red-700 dark:text-red-300 font-semibold'
       : highlight === 'high'
-        ? 'text-orange-700 font-semibold'
+        ? 'text-orange-700 dark:text-orange-300 font-semibold'
         : 'text-gray-800 dark:text-gray-200 font-medium';
   return (
     <div className="flex items-center justify-between gap-2 py-0.5">

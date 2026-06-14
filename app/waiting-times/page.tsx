@@ -183,9 +183,9 @@ export default function WaitingTimesPage() {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div className={`flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center ${
-                        isLongWaiting ? 'bg-red-100' : 'bg-medical-primary/10'
+                        isLongWaiting ? 'bg-red-100 dark:bg-red-950/50' : 'bg-medical-primary/10'
                       }`}>
-                        <User className={`w-5 h-5 ${isLongWaiting ? 'text-red-600' : 'text-medical-primary'}`} />
+                        <User className={`w-5 h-5 ${isLongWaiting ? 'text-red-600 dark:text-red-300' : 'text-medical-primary'}`} />
                       </div>
                       <div className="ml-4">
                         <div className={`text-sm font-medium ${
@@ -214,7 +214,7 @@ export default function WaitingTimesPage() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <span className={`text-sm font-semibold ${
-                            isLongWaiting ? 'text-red-600' : 'text-medical-primary'
+                            isLongWaiting ? 'text-red-600 dark:text-red-300' : 'text-medical-primary'
                           }`}>
                             {item.waitingTimeDays.toFixed(1)} nap
                           </span>
@@ -235,7 +235,7 @@ export default function WaitingTimesPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold text-green-700">
+                          <span className="text-sm font-semibold text-green-700 dark:text-green-300">
                             {item.waitingTimeDays.toFixed(1)} nap
                           </span>
                         </div>
@@ -256,9 +256,9 @@ export default function WaitingTimesPage() {
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       <div className={`flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center ${
-                        isLongWaiting ? 'bg-red-100' : 'bg-medical-primary/10'
+                        isLongWaiting ? 'bg-red-100 dark:bg-red-950/50' : 'bg-medical-primary/10'
                       }`}>
-                        <User className={`w-5 h-5 ${isLongWaiting ? 'text-red-600' : 'text-medical-primary'}`} />
+                        <User className={`w-5 h-5 ${isLongWaiting ? 'text-red-600 dark:text-red-300' : 'text-medical-primary'}`} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <h3 className={`text-base font-semibold truncate ${
@@ -275,7 +275,7 @@ export default function WaitingTimesPage() {
                     </div>
                     <div className="flex-shrink-0 ml-2">
                       <span className={`text-sm font-semibold ${
-                        isLongWaiting ? 'text-red-600' : activeTab === 'elso_konzultacio' ? 'text-medical-primary' : 'text-green-700'
+                        isLongWaiting ? 'text-red-600 dark:text-red-300' : activeTab === 'elso_konzultacio' ? 'text-medical-primary' : 'text-green-700 dark:text-green-300'
                       }`}>
                         {item.waitingTimeDays.toFixed(1)} nap
                       </span>

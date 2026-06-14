@@ -45,38 +45,38 @@ export function PendingTreatmentsWidget({ treatments }: PendingTreatmentsWidgetP
             <div
               key={treatment.id}
               onClick={() => handlePatientClick(treatment.id)}
-              className="p-3 rounded-lg border border-orange-200 bg-orange-50 hover:bg-orange-100 cursor-pointer transition-colors"
+              className="p-3 rounded-lg border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/40 hover:bg-orange-100 dark:hover:bg-orange-900/40 cursor-pointer transition-colors"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm sm:text-base text-gray-900 truncate">
+                  <div className="font-medium text-sm sm:text-base text-gray-900 dark:text-gray-100 truncate">
                     {treatment.patientName || 'Névtelen beteg'}
                   </div>
                   {treatment.patientTaj && (
-                    <div className="text-xs text-gray-600 mt-0.5">
+                    <div className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
                       TAJ: {treatment.patientTaj}
                     </div>
                   )}
                   <div className="flex flex-wrap gap-2 mt-2">
                     {treatment.pendingFelso > 0 && (
-                      <span className="text-xs px-2 py-1 bg-white rounded border border-orange-200">
+                      <span className="text-xs px-2 py-1 bg-white dark:bg-gray-800 rounded border border-orange-200 dark:border-orange-800">
                         Felső: {treatment.pendingFelso}
                       </span>
                     )}
                     {treatment.pendingAlso > 0 && (
-                      <span className="text-xs px-2 py-1 bg-white rounded border border-orange-200">
+                      <span className="text-xs px-2 py-1 bg-white dark:bg-gray-800 rounded border border-orange-200 dark:border-orange-800">
                         Alsó: {treatment.pendingAlso}
                       </span>
                     )}
                     {treatment.pendingArcotErinto > 0 && (
-                      <span className="text-xs px-2 py-1 bg-white rounded border border-orange-200">
+                      <span className="text-xs px-2 py-1 bg-white dark:bg-gray-800 rounded border border-orange-200 dark:border-orange-800">
                         Arcot érintő: {treatment.pendingArcotErinto}
                       </span>
                     )}
                   </div>
                 </div>
                 <div className="flex-shrink-0">
-                  <span className="text-lg font-bold text-orange-600">{totalPending}</span>
+                  <span className="text-lg font-bold text-orange-600 dark:text-orange-300">{totalPending}</span>
                 </div>
               </div>
             </div>

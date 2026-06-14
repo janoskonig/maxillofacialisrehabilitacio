@@ -164,11 +164,11 @@ export function DocumentRequestInfoCard({
         onClick={() => setShowModal(true)}
       >
         <div className="flex items-start gap-3">
-          <div className="p-2 bg-amber-200 rounded-lg text-amber-700 flex-shrink-0">
+          <div className="p-2 bg-amber-200 rounded-lg text-amber-700 dark:text-amber-300 flex-shrink-0">
             <FileText className="w-5 h-5" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="font-semibold text-amber-900 text-sm mb-2">
+            <div className="font-semibold text-amber-900 dark:text-amber-200 text-sm mb-2">
               Dokumentum kérés
             </div>
             
@@ -178,7 +178,7 @@ export function DocumentRequestInfoCard({
               </div>
               
               {loading ? (
-                <div className="text-xs text-amber-700">
+                <div className="text-xs text-amber-700 dark:text-amber-300">
                   <span className="font-semibold">Beteg:</span> Betöltés...
                 </div>
               ) : displayPatientName ? (
@@ -188,7 +188,7 @@ export function DocumentRequestInfoCard({
               ) : null}
             </div>
 
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-amber-200 hover:bg-amber-300 text-amber-900 rounded-lg border border-amber-300 transition-colors text-sm font-medium">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-amber-200 hover:bg-amber-300 text-amber-900 dark:text-amber-200 rounded-lg border border-amber-300 dark:border-amber-700 transition-colors text-sm font-medium">
               <Upload className="w-4 h-4" />
               Feltöltés
             </div>

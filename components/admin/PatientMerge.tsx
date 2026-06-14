@@ -238,7 +238,7 @@ export function PatientMerge() {
   if (step === 'done') {
     return (
       <div className="text-center py-8">
-        <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+        <CheckCircle className="w-16 h-16 text-green-500 dark:text-green-400 mx-auto mb-4" />
         <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">Összevonás sikeres!</h3>
         <p className="text-gray-600 dark:text-gray-400 mb-2">{successMsg}</p>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">{mergedCount} profil lett egyesítve egyetlen páciensbe.</p>

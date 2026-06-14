@@ -342,13 +342,13 @@ export function StagesGanttChart({
               {s.labelHu}
             </span>
           ))}
-        <span className="inline-flex items-center gap-1.5 text-xs text-gray-600">
+        <span className="inline-flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
           <span className="h-3 w-3 rounded bg-gray-400 opacity-40" />
           Lezárt epizód (halvány)
         </span>
         {hasVirtuals && (
           <span className="inline-flex items-center gap-1.5 text-xs">
-            <span className="h-3 w-3 rounded border-2 border-dashed border-amber-400 bg-amber-50" />
+            <span className="h-3 w-3 rounded border-2 border-dashed border-amber-400 bg-amber-50 dark:bg-amber-950/40" />
             Várható lépés (nem foglalt)
           </span>
         )}
@@ -357,11 +357,11 @@ export function StagesGanttChart({
       <div className="flex" style={{ minWidth: leftLabelWidth + 800 }}>
         {/* Left: labels */}
         <div
-          className="flex-shrink-0 border-r border-gray-200 bg-gray-50/80 sticky left-0 z-10"
+          className="flex-shrink-0 border-r border-gray-200 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-800/60 sticky left-0 z-10"
           style={{ width: leftLabelWidth }}
         >
           <div
-            className="flex items-center px-2 text-xs font-medium text-gray-500 border-b border-gray-200"
+            className="flex items-center px-2 text-xs font-medium text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-800"
             style={{ height: headerHeight }}
           >
             Beteg / Aktuális stádium
@@ -374,14 +374,14 @@ export function StagesGanttChart({
                   <button
                     type="button"
                     onClick={() => toggleGroup(group.key)}
-                    className="w-full flex items-center gap-2 px-2 border-b border-gray-200 bg-gray-100 hover:bg-gray-200 text-left"
+                    className="w-full flex items-center gap-2 px-2 border-b border-gray-200 dark:border-gray-800 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-left"
                     style={{ height: groupHeaderHeight }}
                     title={`${group.label} – ${group.rows.length} beteg`}
                   >
                     {isCollapsed ? (
-                      <ChevronRight className="w-4 h-4 text-gray-500" />
+                      <ChevronRight className="w-4 h-4 text-gray-500 dark:text-gray-400" />
                     ) : (
-                      <ChevronDown className="w-4 h-4 text-gray-500" />
+                      <ChevronDown className="w-4 h-4 text-gray-500 dark:text-gray-400" />
                     )}
                     {group.stageCode && (
                       <span className={`h-3 w-3 rounded ${getStageColor(group.stageCode)}`} />
@@ -389,10 +389,10 @@ export function StagesGanttChart({
                     {group.isClosedGroup && (
                       <span className="h-3 w-3 rounded bg-gray-400 opacity-40" />
                     )}
-                    <span className="text-sm font-semibold text-gray-800 truncate">
+                    <span className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">
                       {group.label}
                     </span>
-                    <span className="ml-auto text-xs text-gray-500 tabular-nums">
+                    <span className="ml-auto text-xs text-gray-500 dark:text-gray-400 tabular-nums">
                       {group.rows.length}
                     </span>
                   </button>
@@ -417,7 +417,7 @@ export function StagesGanttChart({
                     return (
                       <div
                         key={row.patientId}
-                        className="flex flex-col justify-center px-2 border-b border-gray-100 text-sm"
+                        className="flex flex-col justify-center px-2 border-b border-gray-100 dark:border-gray-800 text-sm"
                         style={{ height: patientRowHeight }}
                         title={`${row.patientName} – ${row.chiefComplaint || '–'}${
                           stageLabel
@@ -430,13 +430,13 @@ export function StagesGanttChart({
                         <div className="flex items-center gap-1 min-w-0">
                           <Link
                             href={`/patients/${row.patientId}/view`}
-                            className="font-medium text-gray-900 truncate hover:text-blue-600 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 rounded"
+                            className="font-medium text-gray-900 dark:text-gray-100 truncate hover:text-blue-600 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 rounded"
                             title={`${row.patientName} adatlapjának megnyitása`}
                           >
                             {row.patientName}
                           </Link>
                           {episodeCount > 1 && (
-                            <span className="text-[10px] text-gray-500 bg-gray-200 rounded px-1 tabular-nums whitespace-nowrap">
+                            <span className="text-[10px] text-gray-500 dark:text-gray-400 bg-gray-200 dark:bg-gray-700 rounded px-1 tabular-nums whitespace-nowrap">
                               {episodeCount} ep.
                             </span>
                           )}
@@ -452,19 +452,19 @@ export function StagesGanttChart({
                               {isClosedRow ? `Lezárt · ${stageLabel}` : stageLabel}
                             </span>
                           ) : isClosedRow ? (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ring-1 ring-inset bg-gray-100 text-gray-600 ring-gray-200">
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ring-1 ring-inset bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 ring-gray-200 dark:ring-gray-700">
                               Lezárt
                             </span>
                           ) : (
-                            <span className="text-[10px] text-gray-400">–</span>
+                            <span className="text-[10px] text-gray-400 dark:text-gray-500">–</span>
                           )}
                           {days != null && !isClosedRow && (
-                            <span className="text-[10px] text-gray-500 tabular-nums whitespace-nowrap">
+                            <span className="text-[10px] text-gray-500 dark:text-gray-400 tabular-nums whitespace-nowrap">
                               {days} napja
                             </span>
                           )}
                           {row.chiefComplaint && (
-                            <span className="text-xs text-gray-500 truncate ml-1">
+                            <span className="text-xs text-gray-500 dark:text-gray-400 truncate ml-1">
                               · {row.chiefComplaint}
                             </span>
                           )}
@@ -480,7 +480,7 @@ export function StagesGanttChart({
         {/* Right: time grid + bars */}
         <div className="flex-1 overflow-x-auto" style={{ minWidth: 600 }}>
           <div
-            className="relative border-b border-gray-200"
+            className="relative border-b border-gray-200 dark:border-gray-800"
             style={{
               height: headerHeight,
               minWidth: 800,
@@ -502,7 +502,7 @@ export function StagesGanttChart({
               return months.map((m) => (
                 <div
                   key={m.label}
-                  className="absolute top-0 bottom-0 text-xs text-gray-500 border-l border-gray-200 pl-1"
+                  className="absolute top-0 bottom-0 text-xs text-gray-500 dark:text-gray-400 border-l border-gray-200 dark:border-gray-800 pl-1"
                   style={{ left: `${m.left}%`, minWidth: 0 }}
                 >
                   {m.label}
@@ -517,7 +517,7 @@ export function StagesGanttChart({
               <div key={group.key}>
                 {shouldGroup && (
                   <div
-                    className="border-b border-gray-200 bg-gray-100"
+                    className="border-b border-gray-200 dark:border-gray-800 bg-gray-100 dark:bg-gray-800"
                     style={{ height: groupHeaderHeight, minWidth: 800 }}
                   />
                 )}
@@ -545,7 +545,7 @@ export function StagesGanttChart({
                     return (
                       <div
                         key={row.patientId}
-                        className="relative border-b border-gray-100"
+                        className="relative border-b border-gray-100 dark:border-gray-800"
                         style={{ height: patientRowHeight, minWidth: 800 }}
                       >
                         {/* Track A: Stages from all episodes */}
@@ -625,7 +625,7 @@ export function StagesGanttChart({
                                 <a
                                   key={vw.virtualKey}
                                   href={vw.worklistUrl}
-                                  className="absolute opacity-60 border-2 border-dashed border-amber-400 bg-amber-50 rounded min-w-[4px] flex items-center justify-center overflow-hidden hover:opacity-80 hover:bg-amber-100 transition-all"
+                                  className="absolute opacity-60 border-2 border-dashed border-amber-400 bg-amber-50 dark:bg-amber-950/40 rounded min-w-[4px] flex items-center justify-center overflow-hidden hover:opacity-80 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-all"
                                   style={{
                                     left: `${left}%`,
                                     width: `${Math.max(width, 2)}%`,
@@ -635,7 +635,7 @@ export function StagesGanttChart({
                                   title={`${vw.stepLabel} (${vw.patientName}): ${vw.windowStartDate} – ${vw.windowEndDate}. Még nem foglalt – kattintson a munkalistához.`}
                                 >
                                   {width > 10 && (
-                                    <span className="text-[10px] text-amber-800 truncate px-1">
+                                    <span className="text-[10px] text-amber-800 dark:text-amber-300 truncate px-1">
                                       {vw.stepLabel}
                                     </span>
                                   )}
@@ -654,7 +654,7 @@ export function StagesGanttChart({
       </div>
 
       {patientRows.length === 0 && (
-        <div className="py-12 text-center text-gray-500 text-sm">
+        <div className="py-12 text-center text-gray-500 dark:text-gray-400 text-sm">
           Nincs megjeleníthető beteg a kiválasztott szűrőkkel.
         </div>
       )}

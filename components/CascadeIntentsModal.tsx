@@ -89,7 +89,7 @@ export function CascadeIntentsModal({
           <h2 id="cascade-intents-title" className="text-lg font-semibold text-gray-900 dark:text-gray-100">
             Tervezett lépések eltolása
           </h2>
-          <button onClick={onClose} className="text-gray-500 dark:text-gray-400 hover:text-gray-700 p-1" aria-label="Bezárás">
+          <button onClick={onClose} className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 p-1" aria-label="Bezárás">
             <X className="w-5 h-5" />
           </button>
         </div>

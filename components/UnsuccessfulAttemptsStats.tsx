@@ -190,7 +190,7 @@ export function UnsuccessfulAttemptsStats() {
   return (
     <section
       id="stats-unsuccessful-attempts"
-      className="card scroll-mt-28 border-orange-200/80 shadow-soft-md"
+      className="card scroll-mt-28 border-orange-200/80 dark:border-orange-800/80 shadow-soft-md"
       aria-labelledby="unsuccessful-attempts-heading"
     >
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -424,10 +424,10 @@ export function UnsuccessfulAttemptsStats() {
                   <tbody>
                     {data.recent.map((r) => (
                       <tr key={r.appointmentId} className="border-b">
-                        <td className="px-2 py-1.5 text-gray-700 whitespace-nowrap">
+                        <td className="px-2 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">
                           {formatDateTime(r.failedAt)}
                         </td>
-                        <td className="px-2 py-1.5 text-gray-700">
+                        <td className="px-2 py-1.5 text-gray-700 dark:text-gray-300">
                           {r.patientId && r.patientName ? (
                             <Link
                               href={`/patients/${r.patientId}/view`}
@@ -437,25 +437,25 @@ export function UnsuccessfulAttemptsStats() {
                               {r.patientName}
                             </Link>
                           ) : (
-                            r.patientName ?? <span className="text-gray-400">–</span>
+                            r.patientName ?? <span className="text-gray-400 dark:text-gray-500">–</span>
                           )}
                         </td>
-                        <td className="px-2 py-1.5 text-gray-700">
-                          {r.workPhaseLabel ?? r.workPhaseCode ?? <span className="text-gray-400">–</span>}
+                        <td className="px-2 py-1.5 text-gray-700 dark:text-gray-300">
+                          {r.workPhaseLabel ?? r.workPhaseCode ?? <span className="text-gray-400 dark:text-gray-500">–</span>}
                           {r.workPhaseLabel && r.workPhaseCode && (
-                            <span className="block text-xs text-gray-400">{r.workPhaseCode}</span>
+                            <span className="block text-xs text-gray-400 dark:text-gray-500">{r.workPhaseCode}</span>
                           )}
                         </td>
-                        <td className="px-2 py-1.5 text-gray-700 tabular-nums">{r.attemptNumber}.</td>
-                        <td className="px-2 py-1.5 text-gray-700 whitespace-nowrap">
+                        <td className="px-2 py-1.5 text-gray-700 dark:text-gray-300 tabular-nums">{r.attemptNumber}.</td>
+                        <td className="px-2 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">
                           {formatDateTime(r.appointmentStart)}
                         </td>
-                        <td className="px-2 py-1.5 text-gray-700 max-w-xs">
-                          <span className="italic text-orange-800" title={r.reason ?? ''}>
-                            {r.reason ?? <span className="text-gray-400">–</span>}
+                        <td className="px-2 py-1.5 text-gray-700 dark:text-gray-300 max-w-xs">
+                          <span className="italic text-orange-800 dark:text-orange-300" title={r.reason ?? ''}>
+                            {r.reason ?? <span className="text-gray-400 dark:text-gray-500">–</span>}
                           </span>
                         </td>
-                        <td className="px-2 py-1.5 text-gray-600 text-xs">{r.failedBy ?? '–'}</td>
+                        <td className="px-2 py-1.5 text-gray-600 dark:text-gray-400 text-xs">{r.failedBy ?? '–'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -465,7 +465,7 @@ export function UnsuccessfulAttemptsStats() {
           )}
 
           {data.summary.period === 0 && (
-            <div className="text-center py-6 text-sm text-gray-500">
+            <div className="text-center py-6 text-sm text-gray-500 dark:text-gray-400">
               {doctor
                 ? `Ebben az időszakban ${doctor} nem jelölt sikertelennek próbát.`
                 : 'Ebben az időszakban nem volt sikertelennek jelölt próba.'}
@@ -474,42 +474,42 @@ export function UnsuccessfulAttemptsStats() {
 
           {/* Attempt-number eloszlás (összes idejű, NEM csak unsuccessful) */}
           {data.attemptDistributionSummary.osszesStepInstance > 0 ? (
-            <div className="rounded-xl border border-orange-200/80 bg-gradient-to-br from-orange-50/40 to-white p-4">
+            <div className="rounded-xl border border-orange-200/80 dark:border-orange-800/80 bg-gradient-to-br from-orange-50/40 to-white p-4">
               <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-                <h3 className="text-sm font-semibold text-gray-900">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                   Hány próbát kívántak a step-instance-ek
                 </h3>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                   (episode_id, step_code) párok minden idejű attempt_number alapján
                 </p>
               </div>
               <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div>
-                  <p className="text-xs text-gray-500">Összes step-instance</p>
-                  <p className="text-xl font-bold tabular-nums text-gray-900">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Összes step-instance</p>
+                  <p className="text-xl font-bold tabular-nums text-gray-900 dark:text-gray-100">
                     {data.attemptDistributionSummary.osszesStepInstance}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">1 próba</p>
-                  <p className="text-xl font-bold tabular-nums text-emerald-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">1 próba</p>
+                  <p className="text-xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
                     {data.attemptDistributionSummary.egyProba}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">2 próba</p>
-                  <p className="text-xl font-bold tabular-nums text-amber-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">2 próba</p>
+                  <p className="text-xl font-bold tabular-nums text-amber-700 dark:text-amber-300">
                     {data.attemptDistributionSummary.ketProba}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">3+ próba</p>
-                  <p className="text-xl font-bold tabular-nums text-rose-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">3+ próba</p>
+                  <p className="text-xl font-bold tabular-nums text-rose-700 dark:text-rose-300">
                     {data.attemptDistributionSummary.haromVagyTobbProba}
                   </p>
                 </div>
               </div>
-              <p className="mb-3 text-xs text-gray-600">
+              <p className="mb-3 text-xs text-gray-600 dark:text-gray-400">
                 Többszörösen próbált step-instance-ek aránya:{' '}
                 <span className="font-semibold tabular-nums">
                   {data.attemptDistributionSummary.tobbszorPct}%
@@ -528,10 +528,10 @@ export function UnsuccessfulAttemptsStats() {
                   return (
                     <li key={b.maxAttempts}>
                       <div className="flex justify-between text-xs">
-                        <span className="text-gray-700">{b.maxAttempts}. próba</span>
-                        <span className="tabular-nums font-semibold text-gray-900">{b.parosSzam}</span>
+                        <span className="text-gray-700 dark:text-gray-300">{b.maxAttempts}. próba</span>
+                        <span className="tabular-nums font-semibold text-gray-900 dark:text-gray-100">{b.parosSzam}</span>
                       </div>
-                      <div className="mt-0.5 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                      <div className="mt-0.5 h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
                         <div
                           className={`h-full rounded-full transition-[width] duration-500 ${tone}`}
                           style={{ width: `${pct}%` }}
@@ -577,13 +577,13 @@ function BucketList({
         ? 'bg-blue-400/80'
         : 'bg-gray-400/80';
   return (
-    <div className="rounded-xl border border-gray-200 p-3">
-      <div className="flex items-center gap-2 mb-2 text-sm font-semibold text-gray-700">
+    <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-3">
+      <div className="flex items-center gap-2 mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
         {icon}
         {title}
       </div>
       {rows.length === 0 ? (
-        <p className="text-xs text-gray-500 py-3 text-center">{emptyHint}</p>
+        <p className="text-xs text-gray-500 dark:text-gray-400 py-3 text-center">{emptyHint}</p>
       ) : (
         <ul className="space-y-1.5">
           {rows.map((row, i) => {
@@ -591,17 +591,17 @@ function BucketList({
             return (
               <li key={`${row.label}-${i}`} className="text-xs">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-gray-800 truncate" title={row.label}>
+                  <span className="text-gray-800 dark:text-gray-200 truncate" title={row.label}>
                     {row.label}
                   </span>
-                  <span className="font-semibold tabular-nums text-gray-700">{row.count}</span>
+                  <span className="font-semibold tabular-nums text-gray-700 dark:text-gray-300">{row.count}</span>
                 </div>
                 {row.sublabel && (
-                  <div className="text-[10px] text-gray-400 truncate" title={row.sublabel}>
+                  <div className="text-[10px] text-gray-400 dark:text-gray-500 truncate" title={row.sublabel}>
                     {row.sublabel}
                   </div>
                 )}
-                <div className="mt-0.5 h-1 bg-gray-100 rounded overflow-hidden">
+                <div className="mt-0.5 h-1 bg-gray-100 dark:bg-gray-800 rounded overflow-hidden">
                   <div
                     className={`h-full ${barColor}`}
                     style={{ width: `${Math.max(widthPct, 2)}%` }}

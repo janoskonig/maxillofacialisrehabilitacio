@@ -93,7 +93,7 @@ export function SzemelyesAdatokSection({
               maxDate={new Date()}
             />
             {errors.szuletesiDatum && (
-              <p className="text-red-500 text-sm mt-1">{errors.szuletesiDatum.message as string}</p>
+              <p className="text-red-500 dark:text-red-400 text-sm mt-1">{errors.szuletesiDatum.message as string}</p>
             )}
           </div>
           <div>
@@ -103,7 +103,7 @@ export function SzemelyesAdatokSection({
               <option value="ferfi">Férfi</option>
               <option value="no">Nő</option>
             </select>
-            {errors.nem && <p className="text-red-500 text-sm mt-1">{errors.nem.message as string}</p>}
+            {errors.nem && <p className="text-red-500 dark:text-red-400 text-sm mt-1">{errors.nem.message as string}</p>}
           </div>
           {!compactPersonalFields && (
             <>
@@ -120,7 +120,7 @@ export function SzemelyesAdatokSection({
                   maxDate={new Date()}
                 />
                 {errors.halalDatum && (
-                  <p className="text-red-500 text-sm mt-1">{errors.halalDatum.message}</p>
+                  <p className="text-red-500 dark:text-red-400 text-sm mt-1">{errors.halalDatum.message}</p>
                 )}
               </div>
               <div>

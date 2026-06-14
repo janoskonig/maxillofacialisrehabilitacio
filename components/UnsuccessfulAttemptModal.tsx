@@ -92,18 +92,18 @@ export function UnsuccessfulAttemptModal({
       aria-modal="true"
       aria-labelledby="unsuccessful-modal-title"
     >
-      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b">
           <h2
             id="unsuccessful-modal-title"
-            className="text-lg font-semibold text-gray-900 flex items-center gap-2"
+            className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2"
           >
-            <AlertTriangle className="w-5 h-5 text-orange-500" />
+            <AlertTriangle className="w-5 h-5 text-orange-500 dark:text-orange-400" />
             Sikertelen próba — ismétlés szükséges
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 p-1"
+            className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 p-1"
             aria-label="Bezárás"
             type="button"
           >
@@ -112,20 +112,20 @@ export function UnsuccessfulAttemptModal({
         </div>
 
         <div className="p-4 space-y-4">
-          <div className="text-sm text-gray-700 bg-orange-50 border border-orange-200 p-3 rounded">
-            <div className="font-medium text-orange-900 mb-1">
+          <div className="text-sm text-gray-700 dark:text-gray-300 bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800 p-3 rounded">
+            <div className="font-medium text-orange-900 dark:text-orange-200 mb-1">
               Mit jelentesz sikertelennek?
             </div>
             <div className="text-orange-900/90">
               {stepLabel ?? 'Munkafázis'}
               {attemptNumber != null && (
-                <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-orange-100 text-orange-800 align-middle">
+                <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-950/50 text-orange-800 dark:text-orange-300 align-middle">
                   {attemptNumber}. próba
                 </span>
               )}
             </div>
             {appointmentStart && (
-              <div className="text-xs text-orange-800 mt-1">
+              <div className="text-xs text-orange-800 dark:text-orange-300 mt-1">
                 Időpont: {new Date(appointmentStart).toLocaleString('hu-HU', {
                   year: 'numeric',
                   month: 'short',
@@ -135,13 +135,13 @@ export function UnsuccessfulAttemptModal({
                 })}
               </div>
             )}
-            <div className="text-xs text-orange-800 mt-1 font-mono opacity-70 break-all">
+            <div className="text-xs text-orange-800 dark:text-orange-300 mt-1 font-mono opacity-70 break-all">
               ID: {appointmentId}
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Indok (min {MIN_REASON_LENGTH} karakter) *
             </label>
             <div className="flex flex-wrap gap-2 mb-2">
@@ -150,7 +150,7 @@ export function UnsuccessfulAttemptModal({
                   key={r}
                   type="button"
                   onClick={() => handleQuickReason(r)}
-                  className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-700"
+                  className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
                 >
                   {r}
                 </button>
@@ -165,7 +165,7 @@ export function UnsuccessfulAttemptModal({
               maxLength={500}
               autoFocus
             />
-            <div className="flex justify-between text-xs text-gray-500 mt-1">
+            <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
               <span>
                 {trimmed.length < MIN_REASON_LENGTH
                   ? `Még ${MIN_REASON_LENGTH - trimmed.length} karakter szükséges`
@@ -175,7 +175,7 @@ export function UnsuccessfulAttemptModal({
             </div>
           </div>
 
-          <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer select-none">
+          <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
             <input
               type="checkbox"
               checked={openNextPicker}
@@ -184,14 +184,14 @@ export function UnsuccessfulAttemptModal({
             />
             <span>
               <span className="font-medium">Következő próba foglalása most</span>
-              <span className="block text-xs text-gray-500">
+              <span className="block text-xs text-gray-500 dark:text-gray-400">
                 A jelölés után azonnal megnyílik az időpont-választó az új próbához.
               </span>
             </span>
           </label>
 
           {error && (
-            <div className="text-sm text-red-700 bg-red-50 border border-red-200 p-2 rounded">
+            <div className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 p-2 rounded">
               {error}
             </div>
           )}

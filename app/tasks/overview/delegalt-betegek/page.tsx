@@ -143,7 +143,7 @@ export default function DelegaltBetegekPage() {
             </div>
           </div>
           <div className="card p-4 flex items-center gap-3">
-            <AlertTriangle className={`w-8 h-8 ${stalledCount > 0 ? 'text-amber-500' : 'text-gray-300'}`} />
+            <AlertTriangle className={`w-8 h-8 ${stalledCount > 0 ? 'text-amber-500 dark:text-amber-400' : 'text-gray-300'}`} />
             <div>
               <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stalledCount}</p>
               <p className="text-sm text-gray-500 dark:text-gray-400">Elakadt (nincs köv. időpont)</p>
@@ -195,7 +195,7 @@ export default function DelegaltBetegekPage() {
                     >
                       <td className="px-4 py-2">
                         <div className="flex items-center gap-2">
-                          {p.stalled && <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />}
+                          {p.stalled && <AlertTriangle className="w-4 h-4 text-amber-500 dark:text-amber-400 shrink-0" />}
                           <span className="font-medium text-gray-900 dark:text-gray-100">{p.nev ?? 'Név nélkül'}</span>
                         </div>
                         {p.intezmeny && <div className="text-xs text-gray-400 dark:text-gray-500">{p.intezmeny}</div>}

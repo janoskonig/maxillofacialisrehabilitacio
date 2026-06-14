@@ -211,7 +211,7 @@ export function QuickTaskForm({ patientId, onCreated }: QuickTaskFormProps) {
         </div>
       </div>
       {(remind || remindEmail) && dueLocal.trim().length === 0 && (
-        <p className="text-xs text-amber-700">
+        <p className="text-xs text-amber-700 dark:text-amber-300">
           Az emlékeztetőhöz adj meg határidőt is.
         </p>
       )}
@@ -280,7 +280,7 @@ export function QuickTaskForm({ patientId, onCreated }: QuickTaskFormProps) {
       )}
 
       {feedback && (
-        <p className={`text-sm ${feedback.ok ? 'text-green-700' : 'text-red-700'}`}>{feedback.msg}</p>
+        <p className={`text-sm ${feedback.ok ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>{feedback.msg}</p>
       )}
 
       <button

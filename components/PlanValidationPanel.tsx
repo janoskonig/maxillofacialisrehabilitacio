@@ -97,28 +97,28 @@ export function PlanValidationPanel({ episodeId, patientId, signature, canEdit =
         <div className="flex items-center gap-2 min-w-0">
           {approved ? (
             <>
-              <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span className="font-medium text-emerald-700">Terv jóváhagyva</span>
+              <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-300 shrink-0" />
+              <span className="font-medium text-emerald-700 dark:text-emerald-300">Terv jóváhagyva</span>
               <span className="text-gray-500 dark:text-gray-400 truncate">
                 {new Date(data.approvedAt as string).toLocaleString('hu-HU')}
               </span>
             </>
           ) : clean ? (
             <>
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span className="font-medium text-emerald-700">A terv rendben — foglalásra kész</span>
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-300 shrink-0" />
+              <span className="font-medium text-emerald-700 dark:text-emerald-300">A terv rendben — foglalásra kész</span>
             </>
           ) : errors.length > 0 ? (
             <>
-              <XCircle className="w-4 h-4 text-red-600 shrink-0" />
-              <span className="font-medium text-red-700">
+              <XCircle className="w-4 h-4 text-red-600 dark:text-red-300 shrink-0" />
+              <span className="font-medium text-red-700 dark:text-red-300">
                 {errors.length} hiba{warnings.length > 0 ? `, ${warnings.length} figyelmeztetés` : ''}
               </span>
             </>
           ) : (
             <>
-              <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-              <span className="font-medium text-amber-700">{warnings.length} figyelmeztetés</span>
+              <AlertTriangle className="w-4 h-4 text-amber-500 dark:text-amber-400 shrink-0" />
+              <span className="font-medium text-amber-700 dark:text-amber-300">{warnings.length} figyelmeztetés</span>
             </>
           )}
         </div>
@@ -154,9 +154,9 @@ export function PlanValidationPanel({ episodeId, patientId, signature, canEdit =
           {[...errors, ...warnings].map((issue, idx) => (
             <li key={`${issue.code}-${issue.workPhaseCode ?? idx}`} className="flex items-start gap-2 px-3 py-1.5">
               {issue.level === 'error' ? (
-                <XCircle className="w-3.5 h-3.5 text-red-500 mt-0.5 shrink-0" />
+                <XCircle className="w-3.5 h-3.5 text-red-500 dark:text-red-400 mt-0.5 shrink-0" />
               ) : (
-                <AlertTriangle className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 mt-0.5 shrink-0" />
               )}
               <span className="text-gray-700 dark:text-gray-300">{issue.message}</span>
             </li>
@@ -183,7 +183,7 @@ export function PlanValidationPanel({ episodeId, patientId, signature, canEdit =
           <ul className="divide-y divide-amber-100 dark:divide-amber-900">
             {data.sequenceViolations!.map((v, idx) => (
               <li key={`${v.workPhaseCode}-${idx}`} className="flex items-start gap-2 px-3 py-1.5">
-                <CalendarClock className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
+                <CalendarClock className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 mt-0.5 shrink-0" />
                 <span className="text-gray-700 dark:text-gray-300">{v.message}</span>
               </li>
             ))}

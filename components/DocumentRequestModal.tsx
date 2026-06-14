@@ -429,7 +429,7 @@ export function DocumentRequestModal({
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Dokumentum feltöltése</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 dark:text-gray-500 hover:text-gray-600 transition-colors"
+            className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
             disabled={uploading}
           >
             <X className="w-5 h-5" />

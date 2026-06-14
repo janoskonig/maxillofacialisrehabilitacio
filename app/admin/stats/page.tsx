@@ -171,14 +171,14 @@ function KpiCard({
     teal: 'from-teal-500/15 to-teal-400/5 ring-teal-500/20',
   };
   const iconTint: Record<typeof accent, string> = {
-    sky: 'text-sky-600 bg-sky-500/10',
-    emerald: 'text-emerald-600 bg-emerald-500/10',
-    violet: 'text-violet-600 bg-violet-500/10',
-    amber: 'text-amber-600 bg-amber-500/10',
-    rose: 'text-rose-600 bg-rose-500/10',
+    sky: 'text-sky-600 dark:text-sky-300 bg-sky-500/10',
+    emerald: 'text-emerald-600 dark:text-emerald-300 bg-emerald-500/10',
+    violet: 'text-violet-600 dark:text-violet-300 bg-violet-500/10',
+    amber: 'text-amber-600 dark:text-amber-300 bg-amber-500/10',
+    rose: 'text-rose-600 dark:text-rose-300 bg-rose-500/10',
     slate: 'text-slate-600 bg-slate-500/10',
-    indigo: 'text-indigo-600 bg-indigo-500/10',
-    teal: 'text-teal-600 bg-teal-500/10',
+    indigo: 'text-indigo-600 dark:text-indigo-300 bg-indigo-500/10',
+    teal: 'text-teal-600 dark:text-teal-300 bg-teal-500/10',
   };
   // For inverted metrics (no-show / lemondás) lower is better.
   const isPositive = trendInverted ? (trendPct ?? 0) <= 0 : (trendPct ?? 0) >= 0;
@@ -252,7 +252,7 @@ function SectionShell({
   return (
     <section
       id={id}
-      className="card scroll-mt-28 border-gray-200/80 shadow-soft-md"
+      className="card scroll-mt-28 border-gray-200/80 dark:border-gray-800/80 shadow-soft-md"
       aria-labelledby={`${id}-heading`}
     >
       <div className="mb-5 flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
@@ -472,18 +472,18 @@ export default function StatsPage() {
       actions={
         <div className="flex items-center gap-3">
           <span
-            className="hidden text-xs text-gray-500 sm:inline-flex sm:items-center sm:gap-1"
+            className="hidden text-xs text-gray-500 dark:text-gray-400 sm:inline-flex sm:items-center sm:gap-1"
             aria-live="polite"
             title={stats?.generaltAt ?? ''}
           >
             <Clock className="h-3.5 w-3.5" />
-            Frissítve: <span className="font-medium text-gray-700">{lastUpdatedLabel}</span>
+            Frissítve: <span className="font-medium text-gray-700 dark:text-gray-300">{lastUpdatedLabel}</span>
           </span>
           <button
             type="button"
             onClick={() => loadStats()}
             disabled={statsLoading}
-            className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-soft transition-colors hover:bg-gray-50 disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 shadow-soft transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50 disabled:opacity-50"
           >
             <RefreshCw className={`h-4 w-4 ${statsLoading ? 'animate-spin' : ''}`} />
             Frissítés
@@ -493,12 +493,12 @@ export default function StatsPage() {
     >
       <div>
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
             Rendszer- és szakmai mutatók egy helyen — csak adminisztrátorok számára.
           </p>
           {currentUser && (
-            <p className="text-sm text-gray-500 sm:text-right">
-              Bejelentkezve: <span className="font-medium text-gray-700">{currentUser.email}</span>
+            <p className="text-sm text-gray-500 dark:text-gray-400 sm:text-right">
+              Bejelentkezve: <span className="font-medium text-gray-700 dark:text-gray-300">{currentUser.email}</span>
             </p>
           )}
         </div>
@@ -515,7 +515,7 @@ export default function StatsPage() {
               className={`inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
                 activeTab === t.id
                   ? 'bg-medical-primary text-white shadow-soft'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900'
+                  : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100'
               }`}
             >
               {t.icon}
@@ -527,8 +527,8 @@ export default function StatsPage() {
         {statsLoading && !stats ? (
           <StatsLoadingSkeleton />
         ) : error ? (
-          <div className="card border-rose-200 bg-rose-50/80 text-center shadow-soft-md">
-            <p className="font-medium text-rose-900">{error}</p>
+          <div className="card border-rose-200 dark:border-rose-800 bg-rose-50/80 text-center shadow-soft-md">
+            <p className="font-medium text-rose-900 dark:text-rose-200">{error}</p>
             <button type="button" className="btn-secondary mt-4" onClick={() => loadStats()}>
               Újrapróbálás
             </button>
@@ -667,15 +667,15 @@ export default function StatsPage() {
 
               {/* Quick glance + slot utilisation */}
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                <div className="card border-gray-200/80 lg:col-span-2">
+                <div className="card border-gray-200/80 dark:border-gray-800/80 lg:col-span-2">
                   <div className="flex items-center justify-between gap-2">
                     <div>
-                      <h3 className="text-sm font-semibold text-gray-900">Gyors pillantás</h3>
-                      <p className="mt-0.5 text-xs text-gray-500">
+                      <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Gyors pillantás</h3>
+                      <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
                         Dokumentumok, visszajelzések és időslot-kihasználtság.
                       </p>
                     </div>
-                    <CalendarClock className="h-5 w-5 text-gray-400" aria-hidden />
+                    <CalendarClock className="h-5 w-5 text-gray-400 dark:text-gray-500" aria-hidden />
                   </div>
                   <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <MiniStat label="Dokumentumok" value={stats.dokumentumok.osszes} />
@@ -687,16 +687,16 @@ export default function StatsPage() {
                     <MiniStat
                       label="Slot kihasználtság"
                       value={slotUtilization != null ? `${slotUtilization}%` : '—'}
-                      valueClassName="text-violet-700"
+                      valueClassName="text-violet-700 dark:text-violet-300"
                     />
                   </dl>
                   {slotUtilization != null ? (
                     <div className="mt-4">
-                      <div className="mb-1 flex justify-between text-xs font-medium text-gray-600">
+                      <div className="mb-1 flex justify-between text-xs font-medium text-gray-600 dark:text-gray-400">
                         <span>{stats.idoslotok.lefoglalt} lefoglalt / {stats.idoslotok.osszes} összes</span>
                         <span className="tabular-nums">{slotUtilization}%</span>
                       </div>
-                      <div className="h-2.5 overflow-hidden rounded-full bg-gray-100">
+                      <div className="h-2.5 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
                         <div
                           className="h-full rounded-full bg-gradient-to-r from-violet-500 to-medical-primary transition-[width] duration-500"
                           style={{ width: `${slotUtilization}%` }}
@@ -705,20 +705,20 @@ export default function StatsPage() {
                     </div>
                   ) : null}
                 </div>
-                <div className="card flex flex-col justify-center border-gray-200/80 bg-gradient-to-br from-medical-primary/5 to-transparent">
-                  <p className="text-sm font-medium text-gray-700">Betegek — havi trend</p>
-                  <p className="mt-2 text-xs text-gray-500">
+                <div className="card flex flex-col justify-center border-gray-200/80 dark:border-gray-800/80 bg-gradient-to-br from-medical-primary/5 to-transparent">
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Betegek — havi trend</p>
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                     Ebben a hónapban vs. múlt hónap; százalék a múlt hónaphoz képest.
                   </p>
                   <div className="mt-4 flex items-baseline gap-2">
-                    <span className="text-3xl font-bold tabular-nums text-gray-900">
+                    <span className="text-3xl font-bold tabular-nums text-gray-900 dark:text-gray-100">
                       {stats.betegek.ebbenAHonapban}
                     </span>
-                    <span className="text-sm text-gray-500">/ {stats.betegek.multHonapban} előző hónap</span>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">/ {stats.betegek.multHonapban} előző hónap</span>
                   </div>
                   <div
                     className={`mt-2 inline-flex items-center gap-1 text-sm font-semibold ${
-                      patientMonthDeltaPct >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                      patientMonthDeltaPct >= 0 ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300'
                     }`}
                   >
                     {patientMonthDeltaPct >= 0 ? (
@@ -734,23 +734,23 @@ export default function StatsPage() {
 
               {/* Trend grafikonok */}
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                <div className="card border-gray-200/80">
+                <div className="card border-gray-200/80 dark:border-gray-800/80">
                   <div className="mb-3 flex items-center justify-between">
                     <div>
-                      <h3 className="text-sm font-semibold text-gray-900">Új betegek (12 hónap)</h3>
-                      <p className="text-xs text-gray-500">Havi felvett betegek görgetett ablakban.</p>
+                      <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Új betegek (12 hónap)</h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Havi felvett betegek görgetett ablakban.</p>
                     </div>
-                    <Users className="h-5 w-5 text-sky-500" aria-hidden />
+                    <Users className="h-5 w-5 text-sky-500 dark:text-sky-400" aria-hidden />
                   </div>
                   <MonthlyPatientsChart data={stats.betegek.havitTrend} />
                 </div>
-                <div className="card border-gray-200/80">
+                <div className="card border-gray-200/80 dark:border-gray-800/80">
                   <div className="mb-3 flex items-center justify-between">
                     <div>
-                      <h3 className="text-sm font-semibold text-gray-900">Aktivitás (utolsó 30 nap)</h3>
-                      <p className="text-xs text-gray-500">Napi aktivitás-események összesítése.</p>
+                      <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Aktivitás (utolsó 30 nap)</h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Napi aktivitás-események összesítése.</p>
                     </div>
-                    <Activity className="h-5 w-5 text-amber-500" aria-hidden />
+                    <Activity className="h-5 w-5 text-amber-500 dark:text-amber-400" aria-hidden />
                   </div>
                   <ActivityTrendChart data={stats.aktivitas.napiTrend} />
                 </div>
@@ -773,7 +773,7 @@ export default function StatsPage() {
                     value={
                       <span
                         className={
-                          patientMonthDeltaPct >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                          patientMonthDeltaPct >= 0 ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300'
                         }
                       >
                         {patientMonthDeltaPct >= 0 ? '+' : ''}
@@ -784,7 +784,7 @@ export default function StatsPage() {
                 </div>
                 <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
                   <div>
-                    <h3 className="mb-3 text-sm font-semibold text-gray-800">Nem szerint</h3>
+                    <h3 className="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-200">Nem szerint</h3>
                     <DistributionBars
                       items={stats.betegek.nemSzerint}
                       labelKey="nem"
@@ -792,7 +792,7 @@ export default function StatsPage() {
                     />
                   </div>
                   <div>
-                    <h3 className="mb-3 text-sm font-semibold text-gray-800">Etiológia szerint</h3>
+                    <h3 className="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-200">Etiológia szerint</h3>
                     <DistributionBars
                       items={stats.betegek.etiologiaSzerint}
                       labelKey="etiologia"
@@ -800,7 +800,7 @@ export default function StatsPage() {
                     />
                   </div>
                   <div>
-                    <h3 className="mb-3 text-sm font-semibold text-gray-800">Orvos szerint (top 10)</h3>
+                    <h3 className="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-200">Orvos szerint (top 10)</h3>
                     <DistributionBars
                       items={stats.betegek.orvosSzerint}
                       labelKey="orvos"
@@ -813,9 +813,9 @@ export default function StatsPage() {
                 <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
                   <div>
                     <div className="mb-3 flex items-center justify-between">
-                      <h3 className="text-sm font-semibold text-gray-800">Életkor (kohorszok)</h3>
+                      <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">Életkor (kohorszok)</h3>
                       {stats.betegek.eletkor.mintaSzam > 0 ? (
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
                           Átlag {stats.betegek.eletkor.atlagEv ?? '—'} · medián{' '}
                           {stats.betegek.eletkor.medianEv ?? '—'} · n=
                           {stats.betegek.eletkor.mintaSzam}
@@ -829,7 +829,7 @@ export default function StatsPage() {
                     />
                   </div>
                   <div>
-                    <h3 className="mb-3 text-sm font-semibold text-gray-800">Intake állapot</h3>
+                    <h3 className="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-200">Intake állapot</h3>
                     <DistributionBars
                       items={stats.betegek.intakeStatusSzerint.map((s) => ({
                         ...s,
@@ -852,36 +852,36 @@ export default function StatsPage() {
                   <MiniStat
                     label="Aktív"
                     value={stats.felhasznalok.aktiv}
-                    valueClassName="text-emerald-600"
+                    valueClassName="text-emerald-600 dark:text-emerald-300"
                   />
                   <MiniStat
                     label="Inaktív"
                     value={stats.felhasznalok.inaktiv}
-                    valueClassName="text-rose-600"
+                    valueClassName="text-rose-600 dark:text-rose-300"
                   />
                   <MiniStat label="Új (30 nap)" value={stats.felhasznalok.utolso30Napban} />
                   <MiniStat label="Összes" value={stats.felhasznalok.osszes} />
                 </div>
-                <div className="overflow-hidden rounded-xl border border-gray-200">
-                  <table className="min-w-full divide-y divide-gray-200 text-sm">
-                    <thead className="bg-gray-50/90">
+                <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-800">
+                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800 text-sm">
+                    <thead className="bg-gray-50/90 dark:bg-gray-800/90">
                       <tr>
-                        <th className="px-4 py-3 text-left font-semibold text-gray-600">Szerepkör</th>
-                        <th className="px-4 py-3 text-right font-semibold text-gray-600">Összes</th>
-                        <th className="px-4 py-3 text-right font-semibold text-gray-600">Aktív</th>
+                        <th className="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-400">Szerepkör</th>
+                        <th className="px-4 py-3 text-right font-semibold text-gray-600 dark:text-gray-400">Összes</th>
+                        <th className="px-4 py-3 text-right font-semibold text-gray-600 dark:text-gray-400">Aktív</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100 bg-white">
+                    <tbody className="divide-y divide-gray-100 dark:divide-gray-800 bg-white dark:bg-gray-900">
                       {stats.felhasznalok.szerepkorSzerint.map((item, idx) => (
                         <tr
                           key={idx}
-                          className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}
+                          className={idx % 2 === 0 ? 'bg-white dark:bg-gray-900' : 'bg-gray-50/50 dark:bg-gray-800/50'}
                         >
-                          <td className="px-4 py-2.5 text-gray-800">{item.szerepkor}</td>
-                          <td className="px-4 py-2.5 text-right tabular-nums font-medium text-gray-900">
+                          <td className="px-4 py-2.5 text-gray-800 dark:text-gray-200">{item.szerepkor}</td>
+                          <td className="px-4 py-2.5 text-right tabular-nums font-medium text-gray-900 dark:text-gray-100">
                             {item.osszes}
                           </td>
-                          <td className="px-4 py-2.5 text-right tabular-nums font-medium text-emerald-600">
+                          <td className="px-4 py-2.5 text-right tabular-nums font-medium text-emerald-600 dark:text-emerald-300">
                             {item.aktiv}
                           </td>
                         </tr>
@@ -901,7 +901,7 @@ export default function StatsPage() {
                   <MiniStat
                     label="Jövőbeli"
                     value={stats.idopontfoglalasok.jovobeli}
-                    valueClassName="text-sky-600"
+                    valueClassName="text-sky-600 dark:text-sky-300"
                   />
                   <MiniStat label="Múltbeli" value={stats.idopontfoglalasok.multbeli} />
                   <MiniStat label="Ebben a hónapban" value={stats.idopontfoglalasok.ebbenAHonapban} />
@@ -910,11 +910,11 @@ export default function StatsPage() {
 
                 <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
                   <div>
-                    <h3 className="mb-3 text-sm font-semibold text-gray-800">Időpontok kimenete</h3>
+                    <h3 className="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-200">Időpontok kimenete</h3>
                     <AppointmentOutcomeChart data={stats.idopontfoglalasok.kimenetSzerint} />
                   </div>
                   <div>
-                    <h3 className="mb-3 text-sm font-semibold text-gray-800">Páciens-jóváhagyás státusza</h3>
+                    <h3 className="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-200">Páciens-jóváhagyás státusza</h3>
                     <DistributionBars
                       items={stats.idopontfoglalasok.statusSzerint.map((x) => ({
                         ...x,
@@ -928,11 +928,11 @@ export default function StatsPage() {
 
                 <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
                   <div>
-                    <h3 className="mb-3 text-sm font-semibold text-gray-800">Csúcsidők (óránként)</h3>
+                    <h3 className="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-200">Csúcsidők (óránként)</h3>
                     <BookingHourChart data={stats.idopontfoglalasok.csucsOrak} />
                   </div>
                   <div>
-                    <h3 className="mb-3 text-sm font-semibold text-gray-800">Hét napjai szerint</h3>
+                    <h3 className="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-200">Hét napjai szerint</h3>
                     <BookingWeekdayChart data={stats.idopontfoglalasok.napiEloszlas} />
                   </div>
                 </div>
@@ -940,9 +940,9 @@ export default function StatsPage() {
                 {/* Booking lead-time eloszlás */}
                 <div className="mt-8">
                   <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
-                    <h3 className="text-sm font-semibold text-gray-800">Foglalási előretekintés</h3>
+                    <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">Foglalási előretekintés</h3>
                     {stats.idopontfoglalasok.bookingLeadTime.mintaSzam > 0 ? (
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
                         Átlag {stats.idopontfoglalasok.bookingLeadTime.atlagNapok ?? '—'} nap ·
                         medián {stats.idopontfoglalasok.bookingLeadTime.medianNapok ?? '—'} nap ·
                         IQR {stats.idopontfoglalasok.bookingLeadTime.p25Napok ?? '—'}–
@@ -969,22 +969,22 @@ export default function StatsPage() {
                   <MiniStat
                     label="Elérhető"
                     value={stats.idoslotok.elerheto}
-                    valueClassName="text-emerald-600"
+                    valueClassName="text-emerald-600 dark:text-emerald-300"
                   />
                   <MiniStat
                     label="Lefoglalt"
                     value={stats.idoslotok.lefoglalt}
-                    valueClassName="text-sky-600"
+                    valueClassName="text-sky-600 dark:text-sky-300"
                   />
                   <MiniStat label="Összes" value={stats.idoslotok.osszes} />
                 </div>
                 {slotUtilization != null && (
                   <div className="mt-5">
-                    <div className="mb-1 flex justify-between text-xs font-medium text-gray-600">
+                    <div className="mb-1 flex justify-between text-xs font-medium text-gray-600 dark:text-gray-400">
                       <span>Kihasználtság</span>
                       <span className="tabular-nums">{slotUtilization}%</span>
                     </div>
-                    <div className="h-2.5 overflow-hidden rounded-full bg-gray-100">
+                    <div className="h-2.5 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
                       <div
                         className="h-full rounded-full bg-gradient-to-r from-violet-500 to-medical-primary transition-[width] duration-500"
                         style={{ width: `${slotUtilization}%` }}
@@ -1007,7 +1007,7 @@ export default function StatsPage() {
                 </div>
                 <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
                   <div>
-                    <h3 className="mb-3 text-sm font-semibold text-gray-800">Művelet szerint</h3>
+                    <h3 className="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-200">Művelet szerint</h3>
                     <DistributionBars
                       items={stats.aktivitas.muveletSzerint.map((x) => ({
                         ...x,
@@ -1018,7 +1018,7 @@ export default function StatsPage() {
                     />
                   </div>
                   <div>
-                    <h3 className="mb-3 text-sm font-semibold text-gray-800">Felhasználó szerint</h3>
+                    <h3 className="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-200">Felhasználó szerint</h3>
                     <DistributionBars
                       items={stats.aktivitas.felhasznaloSzerint}
                       labelKey="felhasznalo"
@@ -1039,7 +1039,7 @@ export default function StatsPage() {
                 </div>
                 <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
                   <div>
-                    <h3 className="mb-3 text-sm font-semibold text-gray-800">Státusz szerint</h3>
+                    <h3 className="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-200">Státusz szerint</h3>
                     <DistributionBars
                       items={stats.visszajelzesek.statusSzerint.map((x) => ({
                         ...x,
@@ -1050,7 +1050,7 @@ export default function StatsPage() {
                     />
                   </div>
                   <div>
-                    <h3 className="mb-3 text-sm font-semibold text-gray-800">Típus szerint</h3>
+                    <h3 className="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-200">Típus szerint</h3>
                     <DistributionBars
                       items={stats.visszajelzesek.tipusSzerint.map((x) => ({
                         ...x,
@@ -1086,7 +1086,7 @@ export default function StatsPage() {
                   <MiniStat
                     label="Olvasatlan"
                     value={stats.uzenetek.olvasatlanOsszes}
-                    valueClassName="text-rose-600"
+                    valueClassName="text-rose-600 dark:text-rose-300"
                   />
                   <MiniStat
                     label="Olvasatlan arány"
@@ -1099,32 +1099,32 @@ export default function StatsPage() {
                     }
                   />
                 </div>
-                <div className="overflow-hidden rounded-xl border border-gray-200">
-                  <table className="min-w-full divide-y divide-gray-200 text-sm">
-                    <thead className="bg-gray-50/90">
+                <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-800">
+                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800 text-sm">
+                    <thead className="bg-gray-50/90 dark:bg-gray-800/90">
                       <tr>
-                        <th className="px-4 py-3 text-left font-semibold text-gray-600">Küldő típus</th>
-                        <th className="px-4 py-3 text-right font-semibold text-gray-600">Összes</th>
-                        <th className="px-4 py-3 text-right font-semibold text-gray-600">Olvasatlan</th>
+                        <th className="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-400">Küldő típus</th>
+                        <th className="px-4 py-3 text-right font-semibold text-gray-600 dark:text-gray-400">Összes</th>
+                        <th className="px-4 py-3 text-right font-semibold text-gray-600 dark:text-gray-400">Olvasatlan</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100 bg-white">
+                    <tbody className="divide-y divide-gray-100 dark:divide-gray-800 bg-white dark:bg-gray-900">
                       {stats.uzenetek.kuldoTipusSzerint.length === 0 ? (
                         <tr>
-                          <td className="px-4 py-2.5 text-gray-500" colSpan={3}>
+                          <td className="px-4 py-2.5 text-gray-500 dark:text-gray-400" colSpan={3}>
                             Nincs üzenet a rendszerben.
                           </td>
                         </tr>
                       ) : (
                         stats.uzenetek.kuldoTipusSzerint.map((row, idx) => (
-                          <tr key={row.kuldoTipus} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
-                            <td className="px-4 py-2.5 text-gray-800">
+                          <tr key={row.kuldoTipus} className={idx % 2 === 0 ? 'bg-white dark:bg-gray-900' : 'bg-gray-50/50 dark:bg-gray-800/50'}>
+                            <td className="px-4 py-2.5 text-gray-800 dark:text-gray-200">
                               {SENDER_TYPE_LABEL_HU[row.kuldoTipus] ?? row.kuldoTipus}
                             </td>
-                            <td className="px-4 py-2.5 text-right tabular-nums font-medium text-gray-900">
+                            <td className="px-4 py-2.5 text-right tabular-nums font-medium text-gray-900 dark:text-gray-100">
                               {row.osszes}
                             </td>
-                            <td className="px-4 py-2.5 text-right tabular-nums font-medium text-rose-600">
+                            <td className="px-4 py-2.5 text-right tabular-nums font-medium text-rose-600 dark:text-rose-300">
                               {row.olvasatlan}
                             </td>
                           </tr>
@@ -1137,14 +1137,14 @@ export default function StatsPage() {
             </div>
 
             {/* ───────── Folyamat: episode + work-phase + operatív SLA ───────── */}
-            <div className="space-y-8 border-t border-gray-200/80 pt-10">
+            <div className="space-y-8 border-t border-gray-200/80 dark:border-gray-800/80 pt-10">
               <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-indigo-100 p-2 text-indigo-700">
+                <div className="rounded-lg bg-indigo-100 dark:bg-indigo-950/50 p-2 text-indigo-700 dark:text-indigo-300">
                   <GitBranch className="h-6 w-6" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-gray-900">Folyamat</h2>
-                  <p className="text-sm text-gray-500">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Folyamat</h2>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
                     Episode élettartam, munkafázis pipeline és felhasználói feladat-SLA.
                   </p>
                 </div>
@@ -1154,14 +1154,14 @@ export default function StatsPage() {
               <ConsiliumStatsSection onDataChange={setConsiliumData} />
             </div>
 
-            <div id="stats-medical" className="scroll-mt-32 space-y-4 border-t border-gray-200/80 pt-10">
+            <div id="stats-medical" className="scroll-mt-32 space-y-4 border-t border-gray-200/80 dark:border-gray-800/80 pt-10">
               <div className="flex items-center gap-3">
                 <div className="rounded-lg bg-medical-primary/10 p-2 text-medical-primary">
                   <Stethoscope className="h-6 w-6" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-gray-900">Szakmai statisztikák</h2>
-                  <p className="text-sm text-gray-500">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Szakmai statisztikák</h2>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
                     OHIP-14, kiosztott kezelési tervek, BNO, DMF, fog- és implantátum-eloszlások, várakozási idők és
                     orvosok leterheltsége.
                   </p>
@@ -1171,7 +1171,7 @@ export default function StatsPage() {
               <UnsuccessfulAttemptsStats />
             </div>
 
-            <div className="border-t border-gray-200/80 pt-10">
+            <div className="border-t border-gray-200/80 dark:border-gray-800/80 pt-10">
               <StatsCsvExport
                 stats={stats}
                 pipeline={pipelineData}

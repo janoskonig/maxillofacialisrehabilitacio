@@ -26,9 +26,9 @@ export function WaitingTimeChart({
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-          <p className="text-sm text-blue-600 font-medium">Átlagos várakozási idő</p>
-          <p className="text-2xl font-bold text-blue-900">
+        <div className="bg-blue-50 dark:bg-blue-950/40 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+          <p className="text-sm text-blue-600 dark:text-blue-300 font-medium">Átlagos várakozási idő</p>
+          <p className="text-2xl font-bold text-blue-900 dark:text-blue-200">
             {atlagNapokban.toFixed(1)}
             {szorasNapokban !== undefined && szorasNapokban !== null && (
               <span className="text-lg font-normal"> ± {szorasNapokban.toFixed(1)}</span>
@@ -36,17 +36,17 @@ export function WaitingTimeChart({
             <span className="text-base font-normal"> nap</span>
           </p>
         </div>
-        <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-          <p className="text-sm text-green-600 font-medium">Medián várakozási idő</p>
-          <p className="text-2xl font-bold text-green-900">{medianNapokban.toFixed(1)} nap</p>
+        <div className="bg-green-50 dark:bg-green-950/40 p-4 rounded-lg border border-green-200 dark:border-green-800">
+          <p className="text-sm text-green-600 dark:text-green-300 font-medium">Medián várakozási idő</p>
+          <p className="text-2xl font-bold text-green-900 dark:text-green-200">{medianNapokban.toFixed(1)} nap</p>
         </div>
-        <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
-          <p className="text-sm text-orange-600 font-medium">Legrövidebb várakozás</p>
-          <p className="text-2xl font-bold text-orange-900">{minNapokban.toFixed(1)} nap</p>
+        <div className="bg-orange-50 dark:bg-orange-950/40 p-4 rounded-lg border border-orange-200 dark:border-orange-800">
+          <p className="text-sm text-orange-600 dark:text-orange-300 font-medium">Legrövidebb várakozás</p>
+          <p className="text-2xl font-bold text-orange-900 dark:text-orange-200">{minNapokban.toFixed(1)} nap</p>
         </div>
-        <div className="bg-red-50 p-4 rounded-lg border border-red-200">
-          <p className="text-sm text-red-600 font-medium">Leghosszabb várakozás</p>
-          <p className="text-2xl font-bold text-red-900">{maxNapokban.toFixed(1)} nap</p>
+        <div className="bg-red-50 dark:bg-red-950/40 p-4 rounded-lg border border-red-200 dark:border-red-800">
+          <p className="text-sm text-red-600 dark:text-red-300 font-medium">Leghosszabb várakozás</p>
+          <p className="text-2xl font-bold text-red-900 dark:text-red-200">{maxNapokban.toFixed(1)} nap</p>
         </div>
       </div>
     </div>

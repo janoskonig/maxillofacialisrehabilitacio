@@ -254,7 +254,7 @@ export function PatientFormSectionNavigation({
                   {errorCount > 0 && (
                     <span
                       className={`flex-shrink-0 px-2 py-0.5 text-xs font-semibold rounded-full ${
-                        isActive ? 'bg-white/20 text-white' : 'bg-red-500 text-white'
+                        isActive ? 'bg-white/20 dark:bg-gray-900/20 text-white' : 'bg-red-500 text-white'
                       }`}
                     >
                       {errorCount}

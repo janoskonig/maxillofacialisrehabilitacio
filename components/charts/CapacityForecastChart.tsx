@@ -139,11 +139,11 @@ export function CapacityForecastChart() {
                   {/* Tooltip */}
                   <div className="absolute z-20 bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block w-44 p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-800 rounded-lg shadow-lg text-xs">
                     <div className="font-semibold text-gray-900 dark:text-gray-100 mb-1">{w.weekLabel}</div>
-                    <div className="text-emerald-700">Supply: {w.supply}</div>
-                    <div className="text-blue-700">Foglalt: {w.hardDemand}</div>
-                    <div className="text-amber-700">Tervezett: {w.softDemand}</div>
+                    <div className="text-emerald-700 dark:text-emerald-300">Supply: {w.supply}</div>
+                    <div className="text-blue-700 dark:text-blue-300">Foglalt: {w.hardDemand}</div>
+                    <div className="text-amber-700 dark:text-amber-300">Tervezett: {w.softDemand}</div>
                     {isOverloaded && (
-                      <div className="text-red-600 font-medium mt-0.5">Túlterhelt!</div>
+                      <div className="text-red-600 dark:text-red-300 font-medium mt-0.5">Túlterhelt!</div>
                     )}
                   </div>
                 </div>

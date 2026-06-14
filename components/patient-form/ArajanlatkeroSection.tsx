@@ -216,7 +216,7 @@ export function ArajanlatkeroSection({
                           );
                         }
                       }}
-                      className="btn-secondary text-xs px-3 py-1 text-red-600 hover:text-red-700"
+                      className="btn-secondary text-xs px-3 py-1 text-red-600 dark:text-red-300 hover:text-red-700"
                       title="Törlés"
                     >
                       <Trash2 className="w-3 h-3" />

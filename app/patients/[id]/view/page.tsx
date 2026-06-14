@@ -234,7 +234,7 @@ export default function PatientViewPage() {
         userRole === 'admin' && patientId ? (
           <button
             onClick={handleImpersonate}
-            className="btn-secondary flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-sm text-purple-600 hover:text-purple-700"
+            className="btn-secondary flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-sm text-purple-600 dark:text-purple-300 hover:text-purple-700"
             title="Belépés betegként"
           >
             <User className="w-4 h-4" />

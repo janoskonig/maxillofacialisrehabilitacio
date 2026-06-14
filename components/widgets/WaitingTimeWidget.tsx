@@ -127,38 +127,38 @@ export function WaitingTimeWidget() {
             )}
           </div>
         ) : (
-          <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-            <div className="text-sm font-semibold text-gray-700 mb-1">
+          <div className="p-3 bg-gray-50 dark:bg-gray-800/60 rounded-lg border border-gray-200 dark:border-gray-800">
+            <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
               Első konzultáció
             </div>
-            <div className="text-sm text-gray-500">Nincs elérhető adat</div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">Nincs elérhető adat</div>
           </div>
         )}
 
         {/* Munkafázis */}
         {stats.munkafazis ? (
-          <div className="p-3 bg-green-50 rounded-lg border border-green-200">
-            <div className="text-sm font-semibold text-gray-700 mb-1">
+          <div className="p-3 bg-green-50 dark:bg-green-950/40 rounded-lg border border-green-200 dark:border-green-800">
+            <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
               Munkafázis
             </div>
-            <div className="text-lg font-bold text-green-700">
+            <div className="text-lg font-bold text-green-700 dark:text-green-300">
               {stats.munkafazis.atlag.toFixed(1)}
               {stats.munkafazis.szoras !== null && (
-                <span className="text-sm font-normal text-gray-600 ml-1">
+                <span className="text-sm font-normal text-gray-600 dark:text-gray-400 ml-1">
                   ± {stats.munkafazis.szoras.toFixed(1)} nap
                 </span>
               )}
             </div>
-            <div className="text-xs text-gray-500 mt-1">
+            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               {stats.munkafazis.betegSzama} beteg alapján
             </div>
           </div>
         ) : (
-          <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-            <div className="text-sm font-semibold text-gray-700 mb-1">
+          <div className="p-3 bg-gray-50 dark:bg-gray-800/60 rounded-lg border border-gray-200 dark:border-gray-800">
+            <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
               Munkafázis
             </div>
-            <div className="text-sm text-gray-500">Nincs elérhető adat</div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">Nincs elérhető adat</div>
           </div>
         )}
       </div>

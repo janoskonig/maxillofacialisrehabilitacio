@@ -167,7 +167,7 @@ export function BetegvizsgalatSection({
                     className={`relative inline-block w-9 h-5 rounded-full transition-colors ${showPerio ? 'bg-medical-primary' : 'bg-gray-300 dark:bg-gray-600'}`}
                   >
                     <span
-                      className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${showPerio ? 'right-0.5' : 'left-0.5'}`}
+                      className={`absolute top-0.5 w-4 h-4 bg-white dark:bg-gray-900 rounded-full transition-all ${showPerio ? 'right-0.5' : 'left-0.5'}`}
                     />
                   </span>
                   {showPerio ? 'bekapcsolva' : 'parodontális státuszfelvétel'}

@@ -419,9 +419,9 @@ export function OHIP14Section({
             {reminderEmailLogs.slice(0, 5).map((log, idx) => (
               <li key={`${log.sentAt}-${idx}`} className="text-[11px] flex items-start gap-1.5">
                 {log.status === 'sent' ? (
-                  <CheckCircle className="w-3 h-3 text-green-600 shrink-0 mt-0.5" />
+                  <CheckCircle className="w-3 h-3 text-green-600 dark:text-green-300 shrink-0 mt-0.5" />
                 ) : (
-                  <AlertCircle className="w-3 h-3 text-red-600 shrink-0 mt-0.5" />
+                  <AlertCircle className="w-3 h-3 text-red-600 dark:text-red-300 shrink-0 mt-0.5" />
                 )}
                 <span className={log.status === 'sent' ? 'text-gray-700 dark:text-gray-300' : 'text-red-700 dark:text-red-300'}>
                   {log.timepoint ?? '?'} — {new Date(log.sentAt).toLocaleString('hu-HU')}
@@ -490,7 +490,7 @@ export function OHIP14Section({
               >
                 <div className="flex items-center gap-2">
                   <span className="font-medium">{tp.label}</span>
-                  {isComplete && <span className="text-xs font-medium text-green-700">kitöltve</span>}
+                  {isComplete && <span className="text-xs font-medium text-green-700 dark:text-green-300">kitöltve</span>}
                   {!canSelect && !filled && <Lock className="w-4 h-4" />}
                   {isComplete && (
                     <CheckCircle className="w-4 h-4" />
@@ -543,7 +543,7 @@ export function OHIP14Section({
         <div className="space-y-6">
           {isCurrentTimepointCompleted ? (
             <div className="p-6 bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 rounded-lg text-center">
-              <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-3" />
+              <CheckCircle className="w-12 h-12 text-green-600 dark:text-green-300 mx-auto mb-3" />
               <p className="text-gray-700 dark:text-gray-300 font-medium">
                 A jelenlegi időablakhoz tartozó kérdőív már kitöltve.
               </p>
@@ -674,16 +674,16 @@ export function OHIP14Section({
             </div>
           )}
           {!getAvailability(activeTimepoint).allowed && !isTimepointFilled(activeTimepoint) && (
-            <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <p className="text-sm text-yellow-800">
+            <div className="mt-6 p-4 bg-yellow-50 dark:bg-yellow-950/40 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+              <p className="text-sm text-yellow-800 dark:text-yellow-300">
                 <strong>Figyelem:</strong>{' '}
                 {getAvailability(activeTimepoint).reason}
               </p>
             </div>
           )}
           {!isPatientPortal && isTimepointFilled(activeTimepoint) && (
-            <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-              <p className="text-sm text-green-800">
+            <div className="mt-6 p-4 bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800 rounded-lg">
+              <p className="text-sm text-green-800 dark:text-green-300">
                 <strong>Kitöltve</strong>
                 {responses[activeTimepoint]?.completedAt
                   ? ` – ${new Date(responses[activeTimepoint]!.completedAt!).toLocaleString('hu-HU')}`
@@ -698,7 +698,7 @@ export function OHIP14Section({
       )}
 
       {!activeTimepoint && (
-        <p className="text-gray-500 text-center py-8">
+        <p className="text-gray-500 dark:text-gray-400 text-center py-8">
           Válasszon egy timepointot a kérdőív kitöltéséhez
         </p>
       )}

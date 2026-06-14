@@ -50,8 +50,8 @@ export function BookingModal({ timeSlot, onConfirm, onCancel, loading = false }:
             <div className="flex items-start gap-3">
               <Calendar className="w-5 h-5 text-medical-primary mt-0.5 flex-shrink-0" />
               <div>
-                <div className="text-sm font-medium text-gray-500">Dátum és idő</div>
-                <div className="text-base font-semibold text-gray-900">
+                <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Dátum és idő</div>
+                <div className="text-base font-semibold text-gray-900 dark:text-gray-100">
                   {format(startTime, 'yyyy. MMMM d. EEEE, HH:mm', { locale: hu })}
                 </div>
               </div>
@@ -61,8 +61,8 @@ export function BookingModal({ timeSlot, onConfirm, onCancel, loading = false }:
               <div className="flex items-start gap-3">
                 <User className="w-5 h-5 text-medical-primary mt-0.5 flex-shrink-0" />
                 <div>
-                  <div className="text-sm font-medium text-gray-500">Orvos</div>
-                  <div className="text-base font-semibold text-gray-900">
+                  <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Orvos</div>
+                  <div className="text-base font-semibold text-gray-900 dark:text-gray-100">
                     {timeSlot.dentistName}
                   </div>
                 </div>
@@ -72,8 +72,8 @@ export function BookingModal({ timeSlot, onConfirm, onCancel, loading = false }:
             <div className="flex items-start gap-3">
               <MapPin className="w-5 h-5 text-medical-primary mt-0.5 flex-shrink-0" />
               <div>
-                <div className="text-sm font-medium text-gray-500">Helyszín</div>
-                <div className="text-base font-semibold text-gray-900">
+                <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Helyszín</div>
+                <div className="text-base font-semibold text-gray-900 dark:text-gray-100">
                   {displayCim}
                   {timeSlot.teremszam && ` • ${timeSlot.teremszam}. terem`}
                 </div>
@@ -81,15 +81,15 @@ export function BookingModal({ timeSlot, onConfirm, onCancel, loading = false }:
             </div>
           </div>
 
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <p className="text-sm text-blue-800">
+          <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+            <p className="text-sm text-blue-800 dark:text-blue-300">
               Az időpont foglalása után email értesítést kap az orvos és Ön is (ha van email címe).
             </p>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="flex gap-3 p-6 border-t bg-gray-50">
+        <div className="flex gap-3 p-6 border-t bg-gray-50 dark:bg-gray-800/60">
           <button
             onClick={onCancel}
             disabled={loading}

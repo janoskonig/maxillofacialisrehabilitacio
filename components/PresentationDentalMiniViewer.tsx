@@ -50,7 +50,7 @@ export function PresentationDentalMiniViewer({
       </div>
 
       {Object.keys(fogak).length > 0 && (
-        <div className="overflow-x-auto rounded-md bg-gray-50/80 p-2 border border-gray-200/80">
+        <div className="overflow-x-auto rounded-md bg-gray-50/80 dark:bg-gray-800/80 p-2 border border-gray-200/80 dark:border-gray-800/80">
           <div className="flex justify-between mb-1.5 min-w-[520px]">
             <div className="flex gap-0.5">
               {UPPER_L.map((tooth) => (
@@ -107,7 +107,7 @@ export function PresentationDentalMiniViewer({
       )}
 
       {(hasKnownImplant || hasUnknownImplant) && (
-        <div className="text-xs text-gray-800 space-y-1 border-t border-gray-200 pt-2">
+        <div className="text-xs text-gray-800 dark:text-gray-200 space-y-1 border-t border-gray-200 dark:border-gray-800 pt-2">
           {hasKnownImplant && (
             <ul className="list-disc pl-4 space-y-0.5">
               {implantEntries.map(([pos, detail]) => {

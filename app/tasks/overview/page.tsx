@@ -201,14 +201,14 @@ export default function TaskOverviewPage() {
             </div>
           </div>
           <div className="card p-4 flex items-center gap-3">
-            <AlertTriangle className="w-8 h-8 text-red-500" />
+            <AlertTriangle className="w-8 h-8 text-red-500 dark:text-red-400" />
             <div>
               <p className="text-2xl font-bold text-red-600 dark:text-red-300">{summary?.overdue ?? 0}</p>
               <p className="text-sm text-gray-500 dark:text-gray-400">Lejárt határidő</p>
             </div>
           </div>
           <div className="card p-4 flex items-center gap-3">
-            <Clock className="w-8 h-8 text-amber-500" />
+            <Clock className="w-8 h-8 text-amber-500 dark:text-amber-400" />
             <div>
               <p className="text-2xl font-bold text-amber-600 dark:text-amber-300">{summary?.dueSoon ?? 0}</p>
               <p className="text-sm text-gray-500 dark:text-gray-400">7 napon belül esedékes</p>

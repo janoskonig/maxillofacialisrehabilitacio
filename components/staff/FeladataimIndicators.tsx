@@ -36,8 +36,8 @@ export function FeladataimIndicators({ unviewed, viewedOpen, variant = 'corner' 
       <span
         className={
           isInline
-            ? 'ml-auto shrink-0 min-w-[1.25rem] h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-amber-100 text-amber-900 text-[10px] font-semibold border border-amber-300'
-            : 'pointer-events-none absolute -top-1.5 -right-1.5 min-w-[1.125rem] h-5 px-1 flex items-center justify-center rounded-full bg-amber-100 text-amber-900 text-[10px] font-semibold border border-amber-300'
+            ? 'ml-auto shrink-0 min-w-[1.25rem] h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 text-[10px] font-semibold border border-amber-300 dark:border-amber-700'
+            : 'pointer-events-none absolute -top-1.5 -right-1.5 min-w-[1.125rem] h-5 px-1 flex items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 text-[10px] font-semibold border border-amber-300 dark:border-amber-700'
         }
         aria-hidden
       >

@@ -47,7 +47,7 @@ export function Toast({ message, type = 'info', isVisible, onClose, duration = 3
         <div className="flex-1 text-sm font-medium">{message}</div>
         <button
           onClick={onClose}
-          className="flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 transition-colors"
+          className="flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
           aria-label="Bezárás"
         >
           <X className="w-4 h-4" />

@@ -31,7 +31,7 @@ export function ConflictModal({
       <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-md w-full">
         <div className="p-6">
           <div className="flex items-start mb-4">
-            <AlertTriangle className="w-6 h-6 text-amber-600 mr-3 mt-0.5 flex-shrink-0" />
+            <AlertTriangle className="w-6 h-6 text-amber-600 dark:text-amber-300 mr-3 mt-0.5 flex-shrink-0" />
             <div className="flex-1">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                 Konfliktus észlelve

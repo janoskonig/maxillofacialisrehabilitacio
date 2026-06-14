@@ -1614,13 +1614,13 @@ export function PatientForm({
     >
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-4">
-          <h3 className="text-2xl font-bold text-gray-900">
+          <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
             {isViewOnly ? 'Beteg megtekintése' : patient ? 'Beteg szerkesztése' : 'Új beteg'}
           </h3>
           {patient?.id && (
             <button
               onClick={() => router.push(`/patients/${patient.id}/history`)}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-colors"
+              className="flex items-center gap-2 px-3 py-1.5 text-sm text-purple-600 dark:text-purple-300 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950/40 rounded-lg transition-colors"
               title="Változások megtekintése"
             >
               <History className="w-4 h-4" />
@@ -1630,7 +1630,7 @@ export function PatientForm({
         </div>
         <button
           onClick={handleCancel}
-          className="text-gray-400 hover:text-gray-600"
+          className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400"
           data-patient-form-cancel
         >
           <X className="w-6 h-6" />
@@ -1652,15 +1652,15 @@ export function PatientForm({
        conflict.lastSaveErrorRef.current instanceof ApiError && 
        conflict.lastSaveErrorRef.current.status === 409 && 
        conflict.lastSaveErrorRef.current.code === 'STALE_WRITE' && (
-        <div className="mb-4 bg-amber-50 border-l-4 border-amber-400 p-4 rounded-md">
+        <div className="mb-4 bg-amber-50 dark:bg-amber-950/40 border-l-4 border-amber-400 p-4 rounded-md">
           <div className="flex items-start justify-between">
             <div className="flex items-start">
-              <AlertTriangle className="w-5 h-5 text-amber-600 mr-3 mt-0.5 flex-shrink-0" />
+              <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-300 mr-3 mt-0.5 flex-shrink-0" />
               <div className="flex-1">
-                <h4 className="text-sm font-semibold text-amber-800 mb-1">
+                <h4 className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-1">
                   Konfliktus észlelve
                 </h4>
-                <p className="text-sm text-amber-700 mb-3">
+                <p className="text-sm text-amber-700 dark:text-amber-300 mb-3">
                   Másik felhasználó módosította a beteg adatait közben. Kérjük, frissítse az adatokat a legfrissebb verzió betöltéséhez.
                 </p>
                 <button
@@ -1675,7 +1675,7 @@ export function PatientForm({
             <button
               type="button"
               onClick={() => conflict.dismissBanner()}
-              className="text-amber-600 hover:text-amber-800 ml-4"
+              className="text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 ml-4"
               aria-label="Banner bezárása"
             >
               <X className="w-5 h-5" />
@@ -1688,14 +1688,14 @@ export function PatientForm({
 
       <form id="patient-form" onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         {!isViewOnly && (
-          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-md">
+          <div className="bg-yellow-50 dark:bg-yellow-950/40 border-l-4 border-yellow-400 p-4 rounded-md">
             <div className="flex items-start">
-              <AlertTriangle className="w-5 h-5 text-yellow-600 mr-3 mt-0.5 flex-shrink-0" />
+              <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-300 mr-3 mt-0.5 flex-shrink-0" />
               <div>
-                <h4 className="text-sm font-semibold text-yellow-800 mb-1">
+                <h4 className="text-sm font-semibold text-yellow-800 dark:text-yellow-300 mb-1">
                   ⚠️ FONTOS: Ne felejtse el menteni!
                 </h4>
-                <p className="text-sm text-yellow-700">
+                <p className="text-sm text-yellow-700 dark:text-yellow-300">
                   {minimalNewPatient ? (
                     <>
                       Mentés után a beteg teljes adatait a beteg lapon folytathatja (klinikai minimum, fogazat,
@@ -1915,19 +1915,19 @@ export function PatientForm({
           {patientId ? (
             <PatientStageSection patientId={patientId} patientName={currentPatient?.nev || null} />
           ) : (
-            <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
-              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2 mb-2">
+            <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 sm:p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2 mb-2">
                 <Calendar className="w-5 h-5 text-medical-primary" />
                 Betegstádium és ellátási epizód
               </h3>
-              <p className="text-sm text-gray-600 mb-3">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
                 Az új ellátási epizód megnyitása és a stádiumok beállítása a beteg első mentése után
                 lehetséges (ekkor jön létre a betegazonosító). Ezután itt rövid összefoglalót lát, a
                 részletes epizód- és stádiumkezeléshez nyissa meg a Stádiumok oldalt — így a beutaló
                 orvosok is ugyanazt az utat használhatják.
               </p>
               {!isViewOnly && (
-                <p className="text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-md px-3 py-2">
+                <p className="text-sm text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-100 dark:border-amber-900 rounded-md px-3 py-2">
                   Mentse az űrlapot az alsó sáv <strong>„Beteg mentése”</strong> gombjával, majd térjen vissza ide, vagy
                   válassza a „Stádium beállítása / Részletek” lehetőséget. Ebben a szakaszban nincs másik mentés gomb.
                 </p>
@@ -1939,7 +1939,7 @@ export function PatientForm({
 
         {/* View-only mode close button */}
         {isViewOnly && (
-          <div className="pt-6 border-t border-gray-200">
+          <div className="pt-6 border-t border-gray-200 dark:border-gray-800">
             <div className="flex justify-end">
               <button
                 type="button"

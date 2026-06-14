@@ -173,7 +173,7 @@ export function OPInlinePreview({
             {/* Hover overlay */}
             {thumbnailUrl && !thumbnailLoading && (
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                <div className="bg-white/90 rounded-full p-2 shadow">
+                <div className="bg-white/90 dark:bg-gray-900/90 rounded-full p-2 shadow">
                   <ZoomIn className="w-5 h-5 text-gray-700 dark:text-gray-300" />
                 </div>
               </div>
@@ -187,7 +187,7 @@ export function OPInlinePreview({
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setCurrentIndex(i => Math.max(0, i - 1)); }}
                 disabled={currentIndex === 0}
-                className="absolute left-1 top-1/2 -translate-y-1/2 p-1 bg-white/80 rounded-full shadow hover:bg-white disabled:opacity-30 transition-colors"
+                className="absolute left-1 top-1/2 -translate-y-1/2 p-1 bg-white/80 dark:bg-gray-900/80 rounded-full shadow hover:bg-white disabled:opacity-30 transition-colors"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
@@ -195,7 +195,7 @@ export function OPInlinePreview({
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setCurrentIndex(i => Math.min(documents.length - 1, i + 1)); }}
                 disabled={currentIndex === documents.length - 1}
-                className="absolute right-1 top-1/2 -translate-y-1/2 p-1 bg-white/80 rounded-full shadow hover:bg-white disabled:opacity-30 transition-colors"
+                className="absolute right-1 top-1/2 -translate-y-1/2 p-1 bg-white/80 dark:bg-gray-900/80 rounded-full shadow hover:bg-white disabled:opacity-30 transition-colors"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>

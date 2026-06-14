@@ -328,7 +328,7 @@ export function PortalDashboard() {
       <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-3 sm:p-4">
         <div className="flex items-center gap-2 sm:gap-3">
           <div className="p-1.5 sm:p-2 bg-blue-50 dark:bg-blue-950/40 rounded-lg flex-shrink-0">
-            <Calendar className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-blue-600" />
+            <Calendar className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-blue-600 dark:text-blue-300" />
           </div>
           <div className="min-w-0">
             <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 truncate">Következő időpont</p>
@@ -337,7 +337,7 @@ export function PortalDashboard() {
                 {format(new Date(nextAppointment.startTime), 'MMM d.', { locale: hu })}
               </p>
             ) : (
-              <p className="text-sm sm:text-base text-gray-500 truncate">Nincs</p>
+              <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 truncate">Nincs</p>
             )}
           </div>
         </div>
@@ -359,23 +359,23 @@ export function PortalDashboard() {
             </a>
           </div>
 
-          <div className="p-4 rounded-lg border border-gray-200 bg-gray-50">
+          <div className="p-4 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60">
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 sm:gap-2 mb-2 flex-wrap">
-                  <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500 flex-shrink-0" />
-                  <span className="font-semibold text-base sm:text-lg text-gray-900">
+                  <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500 dark:text-gray-400 flex-shrink-0" />
+                  <span className="font-semibold text-base sm:text-lg text-gray-900 dark:text-gray-100">
                     {format(new Date(nextAppointment.startTime), 'yyyy. MMMM d. EEEE, HH:mm', { locale: hu })}
                   </span>
                   {getStatusBadge(nextAppointment)}
                 </div>
                 {nextAppointment.dentistName && (
-                  <p className="text-sm sm:text-base text-gray-700 mb-1">
+                  <p className="text-sm sm:text-base text-gray-700 dark:text-gray-300 mb-1">
                     <span className="font-medium">Orvos:</span> {nextAppointment.dentistName}
                   </p>
                 )}
                 {(nextAppointment.cim || nextAppointment.teremszam) && (
-                  <div className="flex items-center gap-1 text-sm sm:text-base text-gray-600">
+                  <div className="flex items-center gap-1 text-sm sm:text-base text-gray-600 dark:text-gray-400">
                     <MapPin className="w-4 h-4 flex-shrink-0" />
                     <span>
                       {nextAppointment.cim}
@@ -384,7 +384,7 @@ export function PortalDashboard() {
                   </div>
                 )}
                 {nextAppointment.approvalStatus === 'pending' && (
-                  <div className="mt-3 pt-3 border-t border-gray-300 flex flex-col sm:flex-row gap-2">
+                  <div className="mt-3 pt-3 border-t border-gray-300 dark:border-gray-700 flex flex-col sm:flex-row gap-2">
                     <button
                       onClick={() => handleApproveAppointment(nextAppointment.id)}
                       disabled={processingAppointment === nextAppointment.id}
@@ -422,7 +422,7 @@ export function PortalDashboard() {
             </span>
           )}
         </div>
-        <p className="text-sm sm:text-base text-gray-600 mb-4">
+        <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-4">
           {unreadMessageCount > 0
             ? `${unreadMessageCount} olvasatlan üzenet`
             : 'Nincs olvasatlan üzenet'}
@@ -445,11 +445,11 @@ export function PortalDashboard() {
               OHIP-14 Kérdőív
             </h2>
             {ohipPending ? (
-              <p className="text-sm sm:text-base text-amber-700 font-medium">
+              <p className="text-sm sm:text-base text-amber-700 dark:text-amber-300 font-medium">
                 Kitöltendő kérdőív: {ohipTimepointLabel}
               </p>
             ) : (
-              <p className="text-sm sm:text-base text-gray-600">
+              <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
                 Jelenleg nincs kitöltendő kérdőív
               </p>
             )}
@@ -474,7 +474,7 @@ export function PortalDashboard() {
               <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-medical-primary" />
               Dokumentumok
             </h2>
-            <p className="text-sm sm:text-base text-gray-600">
+            <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
               Töltse fel a szükséges dokumentumokat (OP, önarckép, zárójelentés, ambuláns lap)
             </p>
           </div>

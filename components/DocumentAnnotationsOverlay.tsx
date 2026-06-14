@@ -511,7 +511,7 @@ export function DocumentAnnotationsOverlay({
         editChrome ? 'sm:ml-auto' : ''
       } ${
         toolbarOnDark
-          ? 'border-white/30 bg-white/10 text-white hover:bg-white/15'
+          ? 'border-white/30 bg-white/10 dark:bg-gray-900/10 text-white hover:bg-white/15'
           : 'border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100'
       }`}
     >
@@ -560,7 +560,7 @@ export function DocumentAnnotationsOverlay({
               onClick={exitEditing}
               className={`flex items-center gap-1 px-2 py-1 rounded border ${
                 toolbarOnDark
-                  ? 'border-white/30 bg-white/10 text-white hover:bg-white/15'
+                  ? 'border-white/30 bg-white/10 dark:bg-gray-900/10 text-white hover:bg-white/15'
                   : 'border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100'
               }`}
             >
@@ -574,7 +574,7 @@ export function DocumentAnnotationsOverlay({
                 tool === 'pen'
                   ? 'bg-medical-primary text-white border-medical-primary'
                   : toolbarOnDark
-                    ? 'bg-white/10 border-white/30 text-white hover:bg-white/15'
+                    ? 'bg-white/10 dark:bg-gray-900/10 border-white/30 text-white hover:bg-white/15'
                     : 'bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100'
               }`}
             >
@@ -588,7 +588,7 @@ export function DocumentAnnotationsOverlay({
                 tool === 'text'
                   ? 'bg-medical-primary text-white border-medical-primary'
                   : toolbarOnDark
-                    ? 'bg-white/10 border-white/30 text-white hover:bg-white/15'
+                    ? 'bg-white/10 dark:bg-gray-900/10 border-white/30 text-white hover:bg-white/15'
                     : 'bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100'
               }`}
             >
@@ -612,7 +612,7 @@ export function DocumentAnnotationsOverlay({
                 onClick={() => setDraftPaths([])}
                 className={
                   toolbarOnDark
-                    ? 'px-2 py-1 rounded border border-white/30 bg-white/10 text-white hover:bg-white/15'
+                    ? 'px-2 py-1 rounded border border-white/30 bg-white/10 dark:bg-gray-900/10 text-white hover:bg-white/15'
                     : 'px-2 py-1 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100'
                 }
               >
@@ -811,7 +811,7 @@ export function DocumentAnnotationsOverlay({
                                   compact
                                     ? `w-full text-left rounded px-1.5 py-1 transition-colors ${
                                         selectedId === ann.id
-                                          ? 'bg-white/15 ring-1 ring-white/30'
+                                          ? 'bg-white/15 dark:bg-gray-900/15 ring-1 ring-white/30'
                                           : 'hover:bg-white/10'
                                       }`
                                     : `w-full text-left rounded px-1.5 py-1 transition-colors ${

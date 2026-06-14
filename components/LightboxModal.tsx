@@ -311,7 +311,7 @@ export function LightboxModal({
 
           {state.error && (
             <div className="flex flex-col items-center justify-center text-white p-8">
-              <File className="w-16 h-16 mb-4 text-gray-400" />
+              <File className="w-16 h-16 mb-4 text-gray-400 dark:text-gray-500" />
               <p className="text-lg mb-2">Nem sikerült betölteni a képet</p>
               <div className="flex gap-2 mt-4">
                 {onDownload && (

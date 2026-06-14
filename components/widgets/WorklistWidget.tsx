@@ -434,16 +434,16 @@ export function WorklistWidget() {
 
   if (status === 403) {
     return (
-      <div className="card border-amber-200 bg-amber-50">
-        <p className="text-amber-800 text-center py-4">Nincs hozzáférés a munkalistához.</p>
+      <div className="card border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40">
+        <p className="text-amber-800 dark:text-amber-300 text-center py-4">Nincs hozzáférés a munkalistához.</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="card border-red-200 bg-red-50">
-        <p className="text-red-800 text-center py-4">
+      <div className="card border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40">
+        <p className="text-red-800 dark:text-red-300 text-center py-4">
           Hiba történt – <button onClick={fetchWorklist} className="underline font-medium">Retry</button>
         </p>
       </div>
@@ -454,9 +454,9 @@ export function WorklistWidget() {
     return (
       <div className="card">
         <div className="text-center py-12">
-          <ClipboardList className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-          <h3 className="text-lg font-medium text-gray-900 mb-1">Nincs foglalni való munkafázis</h3>
-          <p className="text-sm text-gray-500">Jelenleg nincs foglalni való következő munkafázis.</p>
+          <ClipboardList className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-3" />
+          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-1">Nincs foglalni való munkafázis</h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Jelenleg nincs foglalni való következő munkafázis.</p>
         </div>
       </div>
     );
@@ -468,7 +468,7 @@ export function WorklistWidget() {
     <div className="space-y-4">
       {selectedReady.length > 0 && (
         <div className="flex items-center justify-between">
-          <span className="text-sm text-gray-600">
+          <span className="text-sm text-gray-600 dark:text-gray-400">
             {selectedReady.length} kiválasztva – Book next for selected
           </span>
           <button onClick={handleBatchBookNext} className="btn-primary text-sm">
@@ -489,18 +489,18 @@ export function WorklistWidget() {
       )}
 
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
           <thead>
             <tr>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Betegnév</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Stage</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Következő munkafázis</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">ETA</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Hátralévő</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Késés a tervhez képest</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Ablak (terv szerint)</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Status</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 w-24">Művelet</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 dark:text-gray-400">Betegnév</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 dark:text-gray-400">Stage</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 dark:text-gray-400">Következő munkafázis</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 dark:text-gray-400">ETA</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 dark:text-gray-400">Hátralévő</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 dark:text-gray-400">Késés a tervhez képest</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 dark:text-gray-400">Ablak (terv szerint)</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 dark:text-gray-400">Status</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 dark:text-gray-400 w-24">Művelet</th>
             </tr>
           </thead>
           <tbody>
@@ -522,31 +522,31 @@ export function WorklistWidget() {
                     return (
                       <tr
                         key={`${key}::attempt-${att.appointmentId}`}
-                        className={`border-b text-gray-700 ${
-                          isUnsuccessful ? 'bg-orange-50/40' : isNoShow ? 'bg-gray-50/60' : 'bg-gray-50/30'
+                        className={`border-b text-gray-700 dark:text-gray-300 ${
+                          isUnsuccessful ? 'bg-orange-50/40' : isNoShow ? 'bg-gray-50/60 dark:bg-gray-800/60' : 'bg-gray-50/30 dark:bg-gray-800/30'
                         }`}
                       >
-                        <td className="px-3 py-2 text-xs text-gray-500" colSpan={2}>
+                        <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400" colSpan={2}>
                           <span className="opacity-60">↳ előzmény ({item.patientName ?? `#${item.patientId.slice(0, 8)}`})</span>
                         </td>
                         <td className="px-3 py-2 text-sm">
                           <div className="flex items-center gap-2">
-                            <span className="text-gray-700">{stepLabelForModal}</span>
-                            <span className="text-xs px-1.5 py-0.5 rounded bg-gray-200 text-gray-700">
+                            <span className="text-gray-700 dark:text-gray-300">{stepLabelForModal}</span>
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
                               {att.attemptNumber}. próba
                             </span>
                           </div>
                           {isUnsuccessful && att.failedReason && (
                             <div
-                              className="text-xs text-orange-800 mt-0.5 italic line-clamp-2"
+                              className="text-xs text-orange-800 dark:text-orange-300 mt-0.5 italic line-clamp-2"
                               title={att.failedReason}
                             >
                               „{att.failedReason}"
                             </div>
                           )}
                         </td>
-                        <td className="px-3 py-2 text-sm text-gray-400" colSpan={3}>–</td>
-                        <td className="px-3 py-2 text-sm text-gray-600">
+                        <td className="px-3 py-2 text-sm text-gray-400 dark:text-gray-500" colSpan={3}>–</td>
+                        <td className="px-3 py-2 text-sm text-gray-600 dark:text-gray-400">
                           {att.startTime
                             ? new Date(att.startTime).toLocaleString('hu-HU', {
                                 month: 'short',
@@ -556,7 +556,7 @@ export function WorklistWidget() {
                               })
                             : '–'}
                           {att.providerEmail && (
-                            <span className="block text-xs text-gray-500 truncate">
+                            <span className="block text-xs text-gray-500 dark:text-gray-400 truncate">
                               {att.providerEmail}
                             </span>
                           )}
@@ -565,10 +565,10 @@ export function WorklistWidget() {
                           <span
                             className={`text-xs px-2 py-0.5 rounded w-fit inline-flex items-center gap-1 ${
                               isUnsuccessful
-                                ? 'bg-orange-100 text-orange-800'
+                                ? 'bg-orange-100 dark:bg-orange-950/50 text-orange-800 dark:text-orange-300'
                                 : isNoShow
-                                  ? 'bg-gray-200 text-gray-700'
-                                  : 'bg-gray-100 text-gray-600'
+                                  ? 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                  : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
                             }`}
                           >
                             {isUnsuccessful && (
@@ -586,14 +586,14 @@ export function WorklistWidget() {
                             <button
                               type="button"
                               onClick={() => setRevertModalCtx({ item, attempt: att })}
-                              className="text-xs text-gray-600 hover:text-gray-900 hover:underline font-medium text-left flex items-center gap-0.5"
+                              className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:underline font-medium text-left flex items-center gap-0.5"
                               title="Sikertelen-jelölés visszavonása (tévedés esetén)"
                             >
                               <Undo2 className="w-3 h-3" />
                               Visszavonás
                             </button>
                           ) : (
-                            <span className="text-xs text-gray-400">—</span>
+                            <span className="text-xs text-gray-400 dark:text-gray-500">—</span>
                           )}
                         </td>
                       </tr>
@@ -620,12 +620,12 @@ export function WorklistWidget() {
                       </Link>
                     </div>
                   </td>
-                  <td className="px-3 py-2 text-sm text-gray-600">{item.currentStage}</td>
+                  <td className="px-3 py-2 text-sm text-gray-600 dark:text-gray-400">{item.currentStage}</td>
                   <td className="px-3 py-2">
                     <WorklistMergedPhaseCell item={item} />
                     {priorAttempts.length > 0 && (
                       <span
-                        className="ml-1 inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-800 align-middle"
+                        className="ml-1 inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-950/50 text-orange-800 dark:text-orange-300 align-middle"
                         title={`${priorAttempts.length} korábbi próba`}
                       >
                         <AlertTriangle className="w-3 h-3" />
@@ -633,7 +633,7 @@ export function WorklistWidget() {
                       </span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-sm text-gray-600">
+                  <td className="px-3 py-2 text-sm text-gray-600 dark:text-gray-400">
                     {state !== 'BLOCKED' && item.forecastCompletionEndP80ISO ? (
                       (() => {
                         const d = new Date(item.forecastCompletionEndP80ISO);
@@ -645,7 +645,7 @@ export function WorklistWidget() {
                       '–'
                     )}
                   </td>
-                  <td className="px-3 py-2 text-sm text-gray-600">
+                  <td className="px-3 py-2 text-sm text-gray-600 dark:text-gray-400">
                     {state !== 'BLOCKED' && (item.forecastRemainingP50 != null || item.forecastRemainingP80 != null) ? (
                       <span
                         title={`P50: ${item.forecastRemainingP50 ?? '–'} látogatás | P80: ${item.forecastRemainingP80 ?? '–'} látogatás`}
@@ -658,12 +658,12 @@ export function WorklistWidget() {
                   </td>
                   <td className="px-3 py-2 text-sm">
                     {item.overdueByDays > 0 ? (
-                      <span className="text-red-600 font-medium">+{item.overdueByDays} nap</span>
+                      <span className="text-red-600 dark:text-red-300 font-medium">+{item.overdueByDays} nap</span>
                     ) : (
-                      <span className="text-gray-600">–</span>
+                      <span className="text-gray-600 dark:text-gray-400">–</span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-sm text-gray-600">
+                  <td className="px-3 py-2 text-sm text-gray-600 dark:text-gray-400">
                     {item.windowStart && item.windowEnd
                       ? formatShortDateRange(item.windowStart, item.windowEnd)
                       : '–'}
@@ -673,16 +673,16 @@ export function WorklistWidget() {
                       <span
                         className={`text-xs px-2 py-0.5 rounded w-fit ${
                           state === 'BOOKED'
-                            ? 'bg-blue-100 text-blue-800'
+                            ? 'bg-blue-100 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300'
                             : state === 'READY'
-                              ? 'bg-green-100 text-green-800'
+                              ? 'bg-green-100 dark:bg-green-950/50 text-green-800 dark:text-green-300'
                               : state === 'BLOCKED'
-                                ? 'bg-gray-200 text-gray-700'
+                                ? 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
                                 : state === 'NEEDS_REVIEW'
-                                  ? 'bg-amber-100 text-amber-800'
+                                  ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300'
                                   : state === 'BOOKING_IN_PROGRESS'
-                                    ? 'bg-blue-100 text-blue-800'
-                                    : 'bg-orange-100 text-orange-800'
+                                    ? 'bg-blue-100 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300'
+                                    : 'bg-orange-100 dark:bg-orange-950/50 text-orange-800 dark:text-orange-300'
                         }`}
                       >
                         {state === 'BOOKED' ? 'LEFOGLALVA' : state}
@@ -693,7 +693,7 @@ export function WorklistWidget() {
                         )}
                       </span>
                       {state === 'BOOKED' && item.bookedAppointmentStartTime && (
-                        <span className="text-xs text-blue-700 flex items-center gap-1">
+                        <span className="text-xs text-blue-700 dark:text-blue-300 flex items-center gap-1">
                           <CalendarCheck className="w-3 h-3" />
                           {new Date(item.bookedAppointmentStartTime).toLocaleString('hu-HU', {
                             month: 'short',
@@ -702,15 +702,15 @@ export function WorklistWidget() {
                             minute: '2-digit',
                           })}
                           {item.bookedAppointmentProviderEmail && (
-                            <span className="text-gray-500 ml-1">· {item.bookedAppointmentProviderEmail}</span>
+                            <span className="text-gray-500 dark:text-gray-400 ml-1">· {item.bookedAppointmentProviderEmail}</span>
                           )}
                         </span>
                       )}
                       {state === 'BLOCKED' && item.blockedCode === 'NO_CARE_PATHWAY' && item.suggestedTreatmentTypeLabel && (
-                        <span className="text-xs text-gray-600">
+                        <span className="text-xs text-gray-600 dark:text-gray-400">
                           Javasolt kezeléstípus: {item.suggestedTreatmentTypeLabel}
                           {item.suggestedTreatmentTypeCode && (
-                            <span className="text-gray-500"> ({item.suggestedTreatmentTypeCode})</span>
+                            <span className="text-gray-500 dark:text-gray-400"> ({item.suggestedTreatmentTypeCode})</span>
                           )}
                         </span>
                       )}
@@ -727,7 +727,7 @@ export function WorklistWidget() {
                     )}
                     {state === 'BOOKED' && (
                       <div className="flex flex-col gap-1">
-                        <span className="text-xs text-blue-600 font-medium">✓ Foglalva</span>
+                        <span className="text-xs text-blue-600 dark:text-blue-300 font-medium">✓ Foglalva</span>
                         {item.bookedAppointmentId && (
                           <button
                             type="button"
@@ -739,7 +739,7 @@ export function WorklistWidget() {
                                 attemptNumber: currentAttempt,
                               })
                             }
-                            className="text-xs text-orange-700 hover:underline font-medium text-left flex items-center gap-0.5"
+                            className="text-xs text-orange-700 dark:text-orange-300 hover:underline font-medium text-left flex items-center gap-0.5"
                             title="A próba sikertelen volt — új próba szükséges"
                           >
                             <AlertTriangle className="w-3 h-3" />
@@ -758,7 +758,7 @@ export function WorklistWidget() {
                       </button>
                     )}
                     {state === 'BOOKING_IN_PROGRESS' && (
-                      <span className="text-sm text-gray-500">Foglalás…</span>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">Foglalás…</span>
                     )}
                   </td>
                 </tr>

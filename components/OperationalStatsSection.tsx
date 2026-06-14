@@ -205,8 +205,8 @@ export function OperationalStatsSection({ onDataChange }: Props) {
           </div>
 
           {data.userTasks.lejarat.legregebbenNyitvaNapok != null ? (
-            <div className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50/60 p-3 text-xs text-gray-700">
-              <Timer className="mt-0.5 h-4 w-4 text-gray-500" />
+            <div className="flex items-start gap-2 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-800/60 p-3 text-xs text-gray-700 dark:text-gray-300">
+              <Timer className="mt-0.5 h-4 w-4 text-gray-500 dark:text-gray-400" />
               <span>
                 Legrégebben nyitva álló feladat: {' '}
                 <span className="font-semibold tabular-nums">
@@ -217,48 +217,48 @@ export function OperationalStatsSection({ onDataChange }: Props) {
           ) : null}
 
           <div>
-            <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-800">
-              <CheckCircle2 className="h-4 w-4 text-teal-600" />
+            <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-800 dark:text-gray-200">
+              <CheckCircle2 className="h-4 w-4 text-teal-600 dark:text-teal-300" />
               Típus szerint
             </h3>
-            <div className="overflow-x-auto rounded-xl border border-gray-200">
-              <table className="min-w-full divide-y divide-gray-200 text-xs">
-                <thead className="bg-gray-50/90">
+            <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-800">
+              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800 text-xs">
+                <thead className="bg-gray-50/90 dark:bg-gray-800/60">
                   <tr>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Típus</th>
-                    <th className="px-3 py-2 text-right font-semibold text-gray-600">Összes</th>
-                    <th className="px-3 py-2 text-right font-semibold text-gray-600">Nyitott</th>
-                    <th className="px-3 py-2 text-right font-semibold text-gray-600">Kész</th>
-                    <th className="px-3 py-2 text-right font-semibold text-gray-600">Törölt</th>
-                    <th className="px-3 py-2 text-right font-semibold text-gray-600">Medián megoldás (nap)</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Típus</th>
+                    <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-400">Összes</th>
+                    <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-400">Nyitott</th>
+                    <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-400">Kész</th>
+                    <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-400">Törölt</th>
+                    <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-400">Medián megoldás (nap)</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 bg-white">
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-800 bg-white dark:bg-gray-900">
                   {data.userTasks.tipusSzerint.length === 0 ? (
                     <tr>
-                      <td className="px-3 py-2 text-gray-500" colSpan={6}>
+                      <td className="px-3 py-2 text-gray-500 dark:text-gray-400" colSpan={6}>
                         Nincs adat.
                       </td>
                     </tr>
                   ) : (
                     data.userTasks.tipusSzerint.map((t) => (
                       <tr key={t.taskType}>
-                        <td className="px-3 py-1.5 text-gray-800">
+                        <td className="px-3 py-1.5 text-gray-800 dark:text-gray-200">
                           {TASK_TYPE_LABEL[t.taskType] ?? t.taskType}
                         </td>
-                        <td className="px-3 py-1.5 text-right tabular-nums font-medium text-gray-900">
+                        <td className="px-3 py-1.5 text-right tabular-nums font-medium text-gray-900 dark:text-gray-100">
                           {fmtInt(t.osszes)}
                         </td>
-                        <td className="px-3 py-1.5 text-right tabular-nums text-amber-700">
+                        <td className="px-3 py-1.5 text-right tabular-nums text-amber-700 dark:text-amber-300">
                           {fmtInt(t.nyitott)}
                         </td>
-                        <td className="px-3 py-1.5 text-right tabular-nums text-emerald-700">
+                        <td className="px-3 py-1.5 text-right tabular-nums text-emerald-700 dark:text-emerald-300">
                           {fmtInt(t.kesz)}
                         </td>
-                        <td className="px-3 py-1.5 text-right tabular-nums text-gray-500">
+                        <td className="px-3 py-1.5 text-right tabular-nums text-gray-500 dark:text-gray-400">
                           {fmtInt(t.torolt)}
                         </td>
-                        <td className="px-3 py-1.5 text-right tabular-nums text-gray-700">
+                        <td className="px-3 py-1.5 text-right tabular-nums text-gray-700 dark:text-gray-300">
                           {fmtNum(t.medianMegoldasiNapok)}
                         </td>
                       </tr>
@@ -271,19 +271,19 @@ export function OperationalStatsSection({ onDataChange }: Props) {
 
           {data.userTasks.assigneeKindSzerint.length > 0 ? (
             <div>
-              <h3 className="mb-2 text-sm font-semibold text-gray-800">Címzett típus szerint</h3>
+              <h3 className="mb-2 text-sm font-semibold text-gray-800 dark:text-gray-200">Címzett típus szerint</h3>
               <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {data.userTasks.assigneeKindSzerint.map((a) => (
                   <li
                     key={a.assigneeKind}
-                    className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+                    className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
                   >
-                    <span className="text-gray-700">
+                    <span className="text-gray-700 dark:text-gray-300">
                       {ASSIGNEE_KIND_LABEL[a.assigneeKind] ?? a.assigneeKind}
                     </span>
                     <span className="text-right tabular-nums">
-                      <span className="font-semibold text-gray-900">{fmtInt(a.osszes)}</span>{' '}
-                      <span className="text-xs text-amber-700">({fmtInt(a.nyitott)} nyitott)</span>
+                      <span className="font-semibold text-gray-900 dark:text-gray-100">{fmtInt(a.osszes)}</span>{' '}
+                      <span className="text-xs text-amber-700 dark:text-amber-300">({fmtInt(a.nyitott)} nyitott)</span>
                     </span>
                   </li>
                 ))}

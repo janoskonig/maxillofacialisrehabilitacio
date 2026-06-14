@@ -150,7 +150,7 @@ export function CookieConsent() {
                   </button>
                   <button
                     onClick={() => setShowDetails(true)}
-                    className="text-xs sm:text-sm py-1.5 px-4 text-gray-500 dark:text-gray-400 hover:text-gray-700 transition-colors"
+                    className="text-xs sm:text-sm py-1.5 px-4 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
                   >
                     Testreszabás
                   </button>
@@ -160,7 +160,7 @@ export function CookieConsent() {
           </div>
           <button
             onClick={handleAcceptEssential}
-            className="text-gray-400 dark:text-gray-500 hover:text-gray-600 flex-shrink-0"
+            className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0"
             aria-label="Bezárás"
           >
             <X className="w-4 h-4" />

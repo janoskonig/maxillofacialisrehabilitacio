@@ -448,7 +448,7 @@ export default function ConsiliumPrepPage() {
               </div>
               <button
                 type="button"
-                className="rounded-md border border-white/15 bg-white/5 hover:bg-white/10 px-3 py-1.5 text-sm text-white/85"
+                className="rounded-md border border-white/15 bg-white/5 dark:bg-gray-900/5 hover:bg-white/10 px-3 py-1.5 text-sm text-white/85"
                 onClick={() => setShowWelcomeHelp(false)}
               >
                 Bezárás
@@ -467,7 +467,7 @@ export default function ConsiliumPrepPage() {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  className="rounded-md border border-white/15 bg-white/5 hover:bg-white/10 px-3 py-1.5 text-sm text-white/90 disabled:opacity-40"
+                  className="rounded-md border border-white/15 bg-white/5 dark:bg-gray-900/5 hover:bg-white/10 px-3 py-1.5 text-sm text-white/90 disabled:opacity-40"
                   disabled={welcomeStep === 0}
                   onClick={() => setWelcomeStep((s) => Math.max(0, s - 1))}
                 >
@@ -517,11 +517,11 @@ export default function ConsiliumPrepPage() {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <Link href="/consilium" className="text-xs px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/15 inline-flex items-center gap-2">
+            <Link href="/consilium" className="text-xs px-3 py-1.5 rounded-md bg-white/10 dark:bg-gray-900/10 hover:bg-white/15 inline-flex items-center gap-2">
               <ArrowLeft className="w-3.5 h-3.5" />
               Konzílium
             </Link>
-            <button type="button" className="text-xs px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/15" onClick={() => void load()}>
+            <button type="button" className="text-xs px-3 py-1.5 rounded-md bg-white/10 dark:bg-gray-900/10 hover:bg-white/15" onClick={() => void load()}>
               Frissítés
             </button>
           </div>
@@ -537,7 +537,7 @@ export default function ConsiliumPrepPage() {
         >
           <button
             type="button"
-            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white z-[110]"
+            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 dark:bg-gray-900/10 hover:bg-white/20 text-white z-[110]"
             aria-label="Bezárás"
             onClick={(e) => {
               e.stopPropagation();
@@ -550,7 +550,7 @@ export default function ConsiliumPrepPage() {
             <>
               <button
                 type="button"
-                className="absolute left-2 md:left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white z-[110] disabled:opacity-30"
+                className="absolute left-2 md:left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/10 dark:bg-gray-900/10 hover:bg-white/20 text-white z-[110] disabled:opacity-30"
                 aria-label="Előző kép"
                 disabled={photoLightbox.index <= 0}
                 onClick={(e) => {
@@ -564,7 +564,7 @@ export default function ConsiliumPrepPage() {
               </button>
               <button
                 type="button"
-                className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white z-[110] disabled:opacity-30"
+                className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/10 dark:bg-gray-900/10 hover:bg-white/20 text-white z-[110] disabled:opacity-30"
                 aria-label="Következő kép"
                 disabled={photoLightbox.index >= photoLightbox.previews.length - 1}
                 onClick={(e) => {
