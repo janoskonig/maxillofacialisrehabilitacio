@@ -627,9 +627,10 @@ export async function getDoctorConversations(userId: string): Promise<Array<{
   }> = [];
 
   // 1. Egyéni beszélgetések (ahol group_id IS NULL)
+  // Minden partner orvos ID-ja egy lekérdezésben.
   const individualResult = await pool.query(
     `SELECT DISTINCT
-       CASE 
+       CASE
          WHEN sender_id = $1 THEN recipient_id
          ELSE sender_id
        END as other_doctor_id
@@ -638,37 +639,51 @@ export async function getDoctorConversations(userId: string): Promise<Array<{
     [userId]
   );
 
-  for (const row of individualResult.rows) {
-    const otherDoctorId = row.other_doctor_id;
+  const peerIds: string[] = individualResult.rows
+    .map((row) => row.other_doctor_id)
+    .filter((id: unknown): id is string => typeof id === 'string' && id.length > 0);
 
-    // Orvos adatok
-    const doctorResult = await pool.query(
-      `SELECT id, email, doktor_neve FROM users WHERE id = $1 AND active = true`,
-      [otherDoctorId]
+  if (peerIds.length > 0) {
+    // Partner orvos rekordok EGY lekérdezésben.
+    const doctorsResult = await pool.query(
+      `SELECT id, email, doktor_neve FROM users WHERE id = ANY($1::uuid[]) AND active = true`,
+      [peerIds]
+    );
+    const doctorMap = new Map<string, { id: string; email: string; doktor_neve: string | null }>();
+    for (const d of doctorsResult.rows) {
+      doctorMap.set(d.id, d);
+    }
+
+    // Utolsó üzenet partnerenként EGY lekérdezésben (DISTINCT ON a partner ID-n).
+    const lastMessagesResult = await pool.query(
+      `SELECT DISTINCT ON (peer_id)
+         peer_id, id, sender_id, recipient_id, group_id, sender_email, sender_name,
+         subject, message, read_at, created_at, reply_to_message_id
+       FROM (
+         SELECT
+           CASE WHEN sender_id = $1 THEN recipient_id ELSE sender_id END AS peer_id,
+           id, sender_id, recipient_id, group_id, sender_email, sender_name,
+           subject, message, read_at, created_at, reply_to_message_id
+         FROM doctor_messages
+         WHERE (sender_id = $1 OR recipient_id = $1) AND group_id IS NULL
+       ) sub
+       ORDER BY peer_id, created_at DESC`,
+      [userId]
     );
 
-    if (doctorResult.rows.length === 0) continue;
-
-    const doctor = doctorResult.rows[0];
-
-    // Utolsó üzenet
-    const lastMessageResult = await pool.query(
-      `SELECT id, sender_id, recipient_id, group_id, sender_email, sender_name, subject, message, read_at, created_at, reply_to_message_id
-       FROM doctor_messages
-       WHERE ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1))
-       AND group_id IS NULL
-       ORDER BY created_at DESC
-       LIMIT 1`,
-      [userId, otherDoctorId]
+    // Idézet-előnézetek az összes utolsó üzenethez EGY lekérdezésben.
+    const lastQuoteIds = Array.from(
+      new Set(
+        lastMessagesResult.rows
+          .map((r) => r.reply_to_message_id)
+          .filter((id: unknown): id is string => typeof id === 'string' && id.length > 0),
+      ),
     );
+    const lastQuoteMap = await loadDoctorQuotePreviewMap(lastQuoteIds);
 
-    let lastMessage: DoctorMessage | null = null;
-    if (lastMessageResult.rows.length > 0) {
-      const msgRow = lastMessageResult.rows[0];
-      const lastQuoteMap = await loadDoctorQuotePreviewMap(
-        msgRow.reply_to_message_id ? [msgRow.reply_to_message_id] : [],
-      );
-      lastMessage = {
+    const lastMessageByPeer = new Map<string, DoctorMessage>();
+    for (const msgRow of lastMessagesResult.rows) {
+      lastMessageByPeer.set(msgRow.peer_id, {
         id: msgRow.id,
         senderId: msgRow.sender_id,
         recipientId: msgRow.recipient_id || null,
@@ -683,25 +698,35 @@ export async function getDoctorConversations(userId: string): Promise<Array<{
         quotedMessage: msgRow.reply_to_message_id
           ? lastQuoteMap.get(msgRow.reply_to_message_id) ?? null
           : null,
-      };
+      });
     }
 
-    // Olvasatlan üzenetek száma
+    // Olvasatlan üzenetek partnerenként EGY csoportosított lekérdezésben.
     const unreadResult = await pool.query(
-      `SELECT COUNT(*) as count
+      `SELECT sender_id AS peer_id, COUNT(*) as count
        FROM doctor_messages
-       WHERE recipient_id = $1 AND sender_id = $2 AND read_at IS NULL AND group_id IS NULL`,
-      [userId, otherDoctorId]
+       WHERE recipient_id = $1 AND read_at IS NULL AND group_id IS NULL
+       GROUP BY sender_id`,
+      [userId]
     );
+    const unreadByPeer = new Map<string, number>();
+    for (const r of unreadResult.rows) {
+      unreadByPeer.set(r.peer_id, parseInt(r.count, 10));
+    }
 
-    conversations.push({
-      doctorId: doctor.id,
-      doctorName: doctor.doktor_neve || doctor.email,
-      doctorEmail: doctor.email,
-      lastMessage,
-      unreadCount: parseInt(unreadResult.rows[0].count, 10),
-      type: 'individual',
-    });
+    for (const otherDoctorId of peerIds) {
+      const doctor = doctorMap.get(otherDoctorId);
+      if (!doctor) continue;
+
+      conversations.push({
+        doctorId: doctor.id,
+        doctorName: doctor.doktor_neve || doctor.email,
+        doctorEmail: doctor.email,
+        lastMessage: lastMessageByPeer.get(otherDoctorId) ?? null,
+        unreadCount: unreadByPeer.get(otherDoctorId) ?? 0,
+        type: 'individual',
+      });
+    }
   }
 
   // 2. Csoportos beszélgetések
@@ -864,52 +889,72 @@ export async function getDoctorMessageGroups(userId: string): Promise<Array<{
   );
 
   const groups = [];
+  const groupIds: string[] = groupsResult.rows.map((row) => row.id as string);
 
-  for (const groupRow of groupsResult.rows) {
-    const groupId = groupRow.id;
-
-    // Get participant count
+  if (groupIds.length > 0) {
+    // Résztvevők száma csoportonként EGY csoportosított lekérdezésben.
     const participantCountResult = await pool.query(
-      `SELECT COUNT(*) as count FROM doctor_message_group_participants WHERE group_id = $1`,
-      [groupId]
+      `SELECT group_id, COUNT(*) as count
+       FROM doctor_message_group_participants
+       WHERE group_id = ANY($1::uuid[])
+       GROUP BY group_id`,
+      [groupIds]
     );
-    const participantCount = parseInt(participantCountResult.rows[0].count, 10);
+    const participantCountByGroup = new Map<string, number>();
+    for (const r of participantCountResult.rows) {
+      participantCountByGroup.set(r.group_id, parseInt(r.count, 10));
+    }
 
-    // Get last message
-    const lastMessageResult = await pool.query(
-      `SELECT id, sender_id, recipient_id, group_id, sender_email, sender_name, subject, message, read_at, created_at, reply_to_message_id
+    // Utolsó üzenet csoportonként EGY lekérdezésben (DISTINCT ON a group_id-n).
+    const lastMessagesResult = await pool.query(
+      `SELECT DISTINCT ON (group_id)
+         id, sender_id, recipient_id, group_id, sender_email, sender_name,
+         subject, message, read_at, created_at, reply_to_message_id
        FROM doctor_messages
-       WHERE group_id = $1
-       ORDER BY created_at DESC
-       LIMIT 1`,
-      [groupId]
+       WHERE group_id = ANY($1::uuid[])
+       ORDER BY group_id, created_at DESC`,
+      [groupIds]
     );
 
-    let lastMessage: DoctorMessage | null = null;
-    if (lastMessageResult.rows.length > 0) {
-      const msgRow = lastMessageResult.rows[0];
-      
-      // Lekérjük az olvasókat az utolsó üzenethez
+    // Olvasók az utolsó üzenetekhez EGY lekérdezésben.
+    const lastMessageIds = lastMessagesResult.rows.map((r) => r.id as string);
+    const readsByMessage = new Map<
+      string,
+      Array<{ userId: string; userName: string | null; readAt: Date }>
+    >();
+    if (lastMessageIds.length > 0) {
       const readsResult = await pool.query(
-        `SELECT dmr.user_id, dmr.read_at, u.doktor_neve
+        `SELECT dmr.message_id, dmr.user_id, dmr.read_at, u.doktor_neve
          FROM doctor_message_reads dmr
          LEFT JOIN users u ON u.id = dmr.user_id
-         WHERE dmr.message_id = $1
+         WHERE dmr.message_id = ANY($1::uuid[])
          ORDER BY dmr.read_at ASC`,
-        [msgRow.id]
+        [lastMessageIds]
       );
+      for (const readRow of readsResult.rows) {
+        const list = readsByMessage.get(readRow.message_id) ?? [];
+        list.push({
+          userId: readRow.user_id,
+          userName: readRow.doktor_neve || null,
+          readAt: new Date(readRow.read_at),
+        });
+        readsByMessage.set(readRow.message_id, list);
+      }
+    }
 
-      const readBy = readsResult.rows.map((readRow: any) => ({
-        userId: readRow.user_id,
-        userName: readRow.doktor_neve || null,
-        readAt: new Date(readRow.read_at),
-      }));
+    // Idézet-előnézetek az összes utolsó üzenethez EGY lekérdezésben.
+    const lastQuoteIds = Array.from(
+      new Set(
+        lastMessagesResult.rows
+          .map((r) => r.reply_to_message_id)
+          .filter((id: unknown): id is string => typeof id === 'string' && id.length > 0),
+      ),
+    );
+    const lastQuoteMap = await loadDoctorQuotePreviewMap(lastQuoteIds);
 
-      const lastQuoteMap = await loadDoctorQuotePreviewMap(
-        msgRow.reply_to_message_id ? [msgRow.reply_to_message_id] : [],
-      );
-
-      lastMessage = {
+    const lastMessageByGroup = new Map<string, DoctorMessage>();
+    for (const msgRow of lastMessagesResult.rows) {
+      lastMessageByGroup.set(msgRow.group_id, {
         id: msgRow.id,
         senderId: msgRow.sender_id,
         recipientId: msgRow.recipient_id || null,
@@ -924,35 +969,41 @@ export async function getDoctorMessageGroups(userId: string): Promise<Array<{
         quotedMessage: msgRow.reply_to_message_id
           ? lastQuoteMap.get(msgRow.reply_to_message_id) ?? null
           : null,
-        readBy: readBy,
-      };
+        readBy: readsByMessage.get(msgRow.id) ?? [],
+      });
     }
 
-    // Get unread count (messages in group where user is recipient)
-    // For group messages, we consider a message unread if it's not read by the current user
-    // We check the doctor_message_reads table to see if the user has read the message
+    // Olvasatlan üzenetek csoportonként EGY csoportosított lekérdezésben.
+    // Egy üzenet olvasatlan, ha nem a felhasználó küldte és nem olvasta még.
     const unreadResult = await pool.query(
-      `SELECT COUNT(*) as count
+      `SELECT dm.group_id, COUNT(*) as count
        FROM doctor_messages dm
-       WHERE dm.group_id = $1 
+       WHERE dm.group_id = ANY($1::uuid[])
          AND dm.sender_id != $2
          AND NOT EXISTS (
-           SELECT 1 
-           FROM doctor_message_reads dmr 
-           WHERE dmr.message_id = dm.id 
+           SELECT 1
+           FROM doctor_message_reads dmr
+           WHERE dmr.message_id = dm.id
              AND dmr.user_id = $2
-         )`,
-      [groupId, userId]
+         )
+       GROUP BY dm.group_id`,
+      [groupIds, userId]
     );
-    const unreadCount = parseInt(unreadResult.rows[0].count, 10);
+    const unreadByGroup = new Map<string, number>();
+    for (const r of unreadResult.rows) {
+      unreadByGroup.set(r.group_id, parseInt(r.count, 10));
+    }
 
-    groups.push({
-      groupId,
-      groupName: groupRow.name,
-      participantCount,
-      lastMessage,
-      unreadCount,
-    });
+    for (const groupRow of groupsResult.rows) {
+      const groupId = groupRow.id;
+      groups.push({
+        groupId,
+        groupName: groupRow.name,
+        participantCount: participantCountByGroup.get(groupId) ?? 0,
+        lastMessage: lastMessageByGroup.get(groupId) ?? null,
+        unreadCount: unreadByGroup.get(groupId) ?? 0,
+      });
+    }
   }
 
   // Sort: unread count, then last message date

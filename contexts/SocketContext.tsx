@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
-import { io, Socket } from 'socket.io-client';
+import type { Socket } from 'socket.io-client';
 import { getCurrentUser } from '@/lib/auth';
 
 interface SocketContextType {
@@ -47,7 +47,11 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       }
 
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || window.location.origin;
-      
+
+      // Lusta betöltés: a socket.io-client (~1.5 MB) csak akkor kerül a bundle-be,
+      // amikor ténylegesen kapcsolódunk — a publikus oldalakon (login stb.) nem.
+      const { io } = await import('socket.io-client');
+
       const socket = io(baseUrl, {
         path: '/socket.io',
         transports: ['websocket', 'polling'],
