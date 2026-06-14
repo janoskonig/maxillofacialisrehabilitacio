@@ -8,6 +8,8 @@ export interface PlanReadinessEntry {
   errorCount: number;
   warningCount: number;
   approved: boolean;
+  /** Gap A: hány lefoglalt időpont csúszott a terv sorrendje elé. */
+  sequenceViolations?: number;
 }
 
 /**

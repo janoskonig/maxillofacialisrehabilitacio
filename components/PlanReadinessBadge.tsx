@@ -1,12 +1,14 @@
 'use client';
 
-import { AlertTriangle, CheckCircle2, ShieldCheck, XCircle } from 'lucide-react';
+import { AlertTriangle, CalendarClock, CheckCircle2, ShieldCheck, XCircle } from 'lucide-react';
 import type { PlanReadinessStatus } from '@/lib/treatment-plan-validation';
 
 export interface PlanReadinessBadgeProps {
   status: PlanReadinessStatus | null;
   errorCount?: number;
   warningCount?: number;
+  /** Gap A: lefoglalt időpontok, amelyek a terv sorrendje elé csúsztak. */
+  sequenceViolations?: number;
   /** Compact icon-only (lists) vs. icon + short label. */
   variant?: 'icon' | 'label';
 }
@@ -25,16 +27,35 @@ const CONFIG: Record<
  * Compact plan-readiness indicator for list rows (Gantt, worklist). Renders nothing
  * when status is null (no plan / not loaded yet).
  */
-export function PlanReadinessBadge({ status, errorCount, warningCount, variant = 'icon' }: PlanReadinessBadgeProps) {
-  if (!status) return null;
-  const { Icon, cls, label, title } = CONFIG[status];
+export function PlanReadinessBadge({
+  status,
+  errorCount,
+  warningCount,
+  sequenceViolations = 0,
+  variant = 'icon',
+}: PlanReadinessBadgeProps) {
+  const hasSequence = sequenceViolations > 0;
+  if (!status && !hasSequence) return null;
+
+  const cfg = status ? CONFIG[status] : null;
   const count = status === 'errors' ? errorCount : status === 'warnings' ? warningCount : undefined;
-  const fullTitle = count ? `${title} (${count})` : title;
+  const fullTitle = cfg ? (count ? `${cfg.title} (${count})` : cfg.title) : '';
+  const seqTitle = `${sequenceViolations} lefoglalt időpont a terv sorrendje elé csúszott — újrafoglalandó`;
 
   return (
-    <span className={`inline-flex items-center gap-1 ${cls}`} title={fullTitle} aria-label={fullTitle}>
-      <Icon className="w-3.5 h-3.5 shrink-0" />
-      {variant === 'label' && <span className="text-xs font-medium">{label}</span>}
+    <span className="inline-flex items-center gap-1">
+      {cfg && (
+        <span className={`inline-flex items-center gap-1 ${cfg.cls}`} title={fullTitle} aria-label={fullTitle}>
+          <cfg.Icon className="w-3.5 h-3.5 shrink-0" />
+          {variant === 'label' && <span className="text-xs font-medium">{cfg.label}</span>}
+        </span>
+      )}
+      {hasSequence && (
+        <span className="inline-flex items-center gap-1 text-amber-600" title={seqTitle} aria-label={seqTitle}>
+          <CalendarClock className="w-3.5 h-3.5 shrink-0" />
+          {variant === 'label' && <span className="text-xs font-medium">Sorrend</span>}
+        </span>
+      )}
     </span>
   );
 }

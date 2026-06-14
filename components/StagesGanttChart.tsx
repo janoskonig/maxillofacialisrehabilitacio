@@ -410,6 +410,10 @@ export function StagesGanttChart({
                         .map((e) => planReadiness.get(e.id)?.status)
                         .filter((s): s is PlanReadinessStatus => Boolean(s))
                     );
+                    const rowSequenceViolations = row.episodes.reduce(
+                      (sum, e) => sum + (planReadiness.get(e.id)?.sequenceViolations ?? 0),
+                      0
+                    );
                     return (
                       <div
                         key={row.patientId}
@@ -436,7 +440,7 @@ export function StagesGanttChart({
                               {episodeCount} ep.
                             </span>
                           )}
-                          <PlanReadinessBadge status={rowReadiness} />
+                          <PlanReadinessBadge status={rowReadiness} sequenceViolations={rowSequenceViolations} />
                         </div>
                         <div className="flex items-center gap-1.5 min-w-0">
                           {row.badgeStageCode ? (
