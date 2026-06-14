@@ -8,6 +8,7 @@ import {
   Plus, Search, FileText, Layers, PenLine, Merge, Unlink, Calendar, SendHorizontal,
 } from 'lucide-react';
 import { WorkPhaseTaskDelegateBlock } from './WorkPhaseTaskDelegateBlock';
+import { PlanValidationPanel } from './PlanValidationPanel';
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors,
   type DragEndEvent, type Modifier,
@@ -994,6 +995,12 @@ export function EpisodeStepsManager({
 
   // ─── Render ──────────────────────────────────────────────────────────────
 
+  // Re-validate the plan whenever a step's identity, status, pool or duration changes.
+  const planSignature = useMemo(
+    () => steps.map((s) => `${s.id}:${s.status}:${s.pool}:${s.durationMinutes}`).join('|'),
+    [steps]
+  );
+
   return (
     <div className="bg-white rounded-lg border border-gray-200">
       <button
@@ -1027,6 +1034,9 @@ export function EpisodeStepsManager({
             </div>
           ) : (
             <>
+              {/* ─── Terv-validáció (WP3) ─────────────────────────────── */}
+              <PlanValidationPanel episodeId={episodeId} signature={planSignature} />
+
               {/* ─── Step adder panel ─────────────────────────────────── */}
               <div className="mb-4">
                 {!adderOpen ? (
