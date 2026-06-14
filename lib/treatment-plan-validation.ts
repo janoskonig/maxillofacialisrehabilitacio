@@ -139,3 +139,17 @@ export function validateTreatmentPlan(steps: PlanStepInput[]): PlanIssue[] {
 export function isPlanApprovable(issues: PlanIssue[]): boolean {
   return !issues.some((i) => i.level === 'error');
 }
+
+/**
+ * Compact readiness state for list views (Gantt rows, worklist) — one badge per
+ * episode. Errors win over an existing approval, so a plan edited into an invalid
+ * state after approval shows red rather than a misleading green check.
+ */
+export type PlanReadinessStatus = 'errors' | 'approved' | 'warnings' | 'ready';
+
+export function summarizePlanReadiness(issues: PlanIssue[], approved: boolean): PlanReadinessStatus {
+  if (issues.some((i) => i.level === 'error')) return 'errors';
+  if (approved) return 'approved';
+  if (issues.some((i) => i.level === 'warning')) return 'warnings';
+  return 'ready';
+}

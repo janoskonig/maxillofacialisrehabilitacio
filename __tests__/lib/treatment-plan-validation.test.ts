@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   validateTreatmentPlan,
   isPlanApprovable,
+  summarizePlanReadiness,
   type PlanStepInput,
+  type PlanIssue,
 } from '@/lib/treatment-plan-validation';
 
 const step = (over: Partial<PlanStepInput> & { workPhaseCode: string }): PlanStepInput => ({
@@ -99,5 +101,28 @@ describe('validateTreatmentPlan', () => {
       step({ workPhaseCode: 'work_1_kontroll_1', pool: 'control' }),
     ]);
     expect(codes(issues)).not.toContain('CONTROL_BEFORE_WORK');
+  });
+});
+
+describe('summarizePlanReadiness', () => {
+  const err: PlanIssue = { level: 'error', code: 'INVALID_POOL', message: '' };
+  const warn: PlanIssue = { level: 'warning', code: 'DUPLICATE_STEP', message: '' };
+
+  it('returns "ready" for a clean, unapproved plan', () => {
+    expect(summarizePlanReadiness([], false)).toBe('ready');
+  });
+
+  it('returns "approved" when approved and no errors', () => {
+    expect(summarizePlanReadiness([], true)).toBe('approved');
+    expect(summarizePlanReadiness([warn], true)).toBe('approved');
+  });
+
+  it('returns "warnings" for warning-only, unapproved plan', () => {
+    expect(summarizePlanReadiness([warn], false)).toBe('warnings');
+  });
+
+  it('errors win even over an existing approval', () => {
+    expect(summarizePlanReadiness([err], true)).toBe('errors');
+    expect(summarizePlanReadiness([err, warn], false)).toBe('errors');
   });
 });
