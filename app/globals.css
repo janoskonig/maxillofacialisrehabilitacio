@@ -11,31 +11,48 @@
   
   body {
     @apply text-gray-900 bg-gray-50;
+    @apply dark:text-gray-100 dark:bg-gray-950;
     /* Csak a body: html+body együttes overflow-x gyakran törött lapgörgetést okoz Chrome mobilban */
     overflow-x: clip;
     overscroll-behavior-y: auto;
   }
+
+  /* A natív vezérlők (görgetősáv, beviteli widgetek) is kövessék a témát */
+  html.dark {
+    color-scheme: dark;
+  }
 }
 
 @layer components {
+  /* Üzenetsor render-optimalizálás: a képernyőn kívüli buborékok layout/paint
+     munkáját a böngésző kihagyja, de a node a DOM-ban marad — így a quote-ugrás,
+     keresés-görgetés és az auto-scroll továbbra is működik. Hosszú (több száz
+     üzenetes) szálaknál érdemi reszponzivitás-nyereség, kockázat nélkül. */
+  .msg-row {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 80px;
+  }
+
   /* Form Inputs */
   .form-input {
     @apply block w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 shadow-soft;
+    @apply dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder-gray-500;
     @apply transition-all duration-200 ease-smooth;
     @apply focus:border-medical-primary focus:ring-2 focus:ring-medical-primary/20 focus:outline-none;
-    @apply hover:border-gray-400;
+    @apply hover:border-gray-400 dark:hover:border-gray-600;
   }
-  
+
   .form-input:disabled {
     @apply bg-gray-50 text-gray-500 cursor-not-allowed;
+    @apply dark:bg-gray-800 dark:text-gray-500;
   }
-  
+
   .form-input-error {
     @apply border-medical-error focus:border-medical-error focus:ring-medical-error/20;
   }
-  
+
   .form-label {
-    @apply block text-sm font-semibold text-gray-700 mb-1.5;
+    @apply block text-sm font-semibold text-gray-700 mb-1.5 dark:text-gray-300;
   }
   
   .form-label-required::after {
@@ -56,10 +73,12 @@
   
   .btn-secondary {
     @apply bg-white text-gray-700 px-5 py-2.5 rounded-lg border border-gray-300;
+    @apply dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700;
     @apply font-medium text-sm shadow-soft;
     @apply transition-all duration-200 ease-smooth;
     @apply hover:bg-gray-50 hover:border-gray-400 hover:shadow-soft-md hover:-translate-y-0.5;
-    @apply focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2;
+    @apply dark:hover:bg-gray-700 dark:hover:border-gray-600;
+    @apply focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:focus:ring-offset-gray-900;
     @apply active:translate-y-0 active:shadow-soft;
     @apply disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0;
   }
@@ -85,13 +104,14 @@
   /* Cards */
   .card {
     @apply bg-white rounded-xl shadow-soft border border-gray-200/60 p-4 md:p-6;
+    @apply dark:bg-gray-900 dark:border-gray-800;
     @apply transition-all duration-200 ease-smooth;
   }
-  
+
   .card-hover {
-    @apply hover:shadow-soft-md hover:border-gray-300;
+    @apply hover:shadow-soft-md hover:border-gray-300 dark:hover:border-gray-700;
   }
-  
+
   .card-interactive {
     @apply cursor-pointer hover:shadow-soft-md hover:border-medical-primary/20 hover:-translate-y-0.5;
     @apply transition-all duration-200 ease-smooth;
@@ -104,51 +124,56 @@
   
   .badge-primary {
     @apply bg-medical-primary/10 text-medical-primary border border-medical-primary/20;
+    @apply dark:bg-medical-primary/20 dark:text-medical-primary-lighter dark:border-medical-primary/30;
   }
-  
+
   .badge-success {
     @apply bg-medical-success/10 text-medical-success border border-medical-success/20;
+    @apply dark:bg-medical-success/20 dark:text-medical-success-light dark:border-medical-success/30;
   }
-  
+
   .badge-warning {
     @apply bg-medical-warning/10 text-medical-warning border border-medical-warning/20;
+    @apply dark:bg-medical-warning/20 dark:text-medical-warning-light dark:border-medical-warning/30;
   }
-  
+
   .badge-error {
     @apply bg-medical-error/10 text-medical-error border border-medical-error/20;
+    @apply dark:bg-medical-error/20 dark:text-medical-error-light dark:border-medical-error/30;
   }
-  
+
   .badge-gray {
     @apply bg-gray-100 text-gray-700 border border-gray-200;
+    @apply dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700;
   }
   
   /* Typography Utilities */
   .text-heading-1 {
-    @apply text-3xl font-bold text-gray-900 tracking-tight;
+    @apply text-3xl font-bold text-gray-900 tracking-tight dark:text-gray-50;
   }
-  
+
   .text-heading-2 {
-    @apply text-xl md:text-2xl font-bold text-gray-900 tracking-tight;
+    @apply text-xl md:text-2xl font-bold text-gray-900 tracking-tight dark:text-gray-50;
   }
-  
+
   .text-heading-3 {
-    @apply text-lg md:text-xl font-semibold text-gray-900 tracking-tight;
+    @apply text-lg md:text-xl font-semibold text-gray-900 tracking-tight dark:text-gray-100;
   }
-  
+
   .text-heading-4 {
-    @apply text-base md:text-lg font-semibold text-gray-900;
+    @apply text-base md:text-lg font-semibold text-gray-900 dark:text-gray-100;
   }
-  
+
   .text-body {
-    @apply text-base text-gray-700 leading-relaxed;
+    @apply text-base text-gray-700 leading-relaxed dark:text-gray-300;
   }
-  
+
   .text-body-sm {
-    @apply text-sm text-gray-600 leading-relaxed;
+    @apply text-sm text-gray-600 leading-relaxed dark:text-gray-400;
   }
-  
+
   .text-caption {
-    @apply text-xs text-gray-500 leading-normal;
+    @apply text-xs text-gray-500 leading-normal dark:text-gray-400;
   }
   
   /* Spacing Utilities */
@@ -378,6 +403,7 @@
 /* Sticky header */
 .mobile-header {
   @apply sticky top-0 z-20 bg-white/90 backdrop-blur border-b;
+  @apply dark:bg-gray-900/90 dark:border-gray-800;
 }
 
 @media (max-width: 767px) {
@@ -389,11 +415,13 @@
 /* Card */
 .mobile-card {
   @apply bg-white rounded-lg shadow-sm p-4 border border-gray-200;
+  @apply dark:bg-gray-900 dark:border-gray-800;
 }
 
 /* Sticky CTA bar */
 .mobile-cta-bar {
   @apply sticky bottom-0 z-20 bg-white border-t;
+  @apply dark:bg-gray-900 dark:border-gray-800;
 }
 
 @media (max-width: 767px) {

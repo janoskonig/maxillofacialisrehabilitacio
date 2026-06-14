@@ -8,6 +8,7 @@ import { FeedbackModal } from '@/components/FeedbackButton'
 import { ToastProvider } from '@/contexts/ToastContext'
 import { ToastContainer } from '@/components/ToastContainer'
 import { SocketProvider } from '@/contexts/SocketContext'
+import { ThemeProvider } from '@/components/ThemeProvider'
 import PWARegister from '@/components/PWARegister'
 import { CookieConsent } from '@/components/CookieConsent'
 
@@ -53,22 +54,24 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="hu">
+    <html lang="hu" suppressHydrationWarning>
       <body className={inter.className}>
-        <ErrorBoundary>
-          <SocketProvider>
-            <ToastProvider>
-              <FeedbackProvider>
-                <GlobalErrorHandler />
-                {children}
-                <FeedbackModal />
-                <ToastContainer />
-                <PWARegister />
-                <CookieConsent />
-              </FeedbackProvider>
-            </ToastProvider>
-          </SocketProvider>
-        </ErrorBoundary>
+        <ThemeProvider>
+          <ErrorBoundary>
+            <SocketProvider>
+              <ToastProvider>
+                <FeedbackProvider>
+                  <GlobalErrorHandler />
+                  {children}
+                  <FeedbackModal />
+                  <ToastContainer />
+                  <PWARegister />
+                  <CookieConsent />
+                </FeedbackProvider>
+              </ToastProvider>
+            </SocketProvider>
+          </ErrorBoundary>
+        </ThemeProvider>
       </body>
     </html>
   )

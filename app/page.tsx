@@ -324,10 +324,10 @@ export default function Home() {
 
   if (isCheckingAuth) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-medical-primary mx-auto mb-4"></div>
-          <p className="text-gray-500">Betöltés...</p>
+          <p className="text-gray-500 dark:text-gray-400">Betöltés...</p>
         </div>
       </div>
     );
@@ -374,10 +374,10 @@ export default function Home() {
 
           {/* PWA Announcement Banner */}
           {showPWAAnnouncement && (
-            <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg shadow-sm p-4 relative">
+            <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/40 border border-blue-200 dark:border-blue-900 rounded-lg shadow-sm p-4 relative">
               <button
                 onClick={handleDismissPWAAnnouncement}
-                className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 transition-colors"
+                className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors"
                 aria-label="Bezárás"
               >
                 <X className="w-5 h-5" />
@@ -385,18 +385,18 @@ export default function Home() {
               <div className="flex items-start gap-3 pr-8">
                 <div className="flex-shrink-0 mt-0.5">
                   <div className="flex items-center gap-2">
-                    <Download className="w-5 h-5 text-blue-600" />
-                    <Bell className="w-5 h-5 text-indigo-600" />
+                    <Download className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    <Bell className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                   </div>
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-sm font-semibold text-gray-900 mb-1">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">
                     Új funkciók: Telepíthető alkalmazás és push értesítések
                   </h3>
-                  <p className="text-sm text-gray-700 mb-2">
+                  <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
                     Az alkalmazás mostantól <strong>telepíthető</strong> asztali és mobil eszközökre, és <strong>push értesítéseket</strong> is küldhet időpont foglalásokról, üzenetekről és emlékeztetőkről.
                   </p>
-                  <div className="flex flex-wrap gap-2 text-xs text-gray-600">
+                  <div className="flex flex-wrap gap-2 text-xs text-gray-600 dark:text-gray-400">
                     <span className="flex items-center gap-1">
                       <Download className="w-3.5 h-3.5" />
                       Telepíthető PWA
@@ -432,7 +432,7 @@ export default function Home() {
               <div className="space-y-3">
                 {/* Search */}
                 <div className="relative">
-                  <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 z-10" />
+                  <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-5 h-5 z-10" />
                   <input
                     type="text"
                     placeholder="Keresés név, TAJ szám vagy telefon alapján..."
@@ -447,11 +447,11 @@ export default function Home() {
               <p className="text-body-sm text-gray-500">
                 {searchQuery.trim() || selectedView !== 'all' ? (
                   <>
-                    <span className="font-semibold text-gray-900">{totalPatients}</span> találat
+                    <span className="font-semibold text-gray-900 dark:text-gray-100">{totalPatients}</span> találat
                   </>
                 ) : (
                   <>
-                    <span className="font-semibold text-gray-900">{totalPatients}</span> páciens
+                    <span className="font-semibold text-gray-900 dark:text-gray-100">{totalPatients}</span> páciens
                   </>
                 )}
               </p>
@@ -476,7 +476,7 @@ export default function Home() {
               {/* Pagination - 25 per page */}
               {totalPatients > 0 && (
                 <div className="flex flex-wrap items-center justify-between gap-3 py-3">
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
                     {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, totalPatients)} / Összesen {totalPatients}
                   </p>
                   <div className="flex items-center gap-2">
@@ -503,31 +503,31 @@ export default function Home() {
               {/* Empty state */}
               {totalPatients === 0 && !searchQuery.trim() && selectedView === 'all' && (
                 <div className="card text-center py-12">
-                  <Search className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  <Search className="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                     Keresés a betegek között
                   </h3>
-                  <p className="text-gray-600 mb-4">
+                  <p className="text-gray-600 dark:text-gray-400 mb-4">
                     Kezdjen el gépelni a keresőmezőben, vagy válasszon szűrőt a listához.
                   </p>
                 </div>
               )}
 
               {/* Footer */}
-              <div className="mt-8 pt-6 border-t border-gray-200 flex flex-col items-center gap-3">
+              <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-800 flex flex-col items-center gap-3">
                 <Link
                   href="/docs/kezelesi-ut-utmutato"
-                  className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-medical-primary transition-colors"
+                  className="inline-flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 hover:text-medical-primary transition-colors"
                 >
                   <BookOpen className="w-4 h-4" />
                   Kezelési út és ütemezés — Használati útmutató
                 </Link>
                 <div className="flex gap-4 text-xs">
-                  <Link href="/privacy" className="text-gray-400 hover:text-gray-600 transition-colors">
+                  <Link href="/privacy" className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
                     Privacy Policy
                   </Link>
-                  <span className="text-gray-300">|</span>
-                  <Link href="/terms" className="text-gray-400 hover:text-gray-600 transition-colors">
+                  <span className="text-gray-300 dark:text-gray-700">|</span>
+                  <Link href="/terms" className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
                     Terms of Service
                   </Link>
                 </div>

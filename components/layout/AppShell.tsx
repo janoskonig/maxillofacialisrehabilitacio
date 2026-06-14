@@ -68,7 +68,7 @@ export function AppShell({ title, backTo, actions, maxWidth = 'lg', children }: 
   // Auth betöltése alatt: fejléc + tartalom keret, de oldalsáv nélkül (a user kell hozzá).
   if (!user) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col">
         <PageHeader title={title} backTo={backTo} actions={actions} />
         {content}
         <MobileBottomNav />
@@ -77,7 +77,7 @@ export function AppShell({ title, backTo, actions, maxWidth = 'lg', children }: 
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 md:flex">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 md:flex">
       <Sidebar
         user={user}
         taskSummary={taskSummary}

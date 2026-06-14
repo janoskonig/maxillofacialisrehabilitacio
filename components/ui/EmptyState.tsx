@@ -16,11 +16,11 @@ export function EmptyState({ icon: Icon, title, description, action, className =
     <div className={`card text-center py-12 ${className}`.trim()}>
       {Icon && (
         <div className="flex justify-center mb-3">
-          <Icon className="w-10 h-10 text-gray-300" />
+          <Icon className="w-10 h-10 text-gray-300 dark:text-gray-600" />
         </div>
       )}
-      <p className="text-gray-900 font-medium">{title}</p>
-      {description && <p className="text-sm text-gray-500 mt-1">{description}</p>}
+      <p className="text-gray-900 dark:text-gray-100 font-medium">{title}</p>
+      {description && <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{description}</p>}
       {action && <div className="mt-4 flex justify-center">{action}</div>}
     </div>
   );

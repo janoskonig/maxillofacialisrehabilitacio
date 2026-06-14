@@ -124,7 +124,7 @@ export function Dashboard(_props: DashboardProps) {
                   className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
                     unviewedTasks > 0
                       ? 'border-medical-error/30 bg-medical-error/5 text-medical-error hover:bg-medical-error/10'
-                      : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                      : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
                   }`}
                 >
                   <ClipboardList className="w-4 h-4" />
