@@ -46,21 +46,20 @@ export const PATCH = authedHandler(async (req, { auth, params }) => {
       [sessionId, auth.email],
     );
 
-    let idx = 1;
-    for (const itemId of body.itemIdsInOrder) {
-      const r = await client.query(
-        `UPDATE consilium_session_items
-         SET sort_order = $3,
-             updated_by = $4,
-             updated_at = NOW()
-         WHERE id = $1 AND session_id = $2
-         RETURNING id`,
-        [itemId, sessionId, idx, auth.email],
-      );
-      if (r.rowCount === 0) {
-        throw new HttpError(404, 'Elem nem található ebben az alkalomban', 'ITEM_NOT_FOUND');
-      }
-      idx++;
+    // Egyetlen batch UPDATE az elemenkénti N lekérdezés helyett: a tömb
+    // pozíciója (WITH ORDINALITY) lesz a végső sort_order. Az előző lépés a
+    // sort_order-t kiemeltette a tartományból, így nincs tranziens unique-ütközés.
+    const reorderResult = await client.query(
+      `UPDATE consilium_session_items AS t
+       SET sort_order = v.ord,
+           updated_by = $3,
+           updated_at = NOW()
+       FROM unnest($2::uuid[]) WITH ORDINALITY AS v(id, ord)
+       WHERE t.id = v.id AND t.session_id = $1`,
+      [sessionId, body.itemIdsInOrder, auth.email],
+    );
+    if (reorderResult.rowCount !== body.itemIdsInOrder.length) {
+      throw new HttpError(404, 'Elem nem található ebben az alkalomban', 'ITEM_NOT_FOUND');
     }
 
     await client.query('COMMIT');

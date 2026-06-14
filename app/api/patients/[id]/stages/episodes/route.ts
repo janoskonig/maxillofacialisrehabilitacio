@@ -36,33 +36,38 @@ export const GET = authedHandler(async (req, { auth, params }) => {
       [patientId],
     );
 
-    const episodes = await Promise.all(
-      episodesResult.rows.map(async (episode) => {
-        const stagesResult = await pool.query(
-          `SELECT id, stage_code as "stageCode", at, note
-           FROM stage_events
-           WHERE patient_id = $1 AND episode_id = $2
-           ORDER BY at ASC`,
-          [patientId, episode.episodeId],
-        );
-
-        return {
-          episodeId: episode.episodeId,
-          startDate: (episode.startDate as Date).toISOString(),
-          endDate: (episode.endDate as Date)?.toISOString(),
-          stageCount: episode.stageCount,
-          stages: stagesResult.rows.map((row) => ({
-            id: row.id,
-            stageCode: row.stageCode,
-            stage: row.stageCode,
-            stageDate: (row.at as Date).toISOString(),
-            at: (row.at as Date).toISOString(),
-            notes: row.note,
-            note: row.note,
-          })),
-        };
-      }),
+    // Egyetlen lekérdezés epizódonkénti N+1 helyett: minden stádium egyszerre,
+    // majd memóriában csoportosítva episode_id szerint.
+    const allStagesResult = await pool.query(
+      `SELECT id, stage_code as "stageCode", at, note, episode_id as "episodeId"
+       FROM stage_events
+       WHERE patient_id = $1
+       ORDER BY at ASC`,
+      [patientId],
     );
+
+    const stagesByEpisode = new Map<string, Array<Record<string, unknown>>>();
+    for (const row of allStagesResult.rows) {
+      const list = stagesByEpisode.get(row.episodeId) ?? [];
+      list.push({
+        id: row.id,
+        stageCode: row.stageCode,
+        stage: row.stageCode,
+        stageDate: (row.at as Date).toISOString(),
+        at: (row.at as Date).toISOString(),
+        notes: row.note,
+        note: row.note,
+      });
+      stagesByEpisode.set(row.episodeId, list);
+    }
+
+    const episodes = episodesResult.rows.map((episode) => ({
+      episodeId: episode.episodeId,
+      startDate: (episode.startDate as Date).toISOString(),
+      endDate: (episode.endDate as Date)?.toISOString(),
+      stageCount: episode.stageCount,
+      stages: stagesByEpisode.get(episode.episodeId) ?? [],
+    }));
 
     return NextResponse.json({ episodes });
   }
@@ -80,30 +85,33 @@ export const GET = authedHandler(async (req, { auth, params }) => {
     [patientId],
   );
 
-  const episodes = await Promise.all(
-    episodesResult.rows.map(async (episode) => {
-      const stagesResult = await pool.query(
-        `SELECT id, stage, stage_date as "stageDate", notes
-        FROM patient_stages
-        WHERE patient_id = $1 AND episode_id = $2
-        ORDER BY stage_date ASC`,
-        [patientId, episode.episodeId],
-      );
-
-      return {
-        episodeId: episode.episodeId,
-        startDate: episode.startDate.toISOString(),
-        endDate: episode.endDate?.toISOString(),
-        stageCount: parseInt(episode.stageCount, 10),
-        stages: stagesResult.rows.map((row) => ({
-          id: row.id,
-          stage: row.stage,
-          stageDate: row.stageDate.toISOString(),
-          notes: row.notes,
-        })),
-      };
-    }),
+  const allStagesResult = await pool.query(
+    `SELECT id, stage, stage_date as "stageDate", notes, episode_id as "episodeId"
+     FROM patient_stages
+     WHERE patient_id = $1
+     ORDER BY stage_date ASC`,
+    [patientId],
   );
+
+  const stagesByEpisode = new Map<string, Array<Record<string, unknown>>>();
+  for (const row of allStagesResult.rows) {
+    const list = stagesByEpisode.get(row.episodeId) ?? [];
+    list.push({
+      id: row.id,
+      stage: row.stage,
+      stageDate: row.stageDate.toISOString(),
+      notes: row.notes,
+    });
+    stagesByEpisode.set(row.episodeId, list);
+  }
+
+  const episodes = episodesResult.rows.map((episode) => ({
+    episodeId: episode.episodeId,
+    startDate: episode.startDate.toISOString(),
+    endDate: episode.endDate?.toISOString(),
+    stageCount: parseInt(episode.stageCount, 10),
+    stages: stagesByEpisode.get(episode.episodeId) ?? [],
+  }));
 
   return NextResponse.json({ episodes });
 });
