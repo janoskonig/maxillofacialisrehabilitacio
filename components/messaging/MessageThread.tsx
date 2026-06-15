@@ -15,7 +15,7 @@
  * dolgokat (szövegrender, avatar, csoport-footer) a hívó adja callbackként.
  */
 
-import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, type ReactNode, type RefObject } from 'react';
 import { Loader2 } from 'lucide-react';
 import { ChatMessageBubble, type ChatBubbleMessage } from './ChatMessageBubble';
 import { decorateMessages } from '@/lib/messaging/group-messages';
@@ -34,13 +34,29 @@ interface MessageThreadProps {
   onReplyThreadToggle?: (parentMessageId: string) => void;
   isThreadCollapsed?: (parentMessageId: string) => boolean;
 
+  /**
+   * Jogosultság a kontextus-linkek eltávolítására (staff felület). A gomb
+   * ténylegesen csak a saját, nem-függő üzeneteknél jelenik meg.
+   */
   canRemoveContextLinks?: boolean;
   onRemoveContextLink?: (messageId: string, linkId: string) => void;
+
+  /** Feladó-név a buborék fölött (csak nem-saját). Csoportban hasznos; 1:1-ben kikapcsolható. */
+  showSenderName?: boolean;
+
+  /** Külső görgető-konténer ref (pl. keresés „ugorj az üzenethez” funkcióhoz). */
+  containerRef?: RefObject<HTMLDivElement>;
 
   /** Avatar a nem-saját üzenetekhez (a blokk utolsó buborékján jelenik meg). */
   renderAvatar?: (message: ChatBubbleMessage) => ReactNode;
   /** Buborék-belső footer (pl. csoport „olvasták” lista). */
   renderBubbleFooter?: (message: ChatBubbleMessage) => ReactNode;
+
+  /**
+   * Ha változik, a lista azonnal az aljára görget (pl. beszélgetésváltáskor a
+   * kiválasztott azonosító). Független az új-üzenet-görgetéstől.
+   */
+  scrollAnchorKey?: string | null;
 
   /** „gépel…” indikátor szövege, vagy `null`/`undefined` ha senki nem gépel. */
   typingLabel?: string | null;
@@ -68,15 +84,19 @@ export function MessageThread({
   isThreadCollapsed,
   canRemoveContextLinks = false,
   onRemoveContextLink,
+  showSenderName = true,
+  containerRef,
   renderAvatar,
   renderBubbleFooter,
+  scrollAnchorKey,
   typingLabel,
   onLoadOlder,
   hasMore = false,
   loadingOlder = false,
   className = '',
 }: MessageThreadProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const internalScrollRef = useRef<HTMLDivElement>(null);
+  const scrollRef = containerRef ?? internalScrollRef;
   const bottomRef = useRef<HTMLDivElement>(null);
   const prevCountRef = useRef(0);
   const wasNearBottomRef = useRef(true);
@@ -102,6 +122,13 @@ export function MessageThread({
       bottomRef.current?.scrollIntoView({ block: 'end' });
     }
   }, [messages.length]);
+
+  // Beszélgetésváltás: mindig aljára görgetés (és „közel az aljához” reset).
+  useLayoutEffect(() => {
+    wasNearBottomRef.current = true;
+    bottomRef.current?.scrollIntoView({ block: 'end' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scrollAnchorKey]);
 
   // „gépel…” megjelenésekor is görgessünk, ha alul vagyunk.
   useEffect(() => {
@@ -173,7 +200,10 @@ export function MessageThread({
             onRetry={onRetry}
             onReplyThreadToggle={onReplyThreadToggle}
             replyThreadCollapsed={isThreadCollapsed ? isThreadCollapsed(message.id) : false}
-            canRemoveContextLinks={canRemoveContextLinks}
+            showSenderLabel={showSenderName}
+            canRemoveContextLinks={
+              canRemoveContextLinks && message.isFromMe && message.deliveryStatus !== 'pending'
+            }
             onRemoveContextLink={onRemoveContextLink}
             isFirstInGroup={isFirstInGroup}
             isLastInGroup={isLastInGroup}

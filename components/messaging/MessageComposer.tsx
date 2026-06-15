@@ -12,7 +12,7 @@
  * a portál felületet is.
  */
 
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode, type RefObject } from 'react';
 import { Send } from 'lucide-react';
 
 interface MessageComposerProps {
@@ -31,6 +31,8 @@ interface MessageComposerProps {
   /** Vezető csatolás-gombok (dokumentum / kontextus-link). */
   attachSlot?: ReactNode;
 
+  /** Enter küldjön (Shift+Enter mindig új sor). Mobilon érdemes `false`. Alap: true. */
+  sendOnEnter?: boolean;
   /** Esc lenyomása a mezőben (pl. reply-mód lemondása). */
   onEscape?: () => void;
   /**
@@ -38,6 +40,13 @@ interface MessageComposerProps {
    * a kiválasztott azonosító). `null` → nincs auto-fókusz.
    */
   autoFocusKey?: string | null;
+
+  /** Külső textarea-ref (pl. @mention dropdown-pozícionáláshoz). */
+  textareaRef?: RefObject<HTMLTextAreaElement>;
+  /** Kurzorpozíció-változás jelentése (pl. @mention kiváltásához). */
+  onCursorChange?: (position: number) => void;
+  /** Overlay a beviteli mező fölött (pl. `<PatientMention/>` dropdown). */
+  overlay?: ReactNode;
 }
 
 const MAX_TEXTAREA_PX = 140;
@@ -52,10 +61,15 @@ export function MessageComposer({
   replyBar,
   pendingBar,
   attachSlot,
+  sendOnEnter = true,
   onEscape,
   autoFocusKey,
+  textareaRef: externalRef,
+  onCursorChange,
+  overlay,
 }: MessageComposerProps) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const internalRef = useRef<HTMLTextAreaElement>(null);
+  const textareaRef = externalRef ?? internalRef;
 
   // Auto-növekvő magasság (max korláttal).
   useEffect(() => {
@@ -63,11 +77,13 @@ export function MessageComposer({
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_PX)}px`;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
   // Fókusz beszélgetés megnyitásakor / váltásakor.
   useEffect(() => {
     if (autoFocusKey) textareaRef.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoFocusKey]);
 
   const canSend = value.trim().length > 0 && !sending && !disabled;
@@ -77,7 +93,7 @@ export function MessageComposer({
       onEscape?.();
       return;
     }
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (sendOnEnter && e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       if (canSend) onSend();
     }
@@ -93,17 +109,24 @@ export function MessageComposer({
       <div className="p-2 sm:p-3">
         <div className="flex items-end gap-1.5 bg-gray-100 dark:bg-gray-800 rounded-3xl pl-2 pr-1.5 py-1">
           {attachSlot && <div className="flex items-center gap-0.5 self-end">{attachSlot}</div>}
-          <textarea
-            ref={textareaRef}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            onKeyDown={handleKeyDown}
-            rows={1}
-            disabled={disabled}
-            placeholder={placeholder}
-            aria-label="Üzenet szövege"
-            className="flex-1 resize-none bg-transparent border-0 focus:ring-0 focus:outline-none text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 py-2 max-h-[140px]"
-          />
+          <div className="flex-1 relative min-w-0">
+            <textarea
+              ref={textareaRef}
+              value={value}
+              onChange={(e) => {
+                onChange(e.target.value);
+                onCursorChange?.(e.target.selectionStart);
+              }}
+              onKeyDown={handleKeyDown}
+              onSelect={(e) => onCursorChange?.((e.target as HTMLTextAreaElement).selectionStart)}
+              rows={1}
+              disabled={disabled}
+              placeholder={placeholder}
+              aria-label="Üzenet szövege"
+              className="w-full resize-none bg-transparent border-0 focus:ring-0 focus:outline-none text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 py-2 max-h-[140px]"
+            />
+            {overlay}
+          </div>
           <button
             type="button"
             onClick={onSend}
