@@ -64,8 +64,9 @@ export const GET = roleHandler(['admin'], async (req, { correlationId, auth }) =
   const limit = parseInt(searchParams.get('limit') || '100');
 
   let query = `
-    SELECT id, user_email, type, title, description, error_log, error_stack, 
-           user_agent, url, status, created_at, updated_at
+    SELECT id, user_email, type, title, description, error_log, error_stack,
+           user_agent, url, status, admin_response, admin_note,
+           responded_at, responded_by, created_at, updated_at
     FROM feedback
   `;
   const params: any[] = [];

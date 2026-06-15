@@ -26,4 +26,5 @@ export {
   sendConsentRequestEmail,
   sendTaskReminderEmail,
   sendMissingDataReminderEmail,
+  sendFeedbackResponseEmail,
 } from './senders';
