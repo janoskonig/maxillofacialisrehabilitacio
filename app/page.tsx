@@ -24,10 +24,6 @@ const FotoImageViewer = dynamic(() => import('@/components/FotoImageViewer').the
   ssr: false
 });
 
-const SendMessageModal = dynamic(() => import('@/components/SendMessageModal').then(mod => ({ default: mod.SendMessageModal })), {
-  ssr: false
-});
-
 type UserRoleType = 'admin' | 'fogpótlástanász' | 'technikus' | 'beutalo_orvos';
 
 interface ListState {
@@ -99,7 +95,6 @@ export default function Home() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [opViewerPatient, setOpViewerPatient] = useState<Patient | null>(null);
   const [fotoViewerPatient, setFotoViewerPatient] = useState<Patient | null>(null);
-  const [showMessageModal, setShowMessageModal] = useState(false);
   const [showPWAAnnouncement, setShowPWAAnnouncement] = useState(false);
   const { showToast, confirm: confirmDialog } = useToast();
 
@@ -555,12 +550,6 @@ export default function Home() {
       )}
 
         </div>
-
-      {/* Send Message Modal */}
-      <SendMessageModal
-        isOpen={showMessageModal}
-        onClose={() => setShowMessageModal(false)}
-      />
     </AppShell>
   );
 }
