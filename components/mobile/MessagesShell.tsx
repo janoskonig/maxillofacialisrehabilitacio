@@ -113,7 +113,7 @@ export function MessagesShell({
 
   // Desktop: side-by-side layout
   const desktopLayout = (
-    <div className="flex h-[calc(100vh-200px)] sm:h-[700px] border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden bg-white dark:bg-gray-900">
+    <div className="flex h-[calc(100dvh-200px)] sm:h-[700px] border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden bg-white dark:bg-gray-900">
       {/* Conversations List */}
       <div className={`${showDetail ? 'hidden sm:flex' : 'flex'} w-full sm:w-80 border-r border-gray-200 dark:border-gray-800 flex flex-col`}>
         {listContent}
@@ -166,8 +166,8 @@ export function MessagesShell({
     return (
       <>
         {conversationsDrawer}
-        
-        <div className="flex h-[calc(100vh-200px)] sm:h-[700px] border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden bg-white dark:bg-gray-900">
+
+        <div className="flex h-[calc(100dvh-200px)] sm:h-[700px] border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden bg-white dark:bg-gray-900">
           {showNewChatProp && newChatContent ? (
             newChatContent
           ) : showDetail ? (
