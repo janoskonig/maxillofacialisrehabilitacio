@@ -144,7 +144,7 @@ export async function createAppointment(
       );
       if (episodeLock.rows.length === 0) {
         await client.query('ROLLBACK');
-        return { ok: false, validationError: { error: 'Epizód nem található', status: 404 } };
+        return { ok: false, validationError: { error: 'Epizód nem található', code: 'EPISODE_NOT_FOUND', status: 404 } };
       }
 
       let hasAnyPathway = !!episodeLock.rows[0].care_pathway_id;
@@ -315,14 +315,14 @@ export async function createAppointment(
 
     if (timeSlotResult.rows.length === 0) {
       await client.query('ROLLBACK');
-      return { ok: false, validationError: { error: 'Időpont nem található', status: 404 } };
+      return { ok: false, validationError: { error: 'Időpont nem található', code: 'SLOT_NOT_FOUND', status: 404 } };
     }
 
     const timeSlot = timeSlotResult.rows[0];
     const slotState = timeSlot.state ?? (timeSlot.status === 'available' ? 'free' : 'booked');
     if (slotState !== 'free') {
       await client.query('ROLLBACK');
-      return { ok: false, validationError: { error: 'Ez az időpont már le van foglalva', status: 400 } };
+      return { ok: false, validationError: { error: 'Ez az időpont már le van foglalva', code: 'SLOT_ALREADY_BOOKED', status: 400 } };
     }
 
     if (episodeId) {
@@ -335,7 +335,7 @@ export async function createAppointment(
         await client.query('ROLLBACK');
         return {
           ok: false,
-          validationError: { error: 'Csak a kijelölt orvoshoz adható időpont.', status: 403 },
+          validationError: { error: 'Csak a kijelölt orvoshoz adható időpont.', code: 'PROVIDER_MISMATCH', status: 403 },
         };
       }
     }
@@ -343,7 +343,7 @@ export async function createAppointment(
     const startTime = new Date(timeSlot.start_time);
     if (startTime <= now) {
       await client.query('ROLLBACK');
-      return { ok: false, validationError: { error: 'Csak jövőbeli időpontot lehet lefoglalni', status: 400 } };
+      return { ok: false, validationError: { error: 'Csak jövőbeli időpontot lehet lefoglalni', code: 'SLOT_IN_PAST', status: 400 } };
     }
 
     // Refine risk settings with actual start time
@@ -415,13 +415,13 @@ export async function createAppointment(
       );
       if (intentCheck.rows.length === 0) {
         await client.query('ROLLBACK');
-        return { ok: false, validationError: { error: 'Intent nem található vagy már nem open', status: 400 } };
+        return { ok: false, validationError: { error: 'Intent nem található vagy már nem open', code: 'INTENT_NOT_OPEN', status: 400 } };
       }
       if (intentCheck.rows[0].episode_id !== episodeId) {
         await client.query('ROLLBACK');
         return {
           ok: false,
-          validationError: { error: 'Intent episode_id nem egyezik az appointment episode_id-jával', status: 400 },
+          validationError: { error: 'Intent episode_id nem egyezik az appointment episode_id-jával', code: 'INTENT_EPISODE_MISMATCH', status: 400 },
         };
       }
     }

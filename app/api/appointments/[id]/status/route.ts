@@ -36,7 +36,7 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
 
   if (normalisedStatus === 'completed' && (!completionNotes || completionNotes.trim() === '')) {
     return NextResponse.json(
-      { error: 'A "mi történt?" mező kitöltése kötelező sikeresen teljesült időpont esetén' },
+      { error: 'A "mi történt?" mező kitöltése kötelező sikeresen teljesült időpont esetén', code: 'COMPLETION_NOTES_REQUIRED' },
       { status: 400 }
     );
   }
@@ -76,7 +76,7 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
     if (appointmentResult.rows.length === 0) {
       await client.query('ROLLBACK');
       return NextResponse.json(
-        { error: 'Időpont nem található' },
+        { error: 'Időpont nem található', code: 'APPOINTMENT_NOT_FOUND' },
         { status: 404 }
       );
     }

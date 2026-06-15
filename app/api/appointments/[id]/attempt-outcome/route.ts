@@ -116,7 +116,7 @@ export const PATCH = roleHandler(
 
       if (apptRow.rows.length === 0) {
         earlyResponse = NextResponse.json(
-          { error: 'Időpont nem található' },
+          { error: 'Időpont nem található', code: 'APPOINTMENT_NOT_FOUND' },
           { status: 404 }
         );
       } else {
