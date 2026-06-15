@@ -40,11 +40,11 @@ export function ReplyComposerBar({
     <div
       role="region"
       aria-label="Válasz mód aktív"
-      className={`flex items-start gap-2 px-3 py-2 border-t border-blue-100 bg-blue-50 ${className ?? ''}`}
+      className={`flex items-start gap-2 px-3 py-2 border-t border-blue-100 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 ${className ?? ''}`}
     >
-      <CornerUpLeft className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" aria-hidden="true" />
+      <CornerUpLeft className="w-4 h-4 text-blue-600 dark:text-blue-300 flex-shrink-0 mt-0.5" aria-hidden="true" />
       <div className="flex-1 min-w-0">
-        <div className="text-xs font-semibold text-blue-900 truncate">{headline}</div>
+        <div className="text-xs font-semibold text-blue-900 dark:text-blue-200 truncate">{headline}</div>
         <MessageQuoteBlock
           quote={quote}
           variant="composer"
@@ -54,7 +54,7 @@ export function ReplyComposerBar({
       <button
         type="button"
         onClick={onClose}
-        className="p-1 rounded hover:bg-blue-100 text-blue-700 flex-shrink-0"
+        className="p-1 rounded hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-700 dark:text-blue-300 flex-shrink-0"
         aria-label="Reply mód lemondása (Esc)"
         title="Esc"
       >

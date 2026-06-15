@@ -82,7 +82,7 @@ const STYLES: Record<MessageQuoteVariant, {
 }> = {
   'bubble-own': {
     container: 'px-2 py-1.5 rounded-md bg-blue-500/30',
-    accent: 'w-0.5 self-stretch rounded bg-white/70',
+    accent: 'w-0.5 self-stretch rounded bg-white/70 dark:bg-gray-900/70',
     senderText: 'text-white/90',
     bodyText: 'text-white/90',
     deletedText: 'italic text-white/60',
@@ -91,26 +91,26 @@ const STYLES: Record<MessageQuoteVariant, {
   'bubble-own-green': {
     // A beteg-portál zöld saját buborékához igazítva.
     container: 'px-2 py-1.5 rounded-md bg-green-600/40',
-    accent: 'w-0.5 self-stretch rounded bg-white/80',
+    accent: 'w-0.5 self-stretch rounded bg-white/80 dark:bg-gray-900/80',
     senderText: 'text-white/95',
     bodyText: 'text-white/90',
     deletedText: 'italic text-white/60',
     button: 'hover:bg-green-600/50',
   },
   'bubble-other': {
-    container: 'px-2 py-1.5 rounded-md bg-gray-100',
+    container: 'px-2 py-1.5 rounded-md bg-gray-100 dark:bg-gray-800',
     accent: 'w-0.5 self-stretch rounded bg-blue-500',
-    senderText: 'text-gray-800',
-    bodyText: 'text-gray-700',
-    deletedText: 'italic text-gray-400',
-    button: 'hover:bg-gray-200',
+    senderText: 'text-gray-800 dark:text-gray-200',
+    bodyText: 'text-gray-700 dark:text-gray-300',
+    deletedText: 'italic text-gray-400 dark:text-gray-500',
+    button: 'hover:bg-gray-200 dark:hover:bg-gray-700',
   },
   composer: {
-    container: 'px-3 py-2 rounded-md bg-blue-50 border border-blue-100',
+    container: 'px-3 py-2 rounded-md bg-blue-50 dark:bg-blue-950/40 border border-blue-100',
     accent: 'w-0.5 self-stretch rounded bg-blue-500',
-    senderText: 'text-blue-900',
-    bodyText: 'text-gray-700',
-    deletedText: 'italic text-gray-400',
-    button: 'hover:bg-blue-100',
+    senderText: 'text-blue-900 dark:text-blue-200',
+    bodyText: 'text-gray-700 dark:text-gray-300',
+    deletedText: 'italic text-gray-400 dark:text-gray-500',
+    button: 'hover:bg-blue-100 dark:hover:bg-blue-900/40',
   },
 };

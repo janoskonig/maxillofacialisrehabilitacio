@@ -24,7 +24,7 @@ export function MessageSearchButton({
       onClick={() => ctx.openSearch(channel)}
       className={
         className ??
-        'flex-shrink-0 p-2 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors mobile-touch-target'
+        'flex-shrink-0 p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100 transition-colors mobile-touch-target'
       }
       title={title}
       aria-label={title}

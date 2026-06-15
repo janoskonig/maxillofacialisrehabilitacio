@@ -114,11 +114,11 @@ export function PortalRegister() {
   };
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-      <h2 className="text-xl font-semibold text-gray-900 mb-4">
+    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm p-6">
+      <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">
         Új regisztráció
       </h2>
-      <p className="text-sm text-gray-600 mb-6">
+      <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
         Regisztráljon a páciens portálra. Emailben megerősítő linket küldünk.
       </p>
 
@@ -158,12 +158,12 @@ export function PortalRegister() {
             maxLength={11}
           />
           {tajHasChecksumError(taj) ? (
-            <p className="text-amber-600 text-xs mt-1 flex items-center gap-1">
+            <p className="text-amber-600 dark:text-amber-300 text-xs mt-1 flex items-center gap-1">
               <AlertTriangle className="w-3 h-3 flex-shrink-0" />
               Az ellenőrző számjegy nem megfelelő. Kérjük, ellenőrizze a TAJ számot.
             </p>
           ) : (
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               Formátum: XXX-XXX-XXX (9 számjegy)
             </p>
           )}
@@ -188,7 +188,7 @@ export function PortalRegister() {
 
         {/* Optional Personal Information */}
         <div className="border-t pt-4">
-          <p className="text-sm font-medium text-gray-700 mb-3">
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
             Személyes adatok (opcionális):
           </p>
 
@@ -294,7 +294,7 @@ export function PortalRegister() {
 
         {/* Referring Doctor Information */}
         <div className="border-t pt-4">
-          <p className="text-sm font-medium text-gray-700 mb-3">
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
             Beutaló orvos adatai (opcionális):
           </p>
 
@@ -336,7 +336,7 @@ export function PortalRegister() {
         {/* Legal guardian (minors) */}
         {isMinor && (
           <div className="border-t pt-4 space-y-4">
-            <p className="text-sm text-amber-800 bg-amber-50 rounded-lg p-3">
+            <p className="text-sm text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 rounded-lg p-3">
               A megadott születési dátum alapján a páciens kiskorú. A nyilatkozatokat a
               törvényes képviselő teszi meg — kérjük, adja meg az adatait.
             </p>
@@ -395,10 +395,10 @@ export function PortalRegister() {
               type="checkbox"
               checked={privacyConsent}
               onChange={(e) => setPrivacyConsent(e.target.checked)}
-              className="mt-1 h-4 w-4 rounded border-gray-300 text-medical-primary focus:ring-medical-primary flex-shrink-0"
+              className="mt-1 h-4 w-4 rounded border-gray-300 dark:border-gray-700 text-medical-primary focus:ring-medical-primary flex-shrink-0"
               disabled={loading}
             />
-            <span className="text-sm text-gray-700">
+            <span className="text-sm text-gray-700 dark:text-gray-300">
               {isMinor ? 'A kiskorú törvényes képviselőjeként megismertem és tudomásul vettem az' : 'Megismertem és tudomásul vettem az'}{' '}
               <Link href="/privacy-hu" target="_blank" className="text-medical-primary hover:underline font-medium">
                 adatvédelmi tájékoztatót

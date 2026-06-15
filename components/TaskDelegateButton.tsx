@@ -123,10 +123,10 @@ export function TaskDelegateButton({ taskId, onDelegated }: TaskDelegateButtonPr
   }
 
   return (
-    <div className="mt-3 rounded border border-gray-200 bg-gray-50 p-3">
+    <div className="mt-3 rounded border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60 p-3">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium text-gray-700">Delegálás kollégának</span>
-        <button type="button" className="text-gray-400 hover:text-gray-600" onClick={closePicker} aria-label="Mégse">
+        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Delegálás kollégának</span>
+        <button type="button" className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400" onClick={closePicker} aria-label="Mégse">
           <X className="w-4 h-4" />
         </button>
       </div>
@@ -153,15 +153,15 @@ export function TaskDelegateButton({ taskId, onDelegated }: TaskDelegateButtonPr
           }}
         />
         {listOpen && input.trim().length > 0 && !usersLoading && (
-          <ul className="absolute z-20 left-0 right-0 mt-0.5 max-h-40 overflow-auto rounded border border-gray-200 bg-white shadow text-sm">
+          <ul className="absolute z-20 left-0 right-0 mt-0.5 max-h-40 overflow-auto rounded border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow text-sm">
             {suggestions.length === 0 ? (
-              <li className="px-2 py-1.5 text-gray-500">Nincs találat</li>
+              <li className="px-2 py-1.5 text-gray-500 dark:text-gray-400">Nincs találat</li>
             ) : (
               suggestions.map((u) => (
                 <li key={u.id}>
                   <button
                     type="button"
-                    className="w-full text-left px-2 py-1.5 hover:bg-gray-50"
+                    className="w-full text-left px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800/50"
                     onMouseDown={(ev) => ev.preventDefault()}
                     onClick={() => {
                       setAssigneeId(u.id);
@@ -180,7 +180,7 @@ export function TaskDelegateButton({ taskId, onDelegated }: TaskDelegateButtonPr
       </div>
 
       {feedback && (
-        <p className={`text-sm mt-2 ${feedback.ok ? 'text-green-700' : 'text-red-700'}`}>{feedback.msg}</p>
+        <p className={`text-sm mt-2 ${feedback.ok ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>{feedback.msg}</p>
       )}
 
       <button

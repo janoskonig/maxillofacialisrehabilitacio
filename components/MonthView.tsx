@@ -54,13 +54,13 @@ export function MonthView({
   };
 
   return (
-    <div className="bg-white rounded-lg border overflow-hidden">
+    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 overflow-hidden">
       {/* Week day headers */}
-      <div className="grid grid-cols-7 border-b">
+      <div className="grid grid-cols-7 border-b border-gray-200 dark:border-gray-800">
         {weekDays.map((day, index) => (
           <div
             key={index}
-            className="p-1 sm:p-2 text-center text-xs font-semibold text-gray-600 bg-gray-50"
+            className="p-1 sm:p-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/60"
           >
             {day}
           </div>
@@ -78,9 +78,13 @@ export function MonthView({
           return (
             <div
               key={index}
-              className={`min-h-[60px] sm:min-h-[100px] border-r border-b p-0.5 sm:p-1 ${
-                !isCurrentMonth ? 'bg-gray-50' : 'bg-white'
-              } ${isWeekend ? 'bg-gray-50' : ''} cursor-pointer hover:bg-blue-50 transition-colors`}
+              className={`min-h-[64px] sm:min-h-[100px] border-r border-b border-gray-200 dark:border-gray-800 p-0.5 sm:p-1 ${
+                !isCurrentMonth
+                  ? 'bg-gray-50 dark:bg-gray-950/40'
+                  : isWeekend
+                  ? 'bg-gray-50 dark:bg-gray-800/40'
+                  : 'bg-white dark:bg-gray-900'
+              } cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors`}
               onClick={() => onDateClick?.(day)}
             >
               <div
@@ -88,8 +92,8 @@ export function MonthView({
                   isCurrentDay
                     ? 'bg-blue-600 text-white rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center mx-auto'
                     : isCurrentMonth
-                    ? 'text-gray-900 text-center'
-                    : 'text-gray-400 text-center'
+                    ? 'text-gray-900 dark:text-gray-100 text-center'
+                    : 'text-gray-400 dark:text-gray-600 text-center'
                 }`}
               >
                 {format(day, 'd')}
@@ -119,15 +123,17 @@ export function MonthView({
                   />
                 )}
                 {dayAppointments.length > 3 && (
-                  <div className="text-xs text-gray-500 px-1">
+                  <div className="text-xs text-gray-500 dark:text-gray-400 px-1">
                     +{dayAppointments.length - 3} további
                   </div>
                 )}
               </div>
-              {/* Mobile: Show dot indicator */}
+              {/* Mobile: count pill (tap the day to open it) */}
               {dayAppointments.length > 0 && (
-                <div className="sm:hidden flex justify-center mt-0.5">
-                  <div className="w-1.5 h-1.5 bg-blue-600 rounded-full" />
+                <div className="sm:hidden flex justify-center mt-1">
+                  <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-blue-600 text-white text-[11px] font-semibold leading-none">
+                    {dayAppointments.length}
+                  </span>
                 </div>
               )}
             </div>

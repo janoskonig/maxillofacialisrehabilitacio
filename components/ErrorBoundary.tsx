@@ -36,23 +36,23 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-          <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-6">
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-white dark:bg-gray-900 rounded-lg shadow-lg p-6">
             <div className="flex items-center gap-3 mb-4">
-              <AlertTriangle className="w-8 h-8 text-red-500" />
-              <h1 className="text-2xl font-bold text-gray-900">
+              <AlertTriangle className="w-8 h-8 text-red-500 dark:text-red-400" />
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                 Hiba történt
               </h1>
             </div>
-            <p className="text-gray-600 mb-4">
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
               Sajnáljuk, váratlan hiba történt az alkalmazásban. A hiba automatikusan naplózva lett.
             </p>
             {this.state.error && (
               <details className="mb-4">
-                <summary className="cursor-pointer text-sm text-gray-500 hover:text-gray-700">
+                <summary className="cursor-pointer text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">
                   Részletek
                 </summary>
-                <pre className="mt-2 text-xs bg-gray-100 p-3 rounded overflow-auto">
+                <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-auto">
                   {this.state.error.toString()}
                 </pre>
               </details>

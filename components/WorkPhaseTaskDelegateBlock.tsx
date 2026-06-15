@@ -223,24 +223,24 @@ export function WorkPhaseTaskDelegateBlock({
   };
 
   return (
-    <div className="mt-2 p-2 rounded border border-indigo-200/80 bg-indigo-50/40 text-xs space-y-2">
+    <div className="mt-2 p-2 rounded border border-indigo-200/80 dark:border-indigo-800 bg-indigo-50/40 dark:bg-indigo-950/40 text-xs space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <span className="font-medium text-indigo-900 flex items-center gap-1">
+        <span className="font-medium text-indigo-900 dark:text-indigo-200 flex items-center gap-1">
           <SendHorizontal className="w-3.5 h-3.5" />
           Feladat: {phaseLabel}
         </span>
-        <button type="button" onClick={onClose} className="text-indigo-700 underline">
+        <button type="button" onClick={onClose} className="text-indigo-700 dark:text-indigo-300 underline">
           Bezár
         </button>
       </div>
 
       {userRole === 'admin' && (
-        <p className="text-[10px] text-indigo-800/80">
+        <p className="text-[10px] text-indigo-800/80 dark:text-indigo-300">
           Admin: feladat kiosztható bármely aktív, nem technikus felhasználónak (intézménytől függetlenül).
         </p>
       )}
 
-      <label className="inline-flex items-center gap-1.5 cursor-pointer font-medium text-indigo-900">
+      <label className="inline-flex items-center gap-1.5 cursor-pointer font-medium text-indigo-900 dark:text-indigo-200">
         <input
           type="checkbox"
           checked={splitMode}
@@ -285,14 +285,14 @@ export function WorkPhaseTaskDelegateBlock({
       </div>
 
       {splitMode ? (
-        <div className="space-y-2 rounded border border-indigo-100 bg-white/60 p-2">
-          <p className="text-[10px] text-gray-600">
+        <div className="space-y-2 rounded border border-indigo-100 dark:border-indigo-800 bg-white/60 dark:bg-gray-800 p-2">
+          <p className="text-[10px] text-gray-600 dark:text-gray-400">
             Minden sor külön Feladataim tétel lesz (pl. implantációs kütyük tételenként).
           </p>
           {splitLines.map((line, idx) => (
-            <div key={line.id} className="flex flex-col gap-1 border-b border-gray-100 pb-2 last:border-0">
+            <div key={line.id} className="flex flex-col gap-1 border-b border-gray-100 dark:border-gray-800 pb-2 last:border-0">
               <div className="flex gap-1 items-start">
-                <span className="text-[10px] text-gray-400 pt-1.5 w-4 shrink-0">{idx + 1}.</span>
+                <span className="text-[10px] text-gray-400 dark:text-gray-500 pt-1.5 w-4 shrink-0">{idx + 1}.</span>
                 <input
                   type="text"
                   className="form-input text-xs py-1 flex-1"
@@ -303,7 +303,7 @@ export function WorkPhaseTaskDelegateBlock({
                 {splitLines.length > 2 && (
                   <button
                     type="button"
-                    className="p-1 text-red-600 hover:bg-red-50 rounded"
+                    className="p-1 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/40 rounded"
                     title="Tétel törlése"
                     onClick={() => setSplitLines((prev) => prev.filter((l) => l.id !== line.id))}
                   >
@@ -330,7 +330,7 @@ export function WorkPhaseTaskDelegateBlock({
           ))}
           <button
             type="button"
-            className="inline-flex items-center gap-1 text-indigo-700 hover:underline"
+            className="inline-flex items-center gap-1 text-indigo-700 dark:text-indigo-300 hover:underline"
             onClick={() => setSplitLines((prev) => [...prev, newSplitLine()])}
           >
             <Plus className="w-3 h-3" />
@@ -346,7 +346,7 @@ export function WorkPhaseTaskDelegateBlock({
 
       {mode === 'staff' && (!splitMode || splitMode) ? (
         <div className="relative space-y-1">
-          <label className="block text-[11px] text-gray-600">
+          <label className="block text-[11px] text-gray-600 dark:text-gray-400">
             {splitMode ? 'Alapértelmezett címzett (opcionális, ha minden sorhoz külön van)' : 'Címzett'}
           </label>
           <input
@@ -371,15 +371,15 @@ export function WorkPhaseTaskDelegateBlock({
             autoComplete="off"
           />
           {listOpen && assigneeInput.trim().length > 0 && !institutionUsersLoading && (
-            <ul className="absolute z-20 left-0 right-0 mt-0.5 max-h-36 overflow-auto rounded border border-gray-200 bg-white shadow text-[11px]">
+            <ul className="absolute z-20 left-0 right-0 mt-0.5 max-h-36 overflow-auto rounded border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow text-[11px]">
               {suggestions.length === 0 ? (
-                <li className="px-2 py-1.5 text-gray-500">Nincs találat</li>
+                <li className="px-2 py-1.5 text-gray-500 dark:text-gray-400">Nincs találat</li>
               ) : (
                 suggestions.map((u) => (
                   <li key={u.id}>
                     <button
                       type="button"
-                      className="w-full text-left px-2 py-1.5 hover:bg-gray-50"
+                      className="w-full text-left px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800/50"
                       onMouseDown={(ev) => ev.preventDefault()}
                       onClick={() => pickUser(u)}
                     >
@@ -394,7 +394,7 @@ export function WorkPhaseTaskDelegateBlock({
       ) : mode === 'external' ? (
         <div className="space-y-2">
           <div>
-            <label className="block text-[11px] text-gray-600 mb-0.5">Külső címzett / kapcsolat</label>
+            <label className="block text-[11px] text-gray-600 dark:text-gray-400 mb-0.5">Külső címzett / kapcsolat</label>
             <textarea
               className="form-input text-xs py-1 w-full min-h-[48px]"
               rows={2}
@@ -404,7 +404,7 @@ export function WorkPhaseTaskDelegateBlock({
             />
           </div>
           <div>
-            <label className="block text-[11px] text-gray-600 mb-0.5 flex items-center gap-1">
+            <label className="block text-[11px] text-gray-600 dark:text-gray-400 mb-0.5 flex items-center gap-1">
               <UserRound className="w-3 h-3" />
               Kinél maradjon a feladat a Feladataim listán
             </label>
@@ -427,7 +427,7 @@ export function WorkPhaseTaskDelegateBlock({
 
       <div className="grid gap-2 sm:grid-cols-2">
         <div>
-          <label className="block text-[11px] text-gray-600 mb-0.5">Megjegyzés (opcionális)</label>
+          <label className="block text-[11px] text-gray-600 dark:text-gray-400 mb-0.5">Megjegyzés (opcionális)</label>
           <textarea
             className="form-input text-xs py-1 w-full min-h-[40px]"
             rows={2}
@@ -436,7 +436,7 @@ export function WorkPhaseTaskDelegateBlock({
           />
         </div>
         <div>
-          <label className="block text-[11px] text-gray-600 mb-0.5">Határidő (opcionális)</label>
+          <label className="block text-[11px] text-gray-600 dark:text-gray-400 mb-0.5">Határidő (opcionális)</label>
           <input
             type="datetime-local"
             className="form-input text-xs py-1 w-full"
@@ -447,7 +447,7 @@ export function WorkPhaseTaskDelegateBlock({
       </div>
 
       {feedback && (
-        <p className={feedback.ok ? 'text-green-700' : 'text-red-700'}>{feedback.msg}</p>
+        <p className={feedback.ok ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}>{feedback.msg}</p>
       )}
 
       <button

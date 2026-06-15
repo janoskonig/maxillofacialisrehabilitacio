@@ -87,7 +87,7 @@ export function LinkAppointmentModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div
-        className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
+        className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
         role="dialog"
         aria-labelledby="link-appointment-title"
       >
@@ -96,20 +96,20 @@ export function LinkAppointmentModal({
             <Link2 className="w-5 h-5 text-medical-primary" />
             Meglévő foglalás hozzárendelése
           </h2>
-          <button type="button" onClick={onClose} className="p-1 text-gray-500 hover:text-gray-800">
+          <button type="button" onClick={onClose} className="p-1 text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <div className="px-4 py-3 space-y-3 text-sm">
-          <p className="text-gray-700">
+          <p className="text-gray-700 dark:text-gray-300">
             Válaszd ki a jövőbeli időpontot, amelyet a következő munkafázishoz szeretnél kötni:{' '}
             <strong>{stepLabel}</strong>
           </p>
 
-          {loading && <p className="text-gray-500">Foglalások betöltése…</p>}
+          {loading && <p className="text-gray-500 dark:text-gray-400">Foglalások betöltése…</p>}
           {!loading && options.length === 0 && (
-            <p className="text-amber-800 bg-amber-50 rounded px-3 py-2">
+            <p className="text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 rounded px-3 py-2">
               Nincs hozzárendelhető jövőbeli foglalás (pl. páciens portálon foglalt konzultáció vagy más
               epizód).
             </p>
@@ -118,7 +118,7 @@ export function LinkAppointmentModal({
             <ul className="space-y-2 max-h-48 overflow-y-auto border rounded p-2">
               {options.map((opt) => (
                 <li key={opt.id}>
-                  <label className="flex items-start gap-2 cursor-pointer rounded px-2 py-1.5 hover:bg-gray-50">
+                  <label className="flex items-start gap-2 cursor-pointer rounded px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800/50">
                     <input
                       type="radio"
                       name="unlinked-appt"
@@ -129,13 +129,13 @@ export function LinkAppointmentModal({
                     <span>
                       <span className="font-medium">{formatDateTime(opt.startTime)}</span>
                       {opt.dentistEmail && (
-                        <span className="text-gray-500 ml-1">· {opt.dentistEmail}</span>
+                        <span className="text-gray-500 dark:text-gray-400 ml-1">· {opt.dentistEmail}</span>
                       )}
                       {opt.isPatientPortal && (
-                        <span className="ml-1 text-xs text-blue-700">(páciens portál)</span>
+                        <span className="ml-1 text-xs text-blue-700 dark:text-blue-300">(páciens portál)</span>
                       )}
                       {opt.stepCode && (
-                        <span className="block text-xs text-gray-500">Jelenlegi lépés: {opt.stepCode}</span>
+                        <span className="block text-xs text-gray-500 dark:text-gray-400">Jelenlegi lépés: {opt.stepCode}</span>
                       )}
                     </span>
                   </label>
@@ -145,7 +145,7 @@ export function LinkAppointmentModal({
           )}
 
           <div>
-            <label htmlFor="link-reason" className="block text-gray-700 font-medium mb-1">
+            <label htmlFor="link-reason" className="block text-gray-700 dark:text-gray-300 font-medium mb-1">
               Indoklás (min. {MIN_REASON_LENGTH} karakter)
             </label>
             <textarea
@@ -158,11 +158,11 @@ export function LinkAppointmentModal({
             />
           </div>
 
-          {error && <p className="text-red-700 text-sm">{error}</p>}
+          {error && <p className="text-red-700 dark:text-red-300 text-sm">{error}</p>}
         </div>
 
         <div className="flex justify-end gap-2 border-t px-4 py-3">
-          <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded">
+          <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
             Mégse
           </button>
           <button

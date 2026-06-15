@@ -66,7 +66,7 @@ export const TimelineHeader = memo(function TimelineHeader({
 
   return (
     <div
-      className="relative border-b border-gray-200 bg-gray-50/90 shrink-0"
+      className="relative border-b border-gray-200 dark:border-gray-800 bg-gray-50/90 dark:bg-gray-800/60 shrink-0"
       style={{ height, minWidth: trackMinWidth }}
       role="presentation"
     >
@@ -74,7 +74,7 @@ export const TimelineHeader = memo(function TimelineHeader({
       {mondays.map((w) => (
         <div
           key={w.key}
-          className="absolute bottom-0 text-[10px] leading-none text-gray-400 border-l border-gray-100 pl-0.5 pt-0.5 pointer-events-none select-none"
+          className="absolute bottom-0 text-[10px] leading-none text-gray-400 dark:text-gray-500 border-l border-gray-100 dark:border-gray-800 pl-0.5 pt-0.5 pointer-events-none select-none"
           style={{ left: `${Math.max(0, w.left)}%`, top: topH }}
         >
           {showMondayLabels ? w.label : ''}
@@ -84,7 +84,7 @@ export const TimelineHeader = memo(function TimelineHeader({
       {months.map((m) => (
         <div
           key={m.key}
-          className="absolute top-0 text-[11px] font-medium text-gray-600 border-l border-gray-300 pl-1 pt-0.5 pointer-events-none select-none"
+          className="absolute top-0 text-[11px] font-medium text-gray-600 dark:text-gray-300 border-l border-gray-300 dark:border-gray-700 pl-1 pt-0.5 pointer-events-none select-none"
           style={{ left: `${Math.max(0, m.left)}%`, height: topH }}
         >
           {m.label}

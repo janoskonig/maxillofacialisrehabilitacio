@@ -53,10 +53,10 @@ export function BeutaloSection({
               type="checkbox"
               checked={vanBeutalo}
               onChange={onVanBeutaloChange}
-              className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
+              className="rounded border-gray-300 dark:border-gray-700 text-medical-primary focus:ring-medical-primary"
               disabled={isViewOnly}
             />
-            <label htmlFor="beutalo-toggle" className="ml-2 text-sm text-gray-700">Van beutaló?</label>
+            <label htmlFor="beutalo-toggle" className="ml-2 text-sm text-gray-700 dark:text-gray-300">Van beutaló?</label>
           </div>
 
           {vanBeutalo && (

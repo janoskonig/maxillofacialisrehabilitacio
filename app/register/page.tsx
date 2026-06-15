@@ -192,24 +192,24 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
           <Logo width={100} height={115} />
         </div>
-        <h2 className="mt-6 text-center text-3xl font-bold text-gray-900">
+        <h2 className="mt-6 text-center text-3xl font-bold text-gray-900 dark:text-gray-100">
           Maxillofaciális Rehabilitáció
         </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
+        <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
           REGISZTRÁCIÓ
         </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+        <div className="bg-white dark:bg-gray-900 py-8 px-4 shadow sm:rounded-lg sm:px-10">
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
-              <label htmlFor="fullName" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Teljes név
               </label>
               <div className="mt-1 relative">
@@ -224,13 +224,13 @@ export default function Register() {
                   className="form-input pl-10"
                   placeholder="Kovács János dr."
                 />
-                <UserCircle className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <UserCircle className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-4 h-4" />
               </div>
-              <p className="mt-1 text-xs text-gray-500">Adja meg a teljes nevét (pl. Kovács János dr.)</p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Adja meg a teljes nevét (pl. Kovács János dr.)</p>
             </div>
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Email cím
               </label>
               <div className="mt-1 relative">
@@ -245,12 +245,12 @@ export default function Register() {
                   className="form-input pl-10"
                   placeholder="vezeteknev.keresztnev@example.com"
                 />
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-4 h-4" />
               </div>
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Jelszó
               </label>
               <div className="mt-1 relative">
@@ -265,20 +265,20 @@ export default function Register() {
                   className="form-input pl-10 pr-10"
                   placeholder="••••••••"
                 />
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-4 h-4" />
                 <button
                   type="button"
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                   onClick={() => setShowPassword(!showPassword)}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              <p className="mt-1 text-xs text-gray-500">Legalább 6 karakter</p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Legalább 6 karakter</p>
             </div>
 
             <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Jelszó megerősítése
               </label>
               <div className="mt-1 relative">
@@ -293,10 +293,10 @@ export default function Register() {
                   className="form-input pl-10 pr-10"
                   placeholder="••••••••"
                 />
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-4 h-4" />
                 <button
                   type="button"
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                 >
                   {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -305,7 +305,7 @@ export default function Register() {
             </div>
 
             <div>
-              <label htmlFor="role" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="role" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Szerepkör
               </label>
               <div className="mt-1">
@@ -324,11 +324,11 @@ export default function Register() {
                   <option value="technikus">Technikus</option>
                 </select>
               </div>
-              <p className="mt-1 text-xs text-gray-500">Kérjük, válassza ki, milyen szerepkörben szeretne regisztrálni</p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Kérjük, válassza ki, milyen szerepkörben szeretne regisztrálni</p>
             </div>
 
             <div>
-              <label htmlFor="institution" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="institution" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Intézmény
               </label>
               <div className="mt-1 relative">
@@ -348,13 +348,13 @@ export default function Register() {
                 {showInstitutionDropdown && filteredInstitutions.length > 0 && (
                   <div
                     ref={institutionDropdownRef}
-                    className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto"
+                    className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-auto"
                   >
                     {filteredInstitutions.map((inst, index) => (
                       <div
                         key={index}
                         onClick={() => selectInstitution(inst)}
-                        className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm text-gray-700 border-b border-gray-100 last:border-b-0"
+                        className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer text-sm text-gray-700 dark:text-gray-300 border-b border-gray-100 dark:border-gray-800 last:border-b-0"
                       >
                         {inst}
                       </div>
@@ -362,13 +362,13 @@ export default function Register() {
                   </div>
                 )}
               </div>
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 Kezdjen el gépelni vagy válasszon az eddig regisztrált intézmények közül
               </p>
             </div>
 
             <div>
-              <label htmlFor="accessReason" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="accessReason" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Hozzáférés indokolása
               </label>
               <div className="mt-1">
@@ -383,20 +383,20 @@ export default function Register() {
                   placeholder="Rövid indokolás, miért kér hozzáférést a rendszerhez..."
                 />
               </div>
-              <p className="mt-1 text-xs text-gray-500">Kérjük, röviden indokolja, miért kér hozzáférést</p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Kérjük, röviden indokolja, miért kér hozzáférést</p>
             </div>
 
             {/* GDPR Consent */}
-            <div className="border-t pt-4">
+            <div className="border-t dark:border-gray-800 pt-4">
               <label className="flex items-start gap-3 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={privacyConsent}
                   onChange={(e) => setPrivacyConsent(e.target.checked)}
-                  className="mt-1 h-4 w-4 rounded border-gray-300 text-medical-primary focus:ring-medical-primary flex-shrink-0"
+                  className="mt-1 h-4 w-4 rounded border-gray-300 dark:border-gray-700 text-medical-primary focus:ring-medical-primary flex-shrink-0"
                   disabled={isLoading}
                 />
-                <span className="text-sm text-gray-700">
+                <span className="text-sm text-gray-700 dark:text-gray-300">
                   Elolvastam és elfogadom az{' '}
                   <Link href="/privacy-hu" target="_blank" className="text-medical-primary hover:underline font-medium">
                     Adatvédelmi Irányelveket
@@ -411,7 +411,7 @@ export default function Register() {
             </div>
 
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md text-sm">
+              <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-300 px-4 py-3 rounded-md text-sm">
                 {error}
               </div>
             )}
@@ -434,7 +434,7 @@ export default function Register() {
             </div>
 
             <div className="text-center">
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
                 Már van fiókja?{' '}
                 <Link href="/login" className="font-medium text-medical-primary hover:text-medical-primary-dark">
                   Bejelentkezés

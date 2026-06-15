@@ -8,9 +8,9 @@ export const metadata: Metadata = {
 
 export default function TermsOfServiceHu() {
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-white rounded-lg shadow-sm p-8">
+        <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm p-8">
           <div className="mb-6">
             <Link href="/" className="text-medical-primary hover:underline text-sm">
               ← Vissza a főoldalra
@@ -18,7 +18,7 @@ export default function TermsOfServiceHu() {
           </div>
           
           <div className="mb-6 flex items-center justify-between">
-            <h1 className="text-3xl font-bold text-gray-900">Felhasználási Feltételek</h1>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Felhasználási Feltételek</h1>
             <Link 
               href="/terms" 
               className="text-sm text-medical-primary hover:underline"
@@ -27,13 +27,13 @@ export default function TermsOfServiceHu() {
             </Link>
           </div>
 
-          <div className="prose prose-sm max-w-none text-gray-700 space-y-6">
-            <p className="text-sm text-gray-600">
+          <div className="prose prose-sm max-w-none text-gray-700 dark:text-gray-300 space-y-6">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
               <strong>Utolsó frissítés:</strong> {new Date().toLocaleDateString('hu-HU', { year: 'numeric', month: 'long', day: 'numeric' })}
             </p>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">1. Feltételek Elfogadása</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-3">1. Feltételek Elfogadása</h2>
               <p>
                 A Maxillofacialis Rehabilitációs Rendszer ("Szolgáltatás") elérésével és használatával Ön elfogadja és 
                 kötelezettséget vállal arra, hogy betartja ezen megállapodás feltételeit és rendelkezéseit. Ha nem ért egyet 
@@ -42,7 +42,7 @@ export default function TermsOfServiceHu() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">2. Szolgáltatás Leírása</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-3">2. Szolgáltatás Leírása</h2>
               <p>
                 A Maxillofacialis Rehabilitációs Rendszer egy orvosi időpontfoglalási és betegadat-kezelő rendszer, amelyet 
                 a maxillofaciális rehabilitációban specializálódott egészségügyi szakemberek számára terveztek. A Szolgáltatás 
@@ -58,15 +58,15 @@ export default function TermsOfServiceHu() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">3. Felhasználói Fiókok és Felelősségek</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-3">3. Felhasználói Fiókok és Felelősségek</h2>
               
-              <h3 className="text-lg font-semibold text-gray-800 mt-4 mb-2">3.1 Fiók Létrehozása</h3>
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mt-4 mb-2">3.1 Fiók Létrehozása</h3>
               <p>
                 A Szolgáltatás használatához érvényes email címmel fiókot kell létrehoznia. Ön felelős a fiókja 
                 hitelesítő adatainak titoktartásáért.
               </p>
 
-              <h3 className="text-lg font-semibold text-gray-800 mt-4 mb-2">3.2 Felhasználói Szerepkörök</h3>
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mt-4 mb-2">3.2 Felhasználói Szerepkörök</h3>
               <p>A Szolgáltatás különböző felhasználói szerepköröket támogat eltérő jogosultságokkal:</p>
               <ul className="list-disc pl-6 space-y-1">
                 <li><strong>Admin:</strong> Teljes rendszer hozzáférés és felhasználókezelés</li>
@@ -75,7 +75,7 @@ export default function TermsOfServiceHu() {
                 <li><strong>Technikus:</strong> Korlátozott hozzáférés műszaki műveletekhez</li>
               </ul>
 
-              <h3 className="text-lg font-semibold text-gray-800 mt-4 mb-2">3.3 Felhasználói Felelősségek</h3>
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mt-4 mb-2">3.3 Felhasználói Felelősségek</h3>
               <p>Ön vállalja, hogy:</p>
               <ul className="list-disc pl-6 space-y-1">
                 <li>Pontos és teljes információkat ad meg fiókja létrehozásakor</li>
@@ -89,7 +89,7 @@ export default function TermsOfServiceHu() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">4. Orvosi Információk és Adatvédelmi Megfelelőség</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-3">4. Orvosi Információk és Adatvédelmi Megfelelőség</h2>
               <p>
                 A Szolgáltatás érzékeny orvosi információkat kezel. A felhasználók felelősek:
               </p>
@@ -103,7 +103,7 @@ export default function TermsOfServiceHu() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">5. Tiltott Használat</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-3">5. Tiltott Használat</h2>
               <p>A Szolgáltatást nem használhatja:</p>
               <ul className="list-disc pl-6 space-y-1">
                 <li>Bármilyen törvénytelen célra vagy mások felkérésére törvénytelen cselekmények elvégzésére</li>
@@ -120,9 +120,9 @@ export default function TermsOfServiceHu() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">6. Harmadik Fél Integrációk</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-3">6. Harmadik Fél Integrációk</h2>
               
-              <h3 className="text-lg font-semibold text-gray-800 mt-4 mb-2">6.1 Google Calendar</h3>
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mt-4 mb-2">6.1 Google Calendar</h3>
               <p>
                 A Szolgáltatás opcionális integrációt kínál a Google Calendar-rel. E funkció engedélyezésével:
               </p>
@@ -135,7 +135,7 @@ export default function TermsOfServiceHu() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">7. Szolgáltatás Elérhetősége</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-3">7. Szolgáltatás Elérhetősége</h2>
               <p>
                 Törekszünk a Szolgáltatás folyamatos elérhetőségének biztosítására, de nem garantáljuk, hogy a Szolgáltatás 
                 mindig elérhető lesz. A Szolgáltatás a következő okok miatt lehet elérhetetlen:
@@ -152,7 +152,7 @@ export default function TermsOfServiceHu() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">8. Szellemi Tulajdon</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-3">8. Szellemi Tulajdon</h2>
               <p>
                 A Szolgáltatás és eredeti tartalma, funkciói és működése a Maxillofacialis Rehabilitációs Rendszer tulajdona, 
                 és nemzetközi szerzői jogi, védjegyjogi, szabadalmi, üzleti titok és egyéb szellemi tulajdonjogi törvények 
@@ -161,7 +161,7 @@ export default function TermsOfServiceHu() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">9. Felelősség Korlátozása</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-3">9. Felelősség Korlátozása</h2>
               <p>
                 A törvény által megengedett maximális mértékig a Maxillofacialis Rehabilitációs Rendszer nem vállal felelősséget 
                 közvetett, véletlen, különleges, következményes vagy büntető károkért, vagy bármilyen nyereség vagy bevétel 
@@ -171,7 +171,7 @@ export default function TermsOfServiceHu() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">10. Kártérítés</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-3">10. Kártérítés</h2>
               <p>
                 Ön vállalja, hogy megvédi, kártalanítja és mentesíti a Maxillofacialis Rehabilitációs Rendszert és tisztviselőit, 
                 igazgatóit, alkalmazottait és ügynökeit minden követelés, kötelezettség, kár, veszteség és költség, beleértve 
@@ -181,7 +181,7 @@ export default function TermsOfServiceHu() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">11. Felmondás</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-3">11. Felmondás</h2>
               <p>
                 Bármikor, előzetes értesítés vagy felelősségvállalás nélkül megszüntethetjük vagy felfüggeszthetjük fiókját 
                 és a Szolgáltatáshoz való hozzáférését bármilyen okból, beleértve, ha Ön megsérti ezeket a Feltételeket. 
@@ -190,7 +190,7 @@ export default function TermsOfServiceHu() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">12. Feltételek Módosítása</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-3">12. Feltételek Módosítása</h2>
               <p>
                 Fenntartjuk a jogot ezen Feltételek bármikori módosítására. A felhasználókat értesítjük minden lényeges 
                 változásról az új Feltételek ezen az oldalon való közzétételével és az "Utolsó frissítés" dátum frissítésével. 
@@ -199,7 +199,7 @@ export default function TermsOfServiceHu() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">13. Irányadó Jog</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-3">13. Irányadó Jog</h2>
               <p>
                 Ezeket a Feltételeket a magyar törvények szerint kell értelmezni és alkalmazni, a jogütközési rendelkezésektől 
                 függetlenül.
@@ -207,7 +207,7 @@ export default function TermsOfServiceHu() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">14. Kapcsolattartási Információk</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-3">14. Kapcsolattartási Információk</h2>
               <p>
                 Ha bármilyen kérdése van ezekkel a Felhasználási Feltételekkel kapcsolatban, kérjük, lépjen kapcsolatba velünk:
               </p>

@@ -688,7 +688,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
       <div className="card">
         <div className="flex items-center justify-center py-6">
           <div className="animate-spin rounded-full h-6 w-6 border-2 border-medical-primary/20 border-t-medical-primary" />
-          <span className="ml-2 text-sm text-gray-600">Következő munkafázis betöltése…</span>
+          <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">Következő munkafázis betöltése…</span>
         </div>
       </div>
     );
@@ -696,16 +696,16 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
 
   if (status === 403) {
     return (
-      <div className="card border-amber-200 bg-amber-50">
-        <p className="text-amber-800 text-center py-3 text-sm">Nincs hozzáférés a munkalistához.</p>
+      <div className="card border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40">
+        <p className="text-amber-800 dark:text-amber-300 text-center py-3 text-sm">Nincs hozzáférés a munkalistához.</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="card border-red-200 bg-red-50">
-        <p className="text-red-800 text-center py-3 text-sm">
+      <div className="card border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40">
+        <p className="text-red-800 dark:text-red-300 text-center py-3 text-sm">
           Hiba történt – <button onClick={fetchWorklist} className="underline font-medium">Újra</button>
         </p>
       </div>
@@ -716,9 +716,9 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
     return (
       <div className="card">
         <div className="text-center py-8">
-          <ClipboardList className="w-10 h-10 text-gray-400 mx-auto mb-2" />
-          <h3 className="text-base font-medium text-gray-900 mb-1">Nincs foglalni való következő munkafázis</h3>
-          <p className="text-sm text-gray-500">
+          <ClipboardList className="w-10 h-10 text-gray-400 dark:text-gray-500 mx-auto mb-2" />
+          <h3 className="text-base font-medium text-gray-900 dark:text-gray-100 mb-1">Nincs foglalni való következő munkafázis</h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
             {patientName
               ? `${patientName} jelenleg nincs aktív kezelésben, vagy minden kezeléshez már van jövőbeli időpont.`
               : 'A beteg jelenleg nincs aktív kezelésben, vagy minden kezeléshez már van jövőbeli időpont.'}
@@ -736,9 +736,9 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
   return (
     <div className="space-y-3">
       {showChainMandatoryBanner && (
-        <div className="rounded-lg border-2 border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+        <div className="rounded-lg border-2 border-amber-400 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-sm text-amber-950 dark:text-amber-200">
           <p className="font-semibold">Teljes sorozat lefoglalása kötelező lépés</p>
-          <p className="mt-1 text-amber-900/90">
+          <p className="mt-1 text-amber-900/90 dark:text-amber-300/90">
             Ha az epizódhoz több munkafázis tartozik, az első sorban az „Összes szükséges időpont lefoglalása”
             gombbal foglald le egyszerre a szükséges időpontokat — ne csak az első lépést egyenként.
           </p>
@@ -748,8 +748,8 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
         <p
           className={`text-sm px-3 py-2 rounded ${
             convertAllMessage.type === 'success'
-              ? 'bg-green-50 text-green-800'
-              : 'bg-red-50 text-red-800'
+              ? 'bg-green-50 dark:bg-green-950/40 text-green-800 dark:text-green-300'
+              : 'bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300'
           }`}
         >
           {convertAllMessage.text}
@@ -795,9 +795,9 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                       </div>
                     )}
                   {priorAttempts.length > 0 && (
-                    <details className="rounded-lg border border-gray-200 bg-gray-50/60 px-3 py-2">
-                      <summary className="cursor-pointer select-none text-xs text-gray-600 flex items-center gap-1.5">
-                        <AlertTriangle className="w-3 h-3 text-orange-500" />
+                    <details className="rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-800/60 px-3 py-2">
+                      <summary className="cursor-pointer select-none text-xs text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
+                        <AlertTriangle className="w-3 h-3 text-orange-500 dark:text-orange-400" />
                         {priorAttempts.length} korábbi próba
                       </summary>
                       <div className="mt-2 space-y-1.5">
@@ -812,16 +812,16 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                             >
                               <div className="min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="text-xs px-1.5 py-0.5 rounded bg-gray-200 text-gray-700">
+                                  <span className="text-xs px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
                                     {att.attemptNumber}. próba
                                   </span>
                                   <span
                                     className={`text-xs px-2 py-0.5 rounded inline-flex items-center gap-1 ${
                                       isUnsuccessful
-                                        ? 'bg-orange-100 text-orange-800'
+                                        ? 'bg-orange-100 dark:bg-orange-950/50 text-orange-800 dark:text-orange-300'
                                         : isNoShow
-                                          ? 'bg-gray-200 text-gray-700'
-                                          : 'bg-gray-100 text-gray-600'
+                                          ? 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                          : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
                                     }`}
                                   >
                                     {isUnsuccessful && (
@@ -833,7 +833,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                                     {isNoShow && 'NEM JELENT MEG'}
                                     {isCompleted && '✓ KÉSZ (régebbi)'}
                                   </span>
-                                  <span className="text-xs text-gray-500">
+                                  <span className="text-xs text-gray-500 dark:text-gray-400">
                                     {att.startTime
                                       ? new Date(att.startTime).toLocaleString('hu-HU', {
                                           month: 'short',
@@ -842,12 +842,12 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                                           minute: '2-digit',
                                         })
                                       : '–'}
-                                    {att.providerEmail && <span className="text-gray-400"> · {att.providerEmail}</span>}
+                                    {att.providerEmail && <span className="text-gray-400 dark:text-gray-500"> · {att.providerEmail}</span>}
                                   </span>
                                 </div>
                                 {isUnsuccessful && att.failedReason && (
                                   <div
-                                    className="text-xs text-orange-800 mt-0.5 italic line-clamp-2"
+                                    className="text-xs text-orange-800 dark:text-orange-300 mt-0.5 italic line-clamp-2"
                                     title={att.failedReason}
                                   >
                                     „{att.failedReason}"
@@ -858,7 +858,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                                 <button
                                   type="button"
                                   onClick={() => setRevertModalCtx({ item, attempt: att })}
-                                  className="shrink-0 text-xs text-gray-600 hover:text-gray-900 hover:underline font-medium flex items-center gap-0.5"
+                                  className="shrink-0 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:underline font-medium flex items-center gap-0.5"
                                   title="Sikertelen-jelölés visszavonása (tévedés esetén)"
                                 >
                                   <Undo2 className="w-3 h-3" />
@@ -872,13 +872,13 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                     </details>
                   )}
                   <div
-                    className={`rounded-lg border bg-white px-3.5 py-3 ${item.overdueByDays > 0 && state !== 'COMPLETED' && state !== 'SKIPPED' ? 'border-red-200' : 'border-gray-200'} ${state === 'COMPLETED' ? 'opacity-70' : ''} ${state === 'SKIPPED' ? 'opacity-50' : ''}`}
+                    className={`rounded-lg border bg-white dark:bg-gray-900 px-3.5 py-3 ${item.overdueByDays > 0 && state !== 'COMPLETED' && state !== 'SKIPPED' ? 'border-red-200 dark:border-red-800' : 'border-gray-200 dark:border-gray-800'} ${state === 'COMPLETED' ? 'opacity-70' : ''} ${state === 'SKIPPED' ? 'opacity-50' : ''}`}
                   >
                     <div className="flex items-center gap-2 flex-wrap">
                       <WorklistMergedPhaseCell item={item} />
                       {priorAttempts.length > 0 && (
                         <span
-                          className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-800"
+                          className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-950/50 text-orange-800 dark:text-orange-300"
                           title={`${priorAttempts.length} korábbi próba (sikertelen vagy meg nem jelent)`}
                         >
                           <AlertTriangle className="w-3 h-3" />
@@ -888,30 +888,30 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                       <span
                         className={`text-xs px-2 py-0.5 rounded ${
                           state === 'COMPLETED'
-                            ? 'bg-gray-100 text-gray-600'
+                            ? 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
                             : state === 'SKIPPED'
-                              ? 'bg-gray-100 text-gray-500 line-through'
+                              ? 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 line-through'
                               : state === 'BOOKED'
-                                ? 'bg-blue-100 text-blue-800'
+                                ? 'bg-blue-100 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300'
                                 : state === 'READY'
-                                  ? 'bg-green-100 text-green-800'
+                                  ? 'bg-green-100 dark:bg-green-950/50 text-green-800 dark:text-green-300'
                                   : state === 'BLOCKED'
-                                    ? 'bg-gray-200 text-gray-700'
+                                    ? 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
                                     : state === 'NEEDS_REVIEW'
-                                      ? 'bg-amber-100 text-amber-800'
+                                      ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300'
                                       : state === 'BOOKING_IN_PROGRESS'
-                                        ? 'bg-blue-100 text-blue-800'
-                                        : 'bg-orange-100 text-orange-800'
+                                        ? 'bg-blue-100 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300'
+                                        : 'bg-orange-100 dark:bg-orange-950/50 text-orange-800 dark:text-orange-300'
                         }`}
                       >
                         {state === 'COMPLETED' ? '✓ KÉSZ' : state === 'SKIPPED' ? 'KIHAGYVA' : state === 'BOOKED' ? 'LEFOGLALVA' : state}
                       </span>
                     </div>
-                    <div className="mt-1.5 flex items-center gap-x-4 gap-y-1 flex-wrap text-xs text-gray-500">
-                      <span className="text-gray-400">{item.currentStage} · #{item.episodeId.slice(0, 8)}</span>
+                    <div className="mt-1.5 flex items-center gap-x-4 gap-y-1 flex-wrap text-xs text-gray-500 dark:text-gray-400">
+                      <span className="text-gray-400 dark:text-gray-500">{item.currentStage} · #{item.episodeId.slice(0, 8)}</span>
                       <span>Terv: {ablakStart && ablakEnd ? formatShortDateRange(ablakStart, ablakEnd) : '–'}</span>
                       {item.overdueByDays > 0 && state !== 'COMPLETED' && state !== 'SKIPPED' && (
-                        <span className="text-red-600 font-medium">+{item.overdueByDays} nap késés</span>
+                        <span className="text-red-600 dark:text-red-300 font-medium">+{item.overdueByDays} nap késés</span>
                       )}
                       {state === 'COMPLETED' && item.windowStart && (
                         <span className="inline-flex items-center gap-1">
@@ -920,7 +920,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                         </span>
                       )}
                       {state === 'BOOKED' && item.bookedAppointmentStartTime && (
-                        <span className="inline-flex items-center gap-1 text-blue-700">
+                        <span className="inline-flex items-center gap-1 text-blue-700 dark:text-blue-300">
                           <CalendarCheck className="w-3 h-3" />
                           {new Date(item.bookedAppointmentStartTime).toLocaleString('hu-HU', {
                             month: 'short',
@@ -929,25 +929,25 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                             minute: '2-digit',
                           })}
                           {item.bookedAppointmentProviderEmail && (
-                            <span className="text-gray-500"> · {item.bookedAppointmentProviderEmail}</span>
+                            <span className="text-gray-500 dark:text-gray-400"> · {item.bookedAppointmentProviderEmail}</span>
                           )}
                         </span>
                       )}
                       {state === 'BLOCKED' && item.blockedReason && (
-                        <span className="text-gray-600" title={item.blockedReason}>
+                        <span className="text-gray-600 dark:text-gray-400" title={item.blockedReason}>
                           {item.blockedReason}
                         </span>
                       )}
                       {state === 'BLOCKED' && item.blockedCode === 'NO_CARE_PATHWAY' && item.suggestedTreatmentTypeLabel && (
-                        <span className="text-gray-600">
+                        <span className="text-gray-600 dark:text-gray-400">
                           Javasolt: {item.suggestedTreatmentTypeLabel}
                           {item.suggestedTreatmentTypeCode && (
-                            <span className="text-gray-500"> ({item.suggestedTreatmentTypeCode})</span>
+                            <span className="text-gray-500 dark:text-gray-400"> ({item.suggestedTreatmentTypeCode})</span>
                           )}
                         </span>
                       )}
                     </div>
-                    <div className="mt-2.5 pt-2.5 border-t border-gray-100 flex items-center gap-x-4 gap-y-1.5 flex-wrap">
+                    <div className="mt-2.5 pt-2.5 border-t border-gray-100 dark:border-gray-800 flex items-center gap-x-4 gap-y-1.5 flex-wrap">
                       {state === 'COMPLETED' && (
                         <>
                           {item.currentAppointmentId && (
@@ -961,7 +961,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                                   attemptNumber: currentAttempt,
                                 })
                               }
-                              className="text-xs text-orange-700 hover:underline font-medium text-left flex items-center gap-0.5"
+                              className="text-xs text-orange-700 dark:text-orange-300 hover:underline font-medium text-left flex items-center gap-0.5"
                               title="Mégis sikertelen volt (pl. labor visszaszólt) — új próba szükséges"
                             >
                               <AlertTriangle className="w-3 h-3" />
@@ -973,19 +973,19 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                               type="button"
                               onClick={() => handleReopenStep(item)}
                               disabled={reopenKey === key}
-                              className="text-xs text-gray-600 hover:text-gray-900 hover:underline font-medium disabled:opacity-50 text-left flex items-center gap-0.5"
+                              className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:underline font-medium disabled:opacity-50 text-left flex items-center gap-0.5"
                               title="Mégsem kész — visszaállítás várakozóra (indoklás szükséges)"
                             >
                               <Undo2 className="w-3 h-3" />
                               {reopenKey === key ? 'Visszaállítás…' : 'Mégsem kész'}
                             </button>
                           ) : (
-                            !item.currentAppointmentId && <span className="text-xs text-gray-400">—</span>
+                            !item.currentAppointmentId && <span className="text-xs text-gray-400 dark:text-gray-500">—</span>
                           )}
                         </>
                       )}
                       {state === 'SKIPPED' && (
-                        <span className="text-xs text-gray-400">—</span>
+                        <span className="text-xs text-gray-400 dark:text-gray-500">—</span>
                       )}
                       {showConvertAll && (
                         <button
@@ -993,7 +993,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                           disabled={!!isConvertingAll}
                           className={`text-xs font-medium disabled:opacity-50 text-left ${
                             chainBookingRequiredByEpisodeId[item.episodeId]
-                              ? 'text-amber-900 font-semibold ring-1 ring-amber-400 rounded px-1.5 py-0.5 bg-amber-50'
+                              ? 'text-amber-900 dark:text-amber-200 font-semibold ring-1 ring-amber-400 rounded px-1.5 py-0.5 bg-amber-50 dark:bg-amber-950/40'
                               : 'text-medical-primary hover:underline'
                           }`}
                         >
@@ -1011,8 +1011,8 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                             }
                             className={`text-xs font-medium text-left flex items-center gap-0.5 ${
                               delegateItemKey === key
-                                ? 'text-indigo-800 underline'
-                                : 'text-indigo-700 hover:underline'
+                                ? 'text-indigo-800 dark:text-indigo-300 underline'
+                                : 'text-indigo-700 dark:text-indigo-300 hover:underline'
                             }`}
                             title="Feladat kiosztása vagy felosztása részletes listára"
                           >
@@ -1032,7 +1032,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                             <button
                               type="button"
                               onClick={() => setLinkAppointmentItem(item)}
-                              className="text-xs text-indigo-700 hover:underline font-medium text-left flex items-center gap-0.5"
+                              className="text-xs text-indigo-700 dark:text-indigo-300 hover:underline font-medium text-left flex items-center gap-0.5"
                               title="Már létező jövőbeli foglalás (pl. páciens portál) hozzárendelése ehhez a munkafázishoz"
                             >
                               <Link2 className="w-3 h-3" />
@@ -1044,7 +1044,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                               type="button"
                               onClick={() => handleMarkStepComplete(item)}
                               disabled={markCompleteKey === key}
-                              className="text-xs text-gray-600 hover:underline font-medium disabled:opacity-50 text-left"
+                              className="text-xs text-gray-600 dark:text-gray-400 hover:underline font-medium disabled:opacity-50 text-left"
                               title="A munkafázis elkészült, nem itt foglalt időponttal"
                             >
                               {markCompleteKey === key ? 'Mentés…' : 'Elkészült (utólag)'}
@@ -1054,7 +1054,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                       )}
                       {state === 'BOOKED' && (
                         <>
-                          <span className="text-xs text-blue-600 font-medium">✓ Foglalva</span>
+                          <span className="text-xs text-blue-600 dark:text-blue-300 font-medium">✓ Foglalva</span>
                           {item.bookedAppointmentId && (
                             <button
                               type="button"
@@ -1084,7 +1084,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                                 type="button"
                                 onClick={() => handleOpenReassignStep(item)}
                                 disabled={isSubmitting}
-                                className="text-xs text-purple-700 hover:underline font-medium text-left flex items-center gap-0.5 disabled:opacity-50"
+                                className="text-xs text-purple-700 dark:text-purple-300 hover:underline font-medium text-left flex items-center gap-0.5 disabled:opacity-50"
                                 title="A foglalás átrendezése az epizód másik munkafázisára (az időpont nem változik, csak a fázis-hovatartozás)"
                               >
                                 <Shuffle className="w-3 h-3" />
@@ -1103,7 +1103,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                                   attemptNumber: currentAttempt,
                                 })
                               }
-                              className="text-xs text-orange-700 hover:underline font-medium text-left flex items-center gap-0.5"
+                              className="text-xs text-orange-700 dark:text-orange-300 hover:underline font-medium text-left flex items-center gap-0.5"
                               title="A próba sikertelen volt — új próba szükséges"
                             >
                               <AlertTriangle className="w-3 h-3" />
@@ -1115,7 +1115,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                               type="button"
                               onClick={() => handleDeleteAppointment(item.bookedAppointmentId!)}
                               disabled={deleteAppointmentId === item.bookedAppointmentId}
-                              className="text-xs text-red-600 hover:underline font-medium disabled:opacity-50 text-left flex items-center gap-0.5"
+                              className="text-xs text-red-600 dark:text-red-300 hover:underline font-medium disabled:opacity-50 text-left flex items-center gap-0.5"
                               title="Időpont törlése (slot felszabadul)"
                             >
                               <Trash2 className="w-3 h-3" />
@@ -1127,7 +1127,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                               type="button"
                               onClick={() => handleMarkStepComplete(item)}
                               disabled={markCompleteKey === key}
-                              className="text-xs text-gray-600 hover:underline font-medium disabled:opacity-50 text-left"
+                              className="text-xs text-gray-600 dark:text-gray-400 hover:underline font-medium disabled:opacity-50 text-left"
                               title="A munkafázis elkészült (nem itt foglalt), utólag jelölés"
                             >
                               {markCompleteKey === key ? 'Mentés…' : 'Elkészült (utólag)'}
@@ -1145,12 +1145,12 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                         </button>
                       )}
                       {state === 'BOOKING_IN_PROGRESS' && (
-                        <span className="text-sm text-gray-500">Foglalás…</span>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">Foglalás…</span>
                       )}
                     </div>
                   </div>
                 {delegateItemKey === key && item.workPhaseId && (
-                  <div className="rounded-lg border border-indigo-100 bg-indigo-50/30 px-3 py-2">
+                  <div className="rounded-lg border border-indigo-100 dark:border-indigo-800 bg-indigo-50/30 dark:bg-indigo-950/40 px-3 py-2">
                     <WorkPhaseTaskDelegateBlock
                       episodeId={item.episodeId}
                       workPhaseId={item.workPhaseId}

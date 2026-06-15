@@ -57,10 +57,10 @@ function CardShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-3.5 sm:p-4 flex flex-col">
+    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-3.5 sm:p-4 flex flex-col">
       <div className="flex items-center gap-1.5 mb-2.5">
-        <span className="text-gray-400">{icon}</span>
-        <span className="text-xs font-medium text-gray-500">{title}</span>
+        <span className="text-gray-400 dark:text-gray-500">{icon}</span>
+        <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{title}</span>
         {action && (
           <button
             type="button"
@@ -176,17 +176,17 @@ export function PatientOverviewTab({
           {patient.beutaloOrvos || patient.beutaloIntezmeny || patient.szovettaniDiagnozis ? (
             <div className="space-y-0.5">
               {patient.beutaloOrvos && (
-                <p className="text-sm font-medium text-gray-900">{patient.beutaloOrvos}</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{patient.beutaloOrvos}</p>
               )}
               {patient.beutaloIntezmeny && (
-                <p className="text-[13px] text-gray-600">{patient.beutaloIntezmeny}</p>
+                <p className="text-[13px] text-gray-600 dark:text-gray-400">{patient.beutaloIntezmeny}</p>
               )}
               {patient.szovettaniDiagnozis && (
-                <p className="text-[13px] text-gray-600">Dg.: {patient.szovettaniDiagnozis}</p>
+                <p className="text-[13px] text-gray-600 dark:text-gray-400">Dg.: {patient.szovettaniDiagnozis}</p>
               )}
             </div>
           ) : (
-            <p className="text-[13px] text-gray-400">Nincs beutaló adat rögzítve.</p>
+            <p className="text-[13px] text-gray-400 dark:text-gray-500">Nincs beutaló adat rögzítve.</p>
           )}
         </CardShell>
 
@@ -199,17 +199,17 @@ export function PatientOverviewTab({
           >
             {nextStep ? (
               <div className="space-y-1">
-                <p className="text-sm font-medium text-gray-900">
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
                   {nextStep.stepLabel || nextStep.nextStep}
                 </p>
                 {windowStart && (
-                  <p className="text-[13px] text-gray-600">
+                  <p className="text-[13px] text-gray-600 dark:text-gray-400">
                     Ablak: {format(new Date(windowStart), 'yyyy. MMM d.', { locale: hu })}
                     {windowEnd ? ` – ${format(new Date(windowEnd), 'MMM d.', { locale: hu })}` : ''}
                   </p>
                 )}
                 {nextStep.overdueByDays > 0 && (
-                  <p className="text-[13px] text-red-600">
+                  <p className="text-[13px] text-red-600 dark:text-red-400">
                     {nextStep.overdueByDays} napja esedékes
                   </p>
                 )}
@@ -223,7 +223,7 @@ export function PatientOverviewTab({
                 </button>
               </div>
             ) : (
-              <p className="text-[13px] text-gray-400">Nincs következő munkafázis.</p>
+              <p className="text-[13px] text-gray-400 dark:text-gray-500">Nincs következő munkafázis.</p>
             )}
           </CardShell>
         )}
@@ -237,12 +237,12 @@ export function PatientOverviewTab({
           {tasks.length > 0 ? (
             <ul className="space-y-1.5">
               {tasks.slice(0, 3).map((t) => (
-                <li key={t.id} className="flex items-start gap-2 text-[13px] text-gray-700">
-                  <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                <li key={t.id} className="flex items-start gap-2 text-[13px] text-gray-700 dark:text-gray-300">
+                  <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-amber-400 dark:bg-amber-500 shrink-0" />
                   <span className="min-w-0">
                     <span className="block truncate">{t.title}</span>
                     {(t.dueAt || t.assigneeName) && (
-                      <span className="text-[11px] text-gray-400">
+                      <span className="text-[11px] text-gray-400 dark:text-gray-500">
                         {t.assigneeName ?? ''}
                         {t.dueAt
                           ? `${t.assigneeName ? ' · ' : ''}${format(new Date(t.dueAt), 'MMM d.', { locale: hu })}`
@@ -253,11 +253,11 @@ export function PatientOverviewTab({
                 </li>
               ))}
               {tasks.length > 3 && (
-                <li className="text-[11px] text-gray-400">+{tasks.length - 3} további</li>
+                <li className="text-[11px] text-gray-400 dark:text-gray-500">+{tasks.length - 3} további</li>
               )}
             </ul>
           ) : (
-            <p className="text-[13px] text-gray-400">Nincs nyitott feladat.</p>
+            <p className="text-[13px] text-gray-400 dark:text-gray-500">Nincs nyitott feladat.</p>
           )}
         </CardShell>
 
@@ -270,20 +270,20 @@ export function PatientOverviewTab({
           {logs.length > 0 ? (
             <ul className="space-y-1.5">
               {logs.map((l) => (
-                <li key={l.id} className="text-[13px] text-gray-700">
-                  <span className="font-medium text-gray-900">
+                <li key={l.id} className="text-[13px] text-gray-700 dark:text-gray-300">
+                  <span className="font-medium text-gray-900 dark:text-gray-100">
                     {COMM_TYPE_LABELS[l.communicationType]}
                   </span>
                   {' — '}
-                  <span className="text-gray-600">{l.subject || l.content}</span>
-                  <span className="text-[11px] text-gray-400 ml-1">
+                  <span className="text-gray-600 dark:text-gray-400">{l.subject || l.content}</span>
+                  <span className="text-[11px] text-gray-400 dark:text-gray-500 ml-1">
                     · {format(new Date(l.createdAt), 'MMM d.', { locale: hu })}
                   </span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-[13px] text-gray-400">Nincs rögzített kommunikáció.</p>
+            <p className="text-[13px] text-gray-400 dark:text-gray-500">Nincs rögzített kommunikáció.</p>
           )}
         </CardShell>
       </div>

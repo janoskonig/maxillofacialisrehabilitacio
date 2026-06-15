@@ -114,7 +114,7 @@ export function CapacityPoolConfigManager() {
   if (loading) {
     return (
       <div className="card p-6">
-        <p className="text-gray-500 text-center py-4">Kapacitás konfiguráció betöltése...</p>
+        <p className="text-gray-500 dark:text-gray-400 text-center py-4">Kapacitás konfiguráció betöltése...</p>
       </div>
     );
   }
@@ -125,8 +125,8 @@ export function CapacityPoolConfigManager() {
     <div className="card p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Settings className="w-5 h-5 text-gray-600" />
-          <h3 className="text-xl font-bold text-gray-900">Kapacitás kvóták</h3>
+          <Settings className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+          <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Kapacitás kvóták</h3>
         </div>
         <button
           onClick={() => setShowAddRow(!showAddRow)}
@@ -138,44 +138,44 @@ export function CapacityPoolConfigManager() {
       </div>
 
       {/* Current distribution */}
-      <div className="bg-gray-50 rounded-lg p-4">
+      <div className="bg-gray-50 dark:bg-gray-800/60 rounded-lg p-4">
         <div className="flex items-center gap-2 mb-3">
-          <BarChart3 className="w-4 h-4 text-gray-500" />
-          <h4 className="text-sm font-semibold text-gray-700">
+          <BarChart3 className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+          <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
             Jelenlegi slot-eloszlás (szabad slotok, következő 7 nap)
           </h4>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <div className="bg-white rounded-lg p-3 border">
-            <div className="text-xs text-gray-500 uppercase">Konzultáció</div>
-            <div className="text-2xl font-bold text-blue-700">{distribution.consult}</div>
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border">
+            <div className="text-xs text-gray-500 dark:text-gray-400 uppercase">Konzultáció</div>
+            <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">{distribution.consult}</div>
           </div>
-          <div className="bg-white rounded-lg p-3 border">
-            <div className="text-xs text-gray-500 uppercase">Munkafázis</div>
-            <div className="text-2xl font-bold text-purple-700">{distribution.work}</div>
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border">
+            <div className="text-xs text-gray-500 dark:text-gray-400 uppercase">Munkafázis</div>
+            <div className="text-2xl font-bold text-purple-700 dark:text-purple-300">{distribution.work}</div>
           </div>
-          <div className="bg-white rounded-lg p-3 border">
-            <div className="text-xs text-gray-500 uppercase">Kontroll</div>
-            <div className="text-2xl font-bold text-teal-700">{distribution.control}</div>
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border">
+            <div className="text-xs text-gray-500 dark:text-gray-400 uppercase">Kontroll</div>
+            <div className="text-2xl font-bold text-teal-700 dark:text-teal-300">{distribution.control}</div>
           </div>
-          <div className="bg-white rounded-lg p-3 border">
-            <div className="text-xs text-gray-500 uppercase">Rugalmas</div>
-            <div className="text-2xl font-bold text-yellow-700">{distribution.flexible}</div>
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border">
+            <div className="text-xs text-gray-500 dark:text-gray-400 uppercase">Rugalmas</div>
+            <div className="text-2xl font-bold text-yellow-700 dark:text-yellow-300">{distribution.flexible}</div>
           </div>
-          <div className="bg-white rounded-lg p-3 border">
-            <div className="text-xs text-gray-500 uppercase">Összesen</div>
-            <div className="text-2xl font-bold text-gray-900">{totalFree}</div>
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border">
+            <div className="text-xs text-gray-500 dark:text-gray-400 uppercase">Összesen</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{totalFree}</div>
           </div>
         </div>
       </div>
 
       {/* Add new week */}
       {showAddRow && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
-          <h4 className="text-sm font-semibold text-blue-900">Új heti kvóta hozzáadása</h4>
+        <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-lg p-4 space-y-3">
+          <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-200">Új heti kvóta hozzáadása</h4>
           <div className="flex flex-wrap items-end gap-3">
             <div>
-              <label className="block text-xs text-gray-600 mb-1">Hét kezdete (hétfő)</label>
+              <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Hét kezdete (hétfő)</label>
               <input
                 type="date"
                 value={newWeekStart}
@@ -189,7 +189,7 @@ export function CapacityPoolConfigManager() {
                   <button
                     key={w}
                     onClick={() => setNewWeekStart(w)}
-                    className={`px-2 py-1 text-xs rounded border ${newWeekStart === w ? 'bg-blue-100 border-blue-400 text-blue-800' : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+                    className={`px-2 py-1 text-xs rounded border ${newWeekStart === w ? 'bg-blue-100 dark:bg-blue-950/50 border-blue-400 dark:border-blue-700 text-blue-800 dark:text-blue-300' : 'bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}
                   >
                     {w}
                   </button>
@@ -209,22 +209,22 @@ export function CapacityPoolConfigManager() {
 
       {/* Config table */}
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
+          <thead className="bg-gray-50 dark:bg-gray-800/60">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Hét kezdete</th>
-              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Konzult. min</th>
-              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Konzult. cél</th>
-              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Munka cél</th>
-              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Kontroll cél</th>
-              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Flex cél</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Művelet</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Hét kezdete</th>
+              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Konzult. min</th>
+              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Konzult. cél</th>
+              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Munka cél</th>
+              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Kontroll cél</th>
+              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Flex cél</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Művelet</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
             {configs.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-500">
+                <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                   Nincs kvóta konfigurálva. Az éjszakai rebalance alapértelmezéseket használ.
                 </td>
               </tr>
@@ -235,11 +235,11 @@ export function CapacityPoolConfigManager() {
               const row = isEditing ? editRow! : config;
 
               return (
-                <tr key={config.weekStart} className={isCurrent ? 'bg-blue-50/50' : ''}>
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                <tr key={config.weekStart} className={isCurrent ? 'bg-blue-50/50 dark:bg-blue-950/40' : ''}>
+                  <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
                     {config.weekStart}
                     {isCurrent && (
-                      <span className="ml-2 px-1.5 py-0.5 text-xs rounded bg-blue-100 text-blue-700">aktuális</span>
+                      <span className="ml-2 px-1.5 py-0.5 text-xs rounded bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300">aktuális</span>
                     )}
                   </td>
                   {isEditing ? (
@@ -282,15 +282,15 @@ export function CapacityPoolConfigManager() {
                     </>
                   ) : (
                     <>
-                      <td className="px-4 py-3 text-sm text-center text-gray-700">{config.consultMin}</td>
-                      <td className="px-4 py-3 text-sm text-center text-gray-700">{config.consultTarget}</td>
-                      <td className="px-4 py-3 text-sm text-center text-gray-700">{config.workTarget}</td>
-                      <td className="px-4 py-3 text-sm text-center text-gray-700">{config.controlTarget}</td>
-                      <td className="px-4 py-3 text-sm text-center text-gray-700">{config.flexTarget}</td>
+                      <td className="px-4 py-3 text-sm text-center text-gray-700 dark:text-gray-300">{config.consultMin}</td>
+                      <td className="px-4 py-3 text-sm text-center text-gray-700 dark:text-gray-300">{config.consultTarget}</td>
+                      <td className="px-4 py-3 text-sm text-center text-gray-700 dark:text-gray-300">{config.workTarget}</td>
+                      <td className="px-4 py-3 text-sm text-center text-gray-700 dark:text-gray-300">{config.controlTarget}</td>
+                      <td className="px-4 py-3 text-sm text-center text-gray-700 dark:text-gray-300">{config.flexTarget}</td>
                       <td className="px-4 py-3 text-right">
                         <button
                           onClick={() => setEditRow({ ...config })}
-                          className="text-blue-600 hover:text-blue-800 text-xs font-medium"
+                          className="text-blue-600 dark:text-blue-300 hover:text-blue-800 text-xs font-medium"
                         >
                           Szerkesztés
                         </button>

@@ -106,12 +106,12 @@ function StepLabelInput({
         className="form-input text-sm w-full"
       />
       {open && filtered.length > 0 && (
-        <ul className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded shadow-lg max-h-48 overflow-y-auto">
+        <ul className="absolute z-20 left-0 right-0 top-full mt-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded shadow-lg max-h-48 overflow-y-auto">
           {filtered.slice(0, 15).map((s) => (
             <li key={s}>
               <button
                 type="button"
-                className="w-full text-left px-3 py-1.5 text-sm hover:bg-blue-50 hover:text-blue-800"
+                className="w-full text-left px-3 py-1.5 text-sm hover:bg-blue-50 dark:hover:bg-blue-900/40 hover:text-blue-800"
                 onMouseDown={(e) => {
                   e.preventDefault();
                   onChange(s);
@@ -378,7 +378,7 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
     setError(null);
   };
 
-  if (loading) return <p className="text-gray-600">Betöltés...</p>;
+  if (loading) return <p className="text-gray-600 dark:text-gray-400">Betöltés...</p>;
 
   const showForm = editingId || creating;
 
@@ -386,26 +386,26 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
     <div className="space-y-4">
       <h3 className="text-lg font-semibold">Kezelési utak</h3>
       {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded text-red-800 text-sm">
+        <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded text-red-800 dark:text-red-300 text-sm">
           {error}
         </div>
       )}
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
+          <thead className="bg-gray-50 dark:bg-gray-800/60">
             <tr>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Név</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Reason / Típus</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Munkafázisok</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Epizódok</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Műveletek</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Név</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Reason / Típus</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Munkafázisok</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Epizódok</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Műveletek</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
             {pathways.map((p) => (
               <tr key={p.id}>
                 <td className="px-4 py-2 text-sm font-medium">{p.name}</td>
-                <td className="px-4 py-2 text-sm text-gray-600">
+                <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
                   {p.reason ?? (treatmentTypes.find((t) => t.id === p.treatmentTypeId)?.labelHu ?? p.treatmentTypeId ?? '—')}
                 </td>
                 <td className="px-4 py-2 text-sm">
@@ -441,11 +441,11 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
       </div>
 
       {showForm && (
-        <div className="p-4 border border-gray-200 rounded-lg bg-gray-50 space-y-4">
+        <div className="p-4 border border-gray-200 dark:border-gray-800 rounded-lg bg-gray-50 dark:bg-gray-800/60 space-y-4">
           <h4 className="font-medium">{editingId ? 'Szerkesztés' : 'Új kezelési út'}</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Név</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Név</label>
               <input
                 type="text"
                 value={formName}
@@ -454,7 +454,7 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Reason (vagy Kezeléstípus)</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Reason (vagy Kezeléstípus)</label>
               <div className="flex gap-4">
                 <select
                   value={formReason ?? ''}
@@ -470,7 +470,7 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
                     <option key={r} value={r}>{r}</option>
                   ))}
                 </select>
-                <span className="self-center text-gray-500">vagy</span>
+                <span className="self-center text-gray-500 dark:text-gray-400">vagy</span>
                 <select
                   value={formTreatmentTypeId ?? ''}
                   onChange={(e) => {
@@ -491,7 +491,7 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
 
           <div>
             <div className="flex justify-between items-center mb-2">
-              <label className="block text-sm font-medium text-gray-700">Klinikai munkafázisok</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Klinikai munkafázisok</label>
               <button
                 onClick={addStep}
                 className="px-2 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
@@ -501,7 +501,7 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
             </div>
 
             <div className="space-y-1 mb-1">
-              <div className="flex gap-2 items-center px-2 text-xs text-gray-500 font-medium">
+              <div className="flex gap-2 items-center px-2 text-xs text-gray-500 dark:text-gray-400 font-medium">
                 <span className="w-6 text-center">#</span>
                 <span className="flex-1 min-w-0">Megnevezés</span>
                 <span className="w-28 text-center">Típus</span>
@@ -514,8 +514,8 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
 
             <div className="space-y-2 max-h-96 overflow-y-auto">
               {formSteps.map((step, idx) => (
-                <div key={idx} className="flex gap-2 items-center p-2 bg-white rounded border">
-                  <span className="w-6 text-center text-xs text-gray-400 font-mono shrink-0">
+                <div key={idx} className="flex gap-2 items-center p-2 bg-white dark:bg-gray-800 rounded border">
+                  <span className="w-6 text-center text-xs text-gray-400 dark:text-gray-500 font-mono shrink-0">
                     {idx + 1}
                   </span>
                   <StepLabelInput
@@ -584,7 +584,7 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
                 </div>
               ))}
               {formSteps.length === 0 && (
-                <p className="text-sm text-gray-400 italic px-2 py-4 text-center">
+                <p className="text-sm text-gray-400 dark:text-gray-500 italic px-2 py-4 text-center">
                   Nincs munkafázis. Kattintson a &quot;+ Munkafázis&quot; gombra.
                 </p>
               )}
@@ -592,7 +592,7 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Indoklás (kötelező)</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Indoklás (kötelező)</label>
             <input
               type="text"
               placeholder="Miért módosítom?"

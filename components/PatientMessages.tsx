@@ -545,8 +545,8 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
     return (
       <div className="card p-6">
         <div className="animate-pulse space-y-4">
-          <div className="h-4 bg-gray-200 rounded w-1/4"></div>
-          <div className="h-20 bg-gray-200 rounded"></div>
+          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4"></div>
+          <div className="h-20 bg-gray-200 dark:bg-gray-700 rounded"></div>
         </div>
       </div>
     );
@@ -556,11 +556,11 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
     <MessageSearchProvider preferredChannel="patient">
     <div className="card flex flex-col h-[600px] min-h-[600px]">
       {/* Header */}
-      <div className="p-3 sm:p-4 border-b border-gray-200 bg-gray-50">
+      <div className="p-3 sm:p-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60">
         <div className="flex items-center justify-between gap-2">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
                 Üzenetek {patientName && `- ${patientName}`}
               </h3>
               <button
@@ -589,9 +589,9 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
       </div>
 
       {/* Messages */}
-      <div ref={messagesContainerRef} className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-2 sm:p-4 bg-gray-50 space-y-3 scroll-smooth">
+      <div ref={messagesContainerRef} className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-2 sm:p-4 bg-gray-50 dark:bg-gray-800/60 space-y-3 scroll-smooth">
         {messages.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
+          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
             <MessageCircle className="w-12 h-12 mx-auto mb-2 text-gray-300" />
             <p>Még nincsenek üzenetek</p>
           </div>
@@ -632,10 +632,10 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
                 {/* Sender name and monogram */}
                 {!isFromMe && (
                   <div className="flex items-center gap-1.5 mb-1 px-1">
-                    <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center text-xs font-semibold text-green-700">
+                    <div className="w-6 h-6 rounded-full bg-green-100 dark:bg-green-950/50 flex items-center justify-center text-xs font-semibold text-green-700 dark:text-green-300">
                       {monogram}
                     </div>
-                    <span className="text-xs font-medium text-gray-700">{lastName}</span>
+                    <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{lastName}</span>
                   </div>
                 )}
                 <ChatMessageBubble
@@ -692,7 +692,7 @@ export function PatientMessages({ patientId, patientName }: PatientMessagesProps
       )}
 
       {/* Message Input */}
-      <div className="border-t bg-white pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-0">
+      <div className="border-t bg-white dark:bg-gray-900 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-0">
         <PendingContextLinksBar
           links={pendingContextLinks}
           onRemove={(i) => setPendingContextLinks((prev) => prev.filter((_, idx) => idx !== i))}

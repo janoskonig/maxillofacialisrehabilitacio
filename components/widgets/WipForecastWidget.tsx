@@ -56,7 +56,7 @@ export function WipForecastWidget() {
   if (loading) {
     return (
       <DashboardWidget title="Aktív kezelések prognózisa" icon={<TrendingUp className="w-5 h-5" />}>
-        <div className="text-center py-4 text-gray-500 text-sm">Betöltés...</div>
+        <div className="text-center py-4 text-gray-500 dark:text-gray-400 text-sm">Betöltés...</div>
       </DashboardWidget>
     );
   }
@@ -64,7 +64,7 @@ export function WipForecastWidget() {
   if (!data) {
     return (
       <DashboardWidget title="Aktív kezelések prognózisa" icon={<TrendingUp className="w-5 h-5" />}>
-        <div className="text-center py-4 text-gray-500 text-sm">Nem elérhető</div>
+        <div className="text-center py-4 text-gray-500 dark:text-gray-400 text-sm">Nem elérhető</div>
       </DashboardWidget>
     );
   }
@@ -79,14 +79,14 @@ export function WipForecastWidget() {
           <>
             <div className="space-y-2">
               {doctors.map((doc) => (
-                <div key={doc.providerId ?? '__unassigned__'} className="border border-gray-100 rounded-lg p-3 bg-gray-50/50">
+                <div key={doc.providerId ?? '__unassigned__'} className="border border-gray-100 dark:border-gray-800 rounded-lg p-3 bg-gray-50/50 dark:bg-gray-800/60">
                   <div className="flex items-center gap-2 mb-1.5">
                     <User className="w-3.5 h-3.5 text-medical-primary flex-shrink-0" />
-                    <span className="text-sm font-semibold text-gray-900 truncate">{doctorDisplayName(doc)}</span>
-                    <span className="ml-auto text-xs text-gray-500 whitespace-nowrap">{doc.wipCount} epizód</span>
+                    <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{doctorDisplayName(doc)}</span>
+                    <span className="ml-auto text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{doc.wipCount} epizód</span>
                   </div>
                   {doc.providerId === null && (
-                    <div className="mb-2 text-xs text-gray-800">
+                    <div className="mb-2 text-xs text-gray-800 dark:text-gray-200">
                       {doc.unassignedPatientNames && doc.unassignedPatientNames.length > 0 ? (
                         <ul className="space-y-0.5 pl-1 list-disc list-inside marker:text-medical-primary">
                           {doc.unassignedPatientNames.map((nev) => (
@@ -94,29 +94,29 @@ export function WipForecastWidget() {
                           ))}
                         </ul>
                       ) : (
-                        <p className="text-amber-800/90">A betegnév nincs kitöltve ezeknél a rekordoknál.</p>
+                        <p className="text-amber-800/90 dark:text-amber-300">A betegnév nincs kitöltve ezeknél a rekordoknál.</p>
                       )}
                     </div>
                   )}
                   <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
                     <div>
-                      <span className="text-gray-500">Kifutás: </span>
-                      <span className="font-medium text-gray-800">
+                      <span className="text-gray-500 dark:text-gray-400">Kifutás: </span>
+                      <span className="font-medium text-gray-800 dark:text-gray-200">
                         {doc.wipCompletionP50Max ? `~${formatShortDate(doc.wipCompletionP50Max)}` : '–'}
                       </span>
                       {doc.wipCompletionP80Max && (
-                        <span className="text-gray-400 ml-1">
+                        <span className="text-gray-400 dark:text-gray-500 ml-1">
                           (P80 ~{formatShortDate(doc.wipCompletionP80Max)})
                         </span>
                       )}
                     </div>
                     <div>
-                      <span className="text-gray-500">Hátralévő: </span>
-                      <span className="font-medium text-gray-800">
+                      <span className="text-gray-500 dark:text-gray-400">Hátralévő: </span>
+                      <span className="font-medium text-gray-800 dark:text-gray-200">
                         {doc.wipVisitsRemainingP50Sum} látogatás
                       </span>
                       {doc.wipVisitsRemainingP80Sum !== doc.wipVisitsRemainingP50Sum && (
-                        <span className="text-gray-400 ml-1">
+                        <span className="text-gray-400 dark:text-gray-500 ml-1">
                           (P80: {doc.wipVisitsRemainingP80Sum})
                         </span>
                       )}
@@ -125,7 +125,7 @@ export function WipForecastWidget() {
                 </div>
               ))}
             </div>
-            <div className="text-xs text-gray-500 pt-1 border-t border-gray-100">
+            <div className="text-xs text-gray-500 dark:text-gray-400 pt-1 border-t border-gray-100 dark:border-gray-800">
               Összesen {data.wipCount} aktív kezelés
               {data.wipCompletionP80Max && (
                 <> · legkésőbb ~{formatShortDate(data.wipCompletionP80Max)}</>
@@ -133,7 +133,7 @@ export function WipForecastWidget() {
             </div>
           </>
         ) : (
-          <div className="text-sm text-gray-500">Nincs folyamatban lévő kezelés</div>
+          <div className="text-sm text-gray-500 dark:text-gray-400">Nincs folyamatban lévő kezelés</div>
         )}
       </div>
     </DashboardWidget>

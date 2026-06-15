@@ -730,7 +730,7 @@ export function PatientDocuments({
   if (!patientId) {
     return (
       <div className="card">
-        <p className="text-gray-500 text-sm">Mentse el a beteget a dokumentumok feltöltéséhez</p>
+        <p className="text-gray-500 dark:text-gray-400 text-sm">Mentse el a beteget a dokumentumok feltöltéséhez</p>
       </div>
     );
   }
@@ -738,7 +738,7 @@ export function PatientDocuments({
   return (
     <div className="card">
       <div className="flex justify-between items-center mb-4">
-        <h4 className="text-lg font-semibold text-gray-900 flex items-center">
+        <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center">
           <File className="w-5 h-5 mr-2 text-medical-primary" />
           DOKUMENTUMOK ({documents.length})
         </h4>
@@ -801,17 +801,17 @@ export function PatientDocuments({
 
       {/* NEAK Export Status */}
       {neakExportStatus && !neakExportStatus.isReady && (
-        <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+        <div className="mb-4 p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg">
           <div className="flex items-start">
-            <AlertTriangle className="w-5 h-5 text-amber-600 mr-3 mt-0.5 flex-shrink-0" />
+            <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-300 mr-3 mt-0.5 flex-shrink-0" />
             <div className="flex-1">
-              <h5 className="text-sm font-semibold text-amber-800 mb-2">
+              <h5 className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-2">
                 Hiányoznak kötelező dokumentumok
               </h5>
-              <p className="text-sm text-amber-700 mb-2">
+              <p className="text-sm text-amber-700 dark:text-amber-300 mb-2">
                 Az alábbi tag-ekkel rendelkező dokumentumok hiányoznak:
               </p>
-              <ul className="list-disc list-inside text-sm text-amber-700 mb-3">
+              <ul className="list-disc list-inside text-sm text-amber-700 dark:text-amber-300 mb-3">
                 {neakExportStatus.missingDocTags.map((tag) => (
                   <li key={tag}>{tag.toUpperCase()}</li>
                 ))}
@@ -824,14 +824,14 @@ export function PatientDocuments({
                     fileInputRef.current.click();
                   }
                 }}
-                className="text-sm text-amber-800 hover:text-amber-900 underline"
+                className="text-sm text-amber-800 dark:text-amber-300 hover:text-amber-900 underline"
               >
                 Ugrás dokumentum feltöltéshez →
               </button>
             </div>
             <button
               onClick={() => setNeakExportStatus(null)}
-              className="text-amber-600 hover:text-amber-800 ml-2"
+              className="text-amber-600 dark:text-amber-300 hover:text-amber-800 ml-2"
             >
               <X className="w-4 h-4" />
             </button>
@@ -841,17 +841,17 @@ export function PatientDocuments({
 
       {/* Upload Form */}
       {showUploadForm && canUpload && !isViewOnly && (
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+        <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800/60 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-700">
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Fájl kiválasztása
               </label>
               <div
                 className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
                   isDragging
                     ? 'border-medical-primary bg-medical-primary/5'
-                    : 'border-gray-300 hover:border-gray-400'
+                    : 'border-gray-300 dark:border-gray-700 hover:border-gray-400'
                 }`}
                 onDragEnter={handleDragEnter}
                 onDragOver={handleDragOver}
@@ -871,14 +871,14 @@ export function PatientDocuments({
                     }
                   }}
                 />
-                <Upload className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                <p className="text-sm text-gray-600">
+                <Upload className="w-8 h-8 mx-auto mb-2 text-gray-400 dark:text-gray-500" />
+                <p className="text-sm text-gray-600 dark:text-gray-400">
                   {selectedFiles.length > 0 
                     ? `${selectedFiles.length} fájl kiválasztva` 
                     : 'Kattintson vagy húzza ide a fájlokat'}
                 </p>
                 {selectedFiles.length > 0 && (
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     Összesen: {formatFileSize(selectedFiles.reduce((sum, file) => sum + file.size, 0))}
                   </p>
                 )}
@@ -888,15 +888,15 @@ export function PatientDocuments({
             {selectedFiles.length > 0 && (
               <>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Kiválasztott fájlok ({selectedFiles.length})
                   </label>
-                  <div className="mb-4 p-3 bg-white border border-gray-200 rounded-lg max-h-40 overflow-y-auto">
+                  <div className="mb-4 p-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg max-h-40 overflow-y-auto">
                     <ul className="space-y-1">
                       {selectedFiles.map((file, index) => (
-                        <li key={index} className="text-sm text-gray-700 flex items-center justify-between">
+                        <li key={index} className="text-sm text-gray-700 dark:text-gray-300 flex items-center justify-between">
                           <span className="flex-1 truncate">{file.name}</span>
-                          <span className="text-xs text-gray-500 ml-2">{formatFileSize(file.size)}</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">{formatFileSize(file.size)}</span>
                         </li>
                       ))}
                     </ul>
@@ -904,7 +904,7 @@ export function PatientDocuments({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Leírás (opcionális - minden fájlhoz ugyanaz)
                   </label>
                   <textarea
@@ -917,7 +917,7 @@ export function PatientDocuments({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Címkék
                   </label>
                   <div className="flex flex-wrap gap-2 mb-2">
@@ -939,7 +939,7 @@ export function PatientDocuments({
                   </div>
                   {availableTags.length > 0 && (
                     <div className="mb-3">
-                      <p className="text-xs text-gray-500 mb-2">Gyors címkék</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Gyors címkék</p>
                       <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto pr-1">
                         {availableTags.map((availableTag) => {
                           const isSelected = tags.some(
@@ -954,8 +954,8 @@ export function PatientDocuments({
                               disabled={isSelected}
                               className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
                                 isSelected
-                                  ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
+                                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border-gray-200 dark:border-gray-800 cursor-not-allowed'
+                                  : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700'
                               }`}
                               title={`${availableTag} címke hozzáadása`}
                             >
@@ -996,15 +996,15 @@ export function PatientDocuments({
                       {showTagSuggestions && filteredTags.length > 0 && (
                         <div
                           ref={tagSuggestionsRef}
-                          className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto"
+                          className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg max-h-48 overflow-y-auto"
                         >
                           {filteredTags.map((tag, index) => (
                             <button
                               key={tag}
                               type="button"
                               onClick={() => addTag(tag)}
-                              className={`w-full text-left px-4 py-2 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none ${
-                                index === selectedTagIndex ? 'bg-gray-100' : ''
+                              className={`w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 focus:outline-none ${
+                                index === selectedTagIndex ? 'bg-gray-100 dark:bg-gray-800' : ''
                               }`}
                             >
                               {tag}
@@ -1057,9 +1057,9 @@ export function PatientDocuments({
 
       {/* Documents List */}
       {loading ? (
-        <div className="text-center py-8 text-gray-500">Betöltés...</div>
+        <div className="text-center py-8 text-gray-500 dark:text-gray-400">Betöltés...</div>
       ) : documents.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
+        <div className="text-center py-8 text-gray-500 dark:text-gray-400">
           <File className="w-12 h-12 mx-auto mb-2 text-gray-300" />
           <p>Nincsenek dokumentumok</p>
         </div>

@@ -47,7 +47,7 @@ export function DocumentUploadButton({
     <>
       <button
         onClick={() => setShowModal(true)}
-        className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg border border-blue-200 transition-colors text-sm font-medium"
+        className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-lg border border-blue-200 dark:border-blue-800 transition-colors text-sm font-medium"
         title={`${tag ? `${tag} ` : ''}dokumentum feltöltése`}
       >
         <Upload className="w-4 h-4" />

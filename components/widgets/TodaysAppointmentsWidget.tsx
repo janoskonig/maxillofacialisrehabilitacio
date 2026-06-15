@@ -146,17 +146,17 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
 
   const getStatusLabel = useCallback((status: string | null | undefined, isLate?: boolean | null) => {
     if (isLate && !status) {
-      return { label: 'Késett', color: 'text-orange-600', bgColor: 'bg-orange-50', icon: Clock };
+      return { label: 'Késett', color: 'text-orange-600 dark:text-orange-300', bgColor: 'bg-orange-50 dark:bg-orange-950/40', icon: Clock };
     }
     switch (status) {
       case 'cancelled_by_doctor':
-        return { label: 'Lemondta az orvos', color: 'text-red-600', bgColor: 'bg-red-50', icon: XCircle };
+        return { label: 'Lemondta az orvos', color: 'text-red-600 dark:text-red-300', bgColor: 'bg-red-50 dark:bg-red-950/40', icon: XCircle };
       case 'cancelled_by_patient':
-        return { label: 'Lemondta a beteg', color: 'text-red-600', bgColor: 'bg-red-50', icon: XCircle };
+        return { label: 'Lemondta a beteg', color: 'text-red-600 dark:text-red-300', bgColor: 'bg-red-50 dark:bg-red-950/40', icon: XCircle };
       case 'completed':
-        return { label: 'Sikeresen teljesült', color: 'text-green-600', bgColor: 'bg-green-50', icon: CheckCircle2 };
+        return { label: 'Sikeresen teljesült', color: 'text-green-600 dark:text-green-300', bgColor: 'bg-green-50 dark:bg-green-950/40', icon: CheckCircle2 };
       case 'no_show':
-        return { label: 'Nem jelent meg', color: 'text-red-600', bgColor: 'bg-red-50', icon: AlertCircle };
+        return { label: 'Nem jelent meg', color: 'text-red-600 dark:text-red-300', bgColor: 'bg-red-50 dark:bg-red-950/40', icon: AlertCircle };
       default:
         return null;
     }

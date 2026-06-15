@@ -115,9 +115,9 @@ export function PortalLayout({ children }: PortalLayoutProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b sticky top-0 z-30 max-sm:mobile-safe-top">
+      <header className="bg-white dark:bg-gray-900 shadow-sm border-b sticky top-0 z-30 max-sm:mobile-safe-top">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8">
           <div className="flex items-center justify-between py-3 sm:py-4">
             <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
@@ -129,7 +129,7 @@ export function PortalLayout({ children }: PortalLayoutProps) {
                   Páciens portál
                 </h1>
                 {patientName && (
-                  <p className="text-xs sm:text-sm text-gray-600 truncate">{patientName}</p>
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 truncate">{patientName}</p>
                 )}
               </div>
             </div>
@@ -145,7 +145,7 @@ export function PortalLayout({ children }: PortalLayoutProps) {
       </header>
 
       {/* Desktop Navigation */}
-      <nav className="bg-white border-b hidden sm:block">
+      <nav className="bg-white dark:bg-gray-900 border-b hidden sm:block">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8">
           <div className="flex gap-0.5 sm:gap-1 overflow-x-auto scrollbar-hide">
             <a
@@ -153,7 +153,7 @@ export function PortalLayout({ children }: PortalLayoutProps) {
               className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
                 pathname === '/patient-portal/dashboard'
                   ? 'text-medical-primary border-medical-primary'
-                  : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
+                  : 'text-gray-700 dark:text-gray-300 hover:text-medical-primary border-transparent hover:border-medical-primary'
               }`}
             >
               <LayoutDashboard className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -165,7 +165,7 @@ export function PortalLayout({ children }: PortalLayoutProps) {
               className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
                 pathname === '/patient-portal/tasks'
                   ? 'text-medical-primary border-medical-primary'
-                  : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
+                  : 'text-gray-700 dark:text-gray-300 hover:text-medical-primary border-transparent hover:border-medical-primary'
               }`}
             >
               <ClipboardList className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -176,7 +176,7 @@ export function PortalLayout({ children }: PortalLayoutProps) {
               className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
                 pathname === '/patient-portal/appointments'
                   ? 'text-medical-primary border-medical-primary'
-                  : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
+                  : 'text-gray-700 dark:text-gray-300 hover:text-medical-primary border-transparent hover:border-medical-primary'
               }`}
             >
               <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -188,7 +188,7 @@ export function PortalLayout({ children }: PortalLayoutProps) {
               className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
                 pathname === '/patient-portal/documents'
                   ? 'text-medical-primary border-medical-primary'
-                  : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
+                  : 'text-gray-700 dark:text-gray-300 hover:text-medical-primary border-transparent hover:border-medical-primary'
               }`}
             >
               <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -199,7 +199,7 @@ export function PortalLayout({ children }: PortalLayoutProps) {
               className={`relative flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
                 pathname === '/patient-portal/ohip14'
                   ? 'text-medical-primary border-medical-primary'
-                  : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
+                  : 'text-gray-700 dark:text-gray-300 hover:text-medical-primary border-transparent hover:border-medical-primary'
               }`}
             >
               <ClipboardList className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -214,7 +214,7 @@ export function PortalLayout({ children }: PortalLayoutProps) {
               className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
                 pathname === '/patient-portal/messages'
                   ? 'text-medical-primary border-medical-primary'
-                  : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
+                  : 'text-gray-700 dark:text-gray-300 hover:text-medical-primary border-transparent hover:border-medical-primary'
               }`}
             >
               <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -226,7 +226,7 @@ export function PortalLayout({ children }: PortalLayoutProps) {
               className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
                 pathname === '/patient-portal/profile'
                   ? 'text-medical-primary border-medical-primary'
-                  : 'text-gray-700 hover:text-medical-primary border-transparent hover:border-medical-primary'
+                  : 'text-gray-700 dark:text-gray-300 hover:text-medical-primary border-transparent hover:border-medical-primary'
               }`}
             >
               <User className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -239,11 +239,11 @@ export function PortalLayout({ children }: PortalLayoutProps) {
 
       {/* Consent obligation banner */}
       {consent?.needsAction && pathname !== '/patient-portal/profile' && (
-        <div className="bg-amber-50 border-b border-amber-200">
+        <div className="bg-amber-50 dark:bg-amber-950/40 border-b border-amber-200 dark:border-amber-800">
           <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
             <div className="flex items-start gap-2 flex-1 min-w-0">
-              <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-amber-900">
+              <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-amber-900 dark:text-amber-200">
                 {consent.needsNoticeAck && consent.needsResearch
                   ? 'Kérjük, ismerje meg az adatkezelési tájékoztatót, és nyilatkozzon a kutatási hozzájárulásáról.'
                   : consent.needsNoticeAck

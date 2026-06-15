@@ -49,14 +49,14 @@ export function CancellationModal({ appointment, onConfirm, onCancel, loading = 
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-md w-full shadow-xl">
+      <div className="bg-white dark:bg-gray-900 rounded-lg max-w-md w-full shadow-xl">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-xl font-bold text-gray-900">Időpont lemondása</h2>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Időpont lemondása</h2>
           <button
             onClick={onCancel}
             disabled={loading}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -65,19 +65,19 @@ export function CancellationModal({ appointment, onConfirm, onCancel, loading = 
         {/* Content */}
         <form onSubmit={handleSubmit}>
           <div className="p-6 space-y-4">
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2">
-              <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
-              <p className="text-sm text-red-800">
+            <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-lg p-3 flex items-start gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-300 mt-0.5 flex-shrink-0" />
+              <p className="text-sm text-red-800 dark:text-red-300">
                 Biztosan le szeretné mondani ezt az időpontot? A lemondás után az időpont újra elérhetővé válik más páciensek számára.
               </p>
             </div>
 
-            <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+            <div className="bg-gray-50 dark:bg-gray-800/60 rounded-lg p-4 space-y-3">
               <div className="flex items-start gap-3">
                 <Calendar className="w-5 h-5 text-medical-primary mt-0.5 flex-shrink-0" />
                 <div>
-                  <div className="text-sm font-medium text-gray-500">Dátum és idő</div>
-                  <div className="text-base font-semibold text-gray-900">
+                  <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Dátum és idő</div>
+                  <div className="text-base font-semibold text-gray-900 dark:text-gray-100">
                     {format(startTime, 'yyyy. MMMM d. EEEE, HH:mm', { locale: hu })}
                   </div>
                 </div>
@@ -87,8 +87,8 @@ export function CancellationModal({ appointment, onConfirm, onCancel, loading = 
                 <div className="flex items-start gap-3">
                   <User className="w-5 h-5 text-medical-primary mt-0.5 flex-shrink-0" />
                   <div>
-                    <div className="text-sm font-medium text-gray-500">Orvos</div>
-                    <div className="text-base font-semibold text-gray-900">
+                    <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Orvos</div>
+                    <div className="text-base font-semibold text-gray-900 dark:text-gray-100">
                       {appointment.dentistName}
                     </div>
                   </div>
@@ -98,8 +98,8 @@ export function CancellationModal({ appointment, onConfirm, onCancel, loading = 
               <div className="flex items-start gap-3">
                 <MapPin className="w-5 h-5 text-medical-primary mt-0.5 flex-shrink-0" />
                 <div>
-                  <div className="text-sm font-medium text-gray-500">Helyszín</div>
-                  <div className="text-base font-semibold text-gray-900">
+                  <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Helyszín</div>
+                  <div className="text-base font-semibold text-gray-900 dark:text-gray-100">
                     {displayCim}
                     {appointment.teremszam && ` • ${appointment.teremszam}. terem`}
                   </div>
@@ -108,8 +108,8 @@ export function CancellationModal({ appointment, onConfirm, onCancel, loading = 
             </div>
 
             <div>
-              <label htmlFor="cancellation-reason" className="block text-sm font-medium text-gray-700 mb-2">
-                Lemondás indoka <span className="text-red-600">*</span>
+              <label htmlFor="cancellation-reason" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Lemondás indoka <span className="text-red-600 dark:text-red-300">*</span>
               </label>
               <textarea
                 id="cancellation-reason"
@@ -125,22 +125,22 @@ export function CancellationModal({ appointment, onConfirm, onCancel, loading = 
                 required
               />
               {error && (
-                <p className="mt-1 text-sm text-red-600">{error}</p>
+                <p className="mt-1 text-sm text-red-600 dark:text-red-300">{error}</p>
               )}
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 Minimum 10 karakter szükséges
               </p>
             </div>
 
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <p className="text-sm text-blue-800">
+            <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+              <p className="text-sm text-blue-800 dark:text-blue-300">
                 A lemondás után email értesítést kap az orvos és az adminisztráció.
               </p>
             </div>
           </div>
 
           {/* Footer */}
-          <div className="flex gap-3 p-6 border-t bg-gray-50">
+          <div className="flex gap-3 p-6 border-t bg-gray-50 dark:bg-gray-800/60">
             <button
               type="button"
               onClick={onCancel}

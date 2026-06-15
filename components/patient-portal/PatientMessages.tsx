@@ -638,10 +638,10 @@ export function PatientMessages() {
   if (loading) {
     return (
       <div className="card">
-        <div className="flex h-[calc(100vh-200px)] sm:h-[700px] border border-gray-200 rounded-lg overflow-hidden bg-white items-center justify-center">
+        <div className="flex h-[calc(100vh-200px)] sm:h-[700px] border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden bg-white dark:bg-gray-900 items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-500">Betöltés...</p>
+            <p className="text-gray-500 dark:text-gray-400">Betöltés...</p>
           </div>
         </div>
       </div>
@@ -650,7 +650,7 @@ export function PatientMessages() {
 
   if (!patientId) {
     return (
-      <div className="card p-6 text-center text-gray-500">
+      <div className="card p-6 text-center text-gray-500 dark:text-gray-400">
         <p>Beteg adatok betöltése...</p>
       </div>
     );
@@ -665,9 +665,9 @@ export function PatientMessages() {
 
   // Conversations list
   const conversationsListContent = conversations.length === 0 && !loading ? (
-    <div className="p-4 text-center text-gray-500 text-sm">
+    <div className="p-4 text-center text-gray-500 dark:text-gray-400 text-sm">
       Még nincsenek beszélgetések
-      <p className="text-xs mt-2 text-gray-400">Kattintson az &quot;Új beszélgetés&quot; gombra egy orvos kiválasztásához</p>
+      <p className="text-xs mt-2 text-gray-400 dark:text-gray-500">Kattintson az &quot;Új beszélgetés&quot; gombra egy orvos kiválasztásához</p>
     </div>
   ) : (
     conversations.map((conv) => {
@@ -679,29 +679,29 @@ export function PatientMessages() {
         <div
           key={conv.doctorId}
           onClick={() => handleSelectDoctor(conv.doctorId, conv.doctorName)}
-          className={`p-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${
-            isSelected ? 'bg-blue-100 border-l-4 border-l-blue-600' : ''
+          className={`p-3 border-b border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${
+            isSelected ? 'bg-blue-100 dark:bg-blue-950/50 border-l-4 border-l-blue-600' : ''
           }`}
         >
           <div className="flex items-center gap-3">
             <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ${
-              conv.unreadCount > 0 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+              conv.unreadCount > 0 ? 'bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
             }`}>
               {monogram}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <span className={`text-sm truncate ${conv.unreadCount > 0 ? 'font-semibold text-gray-900' : 'font-medium text-gray-900'}`}>
+                  <span className={`text-sm truncate ${conv.unreadCount > 0 ? 'font-semibold text-gray-900 dark:text-gray-100' : 'font-medium text-gray-900 dark:text-gray-100'}`}>
                     {conv.doctorName}
                   </span>
                   {recipient?.type === 'treating_doctor' && (
-                    <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full flex-shrink-0">Kezelőorvos</span>
+                    <span className="text-[10px] text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded-full flex-shrink-0">Kezelőorvos</span>
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   {conv.lastMessage && (
-                    <span className="text-xs text-gray-400">{formatConversationTime(conv.lastMessage.createdAt)}</span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">{formatConversationTime(conv.lastMessage.createdAt)}</span>
                   )}
                   {conv.unreadCount > 0 && (
                     <span className="px-1.5 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full min-w-[20px] text-center">
@@ -711,7 +711,7 @@ export function PatientMessages() {
                 </div>
               </div>
               {conv.lastMessage && (
-                <p className={`text-xs mt-0.5 truncate ${conv.unreadCount > 0 ? 'text-gray-700 font-medium' : 'text-gray-500'}`}>
+                <p className={`text-xs mt-0.5 truncate ${conv.unreadCount > 0 ? 'text-gray-700 dark:text-gray-300 font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
                   {conv.lastMessage.senderType === 'patient' ? 'Ön: ' : ''}
                   {conv.lastMessage.message.substring(0, 50)}
                   {conv.lastMessage.message.length > 50 ? '...' : ''}
@@ -727,16 +727,16 @@ export function PatientMessages() {
   // Detail header
   const detailHeaderContent = (
     <>
-      <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">
+      <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
         {selectedDoctorName || 'Üzenetek'}
       </h3>
       {(() => {
         const recipient = recipients.find(r => r.id === selectedDoctorId);
         if (recipient?.type === 'treating_doctor') {
-          return <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full mt-1 inline-block">Kezelőorvos</span>;
+          return <span className="text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 rounded-full mt-1 inline-block">Kezelőorvos</span>;
         }
         if (recipient?.type === 'admin') {
-          return <span className="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full mt-1 inline-block">Admin</span>;
+          return <span className="text-xs text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded-full mt-1 inline-block">Admin</span>;
         }
         return null;
       })()}
@@ -757,10 +757,10 @@ export function PatientMessages() {
         {messagesLoading ? (
           <div className="text-center py-12">
             <Loader2 className="w-8 h-8 mx-auto mb-2 text-gray-300 animate-spin" />
-            <p className="text-sm text-gray-500">Üzenetek betöltése...</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Üzenetek betöltése...</p>
           </div>
         ) : messages.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
+          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
             <MessageCircle className="w-16 h-16 mx-auto mb-4 text-gray-300" />
             <p className="text-base font-medium">Még nincsenek üzenetek</p>
             <p className="text-sm mt-2">Küldjön üzenetet!</p>
@@ -799,9 +799,9 @@ export function PatientMessages() {
               <div key={message.id}>
                 {showDateSeparator && (
                   <div className="flex items-center gap-3 my-4">
-                    <div className="flex-1 border-t border-gray-300" />
-                    <span className="text-xs font-medium text-gray-500 whitespace-nowrap">{dateSeparatorLabel}</span>
-                    <div className="flex-1 border-t border-gray-300" />
+                    <div className="flex-1 border-t border-gray-300 dark:border-gray-700" />
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">{dateSeparatorLabel}</span>
+                    <div className="flex-1 border-t border-gray-300 dark:border-gray-700" />
                   </div>
                 )}
               <div
@@ -810,14 +810,14 @@ export function PatientMessages() {
               >
                 <div className={`flex gap-2 max-w-[80%] sm:max-w-[70%] ${isMyMessage ? 'flex-row-reverse' : 'flex-row'}`}>
                   {isTheirMessage && (
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-semibold">
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 flex items-center justify-center text-xs font-semibold">
                       {monogram}
                     </div>
                   )}
                   
                   <div className={`flex flex-col ${isMyMessage ? 'items-end' : 'items-start'}`}>
                     {isTheirMessage && (
-                      <div className="text-xs font-medium text-gray-600 mb-1 px-1">
+                      <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 px-1">
                         {lastName}
                       </div>
                     )}
@@ -827,7 +827,7 @@ export function PatientMessages() {
                         <button
                           type="button"
                           onClick={() => startReplyTo(message)}
-                          className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity p-1 rounded-full bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-300 shadow-sm flex-shrink-0"
+                          className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity p-1 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 hover:text-blue-600 hover:border-blue-300 shadow-sm flex-shrink-0"
                           aria-label="Válasz erre az üzenetre"
                           title="Válasz"
                         >
@@ -840,8 +840,8 @@ export function PatientMessages() {
                           isMyMessage
                             ? 'bg-green-500 text-white rounded-br-md'
                             : isUnread
-                            ? 'bg-white text-gray-900 border-2 border-blue-400 shadow-md'
-                            : 'bg-white text-gray-900 border border-gray-200'
+                            ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border-2 border-blue-400 shadow-md'
+                            : 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-800'
                         }`}
                       >
                         {/* Slice 0.6: idézet előnézet a buborékon belül */}
@@ -867,7 +867,7 @@ export function PatientMessages() {
                           />
                         )}
 
-                        <div className={`text-sm whitespace-pre-wrap break-words ${isMyMessage ? 'text-white' : 'text-gray-900'}`}>
+                        <div className={`text-sm whitespace-pre-wrap break-words ${isMyMessage ? 'text-white' : 'text-gray-900 dark:text-gray-100'}`}>
                           <MessageTextRenderer
                             text={message.message}
                             chatType="patient-doctor"
@@ -884,7 +884,7 @@ export function PatientMessages() {
                         </div>
 
                         <div className={`flex items-center gap-1.5 mt-1.5 ${isMyMessage ? 'justify-end' : 'justify-start'}`}>
-                          <span className={`text-[10px] ${isMyMessage ? 'text-green-100' : 'text-gray-500'}`}>
+                          <span className={`text-[10px] ${isMyMessage ? 'text-green-100' : 'text-gray-500 dark:text-gray-400'}`}>
                             {format(new Date(message.createdAt), 'HH:mm', { locale: hu })}
                           </span>
                           {isMyMessage && (
@@ -927,7 +927,7 @@ export function PatientMessages() {
                         type="button"
                         onClick={() => handleReplyThreadToggle(message.id)}
                         className={`mt-1 text-xs font-medium underline-offset-2 hover:underline ${
-                          isMyMessage ? 'text-green-700' : 'text-gray-600'
+                          isMyMessage ? 'text-green-700 dark:text-green-300' : 'text-gray-600 dark:text-gray-400'
                         }`}
                       >
                         {replyThreadToggleLabel(message.replyCount ?? 0, isCollapsed(message.id))}
@@ -959,7 +959,7 @@ export function PatientMessages() {
       )}
 
       {/* Input Area */}
-      <div className="flex-shrink-0 border-t bg-white p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-4">
+      <div className="flex-shrink-0 border-t bg-white dark:bg-gray-900 p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-4">
         <div className="flex items-end gap-2">
           <DocumentLinkComposerButton
             chatType="patient-doctor"
@@ -983,7 +983,7 @@ export function PatientMessages() {
                 handleSendMessage();
               }
             }}
-            className="form-input flex-1 resize-none rounded-xl border-gray-300 focus:border-blue-500 focus:ring-blue-500 min-h-[44px]"
+            className="form-input flex-1 resize-none rounded-xl border-gray-300 dark:border-gray-700 focus:border-blue-500 focus:ring-blue-500 min-h-[44px]"
             rows={2}
             placeholder="Írja be üzenetét..."
             disabled={sending}
@@ -1008,21 +1008,21 @@ export function PatientMessages() {
   // New chat content
   const newChatContent = (
     <>
-      <div className="p-3 sm:p-4 border-b border-gray-200 bg-gray-50">
+      <div className="p-3 sm:p-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-base sm:text-lg font-semibold text-gray-900">Új beszélgetés</h3>
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">Új beszélgetés</h3>
           <button
             onClick={() => {
               setShowNewChat(false);
               setDoctorSearchQuery('');
             }}
-            className="p-1 hover:bg-gray-200 rounded transition-colors mobile-touch-target"
+            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors mobile-touch-target"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
           <input
             type="text"
             value={doctorSearchQuery}
@@ -1035,7 +1035,7 @@ export function PatientMessages() {
       </div>
       <div className="flex-1 overflow-y-auto">
         {filteredRecipients.length === 0 ? (
-          <div className="p-4 text-center text-gray-500 text-sm">
+          <div className="p-4 text-center text-gray-500 dark:text-gray-400 text-sm">
             {doctorSearchQuery ? 'Nincs találat' : 'Minden orvossal van már beszélgetése'}
           </div>
         ) : (
@@ -1043,20 +1043,20 @@ export function PatientMessages() {
             <div
               key={recipient.id}
               onClick={() => handleSelectDoctor(recipient.id, recipient.name)}
-              className="p-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors"
+              className="p-3 border-b border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
             >
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-sm font-semibold flex-shrink-0">
+                <div className="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 flex items-center justify-center text-sm font-semibold flex-shrink-0">
                   {getMonogram(recipient.name)}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-medium text-gray-900 truncate">{recipient.name}</span>
+                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{recipient.name}</span>
                     {recipient.type === 'treating_doctor' && (
-                      <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full flex-shrink-0">Kezelőorvos</span>
+                      <span className="text-[10px] text-blue-600 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded-full flex-shrink-0">Kezelőorvos</span>
                     )}
                     {recipient.type === 'admin' && (
-                      <span className="text-[10px] text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded-full flex-shrink-0">Admin</span>
+                      <span className="text-[10px] text-purple-600 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 px-1.5 py-0.5 rounded-full flex-shrink-0">Admin</span>
                     )}
                   </div>
                 </div>

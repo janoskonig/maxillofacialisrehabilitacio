@@ -34,7 +34,7 @@ export function MobileBackButton({
     <button
       type="button"
       onClick={handleClick}
-      className={`flex items-center gap-2 text-gray-700 hover:text-gray-900 transition-colors ${className}`}
+      className={`flex items-center gap-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 transition-colors ${className}`}
       aria-label={label}
     >
       <ArrowLeft className="w-5 h-5" />

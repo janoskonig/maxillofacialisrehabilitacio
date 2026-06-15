@@ -36,9 +36,9 @@ const poolLabels: Record<string, string> = {
 };
 
 const poolColors: Record<string, string> = {
-  consult: 'bg-purple-100 text-purple-700',
-  work: 'bg-blue-100 text-blue-700',
-  control: 'bg-teal-100 text-teal-700',
+  consult: 'bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300',
+  work: 'bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300',
+  control: 'bg-teal-100 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300',
 };
 
 function formatDate(iso: string): string {
@@ -105,8 +105,8 @@ export function EpisodeStepProjections({ episodeId, refreshTrigger }: EpisodeSte
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <div className="flex items-center gap-2 text-gray-500">
+      <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
+        <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
           <Loader2 className="w-4 h-4 animate-spin" />
           <span className="text-sm">Tervezett ütemezés betöltése…</span>
         </div>
@@ -116,20 +116,20 @@ export function EpisodeStepProjections({ episodeId, refreshTrigger }: EpisodeSte
 
   if (error) {
     return (
-      <div className="bg-white rounded-lg border border-red-200 p-4">
-        <p className="text-sm text-red-700">{error}</p>
+      <div className="bg-white dark:bg-gray-900 rounded-lg border border-red-200 dark:border-red-800 p-4">
+        <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
       </div>
     );
   }
 
   if (blocked) {
     return (
-      <div className="bg-white rounded-lg border border-amber-200 p-4">
-        <div className="flex items-center gap-2 text-amber-700">
+      <div className="bg-white dark:bg-gray-900 rounded-lg border border-amber-200 dark:border-amber-800 p-4">
+        <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
           <AlertTriangle className="w-4 h-4" />
           <p className="text-sm font-medium">Nem tudunk ütemezést becsülni</p>
         </div>
-        {blockedReason && <p className="text-sm text-amber-600 mt-1 ml-6">{blockedReason}</p>}
+        {blockedReason && <p className="text-sm text-amber-600 dark:text-amber-300 mt-1 ml-6">{blockedReason}</p>}
       </div>
     );
   }
@@ -142,16 +142,16 @@ export function EpisodeStepProjections({ episodeId, refreshTrigger }: EpisodeSte
   const progress = totalSteps > 0 ? (completedSteps.length / totalSteps) * 100 : 0;
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200">
+    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
       >
         <div className="flex items-center gap-2">
           <CalendarDays className="w-5 h-5 text-medical-primary" />
           <div>
-            <h3 className="text-base font-semibold text-gray-900">Tervezett ütemezés</h3>
-            <p className="text-sm text-gray-500 mt-0.5">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Tervezett ütemezés</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
               {summary?.remainingCount ?? 0} hátralévő lépés
               {summary?.nextStepWaitDays != null && summary.nextStepWaitDays > 0 && (
                 <> · következő {formatWaitDays(summary.nextStepWaitDays)}</>
@@ -160,10 +160,10 @@ export function EpisodeStepProjections({ episodeId, refreshTrigger }: EpisodeSte
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-500">
+          <span className="text-xs text-gray-500 dark:text-gray-400">
             {completedSteps.length}/{totalSteps} kész
           </span>
-          {expanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+          {expanded ? <ChevronUp className="w-4 h-4 text-gray-400 dark:text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-400 dark:text-gray-500" />}
         </div>
       </button>
 
@@ -171,7 +171,7 @@ export function EpisodeStepProjections({ episodeId, refreshTrigger }: EpisodeSte
         <div className="px-4 pb-4">
           {/* Progress bar */}
           <div className="mb-4">
-            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
               <div
                 className="h-full bg-medical-primary rounded-full transition-all duration-500"
                 style={{ width: `${progress}%` }}
@@ -184,8 +184,8 @@ export function EpisodeStepProjections({ episodeId, refreshTrigger }: EpisodeSte
             <div className="mb-4 flex items-center gap-3 p-3 rounded-lg bg-medical-primary/5 border border-medical-primary/10">
               <CalendarDays className="w-5 h-5 text-medical-primary shrink-0" />
               <div className="text-sm">
-                <span className="font-medium text-gray-900">Becsült befejezés: </span>
-                <span className="text-gray-700">
+                <span className="font-medium text-gray-900 dark:text-gray-100">Becsült befejezés: </span>
+                <span className="text-gray-700 dark:text-gray-300">
                   {summary.estimatedCompletionEarliest && summary.estimatedCompletionLatest
                     ? `${formatDate(summary.estimatedCompletionEarliest)} – ${formatDate(summary.estimatedCompletionLatest)}`
                     : summary.estimatedCompletionLatest
@@ -211,8 +211,8 @@ export function EpisodeStepProjections({ episodeId, refreshTrigger }: EpisodeSte
                     <StepDot status={step.status} isNext={isNext} />
                     {!isLast && (
                       <div className={`w-0.5 flex-1 min-h-[1.5rem] ${
-                        step.status === 'completed' ? 'bg-green-300' :
-                        step.status === 'skipped' ? 'bg-amber-200' : 'bg-gray-200'
+                        step.status === 'completed' ? 'bg-green-300 dark:bg-green-800' :
+                        step.status === 'skipped' ? 'bg-amber-200 dark:bg-amber-800' : 'bg-gray-200 dark:bg-gray-700'
                       }`} />
                     )}
                   </div>
@@ -225,7 +225,7 @@ export function EpisodeStepProjections({ episodeId, refreshTrigger }: EpisodeSte
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className={`text-sm font-medium ${
-                            step.status === 'skipped' ? 'line-through text-gray-400' : 'text-gray-900'
+                            step.status === 'skipped' ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'
                           }`}>
                             {step.label}
                           </span>
@@ -235,19 +235,19 @@ export function EpisodeStepProjections({ episodeId, refreshTrigger }: EpisodeSte
                             </span>
                           )}
                           {step.mergedPartLabels && step.mergedPartLabels.length > 0 && (
-                            <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">
+                            <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300">
                               +{step.mergedPartLabels.length} összevonva
                             </span>
                           )}
-                          <span className={`text-xs px-1.5 py-0.5 rounded ${poolColors[step.pool] ?? 'bg-gray-100 text-gray-600'}`}>
+                          <span className={`text-xs px-1.5 py-0.5 rounded ${poolColors[step.pool] ?? 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'}`}>
                             {poolLabels[step.pool] ?? step.pool}
                           </span>
-                          <span className="text-xs text-gray-400">{step.durationMinutes} perc</span>
+                          <span className="text-xs text-gray-400 dark:text-gray-500">{step.durationMinutes} perc</span>
                         </div>
                         {step.mergedPartLabels && step.mergedPartLabels.length > 0 && (
                           <div className="mt-1 ml-0.5 space-y-0.5">
                             {step.mergedPartLabels.map((part, i) => (
-                              <div key={`${part}-${i}`} className="flex items-center gap-1.5 text-xs text-violet-600">
+                              <div key={`${part}-${i}`} className="flex items-center gap-1.5 text-xs text-violet-600 dark:text-violet-300">
                                 <Merge className="w-3 h-3 shrink-0" />
                                 <span className="min-w-0">{part}</span>
                               </div>
@@ -258,33 +258,33 @@ export function EpisodeStepProjections({ episodeId, refreshTrigger }: EpisodeSte
                         {/* Date/window info */}
                         <div className="mt-1">
                           {step.status === 'completed' && step.actualDate && (
-                            <span className="text-xs text-green-600">
+                            <span className="text-xs text-green-600 dark:text-green-300">
                               ✓ Kész – {formatDateLong(step.actualDate)}
                             </span>
                           )}
                           {step.status === 'scheduled' && step.actualDate && (
-                            <span className="text-xs text-blue-600">
+                            <span className="text-xs text-blue-600 dark:text-blue-300">
                               📅 Foglalva – {formatDateLong(step.actualDate)}
                               {step.waitFromNowDays != null && step.waitFromNowDays > 0 && (
-                                <span className="text-gray-500"> ({formatWaitDays(step.waitFromNowDays)})</span>
+                                <span className="text-gray-500 dark:text-gray-400"> ({formatWaitDays(step.waitFromNowDays)})</span>
                               )}
                             </span>
                           )}
                           {step.status === 'pending' && step.windowStart && step.windowEnd && (
-                            <span className="text-xs text-gray-600">
+                            <span className="text-xs text-gray-600 dark:text-gray-400">
                               🕐 {formatDate(step.windowStart)} – {formatDate(step.windowEnd)}
                               {step.waitFromNowDays != null && (
-                                <span className="text-gray-500 ml-1">
+                                <span className="text-gray-500 dark:text-gray-400 ml-1">
                                   ({step.waitFromNowDays === 0 ? 'most ütemezendő' : formatWaitDays(step.waitFromNowDays)})
                                 </span>
                               )}
                             </span>
                           )}
                           {step.status === 'pending' && !step.windowStart && (
-                            <span className="text-xs text-gray-400 italic">Időablak számítása…</span>
+                            <span className="text-xs text-gray-400 dark:text-gray-500 italic">Időablak számítása…</span>
                           )}
                           {step.status === 'skipped' && (
-                            <span className="text-xs text-amber-500">Átugorva</span>
+                            <span className="text-xs text-amber-500 dark:text-amber-400">Átugorva</span>
                           )}
                         </div>
                       </div>
@@ -303,31 +303,31 @@ export function EpisodeStepProjections({ episodeId, refreshTrigger }: EpisodeSte
 function StepDot({ status, isNext }: { status: string; isNext: boolean }) {
   if (status === 'completed') {
     return (
-      <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center">
-        <CheckCircle2 className="w-4 h-4 text-green-600" />
+      <div className="w-6 h-6 rounded-full bg-green-100 dark:bg-green-950/50 flex items-center justify-center">
+        <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-300" />
       </div>
     );
   }
   if (status === 'scheduled') {
     return (
-      <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
-        <Clock className="w-4 h-4 text-blue-600" />
+      <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-950/50 flex items-center justify-center">
+        <Clock className="w-4 h-4 text-blue-600 dark:text-blue-300" />
       </div>
     );
   }
   if (status === 'skipped') {
     return (
-      <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center">
-        <SkipForward className="w-4 h-4 text-amber-500" />
+      <div className="w-6 h-6 rounded-full bg-amber-100 dark:bg-amber-950/50 flex items-center justify-center">
+        <SkipForward className="w-4 h-4 text-amber-500 dark:text-amber-400" />
       </div>
     );
   }
   // pending
   return (
     <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-      isNext ? 'bg-medical-primary/15 ring-2 ring-medical-primary/30' : 'bg-gray-100'
+      isNext ? 'bg-medical-primary/15 ring-2 ring-medical-primary/30' : 'bg-gray-100 dark:bg-gray-800'
     }`}>
-      <Circle className={`w-4 h-4 ${isNext ? 'text-medical-primary' : 'text-gray-300'}`} />
+      <Circle className={`w-4 h-4 ${isNext ? 'text-medical-primary' : 'text-gray-300 dark:text-gray-600'}`} />
     </div>
   );
 }

@@ -165,24 +165,24 @@ export function PortalLogin() {
 
   if (step === 'register') {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 sm:p-6">
-        <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-3 sm:mb-4">
+      <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm p-4 sm:p-6">
+        <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100 mb-3 sm:mb-4">
           Regisztráció
         </h2>
-        <p className="text-xs sm:text-sm text-gray-600 mb-4 sm:mb-6">
+        <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-4 sm:mb-6">
           Kérjük, töltse ki az alábbi adatokat az időpontfoglaláshoz.
         </p>
 
         <form onSubmit={handleRegister} className="space-y-3 sm:space-y-4">
           {/* Basic Info Section */}
-          <div className="border-b border-gray-200 pb-3 sm:pb-4">
-            <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3">Alapadatok</h3>
+          <div className="border-b border-gray-200 dark:border-gray-800 pb-3 sm:pb-4">
+            <h3 className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 sm:mb-3">Alapadatok</h3>
             
             <div className="space-y-3 sm:space-y-4">
               <div>
                 <label htmlFor="email" className="form-label flex items-center gap-2">
                   <Mail className="w-4 h-4" />
-                  Email cím <span className="text-red-500">*</span>
+                  Email cím <span className="text-red-500 dark:text-red-400">*</span>
                 </label>
                 <input
                   id="email"
@@ -199,7 +199,7 @@ export function PortalLogin() {
               <div>
                 <label htmlFor="taj" className="form-label flex items-center gap-2">
                   <CreditCard className="w-4 h-4" />
-                  TAJ szám <span className="text-red-500">*</span>
+                  TAJ szám <span className="text-red-500 dark:text-red-400">*</span>
                 </label>
                 <input
                   id="taj"
@@ -213,12 +213,12 @@ export function PortalLogin() {
                   maxLength={11}
                 />
                 {tajHasChecksumError(taj) ? (
-                  <p className="text-amber-600 text-xs mt-1 flex items-center gap-1">
+                  <p className="text-amber-600 dark:text-amber-300 text-xs mt-1 flex items-center gap-1">
                     <AlertTriangle className="w-3 h-3 flex-shrink-0" />
                     Az ellenőrző számjegy nem megfelelő. Kérjük, ellenőrizze a TAJ számot.
                   </p>
                 ) : (
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     Formátum: XXX-XXX-XXX (9 számjegy)
                   </p>
                 )}
@@ -227,7 +227,7 @@ export function PortalLogin() {
               <div>
                 <label htmlFor="nev" className="form-label flex items-center gap-2">
                   <User className="w-4 h-4" />
-                  Teljes név <span className="text-red-500">*</span>
+                  Teljes név <span className="text-red-500 dark:text-red-400">*</span>
                 </label>
                 <input
                   id="nev"
@@ -245,7 +245,7 @@ export function PortalLogin() {
                 <div>
                   <label htmlFor="szuletesiDatum" className="form-label flex items-center gap-2">
                     <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                    Születési dátum <span className="text-red-500">*</span>
+                    Születési dátum <span className="text-red-500 dark:text-red-400">*</span>
                   </label>
                   <input
                     id="szuletesiDatum"
@@ -261,7 +261,7 @@ export function PortalLogin() {
 
                 <div>
                   <label htmlFor="nem" className="form-label">
-                    Nem <span className="text-red-500">*</span>
+                    Nem <span className="text-red-500 dark:text-red-400">*</span>
                   </label>
                   <select
                     id="nem"
@@ -298,8 +298,8 @@ export function PortalLogin() {
           </div>
 
           {/* Address Section */}
-          <div className="border-b border-gray-200 pb-3 sm:pb-4">
-            <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3">Lakcím</h3>
+          <div className="border-b border-gray-200 dark:border-gray-800 pb-3 sm:pb-4">
+            <h3 className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 sm:mb-3">Lakcím</h3>
             
             <div className="space-y-3 sm:space-y-4">
               <div>
@@ -355,7 +355,7 @@ export function PortalLogin() {
 
           {/* Referral Section */}
           <div>
-            <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3">Beutaló adatok</h3>
+            <h3 className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 sm:mb-3">Beutaló adatok</h3>
             
             <div className="space-y-3 sm:space-y-4">
               <div>
@@ -426,11 +426,11 @@ export function PortalLogin() {
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 sm:p-6">
-      <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-3 sm:mb-4">
+    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm p-4 sm:p-6">
+      <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100 mb-3 sm:mb-4">
         Bejelentkezés
       </h2>
-      <p className="text-xs sm:text-sm text-gray-600 mb-4 sm:mb-6">
+      <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-4 sm:mb-6">
         Adja meg email címét és TAJ számát. Bejelentkezési linket küldünk emailben. Ha még nem regisztrált, automatikusan létrehozzuk a fiókját.
       </p>
 
@@ -469,12 +469,12 @@ export function PortalLogin() {
             maxLength={11}
           />
           {tajHasChecksumError(taj) ? (
-            <p className="text-amber-600 text-xs mt-1 flex items-center gap-1">
+            <p className="text-amber-600 dark:text-amber-300 text-xs mt-1 flex items-center gap-1">
               <AlertTriangle className="w-3 h-3 flex-shrink-0" />
               Az ellenőrző számjegy nem megfelelő. Kérjük, ellenőrizze a TAJ számot.
             </p>
           ) : (
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               Formátum: XXX-XXX-XXX (9 számjegy)
             </p>
           )}

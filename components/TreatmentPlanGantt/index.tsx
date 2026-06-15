@@ -184,10 +184,10 @@ export function TreatmentPlanGantt() {
       />
 
       <div className="flex flex-wrap gap-2 text-xs">
-        <span className="px-2 py-1 rounded bg-gray-100 text-gray-600">
+        <span className="px-2 py-1 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
           {filtered.length} megjelenítve / {episodes.length} betöltve
         </span>
-        <span className="px-2 py-1 rounded bg-amber-100 text-amber-800">{counts.actionNeededIn7d} figyelmet igényel</span>
+        <span className="px-2 py-1 rounded bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300">{counts.actionNeededIn7d} figyelmet igényel</span>
       </div>
 
       <Legend />
@@ -195,33 +195,33 @@ export function TreatmentPlanGantt() {
       {loading && (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="w-6 h-6 animate-spin text-medical-primary" />
-          <span className="ml-2 text-sm text-gray-500">Kezelési tervek betöltése…</span>
+          <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">Kezelési tervek betöltése…</span>
         </div>
       )}
 
-      {error && <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">{error}</div>}
+      {error && <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-lg p-4 text-sm text-red-700 dark:text-red-300">{error}</div>}
 
       {!loading && !error && episodes.length === 0 && (
-        <div className="text-center py-12 text-gray-500">
+        <div className="text-center py-12 text-gray-500 dark:text-gray-400">
           <Calendar className="w-10 h-10 mx-auto mb-2 text-gray-300" />
           <p className="text-sm">Nincs kezelési terv idővonal adat.</p>
         </div>
       )}
 
       {!loading && !error && filtered.length === 0 && episodes.length > 0 && (
-        <div className="text-center py-8 text-sm text-gray-600">Nincs a szűrőknek megfelelő epizód.</div>
+        <div className="text-center py-8 text-sm text-gray-600 dark:text-gray-400">Nincs a szűrőknek megfelelő epizód.</div>
       )}
 
       {!loading && !error && filtered.length > 0 && (
         <div
-          className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm"
+          className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm"
           role="region"
           aria-label="Kezelési tervek idővonala"
         >
           <div className="flex flex-col" style={{ minWidth: leftCol + trackW }}>
-            <div className="flex shrink-0 border-b border-gray-200 bg-gray-50/90">
+            <div className="flex shrink-0 border-b border-gray-200 dark:border-gray-800 bg-gray-50/90 dark:bg-gray-800/90">
               <div
-                className="sticky left-0 z-20 flex-shrink-0 border-r border-gray-200 bg-gray-50/95"
+                className="sticky left-0 z-20 flex-shrink-0 border-r border-gray-200 dark:border-gray-800 bg-gray-50/95 dark:bg-gray-800/95"
                 style={{ width: leftCol, minHeight: 48 }}
               />
               <TimelineHeader
@@ -260,7 +260,7 @@ export function TreatmentPlanGantt() {
       )}
 
       {meta && (
-        <div className="text-xs text-gray-400 text-right">
+        <div className="text-xs text-gray-400 dark:text-gray-500 text-right">
           Frissítve: {new Date(meta.fetchedAt).toLocaleTimeString('hu-HU')} · ETA = heurisztikus becslés
         </div>
       )}

@@ -71,36 +71,38 @@ export function WeekView({
   };
 
   return (
-    <div className="bg-white rounded-lg border overflow-x-auto">
-      <div className="min-w-full sm:min-w-[800px]">
+    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 overflow-x-auto">
+      {/* On mobile, force a comfortable column width and scroll horizontally so the
+          week stays readable instead of cramming 8 columns into the viewport. */}
+      <div className="min-w-[760px]">
         {/* Virtual lane - top */}
         {includeVirtual && weekVirtualItems.length > 0 && (
           <VirtualLane items={weekVirtualItems} mode="week" weekDates={days} />
         )}
 
         {/* Day headers */}
-        <div className="grid grid-cols-8 border-b sticky top-0 bg-white z-10">
-          <div className="p-2 border-r"></div>
+        <div className="grid grid-cols-8 border-b border-gray-200 dark:border-gray-800 sticky top-0 bg-white dark:bg-gray-900 z-10">
+          <div className="p-2 border-r border-gray-200 dark:border-gray-800"></div>
           {days.map((day) => {
             const isCurrentDay = isToday(day);
             return (
               <div
                 key={day.toISOString()}
-                className={`p-2 text-center border-r ${
-                  isCurrentDay ? 'bg-blue-50' : 'bg-gray-50'
+                className={`p-2 text-center border-r border-gray-200 dark:border-gray-800 ${
+                  isCurrentDay ? 'bg-blue-50 dark:bg-blue-950/40' : 'bg-gray-50 dark:bg-gray-800/60'
                 }`}
               >
-                <div className="text-xs font-medium text-gray-600">
+                <div className="text-xs font-medium text-gray-600 dark:text-gray-400">
                   {format(day, 'EEEE', { locale: hu })}
                 </div>
                 <div
                   className={`text-lg font-bold ${
-                    isCurrentDay ? 'text-blue-600' : 'text-gray-900'
+                    isCurrentDay ? 'text-blue-600 dark:text-blue-400' : 'text-gray-900 dark:text-gray-100'
                   }`}
                 >
                   {format(day, 'd')}
                 </div>
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-gray-500 dark:text-gray-400">
                   {format(day, 'MMM', { locale: hu })}
                 </div>
               </div>
@@ -111,11 +113,11 @@ export function WeekView({
         {/* Time slots */}
         <div className="grid grid-cols-8">
           {/* Hour labels */}
-          <div className="border-r">
+          <div className="border-r border-gray-200 dark:border-gray-800">
             {hours.map((hour) => (
               <div
                 key={hour}
-                className="h-16 border-b p-1 text-xs text-gray-500 text-right pr-2"
+                className="h-16 border-b border-gray-200 dark:border-gray-800 p-1 text-xs text-gray-500 dark:text-gray-400 text-right pr-2"
               >
                 {hour.toString().padStart(2, '0')}:00
               </div>
@@ -123,28 +125,36 @@ export function WeekView({
           </div>
 
           {/* Day columns */}
-          {days.map((day) => (
-            <div key={day.toISOString()} className="border-r">
-              {hours.map((hour) => {
-                const hourAppointments = getAppointmentsForHour(day, hour);
-                return (
-                  <div
-                    key={`${day.toISOString()}-${hour}`}
-                    className="h-16 border-b p-1"
-                  >
-                    {hourAppointments.map((appointment) => (
-                      <CalendarEvent
-                        key={appointment.id}
-                        appointment={appointment}
-                        onClick={() => onAppointmentClick?.(appointment)}
-                        compact
-                      />
-                    ))}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
+          {days.map((day) => {
+            const isCurrentDay = isToday(day);
+            return (
+              <div
+                key={day.toISOString()}
+                className={`border-r border-gray-200 dark:border-gray-800 ${
+                  isCurrentDay ? 'bg-blue-50/40 dark:bg-blue-950/20' : ''
+                }`}
+              >
+                {hours.map((hour) => {
+                  const hourAppointments = getAppointmentsForHour(day, hour);
+                  return (
+                    <div
+                      key={`${day.toISOString()}-${hour}`}
+                      className="h-16 border-b border-gray-200 dark:border-gray-800 p-1 space-y-0.5"
+                    >
+                      {hourAppointments.map((appointment) => (
+                        <CalendarEvent
+                          key={appointment.id}
+                          appointment={appointment}
+                          onClick={() => onAppointmentClick?.(appointment)}
+                          compact
+                        />
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

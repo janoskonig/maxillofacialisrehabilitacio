@@ -56,19 +56,19 @@ export function PrivacyNoticeCard() {
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow p-4 text-sm text-gray-500">
+      <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-4 text-sm text-gray-500 dark:text-gray-400">
         Adatkezelési tájékoztató betöltése…
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2 mb-2">
+    <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-6">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2 mb-2">
         <ShieldCheck className="w-5 h-5 text-medical-primary" />
         Adatkezelési tájékoztató
       </h3>
-      <p className="text-sm text-gray-600 mb-4">
+      <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
         Az ellátási adatkezelés jogalapja a GDPR 9. cikk (2) h) pontja és az 1997. évi CLIV.
         törvény — ehhez nem hozzájárulás, hanem a tájékoztató megismerése szükséges.{' '}
         <Link href="/privacy-hu" className="text-medical-primary hover:underline">
@@ -77,20 +77,20 @@ export function PrivacyNoticeCard() {
       </p>
 
       {isMinor && (
-        <p className="text-xs text-amber-800 bg-amber-50 rounded-lg p-3 mb-3">
+        <p className="text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 rounded-lg p-3 mb-3">
           Kiskorú páciens — a nyilatkozatot a törvényes képviselő
           {guardianName ? ` (${guardianName})` : ''} teszi meg.
         </p>
       )}
 
       {acknowledged ? (
-        <div className="flex items-center gap-2 text-green-800 bg-green-50 rounded-lg p-3 text-sm">
+        <div className="flex items-center gap-2 text-green-800 dark:text-green-300 bg-green-50 dark:bg-green-950/40 rounded-lg p-3 text-sm">
           <CheckCircle2 className="w-5 h-5 shrink-0" />
           Tájékoztató tudomásul véve
         </div>
       ) : (
         <>
-          <label className="flex items-start gap-2 text-sm text-gray-700 mb-3">
+          <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300 mb-3">
             <input
               type="checkbox"
               checked={agreed}

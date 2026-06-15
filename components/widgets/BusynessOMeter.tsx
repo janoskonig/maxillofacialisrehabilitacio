@@ -56,11 +56,11 @@ const LEVEL_LABELS: Record<Level, string> = {
 };
 
 const LEVEL_TEXT_COLORS: Record<Level, string> = {
-  low: 'text-green-700',
-  medium: 'text-yellow-700',
-  high: 'text-orange-700',
-  critical: 'text-red-700',
-  unavailable: 'text-gray-500',
+  low: 'text-green-700 dark:text-green-300',
+  medium: 'text-yellow-700 dark:text-yellow-300',
+  high: 'text-orange-700 dark:text-orange-300',
+  critical: 'text-red-700 dark:text-red-300',
+  unavailable: 'text-gray-500 dark:text-gray-400',
 };
 
 const FLAG_LABELS: Record<string, string> = {
@@ -125,11 +125,11 @@ export function BusynessOMeter() {
 
   const headerExtra = (
     <div className="flex items-center gap-2 text-xs">
-      <label className="text-gray-500 hidden sm:inline">Horizont</label>
+      <label className="text-gray-500 dark:text-gray-400 hidden sm:inline">Horizont</label>
       <select
         value={horizonDays}
         onChange={(e) => setHorizonDays(parseInt(e.target.value, 10))}
-        className="border border-gray-200 rounded px-2 py-1 bg-white text-gray-700"
+        className="border border-gray-200 dark:border-gray-800 rounded px-2 py-1 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300"
       >
         {HORIZON_OPTIONS.map((o) => (
           <option key={o.value} value={o.value}>
@@ -144,10 +144,10 @@ export function BusynessOMeter() {
     return (
       <DashboardWidget title="Orvos terhelés" icon={<Activity className="w-5 h-5" />}>
         <div className="flex items-center justify-between mb-3">
-          <span className="text-xs text-gray-500">Heti penzum: 2 óra mindenkinek</span>
+          <span className="text-xs text-gray-500 dark:text-gray-400">Heti penzum: 2 óra mindenkinek</span>
           {headerExtra}
         </div>
-        <div className="text-center py-4 text-gray-500 text-sm">Betöltés...</div>
+        <div className="text-center py-4 text-gray-500 dark:text-gray-400 text-sm">Betöltés...</div>
       </DashboardWidget>
     );
   }
@@ -157,14 +157,14 @@ export function BusynessOMeter() {
   return (
     <DashboardWidget title="Orvos terhelés" icon={<Activity className="w-5 h-5" />}>
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <div className="flex items-center gap-1.5 text-xs text-gray-500">
+        <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
           <Info className="w-3.5 h-3.5" />
           <span>
-            Heti penzum: <span className="font-medium text-gray-700">2 óra</span>
+            Heti penzum: <span className="font-medium text-gray-700 dark:text-gray-300">2 óra</span>
             {data && (
               <>
                 {' '}· cél a horizontra:{' '}
-                <span className="font-medium text-gray-700">
+                <span className="font-medium text-gray-700 dark:text-gray-300">
                   {formatMinutes(Math.round((120 * data.horizonDays) / 7))}
                 </span>
               </>
@@ -175,30 +175,30 @@ export function BusynessOMeter() {
       </div>
 
       {doctors.length === 0 ? (
-        <div className="text-sm text-gray-500 py-2">Nincs megjeleníthető orvos.</div>
+        <div className="text-sm text-gray-500 dark:text-gray-400 py-2">Nincs megjeleníthető orvos.</div>
       ) : (
         <div className="space-y-1.5">
           {displayed.map((d) => {
             const isExpanded = expandedIds.has(d.userId);
             const width = barWidth(d.utilizationPct, d.level);
             return (
-              <div key={d.userId} className="border border-gray-100 rounded-lg overflow-hidden">
+              <div key={d.userId} className="border border-gray-100 dark:border-gray-800 rounded-lg overflow-hidden">
                 <button
                   type="button"
                   onClick={() => toggleExpanded(d.userId)}
-                  className="w-full grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 px-2.5 py-2 hover:bg-gray-50 transition-colors text-left"
+                  className="w-full grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 px-2.5 py-2 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors text-left"
                   aria-expanded={isExpanded}
                 >
                   <div className="min-w-0 flex items-center gap-2">
                     <span
-                      className={`text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                      className={`text-gray-400 dark:text-gray-500 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
                       aria-hidden="true"
                     >
                       ▶
                     </span>
                     <div className="min-w-0">
                       <div className="text-sm font-medium truncate">{d.name}</div>
-                      <div className="text-[11px] text-gray-500 truncate">
+                      <div className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
                         {formatMinutes(d.committedMinutes)} foglalva /{' '}
                         {formatMinutes(d.targetCapacityMinutes)} cél
                       </div>
@@ -206,7 +206,7 @@ export function BusynessOMeter() {
                   </div>
                   <div className="flex items-center gap-2 min-w-[180px] justify-end">
                     <div
-                      className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden shrink-0 relative"
+                      className="w-24 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden shrink-0 relative"
                       title={`Tényleges utilizáció: ${d.utilizationPct}%`}
                     >
                       <div
@@ -218,13 +218,13 @@ export function BusynessOMeter() {
                       <span className={`text-xs font-semibold ${LEVEL_TEXT_COLORS[d.level]}`}>
                         {d.utilizationPct}%
                       </span>
-                      <span className="text-[10px] text-gray-500">{LEVEL_LABELS[d.level]}</span>
+                      <span className="text-[10px] text-gray-500 dark:text-gray-400">{LEVEL_LABELS[d.level]}</span>
                     </div>
                   </div>
                 </button>
 
                 {isExpanded && (
-                  <div className="px-3 pb-3 pt-1 bg-gray-50/60 border-t border-gray-100">
+                  <div className="px-3 pb-3 pt-1 bg-gray-50/60 dark:bg-gray-800/60 border-t border-gray-100 dark:border-gray-800">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs">
                       <DetailRow
                         label="Foglalt időpontok"
@@ -284,7 +284,7 @@ export function BusynessOMeter() {
                         {d.flags.map((f) => (
                           <span
                             key={f}
-                            className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200"
+                            className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800"
                           >
                             {FLAG_LABELS[f] ?? f}
                           </span>
@@ -292,11 +292,11 @@ export function BusynessOMeter() {
                       </div>
                     )}
 
-                    <div className="mt-2 text-[11px] text-gray-500 leading-snug">
+                    <div className="mt-2 text-[11px] text-gray-500 dark:text-gray-400 leading-snug">
                       Számolás: ({formatMinutes(d.bookedMinutes)} foglalt +{' '}
                       {formatMinutes(d.heldMinutes)} hold) ÷{' '}
                       {formatMinutes(d.targetCapacityMinutes)} cél ={' '}
-                      <span className="font-medium text-gray-700">{d.utilizationPct}%</span>. A
+                      <span className="font-medium text-gray-700 dark:text-gray-300">{d.utilizationPct}%</span>. A
                       naptári fedezet csak tájékoztató, nem mozgatja a szintet.
                     </div>
                   </div>
@@ -331,13 +331,13 @@ function DetailRow({
 }) {
   const valueClass =
     highlight === 'critical'
-      ? 'text-red-700 font-semibold'
+      ? 'text-red-700 dark:text-red-300 font-semibold'
       : highlight === 'high'
-        ? 'text-orange-700 font-semibold'
-        : 'text-gray-800 font-medium';
+        ? 'text-orange-700 dark:text-orange-300 font-semibold'
+        : 'text-gray-800 dark:text-gray-200 font-medium';
   return (
     <div className="flex items-center justify-between gap-2 py-0.5">
-      <span className="text-gray-500 truncate">{label}</span>
+      <span className="text-gray-500 dark:text-gray-400 truncate">{label}</span>
       <span className={`tabular-nums ${valueClass}`}>{value}</span>
     </div>
   );

@@ -93,7 +93,7 @@ export function DuplicateDetector() {
   if (!loaded && !loading) {
     return (
       <div className="text-center py-6">
-        <p className="text-sm text-gray-500 mb-4">Ellenőrizd, vannak-e duplikált páciens profilok az adatbázisban.</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Ellenőrizd, vannak-e duplikált páciens profilok az adatbázisban.</p>
         <button onClick={load} className="btn-primary flex items-center gap-2 mx-auto">
           <RefreshCw className="w-4 h-4" />
           Duplikátumok keresése
@@ -106,7 +106,7 @@ export function DuplicateDetector() {
     return (
       <div className="text-center py-8">
         <Loader2 className="w-8 h-8 text-medical-primary animate-spin mx-auto mb-3" />
-        <p className="text-sm text-gray-500">Duplikátumok keresése...</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">Duplikátumok keresése...</p>
       </div>
     );
   }
@@ -114,7 +114,7 @@ export function DuplicateDetector() {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-gray-600 dark:text-gray-400">
           {groups.length === 0
             ? 'Nem találtunk gyanús duplikátumokat.'
             : `${groups.length} gyanús duplikátum csoport találva.`}
@@ -126,22 +126,22 @@ export function DuplicateDetector() {
       </div>
 
       {successMsg && (
-        <div className="bg-green-50 border border-green-300 rounded-lg p-3 mb-4 text-sm text-green-800 flex items-center gap-2">
+        <div className="bg-green-50 dark:bg-green-950/40 border border-green-300 dark:border-green-700 rounded-lg p-3 mb-4 text-sm text-green-800 dark:text-green-300 flex items-center gap-2">
           <CheckCircle className="w-4 h-4 shrink-0" />
           {successMsg}
         </div>
       )}
 
       {error && (
-        <div className="bg-red-50 border border-red-300 rounded-lg p-3 mb-4 text-sm text-red-800">
+        <div className="bg-red-50 dark:bg-red-950/40 border border-red-300 dark:border-red-700 rounded-lg p-3 mb-4 text-sm text-red-800 dark:text-red-300">
           {error}
         </div>
       )}
 
       {groups.length === 0 && !error && (
         <div className="text-center py-6">
-          <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3" />
-          <p className="text-gray-600 font-medium">Nincs duplikátum!</p>
+          <CheckCircle className="w-12 h-12 text-green-500 dark:text-green-400 mx-auto mb-3" />
+          <p className="text-gray-600 dark:text-gray-400 font-medium">Nincs duplikátum!</p>
         </div>
       )}
 
@@ -152,12 +152,12 @@ export function DuplicateDetector() {
           const isMerging = merging === primary.id;
 
           return (
-            <div key={`${gi}-${primary.id}`} className="border border-amber-300 rounded-lg bg-amber-50/50 overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-2.5 bg-amber-100/60 border-b border-amber-200">
+            <div key={`${gi}-${primary.id}`} className="border border-amber-300 dark:border-amber-700 rounded-lg bg-amber-50/50 dark:bg-amber-950/40 overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-2.5 bg-amber-100/60 dark:bg-amber-950/50 border-b border-amber-200 dark:border-amber-800">
                 <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-600" />
-                  <span className="text-sm font-semibold text-amber-900">{group.reason}</span>
-                  <span className="text-xs text-amber-700 bg-amber-200 rounded-full px-2 py-0.5">{group.patients.length} profil</span>
+                  <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-300" />
+                  <span className="text-sm font-semibold text-amber-900 dark:text-amber-200">{group.reason}</span>
+                  <span className="text-xs text-amber-700 dark:text-amber-300 bg-amber-200 dark:bg-amber-950/50 rounded-full px-2 py-0.5">{group.patients.length} profil</span>
                 </div>
                 <button
                   onClick={() => handleQuickMerge(group)}
@@ -172,19 +172,19 @@ export function DuplicateDetector() {
                 </button>
               </div>
 
-              <div className="divide-y divide-amber-200">
+              <div className="divide-y divide-amber-200 dark:divide-amber-800">
                 {group.patients.map((p, pi) => (
-                  <div key={p.id} className={`flex items-center gap-4 px-4 py-2.5 text-sm ${pi === 0 ? 'bg-green-50/50' : ''}`}>
-                    <span className={`text-xs font-bold uppercase tracking-wide w-20 shrink-0 ${pi === 0 ? 'text-green-700' : 'text-red-600'}`}>
+                  <div key={p.id} className={`flex items-center gap-4 px-4 py-2.5 text-sm ${pi === 0 ? 'bg-green-50/50 dark:bg-green-950/40' : ''}`}>
+                    <span className={`text-xs font-bold uppercase tracking-wide w-20 shrink-0 ${pi === 0 ? 'text-green-700 dark:text-green-300' : 'text-red-600 dark:text-red-300'}`}>
                       {pi === 0 ? 'Megmarad' : 'Törlendő'}
                     </span>
                     <div className="flex-1 min-w-0 flex flex-wrap items-center gap-x-4 gap-y-0.5">
-                      <span className="font-semibold text-gray-900">{p.nev}</span>
-                      {p.taj && <span className="text-gray-500">TAJ: {p.taj}</span>}
-                      {p.szuletesiDatum && <span className="text-gray-500">Szül.: {formatDate(p.szuletesiDatum)}</span>}
-                      {p.telefonszam && <span className="text-gray-500">Tel.: {p.telefonszam}</span>}
-                      {p.kezeleoorvos && <span className="text-gray-500">Orvos: {p.kezeleoorvos}</span>}
-                      <span className="text-gray-400 text-xs">Rögzítve: {formatDate(p.createdAt)}</span>
+                      <span className="font-semibold text-gray-900 dark:text-gray-100">{p.nev}</span>
+                      {p.taj && <span className="text-gray-500 dark:text-gray-400">TAJ: {p.taj}</span>}
+                      {p.szuletesiDatum && <span className="text-gray-500 dark:text-gray-400">Szül.: {formatDate(p.szuletesiDatum)}</span>}
+                      {p.telefonszam && <span className="text-gray-500 dark:text-gray-400">Tel.: {p.telefonszam}</span>}
+                      {p.kezeleoorvos && <span className="text-gray-500 dark:text-gray-400">Orvos: {p.kezeleoorvos}</span>}
+                      <span className="text-gray-400 dark:text-gray-500 text-xs">Rögzítve: {formatDate(p.createdAt)}</span>
                     </div>
                     <a
                       href={`/patients/${p.id}/view`}

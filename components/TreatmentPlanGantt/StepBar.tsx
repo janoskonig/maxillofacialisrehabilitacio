@@ -21,7 +21,7 @@ export const StepBar = memo(function StepBar({ step, range, toPercent, onSelect 
     return (
       <button
         type="button"
-        className="absolute top-1/2 -translate-y-1/2 w-1.5 h-8 rounded-sm bg-gray-400 hover:bg-gray-500 ring-1 ring-gray-300 z-[2]"
+        className="absolute top-1/2 -translate-y-1/2 w-1.5 h-8 rounded-sm bg-gray-400 dark:bg-gray-600 hover:bg-gray-500 dark:hover:bg-gray-500 ring-1 ring-gray-300 dark:ring-gray-700 z-[2]"
         style={{ left: `${left}%` }}
         aria-label={`${step.label} — nincs dátum, hely a sorban`}
         onClick={(e) => onSelect(step, e.currentTarget)}

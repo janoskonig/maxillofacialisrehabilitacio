@@ -71,12 +71,12 @@ export default function StaffTasksPage() {
     >
       <div className="space-y-6">
         <section className="card p-4">
-          <h2 className="text-sm font-semibold text-gray-900 mb-3">Új teendő</h2>
+          <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">Új teendő</h2>
           <QuickTaskForm onCreated={() => void loadTasks()} />
         </section>
 
         {loading ? (
-          <div className="flex items-center justify-center py-12 text-gray-500 gap-2">
+          <div className="flex items-center justify-center py-12 text-gray-500 dark:text-gray-400 gap-2">
             <Loader2 className="w-6 h-6 animate-spin" />
             Betöltés...
           </div>
@@ -89,7 +89,7 @@ export default function StaffTasksPage() {
                 <div className="flex items-start gap-3">
                   <ClipboardList className="w-5 h-5 text-medical-primary flex-shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900">{t.title}</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{t.title}</p>
                     {(t.patientName || t.patientId) && (
                       <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-medical-primary/10 px-2 py-0.5 text-xs font-medium text-medical-primary">
                         <UserRound className="w-3.5 h-3.5" />
@@ -97,7 +97,7 @@ export default function StaffTasksPage() {
                       </span>
                     )}
                     {t.description && (
-                      <p className="text-sm text-gray-600 mt-1 whitespace-pre-wrap">{t.description}</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 whitespace-pre-wrap">{t.description}</p>
                     )}
                     {t.dueAt ? (
                       (() => {
@@ -105,7 +105,7 @@ export default function StaffTasksPage() {
                         return (
                           <p
                             className={`text-sm font-medium mt-2 ${
-                              overdue ? 'text-red-600' : 'text-amber-900/90'
+                              overdue ? 'text-red-600 dark:text-red-300' : 'text-amber-900/90'
                             }`}
                           >
                             Határidő: {format(new Date(t.dueAt), 'yyyy.MM.dd HH:mm', { locale: hu })}
@@ -114,7 +114,7 @@ export default function StaffTasksPage() {
                         );
                       })()
                     ) : null}
-                    <p className="text-xs text-gray-400 mt-2">
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
                       {format(new Date(t.createdAt), 'yyyy.MM.dd HH:mm', { locale: hu })}
                     </p>
                     {t.patientId && (
@@ -127,7 +127,7 @@ export default function StaffTasksPage() {
                         </Link>
                         <Link
                           href={`/messages?patientId=${t.patientId}`}
-                          className="text-sm text-gray-600 hover:underline"
+                          className="text-sm text-gray-600 dark:text-gray-400 hover:underline"
                         >
                           Üzenetek
                         </Link>

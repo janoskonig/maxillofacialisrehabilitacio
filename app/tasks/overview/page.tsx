@@ -136,8 +136,8 @@ export default function TaskOverviewPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="flex items-center gap-2 text-gray-500">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
+        <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
           <Loader2 className="w-6 h-6 animate-spin" />
           Betöltés…
         </div>
@@ -147,9 +147,9 @@ export default function TaskOverviewPage() {
 
   if (!authorized) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-6">
         <div className="card max-w-md w-full text-center p-6">
-          <p className="text-gray-700">Nincs jogosultságod a vezetői nézethez.</p>
+          <p className="text-gray-700 dark:text-gray-300">Nincs jogosultságod a vezetői nézethez.</p>
           <button className="btn-secondary mt-4" onClick={() => router.push('/')}>
             Vissza a főoldalra
           </button>
@@ -173,19 +173,19 @@ export default function TaskOverviewPage() {
     >
       <div className="space-y-6">
         {/* Aloldal-navigáció */}
-        <div className="flex gap-1 border-b border-gray-200">
+        <div className="flex gap-1 border-b border-gray-200 dark:border-gray-800">
           <span className="px-4 py-2 text-sm font-medium text-medical-primary border-b-2 border-medical-primary">
             Feladatok
           </span>
           <Link
             href="/tasks/overview/data-completeness"
-            className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent"
+            className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 border-b-2 border-transparent"
           >
             Adathiány
           </Link>
           <Link
             href="/tasks/overview/delegalt-betegek"
-            className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent"
+            className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 border-b-2 border-transparent"
           >
             Delegált betegek
           </Link>
@@ -196,22 +196,22 @@ export default function TaskOverviewPage() {
           <div className="card p-4 flex items-center gap-3">
             <ClipboardList className="w-8 h-8 text-medical-primary" />
             <div>
-              <p className="text-2xl font-bold text-gray-900">{summary?.totalOpen ?? 0}</p>
-              <p className="text-sm text-gray-500">Nyitott feladat</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{summary?.totalOpen ?? 0}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Nyitott feladat</p>
             </div>
           </div>
           <div className="card p-4 flex items-center gap-3">
-            <AlertTriangle className="w-8 h-8 text-red-500" />
+            <AlertTriangle className="w-8 h-8 text-red-500 dark:text-red-400" />
             <div>
-              <p className="text-2xl font-bold text-red-600">{summary?.overdue ?? 0}</p>
-              <p className="text-sm text-gray-500">Lejárt határidő</p>
+              <p className="text-2xl font-bold text-red-600 dark:text-red-300">{summary?.overdue ?? 0}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Lejárt határidő</p>
             </div>
           </div>
           <div className="card p-4 flex items-center gap-3">
-            <Clock className="w-8 h-8 text-amber-500" />
+            <Clock className="w-8 h-8 text-amber-500 dark:text-amber-400" />
             <div>
-              <p className="text-2xl font-bold text-amber-600">{summary?.dueSoon ?? 0}</p>
-              <p className="text-sm text-gray-500">7 napon belül esedékes</p>
+              <p className="text-2xl font-bold text-amber-600 dark:text-amber-300">{summary?.dueSoon ?? 0}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">7 napon belül esedékes</p>
             </div>
           </div>
         </div>
@@ -219,7 +219,7 @@ export default function TaskOverviewPage() {
         {/* Felelősök szerinti bontás */}
         {summary && summary.byAssignee.length > 0 && (
           <section className="card p-4">
-            <h2 className="text-sm font-semibold text-gray-900 mb-3">Felelősök szerint (nyitott)</h2>
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">Felelősök szerint (nyitott)</h2>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
@@ -227,7 +227,7 @@ export default function TaskOverviewPage() {
                 className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
                   assigneeFilter === ''
                     ? 'bg-medical-primary text-white border-medical-primary'
-                    : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                    : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50'
                 }`}
               >
                 Mind ({summary.totalOpen})
@@ -240,7 +240,7 @@ export default function TaskOverviewPage() {
                   className={`px-3 py-1.5 rounded-full text-sm border transition-colors inline-flex items-center gap-1.5 ${
                     assigneeFilter === a.userId
                       ? 'bg-medical-primary text-white border-medical-primary'
-                      : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                      : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50'
                   }`}
                 >
                   <UserRound className="w-3.5 h-3.5" />
@@ -249,7 +249,7 @@ export default function TaskOverviewPage() {
                   {a.overdue > 0 && (
                     <span
                       className={`text-xs font-semibold ${
-                        assigneeFilter === a.userId ? 'text-red-100' : 'text-red-600'
+                        assigneeFilter === a.userId ? 'text-red-100' : 'text-red-600 dark:text-red-300'
                       }`}
                     >
                       ({a.overdue} lejárt)
@@ -263,14 +263,14 @@ export default function TaskOverviewPage() {
 
         {/* Szűrők */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+          <div className="flex rounded-lg border border-gray-200 dark:border-gray-800 overflow-hidden">
             {(['open', 'done', 'all'] as StatusFilter[]).map((s) => (
               <button
                 key={s}
                 type="button"
                 onClick={() => void changeStatus(s)}
                 className={`px-4 py-2 text-sm font-medium transition-colors ${
-                  status === s ? 'bg-medical-primary text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                  status === s ? 'bg-medical-primary text-white' : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50'
                 }`}
               >
                 {s === 'open' ? 'Nyitott' : s === 'done' ? 'Lezárt (30 nap)' : 'Mind'}
@@ -288,8 +288,8 @@ export default function TaskOverviewPage() {
 
         {/* Lista */}
         {filteredTasks.length === 0 ? (
-          <div className="card text-center py-12 text-gray-600">
-            <ClipboardList className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+          <div className="card text-center py-12 text-gray-600 dark:text-gray-400">
+            <ClipboardList className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
             <p>Nincs a szűrőnek megfelelő feladat.</p>
           </div>
         ) : (
@@ -297,25 +297,25 @@ export default function TaskOverviewPage() {
             {filteredTasks.map((t) => (
               <li
                 key={t.id}
-                className={`card p-4 ${t.overdue ? 'border-l-4 border-red-400' : ''} ${
+                className={`card p-4 ${t.overdue ? 'border-l-4 border-red-400 dark:border-red-700' : ''} ${
                   t.status === 'done' ? 'opacity-70' : ''
                 }`}
               >
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs rounded-full bg-gray-100 text-gray-600 px-2 py-0.5">
+                      <span className="text-xs rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-0.5">
                         {TASK_TYPE_LABELS[t.taskType] ?? t.taskType}
                       </span>
                       {t.status === 'done' && (
-                        <span className="text-xs rounded-full bg-green-100 text-green-700 px-2 py-0.5">
+                        <span className="text-xs rounded-full bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-300 px-2 py-0.5">
                           Lezárva
                         </span>
                       )}
                     </div>
-                    <p className="font-medium text-gray-900 mt-1">{t.title}</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100 mt-1">{t.title}</p>
                     {t.description && (
-                      <p className="text-sm text-gray-600 mt-0.5 whitespace-pre-wrap line-clamp-2">
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5 whitespace-pre-wrap line-clamp-2">
                         {t.description}
                       </p>
                     )}
@@ -327,26 +327,26 @@ export default function TaskOverviewPage() {
                       {t.patientId && (
                         <Link
                           href={`/patients/${t.patientId}/view#section-adminisztracio`}
-                          className="text-gray-600 hover:underline"
+                          className="text-gray-600 dark:text-gray-400 hover:underline"
                         >
                           Beteg: {t.patientName || 'ismeretlen'}
                         </Link>
                       )}
                       {t.creatorName && (
-                        <span className="text-gray-400">Kiosztotta: {t.creatorName}</span>
+                        <span className="text-gray-400 dark:text-gray-500">Kiosztotta: {t.creatorName}</span>
                       )}
                     </div>
                   </div>
                   <div className="text-xs text-right shrink-0 space-y-0.5">
                     {t.dueAt ? (
-                      <p className={t.overdue ? 'font-semibold text-red-600' : 'text-amber-900/90'}>
+                      <p className={t.overdue ? 'font-semibold text-red-600 dark:text-red-300' : 'text-amber-900/90 dark:text-amber-300'}>
                         Határidő: {format(new Date(t.dueAt), 'yyyy.MM.dd HH:mm', { locale: hu })}
                         {t.overdue ? ' — lejárt' : ''}
                       </p>
                     ) : (
-                      <p className="text-gray-400">Nincs határidő</p>
+                      <p className="text-gray-400 dark:text-gray-500">Nincs határidő</p>
                     )}
-                    <p className="text-gray-400">
+                    <p className="text-gray-400 dark:text-gray-500">
                       Létrehozva: {format(new Date(t.createdAt), 'yyyy.MM.dd', { locale: hu })}
                     </p>
                   </div>

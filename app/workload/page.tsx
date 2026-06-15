@@ -38,8 +38,8 @@ export default function WorkloadPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-pulse text-gray-500">Betöltés…</div>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
+        <div className="animate-pulse text-gray-500 dark:text-gray-400">Betöltés…</div>
       </div>
     );
   }
@@ -49,7 +49,7 @@ export default function WorkloadPage() {
   return (
     <AppShell title="Orvosi terhelés" backTo="/" maxWidth="xl">
       <div className="space-y-4">
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-gray-600 dark:text-gray-400">
           Összefoglaló orvosi terhelési kép a következő időszakra. A jobb oldali
           panel a folyamatban lévő protetikai esetek várható befejezését mutatja
           (P50/P80), a bal oldali a foglalt + hold percek alapján számol

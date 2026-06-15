@@ -177,19 +177,19 @@ export function ConsiliumStatsSection({ onDataChange }: Props) {
   return (
     <section
       id="stats-consilium"
-      className="card scroll-mt-28 border-purple-200/80 shadow-soft-md"
+      className="card scroll-mt-28 border-purple-200/80 dark:border-purple-800 shadow-soft-md"
       aria-labelledby="stats-consilium-heading"
     >
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
-          <div className="mt-0.5 rounded-lg bg-purple-100 p-2 text-purple-700">
+          <div className="mt-0.5 rounded-lg bg-purple-100 dark:bg-purple-950/50 p-2 text-purple-700 dark:text-purple-300">
             <Users2 className="h-5 w-5" />
           </div>
           <div>
-            <h2 id="stats-consilium-heading" className="text-lg font-semibold text-gray-900">
+            <h2 id="stats-consilium-heading" className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               Konzílium
             </h2>
-            <p className="mt-0.5 text-sm text-gray-500">
+            <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
               Sessions, részvétel, megbeszélt napirendi pontok és előkészítő kommentek.
             </p>
           </div>
@@ -198,7 +198,7 @@ export function ConsiliumStatsSection({ onDataChange }: Props) {
           type="button"
           onClick={load}
           disabled={loading}
-          className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-soft transition-colors hover:bg-gray-50 disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 shadow-soft transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50 disabled:opacity-50"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           Frissítés
@@ -208,11 +208,11 @@ export function ConsiliumStatsSection({ onDataChange }: Props) {
       {loading && !data ? (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-24 animate-pulse rounded-xl bg-gray-100" />
+            <div key={i} className="h-24 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-800" />
           ))}
         </div>
       ) : unavailable ? (
-        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/80 p-3 text-sm text-amber-800">
+        <div className="flex items-start gap-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/40 p-3 text-sm text-amber-800 dark:text-amber-300">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
             A consilium_sessions tábla nem található — a 011-es migráció valószínűleg még nem futott
@@ -220,7 +220,7 @@ export function ConsiliumStatsSection({ onDataChange }: Props) {
           </span>
         </div>
       ) : error ? (
-        <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50/80 p-3 text-sm text-rose-800">
+        <div className="flex items-start gap-2 rounded-lg border border-rose-200 dark:border-rose-800 bg-rose-50/80 dark:bg-rose-950/40 p-3 text-sm text-rose-800 dark:text-rose-300">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>
@@ -228,36 +228,36 @@ export function ConsiliumStatsSection({ onDataChange }: Props) {
         <div className="space-y-6">
           {/* Sessions KPI sor */}
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <div className="rounded-xl border border-gray-200/80 bg-gradient-to-br from-purple-50/60 to-white p-3">
-              <p className="text-xs font-medium text-gray-500">Összes ülés</p>
-              <p className="mt-0.5 text-2xl font-bold tabular-nums text-gray-900">
+            <div className="rounded-xl border border-gray-200/80 dark:border-gray-800 bg-gradient-to-br from-purple-50/60 to-white p-3">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Összes ülés</p>
+              <p className="mt-0.5 text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-100">
                 {fmtInt(data.sessions.summary.osszes)}
               </p>
-              <p className="mt-0.5 text-[11px] text-gray-500">
+              <p className="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">
                 {fmtInt(data.sessions.summary.multbeli)} múltbeli ·{' '}
                 {fmtInt(data.sessions.summary.jovobeli)} jövőbeli
               </p>
             </div>
-            <div className="rounded-xl border border-gray-200/80 bg-white p-3">
-              <p className="text-xs font-medium text-gray-500">Státusz</p>
-              <p className="mt-0.5 text-sm font-semibold text-gray-900">
+            <div className="rounded-xl border border-gray-200/80 dark:border-gray-800 bg-white dark:bg-gray-900 p-3">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Státusz</p>
+              <p className="mt-0.5 text-sm font-semibold text-gray-900 dark:text-gray-100">
                 {data.sessions.summary.draft} vázlat ·{' '}
-                <span className="text-emerald-700">{data.sessions.summary.active} aktív</span> ·{' '}
+                <span className="text-emerald-700 dark:text-emerald-300">{data.sessions.summary.active} aktív</span> ·{' '}
                 {data.sessions.summary.closed} lezárt
               </p>
             </div>
-            <div className="rounded-xl border border-gray-200/80 bg-gradient-to-br from-indigo-50/60 to-white p-3">
-              <p className="text-xs font-medium text-gray-500">Átl. napirendi pont / ülés</p>
-              <p className="mt-0.5 text-2xl font-bold tabular-nums text-indigo-700">
+            <div className="rounded-xl border border-gray-200/80 dark:border-gray-800 bg-gradient-to-br from-indigo-50/60 to-white p-3">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Átl. napirendi pont / ülés</p>
+              <p className="mt-0.5 text-2xl font-bold tabular-nums text-indigo-700 dark:text-indigo-300">
                 {fmtNum(data.sessions.summary.atlagNapirendiPont)}
               </p>
             </div>
-            <div className="rounded-xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50/60 to-white p-3">
-              <p className="text-xs font-medium text-gray-500">Megbeszélt napirendi pontok</p>
-              <p className="mt-0.5 text-2xl font-bold tabular-nums text-emerald-700">
+            <div className="rounded-xl border border-emerald-200/80 dark:border-emerald-800 bg-gradient-to-br from-emerald-50/60 to-white p-3">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Megbeszélt napirendi pontok</p>
+              <p className="mt-0.5 text-2xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
                 {data.coverage.coveragePct.toLocaleString('hu-HU', { maximumFractionDigits: 1 })}%
               </p>
-              <p className="mt-0.5 text-[11px] text-emerald-800">
+              <p className="mt-0.5 text-[11px] text-emerald-800 dark:text-emerald-300">
                 {fmtInt(data.coverage.discussedItem)} / {fmtInt(data.coverage.osszesItem)} item
                 {data.coverage.perSession.sessionSzam > 0 ? (
                   <>
@@ -271,11 +271,11 @@ export function ConsiliumStatsSection({ onDataChange }: Props) {
           {/* Heti trend mini-chart */}
           {data.sessions.hetiTrend.length > 0 ? (
             <div>
-              <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-800">
-                <CalendarRange className="h-4 w-4 text-purple-600" />
+              <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-800 dark:text-gray-200">
+                <CalendarRange className="h-4 w-4 text-purple-600 dark:text-purple-300" />
                 Heti aktivitás (utolsó 26 hét + 12 hét előretekintés)
               </h3>
-              <div className="flex h-24 items-end gap-1 rounded-lg border border-gray-200 bg-white p-2">
+              <div className="flex h-24 items-end gap-1 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-2">
                 {data.sessions.hetiTrend.map((w) => {
                   const pct = maxWeekly > 0 ? Math.max(2, Math.round((w.darab / maxWeekly) * 100)) : 2;
                   return (
@@ -293,42 +293,42 @@ export function ConsiliumStatsSection({ onDataChange }: Props) {
 
           {/* Részvétel */}
           {data.attendance.available ? (
-            <div className="rounded-xl border border-gray-200/80 bg-gradient-to-br from-purple-50/30 to-white p-4">
-              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
-                <Users2 className="h-4 w-4 text-purple-600" />
+            <div className="rounded-xl border border-gray-200/80 dark:border-gray-800 bg-gradient-to-br from-purple-50/30 to-white p-4">
+              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                <Users2 className="h-4 w-4 text-purple-600 dark:text-purple-300" />
                 Részvétel — bejelentett vs jelen-lévő
               </h3>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div>
-                  <p className="text-xs text-gray-500">Sessions (n)</p>
-                  <p className="text-xl font-bold tabular-nums text-gray-900">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Sessions (n)</p>
+                  <p className="text-xl font-bold tabular-nums text-gray-900 dark:text-gray-100">
                     {fmtInt(data.attendance.summary.sessionSzam)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">Átl. bejelentett</p>
-                  <p className="text-xl font-bold tabular-nums text-gray-900">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Átl. bejelentett</p>
+                  <p className="text-xl font-bold tabular-nums text-gray-900 dark:text-gray-100">
                     {fmtNum(data.attendance.summary.atlagBejelentett)}
                   </p>
-                  <p className="text-[10px] text-gray-400">
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500">
                     medián {fmtNum(data.attendance.summary.medianBejelentett)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">Átl. jelen-lévő</p>
-                  <p className="text-xl font-bold tabular-nums text-emerald-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Átl. jelen-lévő</p>
+                  <p className="text-xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
                     {fmtNum(data.attendance.summary.atlagJelen)}
                   </p>
-                  <p className="text-[10px] text-gray-400">
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500">
                     medián {fmtNum(data.attendance.summary.medianJelen)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">Részvételi arány</p>
-                  <p className="text-xl font-bold tabular-nums text-violet-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Részvételi arány</p>
+                  <p className="text-xl font-bold tabular-nums text-violet-700 dark:text-violet-300">
                     {data.attendance.summary.reszveteliAranyPct.toLocaleString('hu-HU', { maximumFractionDigits: 1 })}%
                   </p>
-                  <p className="text-[10px] text-gray-400">
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500">
                     {fmtInt(data.attendance.summary.osszesJelen)} /{' '}
                     {fmtInt(data.attendance.summary.osszesBejelentett)}
                   </p>
@@ -337,20 +337,20 @@ export function ConsiliumStatsSection({ onDataChange }: Props) {
 
               {data.attendance.topAttendees.length > 0 ? (
                 <div className="mt-4">
-                  <h4 className="mb-2 text-xs font-semibold text-gray-700">
+                  <h4 className="mb-2 text-xs font-semibold text-gray-700 dark:text-gray-300">
                     Top {data.attendance.topAttendees.length} leggyakoribb résztvevő
                   </h4>
-                  <div className="overflow-x-auto rounded-lg border border-gray-200">
-                    <table className="min-w-full divide-y divide-gray-200 text-xs">
-                      <thead className="bg-gray-50/90">
+                  <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-800">
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800 text-xs">
+                      <thead className="bg-gray-50/90 dark:bg-gray-800/60">
                         <tr>
-                          <th className="px-3 py-2 text-left font-semibold text-gray-600">Név</th>
-                          <th className="px-3 py-2 text-right font-semibold text-gray-600">Meghívás</th>
-                          <th className="px-3 py-2 text-right font-semibold text-gray-600">Jelen</th>
-                          <th className="px-3 py-2 text-right font-semibold text-gray-600">Részvétel %</th>
+                          <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Név</th>
+                          <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-400">Meghívás</th>
+                          <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-400">Jelen</th>
+                          <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-400">Részvétel %</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-100 bg-white">
+                      <tbody className="divide-y divide-gray-100 dark:divide-gray-800 bg-white dark:bg-gray-900">
                         {data.attendance.topAttendees.map((a, idx) => {
                           const pct =
                             a.osszesMeghivas > 0
@@ -358,14 +358,14 @@ export function ConsiliumStatsSection({ onDataChange }: Props) {
                               : 0;
                           return (
                             <tr key={`${a.attendeeId}-${idx}`}>
-                              <td className="px-3 py-1.5 text-gray-800">{a.attendeeName}</td>
-                              <td className="px-3 py-1.5 text-right tabular-nums text-gray-700">
+                              <td className="px-3 py-1.5 text-gray-800 dark:text-gray-200">{a.attendeeName}</td>
+                              <td className="px-3 py-1.5 text-right tabular-nums text-gray-700 dark:text-gray-300">
                                 {fmtInt(a.osszesMeghivas)}
                               </td>
-                              <td className="px-3 py-1.5 text-right tabular-nums font-medium text-emerald-700">
+                              <td className="px-3 py-1.5 text-right tabular-nums font-medium text-emerald-700 dark:text-emerald-300">
                                 {fmtInt(a.osszesJelen)}
                               </td>
-                              <td className="px-3 py-1.5 text-right tabular-nums text-violet-700">
+                              <td className="px-3 py-1.5 text-right tabular-nums text-violet-700 dark:text-violet-300">
                                 {pct}%
                               </td>
                             </tr>
@@ -378,88 +378,88 @@ export function ConsiliumStatsSection({ onDataChange }: Props) {
               ) : null}
             </div>
           ) : (
-            <div className="rounded-lg border border-amber-200/70 bg-amber-50/40 p-3 text-xs text-amber-800">
+            <div className="rounded-lg border border-amber-200/70 dark:border-amber-800 bg-amber-50/40 dark:bg-amber-950/40 p-3 text-xs text-amber-800 dark:text-amber-300">
               A részvétel-statisztika a 012-es migráció után érhető el (`attendees` JSONB oszlop).
             </div>
           )}
 
           {/* Prep tokenek */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <div className="rounded-xl border border-gray-200/80 bg-gradient-to-br from-sky-50/40 to-white p-4">
-              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
-                <KeyRound className="h-4 w-4 text-sky-600" />
+            <div className="rounded-xl border border-gray-200/80 dark:border-gray-800 bg-gradient-to-br from-sky-50/40 to-white p-4">
+              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                <KeyRound className="h-4 w-4 text-sky-600 dark:text-sky-300" />
                 Előkészítő tokenek
               </h3>
               {data.prepTokens.available ? (
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <p className="text-xs text-gray-500">Kiállított összesen</p>
-                    <p className="text-xl font-bold tabular-nums text-gray-900">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Kiállított összesen</p>
+                    <p className="text-xl font-bold tabular-nums text-gray-900 dark:text-gray-100">
                       {fmtInt(data.prepTokens.kiallitott)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">Aktív</p>
-                    <p className="text-xl font-bold tabular-nums text-emerald-700">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Aktív</p>
+                    <p className="text-xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
                       {fmtInt(data.prepTokens.aktiv)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">Visszavont</p>
-                    <p className="text-xl font-bold tabular-nums text-rose-700">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Visszavont</p>
+                    <p className="text-xl font-bold tabular-nums text-rose-700 dark:text-rose-300">
                       {fmtInt(data.prepTokens.visszavont)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">Lejárt</p>
-                    <p className="text-xl font-bold tabular-nums text-gray-500">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Lejárt</p>
+                    <p className="text-xl font-bold tabular-nums text-gray-500 dark:text-gray-400">
                       {fmtInt(data.prepTokens.lejart)}
                     </p>
                   </div>
                   <div className="col-span-2">
-                    <p className="text-xs text-gray-500">Tokent kapott napirendi pontok</p>
-                    <p className="text-lg font-semibold tabular-nums text-sky-700">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Tokent kapott napirendi pontok</p>
+                    <p className="text-lg font-semibold tabular-nums text-sky-700 dark:text-sky-300">
                       {fmtInt(data.prepTokens.tokenezettItemSzam)} item
                     </p>
                   </div>
                 </div>
               ) : (
-                <p className="text-xs text-amber-800">
+                <p className="text-xs text-amber-800 dark:text-amber-300">
                   A 015-ös migráció (consilium_item_prep_tokens) még nem futott le.
                 </p>
               )}
             </div>
 
             {/* Prep kommentek */}
-            <div className="rounded-xl border border-gray-200/80 bg-gradient-to-br from-rose-50/40 to-white p-4">
-              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
-                <MessageCircle className="h-4 w-4 text-rose-600" />
+            <div className="rounded-xl border border-gray-200/80 dark:border-gray-800 bg-gradient-to-br from-rose-50/40 to-white p-4">
+              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                <MessageCircle className="h-4 w-4 text-rose-600 dark:text-rose-300" />
                 Előkészítő kommentek
               </h3>
               {data.prepComments.available ? (
                 <>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <p className="text-xs text-gray-500">Összes komment</p>
-                      <p className="text-xl font-bold tabular-nums text-gray-900">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Összes komment</p>
+                      <p className="text-xl font-bold tabular-nums text-gray-900 dark:text-gray-100">
                         {fmtInt(data.prepComments.osszesKomment)}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500">Kommentelt napirendi pont</p>
-                      <p className="text-xl font-bold tabular-nums text-rose-700">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Kommentelt napirendi pont</p>
+                      <p className="text-xl font-bold tabular-nums text-rose-700 dark:text-rose-300">
                         {fmtInt(data.prepComments.kommenteltItemSzam)}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500">Átl. komment / kommentelt item</p>
-                      <p className="text-xl font-bold tabular-nums text-gray-900">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Átl. komment / kommentelt item</p>
+                      <p className="text-xl font-bold tabular-nums text-gray-900 dark:text-gray-100">
                         {fmtNum(data.prepComments.atlagKommentPerKommenteltItem)}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500">Medián / kommentelt item</p>
-                      <p className="text-xl font-bold tabular-nums text-gray-900">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Medián / kommentelt item</p>
+                      <p className="text-xl font-bold tabular-nums text-gray-900 dark:text-gray-100">
                         {fmtNum(data.prepComments.medianKommentPerKommenteltItem)}
                       </p>
                     </div>
@@ -467,7 +467,7 @@ export function ConsiliumStatsSection({ onDataChange }: Props) {
 
                   {data.prepComments.topAuthors.length > 0 ? (
                     <div className="mt-4">
-                      <h4 className="mb-2 text-xs font-semibold text-gray-700">
+                      <h4 className="mb-2 text-xs font-semibold text-gray-700 dark:text-gray-300">
                         Top {data.prepComments.topAuthors.length} kommentelő
                       </h4>
                       <ul className="space-y-1.5">
@@ -479,17 +479,17 @@ export function ConsiliumStatsSection({ onDataChange }: Props) {
                           return (
                             <li key={`${a.authorDisplay}-${idx}`}>
                               <div className="flex justify-between text-xs">
-                                <span className="text-gray-700 truncate" title={a.authorDisplay}>
+                                <span className="text-gray-700 dark:text-gray-300 truncate" title={a.authorDisplay}>
                                   {a.authorDisplay}
                                 </span>
                                 <span className="tabular-nums">
-                                  <span className="font-semibold text-gray-900">{a.kommentSzam}</span>{' '}
-                                  <span className="text-[10px] text-gray-400">
+                                  <span className="font-semibold text-gray-900 dark:text-gray-100">{a.kommentSzam}</span>{' '}
+                                  <span className="text-[10px] text-gray-400 dark:text-gray-500">
                                     ({a.erintettItemSzam} item)
                                   </span>
                                 </span>
                               </div>
-                              <div className="mt-0.5 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                              <div className="mt-0.5 h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
                                 <div
                                   className="h-full rounded-full bg-rose-500/70 transition-[width] duration-500"
                                   style={{ width: `${pct}%` }}
@@ -501,13 +501,13 @@ export function ConsiliumStatsSection({ onDataChange }: Props) {
                       </ul>
                     </div>
                   ) : (
-                    <p className="mt-3 text-xs text-gray-500">
+                    <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
                       Még nincs előkészítő komment a rendszerben.
                     </p>
                   )}
                 </>
               ) : (
-                <p className="text-xs text-amber-800">
+                <p className="text-xs text-amber-800 dark:text-amber-300">
                   A 015-ös migráció (consilium_prep_comments) még nem futott le.
                 </p>
               )}
@@ -516,8 +516,8 @@ export function ConsiliumStatsSection({ onDataChange }: Props) {
 
           {/* Per-session coverage info */}
           {data.coverage.perSession.sessionSzam > 0 ? (
-            <div className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50/60 p-3 text-xs text-gray-700">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-600" />
+            <div className="flex items-start gap-2 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-800/60 p-3 text-xs text-gray-700 dark:text-gray-300">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-600 dark:text-emerald-300" />
               <span>
                 Per-session megbeszélési arány — átlag{' '}
                 <span className="font-semibold tabular-nums">

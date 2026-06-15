@@ -65,10 +65,10 @@ export default function PatientHistoryPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
         <div className="text-center">
-          <Clock className="w-12 h-12 text-gray-400 mx-auto mb-4 animate-pulse" />
-          <p className="text-gray-500">Betöltés...</p>
+          <Clock className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-4 animate-pulse" />
+          <p className="text-gray-500 dark:text-gray-400">Betöltés...</p>
         </div>
       </div>
     );
@@ -82,7 +82,7 @@ export default function PatientHistoryPage() {
     <AppShell title="Páciens életút" backTo="/" maxWidth="xl">
       <div className="mb-6">
         {patientName && (
-          <p className="text-gray-600">
+          <p className="text-gray-600 dark:text-gray-400">
             {patientName}
           </p>
         )}
