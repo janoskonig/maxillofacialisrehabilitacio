@@ -79,6 +79,19 @@ interface Props {
   /** Show or hide the sender label above the bubble (non-own). Default: true. */
   showSenderLabel?: boolean;
   /**
+   * Üzenet-csoportosítás (lásd `lib/messaging/group-messages`). Ha `false`, az
+   * üzenet egy egymást követő blokk közepén/végén van: a feladó-címke és az
+   * avatar elrejtődik, a buborék sarkai teljesen kerekek (nincs „farok”).
+   */
+  isFirstInGroup?: boolean;
+  isLastInGroup?: boolean;
+  /**
+   * Avatar a buborék melletti bal oldali sávban (csak nem-saját üzenetnél, és
+   * csak a blokk utolsó üzeneténél jelenik meg). Ha hiányzik, a sáv üres marad,
+   * így a csoport buborékjai egy vonalban állnak.
+   */
+  avatarSlot?: ReactNode;
+  /**
    * Extra content rendered INSIDE the bubble, under the time/check row.
    * Csatorna-specifikus elemekhez (pl. group chat `readBy` / "nem olvasták")
    * — a chrome egységes marad, a tartalom a hívó hatáskörében.
@@ -100,6 +113,9 @@ export function ChatMessageBubble({
   onRetry,
   currentUserId,
   showSenderLabel = true,
+  isFirstInGroup = true,
+  isLastInGroup = true,
+  avatarSlot,
   bubbleFooter,
   onRemoveContextLink,
   canRemoveContextLinks = false,
@@ -115,10 +131,15 @@ export function ChatMessageBubble({
     message.createdAt instanceof Date ? message.createdAt : new Date(message.createdAt);
 
   const bubbleStyle = isFromMe
-    ? 'bg-blue-600 text-white'
+    ? 'bg-medical-primary text-white'
     : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-800';
 
   const timeStyle = isFromMe ? 'text-blue-100' : 'text-gray-500 dark:text-gray-400';
+
+  // „Farok” (éles sarok) csak a blokk utolsó buborékján, a feladó oldala felé.
+  const cornerStyle = `rounded-2xl ${
+    isLastInGroup ? (isFromMe ? 'rounded-br-md' : 'rounded-bl-md') : ''
+  }`;
 
   const quoteVariant: 'bubble-own' | 'bubble-other' = isFromMe ? 'bubble-own' : 'bubble-other';
 
@@ -131,19 +152,28 @@ export function ChatMessageBubble({
   return (
     <div
       data-message-id={message.id}
-      className={`group flex flex-col ${isFromMe ? 'items-end' : 'items-start'} ${className ?? ''}`}
+      role="article"
+      className={`group flex w-full gap-2 ${isFromMe ? 'justify-end' : 'justify-start'} ${className ?? ''}`}
     >
-      {!isFromMe && showSenderLabel && message.senderName && (
-        <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 px-1">{message.senderName}</div>
+      {/* Bal oldali avatar-sáv (csak nem-saját) — avatar csak a blokk alján. */}
+      {!isFromMe && (
+        <div className="w-7 flex-shrink-0 flex items-end" aria-hidden={!isLastInGroup}>
+          {isLastInGroup ? avatarSlot : null}
+        </div>
       )}
 
-      <div className="relative inline-flex w-fit max-w-[85%] sm:max-w-[80%] items-end">
-        {/* Reply akció gomb a buborék mellett — abszolút, hogy ne szűkítse a buborékot */}
-        {onReply && isFromMe && (
-          <ReplyActionButton onClick={() => onReply(message)} side="left" />
+      <div className={`flex flex-col min-w-0 max-w-[85%] sm:max-w-[80%] ${isFromMe ? 'items-end' : 'items-start'}`}>
+        {!isFromMe && showSenderLabel && isFirstInGroup && message.senderName && (
+          <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 px-1">{message.senderName}</div>
         )}
 
-        <div className={`min-w-0 max-w-full rounded-lg px-3 py-2 ${bubbleStyle}`}>
+        <div className="relative inline-flex w-fit max-w-full items-end">
+          {/* Reply akció gomb a buborék mellett — abszolút, hogy ne szűkítse a buborékot */}
+          {onReply && isFromMe && (
+            <ReplyActionButton onClick={() => onReply(message)} side="left" />
+          )}
+
+          <div className={`min-w-0 max-w-full px-3 py-2 ${bubbleStyle} ${cornerStyle}`}>
           {message.quotedMessage && (
             <div className="mb-2">
               <MessageQuoteBlock
@@ -219,6 +249,7 @@ export function ChatMessageBubble({
           {replyThreadToggleLabel(message.replyCount, replyThreadCollapsed)}
         </button>
       )}
+      </div>
     </div>
   );
 }
