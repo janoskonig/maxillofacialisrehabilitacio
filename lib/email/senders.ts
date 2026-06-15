@@ -1220,6 +1220,73 @@ export async function sendTaskReminderEmail(params: {
   });
 }
 
+const FEEDBACK_TYPE_LABELS_HU: Record<string, string> = {
+  bug: 'Hiba',
+  error: 'Hiba (error)',
+  crash: 'Összeomlás',
+  suggestion: 'Javaslat',
+  other: 'Egyéb',
+};
+
+const FEEDBACK_STATUS_LABELS_HU: Record<string, string> = {
+  open: 'Nyitott',
+  in_progress: 'Folyamatban',
+  resolved: 'Megoldva',
+  closed: 'Lezárva',
+};
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/**
+ * Admin válasz a beküldött visszajelzésre / bug jelentésre. A bejelentőnek megy
+ * (a feedback.user_email címre), tartalmazza az eredeti bejelentést, az admin
+ * válaszát és a ticket aktuális állapotát.
+ */
+export async function sendFeedbackResponseEmail(params: {
+  to: string;
+  feedbackId: string;
+  type: string;
+  title: string | null;
+  originalDescription: string;
+  response: string;
+  status: string;
+}): Promise<void> {
+  const { to, feedbackId, type, title, originalDescription, response, status } = params;
+  const typeLabel = FEEDBACK_TYPE_LABELS_HU[type] || type;
+  const statusLabel = FEEDBACK_STATUS_LABELS_HU[status] || status;
+  const subjectTitle = title?.trim() || `${typeLabel} visszajelzés`;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #2563eb;">Válasz a visszajelzésére</h2>
+      <p>Kedves Bejelentő,</p>
+      <p>Köszönjük a visszajelzését. Az alábbi bejelentésére reagálunk:</p>
+      <div style="background:#f3f4f6;border-left:4px solid #9ca3af;padding:12px 16px;margin:16px 0;border-radius:4px;">
+        <p style="margin:0 0 4px;font-weight:bold;">${escapeHtml(subjectTitle)} <span style="font-weight:normal;color:#6b7280;">(${escapeHtml(typeLabel)})</span></p>
+        <p style="margin:0;color:#4b5563;white-space:pre-wrap;">${escapeHtml(originalDescription)}</p>
+      </div>
+      <h3 style="color:#111827;margin-bottom:4px;">Válaszunk</h3>
+      <p style="white-space:pre-wrap;">${escapeHtml(response)}</p>
+      <p style="margin-top:16px;color:#6b7280;font-size:14px;">A bejelentés jelenlegi állapota: <strong>${escapeHtml(statusLabel)}</strong></p>
+      <p style="margin-top:24px;">Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to,
+    subject: `Válasz a visszajelzésére – ${subjectTitle}`,
+    html,
+    emailType: 'feedback_response',
+    sentBy: 'system',
+    metadata: { feedbackId, status },
+  });
+}
+
 /**
  * Hiányzó betegadat-emlékeztető az érintett orvosnak (beutaló orvos vagy a
  * legutóbbi fogpótlástanász). Felsorolja a beteg hiányzó klinikai és kutatási

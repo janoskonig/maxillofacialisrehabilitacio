@@ -33,6 +33,10 @@ type Feedback = {
   user_agent: string | null;
   url: string | null;
   status: 'open' | 'in_progress' | 'resolved' | 'closed';
+  admin_response: string | null;
+  admin_note: string | null;
+  responded_at: string | null;
+  responded_by: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -47,6 +51,10 @@ export function UserManagementTab() {
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [feedbackStatusFilter, setFeedbackStatusFilter] = useState('');
   const [expandedFeedback, setExpandedFeedback] = useState<Set<string>>(new Set());
+  const [responseDraft, setResponseDraft] = useState<Record<string, string>>({});
+  const [noteDraft, setNoteDraft] = useState<Record<string, string>>({});
+  const [notifyReporter, setNotifyReporter] = useState<Record<string, boolean>>({});
+  const [savingFeedback, setSavingFeedback] = useState<string | null>(null);
 
   const [selectedUserId, setSelectedUserId] = useState('');
   const [impersonating, setImpersonating] = useState(false);
@@ -177,6 +185,40 @@ export function UserManagementTab() {
       const res = await fetch(`/api/feedback/${feedbackId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ status: newStatus }) });
       if (res.ok) { setFeedback(prev => prev.map(f => f.id === feedbackId ? { ...f, status: newStatus as Feedback['status'], updated_at: new Date().toISOString() } : f)); }
     } catch { alert('Hiba történt a status frissítésekor'); }
+  };
+
+  const saveFeedbackResponse = async (item: Feedback) => {
+    const response = (responseDraft[item.id] ?? '').trim();
+    const note = (noteDraft[item.id] ?? '').trim();
+    if (!response && !note) { alert('Adjon meg választ vagy belső jegyzetet.'); return; }
+    const notify = (notifyReporter[item.id] ?? true) && !!response && !!item.user_email;
+    setSavingFeedback(item.id);
+    try {
+      const res = await fetch(`/api/feedback/${item.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          ...(response ? { adminResponse: response } : {}),
+          ...(note ? { adminNote: note } : {}),
+          notifyReporter: notify,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const updated = data.feedback as Feedback;
+        setFeedback(prev => prev.map(f => f.id === item.id ? { ...f, ...updated } : f));
+        setResponseDraft(prev => { const n = { ...prev }; delete n[item.id]; return n; });
+        setNoteDraft(prev => { const n = { ...prev }; delete n[item.id]; return n; });
+        if (response) {
+          alert(data.emailSent ? 'Válasz mentve és emailben elküldve a bejelentőnek.' : 'Válasz mentve. (Email nem ment ki — nincs bejelentő email cím vagy ki van kapcsolva az értesítés.)');
+        }
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || 'Hiba a válasz mentésekor');
+      }
+    } catch { alert('Hiba történt a válasz mentésekor'); }
+    finally { setSavingFeedback(null); }
   };
 
   useEffect(() => {
@@ -454,6 +496,65 @@ export function UserManagementTab() {
                         <div><span className="font-medium text-gray-700 dark:text-gray-300">User Agent:</span><span className="ml-2 text-gray-600 dark:text-gray-400 text-xs">{item.user_agent || 'N/A'}</span></div>
                         <div><span className="font-medium text-gray-700 dark:text-gray-300">Létrehozva:</span><span className="ml-2 text-gray-600 dark:text-gray-400">{new Date(item.created_at).toLocaleString('hu-HU')}</span></div>
                         <div><span className="font-medium text-gray-700 dark:text-gray-300">Frissítve:</span><span className="ml-2 text-gray-600 dark:text-gray-400">{new Date(item.updated_at).toLocaleString('hu-HU')}</span></div>
+                      </div>
+
+                      {item.admin_response && (
+                        <div className="rounded-md bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-3">
+                          <h4 className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-1">Elküldött válasz</h4>
+                          <p className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap">{item.admin_response}</p>
+                          {(item.responded_by || item.responded_at) && (
+                            <p className="text-xs text-blue-700/70 dark:text-blue-400/70 mt-2">{item.responded_by || 'admin'}{item.responded_at ? ` • ${new Date(item.responded_at).toLocaleString('hu-HU')}` : ''}</p>
+                          )}
+                        </div>
+                      )}
+
+                      {item.admin_note && (
+                        <div className="rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3">
+                          <h4 className="text-sm font-medium text-amber-800 dark:text-amber-300 mb-1">Belső jegyzet</h4>
+                          <p className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap">{item.admin_note}</p>
+                        </div>
+                      )}
+
+                      <div className="border-t border-gray-200 dark:border-gray-800 pt-3 space-y-3">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Válasz a bejelentőnek</label>
+                          <textarea
+                            value={responseDraft[item.id] ?? ''}
+                            onChange={e => setResponseDraft(prev => ({ ...prev, [item.id]: e.target.value }))}
+                            rows={3}
+                            placeholder={item.admin_response ? 'Új / módosított válasz…' : 'Írja meg a választ…'}
+                            className="form-input w-full text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Belső jegyzet (nem megy ki a bejelentőnek)</label>
+                          <textarea
+                            value={noteDraft[item.id] ?? ''}
+                            onChange={e => setNoteDraft(prev => ({ ...prev, [item.id]: e.target.value }))}
+                            rows={2}
+                            placeholder={item.admin_note ? 'Jegyzet felülírása…' : 'Belső jegyzet…'}
+                            className="form-input w-full text-sm"
+                          />
+                        </div>
+                        <div className="flex items-center justify-between gap-3 flex-wrap">
+                          <label className={`flex items-center gap-2 text-sm ${item.user_email ? 'text-gray-700 dark:text-gray-300' : 'text-gray-400 dark:text-gray-600'}`}>
+                            <input
+                              type="checkbox"
+                              checked={(notifyReporter[item.id] ?? true) && !!item.user_email}
+                              disabled={!item.user_email}
+                              onChange={e => setNotifyReporter(prev => ({ ...prev, [item.id]: e.target.checked }))}
+                            />
+                            {item.user_email ? `Email küldése a bejelentőnek (${item.user_email})` : 'Nincs bejelentő email cím — nem küldhető értesítés'}
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => saveFeedbackResponse(item)}
+                            disabled={savingFeedback === item.id}
+                            className="btn-primary text-sm disabled:opacity-50"
+                          >
+                            {savingFeedback === item.id ? 'Mentés…' : 'Válasz mentése'}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
