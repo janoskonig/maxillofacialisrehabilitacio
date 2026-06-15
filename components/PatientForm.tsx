@@ -1701,28 +1701,15 @@ export function PatientForm({
 
 
       <form id="patient-form" onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-        {!isViewOnly && (
+        {!isViewOnly && minimalNewPatient && (
           <div className="bg-yellow-50 dark:bg-yellow-950/40 border-l-4 border-yellow-400 p-4 rounded-md">
             <div className="flex items-start">
               <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-300 mr-3 mt-0.5 flex-shrink-0" />
               <div>
-                <h4 className="text-sm font-semibold text-yellow-800 dark:text-yellow-300 mb-1">
-                  ⚠️ FONTOS: Ne felejtse el menteni!
-                </h4>
                 <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                  {minimalNewPatient ? (
-                    <>
-                      Mentés után a beteg teljes adatait a beteg lapon folytathatja (klinikai minimum, fogazat,
-                      dokumentumok). Az adatok adatbázisba csak az alsó sáv{' '}
-                      <strong>„Beteg mentése”</strong> gombjával kerülnek.
-                    </>
-                  ) : (
-                    <>
-                      Az adatok csak akkor kerülnek az adatbázisba, ha az{' '}
-                      <strong>{patient ? 'Beteg frissítése' : 'Beteg mentése'}</strong> gombbal menti el az
-                      űrlapot (a képernyő alján mindig elérhető).
-                    </>
-                  )}
+                  Mentés után a beteg teljes adatait a beteg lapon folytathatja (klinikai minimum, fogazat,
+                  dokumentumok). Az adatok adatbázisba csak az alsó sáv{' '}
+                  <strong>„Beteg mentése”</strong> gombjával kerülnek.
                 </p>
               </div>
             </div>
