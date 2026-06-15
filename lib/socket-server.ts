@@ -8,6 +8,14 @@ import type { MessageDeliveryStatusEvent } from './types/messaging';
 let io: SocketIOServer | null = null;
 
 /**
+ * Jelenlét (presence) — CSAK staff (orvos) felhasználókra. userId → aktív
+ * kapcsolatok száma (egy user több fülön/eszközön is lehet). A `staff` szobába
+ * minden orvos belép connect-kor; a presence-broadcast ide megy, így a betegek
+ * (akik sosem lépnek be a `staff` szobába) nem látják az orvosok jelenlétét.
+ */
+const connectedDoctors = new Map<string, number>();
+
+/**
  * Slice 0.7 — szoba elnevezések:
  *   patient:{patientId}        beteg ↔ orvos szál
  *   user:{userId}              egyetlen felhasználó (orvos vagy beteg) — 1:1 routing
@@ -81,6 +89,49 @@ export function initSocketIO(httpServer: HTTPServer): SocketIOServer {
       console.log(`[Socket] Patient ${auth.patientId} joined room: ${room}`);
     }
 
+    // Presence (staff-only): belépés a `staff` szobába + online broadcast.
+    if (auth.userType === 'doctor') {
+      socket.join('staff');
+      const prev = connectedDoctors.get(auth.userId) ?? 0;
+      connectedDoctors.set(auth.userId, prev + 1);
+      if (prev === 0) {
+        io?.to('staff').emit('presence-update', { userId: auth.userId, online: true });
+      }
+    }
+
+    // Presence snapshot kérése (mountkor a kliens hidratálja az online listát).
+    socket.on('presence-request', () => {
+      if (auth.userType !== 'doctor') return;
+      socket.emit('presence-snapshot', { onlineUserIds: Array.from(connectedDoctors.keys()) });
+    });
+
+    // Typing relay — efemer, nem perzisztált. A megfelelő szobába továbbítjuk,
+    // a feladót kizárva (`socket.to`).
+    const relayTyping = (
+      data: { patientId?: string; groupId?: string; recipientId?: string },
+      typing: boolean,
+    ) => {
+      const payload = {
+        userId: auth.userId,
+        userType: auth.userType,
+        typing,
+        patientId: data.patientId ?? null,
+        groupId: data.groupId ?? null,
+      };
+      if (data.groupId) {
+        const raw = data.groupId.startsWith('doctor-group:')
+          ? data.groupId.slice('doctor-group:'.length)
+          : data.groupId;
+        socket.to(`doctor-group:${raw}`).emit('typing', payload);
+      } else if (data.patientId) {
+        socket.to(`patient:${data.patientId}`).emit('typing', payload);
+      } else if (data.recipientId) {
+        socket.to(`user:${data.recipientId}`).emit('typing', payload);
+      }
+    };
+    socket.on('typing-start', (data) => relayTyping(data, true));
+    socket.on('typing-stop', (data) => relayTyping(data, false));
+
     // Handle join-room event — Slice 0.7 ACL ellenőrzéssel.
     socket.on('join-room', async (data: { patientId?: string; groupId?: string }) => {
       if (data.patientId) {
@@ -145,6 +196,17 @@ export function initSocketIO(httpServer: HTTPServer): SocketIOServer {
     // Handle disconnect
     socket.on('disconnect', () => {
       console.log(`[Socket] User disconnected: ${auth.userType} ${auth.userId}`);
+
+      // Presence (staff-only): utolsó kapcsolat bontásakor offline broadcast.
+      if (auth.userType === 'doctor') {
+        const prev = connectedDoctors.get(auth.userId) ?? 0;
+        if (prev <= 1) {
+          connectedDoctors.delete(auth.userId);
+          io?.to('staff').emit('presence-update', { userId: auth.userId, online: false });
+        } else {
+          connectedDoctors.set(auth.userId, prev - 1);
+        }
+      }
     });
   });
 

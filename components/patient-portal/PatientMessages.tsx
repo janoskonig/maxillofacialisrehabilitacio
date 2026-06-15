@@ -1,17 +1,20 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, useMemo, type RefObject } from 'react';
-import { MessageCircle, Send, Clock, Check, CheckCheck, Loader2, ChevronDown, Users, Search, X, CornerUpLeft, AlertTriangle, RotateCcw } from 'lucide-react';
-import { format, isToday, isYesterday, isSameDay } from 'date-fns';
-import { hu } from 'date-fns/locale';
+import { MessageCircle, Search, X, Phone } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
 import { useRouter } from 'next/navigation';
-import { getMonogram, getLastName } from '@/lib/utils';
+import { getMonogram } from '@/lib/utils';
 import { MessageTextRenderer } from '@/components/MessageTextRenderer';
 import { useSocket } from '@/contexts/SocketContext';
 import { MessagesShell } from '@/components/mobile/MessagesShell';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
-import { MessageQuoteBlock } from '@/components/messaging/MessageQuoteBlock';
+import { useTypingIndicator } from '@/hooks/useTypingIndicator';
+import { type ChatBubbleMessage } from '@/components/messaging/ChatMessageBubble';
+import { Avatar } from '@/components/messaging/Avatar';
+import { MessageThread } from '@/components/messaging/MessageThread';
+import { MessageComposer } from '@/components/messaging/MessageComposer';
+import { ConversationList, type ConversationVM } from '@/components/messaging/ConversationList';
 import { ReplyComposerBar } from '@/components/messaging/ReplyComposerBar';
 import { useReplyState } from '@/components/messaging/useReplyState';
 import { buildQuotedMessagePreview } from '@/lib/message-reply';
@@ -25,7 +28,6 @@ import { MessageSearchProvider } from '@/contexts/MessageSearchContext';
 import { MessageSearchButton } from '@/components/messaging/MessageSearchButton';
 import { useRegisterMessageSearch } from '@/hooks/useRegisterMessageSearch';
 import type { MessageSearchHandler } from '@/contexts/MessageSearchContext';
-import { MessageContextLinksStrip } from '@/components/messaging/MessageContextLinksStrip';
 import {
   applyDeliveryStatusUpdate,
   isPatientChannelDeliveryEvent,
@@ -34,7 +36,6 @@ import { incrementParentReplyCount } from '@/components/messaging/reply-count-so
 import { useReplyThreadCollapse } from '@/components/messaging/useReplyThreadCollapse';
 import { filterMessagesByThreadCollapse } from '@/lib/messaging/reply-thread-visibility';
 import { DocumentLinkComposerButton } from '@/components/messaging/DocumentLinkComposerButton';
-import { replyThreadToggleLabel } from '@/components/messaging/reply-thread-label';
 
 interface Message {
   id: string;
@@ -92,7 +93,6 @@ export function PatientMessages() {
   const [showNewChat, setShowNewChat] = useState(false);
   const [doctorSearchQuery, setDoctorSearchQuery] = useState('');
   
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesLoadedRef = useRef<Set<string>>(new Set());
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -163,6 +163,57 @@ export function PatientMessages() {
   useEffect(() => {
     resetThreads();
   }, [selectedDoctorId, resetThreads]);
+
+  const messageById = useMemo(() => {
+    const map = new Map<string, Message>();
+    for (const m of messages) map.set(m.id, m);
+    return map;
+  }, [messages]);
+
+  // Gépel-indikátor a beteg-szálban. Jelenlét NINCS a portálon (nem mutatjuk az
+  // orvos online-állapotát — lásd terv: „munkaidőben válaszolunk”).
+  const typingConversation = useMemo(
+    () => (patientId && selectedDoctorId ? { patientId } : null),
+    [patientId, selectedDoctorId],
+  );
+  const { typingLabel, notifyTyping } = useTypingIndicator({
+    socket,
+    isConnected,
+    conversation: typingConversation,
+    currentUserId: patientId,
+    peerName: selectedDoctorName,
+  });
+
+  // Csatorna-független buborék-shape. Beteg üzenetei JOBBRA (saját, zöld).
+  const bubbleMessages = useMemo<ChatBubbleMessage[]>(
+    () =>
+      visibleMessages.map((message) => {
+        const isFromMe = message.senderType === 'patient';
+        const isPending = message.pending === true;
+        const isFailed = message.deliveryStatus === 'failed';
+        const senderName = isFromMe ? patientName || 'Én' : selectedDoctorName || 'Orvos';
+
+        return {
+          id: message.id,
+          message: message.message,
+          createdAt: message.createdAt,
+          senderId: message.senderId,
+          senderName,
+          isFromMe,
+          replyToMessageId: message.replyToMessageId ?? null,
+          quotedMessage: message.quotedMessage ?? null,
+          replyCount: message.replyCount ?? 0,
+          deliveryStatus: isPending
+            ? 'pending'
+            : isFailed
+              ? 'failed'
+              : message.deliveryStatus ?? (message.readAt ? 'read' : 'sent'),
+          readAt: message.readAt ?? null,
+          contextLinks: message.contextLinks ?? [],
+        };
+      }),
+    [visibleMessages, patientName, selectedDoctorName],
+  );
 
   const totalUnreadCount = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
 
@@ -449,19 +500,6 @@ export function PatientMessages() {
     return () => clearTimeout(timeoutId);
   }, [patientId, selectedDoctorId, messagesLoading, messages.length]);
 
-  // Scroll to bottom when messages change
-  useEffect(() => {
-    if (!messagesLoading && selectedDoctorId) {
-      requestAnimationFrame(() => {
-        setTimeout(() => {
-          if (messagesContainerRef.current) {
-            messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
-          }
-        }, 50);
-      });
-    }
-  }, [messages, messagesLoading, selectedDoctorId]);
-
   // Select doctor
   const handleSelectDoctor = (doctorId: string, doctorName: string) => {
     setSelectedDoctorId(doctorId);
@@ -640,7 +678,7 @@ export function PatientMessages() {
       <div className="card">
         <div className="flex h-[calc(100vh-200px)] sm:h-[700px] border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden bg-white dark:bg-gray-900 items-center justify-center">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-medical-primary mx-auto mb-4"></div>
             <p className="text-gray-500 dark:text-gray-400">Betöltés...</p>
           </div>
         </div>
@@ -656,311 +694,142 @@ export function PatientMessages() {
     );
   }
 
-  const formatConversationTime = (dateStr: string) => {
-    const d = new Date(dateStr);
-    if (isToday(d)) return format(d, 'HH:mm');
-    if (isYesterday(d)) return 'Tegnap';
-    return format(d, 'MM.dd.');
+  const recipientTypeLabel = (doctorId: string | null): string | null => {
+    const recipient = recipients.find((r) => r.id === doctorId);
+    if (recipient?.type === 'treating_doctor') return 'Kezelőorvos';
+    if (recipient?.type === 'admin') return 'Admin';
+    return null;
   };
 
-  // Conversations list
-  const conversationsListContent = conversations.length === 0 && !loading ? (
-    <div className="p-4 text-center text-gray-500 dark:text-gray-400 text-sm">
-      Még nincsenek beszélgetések
-      <p className="text-xs mt-2 text-gray-400 dark:text-gray-500">Kattintson az &quot;Új beszélgetés&quot; gombra egy orvos kiválasztásához</p>
-    </div>
-  ) : (
-    conversations.map((conv) => {
-      const isSelected = selectedDoctorId === conv.doctorId;
-      const monogram = getMonogram(conv.doctorName);
-      const recipient = recipients.find(r => r.id === conv.doctorId);
-      
-      return (
-        <div
-          key={conv.doctorId}
-          onClick={() => handleSelectDoctor(conv.doctorId, conv.doctorName)}
-          className={`p-3 border-b border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${
-            isSelected ? 'bg-blue-100 dark:bg-blue-950/50 border-l-4 border-l-blue-600' : ''
-          }`}
-        >
-          <div className="flex items-center gap-3">
-            <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ${
-              conv.unreadCount > 0 ? 'bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
-            }`}>
-              {monogram}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className={`text-sm truncate ${conv.unreadCount > 0 ? 'font-semibold text-gray-900 dark:text-gray-100' : 'font-medium text-gray-900 dark:text-gray-100'}`}>
-                    {conv.doctorName}
-                  </span>
-                  {recipient?.type === 'treating_doctor' && (
-                    <span className="text-[10px] text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded-full flex-shrink-0">Kezelőorvos</span>
-                  )}
-                </div>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  {conv.lastMessage && (
-                    <span className="text-xs text-gray-400 dark:text-gray-500">{formatConversationTime(conv.lastMessage.createdAt)}</span>
-                  )}
-                  {conv.unreadCount > 0 && (
-                    <span className="px-1.5 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full min-w-[20px] text-center">
-                      {conv.unreadCount}
-                    </span>
-                  )}
-                </div>
-              </div>
-              {conv.lastMessage && (
-                <p className={`text-xs mt-0.5 truncate ${conv.unreadCount > 0 ? 'text-gray-700 dark:text-gray-300 font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
-                  {conv.lastMessage.senderType === 'patient' ? 'Ön: ' : ''}
-                  {conv.lastMessage.message.substring(0, 50)}
-                  {conv.lastMessage.message.length > 50 ? '...' : ''}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      );
-    })
+  // Conversations → view model
+  const conversationItems: ConversationVM[] = conversations.map((conv) => ({
+    id: conv.doctorId,
+    title: conv.doctorName,
+    subtitle: recipientTypeLabel(conv.doctorId),
+    preview: conv.lastMessage?.message ?? null,
+    previewPrefix: conv.lastMessage?.senderType === 'patient' ? 'Ön:' : null,
+    timestamp: conv.lastMessage?.createdAt ?? null,
+    unreadCount: conv.unreadCount,
+    avatar: { name: conv.doctorName, seed: conv.doctorId },
+  }));
+
+  const conversationsListContent = (
+    <ConversationList
+      items={conversationItems}
+      selectedId={selectedDoctorId}
+      onSelect={(doctorId) => {
+        const conv = conversations.find((c) => c.doctorId === doctorId);
+        handleSelectDoctor(doctorId, conv?.doctorName ?? 'Orvos');
+      }}
+      filterPlaceholder="Orvos keresése…"
+      emptyState={
+        <span>
+          Még nincsenek beszélgetések
+          <span className="block text-xs mt-2 text-gray-400 dark:text-gray-500">
+            Kattintson az „Új beszélgetés” gombra egy orvos kiválasztásához
+          </span>
+        </span>
+      }
+    />
   );
 
   // Detail header
   const detailHeaderContent = (
-    <>
-      <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
-        {selectedDoctorName || 'Üzenetek'}
-      </h3>
-      {(() => {
-        const recipient = recipients.find(r => r.id === selectedDoctorId);
-        if (recipient?.type === 'treating_doctor') {
-          return <span className="text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 rounded-full mt-1 inline-block">Kezelőorvos</span>;
-        }
-        if (recipient?.type === 'admin') {
-          return <span className="text-xs text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded-full mt-1 inline-block">Admin</span>;
-        }
-        return null;
-      })()}
-      <div className="flex items-center gap-2 flex-shrink-0 mt-1 sm:mt-0">
+    <div className="flex items-center gap-3 w-full min-w-0">
+      <Avatar name={selectedDoctorName} seed={selectedDoctorId ?? ''} sizeClass="h-9 w-9 hidden sm:flex" />
+      <div className="flex-1 min-w-0">
+        <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
+          {selectedDoctorName || 'Üzenetek'}
+        </h3>
+        {recipientTypeLabel(selectedDoctorId) && (
+          <span className="text-xs text-gray-500 dark:text-gray-400">{recipientTypeLabel(selectedDoctorId)}</span>
+        )}
+      </div>
+      <div className="flex items-center gap-2 flex-shrink-0">
         <MessageSearchButton channel="patient" />
         {isConnected && (
           <div className="w-2 h-2 bg-green-500 rounded-full animate-connection-pulse" title="Kapcsolódva" />
         )}
       </div>
-    </>
+    </div>
   );
 
-  // Detail content (messages + input)
+  // Detail content: thread + composer
   const detailContent = (
     <>
-      {/* Messages */}
-      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto bg-gradient-to-b from-gray-50 to-gray-100 p-4 space-y-4 scroll-smooth">
-        {messagesLoading ? (
-          <div className="text-center py-12">
-            <Loader2 className="w-8 h-8 mx-auto mb-2 text-gray-300 animate-spin" />
-            <p className="text-sm text-gray-500 dark:text-gray-400">Üzenetek betöltése...</p>
+      <MessageThread
+        containerRef={messagesContainerRef}
+        messages={bubbleMessages}
+        currentUserId={patientId}
+        loading={messagesLoading}
+        scrollAnchorKey={selectedDoctorId}
+        typingLabel={typingLabel}
+        showSenderName={false}
+        ownTone="green"
+        emptyState={
+          <div className="text-center text-gray-500 dark:text-gray-400">
+            <MessageCircle className="w-14 h-14 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
+            <p className="text-base font-medium text-gray-700 dark:text-gray-300">Még nincs üzenet</p>
+            <p className="text-sm mt-1">Írjon bátran kezelőorvosának.</p>
           </div>
-        ) : messages.length === 0 ? (
-          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-            <MessageCircle className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-            <p className="text-base font-medium">Még nincsenek üzenetek</p>
-            <p className="text-sm mt-2">Küldjön üzenetet!</p>
-          </div>
-        ) : (
-          visibleMessages.map((message, index) => {
-            const isMyMessage = message.senderType === 'patient';
-            const isTheirMessage = message.senderType === 'doctor';
-            const isUnread = !message.readAt && isTheirMessage;
-            const isPending = message.pending === true;
-            const isFailed = message.deliveryStatus === 'failed';
-            const deliveryState =
-              isFailed
-                ? 'failed'
-                : message.deliveryStatus ?? (message.readAt ? 'read' : 'sent');
-            const isRead = deliveryState === 'read' || message.readAt !== null;
-            const isDelivered = deliveryState === 'delivered';
-
-            const senderName = isMyMessage 
-              ? (patientName || 'Én')
-              : (selectedDoctorName || 'Orvos');
-            const lastName = getLastName(senderName);
-            const monogram = getMonogram(senderName);
-
-            const msgDate = new Date(message.createdAt);
-            const prevMsg = index > 0 ? visibleMessages[index - 1] : null;
-            const showDateSeparator = !prevMsg || !isSameDay(msgDate, new Date(prevMsg.createdAt));
-
-            const dateSeparatorLabel = isToday(msgDate)
-              ? 'Ma'
-              : isYesterday(msgDate)
-              ? 'Tegnap'
-              : format(msgDate, 'yyyy. MMMM d.', { locale: hu });
-
-            return (
-              <div key={message.id}>
-                {showDateSeparator && (
-                  <div className="flex items-center gap-3 my-4">
-                    <div className="flex-1 border-t border-gray-300 dark:border-gray-700" />
-                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">{dateSeparatorLabel}</span>
-                    <div className="flex-1 border-t border-gray-300 dark:border-gray-700" />
-                  </div>
-                )}
-              <div
-                data-message-id={message.id}
-                className={`group flex w-full ${isMyMessage ? 'justify-end' : 'justify-start'} animate-message-pop`}
-              >
-                <div className={`flex gap-2 max-w-[80%] sm:max-w-[70%] ${isMyMessage ? 'flex-row-reverse' : 'flex-row'}`}>
-                  {isTheirMessage && (
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 flex items-center justify-center text-xs font-semibold">
-                      {monogram}
-                    </div>
-                  )}
-                  
-                  <div className={`flex flex-col ${isMyMessage ? 'items-end' : 'items-start'}`}>
-                    {isTheirMessage && (
-                      <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 px-1">
-                        {lastName}
-                      </div>
-                    )}
-                    
-                    <div className={`flex items-end gap-1 ${isMyMessage ? 'flex-row-reverse' : 'flex-row'}`}>
-                      {!isPending && !isFailed && (
-                        <button
-                          type="button"
-                          onClick={() => startReplyTo(message)}
-                          className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity p-1 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 hover:text-blue-600 hover:border-blue-300 shadow-sm flex-shrink-0"
-                          aria-label="Válasz erre az üzenetre"
-                          title="Válasz"
-                        >
-                          <CornerUpLeft className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-
-                      <div
-                        className={`rounded-2xl px-4 py-2.5 shadow-sm transition-all duration-200 ${
-                          isMyMessage
-                            ? 'bg-green-500 text-white rounded-br-md'
-                            : isUnread
-                            ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border-2 border-blue-400 shadow-md'
-                            : 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-800'
-                        }`}
-                      >
-                        {/* Slice 0.6: idézet előnézet a buborékon belül */}
-                        {message.quotedMessage && (
-                          <div className="mb-2">
-                            <MessageQuoteBlock
-                              quote={message.quotedMessage}
-                              variant={isMyMessage ? 'bubble-own-green' : 'bubble-other'}
-                              onClick={scrollToMessage}
-                              senderLabelOverride={
-                                message.quotedMessage.senderId === patientId
-                                  ? 'Te'
-                                  : message.quotedMessage.senderName ?? undefined
-                              }
-                            />
-                          </div>
-                        )}
-
-                        {message.contextLinks && message.contextLinks.length > 0 && (
-                          <MessageContextLinksStrip
-                            links={message.contextLinks}
-                            variant={isMyMessage ? 'bubble-own' : 'bubble-other'}
-                          />
-                        )}
-
-                        <div className={`text-sm whitespace-pre-wrap break-words ${isMyMessage ? 'text-white' : 'text-gray-900 dark:text-gray-100'}`}>
-                          <MessageTextRenderer
-                            text={message.message}
-                            chatType="patient-doctor"
-                            patientId={patientId}
-                            messageId={message.id}
-                            senderId={message.senderId}
-                            currentUserId={patientId}
-                            contextLinks={message.contextLinks}
-                            onSendMessage={async (messageText) => {
-                              setNewMessage(messageText);
-                              await handleSendMessage();
-                            }}
-                          />
-                        </div>
-
-                        <div className={`flex items-center gap-1.5 mt-1.5 ${isMyMessage ? 'justify-end' : 'justify-start'}`}>
-                          <span className={`text-[10px] ${isMyMessage ? 'text-green-100' : 'text-gray-500 dark:text-gray-400'}`}>
-                            {format(new Date(message.createdAt), 'HH:mm', { locale: hu })}
-                          </span>
-                          {isMyMessage && (
-                            <span className="flex items-center gap-1">
-                              {isPending ? (
-                                <Loader2 className="w-3 h-3 animate-spin text-green-200" />
-                              ) : isFailed ? (
-                                <>
-                                  <AlertTriangle className="w-3 h-3 text-green-200" aria-label="küldés sikertelen" />
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      void retryFailedMessage(message);
-                                    }}
-                                    className="inline-flex items-center gap-0.5 text-[10px] underline-offset-2 hover:underline text-green-100"
-                                  >
-                                    <RotateCcw className="w-3 h-3" /> Újraküldés
-                                  </button>
-                                </>
-                              ) : isRead ? (
-                                <CheckCheck className="w-3 h-3 text-green-200" />
-                              ) : isDelivered ? (
-                                <CheckCheck className="w-3 h-3 text-green-200 opacity-70" />
-                              ) : (
-                                <Check className="w-3 h-3 text-green-200 opacity-70" />
-                              )}
-                            </span>
-                          )}
-                          {isUnread && (
-                            <span className="ml-1 px-1.5 py-0.5 text-[10px] font-semibold text-white bg-red-500 rounded">
-                              Új
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {(message.replyCount ?? 0) > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => handleReplyThreadToggle(message.id)}
-                        className={`mt-1 text-xs font-medium underline-offset-2 hover:underline ${
-                          isMyMessage ? 'text-green-700 dark:text-green-300' : 'text-gray-600 dark:text-gray-400'
-                        }`}
-                      >
-                        {replyThreadToggleLabel(message.replyCount ?? 0, isCollapsed(message.id))}
-                      </button>
-                    )}
-                  </div>
-                  
-                  {isMyMessage && <div className="flex-shrink-0 w-8"></div>}
-                </div>
-              </div>
-              </div>
-            );
-          })
+        }
+        renderAvatar={(bubble) => (
+          <Avatar name={bubble.senderName} seed={bubble.senderId} sizeClass="h-7 w-7" textClass="text-[10px]" />
         )}
-        <div ref={messagesEndRef} />
-      </div>
+        renderText={(text, bubble) => (
+          <MessageTextRenderer
+            text={text}
+            chatType="patient-doctor"
+            patientId={patientId}
+            messageId={bubble.id}
+            senderId={bubble.senderId}
+            currentUserId={patientId ?? undefined}
+            contextLinks={bubble.contextLinks}
+            onSendMessage={async (messageText) => {
+              setNewMessage(messageText);
+              await handleSendMessage();
+            }}
+          />
+        )}
+        onReply={(bubble) => {
+          const orig = messageById.get(bubble.id);
+          if (orig && !orig.pending && orig.deliveryStatus !== 'failed') startReplyTo(orig);
+        }}
+        onQuoteClick={scrollToMessage}
+        onReplyThreadToggle={handleReplyThreadToggle}
+        isThreadCollapsed={isCollapsed}
+        onRetry={(bubble) => {
+          const orig = messageById.get(bubble.id);
+          if (orig) void retryFailedMessage(orig);
+        }}
+      />
 
-      {/* Slice 0.6: reply mód csík a composer fölött */}
-      {replyState.isReplying && replyState.replyTarget && (
-        <ReplyComposerBar
-          quote={replyState.replyTarget}
-          onClose={replyState.clearReply}
-          senderLabelOverride={
-            replyState.replyTarget.senderId === patientId
-              ? 'Te'
-              : replyState.replyTarget.senderName ?? undefined
-          }
-        />
-      )}
-
-      {/* Input Area */}
-      <div className="flex-shrink-0 border-t bg-white dark:bg-gray-900 p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-4">
-        <div className="flex items-end gap-2">
+      <MessageComposer
+        value={newMessage}
+        onChange={setNewMessage}
+        onSend={handleSendMessage}
+        sending={sending}
+        disabled={!selectedDoctorId}
+        sendOnEnter={!isMobile}
+        autoFocusKey={selectedDoctorId}
+        textareaRef={textareaRef}
+        onTyping={notifyTyping}
+        onEscape={replyState.isReplying ? replyState.clearReply : undefined}
+        placeholder="Írja meg üzenetét…"
+        replyBar={
+          replyState.isReplying && replyState.replyTarget ? (
+            <ReplyComposerBar
+              quote={replyState.replyTarget}
+              onClose={replyState.clearReply}
+              senderLabelOverride={
+                replyState.replyTarget.senderId === patientId
+                  ? 'Te'
+                  : replyState.replyTarget.senderName ?? undefined
+              }
+            />
+          ) : undefined
+        }
+        attachSlot={
           <DocumentLinkComposerButton
             chatType="patient-doctor"
             portalMode
@@ -968,40 +837,8 @@ export function PatientMessages() {
             disabled={sending}
             onInsert={setNewMessage}
           />
-          <textarea
-            ref={textareaRef}
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape' && replyState.isReplying) {
-                e.preventDefault();
-                replyState.clearReply();
-                return;
-              }
-              if (e.key === 'Enter' && !e.shiftKey && !isMobile) {
-                e.preventDefault();
-                handleSendMessage();
-              }
-            }}
-            className="form-input flex-1 resize-none rounded-xl border-gray-300 dark:border-gray-700 focus:border-blue-500 focus:ring-blue-500 min-h-[44px]"
-            rows={2}
-            placeholder="Írja be üzenetét..."
-            disabled={sending}
-          />
-          <button
-            onClick={handleSendMessage}
-            disabled={sending || !newMessage.trim() || !selectedDoctorId}
-            className="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white rounded-full w-10 h-10 sm:w-auto sm:h-auto sm:rounded-xl sm:px-6 sm:py-2.5 flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 shadow-sm hover:shadow-md"
-          >
-            {sending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Send className="w-4 h-4" />
-            )}
-            <span className="hidden sm:inline text-sm font-medium">{sending ? 'Küldés...' : 'Küldés'}</span>
-          </button>
-        </div>
-      </div>
+        }
+      />
     </>
   );
 
@@ -1068,6 +905,16 @@ export function PatientMessages() {
     </>
   );
 
+  // Beteg-portál: nyugodtabb hangnem — sürgősségi figyelmeztetés a lista tetején.
+  const listHeaderContent = (
+    <div className="flex items-start gap-2 bg-blue-50 dark:bg-blue-950/40 text-blue-800 dark:text-blue-200 rounded-lg px-3 py-2">
+      <Phone className="w-4 h-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
+      <span className="text-xs leading-snug">
+        Sürgős esetben hívja rendelőnket. Az üzenetekre munkaidőben válaszolunk.
+      </span>
+    </div>
+  );
+
   return (
     <MessageSearchProvider preferredChannel="patient">
     <div className="card">
@@ -1077,6 +924,7 @@ export function PatientMessages() {
         unreadCount={totalUnreadCount}
         onNewChat={handleStartNewChat}
         conversationsList={conversationsListContent}
+        listHeaderContent={listHeaderContent}
         showDetail={!!selectedDoctorId}
         onBack={() => {
           setSelectedDoctorId(null);

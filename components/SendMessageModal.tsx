@@ -1,12 +1,11 @@
 'use client';
 
 import { useCallback, useState, useEffect, useRef, useMemo } from 'react';
-import { MessageCircle, Send, X, Search, User, Clock, Mail, ArrowLeft, Check, CheckCheck, Loader2, FileQuestion } from 'lucide-react';
+import { MessageCircle, Send, X, Search, User, Clock, Mail, ArrowLeft, FileQuestion } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useRouter } from 'next/navigation';
-import { getMonogram, getLastName } from '@/lib/utils';
 import { MessageTextRenderer } from './MessageTextRenderer';
 import { DocumentRequestSendWizard } from './DocumentRequestSendWizard';
 import { DocumentLinkComposerButton } from './messaging/DocumentLinkComposerButton';
@@ -16,7 +15,10 @@ import type { PendingContextLink } from './messaging/ContextLinkAttachPicker';
 import { useMessageContextActions } from '@/hooks/useMessageContextActions';
 import type { MessageContextLink } from '@/lib/types/messaging';
 import { getCurrentUser } from '@/lib/auth';
-import { ChatMessageBubble, type ChatBubbleMessage } from './messaging/ChatMessageBubble';
+import { type ChatBubbleMessage } from './messaging/ChatMessageBubble';
+import { Avatar } from './messaging/Avatar';
+import { MessageThread } from './messaging/MessageThread';
+import { MessageComposer } from './messaging/MessageComposer';
 import { ReplyComposerBar } from './messaging/ReplyComposerBar';
 import { useReplyThreadCollapse } from './messaging/useReplyThreadCollapse';
 import { filterMessagesByThreadCollapse } from '@/lib/messaging/reply-thread-visibility';
@@ -71,7 +73,6 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [activeTab, setActiveTab] = useState<'send' | 'recent'>('send');
   const [pendingMessageId, setPendingMessageId] = useState<string | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [showRequestWizard, setShowRequestWizard] = useState(false);
@@ -156,6 +157,41 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
     resetThreads();
   }, [selectedPatient?.id, resetThreads]);
 
+  const messageById = useMemo(() => {
+    const map = new Map<string, RecentMessage>();
+    for (const m of conversationMessages) map.set(m.id, m);
+    return map;
+  }, [conversationMessages]);
+
+  // Csatorna-független buborék-shape. Orvos üzenetei JOBBRA, beteg BALRA.
+  const bubbleMessages = useMemo<ChatBubbleMessage[]>(
+    () =>
+      visibleConversationMessages.map((msg) => {
+        const isDoctor = msg.senderType === 'doctor';
+        const isPending = msg.pending === true;
+        const isFailed = msg.deliveryStatus === 'failed';
+        return {
+          id: msg.id,
+          message: msg.message,
+          createdAt: msg.createdAt,
+          senderId: msg.senderId,
+          senderName: isDoctor ? 'Orvos' : selectedPatient?.nev || 'Beteg',
+          isFromMe: isDoctor,
+          replyToMessageId: msg.replyToMessageId ?? null,
+          quotedMessage: msg.quotedMessage ?? null,
+          replyCount: msg.replyCount ?? 0,
+          deliveryStatus: isPending
+            ? 'pending'
+            : isFailed
+              ? 'failed'
+              : msg.deliveryStatus ?? (msg.readAt ? 'read' : 'sent'),
+          readAt: msg.readAt ?? null,
+          contextLinks: msg.contextLinks ?? [],
+        };
+      }),
+    [visibleConversationMessages, selectedPatient?.nev],
+  );
+
   useEffect(() => {
     if (isOpen) {
       fetchPatients();
@@ -184,13 +220,6 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
       return () => clearInterval(interval);
     }
   }, [selectedPatient, activeTab]);
-
-  // Scroll to bottom when messages change
-  useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [conversationMessages]);
 
   const fetchConversation = async (patientId: string) => {
     try {
@@ -672,178 +701,105 @@ export function SendMessageModal({ isOpen, onClose }: SendMessageModalProps) {
                   </div>
 
                   {/* Chat Messages */}
-                  <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 bg-gray-50 dark:bg-gray-800/60 space-y-3">
-                    {loadingConversation ? (
-                      <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                        <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-600 border-t-transparent mx-auto mb-2"></div>
-                        Betöltés...
-                      </div>
-                    ) : conversationMessages.length === 0 ? (
-                      <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                        <MessageCircle className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                  <MessageThread
+                    containerRef={messagesContainerRef}
+                    messages={bubbleMessages}
+                    currentUserId={currentUserId}
+                    loading={loadingConversation}
+                    scrollAnchorKey={selectedPatient.id}
+                    showSenderName={false}
+                    canRemoveContextLinks
+                    onRemoveContextLink={handleRemoveContextLink}
+                    emptyState={
+                      <div className="text-center text-gray-500 dark:text-gray-400">
+                        <MessageCircle className="w-12 h-12 mx-auto mb-2 text-gray-300 dark:text-gray-600" />
                         <p>Még nincsenek üzenetek ebben a beszélgetésben</p>
                       </div>
-                    ) : (
-                      visibleConversationMessages.map((msg) => {
-                        const isDoctor = msg.senderType === 'doctor';
-                        const isPending = msg.pending === true;
-                        const isFailed = msg.deliveryStatus === 'failed';
-                        
-                        const senderName = isDoctor 
-                          ? 'Orvos'
-                          : (selectedPatient?.nev || 'Beteg');
-                        const lastName = getLastName(senderName);
-                        const monogram = getMonogram(senderName);
-
-                        const bubbleMessage: ChatBubbleMessage = {
-                          id: msg.id,
-                          message: msg.message,
-                          createdAt: msg.createdAt,
-                          senderId: msg.senderId,
-                          senderName,
-                          isFromMe: isDoctor,
-                          replyToMessageId: msg.replyToMessageId ?? null,
-                          quotedMessage: msg.quotedMessage ?? null,
-                          replyCount: msg.replyCount ?? 0,
-                          deliveryStatus: isPending
-                            ? 'pending'
-                            : isFailed
-                              ? 'failed'
-                              : msg.deliveryStatus ?? (msg.readAt ? 'read' : 'sent'),
-                          readAt: msg.readAt ?? null,
-                          contextLinks: msg.contextLinks ?? [],
-                        };
-
-                        const isFromMe =
-                          !!currentUserId &&
-                          msg.senderType === 'doctor' &&
-                          msg.senderId === currentUserId;
-
-                        return (
-                          <div
-                            key={msg.id}
-                            className={`flex flex-col ${isDoctor ? 'items-end' : 'items-start'}`}
-                          >
-                            {/* Sender name and monogram */}
-                            <div className={`flex items-center gap-1.5 mb-1 px-1 ${isDoctor ? 'flex-row-reverse' : ''}`}>
-                              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold ${
-                                isDoctor 
-                                  ? 'bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300' 
-                                  : 'bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-300'
-                              }`}>
-                                {monogram}
-                              </div>
-                              <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{lastName}</span>
-                            </div>
-                            <ChatMessageBubble
-                              message={bubbleMessage}
-                              currentUserId={currentUserId}
-                              showSenderLabel={false}
-                              canRemoveContextLinks={isFromMe && !isPending}
-                              onRemoveContextLink={handleRemoveContextLink}
-                              renderText={(text) => (
-                                <MessageTextRenderer
-                                  text={text}
-                                  chatType="doctor-view-patient"
-                                  patientId={selectedPatient?.id || null}
-                                  messageId={msg.id}
-                                  senderId={msg.senderId}
-                                  currentUserId={currentUserId || undefined}
-                                  contextLinks={msg.contextLinks}
-                                  onSendMessage={async (messageText) => {
-                                    await handleSendMessage(messageText);
-                                  }}
-                                />
-                              )}
-                              onReply={isPending || isFailed ? undefined : () => startReplyTo(msg)}
-                              onQuoteClick={scrollToMessage}
-                              onReplyThreadToggle={handleReplyThreadToggle}
-                              replyThreadCollapsed={isCollapsed(msg.id)}
-                              onRetry={
-                                isFailed && isDoctor
-                                  ? () => {
-                                      void retryFailedMessage(msg);
-                                    }
-                                  : undefined
-                              }
-                            />
-                          </div>
-                        );
-                      })
+                    }
+                    renderAvatar={(bubble) => (
+                      <Avatar name={bubble.senderName} seed={bubble.senderId} sizeClass="h-7 w-7" textClass="text-[10px]" />
                     )}
-                    <div ref={messagesEndRef} />
-                  </div>
-
-                  {/* Slice 0.6: reply mód csík a composer fölött */}
-                  {replyState.isReplying && replyState.replyTarget && (
-                    <ReplyComposerBar
-                      quote={replyState.replyTarget}
-                      onClose={replyState.clearReply}
-                    />
-                  )}
+                    renderText={(text, bubble) => (
+                      <MessageTextRenderer
+                        text={text}
+                        chatType="doctor-view-patient"
+                        patientId={selectedPatient?.id || null}
+                        messageId={bubble.id}
+                        senderId={bubble.senderId}
+                        currentUserId={currentUserId || undefined}
+                        contextLinks={bubble.contextLinks}
+                        onSendMessage={async (messageText) => {
+                          await handleSendMessage(messageText);
+                        }}
+                      />
+                    )}
+                    onReply={(bubble) => {
+                      const orig = messageById.get(bubble.id);
+                      if (orig && !orig.pending && orig.deliveryStatus !== 'failed') startReplyTo(orig);
+                    }}
+                    onQuoteClick={scrollToMessage}
+                    onReplyThreadToggle={handleReplyThreadToggle}
+                    isThreadCollapsed={isCollapsed}
+                    onRetry={(bubble) => {
+                      const orig = messageById.get(bubble.id);
+                      if (orig) void retryFailedMessage(orig);
+                    }}
+                  />
 
                   {/* Message Input */}
-                  <div className="border-t bg-white dark:bg-gray-900 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-                    <PendingContextLinksBar
-                      links={pendingContextLinks}
-                      onRemove={(i) =>
-                        setPendingContextLinks((prev) => prev.filter((_, idx) => idx !== i))
-                      }
-                    />
-                    <div className="flex items-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setShowRequestWizard(true)}
-                        className="flex-shrink-0 btn-secondary rounded-full w-10 h-10 sm:w-auto sm:rounded-lg sm:px-3 sm:py-2.5"
-                        title="Dokumentum bekérése"
-                      >
-                        <FileQuestion className="w-4 h-4 sm:mr-1" />
-                        <span className="hidden sm:inline text-sm">Bekérés</span>
-                      </button>
-                      {selectedPatient && (
-                        <>
-                          <DocumentLinkComposerButton
-                            patientId={selectedPatient.id}
-                            chatType="patient-doctor"
-                            messageText={message}
-                            disabled={sending}
-                            onInsert={setMessage}
-                          />
-                          <ContextLinkComposerButton
-                            patientId={selectedPatient.id}
-                            pendingLinks={pendingContextLinks}
-                            disabled={sending}
-                            onAddPending={(link) =>
-                              setPendingContextLinks((prev) => [...prev, link])
-                            }
-                          />
-                        </>
-                      )}
-                      <textarea
-                        ref={textareaRef}
-                        value={message}
-                        onChange={(e) => setMessage(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Escape' && replyState.isReplying) {
-                            e.preventDefault();
-                            replyState.clearReply();
-                          }
-                        }}
-                        className="form-input flex-1 resize-none min-h-[44px]"
-                        rows={2}
-                        placeholder="Írja be üzenetét..."
-                        disabled={sending}
-                      />
-                      <button
-                        onClick={() => handleSendMessage()}
-                        disabled={!message.trim() || sending}
-                        className="flex-shrink-0 bg-medical-primary hover:bg-medical-primary-dark text-white rounded-full w-10 h-10 sm:w-auto sm:h-auto sm:rounded-lg sm:px-4 sm:py-2.5 flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 shadow-soft"
-                      >
-                        <Send className="w-4 h-4" />
-                        <span className="hidden sm:inline text-sm font-medium">{sending ? '...' : 'Küldés'}</span>
-                      </button>
-                    </div>
-                  </div>
+                  <MessageComposer
+                    value={message}
+                    onChange={setMessage}
+                    onSend={() => handleSendMessage()}
+                    sending={sending}
+                    autoFocusKey={selectedPatient.id}
+                    textareaRef={textareaRef}
+                    onEscape={replyState.isReplying ? replyState.clearReply : undefined}
+                    placeholder="Írja be üzenetét…"
+                    replyBar={
+                      replyState.isReplying && replyState.replyTarget ? (
+                        <ReplyComposerBar quote={replyState.replyTarget} onClose={replyState.clearReply} />
+                      ) : undefined
+                    }
+                    pendingBar={
+                      pendingContextLinks.length > 0 ? (
+                        <PendingContextLinksBar
+                          links={pendingContextLinks}
+                          onRemove={(i) => setPendingContextLinks((prev) => prev.filter((_, idx) => idx !== i))}
+                        />
+                      ) : undefined
+                    }
+                    attachSlot={
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setShowRequestWizard(true)}
+                          className="flex-shrink-0 p-2 text-gray-500 dark:text-gray-400 hover:text-medical-primary rounded-full"
+                          aria-label="Dokumentum bekérése"
+                          title="Dokumentum bekérése"
+                        >
+                          <FileQuestion className="w-5 h-5" />
+                        </button>
+                        {selectedPatient && (
+                          <>
+                            <DocumentLinkComposerButton
+                              patientId={selectedPatient.id}
+                              chatType="patient-doctor"
+                              messageText={message}
+                              disabled={sending}
+                              onInsert={setMessage}
+                            />
+                            <ContextLinkComposerButton
+                              patientId={selectedPatient.id}
+                              pendingLinks={pendingContextLinks}
+                              disabled={sending}
+                              onAddPending={(link) => setPendingContextLinks((prev) => [...prev, link])}
+                            />
+                          </>
+                        )}
+                      </>
+                    }
+                  />
 
                   {selectedPatient && (
                     <DocumentRequestSendWizard

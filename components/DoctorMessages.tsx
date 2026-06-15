@@ -1,21 +1,26 @@
 'use client';
 
 import { useCallback, useState, useEffect, useRef, useMemo, type RefObject } from 'react';
-import { MessageCircle, Send, CheckCheck, Loader2, Users, UserPlus, Edit2, X, Trash2 } from 'lucide-react';
-import { format, isToday, isYesterday, isSameDay } from 'date-fns';
+import { Loader2, Users, UserPlus, Edit2, X, Trash2, CheckCheck, MessageCircle } from 'lucide-react';
+import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useToast } from '@/contexts/ToastContext';
 import { PatientMention } from './PatientMention';
 import { MessageTextRenderer } from './MessageTextRenderer';
 import { CreateGroupChatModal } from './CreateGroupChatModal';
 import { RecipientSelector } from './RecipientSelector';
-import { getMonogram, getLastName } from '@/lib/utils';
 import { useSocket } from '@/contexts/SocketContext';
 import { MessagesShell } from './mobile/MessagesShell';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useDoctorMessages } from '@/hooks/useDoctorMessages';
+import { usePresence } from '@/hooks/usePresence';
+import { useTypingIndicator } from '@/hooks/useTypingIndicator';
 import { aggregateGroupSenderDeliveryStatus } from '@/lib/messaging/group-delivery-status';
-import { ChatMessageBubble, type ChatBubbleMessage } from './messaging/ChatMessageBubble';
+import type { ChatBubbleMessage } from './messaging/ChatMessageBubble';
+import { Avatar } from './messaging/Avatar';
+import { MessageThread } from './messaging/MessageThread';
+import { MessageComposer } from './messaging/MessageComposer';
+import { ConversationList, type ConversationVM } from './messaging/ConversationList';
 import { ReplyComposerBar } from './messaging/ReplyComposerBar';
 import { DocumentLinkComposerButton } from './messaging/DocumentLinkComposerButton';
 import { ContextLinkComposerButton } from './messaging/ContextLinkComposerButton';
@@ -23,6 +28,7 @@ import { PendingContextLinksBar } from './messaging/PendingContextLinksBar';
 import type { PendingContextLink } from './messaging/ContextLinkAttachPicker';
 import { useMessageContextActions } from '@/hooks/useMessageContextActions';
 import type { MessageContextLink } from '@/lib/types/messaging';
+import type { DoctorMessage } from '@/lib/types';
 import { useReplyThreadCollapse } from './messaging/useReplyThreadCollapse';
 import { filterMessagesByThreadCollapse } from '@/lib/messaging/reply-thread-visibility';
 import { MessageSearchButton } from './messaging/MessageSearchButton';
@@ -42,15 +48,32 @@ export function DoctorMessages() {
     replyState, startReplyTo,
     selectDoctor, selectGroup, clearSelection, sendMessage, retryMessage,
     createGroupConversation, renameGroup, deleteGroup,
-    refreshConversations, refreshGroupParticipants, setSelectedGroupName,
+    refreshConversations, refreshGroupParticipants,
   } = useDoctorMessages({ socket, isConnected });
+
+  // Jelenlét (staff) + gépel-indikátor.
+  const { isOnline } = usePresence(socket, isConnected);
+  const typingConversation = useMemo(
+    () =>
+      selectedGroupId
+        ? { groupId: selectedGroupId }
+        : selectedDoctorId
+          ? { recipientId: selectedDoctorId }
+          : null,
+    [selectedGroupId, selectedDoctorId],
+  );
+  const { typingLabel, notifyTyping } = useTypingIndicator({
+    socket,
+    isConnected,
+    conversation: typingConversation,
+    currentUserId,
+    peerName: selectedGroupId ? null : selectedDoctorName,
+  });
 
   // ── UI-only state ───────────────────────────────────────────────────
   const [newMessage, setNewMessage] = useState('');
   const [cursorPosition, setCursorPosition] = useState(0);
-  const [showDoctorSelector, setShowDoctorSelector] = useState(false);
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
-  const [doctorSearchQuery, setDoctorSearchQuery] = useState('');
   const [newChatRecipients, setNewChatRecipients] = useState<Array<{ id: string; name: string; email: string; intezmeny: string | null }>>([]);
   const [showNewChat, setShowNewChat] = useState(false);
   const [editingGroupName, setEditingGroupName] = useState(false);
@@ -60,18 +83,8 @@ export function DoctorMessages() {
   const { attachLink, removeLink } = useMessageContextActions('doctor');
 
   // ── Refs ────────────────────────────────────────────────────────────
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // Scroll state and refs
-  const [isNearBottom, setIsNearBottom] = useState(false);
-  const shouldAutoScrollRef = useRef(false);
-  const prevConversationKeyRef = useRef<string | null>(null);
-  const prevMessageCountRef = useRef<number>(0);
-  const hasInitializedScrollRef = useRef(false);
-  const thresholdPx = 100;
-  const isNearBottomRef = useRef(false);
 
   // ── Responsive ──────────────────────────────────────────────────────
   const breakpoint = useBreakpoint();
@@ -83,24 +96,16 @@ export function DoctorMessages() {
     return null;
   }, [selectedGroupId, selectedDoctorId]);
 
-  const scrollToBottom = (behavior: ScrollBehavior = "auto") => {
-    const el = messagesContainerRef.current;
-    if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior });
-  };
-
-  // Idézet kattintásra: az eredeti `data-message-id` targethez ugrunk az
-  // aktuális üzenetlistában. Ha nincs (pl. törölt parent vagy nincs még
-  // betöltve), csendben nem csinálunk semmit.
+  // Idézet / keresés kattintásra: az eredeti `data-message-id` targethez ugrunk.
   const scrollToMessage = useCallback((messageId: string): boolean => {
     const el = messagesContainerRef.current?.querySelector<HTMLElement>(
       `[data-message-id="${messageId}"]`,
     );
     if (!el) return false;
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    el.classList.add('ring-2', 'ring-blue-400', 'rounded-lg');
+    el.classList.add('ring-2', 'ring-medical-primary', 'rounded-2xl');
     window.setTimeout(() => {
-      el.classList.remove('ring-2', 'ring-blue-400', 'rounded-lg');
+      el.classList.remove('ring-2', 'ring-medical-primary', 'rounded-2xl');
     }, 1600);
     return true;
   }, []);
@@ -149,19 +154,25 @@ export function DoctorMessages() {
 
   useRegisterMessageSearch(searchHandler);
 
+  const { collapsedRoots, isCollapsed, toggleThread, resetThreads } = useReplyThreadCollapse();
+
+  const visibleMessages = useMemo(
+    () => filterMessagesByThreadCollapse(messages, collapsedRoots),
+    [messages, collapsedRoots],
+  );
+
+  const messageById = useMemo(() => {
+    const map = new Map<string, DoctorMessage>();
+    for (const msg of messages) map.set(msg.id, msg);
+    return map;
+  }, [messages]);
+
   const scrollToFirstReply = useCallback(
     (parentId: string) => {
       const firstReply = messages.find((m) => m.replyToMessageId === parentId);
       if (firstReply) scrollToMessage(firstReply.id);
     },
     [messages, scrollToMessage],
-  );
-
-  const { collapsedRoots, isCollapsed, toggleThread, resetThreads } = useReplyThreadCollapse();
-
-  const visibleMessages = useMemo(
-    () => filterMessagesByThreadCollapse(messages, collapsedRoots),
-    [messages, collapsedRoots],
   );
 
   const handleReplyThreadToggle = useCallback(
@@ -179,74 +190,41 @@ export function DoctorMessages() {
     resetThreads();
   }, [conversationKey, resetThreads]);
 
-  // ── Scroll effects ──────────────────────────────────────────────────
+  // ── Bubble adapter (csatorna-független shape) ───────────────────────
+  const bubbleMessages = useMemo<ChatBubbleMessage[]>(
+    () =>
+      visibleMessages.map((message) => {
+        const isFromMe = currentUserId ? message.senderId === currentUserId : false;
+        const isPending = message.pending === true;
+        const senderName = message.senderName || message.senderEmail || 'Ismeretlen';
 
-  // Scroll listener: tracks if user is near bottom
-  useEffect(() => {
-    const el = messagesContainerRef.current;
-    if (!el) return;
+        const effectiveDeliveryStatus = isPending
+          ? ('pending' as const)
+          : message.deliveryStatus === 'failed'
+            ? ('failed' as const)
+            : selectedGroupId && isFromMe
+              ? aggregateGroupSenderDeliveryStatus(message, currentUserId ?? '', groupParticipants)
+              : message.deliveryStatus ?? (message.readAt ? 'read' : 'sent');
 
-    const handleScroll = () => {
-      const distanceFromBottom =
-        el.scrollHeight - el.scrollTop - el.clientHeight;
-      const nearBottom = distanceFromBottom < thresholdPx;
-      isNearBottomRef.current = nearBottom;
-      setIsNearBottom(nearBottom);
-      hasInitializedScrollRef.current = true;
-    };
+        return {
+          id: message.id,
+          message: message.message,
+          createdAt: message.createdAt,
+          senderId: message.senderId,
+          senderName,
+          isFromMe,
+          replyToMessageId: message.replyToMessageId ?? null,
+          quotedMessage: message.quotedMessage ?? null,
+          replyCount: message.replyCount ?? 0,
+          deliveryStatus: effectiveDeliveryStatus,
+          readAt: message.readAt ?? null,
+          contextLinks: message.contextLinks ?? [],
+        };
+      }),
+    [visibleMessages, currentUserId, selectedGroupId, groupParticipants],
+  );
 
-    handleScroll();
-    hasInitializedScrollRef.current = true;
-
-    el.addEventListener("scroll", handleScroll, { passive: true });
-    return () => el.removeEventListener("scroll", handleScroll);
-  }, [conversationKey]);
-
-  // New conversation selected: always scroll to bottom
-  useEffect(() => {
-    if (!conversationKey || loading) return;
-
-    if (prevConversationKeyRef.current !== conversationKey) {
-      prevConversationKeyRef.current = conversationKey;
-
-      shouldAutoScrollRef.current = true;
-      prevMessageCountRef.current = 0;
-      hasInitializedScrollRef.current = false;
-      setIsNearBottom(true);
-
-      queueMicrotask(() => requestAnimationFrame(() => scrollToBottom("auto")));
-    }
-  }, [conversationKey, loading]);
-
-  // Messages list changed: only scroll if justified
-  useEffect(() => {
-    if (loading) return;
-    if (!messagesContainerRef.current) return;
-
-    const currentCount = messages?.length ?? 0;
-    const prevCount = prevMessageCountRef.current;
-    const messageAppended = currentCount > prevCount;
-    prevMessageCountRef.current = currentCount;
-
-    if (!messageAppended) return;
-
-    const el = messagesContainerRef.current;
-    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    const currentlyNearBottom = distanceFromBottom < thresholdPx;
-
-    if (currentlyNearBottom && hasInitializedScrollRef.current) {
-      shouldAutoScrollRef.current = false;
-      requestAnimationFrame(() => scrollToBottom("auto"));
-      return;
-    }
-
-    if (shouldAutoScrollRef.current) {
-      shouldAutoScrollRef.current = false;
-      requestAnimationFrame(() => scrollToBottom("smooth"));
-    }
-  }, [messages, loading]);
-
-  // ── Event handlers (thin wrappers) ──────────────────────────────────
+  // ── Event handlers ──────────────────────────────────────────────────
 
   const handleSendMessage = async (messageText?: string) => {
     const textToSend = messageText || newMessage.trim();
@@ -257,7 +235,6 @@ export function DoctorMessages() {
       return;
     }
 
-    shouldAutoScrollRef.current = true;
     const pendingSnapshot = [...pendingContextLinks];
     const messageId = await sendMessage(textToSend);
     if (messageId) {
@@ -299,26 +276,30 @@ export function DoctorMessages() {
 
   const handleSelectDoctor = (doctorId: string, doctorName: string) => {
     selectDoctor(doctorId, doctorName);
-    setShowDoctorSelector(false);
-    setDoctorSearchQuery('');
   };
 
   const handleSelectGroup = (groupId: string, groupName: string | null) => {
     selectGroup(groupId, groupName);
-    setShowDoctorSelector(false);
-    setDoctorSearchQuery('');
     setShowNewChat(false);
     setNewChatRecipients([]);
+  };
+
+  const handleConversationSelect = (id: string) => {
+    if (id.startsWith('group:')) {
+      const gid = id.slice('group:'.length);
+      const conv = conversations.find((c) => c.type === 'group' && c.groupId === gid);
+      handleSelectGroup(gid, conv?.groupName ?? null);
+    } else if (id.startsWith('doc:')) {
+      const did = id.slice('doc:'.length);
+      const conv = conversations.find((c) => c.type === 'individual' && c.doctorId === did);
+      handleSelectDoctor(did, conv?.doctorName ?? 'Orvos');
+    }
   };
 
   const handleStartNewChat = () => {
     setShowNewChat(true);
     clearSelection();
     setNewChatRecipients([]);
-  };
-
-  const handleNewChatRecipientsChange = (recipients: Array<{ id: string; name: string; email: string; intezmeny: string | null }>) => {
-    setNewChatRecipients(recipients);
   };
 
   const handleStartConversation = async () => {
@@ -332,7 +313,7 @@ export function DoctorMessages() {
       setShowNewChat(false);
       setNewChatRecipients([]);
     } else {
-      const result = await createGroupConversation(newChatRecipients.map(r => r.id));
+      const result = await createGroupConversation(newChatRecipients.map((r) => r.id));
       if (result) {
         handleSelectGroup(result.groupId, null);
         setShowNewChat(false);
@@ -356,38 +337,59 @@ export function DoctorMessages() {
     await deleteGroup();
   };
 
-  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setNewMessage(e.target.value);
-    setCursorPosition(e.target.selectionStart);
-  };
+  // ── Group read-status footer ────────────────────────────────────────
+  const renderBubbleFooter = useCallback(
+    (bubble: ChatBubbleMessage) => {
+      if (!bubble.isFromMe || !selectedGroupId || groupParticipants.length === 0) return null;
+      const message = messageById.get(bubble.id);
+      if (!message) return null;
 
-  const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Escape' && replyState.isReplying) {
-      e.preventDefault();
-      replyState.clearReply();
-      return;
-    }
-    if (e.key === 'Enter' && !e.shiftKey && !isMobile) {
-      e.preventDefault();
-      handleSendMessage();
-    }
-  };
+      const readUserIds = new Set(message.readBy?.map((r) => r.userId) || []);
+      const unreadParticipants = groupParticipants.filter(
+        (p) => p.userId !== currentUserId && p.userId !== message.senderId && !readUserIds.has(p.userId),
+      );
 
-  const handleTextareaSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
-    setCursorPosition((e.target as HTMLTextAreaElement).selectionStart);
-  };
-
-  // ── Derived state ───────────────────────────────────────────────────
-
-  const filteredDoctors = doctors.filter(doctor => {
-    if (!doctorSearchQuery) return true;
-    const query = doctorSearchQuery.toLowerCase();
-    return (
-      doctor.name.toLowerCase().includes(query) ||
-      doctor.email.toLowerCase().includes(query) ||
-      (doctor.intezmeny && doctor.intezmeny.toLowerCase().includes(query))
-    );
-  });
+      return (
+        <div className="text-xs text-blue-100 mt-2 px-1 space-y-1">
+          {message.readBy && message.readBy.length > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="font-medium">Olvasták:</span>
+              <div className="flex items-center gap-1 flex-wrap">
+                {message.readBy.map((reader) => (
+                  <div
+                    key={reader.userId}
+                    className="flex items-center gap-1 bg-blue-500/30 rounded-full px-2 py-0.5"
+                    title={`${reader.userName || 'Ismeretlen'} - ${format(new Date(reader.readAt), 'HH:mm', { locale: hu })}`}
+                  >
+                    <CheckCheck className="w-3 h-3 text-green-300 flex-shrink-0" />
+                    <span className="opacity-90">{reader.userName || 'Ismeretlen'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {unreadParticipants.length > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="font-medium">Nem olvasták:</span>
+              <div className="flex items-center gap-1 flex-wrap">
+                {unreadParticipants.map((participant) => (
+                  <div
+                    key={participant.userId}
+                    className="flex items-center gap-1 bg-blue-500/20 rounded-full px-2 py-0.5 opacity-70"
+                    title={participant.userName || participant.userEmail}
+                  >
+                    <div className="w-3 h-3 rounded-full bg-gray-400 border border-gray-500 flex-shrink-0" />
+                    <span>{participant.userName || participant.userEmail}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    },
+    [selectedGroupId, groupParticipants, messageById, currentUserId],
+  );
 
   // ── Render ──────────────────────────────────────────────────────────
 
@@ -396,7 +398,7 @@ export function DoctorMessages() {
       <div className="flex h-[calc(100vh-200px)] sm:h-[700px] border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden bg-white dark:bg-gray-900">
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-medical-primary mx-auto mb-4" />
             <p className="text-gray-500 dark:text-gray-400">Betöltés...</p>
           </div>
         </div>
@@ -404,7 +406,6 @@ export function DoctorMessages() {
     );
   }
 
-  // Prepare detail actions for MobileActionMenu
   const detailActions = selectedGroupId && !editingGroupName ? [
     {
       label: 'Átnevezés',
@@ -427,85 +428,56 @@ export function DoctorMessages() {
     }] : []),
   ] : [];
 
-  const formatConversationTime = (date: Date | string) => {
-    const d = new Date(date);
-    if (isToday(d)) return format(d, 'HH:mm');
-    if (isYesterday(d)) return 'Tegnap';
-    return format(d, 'MM.dd.');
-  };
+  // Conversations → view model
+  const conversationItems: ConversationVM[] = conversations.map((conv) => {
+    if (conv.type === 'group') {
+      return {
+        id: `group:${conv.groupId}`,
+        title: conv.groupName || `Csoport (${conv.participantCount || 0} résztvevő)`,
+        subtitle: conv.participantCount ? `${conv.participantCount} résztvevő` : null,
+        preview: conv.lastMessage?.message ?? null,
+        timestamp: conv.lastMessage?.createdAt ?? null,
+        unreadCount: conv.unreadCount,
+        avatar: { group: true, name: conv.groupName },
+      };
+    }
+    return {
+      id: `doc:${conv.doctorId}`,
+      title: conv.doctorName,
+      preview: conv.lastMessage?.message ?? null,
+      timestamp: conv.lastMessage?.createdAt ?? null,
+      unreadCount: conv.unreadCount,
+      avatar: {
+        name: conv.doctorName,
+        seed: conv.doctorId ?? conv.doctorName,
+        presence: isOnline(conv.doctorId) ? ('online' as const) : undefined,
+      },
+    };
+  });
 
-  // Conversations list content
-  const conversationsListContent = conversations.length === 0 && !loading ? (
-    <div className="p-4 text-center text-gray-500 dark:text-gray-400 text-sm">
-      Még nincsenek beszélgetések
-      <p className="text-xs mt-2 text-gray-400 dark:text-gray-500">Kattintson az &quot;Új beszélgetés&quot; gombra egy orvos kiválasztásához</p>
-    </div>
-  ) : (
-    conversations.map((conv) => {
-      const isSelected = (conv.type === 'individual' && selectedDoctorId === conv.doctorId) ||
-                        (conv.type === 'group' && selectedGroupId === conv.groupId);
-      const displayName = conv.type === 'individual' 
-        ? conv.doctorName 
-        : (conv.groupName || `Csoport (${conv.participantCount || 0} résztvevő)`);
-      const monogram = conv.type === 'group' 
-        ? null 
-        : getMonogram(conv.doctorName);
-      
-      return (
-        <div
-          key={conv.type === 'individual' ? conv.doctorId : conv.groupId}
-          onClick={() => {
-            if (conv.type === 'individual' && conv.doctorId) {
-              handleSelectDoctor(conv.doctorId, conv.doctorName);
-            } else if (conv.type === 'group' && conv.groupId) {
-              handleSelectGroup(conv.groupId, conv.groupName || null);
-            }
-          }}
-          className={`p-3 border-b border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${
-            isSelected ? 'bg-blue-100 dark:bg-blue-950/50 border-l-4 border-l-blue-600' : ''
-          }`}
-        >
-          <div className="flex items-center gap-3">
-            <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ${
-              conv.type === 'group' ? 'bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300' : conv.unreadCount > 0 ? 'bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
-            }`}>
-              {conv.type === 'group' ? <Users className="w-4 h-4" /> : monogram}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between gap-2">
-                <span className={`text-sm truncate ${conv.unreadCount > 0 ? 'font-semibold text-gray-900 dark:text-gray-100' : 'font-medium text-gray-900 dark:text-gray-100'}`}>
-                  {displayName}
-                </span>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  {conv.lastMessage && (
-                    <span className="text-xs text-gray-400 dark:text-gray-500">{formatConversationTime(conv.lastMessage.createdAt)}</span>
-                  )}
-                  {conv.unreadCount > 0 && (
-                    <span className="px-1.5 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full min-w-[20px] text-center">
-                      {conv.unreadCount}
-                    </span>
-                  )}
-                </div>
-              </div>
-              {conv.lastMessage && (
-                <p className={`text-xs mt-0.5 truncate ${conv.unreadCount > 0 ? 'text-gray-700 dark:text-gray-300 font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
-                  {conv.lastMessage.message.substring(0, 50)}
-                  {conv.lastMessage.message.length > 50 ? '...' : ''}
-                </p>
-              )}
-              {conv.type === 'group' && conv.participantCount && (
-                <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                  {conv.participantCount} résztvevő
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      );
-    })
+  const selectedConversationId = selectedGroupId
+    ? `group:${selectedGroupId}`
+    : selectedDoctorId
+      ? `doc:${selectedDoctorId}`
+      : null;
+
+  const conversationsListContent = (
+    <ConversationList
+      items={conversationItems}
+      selectedId={selectedConversationId}
+      onSelect={handleConversationSelect}
+      emptyState={
+        <span>
+          Még nincsenek beszélgetések
+          <span className="block text-xs mt-2 text-gray-400 dark:text-gray-500">
+            Kattintson az „Új beszélgetés” gombra egy orvos kiválasztásához
+          </span>
+        </span>
+      }
+    />
   );
 
-  // Detail header content
+  // Detail header
   const detailHeaderContent = editingGroupName && selectedGroupId ? (
     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
       <input
@@ -525,10 +497,7 @@ export function DoctorMessages() {
         autoFocus
       />
       <div className="flex gap-2">
-        <button
-          onClick={handleRenameGroup}
-          className="btn-primary px-3 py-1 text-sm flex-1 sm:flex-none mobile-touch-target"
-        >
+        <button onClick={handleRenameGroup} className="btn-primary px-3 py-1 text-sm flex-1 sm:flex-none mobile-touch-target">
           Mentés
         </button>
         <button
@@ -543,20 +512,26 @@ export function DoctorMessages() {
       </div>
     </div>
   ) : (
-    <>
-      <div className="flex items-center justify-between gap-2 min-w-0">
-        <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2 truncate min-w-0">
-          {selectedGroupId && <Users className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 dark:text-blue-300 flex-shrink-0" />}
-          <span className="truncate">{selectedDoctorId ? selectedDoctorName : (selectedGroupName || 'Csoportos beszélgetés')}</span>
-        </h3>
-        <MessageSearchButton channel="doctor" />
-      </div>
-      {(() => {
-        const hasGroupName = Boolean(selectedGroupName?.trim());
-        return selectedGroupId && groupParticipants.length > 0 && (!isMobile || !hasGroupName) ? (
-          <div className="mt-2">
-            <div className="flex items-center gap-2 flex-wrap">
-              <Users className="w-3 h-3 text-blue-600 dark:text-blue-300 flex-shrink-0" />
+    <div className="flex items-center gap-3 min-w-0">
+      <Avatar
+        name={selectedDoctorId ? selectedDoctorName : selectedGroupName}
+        seed={selectedDoctorId ?? selectedGroupId ?? ''}
+        group={!!selectedGroupId}
+        presence={selectedDoctorId && isOnline(selectedDoctorId) ? 'online' : undefined}
+        sizeClass="h-9 w-9 hidden sm:flex"
+      />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between gap-2 min-w-0">
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2 truncate min-w-0">
+            {selectedGroupId && <Users className="w-4 h-4 text-medical-primary flex-shrink-0 sm:hidden" />}
+            <span className="truncate">{selectedDoctorId ? selectedDoctorName : (selectedGroupName || 'Csoportos beszélgetés')}</span>
+          </h3>
+          <MessageSearchButton channel="doctor" />
+        </div>
+        {(() => {
+          const hasGroupName = Boolean(selectedGroupName?.trim());
+          return selectedGroupId && groupParticipants.length > 0 && (!isMobile || !hasGroupName) ? (
+            <div className="mt-1 flex items-center gap-2 flex-wrap">
               <span className="text-xs text-gray-600 dark:text-gray-400">Résztvevők:</span>
               {(showAllParticipants ? groupParticipants : groupParticipants.slice(0, 2)).map((participant) => (
                 <span
@@ -570,257 +545,139 @@ export function DoctorMessages() {
               {groupParticipants.length > 2 && (
                 <button
                   onClick={() => setShowAllParticipants(!showAllParticipants)}
-                  className="text-xs text-blue-600 dark:text-blue-300 hover:text-blue-700 font-medium"
+                  className="text-xs text-medical-primary hover:text-medical-primary-dark font-medium"
                 >
                   {showAllParticipants ? 'Kevesebb' : `+${groupParticipants.length - 2} több`}
                 </button>
               )}
             </div>
-          </div>
-        ) : null;
-      })()}
-    </>
+          ) : null;
+        })()}
+      </div>
+    </div>
   );
 
-  // Detail content (messages + input)
+  // Detail content: thread + composer
   const detailContent = (
     <>
-      {/* Messages */}
-      <div ref={messagesContainerRef} className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-2 sm:p-4 bg-gray-50 dark:bg-gray-800/60 space-y-3">
-        {messages.length === 0 ? (
-          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+      <MessageThread
+        containerRef={messagesContainerRef}
+        messages={bubbleMessages}
+        currentUserId={currentUserId}
+        loading={loading}
+        scrollAnchorKey={conversationKey}
+        typingLabel={typingLabel}
+        showSenderName={!!selectedGroupId}
+        canRemoveContextLinks
+        onRemoveContextLink={handleRemoveContextLink}
+        emptyState={
+          <div className="text-center text-gray-500 dark:text-gray-400">
             <MessageCircle className="w-12 h-12 mx-auto mb-2 text-gray-300 dark:text-gray-600" />
             <p>Még nincsenek üzenetek</p>
           </div>
-        ) : (
-          visibleMessages.map((message, index) => {
-            const isFromMe = currentUserId ? message.senderId === currentUserId : false;
-            const isPending = message.pending === true;
-            const senderName = message.senderName || message.senderEmail || 'Ismeretlen';
-            const lastName = getLastName(senderName);
-            const monogram = getMonogram(senderName);
-
-            const msgDate = new Date(message.createdAt);
-            const prevMsg = index > 0 ? visibleMessages[index - 1] : null;
-            const showDateSeparator = !prevMsg || !isSameDay(msgDate, new Date(prevMsg.createdAt));
-
-            const dateSeparatorLabel = isToday(msgDate)
-              ? 'Ma'
-              : isYesterday(msgDate)
-              ? 'Tegnap'
-              : format(msgDate, 'yyyy. MMMM d.', { locale: hu });
-
-            // Slice 0.5: csatorna-független `ChatMessageBubble`-re adapter
-            // (a hook tartja a forrás-szót, itt csak shape-coercion van).
-            const effectiveDeliveryStatus = isPending
-              ? 'pending' as const
-              : message.deliveryStatus === 'failed'
-                ? 'failed' as const
-                : selectedGroupId && isFromMe
-                ? aggregateGroupSenderDeliveryStatus(
-                    message,
-                    currentUserId ?? '',
-                    groupParticipants,
-                  )
-                : message.deliveryStatus ?? (message.readAt ? 'read' : 'sent');
-
-            const bubbleMessage: ChatBubbleMessage = {
-              id: message.id,
-              message: message.message,
-              createdAt: message.createdAt,
-              senderId: message.senderId,
-              senderName,
-              isFromMe,
-              replyToMessageId: message.replyToMessageId ?? null,
-              quotedMessage: message.quotedMessage ?? null,
-              replyCount: message.replyCount ?? 0,
-              deliveryStatus: effectiveDeliveryStatus,
-              readAt: message.readAt ?? null,
-              contextLinks: message.contextLinks ?? [],
-            };
-
-            // Csoport olvasás-vizualizáció a buborék belső footerébe — a
-            // korábbi inline implementáció (Slice 0.4 előtti) megtartva,
-            // csak `bubbleFooter` slotból renderelve.
-            const groupReadFooter =
-              isFromMe && selectedGroupId && groupParticipants.length > 0 ? (
-                <div className="text-xs text-blue-100 mt-2 px-1 space-y-1">
-                  {message.readBy && message.readBy.length > 0 && (
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="font-medium">Olvasták:</span>
-                      <div className="flex items-center gap-1 flex-wrap">
-                        {message.readBy.map((reader) => (
-                          <div
-                            key={reader.userId}
-                            className="flex items-center gap-1 bg-blue-500/30 rounded-full px-2 py-0.5"
-                            title={`${reader.userName || 'Ismeretlen'} - ${format(new Date(reader.readAt), 'HH:mm', { locale: hu })}`}
-                          >
-                            <CheckCheck className="w-3 h-3 text-green-300 flex-shrink-0" />
-                            <span className="opacity-90">{reader.userName || 'Ismeretlen'}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {(() => {
-                    const readUserIds = new Set(message.readBy?.map(r => r.userId) || []);
-                    const unreadParticipants = groupParticipants.filter(
-                      p => p.userId !== currentUserId && p.userId !== message.senderId && !readUserIds.has(p.userId)
-                    );
-                    if (unreadParticipants.length === 0) return null;
-                    return (
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-medium">Nem olvasták:</span>
-                        <div className="flex items-center gap-1 flex-wrap">
-                          {unreadParticipants.map((participant) => (
-                            <div
-                              key={participant.userId}
-                              className="flex items-center gap-1 bg-blue-500/20 rounded-full px-2 py-0.5 opacity-70"
-                              title={participant.userName || participant.userEmail}
-                            >
-                              <div className="w-3 h-3 rounded-full bg-gray-400 border border-gray-500 flex-shrink-0"></div>
-                              <span>{participant.userName || participant.userEmail}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              ) : null;
-
-            return (
-              <div key={message.id} className="msg-row">
-                {showDateSeparator && (
-                  <div className="flex items-center gap-3 my-4">
-                    <div className="flex-1 border-t border-gray-300 dark:border-gray-700" />
-                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">{dateSeparatorLabel}</span>
-                    <div className="flex-1 border-t border-gray-300 dark:border-gray-700" />
-                  </div>
-                )}
-                <div className={`flex flex-col ${isFromMe ? 'items-end' : 'items-start'}`}>
-                  {!isFromMe && (
-                    <div className="flex items-center gap-1.5 mb-1 px-1">
-                      <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-950/50 flex items-center justify-center text-xs font-semibold text-blue-700 dark:text-blue-300">
-                        {monogram}
-                      </div>
-                      <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{lastName}</span>
-                    </div>
-                  )}
-                  <ChatMessageBubble
-                    message={bubbleMessage}
-                    currentUserId={currentUserId}
-                    showSenderLabel={false}
-                    canRemoveContextLinks={isFromMe && !isPending}
-                    onRemoveContextLink={handleRemoveContextLink}
-                    renderText={(text) => (
-                      <MessageTextRenderer
-                        text={text}
-                        chatType="doctor-doctor"
-                        patientId={null}
-                        messageId={message.id}
-                        senderId={message.senderId}
-                        currentUserId={currentUserId}
-                        contextLinks={message.contextLinks}
-                        onSendMessage={async (messageText) => {
-                          await handleSendMessage(messageText);
-                        }}
-                      />
-                    )}
-                    onReply={isPending ? undefined : () => startReplyTo(message)}
-                    onQuoteClick={scrollToMessage}
-                    onReplyThreadToggle={handleReplyThreadToggle}
-                    replyThreadCollapsed={isCollapsed(message.id)}
-                    onRetry={
-                      message.deliveryStatus === 'failed'
-                        ? () => retryMessage(message)
-                        : undefined
-                    }
-                    bubbleFooter={groupReadFooter}
-                  />
-                </div>
-              </div>
-            );
-          })
+        }
+        renderAvatar={(bubble) => (
+          <Avatar name={bubble.senderName} seed={bubble.senderId} sizeClass="h-7 w-7" textClass="text-[10px]" />
         )}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Slice 0.5: reply mód csík a composer fölött */}
-      {replyState.isReplying && replyState.replyTarget && (
-        <ReplyComposerBar
-          quote={replyState.replyTarget}
-          onClose={replyState.clearReply}
-          senderLabelOverride={
-            replyState.replyTarget.senderId === currentUserId
-              ? 'Te'
-              : replyState.replyTarget.senderName ?? undefined
-          }
-        />
-      )}
-
-      {/* Message Input */}
-      <div className="flex-shrink-0 border-t bg-white dark:bg-gray-900 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-0 relative">
-        <PendingContextLinksBar
-          links={pendingContextLinks}
-          onRemove={(i) => setPendingContextLinks((prev) => prev.filter((_, idx) => idx !== i))}
-        />
-        <div className="flex items-end gap-2 p-2 sm:p-4 sm:pt-2">
-          <DocumentLinkComposerButton
+        renderBubbleFooter={renderBubbleFooter}
+        renderText={(text, bubble) => (
+          <MessageTextRenderer
+            text={text}
             chatType="doctor-doctor"
-            messageText={newMessage}
-            disabled={sending}
-            onInsert={setNewMessage}
+            patientId={null}
+            messageId={bubble.id}
+            senderId={bubble.senderId}
+            currentUserId={currentUserId}
+            contextLinks={bubble.contextLinks}
+            onSendMessage={async (messageText) => {
+              await handleSendMessage(messageText);
+            }}
           />
-          <ContextLinkComposerButton
-            pendingLinks={pendingContextLinks}
-            disabled={sending}
-            onAddPending={(link) => setPendingContextLinks((prev) => [...prev, link])}
-          />
-          <div className="flex-1 relative">
-            <textarea
-              ref={textareaRef}
-              value={newMessage}
-              onChange={handleTextareaChange}
-              onKeyDown={handleTextareaKeyDown}
-              onSelect={handleTextareaSelect}
-              className="form-input flex-1 resize-none w-full min-h-[44px]"
-              rows={2}
-              placeholder="Írja be üzenetét... (használjon @ jelet beteg jelöléséhez)"
+        )}
+        onReply={(bubble) => {
+          const orig = messageById.get(bubble.id);
+          if (orig && !orig.pending) startReplyTo(orig);
+        }}
+        onQuoteClick={scrollToMessage}
+        onReplyThreadToggle={handleReplyThreadToggle}
+        isThreadCollapsed={isCollapsed}
+        onRetry={(bubble) => {
+          const orig = messageById.get(bubble.id);
+          if (orig) retryMessage(orig);
+        }}
+      />
+
+      <MessageComposer
+        value={newMessage}
+        onChange={setNewMessage}
+        onSend={() => handleSendMessage()}
+        sending={sending}
+        sendOnEnter={!isMobile}
+        autoFocusKey={conversationKey}
+        textareaRef={textareaRef}
+        onCursorChange={setCursorPosition}
+        onTyping={notifyTyping}
+        onEscape={replyState.isReplying ? replyState.clearReply : undefined}
+        placeholder="Írja be üzenetét... (@ jellel beteget jelölhet)"
+        replyBar={
+          replyState.isReplying && replyState.replyTarget ? (
+            <ReplyComposerBar
+              quote={replyState.replyTarget}
+              onClose={replyState.clearReply}
+              senderLabelOverride={
+                replyState.replyTarget.senderId === currentUserId
+                  ? 'Te'
+                  : replyState.replyTarget.senderName ?? undefined
+              }
+            />
+          ) : undefined
+        }
+        pendingBar={
+          pendingContextLinks.length > 0 ? (
+            <PendingContextLinksBar
+              links={pendingContextLinks}
+              onRemove={(i) => setPendingContextLinks((prev) => prev.filter((_, idx) => idx !== i))}
+            />
+          ) : undefined
+        }
+        attachSlot={
+          <>
+            <DocumentLinkComposerButton
+              chatType="doctor-doctor"
+              messageText={newMessage}
               disabled={sending}
+              onInsert={setNewMessage}
             />
-            <PatientMention
-              text={newMessage}
-              cursorPosition={cursorPosition}
-              onSelect={(mentionFormat, patientName) => {
-                const textBefore = newMessage.substring(0, cursorPosition);
-                const lastAtIndex = textBefore.lastIndexOf('@');
-                if (lastAtIndex !== -1) {
-                  const textAfter = newMessage.substring(cursorPosition);
-                  const newText = `${newMessage.substring(0, lastAtIndex)}${mentionFormat} ${textAfter}`;
-                  setNewMessage(newText);
-                  setTimeout(() => {
-                    if (textareaRef.current) {
-                      const newPos = lastAtIndex + mentionFormat.length + 1;
-                      textareaRef.current.setSelectionRange(newPos, newPos);
-                      setCursorPosition(newPos);
-                    }
-                  }, 0);
-                }
-              }}
+            <ContextLinkComposerButton
+              pendingLinks={pendingContextLinks}
+              disabled={sending}
+              onAddPending={(link) => setPendingContextLinks((prev) => [...prev, link])}
             />
-          </div>
-          <button
-            onClick={() => handleSendMessage()}
-            disabled={sending || !newMessage.trim()}
-            className="flex-shrink-0 bg-medical-primary hover:bg-medical-primary-dark text-white rounded-full w-10 h-10 sm:w-auto sm:h-auto sm:rounded-lg sm:px-4 sm:py-2.5 flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 shadow-soft"
-          >
-            <Send className="w-4 h-4" />
-            <span className="hidden sm:inline text-sm font-medium">{sending ? '...' : 'Küldés'}</span>
-          </button>
-        </div>
-      </div>
+          </>
+        }
+        overlay={
+          <PatientMention
+            text={newMessage}
+            cursorPosition={cursorPosition}
+            onSelect={(mentionFormat) => {
+              const textBefore = newMessage.substring(0, cursorPosition);
+              const lastAtIndex = textBefore.lastIndexOf('@');
+              if (lastAtIndex !== -1) {
+                const textAfter = newMessage.substring(cursorPosition);
+                const newText = `${newMessage.substring(0, lastAtIndex)}${mentionFormat} ${textAfter}`;
+                setNewMessage(newText);
+                setTimeout(() => {
+                  if (textareaRef.current) {
+                    const newPos = lastAtIndex + mentionFormat.length + 1;
+                    textareaRef.current.setSelectionRange(newPos, newPos);
+                    setCursorPosition(newPos);
+                  }
+                }, 0);
+              }
+            }}
+          />
+        }
+      />
     </>
   );
 
@@ -835,6 +692,7 @@ export function DoctorMessages() {
               setShowNewChat(false);
               setNewChatRecipients([]);
             }}
+            aria-label="Bezárás"
             className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors mobile-touch-target"
           >
             <X className="w-5 h-5" />
@@ -842,7 +700,7 @@ export function DoctorMessages() {
         </div>
         <RecipientSelector
           selectedRecipients={newChatRecipients}
-          onRecipientsChange={handleNewChatRecipientsChange}
+          onRecipientsChange={setNewChatRecipients}
         />
         {newChatRecipients.length > 0 && (
           <button
@@ -862,36 +720,6 @@ export function DoctorMessages() {
     </>
   );
 
-  // List header content (search)
-  const listHeaderContent = showDoctorSelector ? (
-    <div>
-      <input
-        type="text"
-        value={doctorSearchQuery}
-        onChange={(e) => setDoctorSearchQuery(e.target.value)}
-        placeholder="Orvos keresése..."
-        className="form-input w-full mb-2"
-        autoFocus
-      />
-      <div className="max-h-60 overflow-y-auto border border-gray-200 dark:border-gray-800 rounded">
-        {filteredDoctors.map((doctor) => (
-          <div
-            key={doctor.id}
-            onClick={() => handleSelectDoctor(doctor.id, doctor.name)}
-            className={`p-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 ${
-              selectedDoctorId === doctor.id ? 'bg-blue-50 dark:bg-blue-950/40' : ''
-            }`}
-          >
-            <div className="font-medium text-sm">{doctor.name}</div>
-            {doctor.intezmeny && (
-              <div className="text-xs text-gray-500 dark:text-gray-400">{doctor.intezmeny}</div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  ) : null;
-
   return (
     <>
       <MessagesShell
@@ -900,11 +728,8 @@ export function DoctorMessages() {
         unreadCount={unreadCount}
         onNewChat={handleStartNewChat}
         conversationsList={conversationsListContent}
-        listHeaderContent={listHeaderContent}
         showDetail={!!(selectedDoctorId || selectedGroupId)}
-        onBack={() => {
-          clearSelection();
-        }}
+        onBack={() => clearSelection()}
         detailHeader={detailHeaderContent}
         detailContent={detailContent}
         detailActions={detailActions}
