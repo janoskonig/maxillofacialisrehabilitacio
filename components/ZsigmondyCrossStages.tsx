@@ -1,16 +1,18 @@
 'use client';
 
 import { useState, useContext, createContext, useCallback, useEffect } from 'react';
-import { normalizeToothData, type ToothStatus } from '@/hooks/usePatientAutoSave';
+import type { ToothStatus, ToothBase } from '@/hooks/usePatientAutoSave';
 import { isToothTreatmentPathwayDone } from '@/lib/tooth-treatment-pathway';
+import { Tooth } from './patient-form/odontogram/Tooth';
+import {
+  readConditions,
+  BASE_LABELS,
+  UPPER_ROW,
+  LOWER_ROW,
+} from './patient-form/odontogram/tooth-conditions';
 import { ToothTreatmentProvider, ToothTreatmentInline } from './ToothTreatmentPanel';
 import { OPInlinePreview } from './OPInlinePreview';
-import type { ToothTreatment, ToothTreatmentCatalogItem } from '@/lib/types';
-
-const UPPER_LEFT = [18, 17, 16, 15, 14, 13, 12, 11];
-const UPPER_RIGHT = [21, 22, 23, 24, 25, 26, 27, 28];
-const LOWER_LEFT = [48, 47, 46, 45, 44, 43, 42, 41];
-const LOWER_RIGHT = [31, 32, 33, 34, 35, 36, 37, 38];
+import type { ToothTreatment } from '@/lib/types';
 
 interface ZsigmondyCrossStagesProps {
   patientId: string;
@@ -65,20 +67,16 @@ function ToothCell({
   fogak,
   selectedTooth,
   onSelect,
+  numberPosition,
 }: {
   tooth: number;
   fogak: Record<string, ToothStatus> | undefined;
   selectedTooth: string | null;
   onSelect: (t: string) => void;
+  numberPosition: 'below' | 'above';
 }) {
   const toothStr = tooth.toString();
-  const value = fogak?.[toothStr];
-  const normalized = normalizeToothData(value);
-
-  const isMissing = normalized?.status === 'M';
-  const isPresent = normalized && normalized.status !== 'M';
-  const isD = normalized?.status === 'D';
-  const isF = normalized?.status === 'F';
+  const conditions = readConditions(fogak?.[toothStr]);
   const isSelected = selectedTooth === toothStr;
 
   const { treatments } = useContext(TreatmentSummaryContext);
@@ -86,54 +84,28 @@ function ToothCell({
   const activeTreatments = toothTreatments.filter((t) => !isToothTreatmentPathwayDone(t));
   const completedTreatments = toothTreatments.filter((t) => isToothTreatmentPathwayDone(t));
 
-  let bgColor = 'bg-white dark:bg-gray-900';
-  let borderColor = 'border-gray-300 dark:border-gray-700';
-  let textColor = 'text-gray-700 dark:text-gray-300';
-
-  if (isSelected) {
-    borderColor = 'border-medical-primary ring-2 ring-medical-primary/30';
-  }
-
-  if (isMissing) {
-    bgColor = 'bg-gray-100 dark:bg-gray-800';
-    textColor = 'text-gray-400 dark:text-gray-500';
-    borderColor = isSelected ? 'border-medical-primary ring-2 ring-medical-primary/30' : 'border-gray-300 dark:border-gray-700';
-  } else if (isD) {
-    bgColor = 'bg-red-50 dark:bg-red-950/40';
-    borderColor = isSelected ? 'border-medical-primary ring-2 ring-medical-primary/30' : 'border-red-300 dark:border-red-700';
-    textColor = 'text-red-700 dark:text-red-300';
-  } else if (isF) {
-    bgColor = 'bg-blue-50 dark:bg-blue-950/40';
-    borderColor = isSelected ? 'border-medical-primary ring-2 ring-medical-primary/30' : 'border-blue-300 dark:border-blue-700';
-    textColor = 'text-blue-700 dark:text-blue-300';
-  } else if (isPresent) {
-    bgColor = 'bg-green-50 dark:bg-green-950/40';
-    borderColor = isSelected ? 'border-medical-primary ring-2 ring-medical-primary/30' : 'border-green-300 dark:border-green-700';
-    textColor = 'text-green-700 dark:text-green-300';
-  }
-
   return (
-    <button
-      type="button"
-      onClick={() => onSelect(toothStr)}
-      className={`relative w-9 h-9 sm:w-8 sm:h-8 rounded border-2 flex items-center justify-center text-xs font-semibold transition-all ${bgColor} ${borderColor} ${textColor} hover:shadow-md`}
-      title={`${toothStr}. fog${isMissing ? ' (hiányzik)' : isD ? ' (szuvas)' : isF ? ' (tömött)' : isPresent ? ' (jelen van)' : ''}`}
-    >
-      {isMissing ? (
-        <span className="text-[10px]">×</span>
-      ) : (
-        <span className="text-[11px]">{toothStr}</span>
-      )}
+    <div className="relative">
+      <Tooth
+        fdi={toothStr}
+        conditions={conditions}
+        numberPosition={numberPosition}
+        selected={isSelected}
+        onClick={() => onSelect(toothStr)}
+        title={`${toothStr}. fog — ${BASE_LABELS[conditions.base]}${conditions.caries ? ' (szuvas)' : ''}`}
+      />
       {activeTreatments.length > 0 ? (
         <span
-          className="absolute -top-1.5 -right-1.5 min-w-[1rem] h-4 px-0.5 rounded-full bg-amber-500 text-white text-[9px] font-bold flex items-center justify-center leading-none"
+          className="absolute -right-1 min-w-[1rem] h-4 px-0.5 rounded-full bg-amber-500 text-white text-[9px] font-bold flex items-center justify-center leading-none pointer-events-none"
+          style={{ top: numberPosition === 'above' ? 9 : -3 }}
           title={`${activeTreatments.length} nyitott kezelési igény`}
         >
           {activeTreatments.length}
         </span>
       ) : completedTreatments.length > 0 ? (
         <span
-          className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-emerald-600 text-white text-[10px] font-bold flex items-center justify-center leading-none"
+          className="absolute -right-1 w-4 h-4 rounded-full bg-emerald-600 text-white text-[10px] font-bold flex items-center justify-center leading-none pointer-events-none"
+          style={{ top: numberPosition === 'above' ? 9 : -3 }}
           title={
             completedTreatments.length > 1
               ? `${completedTreatments.length} befejezett kezelés`
@@ -144,51 +116,48 @@ function ToothCell({
           ✓
         </span>
       ) : null}
-    </button>
+    </div>
   );
 }
 
-function ToothGrid({
+function Arch({
+  teeth,
   fogak,
+  numberPosition,
   selectedTooth,
   onSelect,
 }: {
+  teeth: number[];
   fogak: Record<string, ToothStatus> | undefined;
+  numberPosition: 'below' | 'above';
   selectedTooth: string | null;
   onSelect: (t: string) => void;
 }) {
   return (
-    <div className="bg-gray-50 dark:bg-gray-800/60 p-3 sm:p-4 rounded-lg overflow-x-auto">
-      <div className="flex justify-between mb-1.5 min-w-[540px] sm:min-w-0">
-        <div className="flex gap-0.5 sm:gap-1">
-          {UPPER_LEFT.map((t) => (
-            <ToothCell key={t} tooth={t} fogak={fogak} selectedTooth={selectedTooth} onSelect={onSelect} />
-          ))}
+    <div className="flex justify-center gap-0.5 min-w-[560px] sm:min-w-0">
+      {teeth.map((t, i) => (
+        <div key={t} className="flex" style={{ marginRight: i === 7 ? 10 : 0 }}>
+          <ToothCell
+            tooth={t}
+            fogak={fogak}
+            selectedTooth={selectedTooth}
+            onSelect={onSelect}
+            numberPosition={numberPosition}
+          />
         </div>
-        <div className="w-px bg-gray-400 mx-1 self-stretch" />
-        <div className="flex gap-0.5 sm:gap-1">
-          {UPPER_RIGHT.map((t) => (
-            <ToothCell key={t} tooth={t} fogak={fogak} selectedTooth={selectedTooth} onSelect={onSelect} />
-          ))}
-        </div>
-      </div>
-      <div className="border-t border-gray-400 my-1" />
-      <div className="flex justify-between mt-1.5 min-w-[540px] sm:min-w-0">
-        <div className="flex gap-0.5 sm:gap-1">
-          {LOWER_LEFT.map((t) => (
-            <ToothCell key={t} tooth={t} fogak={fogak} selectedTooth={selectedTooth} onSelect={onSelect} />
-          ))}
-        </div>
-        <div className="w-px bg-gray-400 mx-1 self-stretch" />
-        <div className="flex gap-0.5 sm:gap-1">
-          {LOWER_RIGHT.map((t) => (
-            <ToothCell key={t} tooth={t} fogak={fogak} selectedTooth={selectedTooth} onSelect={onSelect} />
-          ))}
-        </div>
-      </div>
+      ))}
     </div>
   );
 }
+
+const LEGEND: Array<{ base: ToothBase; label: string }> = [
+  { base: 'sound', label: 'Ép' },
+  { base: 'missing', label: 'Hiányzó' },
+  { base: 'filled', label: 'Tömött' },
+  { base: 'crown', label: 'Korona' },
+  { base: 'root_canal', label: 'Gyökértömött' },
+  { base: 'implant', label: 'Implantátum' },
+];
 
 export function ZsigmondyCrossStages({ patientId, patientName, meglevoFogak }: ZsigmondyCrossStagesProps) {
   const [selectedTooth, setSelectedTooth] = useState<string | null>(null);
@@ -197,16 +166,10 @@ export function ZsigmondyCrossStages({ patientId, patientName, meglevoFogak }: Z
     setSelectedTooth((prev) => (prev === toothStr ? null : toothStr));
   };
 
-  const normalized = selectedTooth ? normalizeToothData(meglevoFogak?.[selectedTooth]) : null;
-  const statusLabel = normalized?.status === 'D'
-    ? 'Szuvas (D)'
-    : normalized?.status === 'F'
-      ? 'Tömött (F)'
-      : normalized?.status === 'M'
-        ? 'Hiányzik (M)'
-        : normalized
-          ? 'Jelen van'
-          : 'Nincs adat';
+  const selectedConditions = selectedTooth ? readConditions(meglevoFogak?.[selectedTooth]) : null;
+  const statusLabel = selectedConditions
+    ? `${BASE_LABELS[selectedConditions.base]}${selectedConditions.caries ? ' · szuvas' : ''}`
+    : 'Nincs adat';
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
@@ -216,18 +179,34 @@ export function ZsigmondyCrossStages({ patientId, patientName, meglevoFogak }: Z
 
       <OPInlinePreview patientId={patientId} patientName={patientName} />
 
-      <div className="flex flex-wrap gap-3 mb-3 text-xs text-gray-500 dark:text-gray-400">
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-50 dark:bg-green-950/40 border border-green-300 dark:border-green-700" /> Jelen van</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-50 dark:bg-red-950/40 border border-red-300 dark:border-red-700" /> Szuvas (D)</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-blue-50 dark:bg-blue-950/40 border border-blue-300 dark:border-blue-700" /> Tömött (F)</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700" /> Hiányzik (M)</span>
-        <span className="flex items-center gap-1"><span className="relative w-3 h-3 rounded bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700"><span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-500" /></span> Nyitott kezelési igény</span>
-        <span className="flex items-center gap-1"><span className="relative w-3 h-3 rounded bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700"><span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-600" /></span> Befejezett kezelés (pipa a fogon)</span>
-      </div>
-
       <TreatmentSummaryProvider patientId={patientId}>
-        <ToothGrid fogak={meglevoFogak} selectedTooth={selectedTooth} onSelect={handleSelect} />
+        <div className="bg-gray-50 dark:bg-gray-800/40 rounded-lg p-3 sm:p-4 overflow-x-auto">
+          <Arch teeth={UPPER_ROW} fogak={meglevoFogak} numberPosition="below" selectedTooth={selectedTooth} onSelect={handleSelect} />
+          <div className="flex items-center gap-2 my-2">
+            <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+            <span className="text-[10px] text-gray-400 dark:text-gray-500">jobb · bal</span>
+            <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+          </div>
+          <Arch teeth={LOWER_ROW} fogak={meglevoFogak} numberPosition="above" selectedTooth={selectedTooth} onSelect={handleSelect} />
+        </div>
       </TreatmentSummaryProvider>
+
+      <div className="flex items-center gap-x-4 gap-y-1 flex-wrap mt-3 text-xs text-gray-600 dark:text-gray-300">
+        {LEGEND.map((l) => (
+          <span key={l.base} className="inline-flex items-center gap-1.5">
+            <Tooth fdi={11} conditions={{ base: l.base, caries: false, periapical: false, mobility: 0 }} size={16} showNumber={false} />
+            {l.label}
+          </span>
+        ))}
+        <span className="inline-flex items-center gap-1.5">
+          <span className="w-4 h-4 rounded-full bg-amber-500 text-white text-[9px] font-bold flex items-center justify-center">1</span>
+          Nyitott kezelési igény
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="w-4 h-4 rounded-full bg-emerald-600 text-white text-[10px] font-bold flex items-center justify-center">✓</span>
+          Befejezett kezelés
+        </span>
+      </div>
 
       {selectedTooth && (
         <div className="mt-4 border border-gray-200 dark:border-gray-800 rounded-lg p-3">
@@ -243,8 +222,8 @@ export function ZsigmondyCrossStages({ patientId, patientName, meglevoFogak }: Z
               Bezár
             </button>
           </div>
-          {normalized?.description && (
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{normalized.description}</p>
+          {selectedConditions?.description && (
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{selectedConditions.description}</p>
           )}
           <ToothTreatmentProvider patientId={patientId}>
             <ToothTreatmentInline toothNumber={selectedTooth} />
