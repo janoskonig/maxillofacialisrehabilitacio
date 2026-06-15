@@ -1,11 +1,13 @@
 'use client';
 
 import { DashboardWidget } from '../DashboardWidget';
-import { Calendar, Clock, MapPin, Edit2, CheckCircle2, AlertCircle, XCircle, X } from 'lucide-react';
+import { Calendar, Clock, MapPin, Edit2, CheckCircle2, AlertCircle, XCircle, RotateCcw, ArrowRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { useRouter } from 'next/navigation';
 import { useState, useCallback, useEffect } from 'react';
+import { getAppointmentTypeChip, APPOINTMENT_TYPE_OPTIONS } from '@/lib/appointment-constants';
+import { extractApiError, formatApiError } from '@/lib/extract-api-error';
 
 interface Appointment {
   id: string;
@@ -20,6 +22,15 @@ interface Appointment {
   isLate?: boolean | null;
   dentistEmail?: string | null;
   dentistName?: string | null;
+  // Type flag + plan-step context (see /api/dashboard nextAppointments).
+  appointmentType?: string | null;
+  typeLabel?: string | null;
+  episodeId?: string | null;
+  stepCode?: string | null;
+  workPhaseId?: string | null;
+  attemptNumber?: number | null;
+  stepLabel?: string | null;
+  rebookNeeded?: boolean | null;
 }
 
 interface TodaysAppointmentsWidgetProps {
@@ -31,6 +42,11 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
   const router = useRouter();
   const [appointments, setAppointments] = useState<Appointment[]>(initialAppointments);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Separate inline state for the "Sikertelen – újra kell" (unsuccessful) flow,
+  // which goes through the dedicated attempt-outcome endpoint (reason required).
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+  const [retryReason, setRetryReason] = useState('');
+  const [retrySaving, setRetrySaving] = useState(false);
 
   // Update local state when prop changes
   useEffect(() => {
@@ -40,23 +56,15 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
     appointmentStatus: 'cancelled_by_doctor' | 'cancelled_by_patient' | 'completed' | 'no_show' | null;
     completionNotes: string;
     isLate: boolean;
+    appointmentType: string;
+    typeLabel: string;
   }>({
     appointmentStatus: null,
     completionNotes: '',
     isLate: false,
+    appointmentType: '',
+    typeLabel: '',
   });
-
-  const handleAppointmentClick = (patientId: string | null | undefined, e?: React.MouseEvent) => {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-    if (patientId) {
-      router.push(`/?patientId=${patientId}`);
-    } else {
-      console.warn('Patient ID is missing for appointment');
-    }
-  };
 
   const handlePatientNameClick = (patientId: string | null | undefined, e: React.MouseEvent) => {
     e.preventDefault();
@@ -68,8 +76,23 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
     }
   };
 
+  // Deep-link into the patient booking flow for a reopened step. The patient
+  // view surfaces the worklist where the now-pending step is bookable; the query
+  // params are forward-compat hints for preselecting it.
+  const handleRebook = useCallback((appointment: Appointment, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!appointment.patientId) return;
+    const params = new URLSearchParams();
+    if (appointment.episodeId) params.set('rebookEpisode', appointment.episodeId);
+    if (appointment.stepCode) params.set('rebookStep', appointment.stepCode);
+    const qs = params.toString();
+    router.push(`/patients/${appointment.patientId}/view${qs ? `?${qs}` : ''}`);
+  }, [router]);
+
   const handleEditStatus = useCallback((appointment: Appointment) => {
     setEditingId(appointment.id);
+    setRetryingId(null);
     const validStatuses = ['cancelled_by_doctor', 'cancelled_by_patient', 'completed', 'no_show'] as const;
     const status = appointment.appointmentStatus && validStatuses.includes(appointment.appointmentStatus as any)
       ? appointment.appointmentStatus as 'cancelled_by_doctor' | 'cancelled_by_patient' | 'completed' | 'no_show'
@@ -78,6 +101,8 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
       appointmentStatus: status,
       completionNotes: appointment.completionNotes || '',
       isLate: appointment.isLate || false,
+      appointmentType: appointment.appointmentType || '',
+      typeLabel: appointment.typeLabel || '',
     });
   }, []);
 
@@ -87,6 +112,8 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
       appointmentStatus: null,
       completionNotes: '',
       isLate: false,
+      appointmentType: '',
+      typeLabel: '',
     });
   }, []);
 
@@ -108,41 +135,40 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
           appointmentStatus: statusForm.appointmentStatus,
           completionNotes: statusForm.appointmentStatus === 'completed' ? statusForm.completionNotes : null,
           isLate: statusForm.isLate,
+          appointmentType: statusForm.appointmentType || null,
+          typeLabel: statusForm.typeLabel,
         }),
       });
 
       if (response.ok) {
         const data = await response.json();
         // Update local state
-        setAppointments(prev => prev.map(apt => 
-          apt.id === appointmentId 
-            ? { 
-                ...apt, 
-                appointmentStatus: data.appointment.appointmentStatus, 
+        setAppointments(prev => prev.map(apt =>
+          apt.id === appointmentId
+            ? {
+                ...apt,
+                appointmentStatus: data.appointment.appointmentStatus,
                 completionNotes: data.appointment.completionNotes,
-                isLate: data.appointment.isLate || false
+                isLate: data.appointment.isLate || false,
+                appointmentType: data.appointment.appointmentType ?? apt.appointmentType,
+                typeLabel: data.appointment.typeLabel ?? statusForm.typeLabel ?? apt.typeLabel,
               }
             : apt
         ));
         setEditingId(null);
-        setStatusForm({
-          appointmentStatus: null,
-          completionNotes: '',
-          isLate: false,
-        });
-        // Notify parent to refresh data
+        setStatusForm({ appointmentStatus: null, completionNotes: '', isLate: false, appointmentType: '', typeLabel: '' });
+        // Notify parent to refresh data (recomputes rebookNeeded authoritatively)
         if (onUpdate) {
           onUpdate();
         }
       } else {
-        const errorData = await response.json();
-        alert(errorData.error || 'Hiba történt az időpont státuszának frissítésekor');
+        alert(formatApiError(await extractApiError(response, 'Hiba történt az időpont státuszának frissítésekor')));
       }
     } catch (error) {
       console.error('Error updating appointment status:', error);
       alert('Hiba történt az időpont státuszának frissítésekor');
     }
-  }, [statusForm]);
+  }, [statusForm, onUpdate]);
 
   const getStatusLabel = useCallback((status: string | null | undefined, isLate?: boolean | null) => {
     if (isLate && !status) {
@@ -157,6 +183,8 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
         return { label: 'Sikeresen teljesült', color: 'text-green-600 dark:text-green-300', bgColor: 'bg-green-50 dark:bg-green-950/40', icon: CheckCircle2 };
       case 'no_show':
         return { label: 'Nem jelent meg', color: 'text-red-600 dark:text-red-300', bgColor: 'bg-red-50 dark:bg-red-950/40', icon: AlertCircle };
+      case 'unsuccessful':
+        return { label: 'Sikertelen – újra kell', color: 'text-amber-600 dark:text-amber-300', bgColor: 'bg-amber-50 dark:bg-amber-950/40', icon: RotateCcw };
       default:
         return null;
     }
@@ -167,12 +195,8 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
     if (status === 'completed') {
       const appointment = appointments.find(a => a.id === appointmentId);
       if (appointment) {
-        setEditingId(appointmentId);
-        setStatusForm({
-          appointmentStatus: 'completed',
-          completionNotes: '',
-          isLate: false,
-        });
+        handleEditStatus(appointment);
+        setStatusForm(prev => ({ ...prev, appointmentStatus: 'completed', completionNotes: '' }));
       }
       return;
     }
@@ -193,13 +217,15 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
 
       if (response.ok) {
         const data = await response.json();
-        setAppointments(prev => prev.map(apt => 
-          apt.id === appointmentId 
-            ? { 
-                ...apt, 
-                appointmentStatus: data.appointment.appointmentStatus, 
+        setAppointments(prev => prev.map(apt =>
+          apt.id === appointmentId
+            ? {
+                ...apt,
+                appointmentStatus: data.appointment.appointmentStatus,
                 completionNotes: data.appointment.completionNotes,
-                isLate: data.appointment.isLate || false
+                isLate: data.appointment.isLate || false,
+                // Optimistic: a no-show on a plan step reopens it for rebooking.
+                rebookNeeded: !!(apt.episodeId && apt.stepCode) || apt.rebookNeeded,
               }
             : apt
         ));
@@ -207,14 +233,55 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
           onUpdate();
         }
       } else {
-        const errorData = await response.json();
-        alert(errorData.error || 'Hiba történt az időpont státuszának frissítésekor');
+        alert(formatApiError(await extractApiError(response, 'Hiba történt az időpont státuszának frissítésekor')));
       }
     } catch (error) {
       console.error('Error updating appointment status:', error);
       alert('Hiba történt az időpont státuszának frissítésekor');
     }
-  }, [onUpdate]);
+  }, [appointments, onUpdate, handleEditStatus]);
+
+  const handleStartRetry = useCallback((appointment: Appointment) => {
+    setRetryingId(appointment.id);
+    setEditingId(null);
+    setRetryReason('');
+  }, []);
+
+  const handleSaveRetry = useCallback(async (appointmentId: string) => {
+    const reason = retryReason.trim();
+    if (reason.length < 5) {
+      alert('Az indok megadása kötelező (legalább 5 karakter).');
+      return;
+    }
+    setRetrySaving(true);
+    try {
+      const response = await fetch(`/api/appointments/${appointmentId}/attempt-outcome`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ action: 'mark_unsuccessful', reason }),
+      });
+      if (response.ok) {
+        setAppointments(prev => prev.map(apt =>
+          apt.id === appointmentId
+            ? { ...apt, appointmentStatus: 'unsuccessful', rebookNeeded: true }
+            : apt
+        ));
+        setRetryingId(null);
+        setRetryReason('');
+        if (onUpdate) {
+          onUpdate();
+        }
+      } else {
+        alert(formatApiError(await extractApiError(response, 'Hiba történt a sikertelen-jelöléskor')));
+      }
+    } catch (error) {
+      console.error('Error marking appointment unsuccessful:', error);
+      alert('Hiba történt a sikertelen-jelöléskor');
+    } finally {
+      setRetrySaving(false);
+    }
+  }, [retryReason, onUpdate]);
 
   if (appointments.length === 0) {
     return (
@@ -237,25 +304,41 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
           const isUpcoming = startTime > new Date();
           const statusInfo = getStatusLabel(appointment.appointmentStatus, appointment.isLate);
           const isEditing = editingId === appointment.id;
-          
+          const isRetrying = retryingId === appointment.id;
+          const chip = getAppointmentTypeChip(appointment.appointmentType, appointment.typeLabel);
+          const isPlanStep = !!(appointment.episodeId && appointment.stepCode);
+          const showRebook = !!appointment.rebookNeeded;
+
           return (
             <div
               key={appointment.id}
               className={`px-3 py-2 rounded-lg border transition-all duration-200 animate-fade-in ${
-                isUpcoming
+                showRebook
+                  ? 'border-amber-300/70 bg-amber-50/60 dark:border-amber-700/50 dark:bg-amber-950/30'
+                  : isUpcoming
                   ? 'border-medical-primary/30 bg-gradient-to-br from-medical-primary/5 to-medical-accent/5 hover:shadow-soft'
                   : 'border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800 hover:shadow-soft'
               }`}
             >
               <div className="flex items-start justify-between gap-1.5">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 mb-0.5">
+                  <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
                     <div className={`p-1 rounded-md ${isUpcoming ? 'bg-medical-primary/10' : 'bg-gray-200 dark:bg-gray-700'}`}>
                       <Clock className={`w-3.5 h-3.5 ${isUpcoming ? 'text-medical-primary' : 'text-gray-500 dark:text-gray-400'} flex-shrink-0`} />
                     </div>
                     <span className="font-bold text-sm text-gray-900 dark:text-gray-100 tabular-nums">
                       {format(startTime, 'HH:mm', { locale: hu })}
                     </span>
+                    {/* Appointment type flag */}
+                    {chip && (
+                      <span
+                        className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full inline-flex items-center gap-1 ${chip.className}`}
+                        title="Időpont típusa"
+                      >
+                        <span aria-hidden>{chip.emoji}</span>
+                        <span className="truncate max-w-[160px]">{chip.label}</span>
+                      </span>
+                    )}
                     {!isUpcoming && (
                       <span className="badge badge-gray text-[10px] leading-tight py-0 px-1.5">(már elmúlt)</span>
                     )}
@@ -267,6 +350,15 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
                   >
                     {appointment.patientName || 'Névtelen beteg'}
                   </div>
+                  {/* Plan-step context */}
+                  {isPlanStep && appointment.stepLabel && (
+                    <div className="text-xs text-gray-600 dark:text-gray-400 leading-snug mt-0.5">
+                      Lépés: <span className="font-medium text-gray-800 dark:text-gray-200">{appointment.stepLabel}</span>
+                      {appointment.attemptNumber && appointment.attemptNumber > 1 && (
+                        <span> · {appointment.attemptNumber}. próba</span>
+                      )}
+                    </div>
+                  )}
                   {appointment.dentistName && (
                     <div className="text-xs text-gray-700 dark:text-gray-300 font-medium leading-snug mt-0.5">
                       {appointment.dentistName}
@@ -278,25 +370,34 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
                       <span>{appointment.teremszam}. terem</span>
                     </div>
                   )}
-                  
+
                   {/* Status display */}
-                  {!isEditing && statusInfo && (
-                    <div className={`badge mt-1.5 text-xs py-0.5 ${statusInfo.bgColor.includes('green') ? 'badge-success' : statusInfo.bgColor.includes('red') ? 'badge-error' : statusInfo.bgColor.includes('orange') ? 'badge-warning' : 'badge-primary'}`}>
+                  {!isEditing && !isRetrying && statusInfo && (
+                    <div className={`badge mt-1.5 text-xs py-0.5 ${statusInfo.bgColor.includes('green') ? 'badge-success' : statusInfo.bgColor.includes('red') ? 'badge-error' : statusInfo.bgColor.includes('amber') ? 'badge-warning' : statusInfo.bgColor.includes('orange') ? 'badge-warning' : 'badge-primary'}`}>
                       <statusInfo.icon className="w-3 h-3 mr-0.5" />
                       <span>{statusInfo.label}</span>
                     </div>
                   )}
-                  
-                  {/* Quick action buttons */}
-                  {!isEditing && !appointment.appointmentStatus && (
-                    <div className="flex gap-1.5 mt-2">
+
+                  {/* Quick action buttons (outcomes) */}
+                  {!isEditing && !isRetrying && !appointment.appointmentStatus && (
+                    <div className="flex gap-1.5 mt-2 flex-wrap">
                       <button
-                        onClick={() => handleEditStatus(appointment)}
+                        onClick={() => handleQuickStatus(appointment.id, 'completed')}
                         className="text-[11px] px-2 py-1 bg-medical-success/10 text-medical-success border border-medical-success/20 rounded-md hover:bg-medical-success/20 transition-all duration-200 font-medium"
                         title="Sikeresen teljesült (megjegyzéssel)"
                       >
                         ✓ Teljesült
                       </button>
+                      {isPlanStep && (
+                        <button
+                          onClick={() => handleStartRetry(appointment)}
+                          className="text-[11px] px-2 py-1 bg-amber-500/10 text-amber-600 dark:text-amber-300 border border-amber-500/20 rounded-md hover:bg-amber-500/20 transition-all duration-200 font-medium"
+                          title="Sikertelen próba – a lépést újra kell foglalni"
+                        >
+                          ↻ Sikertelen – újra kell
+                        </button>
+                      )}
                       <button
                         onClick={() => handleQuickStatus(appointment.id, 'no_show')}
                         className="text-[11px] px-2 py-1 bg-medical-error/10 text-medical-error border border-medical-error/20 rounded-md hover:bg-medical-error/20 transition-all duration-200 font-medium"
@@ -306,17 +407,90 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
                       </button>
                     </div>
                   )}
-                  
+
                   {/* Completion notes display */}
-                  {!isEditing && appointment.completionNotes && (
+                  {!isEditing && !isRetrying && appointment.completionNotes && (
                     <div className="text-xs text-gray-700 dark:text-gray-300 mt-1.5 px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded-md border border-gray-200 dark:border-gray-800 leading-snug">
                       {appointment.completionNotes}
+                    </div>
+                  )}
+
+                  {/* Rebook-needed banner — the outcome→rebook connection */}
+                  {!isEditing && !isRetrying && showRebook && (
+                    <div className="mt-2 pt-2 border-t border-dashed border-amber-400/50 flex items-center gap-2">
+                      <span className="text-xs font-semibold text-amber-700 dark:text-amber-300 inline-flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5" /> Újrafoglalás szükséges
+                      </span>
+                      <button
+                        onClick={(e) => handleRebook(appointment, e)}
+                        className="ml-auto text-[11px] font-bold px-2.5 py-1 rounded-md bg-medical-primary text-white hover:bg-medical-primary/90 transition-all duration-200 inline-flex items-center gap-1"
+                        title="Új időpont foglalása ehhez a lépéshez"
+                      >
+                        Újrafoglalás <ArrowRight className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Retry (unsuccessful) inline form — attempt-outcome endpoint */}
+                  {isRetrying && (
+                    <div className="mt-3 space-y-2 pt-2 border-t border-amber-300/60">
+                      <div className="text-xs font-semibold text-amber-700 dark:text-amber-300 inline-flex items-center gap-1">
+                        <RotateCcw className="w-3.5 h-3.5" /> Sikertelen próba — a lépés visszanyílik újrafoglalásra
+                      </div>
+                      <div>
+                        <label className="form-label text-xs">
+                          Indok <span className="text-medical-error">*</span>
+                        </label>
+                        <textarea
+                          value={retryReason}
+                          onChange={(e) => setRetryReason(e.target.value)}
+                          className="form-input text-xs"
+                          rows={2}
+                          placeholder="pl. rossz illeszkedés, új lenyomat kell…"
+                        />
+                      </div>
+                      <div className="flex gap-2 justify-end pt-1">
+                        <button onClick={() => { setRetryingId(null); setRetryReason(''); }} className="btn-secondary text-xs px-3 py-1.5" disabled={retrySaving}>
+                          Mégse
+                        </button>
+                        <button onClick={() => handleSaveRetry(appointment.id)} className="btn-primary text-xs px-3 py-1.5" disabled={retrySaving}>
+                          {retrySaving ? 'Mentés…' : 'Mentés → újrafoglalás'}
+                        </button>
+                      </div>
                     </div>
                   )}
 
                   {/* Edit form */}
                   {isEditing && (
                     <div className="mt-3 space-y-2 pt-2 border-t border-gray-200 dark:border-gray-800">
+                      <div>
+                        <label className="form-label text-xs">
+                          Típus
+                        </label>
+                        <select
+                          value={statusForm.appointmentType}
+                          onChange={(e) => setStatusForm({ ...statusForm, appointmentType: e.target.value })}
+                          className="form-input text-xs"
+                        >
+                          <option value="">Nincs megadva</option>
+                          {APPOINTMENT_TYPE_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="form-label text-xs">
+                          Címke (szabad szöveg)
+                        </label>
+                        <input
+                          type="text"
+                          value={statusForm.typeLabel}
+                          onChange={(e) => setStatusForm({ ...statusForm, typeLabel: e.target.value })}
+                          className="form-input text-xs"
+                          maxLength={120}
+                          placeholder="pl. implantátum kontroll 6h"
+                        />
+                      </div>
                       <div>
                         <label className="form-label text-xs">
                           Státusz
@@ -340,7 +514,7 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
                           <option value="no_show">Nem jelent meg</option>
                         </select>
                       </div>
-                      {(statusForm.appointmentStatus === 'completed' || statusForm.appointmentStatus) && (
+                      {statusForm.appointmentStatus && (
                         <div>
                           <label className="form-label text-xs">
                             Megjegyzés {statusForm.appointmentStatus === 'completed' && <span className="text-medical-error">*</span>}
@@ -382,13 +556,13 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
                     </div>
                   )}
                 </div>
-                
+
                 {/* Edit button */}
-                {!isEditing && (
+                {!isEditing && !isRetrying && (
                   <button
                     onClick={() => handleEditStatus(appointment)}
                     className="flex-shrink-0 p-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-all duration-200 -mr-0.5"
-                    title="Státusz szerkesztése"
+                    title="Státusz / típus szerkesztése"
                   >
                     <Edit2 className="w-3.5 h-3.5" />
                   </button>
@@ -401,4 +575,3 @@ export function TodaysAppointmentsWidget({ appointments: initialAppointments, on
     </DashboardWidget>
   );
 }
-

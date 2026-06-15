@@ -7,6 +7,7 @@ import {
   parseAppointmentStatus,
 } from '@/lib/appointment-status';
 import { SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT } from '@/lib/active-appointment';
+import { APPOINTMENT_TYPE_VALUES } from '@/lib/appointment-constants';
 import {
   findEwpForAppointmentRevert,
   revertWorkPhaseLinkToPending,
@@ -17,7 +18,7 @@ export const dynamic = 'force-dynamic';
 export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'], async (req, { auth, params }) => {
   const appointmentId = params.id;
   const body = await req.json();
-  const { appointmentStatus, completionNotes, isLate, appointmentType } = body;
+  const { appointmentStatus, completionNotes, isLate, appointmentType, typeLabel } = body;
 
   // Pipe through the canonical taxonomy guard so any new status value added to
   // the SQL CHECK constraint requires updating lib/appointment-status.ts AND
@@ -111,17 +112,25 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
 
     if (appointmentType !== undefined) {
       if (appointmentType !== null && appointmentType !== undefined) {
-        const validTypes = ['elso_konzultacio', 'munkafazis', 'kontroll'];
-        if (!validTypes.includes(appointmentType)) {
+        if (!(APPOINTMENT_TYPE_VALUES as string[]).includes(appointmentType)) {
           await client.query('ROLLBACK');
           return NextResponse.json(
-            { error: 'Érvénytelen időpont típus érték' },
+            { error: 'Érvénytelen időpont típus érték', code: 'INVALID_APPOINTMENT_TYPE' },
             { status: 400 }
           );
         }
       }
       updateFields.push(`appointment_type = $${paramIndex}`);
       updateValues.push(appointmentType || null);
+      paramIndex++;
+    }
+
+    // Free-text type label (catch-all flag, e.g. "implantátum kontroll 6h").
+    // Trimmed; empty string clears it.
+    if (typeLabel !== undefined) {
+      const trimmed = typeof typeLabel === 'string' ? typeLabel.trim() : '';
+      updateFields.push(`type_label = $${paramIndex}`);
+      updateValues.push(trimmed.length > 0 ? trimmed.slice(0, 120) : null);
       paramIndex++;
     }
 
@@ -139,12 +148,13 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
       `UPDATE appointments 
      SET ${updateFields.join(', ')} 
      WHERE id = $${paramIndex}
-     RETURNING 
+     RETURNING
        id,
        appointment_status as "appointmentStatus",
        completion_notes as "completionNotes",
        is_late as "isLate",
-       appointment_type as "appointmentType"`,
+       appointment_type as "appointmentType",
+       type_label as "typeLabel"`,
       updateValues
     );
 
