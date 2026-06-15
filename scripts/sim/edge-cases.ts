@@ -308,6 +308,40 @@ async function main() {
     check('generate + project handle duplicate codes without throwing', !genThrew && !projThrew);
   }
 
+  // ── EC15: unsuccessful attempt → retry re-books as attempt #2 ───────────────
+  console.log('\n[EC15] Unsuccessful attempt → retry re-books the same phase as attempt #2');
+  {
+    const pid = await mkPatient('retry'); const pw = await mkPathway(BASIC);
+    const ep = await mkEpisode(pid, pw, prov.id);
+    // Complete the consult so the first work phase is bookable.
+    await q(`UPDATE episode_work_phases SET status = 'completed' WHERE episode_id = $1 AND work_phase_code = 'consult_1'`, [ep]);
+    const diagWp = (await q<{ id: string }>(`SELECT id FROM episode_work_phases WHERE episode_id = $1 AND work_phase_code = 'diagnostic'`, [ep]))[0].id;
+
+    // Attempt #1
+    const slot1 = await mkSlot(prov.id, future(10));
+    await createAppointment(pool, { ...bookParams(pid, slot1, ep, 'work', 'diagnostic'), workPhaseId: diagWp }, adminAuth(prov.id, prov.email));
+    const appt1 = (await q<{ id: string; attempt_number: number }>(`SELECT id, attempt_number FROM appointments WHERE time_slot_id = $1`, [slot1]))[0];
+
+    // Mark attempt #1 unsuccessful (mirrors the attempt-outcome route's core effects:
+    // the visit happened but failed, so the work phase reopens to 'pending').
+    await q(`UPDATE appointments SET appointment_status = 'unsuccessful', attempt_failed_reason = 'rossz lenyomat', attempt_failed_at = now(), attempt_failed_by = 'ec@local' WHERE id = $1`, [appt1.id]);
+    await q(`UPDATE episode_work_phases SET status = 'pending', appointment_id = NULL WHERE id = $1`, [diagWp]);
+
+    // Attempt #2 on a NEW slot (the failed visit's slot is consumed — it happened).
+    const slot2 = await mkSlot(prov.id, future(17));
+    const r2 = await createAppointment(pool, { ...bookParams(pid, slot2, ep, 'work', 'diagnostic'), workPhaseId: diagWp }, adminAuth(prov.id, prov.email));
+    const appt2 = (await q<{ attempt_number: number }>(`SELECT attempt_number FROM appointments WHERE time_slot_id = $1`, [slot2]))[0];
+    const active = (await q<{ c: string }>(
+      `SELECT count(*)::int AS c FROM appointments WHERE work_phase_id = $1 AND (appointment_status IS NULL OR appointment_status = 'completed')`,
+      [diagWp],
+    ))[0].c;
+
+    check('attempt #1 is recorded as attempt_number=1', Number(appt1.attempt_number) === 1, `got ${appt1.attempt_number}`);
+    check('retry after unsuccessful succeeds (unique guard excludes unsuccessful)', r2.ok, r2.ok ? '' : JSON.stringify((r2 as any).validationError));
+    check('retry is recorded as attempt_number=2', Number(appt2?.attempt_number) === 2, `got ${appt2?.attempt_number}`);
+    check('exactly one active appointment for the phase', Number(active) === 1, `got ${active}`);
+  }
+
   console.log(`\n=== RESULT: ${passN} passed, ${failN} failed ===`);
   const fs = await import('fs');
   fs.writeFileSync('sim-out/edge-cases-report.txt', `${passN} passed, ${failN} failed\n\n${lines.join('\n')}\n`);
