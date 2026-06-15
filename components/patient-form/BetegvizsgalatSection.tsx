@@ -10,6 +10,7 @@ import { ToothTreatmentProvider, ToothTreatmentInline } from '../ToothTreatmentP
 import { OPInlinePreview } from '../OPInlinePreview';
 import { Odontogram } from './odontogram/Odontogram';
 import { readConditions, computeDMFT, BASE_LABELS, isPresent } from './odontogram/tooth-conditions';
+import { applyTreatmentOutcome } from '@/lib/tooth-treatment-outcome';
 import { PerioChart } from './perio/PerioChart';
 
 interface BetegvizsgalatSectionProps {
@@ -145,7 +146,22 @@ export function BetegvizsgalatSection({
             );
 
             return patientId ? (
-              <ToothTreatmentProvider patientId={patientId}>
+              <ToothTreatmentProvider
+                patientId={patientId}
+                onTreatmentCompleted={(toothNumber, treatmentCode) => {
+                  // Egy kezelés "Kész"-re állításakor a szerver már frissítette a
+                  // tárolt állapotot; itt a helyi (autosave-elt) odontogramot is
+                  // átvezetjük, hogy a két oldal ne kerüljön ellentmondásba.
+                  setFogak((prev) => {
+                    const { changed, next } = applyTreatmentOutcome(prev[toothNumber], treatmentCode);
+                    if (!changed) return prev;
+                    const ns = { ...prev };
+                    if (next === undefined) delete ns[toothNumber];
+                    else ns[toothNumber] = next as ToothStatus;
+                    return ns;
+                  });
+                }}
+              >
                 {content}
               </ToothTreatmentProvider>
             ) : content;

@@ -15,6 +15,7 @@ import { PatientStageSelector } from '@/components/PatientStageSelector';
 import { PatientCareTimeline } from '@/components/PatientCareTimeline';
 import { PatientEpisodeForm } from '@/components/PatientEpisodeForm';
 import { ZsigmondyCrossStages } from '@/components/ZsigmondyCrossStages';
+import { DentalStatusTimeline } from '@/components/DentalStatusTimeline';
 import { useToast } from '@/contexts/ToastContext';
 
 export default function PatientStagesPage() {
@@ -190,6 +191,9 @@ export default function PatientStagesPage() {
 
           {/* Zsigmondy-kereszt: fogankénti kezelési igények */}
           <ZsigmondyCrossStages patientId={patientId} patientName={patient.nev || undefined} meglevoFogak={patient.meglevoFogak} />
+
+          {/* Fogazati státusz időbeli alakulása */}
+          <DentalStatusTimeline patientId={patientId} />
 
           {/* Új ellátási epizód indítása */}
           {(userRole === 'admin' || userRole === 'beutalo_orvos' || userRole === 'fogpótlástanász') && (
