@@ -66,6 +66,12 @@ interface ToothTreatmentContextValue {
   institutionUsers: InstitutionUserRow[];
   institutionUsersLoading: boolean;
   loadInstitutionUsers: () => Promise<void>;
+  /**
+   * A beteglapon (szerkeszthető odontogram) ezzel tartja szinkronban a fog
+   * tárolt állapotát, amikor egy kezelés "Kész" lesz — különben az autosave
+   * visszaírná a régi alapállapotot a szerver automatikus frissítése fölé.
+   */
+  onTreatmentCompleted?: (toothNumber: string, treatmentCode: string) => void;
 }
 
 const ToothTreatmentContext = createContext<ToothTreatmentContextValue | null>(null);
@@ -73,9 +79,10 @@ const ToothTreatmentContext = createContext<ToothTreatmentContextValue | null>(n
 interface ToothTreatmentProviderProps {
   patientId: string;
   children: ReactNode;
+  onTreatmentCompleted?: (toothNumber: string, treatmentCode: string) => void;
 }
 
-export function ToothTreatmentProvider({ patientId, children }: ToothTreatmentProviderProps) {
+export function ToothTreatmentProvider({ patientId, children, onTreatmentCompleted }: ToothTreatmentProviderProps) {
   const [treatments, setTreatments] = useState<ToothTreatment[]>([]);
   const [catalog, setCatalog] = useState<ToothTreatmentCatalogItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -137,6 +144,7 @@ export function ToothTreatmentProvider({ patientId, children }: ToothTreatmentPr
         institutionUsers,
         institutionUsersLoading,
         loadInstitutionUsers,
+        onTreatmentCompleted,
       }}
     >
       {children}
@@ -490,6 +498,7 @@ export function ToothTreatmentInline({ toothNumber, isViewOnly }: ToothTreatment
     institutionUsers,
     institutionUsersLoading,
     loadInstitutionUsers,
+    onTreatmentCompleted,
   } = ctx;
 
   const toothTreatments = treatments.filter((t) => String(t.toothNumber) === toothNumber);
@@ -543,16 +552,19 @@ export function ToothTreatmentInline({ toothNumber, isViewOnly }: ToothTreatment
     }
   };
 
-  const handleComplete = async (treatmentId: string) => {
+  const handleComplete = async (treatment: ToothTreatment) => {
     setError(null);
     try {
-      const res = await fetch(`/api/patients/${patientId}/tooth-treatments/${treatmentId}`, {
+      const res = await fetch(`/api/patients/${patientId}/tooth-treatments/${treatment.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ status: 'completed' }),
       });
       if (!res.ok) { const data = await res.json(); setError(data.error ?? `Hiba`); return; }
+      // Az élő odontogramot a szerver már frissítette; a szerkeszthető beteglapon
+      // a helyi állapotot is átvezetjük, hogy az autosave ne írja vissza a régit.
+      onTreatmentCompleted?.(toothNumber, treatment.treatmentCode);
       await reload();
       notifyToothTreatmentsChanged();
     } catch (e) {
@@ -648,7 +660,7 @@ export function ToothTreatmentInline({ toothNumber, isViewOnly }: ToothTreatment
                   {t.status === 'episode_linked' && (
                     <button
                       type="button"
-                      onClick={() => handleComplete(t.id)}
+                      onClick={() => handleComplete(t)}
                       className="px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-xs hover:bg-green-200 flex items-center gap-1"
                       title="Késznek jelölés"
                     >
