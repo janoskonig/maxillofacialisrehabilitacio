@@ -1,4 +1,4 @@
-30 passed, 0 failed
+37 passed, 0 failed
 
 PASS	exactly 1 of 5 concurrent bookings succeeds	got 1
 PASS	exactly 1 appointment row on the slot	got 1
@@ -11,7 +11,7 @@ PASS	past slot → rejected
 PASS	first-bookable returns kind=none (no crash)	kind=none
 PASS	80-char code: projection does not throw	
 PASS	80-char code: intents projected	projected=2
-PASS	length guard flags the 81-char code	offenders=8
+PASS	length guard flags the 81-char code	offenders=11
 PASS	orphaned held slot is freed	state=free
 PASS	legitimately-held slot is preserved	state=held
 PASS	reaper reported freeing the orphan	
@@ -30,3 +30,10 @@ PASS	retry after no-show succeeds (unique guard now excludes no_show)
 PASS	no-show counts as a real attempt → retry is attempt_number=2	got 2
 PASS	no-show slot stays consumed (not freed)	got booked
 PASS	exactly one active appointment for the phase	got 1
+PASS	route returns 200 for no_show	got 200
+PASS	route reopened phase to pending+unlinked (no_show)	{"status":"pending","appointment_id":null}
+PASS	no_show slot stays consumed via route	got booked
+PASS	retry after route no_show succeeds	
+PASS	route returns 200 for cancel	got 200
+PASS	route reopened phase to pending+unlinked (cancel) [GAP A]	{"status":"pending","appointment_id":null}
+PASS	cancelled slot is freed via route	got free

@@ -8,8 +8,7 @@
  *
  * Run: npx tsx scripts/sim/edge-cases.ts
  */
-import { config } from 'dotenv';
-config({ path: '.env.local' });
+import './load-env'; // MUST be first: populates env before auth-server captures JWT_SECRET
 
 import { getDbPool } from '../../lib/db';
 import { createAppointment } from '../../lib/appointment-service';
@@ -21,6 +20,9 @@ import { createOpenEpisodeWithInitialStageZero } from '../../lib/patient-episode
 import { runStuckSlotReaper } from '../../lib/stuck-slot-reaper';
 import { budapestHour } from '../../lib/datetime';
 import { probeAppointmentsWorkPhaseIdColumn } from '../../lib/active-appointment';
+import { SignJWT } from 'jose';
+import { NextRequest } from 'next/server';
+import { PATCH as patchAppointmentStatus } from '../../app/api/appointments/[id]/status/route';
 
 const pool = getDbPool();
 let passN = 0;
@@ -376,6 +378,53 @@ async function main() {
     check('no-show counts as a real attempt → retry is attempt_number=2', Number(appt2?.attempt_number) === 2, `got ${appt2?.attempt_number}`);
     check('no-show slot stays consumed (not freed)', slot1State === 'booked', `got ${slot1State}`);
     check('exactly one active appointment for the phase', Number(active) === 1, `got ${active}`);
+  }
+
+  // ── EC17: REAL status-route handler reopens the phase (end-to-end) ──────────
+  console.log('\n[EC17] Real PATCH /status handler: no_show + cancel reopen the phase (GAP A)');
+  {
+    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'change-this-to-a-random-secret-in-production');
+    const token = await new SignJWT({ userId: prov.id, email: prov.email, role: 'admin' })
+      .setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('1h').sign(secret);
+    const callStatus = (apptId: string, appointmentStatus: string) => {
+      const req = new NextRequest(`http://localhost/api/appointments/${apptId}/status`, {
+        method: 'PATCH',
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ appointmentStatus }),
+      });
+      return patchAppointmentStatus(req, { params: { id: apptId } });
+    };
+    const bookDiag = async (tag: string, off: number) => {
+      const pid = await mkPatient(tag); const pw = await mkPathway(BASIC);
+      const ep = await mkEpisode(pid, pw, prov.id);
+      await q(`UPDATE episode_work_phases SET status = 'completed' WHERE episode_id = $1 AND work_phase_code = 'consult_1'`, [ep]);
+      const wp = (await q<{ id: string }>(`SELECT id FROM episode_work_phases WHERE episode_id = $1 AND work_phase_code = 'diagnostic'`, [ep]))[0].id;
+      const slot = await mkSlot(prov.id, future(off));
+      await createAppointment(pool, { ...bookParams(pid, slot, ep, 'work', 'diagnostic'), workPhaseId: wp }, adminAuth(prov.id, prov.email));
+      const appt = (await q<{ id: string }>(`SELECT id FROM appointments WHERE time_slot_id = $1`, [slot]))[0].id;
+      return { pid, ep, wp, slot, appt };
+    };
+
+    // no_show through the actual route handler
+    const A = await bookDiag('routeNS', 12);
+    const resNS = await callStatus(A.appt, 'no_show');
+    const ewpA = (await q<{ status: string; appointment_id: string | null }>(`SELECT status, appointment_id FROM episode_work_phases WHERE id = $1`, [A.wp]))[0];
+    const slotANow = (await q<{ state: string }>(`SELECT state FROM available_time_slots WHERE id = $1`, [A.slot]))[0].state;
+    check('route returns 200 for no_show', resNS.status === 200, `got ${resNS.status}`);
+    check('route reopened phase to pending+unlinked (no_show)', ewpA.status === 'pending' && ewpA.appointment_id === null, JSON.stringify(ewpA));
+    check('no_show slot stays consumed via route', slotANow === 'booked', `got ${slotANow}`);
+    const slotA2 = await mkSlot(prov.id, future(19));
+    const rA2 = await createAppointment(pool, { ...bookParams(A.pid, slotA2, A.ep, 'work', 'diagnostic'), workPhaseId: A.wp }, adminAuth(prov.id, prov.email));
+    check('retry after route no_show succeeds', rA2.ok, rA2.ok ? '' : JSON.stringify((rA2 as any).validationError));
+
+    // cancel through the actual route handler (GAP A regression)
+    const B = await bookDiag('routeCancel', 13);
+    const resCancel = await callStatus(B.appt, 'cancelled_by_patient');
+    const ewpB = (await q<{ status: string; appointment_id: string | null }>(`SELECT status, appointment_id FROM episode_work_phases WHERE id = $1`, [B.wp]))[0];
+    const slotBNow = (await q<{ state: string }>(`SELECT state FROM available_time_slots WHERE id = $1`, [B.slot]))[0].state;
+    check('route returns 200 for cancel', resCancel.status === 200, `got ${resCancel.status}`);
+    check('route reopened phase to pending+unlinked (cancel) [GAP A]', ewpB.status === 'pending' && ewpB.appointment_id === null, JSON.stringify(ewpB));
+    check('cancelled slot is freed via route', slotBNow === 'free', `got ${slotBNow}`);
   }
 
   console.log(`\n=== RESULT: ${passN} passed, ${failN} failed ===`);
