@@ -68,10 +68,17 @@ export const SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT = `(
 /**
  * "Visible future" = jövőbeli, megjelenítendő foglalás.
  *
- * Ez kicsit szigorúbb az aktívnál: ide a `no_show` és `unsuccessful` is
- * kihullik, mert egy múltbeli meg-nem-jelenést / sikertelen próbát nem akarunk
- * "jövőbeli foglalás"-ként mutatni. (Az `unsuccessful` a múltbeli próba-
- * történet része — külön renderelt, nem "future booking" listán.)
+ * Történetileg ez SZIGORÚBB volt az aktívnál (a `no_show`/`unsuccessful` itt is
+ * kihullt, az "aktív"-nál viszont nem). A 029 (`unsuccessful`) és a 059
+ * (`no_show`) óta az "aktív" halmaz is kizárja ezt a kettőt, így a két fragment
+ * MOST AZONOS — egy meg-nem-jelenést / sikertelen próbát sem aktív foglalásként,
+ * sem "jövőbeli foglalás"-ként nem mutatunk (az `unsuccessful`/`no_show` a
+ * múltbeli próba-történet része, külön renderelve).
+ *
+ * Külön nevesített konstansként tartjuk meg a kettőt, mert KÜLÖN szemantikát
+ * fejeznek ki (booking-guard vs. listamegjelenítés), és külön is fejlődhetnek;
+ * a work-phase-index-parity tesztek őrzik, hogy a halmazok szándék szerint
+ * mozogjanak, ne véletlenül.
  */
 export const SQL_APPOINTMENT_VISIBLE_STATUS_FRAGMENT = `(
   a.appointment_status IS NULL
