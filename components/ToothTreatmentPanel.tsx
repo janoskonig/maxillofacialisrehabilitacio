@@ -41,6 +41,18 @@ const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }>
   completed: { bg: 'bg-green-100 dark:bg-green-950/50', text: 'text-green-800 dark:text-green-300', label: 'Kész' },
 };
 
+/**
+ * Notify other listeners (e.g. the Zsigmondy grid badges, which load tooth
+ * treatments through a separate provider) that the per-tooth treatment list
+ * changed so they can refresh. Without this, badges on the tooth chart stay
+ * stale after add / complete / delete / episode actions until a full reload.
+ */
+function notifyToothTreatmentsChanged() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('tooth-treatments-changed'));
+  }
+}
+
 // ---- Context: load treatments + catalog once, share across all tooth cards ----
 
 interface ToothTreatmentContextValue {
@@ -54,6 +66,12 @@ interface ToothTreatmentContextValue {
   institutionUsers: InstitutionUserRow[];
   institutionUsersLoading: boolean;
   loadInstitutionUsers: () => Promise<void>;
+  /**
+   * A beteglapon (szerkeszthető odontogram) ezzel tartja szinkronban a fog
+   * tárolt állapotát, amikor egy kezelés "Kész" lesz — különben az autosave
+   * visszaírná a régi alapállapotot a szerver automatikus frissítése fölé.
+   */
+  onTreatmentCompleted?: (toothNumber: string, treatmentCode: string) => void;
 }
 
 const ToothTreatmentContext = createContext<ToothTreatmentContextValue | null>(null);
@@ -61,9 +79,10 @@ const ToothTreatmentContext = createContext<ToothTreatmentContextValue | null>(n
 interface ToothTreatmentProviderProps {
   patientId: string;
   children: ReactNode;
+  onTreatmentCompleted?: (toothNumber: string, treatmentCode: string) => void;
 }
 
-export function ToothTreatmentProvider({ patientId, children }: ToothTreatmentProviderProps) {
+export function ToothTreatmentProvider({ patientId, children, onTreatmentCompleted }: ToothTreatmentProviderProps) {
   const [treatments, setTreatments] = useState<ToothTreatment[]>([]);
   const [catalog, setCatalog] = useState<ToothTreatmentCatalogItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -125,6 +144,7 @@ export function ToothTreatmentProvider({ patientId, children }: ToothTreatmentPr
         institutionUsers,
         institutionUsersLoading,
         loadInstitutionUsers,
+        onTreatmentCompleted,
       }}
     >
       {children}
@@ -478,11 +498,20 @@ export function ToothTreatmentInline({ toothNumber, isViewOnly }: ToothTreatment
     institutionUsers,
     institutionUsersLoading,
     loadInstitutionUsers,
+    onTreatmentCompleted,
   } = ctx;
 
   const toothTreatments = treatments.filter((t) => String(t.toothNumber) === toothNumber);
   const active = toothTreatments.filter((t) => !isToothTreatmentPathwayDone(t));
   const completed = toothTreatments.filter((t) => isToothTreatmentPathwayDone(t));
+
+  // The DB enforces a single active treatment per (tooth, code) while it is not
+  // 'completed'. Hide codes that would just bounce back as a 409 so the picker
+  // only ever offers treatments that can actually be added.
+  const blockedCodes = new Set(
+    toothTreatments.filter((t) => t.status !== 'completed').map((t) => t.treatmentCode),
+  );
+  const availableCatalog = catalog.filter((c) => !blockedCodes.has(c.code));
 
   const handleAdd = async () => {
     if (!selectedCode) return;
@@ -500,6 +529,7 @@ export function ToothTreatmentInline({ toothNumber, isViewOnly }: ToothTreatment
       setAdding(false);
       setSelectedCode('');
       await reload();
+      notifyToothTreatmentsChanged();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Hiba');
     } finally {
@@ -516,22 +546,27 @@ export function ToothTreatmentInline({ toothNumber, isViewOnly }: ToothTreatment
       });
       if (!res.ok) { const data = await res.json(); setError(data.error ?? `Hiba`); return; }
       await reload();
+      notifyToothTreatmentsChanged();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Hiba');
     }
   };
 
-  const handleComplete = async (treatmentId: string) => {
+  const handleComplete = async (treatment: ToothTreatment) => {
     setError(null);
     try {
-      const res = await fetch(`/api/patients/${patientId}/tooth-treatments/${treatmentId}`, {
+      const res = await fetch(`/api/patients/${patientId}/tooth-treatments/${treatment.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ status: 'completed' }),
       });
       if (!res.ok) { const data = await res.json(); setError(data.error ?? `Hiba`); return; }
+      // Az élő odontogramot a szerver már frissítette; a szerkeszthető beteglapon
+      // a helyi állapotot is átvezetjük, hogy az autosave ne írja vissza a régit.
+      onTreatmentCompleted?.(toothNumber, treatment.treatmentCode);
       await reload();
+      notifyToothTreatmentsChanged();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Hiba');
     }
@@ -548,6 +583,7 @@ export function ToothTreatmentInline({ toothNumber, isViewOnly }: ToothTreatment
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? `Hiba (${res.status})`); return; }
       await reload();
+      notifyToothTreatmentsChanged();
       window.dispatchEvent(new CustomEvent('episode-created'));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Hiba');
@@ -624,7 +660,7 @@ export function ToothTreatmentInline({ toothNumber, isViewOnly }: ToothTreatment
                   {t.status === 'episode_linked' && (
                     <button
                       type="button"
-                      onClick={() => handleComplete(t.id)}
+                      onClick={() => handleComplete(t)}
                       className="px-1.5 py-0.5 bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-300 rounded text-xs hover:bg-green-200 flex items-center gap-1"
                       title="Késznek jelölés"
                     >
@@ -672,33 +708,47 @@ export function ToothTreatmentInline({ toothNumber, isViewOnly }: ToothTreatment
       {!isViewOnly && (
         <>
           {adding ? (
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <select
-                value={selectedCode}
-                onChange={(e) => setSelectedCode(e.target.value)}
-                className="form-input text-sm py-1 flex-1 min-w-[120px]"
-              >
-                <option value="">Válassz kezelést...</option>
-                {catalog.map((c) => (
-                  <option key={c.code} value={c.code}>{c.labelHu}</option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={handleAdd}
-                disabled={savingAdd || !selectedCode}
-                className="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700 disabled:opacity-50"
-              >
-                {savingAdd ? '…' : 'Hozzáad'}
-              </button>
-              <button
-                type="button"
-                onClick={() => { setAdding(false); setSelectedCode(''); }}
-                className="px-2 py-1 bg-gray-400 text-white rounded text-xs hover:bg-gray-500"
-              >
-                Mégse
-              </button>
-            </div>
+            availableCatalog.length === 0 ? (
+              <div className="flex items-center gap-2 flex-wrap text-xs text-gray-500">
+                <span>Minden elérhető kezelés már fel van véve ehhez a foghoz.</span>
+                <button
+                  type="button"
+                  onClick={() => { setAdding(false); setSelectedCode(''); }}
+                  className="underline hover:text-gray-700"
+                >
+                  Bezár
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <select
+                  value={selectedCode}
+                  onChange={(e) => setSelectedCode(e.target.value)}
+                  aria-label="Kezelés kiválasztása"
+                  className="form-input text-sm py-1 flex-1 min-w-[120px]"
+                >
+                  <option value="">Válassz kezelést...</option>
+                  {availableCatalog.map((c) => (
+                    <option key={c.code} value={c.code}>{c.labelHu}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={handleAdd}
+                  disabled={savingAdd || !selectedCode}
+                  className="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700 disabled:opacity-50"
+                >
+                  {savingAdd ? '…' : 'Hozzáad'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setAdding(false); setSelectedCode(''); }}
+                  className="px-2 py-1 bg-gray-400 text-white rounded text-xs hover:bg-gray-500"
+                >
+                  Mégse
+                </button>
+              </div>
+            )
           ) : (
             <button
               type="button"
