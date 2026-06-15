@@ -11,7 +11,7 @@ PASS	past slot → rejected
 PASS	first-bookable returns kind=none (no crash)	kind=none
 PASS	80-char code: projection does not throw	
 PASS	80-char code: intents projected	projected=2
-PASS	length guard flags the 81-char code	offenders=11
+PASS	length guard flags the 81-char code	offenders=12
 PASS	orphaned held slot is freed	state=free
 PASS	legitimately-held slot is preserved	state=held
 PASS	reaper reported freeing the orphan	
