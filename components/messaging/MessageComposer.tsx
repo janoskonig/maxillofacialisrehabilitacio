@@ -14,6 +14,7 @@
 
 import { useEffect, useRef, type ReactNode, type RefObject } from 'react';
 import { Send } from 'lucide-react';
+import { useKeyboardInset } from '@/hooks/useKeyboardInset';
 
 interface MessageComposerProps {
   value: string;
@@ -70,6 +71,7 @@ export function MessageComposer({
 }: MessageComposerProps) {
   const internalRef = useRef<HTMLTextAreaElement>(null);
   const textareaRef = externalRef ?? internalRef;
+  const keyboardInset = useKeyboardInset();
 
   // Auto-növekvő magasság (max korláttal).
   useEffect(() => {
@@ -101,8 +103,12 @@ export function MessageComposer({
 
   return (
     <div
-      className="border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      className="border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 transition-[padding] duration-150"
+      style={{
+        // Soft-keyboard fölé emelés: ha nyitva van a billentyűzet, annyival
+        // told fel a beviteli sort; egyébként a notch/home-indikátor safe-area.
+        paddingBottom: keyboardInset > 0 ? keyboardInset : 'env(safe-area-inset-bottom)',
+      }}
     >
       {replyBar}
       {pendingBar}
@@ -132,7 +138,7 @@ export function MessageComposer({
             onClick={onSend}
             disabled={!canSend}
             aria-label="Küldés"
-            className="flex-shrink-0 w-9 h-9 rounded-full bg-medical-primary text-white flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed enabled:hover:bg-medical-primary-dark transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-medical-primary focus-visible:ring-offset-2"
+            className="flex-shrink-0 w-11 h-11 sm:w-9 sm:h-9 rounded-full bg-medical-primary text-white flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed enabled:hover:bg-medical-primary-dark transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-medical-primary focus-visible:ring-offset-2"
           >
             <Send className="w-4 h-4" />
           </button>
