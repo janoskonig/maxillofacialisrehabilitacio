@@ -1637,15 +1637,29 @@ export function PatientForm({
         </button>
       </div>
 
-      {/* Section Navigation */}
-      {visibleSections.length > 1 && (
-        <PatientFormSectionNavigation
-          sections={visibleSections}
-          activeSectionId={activeSectionId}
-          onSectionChange={setActiveSectionId}
-          sectionErrors={sectionErrors}
-        />
-      )}
+      {/* Szakasz-navigáció: xl+ képernyőn bal oldali tartalomjegyzék-sáv, alatta felső sáv/mobil lenyíló */}
+      <div className="xl:flex xl:items-start xl:gap-6">
+        {visibleSections.length > 1 && (
+          <PatientFormSectionNavigation
+            sections={visibleSections}
+            activeSectionId={activeSectionId}
+            onSectionChange={setActiveSectionId}
+            sectionErrors={sectionErrors}
+            variant="rail"
+            className="hidden xl:block xl:w-56 xl:flex-shrink-0 xl:sticky xl:top-20 self-start"
+          />
+        )}
+        <div className="min-w-0 xl:flex-1">
+          {visibleSections.length > 1 && (
+            <PatientFormSectionNavigation
+              sections={visibleSections}
+              activeSectionId={activeSectionId}
+              onSectionChange={setActiveSectionId}
+              sectionErrors={sectionErrors}
+              variant="bar"
+              className="xl:hidden"
+            />
+          )}
 
       {/* Auto-save conflict banner */}
       {conflict.showConflictBanner && 
@@ -1953,6 +1967,8 @@ export function PatientForm({
           </div>
         )}
       </form>
+        </div>
+      </div>
 
       {/* Manual save conflict modal */}
       <ConflictModal
