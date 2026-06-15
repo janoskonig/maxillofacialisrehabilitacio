@@ -184,8 +184,16 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
       // Ha az időpont korábban `completed` volt, és az EWP ehhez az appointmenthez
       // kötődött (completed vagy scheduled + appointment_id), a fázist visszanyitjuk
       // `pending`-re — különben „completed” fázis + lemondott időpont inkonzisztencia.
+      //
+      // `no_show` esetén bármilyen kiindulásból (jellemzően pending/scheduled): a
+      // beteg nem jött el, ezért a fázist vissza kell nyitni egy új próbára, és a
+      // halott appointment-linket le kell oldani. Enélkül az EWP `scheduled`
+      // maradna a no_show foglaláshoz láncolva, a worklist nem mutatná újra-
+      // foglalandóként, az újrafoglalás pedig WORK_PHASE_ALREADY_BOOKED-kal bukna
+      // (lásd migration 059 — a no_show "felszabadító" státusz a work_phase
+      // egyediségi index szempontjából).
       if (
-        oldStatus === 'completed' &&
+        (oldStatus === 'completed' || normalisedStatus === 'no_show') &&
         episodeIdForEwp &&
         stepCodeForEwp
       ) {

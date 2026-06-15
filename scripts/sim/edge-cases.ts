@@ -342,6 +342,42 @@ async function main() {
     check('exactly one active appointment for the phase', Number(active) === 1, `got ${active}`);
   }
 
+  // ── EC16: no-show → retry re-books the same phase (migration 059) ───────────
+  console.log('\n[EC16] No-show → retry re-books the same phase as attempt #2');
+  {
+    const pid = await mkPatient('noshow'); const pw = await mkPathway(BASIC);
+    const ep = await mkEpisode(pid, pw, prov.id);
+    await q(`UPDATE episode_work_phases SET status = 'completed' WHERE episode_id = $1 AND work_phase_code = 'consult_1'`, [ep]);
+    const diagWp = (await q<{ id: string }>(`SELECT id FROM episode_work_phases WHERE episode_id = $1 AND work_phase_code = 'diagnostic'`, [ep]))[0].id;
+
+    // Attempt #1
+    const slot1 = await mkSlot(prov.id, future(11));
+    await createAppointment(pool, { ...bookParams(pid, slot1, ep, 'work', 'diagnostic'), workPhaseId: diagWp }, adminAuth(prov.id, prov.email));
+    const appt1 = (await q<{ id: string }>(`SELECT id FROM appointments WHERE time_slot_id = $1`, [slot1]))[0];
+
+    // Patient missed it → no_show. Mirrors the status route's post-059 effect:
+    // the slot stays consumed, but the work phase reopens to 'pending'.
+    await q(`UPDATE appointments SET appointment_status = 'no_show' WHERE id = $1`, [appt1.id]);
+    await q(`UPDATE episode_work_phases SET status = 'pending', appointment_id = NULL WHERE id = $1`, [diagWp]);
+
+    // The no-show slot must NOT be freed (the time was consumed).
+    const slot1State = (await q<{ state: string }>(`SELECT state FROM available_time_slots WHERE id = $1`, [slot1]))[0].state;
+
+    // Retry on a NEW slot — previously blocked by WORK_PHASE_ALREADY_BOOKED.
+    const slot2 = await mkSlot(prov.id, future(18));
+    const r2 = await createAppointment(pool, { ...bookParams(pid, slot2, ep, 'work', 'diagnostic'), workPhaseId: diagWp }, adminAuth(prov.id, prov.email));
+    const appt2 = (await q<{ attempt_number: number }>(`SELECT attempt_number FROM appointments WHERE time_slot_id = $1`, [slot2]))[0];
+    const active = (await q<{ c: string }>(
+      `SELECT count(*)::int AS c FROM appointments WHERE work_phase_id = $1 AND (appointment_status IS NULL OR appointment_status = 'completed')`,
+      [diagWp],
+    ))[0].c;
+
+    check('retry after no-show succeeds (unique guard now excludes no_show)', r2.ok, r2.ok ? '' : JSON.stringify((r2 as any).validationError));
+    check('no-show counts as a real attempt → retry is attempt_number=2', Number(appt2?.attempt_number) === 2, `got ${appt2?.attempt_number}`);
+    check('no-show slot stays consumed (not freed)', slot1State === 'booked', `got ${slot1State}`);
+    check('exactly one active appointment for the phase', Number(active) === 1, `got ${active}`);
+  }
+
   console.log(`\n=== RESULT: ${passN} passed, ${failN} failed ===`);
   const fs = await import('fs');
   fs.writeFileSync('sim-out/edge-cases-report.txt', `${passN} passed, ${failN} failed\n\n${lines.join('\n')}\n`);

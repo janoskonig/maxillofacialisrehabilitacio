@@ -1,4 +1,4 @@
-26 passed, 0 failed
+30 passed, 0 failed
 
 PASS	exactly 1 of 5 concurrent bookings succeeds	got 1
 PASS	exactly 1 appointment row on the slot	got 1
@@ -11,7 +11,7 @@ PASS	past slot → rejected
 PASS	first-bookable returns kind=none (no crash)	kind=none
 PASS	80-char code: projection does not throw	
 PASS	80-char code: intents projected	projected=2
-PASS	length guard flags the 81-char code	offenders=6
+PASS	length guard flags the 81-char code	offenders=8
 PASS	orphaned held slot is freed	state=free
 PASS	legitimately-held slot is preserved	state=held
 PASS	reaper reported freeing the orphan	
@@ -25,4 +25,8 @@ PASS	generate + project handle duplicate codes without throwing
 PASS	attempt #1 is recorded as attempt_number=1	got 1
 PASS	retry after unsuccessful succeeds (unique guard excludes unsuccessful)	
 PASS	retry is recorded as attempt_number=2	got 2
+PASS	exactly one active appointment for the phase	got 1
+PASS	retry after no-show succeeds (unique guard now excludes no_show)	
+PASS	no-show counts as a real attempt → retry is attempt_number=2	got 2
+PASS	no-show slot stays consumed (not freed)	got booked
 PASS	exactly one active appointment for the phase	got 1

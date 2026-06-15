@@ -35,7 +35,7 @@ const ALL_STATUSES: Array<string | null> = [
 /** Mirrors the partial unique index predicate ON THE EXISTING ROW (post-029). */
 function indexConsidersRowActive(status: string | null): boolean {
   if (status === null) return true;
-  return !['cancelled_by_doctor', 'cancelled_by_patient', 'unsuccessful'].includes(status);
+  return !['cancelled_by_doctor', 'cancelled_by_patient', 'no_show', 'unsuccessful'].includes(status);
 }
 
 describe('Index ↔ guard parity (unit truth-table)', () => {
@@ -46,20 +46,21 @@ describe('Index ↔ guard parity (unit truth-table)', () => {
     }
   );
 
-  it('cancelled_*, and unsuccessful are the statuses that free a work phase (post-029)', () => {
+  it('cancelled_*, unsuccessful and no_show are the statuses that free a work phase (post-059)', () => {
     const freedStatuses = ALL_STATUSES.filter((s) => !isAppointmentActive(s));
     expect(freedStatuses.sort()).toEqual([
       'cancelled_by_doctor',
       'cancelled_by_patient',
+      'no_show',
       'unsuccessful',
     ]);
   });
 
-  it('NULL, completed, and no_show all keep the work phase BOOKED', () => {
-    // unsuccessful is intentionally excluded here — it releases the slot so a
-    // new attempt_number row can be created (see migration 029 rationale).
+  it('only NULL and completed keep the work phase BOOKED', () => {
+    // unsuccessful (029) and no_show (059) release the work phase so a new
+    // attempt_number row can be created; their slots stay consumed.
     expect(isAppointmentActive(null)).toBe(true);
     expect(isAppointmentActive('completed')).toBe(true);
-    expect(isAppointmentActive('no_show')).toBe(true);
+    expect(isAppointmentActive('no_show')).toBe(false);
   });
 });
