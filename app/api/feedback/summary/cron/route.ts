@@ -55,6 +55,31 @@ export const GET = apiHandler(async (req, { correlationId }) => {
   const force = req.nextUrl.searchParams.get('force') === '1';
   const pool = getDbPool();
 
+  // Részletes JSON mód (?detail=1): a triage-routine ezt hívja a cron-kulccsal,
+  // hogy a nyitott bejelentések tartalmát is megkapja. Tisztán olvasás — nem küld
+  // push-t és nem írja a cooldownt (azt a push-mód kezeli).
+  if (req.nextUrl.searchParams.get('detail') === '1') {
+    const { rows: items } = await pool.query(`
+      SELECT id, type, title, description,
+             LEFT(COALESCE(error_log, ''), 4000)   AS error_log,
+             LEFT(COALESCE(error_stack, ''), 4000) AS error_stack,
+             url, user_email, status, created_at
+      FROM feedback
+      WHERE status = 'open'
+      ORDER BY created_at DESC
+      LIMIT 200
+    `);
+    logger.info(`[feedback-summary][${correlationId}] detail mód: ${items.length} nyitott tétel.`);
+    return NextResponse.json({
+      success: true,
+      mode: 'detail',
+      openCount: items.length,
+      items,
+      generatedAt: new Date().toISOString(),
+      duration: Date.now() - startTime,
+    });
+  }
+
   // Cooldown-állapot tábla (lusta létrehozás — nincs külön migráció, lásd
   // admin_notification_batch_state mintát a daily-summary-ben).
   await pool.query(`
