@@ -8,6 +8,7 @@ import { type ToothStatus } from '@/hooks/usePatientAutoSave';
 import { Calendar, Download } from 'lucide-react';
 import { ToothTreatmentProvider, ToothTreatmentInline } from '../ToothTreatmentPanel';
 import { OPInlinePreview } from '../OPInlinePreview';
+import { DentalStatusTimeline } from '../DentalStatusTimeline';
 import { Odontogram } from './odontogram/Odontogram';
 import { readConditions, computeDMFT, BASE_LABELS, isPresent } from './odontogram/tooth-conditions';
 import { applyTreatmentOutcome } from '@/lib/tooth-treatment-outcome';
@@ -114,6 +115,13 @@ export function BetegvizsgalatSection({
               </div>
             );
           })()}
+
+          {/* Fogazati státusz idővonal — felvételkori, datált státuszok és kezelési terv */}
+          {patientId && (
+            <div className="mt-4">
+              <DentalStatusTimeline patientId={patientId} />
+            </div>
+          )}
 
           {/* Fogankénti kezelési igények */}
           {(() => {

@@ -121,14 +121,26 @@ export async function applyCompletedTreatmentToDentalStatus(
   return { updated: true };
 }
 
+/**
+ * DATE oszlop → 'YYYY-MM-DD'. A pg a DATE értéket helyi éjfélre állított Date-ként
+ * adja vissza; `toISOString()` UTC-re konvertál, ami UTC+ időzónában (pl. Budapest)
+ * egy napot visszacsúsztat. Ezért a naptári napot a helyi komponensekből építjük.
+ */
+function toDateOnly(value: unknown): string {
+  if (value instanceof Date) {
+    const y = value.getFullYear();
+    const m = String(value.getMonth() + 1).padStart(2, '0');
+    const d = String(value.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return String(value).slice(0, 10);
+}
+
 function mapSnapshotRow(r: any): DentalStatusSnapshot {
   return {
     id: r.id,
     kind: r.kind,
-    effectiveDate:
-      r.effective_date instanceof Date
-        ? r.effective_date.toISOString().slice(0, 10)
-        : String(r.effective_date).slice(0, 10),
+    effectiveDate: toDateOnly(r.effective_date),
     fogak: r.fogak && typeof r.fogak === 'object' ? r.fogak : {},
     note: r.note ?? null,
     sourceToothTreatmentId: r.source_tooth_treatment_id ?? null,
