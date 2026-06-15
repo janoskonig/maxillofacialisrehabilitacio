@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Betegstádiumok – egyszerűsített mockup</title>
+<style>
+  :root{
+    --primary:#2563eb; --primary-dark:#1e40af; --primary-soft:#eff6ff;
+    --ink:#111827; --muted:#6b7280; --line:#e5e7eb; --bg:#f3f4f6;
+    --green:#16a34a; --green-soft:#dcfce7; --amber:#d97706; --amber-soft:#fef3c7;
+    --red:#dc2626; --red-soft:#fee2e2;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:15px;line-height:1.5;}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 20px 80px;display:grid;
+    grid-template-columns:1fr 300px;gap:24px;align-items:start;}
+  @media(max-width:980px){.wrap{grid-template-columns:1fr}.notes{display:none}}
+
+  /* top bar */
+  .topbar{background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
+  .topbar .inner{max-width:1180px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;gap:16px}
+  .back{color:var(--muted);text-decoration:none;font-size:14px}
+  .crumb{font-weight:600}
+  .ghost{margin-left:auto;border:1px solid var(--line);background:#fff;border-radius:9px;
+    padding:7px 12px;font-size:13px;color:#374151;display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+
+  /* hero header */
+  .hero{background:linear-gradient(180deg,#fff, #fbfdff);border:1px solid var(--line);
+    border-radius:16px;padding:18px 20px;display:flex;align-items:center;gap:18px;margin-top:20px}
+  .avatar{width:52px;height:52px;border-radius:50%;background:var(--primary-soft);color:var(--primary);
+    display:grid;place-items:center;font-weight:700;font-size:20px;flex:0 0 auto}
+  .hname{font-size:22px;font-weight:700;margin:0}
+  .hsub{color:var(--muted);font-size:13px;margin:2px 0 0}
+  .stage-pill{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+  .stage-pill .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  .badge-stage{background:var(--primary);color:#fff;border-radius:999px;padding:7px 16px;font-weight:600;font-size:15px}
+
+  /* cards */
+  .card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px 20px;margin-top:18px;position:relative}
+  .card h2{font-size:17px;margin:0 0 2px;display:flex;align-items:center;gap:9px}
+  .card .desc{color:var(--muted);font-size:13px;margin:0 0 14px}
+  .ico{width:22px;height:22px;border-radius:7px;background:var(--primary-soft);color:var(--primary);
+    display:grid;place-items:center;font-size:13px;flex:0 0 auto}
+
+  /* numbered marker chip tying to the user's complaints */
+  .mk{position:absolute;top:-12px;left:-12px;width:30px;height:30px;border-radius:50%;
+    background:var(--primary);color:#fff;font-weight:700;display:grid;place-items:center;
+    box-shadow:0 2px 6px rgba(37,99,235,.4);font-size:14px;z-index:5}
+
+  /* stage selector (moved to top) */
+  .stage-now{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .stage-current{background:var(--primary-soft);border:1px solid #bfdbfe;border-radius:12px;
+    padding:12px 16px;flex:1 1 240px}
+  .stage-current .k{font-size:11px;color:var(--primary-dark);text-transform:uppercase;letter-spacing:.04em}
+  .stage-current .v{font-size:18px;font-weight:700;color:var(--primary-dark)}
+  .stage-current .d{font-size:12px;color:#3b6;margin-top:2px;color:var(--muted)}
+  .select,.btn{font-size:14px}
+  .select{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:#fff;min-width:200px}
+  .btn{background:var(--primary);color:#fff;border:none;border-radius:10px;padding:10px 18px;font-weight:600;cursor:pointer}
+  .btn.lg{padding:12px 22px;font-size:15px}
+
+  /* odontogram */
+  .arch-wrap{background:#f8fafc;border:1px solid var(--line);border-radius:12px;padding:14px;overflow-x:auto}
+  .arch{display:flex;justify-content:center;gap:3px;min-width:560px}
+  .tooth{position:relative;display:flex;flex-direction:column;align-items:center;width:30px;cursor:pointer}
+  .tooth .num{font-size:9.5px;color:#9ca3af;line-height:1}
+  .tooth .badge{position:absolute;top:-4px;right:-2px;min-width:16px;height:16px;border-radius:999px;
+    color:#fff;font-size:10px;font-weight:700;display:grid;place-items:center;padding:0 3px;z-index:2}
+  .b-need{background:var(--amber)}
+  .b-done{background:var(--green)}
+  .midline{display:flex;align-items:center;gap:8px;margin:8px 0;color:#9ca3af;font-size:10px}
+  .midline .ln{flex:1;height:1px;background:var(--line)}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:12px;color:#4b5563;align-items:center}
+  .legend .sw{display:inline-flex;align-items:center;gap:6px}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block}
+
+  /* work phases + tasks woven in */
+  .resp{display:flex;align-items:center;gap:8px;font-size:13px;color:#374151;
+    background:#f9fafb;border:1px dashed var(--line);border-radius:10px;padding:8px 12px;margin-bottom:14px}
+  .resp b{color:var(--ink)}
+  .edit-link{margin-left:auto;color:var(--primary);font-size:13px;text-decoration:none;cursor:pointer}
+
+  .phase{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);
+    border-radius:12px;margin-bottom:10px;background:#fff}
+  .phase .st{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:13px;flex:0 0 auto;color:#fff}
+  .st.done{background:var(--green)} .st.now{background:var(--primary)} .st.todo{background:#cbd5e1;color:#475569}
+  .phase .body{flex:1;min-width:0}
+  .phase .body .t{font-weight:600}
+  .phase .body .m{font-size:12px;color:var(--muted)}
+  .chip{font-size:11px;padding:2px 8px;border-radius:999px;background:#f1f5f9;color:#475569;white-space:nowrap}
+  .phase .task-btn{border:1px solid #bfdbfe;background:var(--primary-soft);color:var(--primary-dark);
+    border-radius:9px;padding:6px 11px;font-size:12px;cursor:pointer;font-weight:600;white-space:nowrap}
+
+  /* task strip woven between phases */
+  .tasks{border:1px solid #bfdbfe;background:#f5f9ff;border-radius:12px;padding:12px 14px;margin:4px 0 14px}
+  .tasks h3{margin:0 0 8px;font-size:13px;color:var(--primary-dark);display:flex;align-items:center;gap:7px}
+  .task{display:flex;align-items:center;gap:10px;font-size:13px;padding:6px 0;border-top:1px dashed #dbeafe}
+  .task:first-of-type{border-top:none}
+  .task .who{margin-left:auto;color:var(--muted);font-size:12px}
+  .task .due{color:var(--amber);font-size:12px;font-weight:600}
+  .task input[type=checkbox]{width:16px;height:16px}
+
+  /* projection (compact) */
+  .proj{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px}
+  .proj .step{flex:0 0 auto;border:1px solid var(--line);border-radius:10px;padding:9px 12px;min-width:120px}
+  .proj .step .t{font-weight:600;font-size:13px}
+  .proj .step .d{font-size:11px;color:var(--muted)}
+  .progress{height:8px;border-radius:999px;background:#e5e7eb;overflow:hidden;margin:6px 0 14px}
+  .progress > i{display:block;height:100%;background:var(--primary);width:45%}
+
+  /* collapsible history */
+  .accordion{background:#fff;border:1px solid var(--line);border-radius:16px;margin-top:18px;position:relative}
+  .accordion summary{list-style:none;cursor:pointer;padding:16px 20px;display:flex;align-items:center;gap:10px;font-weight:600}
+  .accordion summary::-webkit-details-marker{display:none}
+  .accordion .caret{margin-left:auto;color:var(--muted);transition:transform .2s}
+  .accordion[open] .caret{transform:rotate(90deg)}
+  .accordion .inner{padding:0 20px 18px;color:var(--muted);font-size:14px}
+  .tl{border-left:2px solid var(--line);margin-left:6px;padding-left:16px}
+  .tl .ev{position:relative;padding:8px 0}
+  .tl .ev::before{content:"";position:absolute;left:-22px;top:13px;width:9px;height:9px;border-radius:50%;background:#cbd5e1}
+
+  .addep{margin-top:18px;border:1px dashed #cbd5e1;border-radius:12px;padding:14px;text-align:center;color:var(--muted)}
+  .addep button{background:#fff;border:1px solid var(--line);border-radius:10px;padding:9px 16px;cursor:pointer;font-weight:600;color:#374151}
+
+  /* sticky annotation rail */
+  .notes{position:sticky;top:70px;display:flex;flex-direction:column;gap:14px}
+  .note{background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:12px 14px;font-size:13px;color:#78350f}
+  .note b{display:flex;align-items:center;gap:8px;margin-bottom:4px;color:#92400e}
+  .note .n{width:22px;height:22px;border-radius:50%;background:var(--primary);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:700}
+  .note.ok{background:#ecfdf5;border-color:#a7f3d0;color:#065f46}
+  .note.ok b{color:#047857}
+  .legend-note{font-size:12px;color:var(--muted);margin-top:4px}
+
+  .ribbon{background:var(--primary-dark);color:#fff;text-align:center;font-size:13px;padding:6px;letter-spacing:.03em}
+</style>
+</head>
+<body>
+
+<div class="ribbon">MOCKUP — javasolt egyszerűsített elrendezés a /patients/[id]/stages oldalhoz · csak terv, nem éles</div>
+
+<div class="topbar">
+  <div class="inner">
+    <a class="back" href="#">← Főoldal</a>
+    <span class="crumb">Betegstádiumok</span>
+    <button class="ghost">📊 GANTT nézet</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <!-- ===================== MAIN COLUMN ===================== -->
+  <div>
+
+    <!-- HERO -->
+    <div class="hero">
+      <div class="avatar">KN</div>
+      <div>
+        <p class="hname">Kovács Nagy Erzsébet</p>
+        <p class="hsub">72 éves · onkológiai kezelés utáni állapot · aktív epizód: „Obturátor készítés”</p>
+      </div>
+      <div class="stage-pill">
+        <span class="lbl">Jelenlegi stádium</span>
+        <span class="badge-stage">Műtéti utógondozás</span>
+      </div>
+    </div>
+
+    <!-- (1) STAGE SELECTOR MOVED TO TOP -->
+    <div class="card">
+      <span class="mk">5</span>
+      <h2><span class="ico">◆</span> Stádium</h2>
+      <p class="desc">A legfontosabb információ – ezért került legfelülre, egy kattintással módosítható.</p>
+      <div class="stage-now">
+        <div class="stage-current">
+          <div class="k">Most itt tart</div>
+          <div class="v">Műtéti utógondozás</div>
+          <div class="d">2026.05.28. óta · 18 napja</div>
+        </div>
+        <select class="select">
+          <option>Válassz új stádiumot…</option>
+          <option>Lenyomatvétel</option>
+          <option>Próba</option>
+          <option>Kész fogpótlás átadása</option>
+          <option>Gondozás / kontroll</option>
+        </select>
+        <button class="btn lg">Stádium váltása ✓</button>
+      </div>
+    </div>
+
+    <!-- (1) NEW ZSIGMONDY -->
+    <div class="card">
+      <span class="mk">1</span>
+      <h2><span class="ico">🦷</span> Zsigmondy-kereszt — fogankénti kezelési igények</h2>
+      <p class="desc">Új, vizuális fogtérkép (mint a felvételi űrlapon) — az eddigi szám-rács helyett valódi fograjzokkal.</p>
+      <div class="arch-wrap">
+        <div class="arch" id="upper"></div>
+        <div class="midline"><span class="ln"></span><span>jobb · bal</span><span class="ln"></span></div>
+        <div class="arch" id="lower"></div>
+      </div>
+      <div class="legend">
+        <span class="sw"><span class="dot" style="background:#EFEEE8;border:1px solid #8a887f"></span> Ép</span>
+        <span class="sw"><span class="dot" style="background:#fff;border:1px dashed #b9b7ae"></span> Hiányzó</span>
+        <span class="sw"><span class="dot" style="background:#378ADD"></span> Korona</span>
+        <span class="sw"><span class="dot" style="background:#5DCAA5"></span> Hídtest</span>
+        <span class="sw"><span class="dot" style="background:#D85A30"></span> Gyökértömött</span>
+        <span class="sw"><span class="dot b-need" style="border-radius:999px"></span> Nyitott kezelési igény</span>
+        <span class="sw"><span class="dot b-done" style="border-radius:999px"></span> Befejezett</span>
+      </div>
+      <p class="legend-note">Kattintásra lenyíló panel mutatja a fog kezelési igényeit (változatlan funkció).</p>
+    </div>
+
+    <!-- (4)+(3) WORK PHASES with FELELŐS ORVOS compacted + TASKS woven in -->
+    <div class="card">
+      <span class="mk">3</span>
+      <h2><span class="ico">≡</span> Kezelési munkafázisok</h2>
+      <p class="desc">A kezelés lépései időrendben. A feladatok közvetlenül a fázisok mellett és között láthatók.</p>
+
+      <!-- (2) felelős orvos compacted into a single line instead of a big card -->
+      <div class="resp">
+        👤 Felelős orvos: <b>Dr. Szabó Anna</b> · kezelési út: <b>Obturátor (felső)</b>
+        <a class="edit-link">módosítás</a>
+      </div>
+
+      <!-- phase 1 done -->
+      <div class="phase">
+        <div class="st done">✓</div>
+        <div class="body"><div class="t">Konzultáció & tervezés</div><div class="m">2026.05.10 · befejezve</div></div>
+        <span class="chip">konzultáció</span>
+      </div>
+
+      <!-- phase 2 current -->
+      <div class="phase">
+        <div class="st now">●</div>
+        <div class="body"><div class="t">Műtéti utógondozás</div><div class="m">folyamatban · 30 perc</div></div>
+        <span class="chip">munkafázis</span>
+        <button class="task-btn">+ Feladat</button>
+      </div>
+
+      <!-- (3) TASKS woven BETWEEN phases -->
+      <div class="tasks">
+        <h3>📋 Feladatok ehhez a beteghez</h3>
+        <div class="task"><input type="checkbox"><span>Sebgyógyulás ellenőrzése, fotó</span><span class="who">Dr. Szabó Anna</span><span class="due">jún. 18.</span></div>
+        <div class="task"><input type="checkbox"><span>Lenyomatkanál előkészítése — technikus</span><span class="who">Kiss Béla</span><span class="due">jún. 20.</span></div>
+        <div class="task"><input type="checkbox" checked><span style="text-decoration:line-through;color:#9ca3af">Kontroll időpont egyeztetése</span><span class="who">recepció</span></div>
+      </div>
+
+      <!-- phase 3 -->
+      <div class="phase">
+        <div class="st todo">3</div>
+        <div class="body"><div class="t">Lenyomatvétel</div><div class="m">~ jún. 20. körül · 45 perc</div></div>
+        <span class="chip">munkafázis</span>
+        <button class="task-btn">+ Feladat</button>
+      </div>
+      <!-- phase 4 -->
+      <div class="phase">
+        <div class="st todo">4</div>
+        <div class="body"><div class="t">Próba</div><div class="m">~ júl. 4. körül · 30 perc</div></div>
+        <span class="chip">munkafázis</span>
+        <button class="task-btn">+ Feladat</button>
+      </div>
+    </div>
+
+    <!-- PROJECTION compact -->
+    <div class="card">
+      <h2><span class="ico">📅</span> Tervezett ütemezés</h2>
+      <p class="desc">Várható befejezés: 2026. július 18. – augusztus 2.</p>
+      <div class="progress"><i></i></div>
+      <div class="proj">
+        <div class="step"><div class="t">✓ Konzultáció</div><div class="d">máj. 10.</div></div>
+        <div class="step"><div class="t">● Utógondozás</div><div class="d">most</div></div>
+        <div class="step"><div class="t">Lenyomat</div><div class="d">jún. 20.</div></div>
+        <div class="step"><div class="t">Próba</div><div class="d">júl. 4.</div></div>
+        <div class="step"><div class="t">Átadás</div><div class="d">júl. 18.</div></div>
+      </div>
+    </div>
+
+    <!-- (2) TIMELINE collapsed at the very bottom -->
+    <details class="accordion">
+      <span class="mk">2</span>
+      <summary><span class="ico">🕑</span> Előzmények (teljes timeline) <span class="caret">▸</span></summary>
+      <div class="inner">
+        <p>Itt a teljes eseménynapló — stádiumváltások, konzíliumok, feladatok, mérföldkövek. Alapból összecsukva, mert a napi munkához ritkán kell; csak visszanézéshez.</p>
+        <div class="tl">
+          <div class="ev">2026.05.28 — Stádium: Műtéti utógondozás</div>
+          <div class="ev">2026.05.20 — Konzílium: kezelési terv elfogadva</div>
+          <div class="ev">2026.05.10 — Stádium: Konzultáció & tervezés</div>
+          <div class="ev">2026.05.02 — Epizód indítva: Obturátor készítés</div>
+        </div>
+      </div>
+    </details>
+
+    <!-- add episode tucked away -->
+    <div class="addep">
+      <button>＋ Új ellátási epizód indítása</button>
+    </div>
+
+  </div>
+
+  <!-- ===================== ANNOTATION RAIL ===================== -->
+  <aside class="notes">
+    <div class="note ok"><b>✦ A cél</b>Kevesebb görgetés, a fontos dolgok felül. „Nagymama-barát” elrendezés.</div>
+    <div class="note"><b><span class="n">1</span> Új Zsigmondy</b>A régi szám-rácsot lecseréljük a vizuális fogtérképre (Odontogram/Tooth), kezelési-igény jelvényekkel.</div>
+    <div class="note"><b><span class="n">2</span> Timeline → Előzmények</b>Eddig nagy, mindig nyitott blokk volt felül. Javaslat: lecsukható „Előzmények” a lap alján — megmarad, de nincs útban.</div>
+    <div class="note"><b><span class="n">3</span> Feladatok középre</b>A feladatlista bekerül a munkafázisok közé, és minden fázisnál ott a „+ Feladat” gomb.</div>
+    <div class="note"><b><span class="n">4</span> Felelős orvos</b>Külön nagy kártya helyett egyetlen sor a munkafázisok tetején (módosítás linkkel). Kevésbé redundáns.</div>
+    <div class="note"><b><span class="n">5</span> Stádium felülre</b>A „Stádium változtatása” a lap aljáról a tetejére kerül — egy kattintás.</div>
+  </aside>
+</div>
+
+<script>
+// --- minimal odontogram renderer using the real Tooth.tsx geometry/colors ---
+const GEO = {
+  incisor:{out:'M11,8 Q11,3 14,3 Q17,3 17,8 L17,18 L15,33 Q14,35 13,33 L11,18 Z',crown:'M11,8 Q11,3 14,3 Q17,3 17,8 L17,18 L11,18 Z',root:'M11,18 L17,18 L15,33 Q14,35 13,33 Z',cx:14,apex:33},
+  canine:{out:'M11,9 Q11,3 14,2 Q17,3 17,9 L17,18 L15.5,35 Q14,37 12.5,35 L11,18 Z',crown:'M11,9 Q11,3 14,2 Q17,3 17,9 L17,18 L11,18 Z',root:'M11,18 L17,18 L15.5,35 Q14,37 12.5,35 Z',cx:14,apex:35},
+  premolar:{out:'M9,9 Q9,4 11,4 Q13,4 14,6.5 Q15,4 17,4 Q19,4 19,9 L19,18 L15,33 Q14,35 13,33 L9,18 Z',crown:'M9,9 Q9,4 11,4 Q13,4 14,6.5 Q15,4 17,4 Q19,4 19,9 L19,18 L9,18 Z',root:'M9,18 L19,18 L15,33 Q14,35 13,33 Z',cx:14,apex:33},
+  molar:{out:'M5,9 Q5,4 7,4 Q9,4 10,6 Q11.5,4 13.5,4 Q15.5,4 17,6 Q18,4 20,4 Q22,4 22,9 L22,18 L19,33 Q18,35 17,33 L14,21 Q13.5,20 13,21 L10,33 Q9,35 8,33 L5,18 Z',crown:'M5,9 Q5,4 7,4 Q9,4 10,6 Q11.5,4 13.5,4 Q15.5,4 17,6 Q18,4 20,4 Q22,4 22,9 L22,18 L5,18 Z',root:'M5,18 L22,18 L19,33 Q18,35 17,33 L14,21 Q13.5,20 13,21 L10,33 Q9,35 8,33 Z',cx:13.5,apex:33}
+};
+const TOOTH_FILL='#EFEEE8',TOOTH_STROKE='#8a887f',CROWN_FILL='#378ADD',CROWN_STROKE='#185FA5',
+      PONTIC_FILL='#5DCAA5',PONTIC_STROKE='#0F6E56',ROOT_FILL='#D85A30',ROOT_STROKE='#993C1D';
+function grp(fdi){const d=+(''+fdi).slice(-1);return d<=2?'incisor':d===3?'canine':d<=5?'premolar':'molar';}
+
+// demo data: base state + treatment-need badge
+const STATE = {
+  18:'sound',17:'filled',16:'crown',15:'sound',14:'sound',13:'sound',12:'sound',11:'sound',
+  21:'sound',22:'sound',23:'sound',24:'sound',25:'root_canal',26:'crown',27:'missing',28:'missing',
+  48:'missing',47:'missing',46:'pontic',45:'crown',44:'sound',43:'sound',42:'sound',41:'sound',
+  31:'sound',32:'sound',33:'sound',34:'sound',35:'filled',36:'sound',37:'sound',38:'missing'
+};
+const NEED = {25:2,16:1}; const DONE = {26:true,46:true};
+const UPPER=[18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28];
+const LOWER=[48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38];
+
+function toothSVG(fdi,numPos){
+  const g=GEO[grp(fdi)],base=STATE[fdi]||'sound';
+  const missing=base==='missing',crownC=base==='crown',pontic=base==='pontic',rc=base==='root_canal',filled=base==='filled';
+  let inner='';
+  if(missing){inner=`<path d="${g.out}" fill="none" stroke="#b9b7ae" stroke-width="1" stroke-dasharray="2 1.5" opacity="0.7"/>`;}
+  else{
+    inner+=`<path d="${pontic?g.crown:g.out}" fill="${TOOTH_FILL}"/>`;
+    if(crownC) inner+=`<path d="${g.crown}" fill="${CROWN_FILL}"/>`;
+    if(pontic) inner+=`<path d="${g.crown}" fill="${PONTIC_FILL}"/>`;
+    if(rc) inner+=`<path d="${g.root}" fill="${ROOT_FILL}"/>`;
+    inner+=`<path d="${pontic?g.crown:g.out}" fill="none" stroke="${crownC?CROWN_STROKE:pontic?PONTIC_STROKE:TOOTH_STROKE}" stroke-width="1"/>`;
+    if(filled) inner+=`<circle cx="${g.cx}" cy="10" r="2.5" fill="#fff" stroke="${TOOTH_STROKE}" stroke-width="0.8"/>`;
+  }
+  const svg=`<svg width="26" height="38" viewBox="0 0 28 40">${inner}</svg>`;
+  let badge='';
+  if(NEED[fdi]) badge=`<span class="badge b-need">${NEED[fdi]}</span>`;
+  else if(DONE[fdi]) badge=`<span class="badge b-done">✓</span>`;
+  const num=`<span class="num">${fdi}</span>`;
+  return `<div class="tooth" title="${fdi} fog">${badge}${numPos==='above'?num:''}${svg}${numPos==='below'?num:''}</div>`;
+}
+document.getElementById('upper').innerHTML=UPPER.map(f=>toothSVG(f,'below')).join('');
+document.getElementById('lower').innerHTML=LOWER.map(f=>toothSVG(f,'above')).join('');
+</script>
+</body>
+</html>
