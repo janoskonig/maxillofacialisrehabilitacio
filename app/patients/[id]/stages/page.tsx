@@ -6,7 +6,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { Patient } from '@/lib/types';
 import type { PatientEpisode, PatientStageEntry, StageEventEntry } from '@/lib/types';
 import Link from 'next/link';
-import { BarChart3, Calendar } from 'lucide-react';
+import { BarChart3, Calendar, ChevronRight, UserRound } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { EpisodePathwayEditor } from '@/components/EpisodePathwayEditor';
 import { EpisodeStepsManager } from '@/components/EpisodeStepsManager';
@@ -14,6 +14,7 @@ import { EpisodeStepProjections } from '@/components/EpisodeStepProjections';
 import { PatientStageSelector } from '@/components/PatientStageSelector';
 import { PatientCareTimeline } from '@/components/PatientCareTimeline';
 import { PatientEpisodeForm } from '@/components/PatientEpisodeForm';
+import { PatientQuickTaskBlock } from '@/components/PatientQuickTaskBlock';
 import { ZsigmondyCrossStages } from '@/components/ZsigmondyCrossStages';
 import { DentalStatusTimeline } from '@/components/DentalStatusTimeline';
 import { useToast } from '@/contexts/ToastContext';
@@ -31,6 +32,7 @@ export default function PatientStagesPage() {
   const [episodes, setEpisodes] = useState<PatientEpisode[]>([]);
   const [useNewModel, setUseNewModel] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showEpisodeSettings, setShowEpisodeSettings] = useState(false);
 
   const refreshStagesAndEpisodes = useCallback(() => {
     setRefreshKey((k) => k + 1);
@@ -164,10 +166,111 @@ export default function PatientStagesPage() {
       </div>
 
       <div className="space-y-6">
-          {/* Epizódok (új modell) */}
+          {/* 1) Stádium — legfelülre, egy kattintással módosítható */}
+          {(userRole === 'admin' || userRole === 'beutalo_orvos' || userRole === 'fogpótlástanász') && (
+            <PatientStageSelector
+              patientId={patientId}
+              currentStage={currentStage}
+              onStageChanged={handleStageChanged}
+              activeEpisodeId={activeEpisode?.id ?? null}
+              reason={patientReason}
+              useNewModel={useNewModel}
+            />
+          )}
+
+          {/* 2) Zsigmondy-kereszt: fogankénti kezelési igények (vizuális fogtérkép) */}
+          <ZsigmondyCrossStages patientId={patientId} patientName={patient.nev || undefined} meglevoFogak={patient.meglevoFogak} />
+
+          {/* Fogazati státusz időbeli alakulása */}
+          <DentalStatusTimeline patientId={patientId} />
+
+          {/* 3) Kezelési munkafázisok — felelős orvos kompakt sorként, feladatok közéfűzve */}
+          {activeEpisode && (
+            <div className="space-y-4">
+              {/* Felelős orvos + kezelési út: egy sor, módosítás igény szerint kinyitva */}
+              {(userRole === 'admin' || userRole === 'fogpótlástanász') && (
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg px-3 py-2.5">
+                    <UserRound className="w-4 h-4 text-medical-primary shrink-0" />
+                    <span>
+                      Felelős orvos:{' '}
+                      <strong className="text-gray-900 dark:text-gray-100">
+                        {activeEpisode.assignedProviderName || '— nincs beállítva'}
+                      </strong>
+                    </span>
+                    {(activeEpisode.carePathwayName || activeEpisode.episodePathways?.[0]?.pathwayName) && (
+                      <span className="text-gray-500 dark:text-gray-400">
+                        · Kezelési út:{' '}
+                        <strong className="text-gray-700 dark:text-gray-200">
+                          {activeEpisode.carePathwayName || activeEpisode.episodePathways?.[0]?.pathwayName}
+                        </strong>
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setShowEpisodeSettings((v) => !v)}
+                      className="ml-auto inline-flex items-center gap-1 text-medical-primary hover:underline text-sm font-medium"
+                      aria-expanded={showEpisodeSettings}
+                    >
+                      Beállítások módosítása
+                      <ChevronRight className={`w-4 h-4 transition-transform ${showEpisodeSettings ? 'rotate-90' : ''}`} />
+                    </button>
+                  </div>
+                  {showEpisodeSettings && (
+                    <div className="mt-2">
+                      <EpisodePathwayEditor
+                        episodeId={activeEpisode.id}
+                        patientId={patientId}
+                        carePathwayId={activeEpisode.carePathwayId}
+                        assignedProviderId={activeEpisode.assignedProviderId}
+                        carePathwayName={activeEpisode.carePathwayName}
+                        assignedProviderName={activeEpisode.assignedProviderName}
+                        treatmentTypeId={activeEpisode.treatmentTypeId}
+                        onSaved={refreshStagesAndEpisodes}
+                        compact
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Kezelési lépések — aktív epizód + kezelési út szükséges */}
+              {(activeEpisode.carePathwayId || (activeEpisode.episodePathways && activeEpisode.episodePathways.length > 0)) && (
+                <EpisodeStepsManager
+                  episodeId={activeEpisode.id}
+                  patientId={patientId}
+                  carePathwayId={activeEpisode.carePathwayId ?? null}
+                  carePathwayName={activeEpisode.carePathwayName ?? null}
+                  episodePathways={activeEpisode.episodePathways?.map((ep) => ({
+                    id: ep.id,
+                    carePathwayId: ep.carePathwayId,
+                    pathwayName: ep.pathwayName,
+                    jaw: ep.jaw,
+                  }))}
+                  onStepChanged={refreshStagesAndEpisodes}
+                />
+              )}
+
+              {/* Feladatok — a munkafázisok közé fűzve */}
+              <PatientQuickTaskBlock patientId={patientId} />
+
+              {/* Tervezett ütemezés */}
+              {(activeEpisode.carePathwayId || (activeEpisode.episodePathways && activeEpisode.episodePathways.length > 0)) && (
+                <EpisodeStepProjections
+                  episodeId={activeEpisode.id}
+                  refreshTrigger={refreshKey}
+                />
+              )}
+            </div>
+          )}
+
+          {/* Nincs aktív epizód: feladatok így is láthatók */}
+          {!activeEpisode && <PatientQuickTaskBlock patientId={patientId} />}
+
+          {/* Ellátási epizódok listája + új epizód indítása */}
           {episodes.length > 0 && (
             <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Ellátási epizódok</h3>
+              <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">Ellátási epizódok</h3>
               <ul className="space-y-1 text-sm text-gray-700 dark:text-gray-300">
                 {episodes.slice(0, 10).map((ep) => (
                   <li key={ep.id} className="flex items-center gap-2 flex-wrap">
@@ -189,12 +292,6 @@ export default function PatientStagesPage() {
             </div>
           )}
 
-          {/* Zsigmondy-kereszt: fogankénti kezelési igények */}
-          <ZsigmondyCrossStages patientId={patientId} patientName={patient.nev || undefined} meglevoFogak={patient.meglevoFogak} />
-
-          {/* Fogazati státusz időbeli alakulása */}
-          <DentalStatusTimeline patientId={patientId} />
-
           {/* Új ellátási epizód indítása */}
           {(userRole === 'admin' || userRole === 'beutalo_orvos' || userRole === 'fogpótlástanász') && (
             <PatientEpisodeForm
@@ -204,68 +301,22 @@ export default function PatientStagesPage() {
             />
           )}
 
-          {/* Kezelési utak és felelős orvos (epizód szerkesztése) */}
-          {(userRole === 'admin' || userRole === 'fogpótlástanász') && activeEpisode && (
-            <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/30">
-              <p className="text-xs font-medium text-amber-800 dark:text-amber-300 px-4 pt-3 pb-1">
-                Aktív epizód beállításai — Kezelési utak és felelős orvos itt választható ehhez az epizódhoz
-              </p>
-              <EpisodePathwayEditor
-                episodeId={activeEpisode.id}
+          {/* 4) Előzmények (teljes timeline) — alapból lecsukva */}
+          <details className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 group">
+            <summary className="flex items-center gap-2 px-4 py-3 cursor-pointer font-semibold text-gray-900 dark:text-gray-100 list-none [&::-webkit-details-marker]:hidden">
+              <Calendar className="w-5 h-5 text-medical-primary" />
+              Előzmények (teljes timeline)
+              <ChevronRight className="w-4 h-4 ml-auto text-gray-400 transition-transform group-open:rotate-90" />
+            </summary>
+            <div className="px-2 pb-2">
+              <PatientCareTimeline
+                key={refreshKey}
                 patientId={patientId}
-                carePathwayId={activeEpisode.carePathwayId}
-                assignedProviderId={activeEpisode.assignedProviderId}
-                carePathwayName={activeEpisode.carePathwayName}
-                assignedProviderName={activeEpisode.assignedProviderName}
-                treatmentTypeId={activeEpisode.treatmentTypeId}
-                onSaved={refreshStagesAndEpisodes}
+                onRefresh={handleStageChanged}
+                canEditStageStart={userRole === 'admin'}
               />
             </div>
-          )}
-
-          {/* Kezelési lépések kezelése — aktív epizód + kezelési út szükséges */}
-          {activeEpisode && (activeEpisode.carePathwayId || (activeEpisode.episodePathways && activeEpisode.episodePathways.length > 0)) && (
-            <>
-              <EpisodeStepsManager
-                episodeId={activeEpisode.id}
-                patientId={patientId}
-                carePathwayId={activeEpisode.carePathwayId ?? null}
-                carePathwayName={activeEpisode.carePathwayName ?? null}
-                episodePathways={activeEpisode.episodePathways?.map((ep) => ({
-                  id: ep.id,
-                  carePathwayId: ep.carePathwayId,
-                  pathwayName: ep.pathwayName,
-                  jaw: ep.jaw,
-                }))}
-                onStepChanged={refreshStagesAndEpisodes}
-              />
-
-              <EpisodeStepProjections
-                episodeId={activeEpisode.id}
-                refreshTrigger={refreshKey}
-              />
-            </>
-          )}
-
-          {/* Stage Selector */}
-          {(userRole === 'admin' || userRole === 'beutalo_orvos' || userRole === 'fogpótlástanász') && (
-            <PatientStageSelector
-              patientId={patientId}
-              currentStage={currentStage}
-              onStageChanged={handleStageChanged}
-              activeEpisodeId={activeEpisode?.id ?? null}
-              reason={patientReason}
-              useNewModel={useNewModel}
-            />
-          )}
-
-          {/* Egységes timeline (stádium + konzílium + feladatok) */}
-          <PatientCareTimeline
-            key={refreshKey}
-            patientId={patientId}
-            onRefresh={handleStageChanged}
-            canEditStageStart={userRole === 'admin'}
-          />
+          </details>
         </div>
     </AppShell>
   );
