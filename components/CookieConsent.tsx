@@ -86,12 +86,12 @@ export function CookieConsent() {
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-[9999] p-4 max-md:bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px)+0.25rem)]">
-      <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg border border-gray-200 p-4 sm:p-6">
+      <div className="max-w-2xl mx-auto bg-white dark:bg-gray-900 rounded-lg shadow-lg border border-gray-200 dark:border-gray-800 p-4 sm:p-6">
         <div className="flex items-start gap-3">
           <Shield className="w-5 h-5 text-medical-primary flex-shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-semibold text-gray-900">Sütik és adatvédelem</h3>
-            <p className="text-xs sm:text-sm text-gray-600 mt-1">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Sütik és adatvédelem</h3>
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-1">
               Ez az alkalmazás elengedhetetlen munkamenet sütiket használ a bejelentkezéshez. 
               Opcionálisan engedélyezheti a hibakövetést (Sentry) a szolgáltatás javítása érdekében.{' '}
               <Link href="/privacy-hu" className="text-medical-primary hover:underline">
@@ -106,9 +106,9 @@ export function CookieConsent() {
                     type="checkbox"
                     checked={true}
                     disabled
-                    className="h-4 w-4 rounded border-gray-300"
+                    className="h-4 w-4 rounded border-gray-300 dark:border-gray-700"
                   />
-                  <span className="text-gray-700">
+                  <span className="text-gray-700 dark:text-gray-300">
                     <strong>Elengedhetetlen sütik</strong> &ndash; Bejelentkezés és munkamenet (mindig aktív)
                   </span>
                 </label>
@@ -117,9 +117,9 @@ export function CookieConsent() {
                     type="checkbox"
                     checked={errorTracking}
                     onChange={(e) => setErrorTracking(e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
+                    className="h-4 w-4 rounded border-gray-300 dark:border-gray-700 text-medical-primary focus:ring-medical-primary"
                   />
-                  <span className="text-gray-700">
+                  <span className="text-gray-700 dark:text-gray-300">
                     <strong>Hibakövetés (Sentry)</strong> &ndash; Hibajelentések a szolgáltatás javításához (anonimizált)
                   </span>
                 </label>
@@ -144,13 +144,13 @@ export function CookieConsent() {
                   </button>
                   <button
                     onClick={handleAcceptEssential}
-                    className="text-xs sm:text-sm py-1.5 px-4 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+                    className="text-xs sm:text-sm py-1.5 px-4 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
                   >
                     Csak szükségesek
                   </button>
                   <button
                     onClick={() => setShowDetails(true)}
-                    className="text-xs sm:text-sm py-1.5 px-4 text-gray-500 hover:text-gray-700 transition-colors"
+                    className="text-xs sm:text-sm py-1.5 px-4 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
                   >
                     Testreszabás
                   </button>
@@ -160,7 +160,7 @@ export function CookieConsent() {
           </div>
           <button
             onClick={handleAcceptEssential}
-            className="text-gray-400 hover:text-gray-600 flex-shrink-0"
+            className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0"
             aria-label="Bezárás"
           >
             <X className="w-4 h-4" />

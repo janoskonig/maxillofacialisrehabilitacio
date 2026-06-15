@@ -61,11 +61,11 @@ export function MessagesShell({
   // Conversations list content (reusable)
   const listContent = (
     <>
-      <div className="p-4 border-b border-gray-200 bg-gray-50">
+      <div className="p-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             {listIcon || <MessageCircle className="w-5 h-5" />}
-            <h3 className="text-lg font-semibold text-gray-900">{listTitle}</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{listTitle}</h3>
           </div>
           {unreadCount > 0 && (
             <span className="px-2 py-1 text-xs font-semibold text-white bg-red-500 rounded-full">
@@ -113,9 +113,9 @@ export function MessagesShell({
 
   // Desktop: side-by-side layout
   const desktopLayout = (
-    <div className="flex h-[calc(100vh-200px)] sm:h-[700px] border border-gray-200 rounded-lg overflow-hidden bg-white">
+    <div className="flex h-[calc(100vh-200px)] sm:h-[700px] border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden bg-white dark:bg-gray-900">
       {/* Conversations List */}
-      <div className={`${showDetail ? 'hidden sm:flex' : 'flex'} w-full sm:w-80 border-r border-gray-200 flex flex-col`}>
+      <div className={`${showDetail ? 'hidden sm:flex' : 'flex'} w-full sm:w-80 border-r border-gray-200 dark:border-gray-800 flex flex-col`}>
         {listContent}
       </div>
 
@@ -126,7 +126,7 @@ export function MessagesShell({
         ) : showDetail ? (
           <>
             {/* Header */}
-            <div className="p-3 sm:p-4 border-b border-gray-200 bg-gray-50">
+            <div className="p-3 sm:p-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   {detailHeader}
@@ -145,13 +145,13 @@ export function MessagesShell({
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-500">
+          <div className="flex-1 flex items-center justify-center text-gray-500 dark:text-gray-400">
             <div className="text-center max-w-xs mx-auto">
-              <div className="w-20 h-20 mx-auto mb-5 rounded-full bg-gray-100 flex items-center justify-center">
-                <MessageCircle className="w-10 h-10 text-gray-300" />
+              <div className="w-20 h-20 mx-auto mb-5 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                <MessageCircle className="w-10 h-10 text-gray-300 dark:text-gray-600" />
               </div>
-              <p className="text-base font-medium text-gray-700">Válasszon egy beszélgetést</p>
-              <p className="text-sm mt-2 text-gray-400">
+              <p className="text-base font-medium text-gray-700 dark:text-gray-300">Válasszon egy beszélgetést</p>
+              <p className="text-sm mt-2 text-gray-400 dark:text-gray-500">
                 Válasszon a bal oldali listából, vagy indítson új beszélgetést.
               </p>
             </div>
@@ -167,7 +167,7 @@ export function MessagesShell({
       <>
         {conversationsDrawer}
         
-        <div className="flex h-[calc(100vh-200px)] sm:h-[700px] border border-gray-200 rounded-lg overflow-hidden bg-white">
+        <div className="flex h-[calc(100vh-200px)] sm:h-[700px] border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden bg-white dark:bg-gray-900">
           {showNewChatProp && newChatContent ? (
             newChatContent
           ) : showDetail ? (
@@ -186,7 +186,7 @@ export function MessagesShell({
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <button
                       onClick={() => setDrawerOpen(true)}
-                      className="p-2 text-gray-600 hover:text-gray-900 transition-colors mobile-touch-target flex items-center justify-center"
+                      className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors mobile-touch-target flex items-center justify-center"
                       aria-label="Beszélgetések"
                     >
                       <MessageCircle className="w-5 h-5" />
@@ -210,7 +210,7 @@ export function MessagesShell({
                 <div className="px-4 py-2 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     {listIcon || <MessageCircle className="w-5 h-5" />}
-                    <h3 className="text-lg font-semibold text-gray-900">{listTitle}</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{listTitle}</h3>
                     {unreadCount > 0 && (
                       <span className="px-2 py-1 text-xs font-semibold text-white bg-red-500 rounded-full">
                         {unreadCount}
@@ -232,7 +232,7 @@ export function MessagesShell({
               {/* Conversations list in main view when no detail */}
               <div className="flex-1 overflow-y-auto">
                 {listHeaderContent && (
-                  <div className="p-4 border-b border-gray-200 bg-gray-50">
+                  <div className="p-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60">
                     {listHeaderContent}
                   </div>
                 )}

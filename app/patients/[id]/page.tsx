@@ -100,8 +100,8 @@ export default function PatientDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-pulse text-gray-500">Betöltés...</div>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
+        <div className="animate-pulse text-gray-500 dark:text-gray-400">Betöltés...</div>
       </div>
     );
   }
@@ -119,7 +119,7 @@ export default function PatientDetailPage() {
         userRole === 'admin' && patientId ? (
           <button
             onClick={handleImpersonate}
-            className="btn-secondary flex items-center gap-2 text-purple-600 hover:text-purple-700"
+            className="btn-secondary flex items-center gap-2 text-purple-600 dark:text-purple-300 hover:text-purple-700"
             title="Belépés betegként"
           >
             <User className="w-4 h-4" />

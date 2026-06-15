@@ -804,11 +804,11 @@ export function PatientMessagesList() {
 
   if (loading) {
     return (
-      <div className="flex h-[calc(100vh-200px)] sm:h-[700px] border border-gray-200 rounded-lg overflow-hidden bg-white">
+      <div className="flex h-[calc(100vh-200px)] sm:h-[700px] border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden bg-white dark:bg-gray-900">
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-500">Betöltés...</p>
+            <p className="text-gray-500 dark:text-gray-400">Betöltés...</p>
           </div>
         </div>
       </div>
@@ -833,9 +833,9 @@ export function PatientMessagesList() {
 
   // Conversations list content
   const conversationsListContent = filteredConversations.length === 0 ? (
-    <div className="p-4 text-center text-gray-500 text-sm">
+    <div className="p-4 text-center text-gray-500 dark:text-gray-400 text-sm">
       {searchQuery ? 'Nincs találat' : 'Még nincsenek beszélgetések'}
-      <p className="text-xs mt-2 text-gray-400">
+      <p className="text-xs mt-2 text-gray-400 dark:text-gray-500">
         {!searchQuery && 'A betegekkel folytatott beszélgetések itt jelennek meg'}
       </p>
     </div>
@@ -852,24 +852,24 @@ export function PatientMessagesList() {
             setSelectedPatientName(conv.patientName);
             messagesLoadedRef.current.clear();
           }}
-          className={`p-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${
-            isSelected ? 'bg-blue-100 border-l-4 border-l-blue-600' : ''
+          className={`p-3 border-b border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${
+            isSelected ? 'bg-blue-100 dark:bg-blue-950/50 border-l-4 border-l-blue-600' : ''
           }`}
         >
           <div className="flex items-center gap-3">
             <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ${
-              conv.unreadCount > 0 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+              conv.unreadCount > 0 ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
             }`}>
               {monogram}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-2">
-                <span className={`text-sm truncate ${conv.unreadCount > 0 ? 'font-semibold text-gray-900' : 'font-medium text-gray-900'}`}>
+                <span className={`text-sm truncate ${conv.unreadCount > 0 ? 'font-semibold text-gray-900 dark:text-gray-100' : 'font-medium text-gray-900 dark:text-gray-100'}`}>
                   {conv.patientName}
                 </span>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   {conv.lastMessage && (
-                    <span className="text-xs text-gray-400">{formatConversationTime(conv.lastMessage.createdAt)}</span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">{formatConversationTime(conv.lastMessage.createdAt)}</span>
                   )}
                   {conv.unreadCount > 0 && (
                     <span className="px-1.5 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full min-w-[20px] text-center">
@@ -879,7 +879,7 @@ export function PatientMessagesList() {
                 </div>
               </div>
               {conv.lastMessage && (
-                <p className={`text-xs mt-0.5 truncate ${conv.unreadCount > 0 ? 'text-gray-700 font-medium' : 'text-gray-500'}`}>
+                <p className={`text-xs mt-0.5 truncate ${conv.unreadCount > 0 ? 'text-gray-700 dark:text-gray-300 font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
                   {conv.lastMessage.senderType === 'doctor' ? 'Ön: ' : ''}{conv.lastMessage.message.substring(0, 50)}
                   {conv.lastMessage.message.length > 50 ? '...' : ''}
                 </p>
@@ -894,7 +894,7 @@ export function PatientMessagesList() {
   // Detail header content
   const detailHeaderContent = selectedPatientId ? (
     <div className="flex items-center justify-between gap-2 w-full">
-      <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate flex-1 min-w-0">
+      <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 truncate flex-1 min-w-0">
         {selectedPatientName}
       </h3>
       <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
@@ -916,17 +916,17 @@ export function PatientMessagesList() {
     <div className="flex flex-col h-full min-h-0">
       {/* Messages */}
       {loadingMessages ? (
-        <div className="flex-1 flex items-center justify-center bg-gray-50">
+        <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-800/60">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-500">Üzenetek betöltése...</p>
+            <p className="text-gray-500 dark:text-gray-400">Üzenetek betöltése...</p>
           </div>
         </div>
       ) : (
-        <div ref={messagesContainerRef} className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-2 sm:p-4 bg-gray-50 space-y-3 scroll-smooth">
+        <div ref={messagesContainerRef} className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-2 sm:p-4 bg-gray-50 dark:bg-gray-800/60 space-y-3 scroll-smooth">
           {messages.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <MessageCircle className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+              <MessageCircle className="w-12 h-12 mx-auto mb-2 text-gray-300 dark:text-gray-600" />
               <p>Még nincsenek üzenetek</p>
             </div>
           ) : (
@@ -975,18 +975,18 @@ export function PatientMessagesList() {
                 <div key={message.id} className="msg-row">
                   {showDateSeparator && (
                     <div className="flex items-center gap-3 my-4">
-                      <div className="flex-1 border-t border-gray-300" />
-                      <span className="text-xs font-medium text-gray-500 whitespace-nowrap">{dateSeparatorLabel}</span>
-                      <div className="flex-1 border-t border-gray-300" />
+                      <div className="flex-1 border-t border-gray-300 dark:border-gray-700" />
+                      <span className="text-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">{dateSeparatorLabel}</span>
+                      <div className="flex-1 border-t border-gray-300 dark:border-gray-700" />
                     </div>
                   )}
                   <div className={`flex flex-col ${isFromMe ? 'items-end' : 'items-start'}`}>
                     {!isFromMe && (
                       <div className="flex items-center gap-1.5 mb-1 px-1">
-                        <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center text-xs font-semibold text-green-700">
+                        <div className="w-6 h-6 rounded-full bg-green-100 dark:bg-green-950/50 flex items-center justify-center text-xs font-semibold text-green-700 dark:text-green-300">
                           {monogram}
                         </div>
-                        <span className="text-xs font-medium text-gray-700">{lastName}</span>
+                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{lastName}</span>
                       </div>
                     )}
                     <ChatMessageBubble
@@ -1045,7 +1045,7 @@ export function PatientMessagesList() {
       )}
 
       {/* Message Input */}
-      <div className="flex-shrink-0 border-t bg-white p-2 sm:p-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-4">
+      <div className="flex-shrink-0 border-t bg-white dark:bg-gray-900 p-2 sm:p-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-4">
         <PendingContextLinksBar
           links={pendingContextLinks}
           onRemove={(i) => setPendingContextLinks((prev) => prev.filter((_, idx) => idx !== i))}
@@ -1100,13 +1100,13 @@ export function PatientMessagesList() {
       </div>
     </div>
   ) : (
-    <div className="flex-1 flex items-center justify-center text-gray-500">
+    <div className="flex-1 flex items-center justify-center text-gray-500 dark:text-gray-400">
       <div className="text-center max-w-xs mx-auto">
-        <div className="w-20 h-20 mx-auto mb-5 rounded-full bg-gray-100 flex items-center justify-center">
-          <MessageCircle className="w-10 h-10 text-gray-300" />
+        <div className="w-20 h-20 mx-auto mb-5 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+          <MessageCircle className="w-10 h-10 text-gray-300 dark:text-gray-600" />
         </div>
-        <p className="text-base font-medium text-gray-700">Válasszon egy beszélgetést</p>
-        <p className="text-sm mt-2 text-gray-400">
+        <p className="text-base font-medium text-gray-700 dark:text-gray-300">Válasszon egy beszélgetést</p>
+        <p className="text-sm mt-2 text-gray-400 dark:text-gray-500">
           Válasszon egy beteget a bal oldali listából, vagy indítson új beszélgetést az &quot;Új beszélgetés&quot; gombbal.
         </p>
       </div>
@@ -1117,21 +1117,21 @@ export function PatientMessagesList() {
   const newChatContent = showPatientSelector ? (
     <>
       {/* New Chat Header */}
-      <div className="p-3 sm:p-4 border-b border-gray-200 bg-gray-50">
+      <div className="p-3 sm:p-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base sm:text-lg font-semibold text-gray-900">Új beszélgetés</h3>
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">Új beszélgetés</h3>
           <button
             onClick={() => {
               setShowPatientSelector(false);
               setPatientSearchQuery('');
             }}
-            className="p-1 hover:bg-gray-200 rounded transition-colors mobile-touch-target"
+            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors mobile-touch-target"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
         <div className="relative mb-3">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
           <input
             type="text"
             value={patientSearchQuery}
@@ -1142,11 +1142,11 @@ export function PatientMessagesList() {
           />
         </div>
         {patientSearchQuery && (
-          <div className="max-h-60 overflow-y-auto border border-gray-200 rounded bg-white">
+          <div className="max-h-60 overflow-y-auto border border-gray-200 dark:border-gray-800 rounded bg-white dark:bg-gray-900">
             {loadingPatients ? (
-              <div className="p-4 text-center text-gray-500 text-sm">Betöltés...</div>
+              <div className="p-4 text-center text-gray-500 dark:text-gray-400 text-sm">Betöltés...</div>
             ) : availablePatients.length === 0 ? (
-              <div className="p-4 text-center text-gray-500 text-sm">Nincs találat</div>
+              <div className="p-4 text-center text-gray-500 dark:text-gray-400 text-sm">Nincs találat</div>
             ) : (
               availablePatients
                 .filter(p => 
@@ -1170,11 +1170,11 @@ export function PatientMessagesList() {
                       // Refresh conversations to include new patient
                       setTimeout(() => fetchConversations(), 500);
                     }}
-                    className="p-2 cursor-pointer hover:bg-gray-50 border-b border-gray-100 last:border-b-0 mobile-touch-target"
+                    className="p-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800 last:border-b-0 mobile-touch-target"
                   >
                     <div className="font-medium text-sm">{patient.nev}</div>
                     {patient.email && (
-                      <div className="text-xs text-gray-500">{patient.email}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{patient.email}</div>
                     )}
                   </div>
                 ))
@@ -1182,9 +1182,9 @@ export function PatientMessagesList() {
           </div>
         )}
       </div>
-      <div className="flex-1 flex items-center justify-center text-gray-500">
+      <div className="flex-1 flex items-center justify-center text-gray-500 dark:text-gray-400">
         <div className="text-center">
-          <MessageCircle className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+          <MessageCircle className="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
           <p>Válasszon beteget a beszélgetéshez</p>
         </div>
       </div>
@@ -1194,7 +1194,7 @@ export function PatientMessagesList() {
   // List header content (search)
   const listHeaderContent = (
     <div className="relative">
-      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
       <input
         type="text"
         placeholder="Beteg keresése..."

@@ -365,10 +365,10 @@ export function OHIP14Section({
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
+      <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-6">
         <div className="animate-pulse space-y-4">
-          <div className="h-6 bg-gray-200 rounded w-1/4"></div>
-          <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+          <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/4"></div>
+          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
         </div>
       </div>
     );
@@ -382,14 +382,14 @@ export function OHIP14Section({
   };
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 sm:p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h4 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+          <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
             <FileText className="w-5 h-5 text-medical-primary" />
             OHIP-14 Kérdőív
           </h4>
-          <p className="text-sm text-gray-600 mt-1">
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
             Orális egészséghez kapcsolódó életminőség mérése
           </p>
         </div>
@@ -410,8 +410,8 @@ export function OHIP14Section({
       )}
 
       {!isPatientPortal && reminderEmailLogs.length > 0 && (
-        <div className="mb-6 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-          <p className="text-xs font-medium text-gray-700 flex items-center gap-1.5 mb-2">
+        <div className="mb-6 p-3 bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 rounded-lg">
+          <p className="text-xs font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5 mb-2">
             <Mail className="w-3.5 h-3.5" />
             OHIP-14 emlékeztető emailek
           </p>
@@ -419,11 +419,11 @@ export function OHIP14Section({
             {reminderEmailLogs.slice(0, 5).map((log, idx) => (
               <li key={`${log.sentAt}-${idx}`} className="text-[11px] flex items-start gap-1.5">
                 {log.status === 'sent' ? (
-                  <CheckCircle className="w-3 h-3 text-green-600 shrink-0 mt-0.5" />
+                  <CheckCircle className="w-3 h-3 text-green-600 dark:text-green-300 shrink-0 mt-0.5" />
                 ) : (
-                  <AlertCircle className="w-3 h-3 text-red-600 shrink-0 mt-0.5" />
+                  <AlertCircle className="w-3 h-3 text-red-600 dark:text-red-300 shrink-0 mt-0.5" />
                 )}
-                <span className={log.status === 'sent' ? 'text-gray-700' : 'text-red-700'}>
+                <span className={log.status === 'sent' ? 'text-gray-700 dark:text-gray-300' : 'text-red-700 dark:text-red-300'}>
                   {log.timepoint ?? '?'} — {new Date(log.sentAt).toLocaleString('hu-HU')}
                   {log.status === 'sent'
                     ? ` → ${log.recipient}`
@@ -438,8 +438,8 @@ export function OHIP14Section({
       )}
 
       {isPatientPortal && (
-        <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-          <p className="text-sm text-amber-800">
+        <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg">
+          <p className="text-sm text-amber-800 dark:text-amber-300">
             <strong>Szabály:</strong> Egy időablakban csak egyszer töltheti ki a kérdőívet. Kitöltés
             után a válaszokat és az eredményt nem tekintheti meg.
           </p>
@@ -467,12 +467,12 @@ export function OHIP14Section({
                 disabled={!canSelect}
                 className={`px-4 py-2 rounded-lg border transition-colors ${
                   !canSelect
-                    ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border-gray-200 dark:border-gray-800 cursor-not-allowed'
                     : activeTimepoint === tp.value
                       ? 'bg-medical-primary text-white border-medical-primary'
                       : isComplete
-                        ? 'bg-green-50 text-green-700 border-green-300 hover:bg-green-100'
-                        : 'bg-gray-50 text-gray-700 border-gray-300 hover:bg-gray-100'
+                        ? 'bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 border-green-300 dark:border-green-700 hover:bg-green-100 dark:hover:bg-green-900/40'
+                        : 'bg-gray-50 dark:bg-gray-800/60 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700'
                 }`}
                 title={
                   filled && !isPatientPortal
@@ -490,7 +490,7 @@ export function OHIP14Section({
               >
                 <div className="flex items-center gap-2">
                   <span className="font-medium">{tp.label}</span>
-                  {isComplete && <span className="text-xs font-medium text-green-700">kitöltve</span>}
+                  {isComplete && <span className="text-xs font-medium text-green-700 dark:text-green-300">kitöltve</span>}
                   {!canSelect && !filled && <Lock className="w-4 h-4" />}
                   {isComplete && (
                     <CheckCircle className="w-4 h-4" />
@@ -510,7 +510,7 @@ export function OHIP14Section({
           const avail = getAvailability(activeTimepoint);
           if (avail.opensAt && avail.closesAt) {
             return (
-              <div className="mt-2 flex items-center gap-1.5 text-sm text-gray-600">
+              <div className="mt-2 flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
                 <CalendarClock className="w-4 h-4" />
                 <span>
                   Kitöltési időablak: {formatWindowDate(avail.opensAt)} – {formatWindowDate(avail.closesAt)}
@@ -522,17 +522,17 @@ export function OHIP14Section({
         })()}
 
         {deliveryDate && (
-          <p className="text-sm text-gray-600 mt-2">
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
             Átadás (STAGE_6): <strong>{formatWindowDate(deliveryDate)}</strong>
           </p>
         )}
         {currentStageCode && (
-          <p className="text-sm text-gray-600 mt-1">
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
             OHIP stádium: <strong>{currentStageCode}</strong>
           </p>
         )}
         {!currentStageCode && (
-          <p className="text-sm text-gray-500 mt-2">
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
             Nincs stádium beállítva. T0 kitölthető a protetikai fázis megkezdéséig.
           </p>
         )}
@@ -542,24 +542,24 @@ export function OHIP14Section({
       {activeTimepoint && (
         <div className="space-y-6">
           {isCurrentTimepointCompleted ? (
-            <div className="p-6 bg-gray-50 border border-gray-200 rounded-lg text-center">
-              <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-3" />
-              <p className="text-gray-700 font-medium">
+            <div className="p-6 bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 rounded-lg text-center">
+              <CheckCircle className="w-12 h-12 text-green-600 dark:text-green-300 mx-auto mb-3" />
+              <p className="text-gray-700 dark:text-gray-300 font-medium">
                 A jelenlegi időablakhoz tartozó kérdőív már kitöltve.
               </p>
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                 A válaszokat és az eredményt a szabályok szerint nem tekintheti meg.
               </p>
             </div>
           ) : (
             <>
           <div className="flex items-center justify-between">
-            <h5 className="text-base font-semibold text-gray-900">
+            <h5 className="text-base font-semibold text-gray-900 dark:text-gray-100">
               {ohip14TimepointOptions.find((tp) => tp.value === activeTimepoint)?.label} –{' '}
               {ohip14TimepointOptions.find((tp) => tp.value === activeTimepoint)?.description}
             </h5>
             {responses[activeTimepoint]?.lockedAt && (
-              <span className="text-xs text-gray-500 flex items-center gap-1">
+              <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
                 <AlertCircle className="w-4 h-4" />
                 Lezárva
               </span>
@@ -569,14 +569,14 @@ export function OHIP14Section({
           {/* Progress bar */}
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-600">
+              <span className="text-sm text-gray-600 dark:text-gray-400">
                 Kitöltve: {getCompletedCount(activeTimepoint)} / 14 kérdés
               </span>
-              <span className="text-sm font-medium text-gray-900">
+              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
                 {Math.round((getCompletedCount(activeTimepoint) / 14) * 100)}%
               </span>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
+            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
               <div
                 className="bg-medical-primary h-2 rounded-full transition-all duration-300"
                 style={{
@@ -596,11 +596,11 @@ export function OHIP14Section({
               isAllowed && !isTimepointFilled(activeTimepoint) && !isViewOnly && !isLocked;
 
             return (
-              <div key={question.id} className="border-b border-gray-100 pb-4 last:border-b-0">
-                <label className="block text-sm font-medium text-gray-900 mb-2">
+              <div key={question.id} className="border-b border-gray-100 dark:border-gray-800 pb-4 last:border-b-0">
+                <label className="block text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
                   {question.questionNumber}. {question.question}
                   {!isPatientPortal && (
-                    <span className="text-xs text-gray-500 ml-2">
+                    <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
                       ({question.dimensionHungarian})
                     </span>
                   )}
@@ -620,7 +620,7 @@ export function OHIP14Section({
                       className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                         value === option.value
                           ? 'bg-medical-primary text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
                       } ${isViewOnly || isLocked || !canEditAnswers ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       {option.label}
@@ -635,7 +635,7 @@ export function OHIP14Section({
           {responses[activeTimepoint]?.totalScore !== undefined && (
             <div className="mt-6 p-4 bg-medical-primary/10 rounded-lg border border-medical-primary/20">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-sm font-medium text-gray-900">Összpontszám:</span>
+                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Összpontszám:</span>
                 <div className="text-right">
                   <span className="text-2xl font-bold text-medical-primary">
                     {responses[activeTimepoint]?.totalScore} / 56
@@ -674,16 +674,16 @@ export function OHIP14Section({
             </div>
           )}
           {!getAvailability(activeTimepoint).allowed && !isTimepointFilled(activeTimepoint) && (
-            <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <p className="text-sm text-yellow-800">
+            <div className="mt-6 p-4 bg-yellow-50 dark:bg-yellow-950/40 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+              <p className="text-sm text-yellow-800 dark:text-yellow-300">
                 <strong>Figyelem:</strong>{' '}
                 {getAvailability(activeTimepoint).reason}
               </p>
             </div>
           )}
           {!isPatientPortal && isTimepointFilled(activeTimepoint) && (
-            <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-              <p className="text-sm text-green-800">
+            <div className="mt-6 p-4 bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800 rounded-lg">
+              <p className="text-sm text-green-800 dark:text-green-300">
                 <strong>Kitöltve</strong>
                 {responses[activeTimepoint]?.completedAt
                   ? ` – ${new Date(responses[activeTimepoint]!.completedAt!).toLocaleString('hu-HU')}`
@@ -698,7 +698,7 @@ export function OHIP14Section({
       )}
 
       {!activeTimepoint && (
-        <p className="text-gray-500 text-center py-8">
+        <p className="text-gray-500 dark:text-gray-400 text-center py-8">
           Válasszon egy timepointot a kérdőív kitöltéséhez
         </p>
       )}

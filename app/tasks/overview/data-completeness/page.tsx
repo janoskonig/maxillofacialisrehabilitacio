@@ -84,9 +84,9 @@ type Report = {
 
 /** Teljességi pontszám → badge színosztály (zöld ≥90, sárga ≥70, piros alatta). */
 function scoreColor(score: number): string {
-  if (score >= 90) return 'bg-green-50 text-green-700 border-green-200';
-  if (score >= 70) return 'bg-amber-50 text-amber-700 border-amber-200';
-  return 'bg-red-50 text-red-700 border-red-200';
+  if (score >= 90) return 'bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800';
+  if (score >= 70) return 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800';
+  return 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800';
 }
 
 type GroupFilter = 'clinical' | 'research' | 'all';
@@ -271,8 +271,8 @@ export default function DataCompletenessPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="flex items-center gap-2 text-gray-500">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-800/60 flex items-center justify-center">
+        <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
           <Loader2 className="w-6 h-6 animate-spin" />
           Betöltés…
         </div>
@@ -282,9 +282,9 @@ export default function DataCompletenessPage() {
 
   if (!authorized) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-800/60 flex items-center justify-center p-6">
         <div className="card max-w-md w-full text-center p-6">
-          <p className="text-gray-700">Nincs jogosultságod a vezetői nézethez.</p>
+          <p className="text-gray-700 dark:text-gray-300">Nincs jogosultságod a vezetői nézethez.</p>
           <button className="btn-secondary mt-4" onClick={() => router.push('/')}>
             Vissza a főoldalra
           </button>
@@ -303,10 +303,10 @@ export default function DataCompletenessPage() {
     >
       <div className="space-y-6">
         {/* Aloldal-navigáció */}
-        <div className="flex gap-1 border-b border-gray-200">
+        <div className="flex gap-1 border-b border-gray-200 dark:border-gray-800">
           <Link
             href="/tasks/overview"
-            className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent"
+            className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 border-b-2 border-transparent"
           >
             Feladatok
           </Link>
@@ -320,43 +320,43 @@ export default function DataCompletenessPage() {
           <div className="card p-4 flex items-center gap-3">
             <Users className="w-8 h-8 text-medical-primary" />
             <div>
-              <p className="text-2xl font-bold text-gray-900">{summary?.total ?? 0}</p>
-              <p className="text-sm text-gray-500">Beteg összesen</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{summary?.total ?? 0}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Beteg összesen</p>
             </div>
           </div>
           <div className="card p-4 flex items-center gap-3">
-            <AlertTriangle className="w-8 h-8 text-red-500" />
+            <AlertTriangle className="w-8 h-8 text-red-500 dark:text-red-400" />
             <div>
-              <p className="text-2xl font-bold text-red-600">{summary?.clinicalIncomplete ?? 0}</p>
-              <p className="text-sm text-gray-500">Klinikailag hiányos</p>
+              <p className="text-2xl font-bold text-red-600 dark:text-red-300">{summary?.clinicalIncomplete ?? 0}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Klinikailag hiányos</p>
             </div>
           </div>
           <div className="card p-4 flex items-center gap-3">
-            <FlaskConical className="w-8 h-8 text-amber-500" />
+            <FlaskConical className="w-8 h-8 text-amber-500 dark:text-amber-400" />
             <div>
-              <p className="text-2xl font-bold text-amber-600">{summary?.missingOhipT0 ?? 0}</p>
-              <p className="text-sm text-gray-500">OHIP-14 T0 hiányzik</p>
+              <p className="text-2xl font-bold text-amber-600 dark:text-amber-300">{summary?.missingOhipT0 ?? 0}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">OHIP-14 T0 hiányzik</p>
             </div>
           </div>
           <div className="card p-4 flex items-center gap-3">
-            <ClipboardCheck className="w-8 h-8 text-green-600" />
+            <ClipboardCheck className="w-8 h-8 text-green-600 dark:text-green-300" />
             <div>
-              <p className="text-2xl font-bold text-green-700">{summary?.clinicalComplete ?? 0}</p>
-              <p className="text-sm text-gray-500">Klinikailag teljes</p>
+              <p className="text-2xl font-bold text-green-700 dark:text-green-300">{summary?.clinicalComplete ?? 0}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Klinikailag teljes</p>
             </div>
           </div>
           <div className="card p-4 flex items-center gap-3">
             <Gauge className="w-8 h-8 text-medical-primary" />
             <div>
-              <p className="text-2xl font-bold text-gray-900">{summary?.avgCompletenessScore ?? 0}%</p>
-              <p className="text-sm text-gray-500">Átlagos teljesség</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{summary?.avgCompletenessScore ?? 0}%</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Átlagos teljesség</p>
             </div>
           </div>
           <div className="card p-4 flex items-center gap-3">
-            <BadgeCheck className="w-8 h-8 text-emerald-600" />
+            <BadgeCheck className="w-8 h-8 text-emerald-600 dark:text-emerald-300" />
             <div>
-              <p className="text-2xl font-bold text-emerald-700">{summary?.researchReady ?? 0}</p>
-              <p className="text-sm text-gray-500">Elemzésre kész</p>
+              <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{summary?.researchReady ?? 0}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Elemzésre kész</p>
             </div>
           </div>
         </div>
@@ -364,7 +364,7 @@ export default function DataCompletenessPage() {
         {/* Trend: átlagos teljesség az idő függvényében */}
         {snapshots.length >= 2 && (
           <section className="card p-4">
-            <h2 className="text-sm font-semibold text-gray-900 mb-3 inline-flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3 inline-flex items-center gap-1.5">
               <TrendingUp className="w-4 h-4 text-medical-primary" />
               Átlagos adat-teljesség alakulása (utolsó 90 nap)
             </h2>
@@ -398,11 +398,11 @@ export default function DataCompletenessPage() {
         {/* Bontás kezelőorvosonként */}
         {cohorts.length > 0 && (
           <section className="card p-4">
-            <h2 className="text-sm font-semibold text-gray-900 mb-3">Bontás kezelőorvosonként</h2>
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">Bontás kezelőorvosonként</h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-gray-500 border-b">
+                  <tr className="text-left text-gray-500 dark:text-gray-400 border-b">
                     <th className="py-1.5 pr-3 font-medium">Kezelőorvos</th>
                     <th className="py-1.5 px-3 font-medium text-right">Beteg</th>
                     <th className="py-1.5 px-3 font-medium text-right">Átlag %</th>
@@ -413,17 +413,17 @@ export default function DataCompletenessPage() {
                 <tbody>
                   {cohorts.map((c) => (
                     <tr key={c.key} className="border-b last:border-0">
-                      <td className="py-1.5 pr-3 text-gray-900">{c.label}</td>
-                      <td className="py-1.5 px-3 text-right text-gray-700">{c.count}</td>
+                      <td className="py-1.5 pr-3 text-gray-900 dark:text-gray-100">{c.label}</td>
+                      <td className="py-1.5 px-3 text-right text-gray-700 dark:text-gray-300">{c.count}</td>
                       <td className="py-1.5 px-3 text-right">
                         <span className={`font-semibold rounded-full border px-2 py-0.5 ${scoreColor(c.avgScore)}`}>
                           {c.avgScore}%
                         </span>
                       </td>
-                      <td className="py-1.5 px-3 text-right text-gray-700">
+                      <td className="py-1.5 px-3 text-right text-gray-700 dark:text-gray-300">
                         {c.researchReady}/{c.count}
                       </td>
-                      <td className="py-1.5 pl-3 text-right text-orange-700">
+                      <td className="py-1.5 pl-3 text-right text-orange-700 dark:text-orange-300">
                         {c.withWarnings > 0 ? c.withWarnings : '—'}
                       </td>
                     </tr>
@@ -436,7 +436,7 @@ export default function DataCompletenessPage() {
 
         {/* Csoport-váltó */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+          <div className="flex rounded-lg border border-gray-200 dark:border-gray-800 overflow-hidden">
             {(['clinical', 'research', 'all'] as GroupFilter[]).map((g) => (
               <button
                 key={g}
@@ -446,7 +446,7 @@ export default function DataCompletenessPage() {
                   setFieldFilter('');
                 }}
                 className={`px-4 py-2 text-sm font-medium transition-colors ${
-                  group === g ? 'bg-medical-primary text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                  group === g ? 'bg-medical-primary text-white' : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50'
                 }`}
               >
                 {GROUP_LABELS[g]}
@@ -460,7 +460,7 @@ export default function DataCompletenessPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          <label className="flex items-center gap-2 text-sm text-gray-700 select-none">
+          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 select-none">
             <input
               type="checkbox"
               checked={onlyIncomplete}
@@ -482,7 +482,7 @@ export default function DataCompletenessPage() {
         {/* Mezőnkénti hiány-összegzés (kattintható szűrő) */}
         {visibleFieldGaps.length > 0 && (
           <section className="card p-4">
-            <h2 className="text-sm font-semibold text-gray-900 mb-3">
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
               Hiányzó mezők gyakorisága (kattints a szűréshez)
             </h2>
             <div className="flex flex-wrap gap-2">
@@ -498,8 +498,8 @@ export default function DataCompletenessPage() {
                       active
                         ? 'bg-medical-primary text-white border-medical-primary'
                         : isClinical
-                          ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
-                          : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                          ? 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/40'
+                          : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900/40'
                     }`}
                   >
                     {f.label}
@@ -513,8 +513,8 @@ export default function DataCompletenessPage() {
 
         {/* Beteglista */}
         {filteredPatients.length === 0 ? (
-          <div className="card text-center py-12 text-gray-600">
-            <CheckCircle className="w-12 h-12 mx-auto mb-3 text-green-500" />
+          <div className="card text-center py-12 text-gray-600 dark:text-gray-400">
+            <CheckCircle className="w-12 h-12 mx-auto mb-3 text-green-500 dark:text-green-400" />
             <p>Nincs a szűrőnek megfelelő beteg.</p>
           </div>
         ) : (
@@ -530,11 +530,11 @@ export default function DataCompletenessPage() {
                     <div className="min-w-0 flex-1">
                       <Link
                         href={`/patients/${p.patientId}/view`}
-                        className="font-medium text-gray-900 hover:underline"
+                        className="font-medium text-gray-900 dark:text-gray-100 hover:underline"
                       >
                         {p.patientName || 'Névtelen beteg'}
                       </Link>
-                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
                         {p.kezeleoorvos && (
                           <span className="inline-flex items-center gap-1">
                             <UserRound className="w-3.5 h-3.5" />
@@ -554,8 +554,8 @@ export default function DataCompletenessPage() {
                                 title="Pótlás a betegűrlapon (új lapon)"
                                 className={`text-xs rounded-l-full px-2 py-0.5 border inline-flex items-center gap-1 transition-colors ${
                                   m.group === 'clinical'
-                                    ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
-                                    : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                                    ? 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/40'
+                                    : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900/40'
                                 } ${m.group === 'research' ? '' : 'rounded-r-full'}`}
                               >
                                 {m.label}
@@ -568,7 +568,7 @@ export default function DataCompletenessPage() {
                                   disabled={naBusy === `${p.patientId}:${m.key}`}
                                   onClick={() => void markNa(p.patientId, m.key, true)}
                                   title="Jelölés: nem értelmezhető / nem ismert (nem számít hiánynak)"
-                                  className="text-xs rounded-r-full px-1.5 py-0.5 border border-l-0 border-amber-200 bg-white text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                                  className="text-xs rounded-r-full px-1.5 py-0.5 border border-l-0 border-amber-200 dark:border-amber-800 bg-white dark:bg-gray-900 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-50"
                                 >
                                   N/A
                                 </button>
@@ -577,7 +577,7 @@ export default function DataCompletenessPage() {
                           ))}
                         </div>
                       ) : (
-                        <p className="mt-2 text-xs text-green-700 inline-flex items-center gap-1">
+                        <p className="mt-2 text-xs text-green-700 dark:text-green-300 inline-flex items-center gap-1">
                           <CheckCircle className="w-3.5 h-3.5" />
                           {group === 'research'
                             ? 'Kutatási mezők rendben'
@@ -594,7 +594,7 @@ export default function DataCompletenessPage() {
                             <span
                               key={w.code}
                               title={w.message}
-                              className="text-xs rounded-full px-2 py-0.5 border border-orange-300 bg-orange-50 text-orange-800 inline-flex items-center gap-1"
+                              className="text-xs rounded-full px-2 py-0.5 border border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-950/40 text-orange-800 dark:text-orange-300 inline-flex items-center gap-1"
                             >
                               <AlertTriangle className="w-3 h-3" />
                               {w.message}
@@ -614,7 +614,7 @@ export default function DataCompletenessPage() {
                               disabled={naBusy === `${p.patientId}:${m.key}`}
                               onClick={() => void markNa(p.patientId, m.key, false)}
                               title="N/A visszavonása (újra hiányként számít)"
-                              className="text-xs rounded-full px-2 py-0.5 border border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100 inline-flex items-center gap-1 disabled:opacity-50"
+                              className="text-xs rounded-full px-2 py-0.5 border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 inline-flex items-center gap-1 disabled:opacity-50"
                             >
                               {m.label}: N/A
                               <span className="opacity-60">✕</span>
@@ -631,7 +631,7 @@ export default function DataCompletenessPage() {
                         {p.completenessScore}%
                       </span>
                       {missing.length > 0 && (
-                        <span className="font-semibold text-red-600">{missing.length} hiány</span>
+                        <span className="font-semibold text-red-600 dark:text-red-300">{missing.length} hiány</span>
                       )}
                     </div>
                   </div>

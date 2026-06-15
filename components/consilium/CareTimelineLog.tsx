@@ -181,7 +181,7 @@ export function CareTimelineLog({
           <div className="relative flex gap-0 pb-1">
             <div className="relative z-[1] flex w-6 shrink-0 justify-center pt-2">
               <span
-                className="h-2.5 w-2.5 shrink-0 rounded-full bg-white/30 ring-2 ring-zinc-950"
+                className="h-2.5 w-2.5 shrink-0 rounded-full bg-white/30 dark:bg-gray-900/30 ring-2 ring-zinc-950"
                 aria-hidden
               />
             </div>

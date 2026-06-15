@@ -122,18 +122,18 @@ const poolLabels: Record<string, string> = {
 };
 
 const statusConfig: Record<string, { icon: typeof Circle; label: string; color: string; bgColor: string }> = {
-  pending: { icon: Circle, label: 'Várakozik', color: 'text-gray-400', bgColor: 'bg-gray-50' },
-  scheduled: { icon: Clock, label: 'Időpont foglalva', color: 'text-blue-500', bgColor: 'bg-blue-50' },
-  completed: { icon: CheckCircle2, label: 'Kész', color: 'text-green-500', bgColor: 'bg-green-50' },
-  skipped: { icon: SkipForward, label: 'Átugorva', color: 'text-amber-500', bgColor: 'bg-amber-50' },
+  pending: { icon: Circle, label: 'Várakozik', color: 'text-gray-400 dark:text-gray-500', bgColor: 'bg-gray-50 dark:bg-gray-800/60' },
+  scheduled: { icon: Clock, label: 'Időpont foglalva', color: 'text-blue-500 dark:text-blue-400', bgColor: 'bg-blue-50 dark:bg-blue-950/40' },
+  completed: { icon: CheckCircle2, label: 'Kész', color: 'text-green-500 dark:text-green-400', bgColor: 'bg-green-50 dark:bg-green-950/40' },
+  skipped: { icon: SkipForward, label: 'Átugorva', color: 'text-amber-500 dark:text-amber-400', bgColor: 'bg-amber-50 dark:bg-amber-950/40' },
 };
 
 const PATHWAY_COLORS = [
-  'bg-indigo-100 text-indigo-700',
-  'bg-emerald-100 text-emerald-700',
-  'bg-orange-100 text-orange-700',
-  'bg-pink-100 text-pink-700',
-  'bg-cyan-100 text-cyan-700',
+  'bg-indigo-100 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300',
+  'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300',
+  'bg-orange-100 dark:bg-orange-950/50 text-orange-700 dark:text-orange-300',
+  'bg-pink-100 dark:bg-pink-950/50 text-pink-700 dark:text-pink-300',
+  'bg-cyan-100 dark:bg-cyan-950/50 text-cyan-700 dark:text-cyan-300',
 ];
 
 type AdderTab = 'catalog' | 'freetext' | 'tooth';
@@ -193,24 +193,24 @@ function SortableStepRow({
     return (
       <div ref={setNodeRef} style={style}>
         <div
-          className={`flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 ${
+          className={`flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-800/60 ${
             step.status === 'completed' ? 'opacity-70' : 'opacity-60'
           }`}
         >
-          <span className="text-xs font-mono text-gray-400 w-5 text-right shrink-0">{idx + 1}.</span>
+          <span className="text-xs font-mono text-gray-400 dark:text-gray-500 w-5 text-right shrink-0">{idx + 1}.</span>
           <StatusIcon className={`w-4 h-4 shrink-0 ${config.color}`} />
           <span
             className={`flex-1 min-w-0 truncate text-sm ${
-              step.status === 'skipped' ? 'line-through text-gray-400' : 'text-gray-600'
+              step.status === 'skipped' ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-400'
             }`}
           >
             {stepLabel}
           </span>
-          <span className="text-xs text-gray-400 shrink-0">{config.label}</span>
+          <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">{config.label}</span>
           {canUnskip && !mergeMode && (
             <button
               onClick={onUnskipConfirm}
-              className="shrink-0 inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-600 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
+              className="shrink-0 inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
               title="Visszaállítás várakozóra"
             >
               <RotateCcw className="w-3 h-3" />
@@ -220,7 +220,7 @@ function SortableStepRow({
           {canDelete && !mergeMode && (
             <button
               onClick={onDelete}
-              className="shrink-0 p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+              className="shrink-0 p-1 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/40 rounded transition-colors"
               title="Munkafázis elhagyása a tervből"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -250,25 +250,25 @@ function SortableStepRow({
         {/* Drag handle */}
         <button
           ref={setActivatorNodeRef}
-          className="touch-none p-1 rounded hover:bg-gray-200 cursor-grab active:cursor-grabbing shrink-0"
+          className="touch-none p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 cursor-grab active:cursor-grabbing shrink-0"
           {...attributes}
           {...listeners}
           tabIndex={-1}
           aria-label="Húzd át"
         >
-          <GripVertical className="w-4 h-4 text-gray-400" />
+          <GripVertical className="w-4 h-4 text-gray-400 dark:text-gray-500" />
         </button>
 
         {/* Step number + icon */}
         <div className="flex items-center gap-2 shrink-0">
-          <span className="text-xs font-mono text-gray-400 w-5 text-right">{idx + 1}.</span>
+          <span className="text-xs font-mono text-gray-400 dark:text-gray-500 w-5 text-right">{idx + 1}.</span>
           <StatusIcon className={`w-4 h-4 ${config.color}`} />
         </div>
 
         {/* Step info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium text-gray-900">
+            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
               {stepLabel}
             </span>
             {isNext && (
@@ -282,41 +282,41 @@ function SortableStepRow({
               </span>
             )}
             {isTooth && (
-              <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-teal-100 text-teal-700">
+              <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-teal-100 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300">
                 fog #{step.toothNumber}
               </span>
             )}
             {isAdHoc && !isTooth && (
-              <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
+              <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
                 egyedi
               </span>
             )}
             {hasMerged && (
-              <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">
+              <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300">
                 +{mergedChildren.length} összevonva
               </span>
             )}
           </div>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-            <span className="text-xs text-gray-500">{poolLabels[step.pool] ?? step.pool}</span>
-            <span className="text-xs text-gray-400">·</span>
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-gray-500 dark:text-gray-400">{poolLabels[step.pool] ?? step.pool}</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500">·</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">
               {step.durationMinutes} perc
               {hasMerged ? ' (foglalható blokk)' : ''}
             </span>
-            <span className="text-xs text-gray-400">·</span>
-            <span className="text-xs text-gray-500">{step.defaultDaysOffset} nap offset</span>
-            <span className="text-xs text-gray-400">·</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500">·</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">{step.defaultDaysOffset} nap offset</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500">·</span>
             <span className={`text-xs ${config.color}`}>{config.label}</span>
           </div>
           {/* Merged children list */}
           {hasMerged && (
             <div className="mt-1 ml-1 space-y-0.5">
               {mergedChildren.map((child) => (
-                <div key={child.id} className="flex items-center gap-1.5 text-xs text-violet-600">
+                <div key={child.id} className="flex items-center gap-1.5 text-xs text-violet-600 dark:text-violet-300">
                   <Merge className="w-3 h-3" />
                   <span>{child.customLabel || child.treatmentLabel || child.stepCode.replace(/_/g, ' ')}</span>
-                  {child.toothNumber && <span className="text-violet-400">(fog #{child.toothNumber})</span>}
+                  {child.toothNumber && <span className="text-violet-400 dark:text-violet-500">(fog #{child.toothNumber})</span>}
                 </div>
               ))}
             </div>
@@ -330,8 +330,8 @@ function SortableStepRow({
               onClick={onDelegateClick}
               className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded transition-colors ${
                 delegateOpen
-                  ? 'text-indigo-700 bg-indigo-100'
-                  : 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100'
+                  ? 'text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-950/50'
+                  : 'text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/40'
               }`}
               title="Feladat kiosztása / felosztása"
             >
@@ -342,7 +342,7 @@ function SortableStepRow({
           {!mergeMode && (
             <button
               onClick={onEditTiming}
-              className="p-1.5 text-gray-400 hover:text-medical-primary hover:bg-medical-primary/10 rounded transition-colors"
+              className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-medical-primary hover:bg-medical-primary/10 rounded transition-colors"
               title="Időzítés szerkesztése"
             >
               <Calendar className="w-3.5 h-3.5" />
@@ -351,7 +351,7 @@ function SortableStepRow({
           {hasMerged && !mergeMode && (
             <button
               onClick={onUnmerge}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-violet-600 bg-violet-50 rounded hover:bg-violet-100 transition-colors"
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-violet-600 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/40 rounded hover:bg-violet-100 dark:hover:bg-violet-900/40 transition-colors"
               title="Összevonás felbontása"
             >
               <Unlink className="w-3 h-3" />
@@ -361,7 +361,7 @@ function SortableStepRow({
           {canDelete && !mergeMode && (
             <button
               onClick={onDelete}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 bg-red-50 rounded hover:bg-red-100 transition-colors"
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-950/40 rounded hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
               title="Munkafázis elhagyása a tervből"
             >
               <Trash2 className="w-3 h-3" />
@@ -371,7 +371,7 @@ function SortableStepRow({
           {canSkip && !mergeMode && (
             <button
               onClick={onSkipConfirm}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-amber-700 bg-amber-100 rounded hover:bg-amber-200 transition-colors"
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-950/50 rounded hover:bg-amber-200 dark:hover:bg-amber-900/40 transition-colors"
               title="Munkafázis átugrása"
             >
               <SkipForward className="w-3 h-3" />
@@ -381,7 +381,7 @@ function SortableStepRow({
           {canUnskip && !mergeMode && (
             <button
               onClick={onUnskipConfirm}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-600 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
               title="Visszaállítás"
             >
               <RotateCcw className="w-3 h-3" />
@@ -447,41 +447,41 @@ function StepRowWithConfirm({
         </div>
       )}
       {isConfirming && (
-        <div className="mt-1 ml-12 p-3 rounded-lg border border-gray-200 bg-white">
+        <div className="mt-1 ml-12 p-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
           {confirmAction === 'skip' && (
             <>
-              <p className="text-sm text-gray-700 mb-2">
+              <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
                 Biztosan átugorja a(z) <strong>{stepLabel}</strong> munkafázist?
               </p>
               <input
                 type="text" value={skipReason} onChange={(e) => onSkipReasonChange(e.target.value)}
                 placeholder="Ok (opcionális, pl. már megtörtént)"
-                className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 mb-2"
+                className="w-full text-sm border border-gray-300 dark:border-gray-700 rounded px-2 py-1.5 mb-2"
               />
               <div className="flex items-center gap-2">
                 <button onClick={onSkip} disabled={saving}
                   className="inline-flex items-center gap-1 px-3 py-1.5 bg-amber-500 text-white rounded text-xs font-medium hover:bg-amber-600 disabled:opacity-50">
                   {saving && <Loader2 className="w-3 h-3 animate-spin" />} Átugrás
                 </button>
-                <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-800">Mégse</button>
+                <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">Mégse</button>
               </div>
             </>
           )}
           {confirmAction === 'unskip' && (
             <>
-              <p className="text-sm text-gray-700 mb-2">Visszaállítja a(z) <strong>{stepLabel}</strong> munkafázist várakozóra?</p>
+              <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">Visszaállítja a(z) <strong>{stepLabel}</strong> munkafázist várakozóra?</p>
               <div className="flex items-center gap-2">
                 <button onClick={onUnskip} disabled={saving}
                   className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-600 text-white rounded text-xs font-medium hover:bg-gray-700 disabled:opacity-50">
                   {saving && <Loader2 className="w-3 h-3 animate-spin" />} Visszaállítás
                 </button>
-                <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-800">Mégse</button>
+                <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">Mégse</button>
               </div>
             </>
           )}
           {confirmAction === 'delete' && (
             <>
-              <p className="text-sm text-gray-700 mb-2">
+              <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
                 Biztosan elhagyja a(z) <strong>{stepLabel}</strong> munkafázist a tervből? Ez a művelet nem vonható vissza.
               </p>
               <div className="flex items-center gap-2">
@@ -489,7 +489,7 @@ function StepRowWithConfirm({
                   className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-500 text-white rounded text-xs font-medium hover:bg-red-600 disabled:opacity-50">
                   {saving && <Loader2 className="w-3 h-3 animate-spin" />} Elhagyás
                 </button>
-                <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-800">Mégse</button>
+                <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">Mégse</button>
               </div>
             </>
           )}
@@ -542,24 +542,24 @@ function TimingEditor({ step, mergedChildCount, saving, onCancel }: {
 
   return (
     <div>
-      <p className="text-sm text-gray-700 mb-2 font-medium">Időzítés szerkesztése</p>
+      <p className="text-sm text-gray-700 dark:text-gray-300 mb-2 font-medium">Időzítés szerkesztése</p>
       {mergedChildCount > 0 && (
-        <p className="text-xs text-violet-700 bg-violet-50 border border-violet-100 rounded-md px-2 py-1.5 mb-2">
+        <p className="text-xs text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/40 border border-violet-100 dark:border-violet-800 rounded-md px-2 py-1.5 mb-2">
           Összevont csoport: ez a percszám az <strong>egész</strong> egy időpontra eső blokkra vonatkozik
           (foglalható slot). A részlépések külön perce csak tájékoztató; szétbontás után külön állítható.
         </p>
       )}
       <div className="flex items-center gap-3 mb-2">
         <div className="flex items-center gap-1">
-          <label className="text-xs text-gray-500 whitespace-nowrap">Nap offset:</label>
+          <label className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">Nap offset:</label>
           <input type="number" value={daysOffset} onChange={(e) => setDaysOffset(Math.max(0, parseInt(e.target.value) || 0))}
-            min={0} className="w-16 text-sm border border-gray-300 rounded px-2 py-1 text-center" />
+            min={0} className="w-16 text-sm border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-center" />
         </div>
         <div className="flex items-center gap-1">
-          <label className="text-xs text-gray-500 whitespace-nowrap">Időtartam:</label>
+          <label className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">Időtartam:</label>
           <input type="number" value={duration} onChange={(e) => setDuration(Math.max(5, parseInt(e.target.value) || 30))}
-            min={5} step={5} className="w-16 text-sm border border-gray-300 rounded px-2 py-1 text-center" />
-          <span className="text-xs text-gray-400">perc</span>
+            min={5} step={5} className="w-16 text-sm border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-center" />
+          <span className="text-xs text-gray-400 dark:text-gray-500">perc</span>
         </div>
       </div>
       <div className="flex items-center gap-2">
@@ -567,7 +567,7 @@ function TimingEditor({ step, mergedChildCount, saving, onCancel }: {
           className="inline-flex items-center gap-1 px-3 py-1.5 bg-medical-primary text-white rounded text-xs font-medium hover:bg-medical-primary-dark disabled:opacity-50">
           {(saving || localSaving) && <Loader2 className="w-3 h-3 animate-spin" />} Mentés
         </button>
-        <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-800">Mégse</button>
+        <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">Mégse</button>
       </div>
     </div>
   );
@@ -964,8 +964,8 @@ export function EpisodeStepsManager({
   };
 
   const getPathwayColor = (sourceId: string | null): string => {
-    if (!sourceId) return 'bg-gray-100 text-gray-600';
-    return pathwayColorMap.get(sourceId) ?? 'bg-gray-100 text-gray-600';
+    if (!sourceId) return 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400';
+    return pathwayColorMap.get(sourceId) ?? 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400';
   };
 
   const filteredCatalog = useMemo(() => {
@@ -1007,33 +1007,33 @@ export function EpisodeStepsManager({
   );
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200">
+    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
       >
         <div>
-          <h3 className="text-base font-semibold text-gray-900">Kezelési munkafázisok</h3>
+          <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Kezelési munkafázisok</h3>
           {hasMultiplePathways ? (
-            <p className="text-sm text-gray-500 mt-0.5">{episodePathways.length} kezelési út összefésülve</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{episodePathways.length} kezelési út összefésülve</p>
           ) : carePathwayName ? (
-            <p className="text-sm text-gray-500 mt-0.5">{carePathwayName}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{carePathwayName}</p>
           ) : null}
         </div>
         <div className="flex items-center gap-2">
           {steps.length > 0 && (
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-gray-500 dark:text-gray-400">
               {steps.filter((s) => s.status === 'completed' || s.status === 'skipped').length}/{steps.length} kész
             </span>
           )}
-          {expanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+          {expanded ? <ChevronUp className="w-4 h-4 text-gray-400 dark:text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-400 dark:text-gray-500" />}
         </div>
       </button>
 
       {expanded && (
         <div className="px-4 pb-4">
           {loading ? (
-            <div className="flex items-center gap-2 text-gray-500 py-4">
+            <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 py-4">
               <Loader2 className="w-4 h-4 animate-spin" />
               <span className="text-sm">Betöltés…</span>
             </div>
@@ -1059,7 +1059,7 @@ export function EpisodeStepsManager({
                     )}
                     <button
                       onClick={() => { setAdderTab('catalog'); setAdderOpen(true); }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-gray-300 text-gray-600 rounded-md text-sm hover:border-medical-primary hover:text-medical-primary transition-colors"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 rounded-md text-sm hover:border-medical-primary hover:text-medical-primary transition-colors"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       Munkafázis hozzáadása
@@ -1069,8 +1069,8 @@ export function EpisodeStepsManager({
                         onClick={() => { setMergeMode(!mergeMode); setMergeSelection(new Set()); }}
                         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors ${
                           mergeMode
-                            ? 'bg-violet-100 text-violet-700 border border-violet-300'
-                            : 'border border-gray-300 text-gray-600 hover:border-violet-400 hover:text-violet-600'
+                            ? 'bg-violet-100 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 border border-violet-300 dark:border-violet-700'
+                            : 'border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-violet-400 hover:text-violet-600'
                         }`}
                       >
                         <Merge className="w-3.5 h-3.5" />
@@ -1079,7 +1079,7 @@ export function EpisodeStepsManager({
                     )}
                   </div>
                 ) : (
-                  <div className="border border-gray-200 rounded-lg p-3 bg-gray-50/50">
+                  <div className="border border-gray-200 dark:border-gray-800 rounded-lg p-3 bg-gray-50/50 dark:bg-gray-800/60">
                     {/* Tab switcher */}
                     <div className="flex items-center gap-1 mb-3 flex-wrap">
                       <button
@@ -1087,7 +1087,7 @@ export function EpisodeStepsManager({
                         className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                           adderTab === 'catalog'
                             ? 'bg-medical-primary text-white'
-                            : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                            : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50'
                         }`}
                       >
                         <FileText className="w-3 h-3" />
@@ -1099,7 +1099,7 @@ export function EpisodeStepsManager({
                           className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                             adderTab === 'tooth'
                               ? 'bg-teal-600 text-white'
-                              : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                              : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50'
                           }`}
                         >
                           🦷 Fogkezelés
@@ -1108,7 +1108,7 @@ export function EpisodeStepsManager({
                       <div className="flex-1" />
                       <button
                         onClick={() => setAdderOpen(false)}
-                        className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1"
+                        className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 px-2 py-1"
                       >
                         Bezárás
                       </button>
@@ -1118,29 +1118,29 @@ export function EpisodeStepsManager({
                     {adderTab === 'catalog' && (
                       <div>
                         <div className="relative mb-2">
-                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
                           <input
                             type="text"
                             value={catalogSearch}
                             onChange={(e) => setCatalogSearch(e.target.value)}
                             placeholder="Katalógus keresése…"
-                            className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-300 rounded-md"
+                            className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-md"
                           />
                         </div>
                         <div className="max-h-48 overflow-y-auto space-y-0.5">
                           {filteredCatalog.length === 0 ? (
-                            <p className="text-xs text-gray-500 py-2 text-center">Nincs találat</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 py-2 text-center">Nincs találat</p>
                           ) : (
                             filteredCatalog.map((item) => (
                               <button
                                 key={item.stepCode}
                                 onClick={() => addCatalogStep(item)}
                                 disabled={addingStep}
-                                className="w-full text-left flex items-center gap-2 px-2.5 py-2 rounded-md hover:bg-white hover:shadow-sm transition-all text-sm disabled:opacity-50 group"
+                                className="w-full text-left flex items-center gap-2 px-2.5 py-2 rounded-md hover:bg-white dark:hover:bg-gray-800 hover:shadow-sm transition-all text-sm disabled:opacity-50 group"
                               >
-                                <Plus className="w-3.5 h-3.5 text-gray-400 group-hover:text-medical-primary shrink-0" />
-                                <span className="font-medium text-gray-800 group-hover:text-medical-primary">{item.labelHu}</span>
-                                <span className="text-xs text-gray-400 ml-auto shrink-0">{item.stepCode}</span>
+                                <Plus className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 group-hover:text-medical-primary shrink-0" />
+                                <span className="font-medium text-gray-800 dark:text-gray-200 group-hover:text-medical-primary">{item.labelHu}</span>
+                                <span className="text-xs text-gray-400 dark:text-gray-500 ml-auto shrink-0">{item.stepCode}</span>
                               </button>
                             ))
                           )}
@@ -1148,7 +1148,7 @@ export function EpisodeStepsManager({
                         <button
                           type="button"
                           onClick={() => setAdderTab('freetext')}
-                          className="mt-2 text-xs text-gray-500 hover:text-medical-primary inline-flex items-center gap-1"
+                          className="mt-2 text-xs text-gray-500 dark:text-gray-400 hover:text-medical-primary inline-flex items-center gap-1"
                         >
                           <PenLine className="w-3 h-3" />
                           Haladó: egyedi megnevezésű munkafázis
@@ -1162,7 +1162,7 @@ export function EpisodeStepsManager({
                         <button
                           type="button"
                           onClick={() => setAdderTab('catalog')}
-                          className="text-xs text-gray-500 hover:text-medical-primary"
+                          className="text-xs text-gray-500 dark:text-gray-400 hover:text-medical-primary"
                         >
                           ← Vissza a katalógushoz
                         </button>
@@ -1171,13 +1171,13 @@ export function EpisodeStepsManager({
                           value={freeLabel}
                           onChange={(e) => setFreeLabel(e.target.value)}
                           placeholder="Munkafázis megnevezése (pl. Ideiglenes korona)"
-                          className="w-full text-sm border border-gray-300 rounded-md px-3 py-1.5"
+                          className="w-full text-sm border border-gray-300 dark:border-gray-700 rounded-md px-3 py-1.5"
                         />
                         <div className="flex items-center gap-2">
                           <select
                             value={freePool}
                             onChange={(e) => setFreePool(e.target.value)}
-                            className="text-sm border border-gray-300 rounded-md px-2 py-1.5"
+                            className="text-sm border border-gray-300 dark:border-gray-700 rounded-md px-2 py-1.5"
                           >
                             <option value="consult">Konzultáció</option>
                             <option value="work">Munkafázis</option>
@@ -1190,9 +1190,9 @@ export function EpisodeStepsManager({
                               onChange={(e) => setFreeDuration(Math.max(5, parseInt(e.target.value) || 30))}
                               min={5}
                               step={5}
-                              className="w-16 text-sm border border-gray-300 rounded-md px-2 py-1.5 text-center"
+                              className="w-16 text-sm border border-gray-300 dark:border-gray-700 rounded-md px-2 py-1.5 text-center"
                             />
-                            <span className="text-xs text-gray-500">perc</span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">perc</span>
                           </div>
                           <button
                             onClick={addFreeTextStep}
@@ -1210,7 +1210,7 @@ export function EpisodeStepsManager({
                     {adderTab === 'tooth' && (
                       <div>
                         {availableToothTreatments.length === 0 ? (
-                          <p className="text-xs text-gray-500 py-2 text-center">Nincs hozzáadható fogkezelés (mindegyik már a munkafázis-sorban van)</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 py-2 text-center">Nincs hozzáadható fogkezelés (mindegyik már a munkafázis-sorban van)</p>
                         ) : (
                           <div className="max-h-48 overflow-y-auto space-y-0.5">
                             {availableToothTreatments.map((tt) => (
@@ -1218,11 +1218,11 @@ export function EpisodeStepsManager({
                                 key={tt.id}
                                 onClick={() => addToothTreatmentStep(tt)}
                                 disabled={addingStep}
-                                className="w-full text-left flex items-center gap-2 px-2.5 py-2 rounded-md hover:bg-white hover:shadow-sm transition-all text-sm disabled:opacity-50 group"
+                                className="w-full text-left flex items-center gap-2 px-2.5 py-2 rounded-md hover:bg-white dark:hover:bg-gray-800 hover:shadow-sm transition-all text-sm disabled:opacity-50 group"
                               >
-                                <Plus className="w-3.5 h-3.5 text-teal-400 group-hover:text-teal-600 shrink-0" />
-                                <span className="font-medium text-gray-800 group-hover:text-teal-700">{tt.labelHu}</span>
-                                <span className="text-xs text-teal-600 ml-1">fog #{tt.toothNumber}</span>
+                                <Plus className="w-3.5 h-3.5 text-teal-400 dark:text-teal-500 group-hover:text-teal-600 shrink-0" />
+                                <span className="font-medium text-gray-800 dark:text-gray-200 group-hover:text-teal-700">{tt.labelHu}</span>
+                                <span className="text-xs text-teal-600 dark:text-teal-300 ml-1">fog #{tt.toothNumber}</span>
                               </button>
                             ))}
                           </div>
@@ -1235,9 +1235,9 @@ export function EpisodeStepsManager({
 
               {/* ─── Merge mode toolbar ──────────────────────────────── */}
               {mergeMode && (
-                <div className="mb-3 flex items-center gap-2 p-2 rounded-lg bg-violet-50 border border-violet-200">
-                  <Merge className="w-4 h-4 text-violet-600" />
-                  <span className="text-sm text-violet-700">Jelölje ki a munkafázisokat, amelyeket egy időpontra szeretne összevonni.</span>
+                <div className="mb-3 flex items-center gap-2 p-2 rounded-lg bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-800">
+                  <Merge className="w-4 h-4 text-violet-600 dark:text-violet-300" />
+                  <span className="text-sm text-violet-700 dark:text-violet-300">Jelölje ki a munkafázisokat, amelyeket egy időpontra szeretne összevonni.</span>
                   <div className="flex-1" />
                   <button
                     onClick={handleMergeConfirm}
@@ -1249,7 +1249,7 @@ export function EpisodeStepsManager({
                   </button>
                   <button
                     onClick={() => { setMergeMode(false); setMergeSelection(new Set()); }}
-                    className="px-2 py-1 text-xs text-violet-600 hover:text-violet-800"
+                    className="px-2 py-1 text-xs text-violet-600 dark:text-violet-300 hover:text-violet-800"
                   >
                     Mégse
                   </button>
@@ -1258,10 +1258,10 @@ export function EpisodeStepsManager({
 
               {/* ─── Step list with DnD ──────────────────────────────── */}
               {primarySteps.length === 0 ? (
-                <p className="text-sm text-gray-500 py-2">Még nincsenek munkafázisok. Adjon hozzá a fenti űrlapon.</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 py-2">Még nincsenek munkafázisok. Adjon hozzá a fenti űrlapon.</p>
               ) : (
                 <div className="space-y-1">
-                  <p className="text-xs text-gray-500 mb-2">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                     Húzza a munkafázisokat a kívánt sorrendbe. A kukával elhagyhatja a felesleges elemeket.
                   </p>
                   {mounted ? (
@@ -1310,7 +1310,7 @@ export function EpisodeStepsManager({
                   ) : (
                     <div className="animate-pulse space-y-2">
                       {primarySteps.map((_, i) => (
-                        <div key={i} className="h-12 bg-gray-100 rounded-lg" />
+                        <div key={i} className="h-12 bg-gray-100 dark:bg-gray-800 rounded-lg" />
                       ))}
                     </div>
                   )}

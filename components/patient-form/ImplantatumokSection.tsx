@@ -77,7 +77,7 @@ export function ImplantatumokSection({
       {editing ? (
         <>
           <div className="mb-6">
-            <div className="bg-gray-50 p-3 sm:p-4 rounded-lg overflow-x-auto">
+            <div className="bg-gray-50 dark:bg-gray-800/60 p-3 sm:p-4 rounded-lg overflow-x-auto">
               <div className="mb-2">{renderRow(UPPER)}</div>
               {renderRow(LOWER)}
             </div>
@@ -85,9 +85,9 @@ export function ImplantatumokSection({
 
           {positions.length > 0 && (
             <div className="space-y-3 sm:space-y-4 mb-4">
-              <h5 className="font-medium text-gray-700 mb-3 text-sm sm:text-base">Implantátum részletek</h5>
+              <h5 className="font-medium text-gray-700 dark:text-gray-300 mb-3 text-sm sm:text-base">Implantátum részletek</h5>
               {positions.map(toothNumber => (
-                <div key={toothNumber} className="border border-gray-200 rounded-md p-3 sm:p-4">
+                <div key={toothNumber} className="border border-gray-200 dark:border-gray-800 rounded-md p-3 sm:p-4">
                   <label className="form-label font-medium text-sm sm:text-base">
                     {toothNumber}. fog - Implantátum típusa, gyári száma, stb.
                   </label>
@@ -109,10 +109,10 @@ export function ImplantatumokSection({
               <input
                 {...register('nemIsmertPoziciokbanImplantatum')}
                 type="checkbox"
-                className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
+                className="rounded border-gray-300 dark:border-gray-700 text-medical-primary focus:ring-medical-primary"
                 disabled={isViewOnly}
               />
-              <label className="ml-2 text-sm font-medium text-gray-700">Nem ismert pozíciókban</label>
+              <label className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">Nem ismert pozíciókban</label>
             </div>
             {nemIsmertPoziciokbanImplantatum && (
               <div className="ml-6">

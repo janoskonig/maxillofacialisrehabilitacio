@@ -36,8 +36,8 @@ export default function PatientPortalPageClient() {
   }, [searchParams, showToast]);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <header className="bg-white shadow-sm border-b">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col">
+      <header className="bg-white dark:bg-gray-900 shadow-sm border-b dark:border-gray-800">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-3 sm:py-4">
           <div className="flex items-center justify-center">
             <div className="w-[50px] h-[58px] sm:w-[60px] sm:h-[69px] flex-shrink-0">
@@ -47,7 +47,7 @@ export default function PatientPortalPageClient() {
               <h1 className="text-lg sm:text-xl lg:text-2xl font-bold text-medical-primary">
                 Maxillofaciális Rehabilitáció
               </h1>
-              <p className="text-xs sm:text-sm text-gray-600">Páciens portál</p>
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Páciens portál</p>
             </div>
           </div>
         </div>
@@ -56,8 +56,8 @@ export default function PatientPortalPageClient() {
       <main className="flex-1 flex items-center justify-center py-6 sm:py-8 px-3 sm:px-4 lg:px-8">
         <div className="w-full max-w-md">
           <div className="mb-4 sm:mb-6">
-            <div className="bg-green-50 border border-green-200 rounded-lg p-3 sm:p-4">
-              <p className="text-xs sm:text-sm text-green-900 font-medium">
+            <div className="bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800 rounded-lg p-3 sm:p-4">
+              <p className="text-xs sm:text-sm text-green-900 dark:text-green-200 font-medium">
                 Ha Ön páciens, kérem kattintson az alábbi linkre és kövesse az utasításokat.
               </p>
             </div>
@@ -65,7 +65,7 @@ export default function PatientPortalPageClient() {
 
           <PortalLogin />
 
-          <div className="mt-4 sm:mt-6 text-center text-xs sm:text-sm text-gray-600">
+          <div className="mt-4 sm:mt-6 text-center text-xs sm:text-sm text-gray-600 dark:text-gray-400">
             <p>Beutaló szükséges az időpontfoglaláshoz.</p>
             <p className="mt-1.5 sm:mt-2">
               Kérdéseivel forduljon:{' '}

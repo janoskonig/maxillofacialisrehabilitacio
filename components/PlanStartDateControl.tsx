@@ -62,11 +62,11 @@ export function PlanStartDateControl({
     : null;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 text-xs text-gray-700 bg-slate-50 border border-slate-200 rounded px-2 py-1.5 mb-2">
+    <div className="flex flex-wrap items-center gap-2 text-xs text-gray-700 dark:text-gray-300 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 rounded px-2 py-1.5 mb-2">
       <Calendar className="w-3.5 h-3.5 text-medical-primary shrink-0" />
       <span className="font-medium">Kezdődátum (terv):</span>
       {displayCurrent && (
-        <span className="text-gray-600" title="Jelenleg mentett">
+        <span className="text-gray-600 dark:text-gray-400" title="Jelenleg mentett">
           {displayCurrent}
         </span>
       )}
@@ -85,7 +85,7 @@ export function PlanStartDateControl({
       >
         {saving ? '…' : 'Mentés'}
       </button>
-      {message && <span className="text-gray-600">{message}</span>}
+      {message && <span className="text-gray-600 dark:text-gray-400">{message}</span>}
     </div>
   );
 }

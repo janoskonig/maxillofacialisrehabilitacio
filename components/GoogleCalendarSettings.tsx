@@ -272,7 +272,7 @@ export function GoogleCalendarSettings() {
           <Calendar className="w-5 h-5 text-medical-primary" />
           <h2 className="text-xl font-semibold">Google Calendar integráció</h2>
         </div>
-        <div className="flex items-center gap-2 text-gray-500">
+        <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
           <Loader2 className="w-4 h-4 animate-spin" />
           <span>Betöltés...</span>
         </div>
@@ -287,18 +287,18 @@ export function GoogleCalendarSettings() {
         <h2 className="text-xl font-semibold">Google Calendar integráció</h2>
       </div>
 
-      <p className="text-sm text-gray-600 mb-6">
+      <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
         Összekötheti a Google Calendar fiókját, hogy az időpontfoglalások automatikusan megjelenjenek a naptárában.
       </p>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md text-sm mb-4">
+        <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-300 px-4 py-3 rounded-md text-sm mb-4">
           {error}
         </div>
       )}
 
       {success && (
-        <div className="bg-green-50 border border-green-200 text-green-600 px-4 py-3 rounded-md text-sm mb-4">
+        <div className="bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-300 px-4 py-3 rounded-md text-sm mb-4">
           {success}
         </div>
       )}
@@ -307,11 +307,11 @@ export function GoogleCalendarSettings() {
         <div className="space-y-4">
           {/* Státusz megjelenítése */}
           {status.status === 'reconnect_required' ? (
-            <div className="flex items-start gap-3 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-              <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5" />
+            <div className="flex items-start gap-3 p-4 bg-yellow-50 dark:bg-yellow-950/40 border border-yellow-200 dark:border-yellow-800 rounded-md">
+              <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-300 mt-0.5" />
               <div className="flex-1">
-                <div className="font-medium text-gray-900">Újracsatlakoztatás szükséges</div>
-                <div className="text-sm text-gray-600 mt-1">
+                <div className="font-medium text-gray-900 dark:text-gray-100">Újracsatlakoztatás szükséges</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                   {status.email && `Email: ${status.email}`}
                   {status.lastErrorCode && (
                     <div className="mt-1">
@@ -319,7 +319,7 @@ export function GoogleCalendarSettings() {
                     </div>
                   )}
                   {status.lastErrorAt && (
-                    <div className="mt-1 text-xs text-gray-500">
+                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                       Utolsó hiba: {new Date(status.lastErrorAt).toLocaleString('hu-HU')}
                     </div>
                   )}
@@ -346,11 +346,11 @@ export function GoogleCalendarSettings() {
               </div>
             </div>
           ) : status.status === 'broken_config' ? (
-            <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-md">
-              <XCircle className="w-5 h-5 text-red-600 mt-0.5" />
+            <div className="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-md">
+              <XCircle className="w-5 h-5 text-red-600 dark:text-red-300 mt-0.5" />
               <div className="flex-1">
-                <div className="font-medium text-gray-900">Konfigurációs hiba</div>
-                <div className="text-sm text-gray-600 mt-1">
+                <div className="font-medium text-gray-900 dark:text-gray-100">Konfigurációs hiba</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                   {status.email && `Email: ${status.email}`}
                   {status.lastErrorCode && (
                     <div className="mt-1">
@@ -358,23 +358,23 @@ export function GoogleCalendarSettings() {
                     </div>
                   )}
                   {status.lastErrorAt && (
-                    <div className="mt-1 text-xs text-gray-500">
+                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                       Utolsó hiba: {new Date(status.lastErrorAt).toLocaleString('hu-HU')}
                     </div>
                   )}
                 </div>
-                <div className="mt-3 text-sm text-gray-600">
+                <div className="mt-3 text-sm text-gray-600 dark:text-gray-400">
                   Kérjük, lépjen kapcsolatba a rendszergazdával.
                 </div>
               </div>
             </div>
           ) : (
-            <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-md">
-              <CheckCircle2 className="w-5 h-5 text-green-600" />
+            <div className="flex items-center gap-3 p-4 bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800 rounded-md">
+              <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-300" />
               <div className="flex-1">
-                <div className="font-medium text-gray-900">Google Calendar összekötve</div>
+                <div className="font-medium text-gray-900 dark:text-gray-100">Google Calendar összekötve</div>
                 {status.email && (
-                  <div className="text-sm text-gray-600 mt-1">
+                  <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                     Email: {status.email}
                   </div>
                 )}
@@ -383,12 +383,12 @@ export function GoogleCalendarSettings() {
           )}
 
           {/* Naptár beállítások */}
-          <div className="p-4 bg-gray-50 border border-gray-200 rounded-md space-y-4">
-            <h3 className="font-medium text-gray-900">Naptár beállítások</h3>
-            
+          <div className="p-4 bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 rounded-md space-y-4">
+            <h3 className="font-medium text-gray-900 dark:text-gray-100">Naptár beállítások</h3>
+
             {!calendarSettings || calendarSettings.calendars.length === 0 ? (
               <div className="space-y-4">
-                <div className="text-sm text-yellow-600 bg-yellow-50 border border-yellow-200 px-4 py-3 rounded-md">
+                <div className="text-sm text-yellow-600 dark:text-yellow-300 bg-yellow-50 dark:bg-yellow-950/40 border border-yellow-200 dark:border-yellow-800 px-4 py-3 rounded-md">
                   Nem sikerült betölteni a naptárakat. Kérjük, próbálja újra vagy ellenőrizze a Google Calendar kapcsolatot.
                 </div>
                 <button
@@ -402,7 +402,7 @@ export function GoogleCalendarSettings() {
             ) : (
               <>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Forrás naptár (honnan szedje ki a "szabad" eseményeket)
                   </label>
                   <select
@@ -417,13 +417,13 @@ export function GoogleCalendarSettings() {
                       </option>
                     ))}
                   </select>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     Ebből a naptárból keresi a "szabad" nevű eseményeket
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Cél naptár (hova mentse az új eseményeket)
                   </label>
                   <select
@@ -438,7 +438,7 @@ export function GoogleCalendarSettings() {
                       </option>
                     ))}
                   </select>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     Ide menti az új időpontfoglalásokat
                   </p>
                 </div>
@@ -504,7 +504,7 @@ export function GoogleCalendarSettings() {
                   )}
                 </button>
               </div>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
                 „Szabad időpontok betöltése”: a naptárból hozza be a szabad időpontokat. „Időpontok küldése a naptárba”: a korábbi foglalásokat feltölti a Google Naptárba.
               </p>
               <button
@@ -529,11 +529,11 @@ export function GoogleCalendarSettings() {
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="flex items-center gap-3 p-4 bg-gray-50 border border-gray-200 rounded-md">
-            <XCircle className="w-5 h-5 text-gray-400" />
+          <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 rounded-md">
+            <XCircle className="w-5 h-5 text-gray-400 dark:text-gray-500" />
             <div className="flex-1">
-              <div className="font-medium text-gray-900">Google Calendar nincs összekötve</div>
-              <div className="text-sm text-gray-600 mt-1">
+              <div className="font-medium text-gray-900 dark:text-gray-100">Google Calendar nincs összekötve</div>
+              <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                 Kattintson az alábbi gombra az összekötéshez
               </div>
             </div>

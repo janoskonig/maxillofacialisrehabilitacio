@@ -112,26 +112,26 @@ export function DentalStatusTimeline({ patientId }: { patientId: string }) {
   const hasHistory = (data?.snapshots.length ?? 0) > 0 || !!data?.baseline;
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
-      <h3 className="text-base font-semibold text-gray-900 mb-1 flex items-center gap-2">
+    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
+      <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1 flex items-center gap-2">
         <History className="w-4 h-4 text-medical-primary" />
         Fogazati státusz idővonal
       </h3>
-      <p className="text-xs text-gray-500 mb-3">
+      <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
         Kiindulási állapot → kezelési terv → datált státuszok. Egy kezelés „Kész”-re
         állításakor a fog állapota automatikusan frissül és új datált státusz keletkezik.
       </p>
 
       {loading && !data ? (
-        <div className="flex items-center gap-2 text-sm text-gray-500 py-4">
+        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 py-4">
           <Loader2 className="w-4 h-4 animate-spin" /> Betöltés…
         </div>
       ) : !data ? (
-        <p className="text-sm text-gray-500 py-2">Nem sikerült betölteni az idővonalat.</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 py-2">Nem sikerült betölteni az idővonalat.</p>
       ) : (
         <>
           {!hasHistory && (
-            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-3">
+            <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-900 rounded px-2 py-1.5 mb-3">
               Még nincs rögzített előzmény. A kiindulási állapot az első kezelés
               befejezésekor rögzül; addig a „Jelenlegi” és a „Kezelési terv” látható.
             </p>
@@ -149,12 +149,12 @@ export function DentalStatusTimeline({ patientId }: { patientId: string }) {
                   className={`px-2.5 py-1 rounded-full border text-xs transition-colors ${
                     isSel
                       ? 'bg-medical-primary text-white border-medical-primary'
-                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'
                   }`}
                 >
                   <span className="font-medium">{tp.label}</span>
                   {tp.sublabel && (
-                    <span className={isSel ? 'ml-1 opacity-90' : 'ml-1 text-gray-400'}>
+                    <span className={isSel ? 'ml-1 opacity-90' : 'ml-1 text-gray-400 dark:text-gray-500'}>
                       {tp.sublabel}
                     </span>
                   )}
@@ -164,7 +164,7 @@ export function DentalStatusTimeline({ patientId }: { patientId: string }) {
           </div>
 
           {selected?.title && (
-            <p className="text-xs text-gray-500 mb-2">{selected.title}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{selected.title}</p>
           )}
 
           <Odontogram

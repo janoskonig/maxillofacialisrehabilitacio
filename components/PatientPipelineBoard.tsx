@@ -30,14 +30,14 @@ function timeAgo(isoDate: string): string {
 }
 
 const COLUMN_COLORS: Record<string, { bg: string; border: string; badge: string }> = {
-  STAGE_0: { bg: 'bg-blue-50', border: 'border-blue-300', badge: 'bg-blue-500' },
-  STAGE_1: { bg: 'bg-indigo-50', border: 'border-indigo-300', badge: 'bg-indigo-500' },
-  STAGE_2: { bg: 'bg-violet-50', border: 'border-violet-300', badge: 'bg-violet-500' },
-  STAGE_3: { bg: 'bg-purple-50', border: 'border-purple-300', badge: 'bg-purple-500' },
-  STAGE_4: { bg: 'bg-fuchsia-50', border: 'border-fuchsia-300', badge: 'bg-fuchsia-500' },
+  STAGE_0: { bg: 'bg-blue-50 dark:bg-blue-950/40', border: 'border-blue-300 dark:border-blue-700', badge: 'bg-blue-500' },
+  STAGE_1: { bg: 'bg-indigo-50 dark:bg-indigo-950/40', border: 'border-indigo-300 dark:border-indigo-700', badge: 'bg-indigo-500' },
+  STAGE_2: { bg: 'bg-violet-50 dark:bg-violet-950/40', border: 'border-violet-300 dark:border-violet-700', badge: 'bg-violet-500' },
+  STAGE_3: { bg: 'bg-purple-50 dark:bg-purple-950/40', border: 'border-purple-300 dark:border-purple-700', badge: 'bg-purple-500' },
+  STAGE_4: { bg: 'bg-fuchsia-50 dark:bg-fuchsia-950/40', border: 'border-fuchsia-300 dark:border-fuchsia-700', badge: 'bg-fuchsia-500' },
 };
 
-const DEFAULT_COLOR = { bg: 'bg-gray-50', border: 'border-gray-300', badge: 'bg-gray-500' };
+const DEFAULT_COLOR = { bg: 'bg-gray-50 dark:bg-gray-800/60', border: 'border-gray-300 dark:border-gray-700', badge: 'bg-gray-500' };
 
 export function PatientPipelineBoard() {
   const [columns, setColumns] = useState<PipelineColumn[]>([]);
@@ -89,13 +89,13 @@ export function PatientPipelineBoard() {
     <div className="space-y-3">
       {/* Header bar */}
       <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-gray-600 dark:text-gray-400">
           Beteg előkészítés pipeline &mdash; <span className="font-medium">{totalPatients}</span> beteg összesen
         </p>
         <button
           onClick={fetchData}
           disabled={loading}
-          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-medical-primary transition-colors disabled:opacity-50"
+          className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-medical-primary transition-colors disabled:opacity-50"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           Frissítés
@@ -114,7 +114,7 @@ export function PatientPipelineBoard() {
               >
                 {/* Column header */}
                 <div className="flex items-center justify-between px-3 py-2.5 border-b border-inherit">
-                  <h3 className="text-sm font-semibold text-gray-800 truncate">{col.label}</h3>
+                  <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">{col.label}</h3>
                   <span className={`${colors.badge} text-white text-xs font-bold px-2 py-0.5 rounded-full min-w-[24px] text-center`}>
                     {col.patients.length}
                   </span>
@@ -125,19 +125,19 @@ export function PatientPipelineBoard() {
                   {col.patients.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-6 text-center">
                       <Users className="w-8 h-8 text-gray-300 mb-2" />
-                      <p className="text-xs text-gray-400">Nincs beteg</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">Nincs beteg</p>
                     </div>
                   ) : (
                     col.patients.map((patient) => (
                       <Link
                         key={patient.patientId}
                         href={`/patients/${patient.patientId}/view`}
-                        className="block bg-white rounded-lg border border-gray-200 p-3 shadow-sm hover:shadow-md hover:border-medical-primary/40 transition-all duration-150 cursor-pointer group"
+                        className="block bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-800 p-3 shadow-sm hover:shadow-md hover:border-medical-primary/40 transition-all duration-150 cursor-pointer group"
                       >
-                        <p className="text-sm font-medium text-gray-900 group-hover:text-medical-primary truncate">
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 group-hover:text-medical-primary truncate">
                           {patient.patientName}
                         </p>
-                        <div className="flex items-center gap-1 mt-1.5 text-xs text-gray-500">
+                        <div className="flex items-center gap-1 mt-1.5 text-xs text-gray-500 dark:text-gray-400">
                           <Clock className="w-3 h-3" />
                           <span>{timeAgo(patient.since)}</span>
                         </div>

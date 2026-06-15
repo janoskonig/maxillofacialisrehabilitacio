@@ -27,14 +27,14 @@ export function FeedbackButtonTrigger() {
       onClick={openModal}
       className={`p-2 rounded-lg transition-colors relative ${
         hasStoredErrors 
-          ? 'text-red-600 hover:bg-red-50' 
-          : 'text-gray-600 hover:bg-gray-100'
+          ? 'text-red-600 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/40'
+          : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
       }`}
       aria-label="Visszajelzés küldése"
       title={hasStoredErrors ? 'Visszajelzés küldése (hibák vannak)' : 'Visszajelzés küldése'}
     >
       <AlertTriangle 
-        className={`w-5 h-5 ${hasStoredErrors ? 'text-red-600' : 'text-gray-600'}`} 
+        className={`w-5 h-5 ${hasStoredErrors ? 'text-red-600 dark:text-red-300' : 'text-gray-600 dark:text-gray-400'}`}
       />
       {hasStoredErrors && (
         <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] rounded-full w-3 h-3 flex items-center justify-center font-bold">
@@ -153,12 +153,12 @@ export function FeedbackModal() {
     <>
       {/* Feedback Modal */}
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl">
-            <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center">
-              <h2 className="text-2xl font-bold text-gray-900">Visszajelzés küldése</h2>
+          <div className="bg-white dark:bg-gray-900 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl">
+            <div className="sticky top-0 bg-white dark:bg-gray-900 border-b px-6 py-4 flex justify-between items-center">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Visszajelzés küldése</h2>
               <button
                 onClick={handleClose}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+                className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 transition-colors"
                 aria-label="Bezárás"
               >
                 <X className="w-6 h-6" />
@@ -168,7 +168,7 @@ export function FeedbackModal() {
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               {/* Type Selection */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Típus
                 </label>
                 <select
@@ -187,7 +187,7 @@ export function FeedbackModal() {
 
               {/* Title */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Cím (opcionális)
                 </label>
                 <input
@@ -201,8 +201,8 @@ export function FeedbackModal() {
 
               {/* Description */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Leírás <span className="text-red-500">*</span>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Leírás <span className="text-red-500 dark:text-red-400">*</span>
                 </label>
                 <textarea
                   value={description}
@@ -215,14 +215,14 @@ export function FeedbackModal() {
 
               {/* Error Log Info */}
               {includeErrorLog && hasStoredErrors && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <div className="bg-yellow-50 dark:bg-yellow-950/40 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
                   <div className="flex items-start gap-2">
-                    <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
+                    <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-300 mt-0.5" />
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-yellow-800">
+                      <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
                         {storedErrors.length} hibát találtunk a rendszerben
                       </p>
-                      <p className="text-xs text-yellow-700 mt-1">
+                      <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
                         A legutóbbi hiba logja automatikusan csatolva lesz a jelentéshez.
                       </p>
                     </div>
@@ -232,16 +232,16 @@ export function FeedbackModal() {
 
               {/* Submit Status */}
               {submitStatus === 'success' && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                  <p className="text-sm text-green-800">
+                <div className="bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                  <p className="text-sm text-green-800 dark:text-green-200">
                     ✓ Visszajelzés sikeresen elküldve! Köszönjük!
                   </p>
                 </div>
               )}
 
               {submitStatus === 'error' && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <p className="text-sm text-red-800">
+                <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                  <p className="text-sm text-red-800 dark:text-red-200">
                     Hiba történt a küldés során. Kérjük, próbálja újra.
                   </p>
                 </div>

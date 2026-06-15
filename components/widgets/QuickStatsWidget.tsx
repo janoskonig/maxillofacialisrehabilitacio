@@ -25,29 +25,29 @@ export function QuickStatsWidget({
       label: 'Mai időpontok',
       value: todaysAppointmentsCount,
       icon: Calendar,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50',
+      color: 'text-blue-600 dark:text-blue-300',
+      bgColor: 'bg-blue-50 dark:bg-blue-950/40',
     },
     {
       label: 'Következő 7 nap',
       value: upcomingAppointmentsCount,
       icon: Clock,
-      color: 'text-green-600',
-      bgColor: 'bg-green-50',
+      color: 'text-green-600 dark:text-green-300',
+      bgColor: 'bg-green-50 dark:bg-green-950/40',
     },
     {
       label: 'Függőben lévő kezelések',
       value: pendingTreatmentsCount,
       icon: AlertCircle,
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-50',
+      color: 'text-orange-600 dark:text-orange-300',
+      bgColor: 'bg-orange-50 dark:bg-orange-950/40',
     },
     {
       label: 'Új betegek (7 nap)',
       value: recentPatientsCount,
       icon: Users,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-50',
+      color: 'text-purple-600 dark:text-purple-300',
+      bgColor: 'bg-purple-50 dark:bg-purple-950/40',
     },
   ];
 
@@ -57,8 +57,8 @@ export function QuickStatsWidget({
       label: 'Jóváhagyásra vár',
       value: pendingApprovalsCount,
       icon: CheckCircle,
-      color: 'text-red-600',
-      bgColor: 'bg-red-50',
+      color: 'text-red-600 dark:text-red-300',
+      bgColor: 'bg-red-50 dark:bg-red-950/40',
     });
   }
 
@@ -67,8 +67,8 @@ export function QuickStatsWidget({
       label: 'Elérhető időpontok',
       value: availableSlotsCount,
       icon: Clock,
-      color: 'text-indigo-600',
-      bgColor: 'bg-indigo-50',
+      color: 'text-indigo-600 dark:text-indigo-300',
+      bgColor: 'bg-indigo-50 dark:bg-indigo-950/40',
     });
   }
 
@@ -83,8 +83,8 @@ export function QuickStatsWidget({
               className={`${stat.bgColor} rounded-lg p-3 flex flex-col items-center justify-center text-center`}
             >
               <Icon className={`w-6 h-6 sm:w-8 sm:h-8 ${stat.color} mb-2`} />
-              <div className="text-2xl sm:text-3xl font-bold text-gray-900">{stat.value}</div>
-              <div className="text-xs sm:text-sm text-gray-600 mt-1">{stat.label}</div>
+              <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100">{stat.value}</div>
+              <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-1">{stat.label}</div>
             </div>
           );
         })}

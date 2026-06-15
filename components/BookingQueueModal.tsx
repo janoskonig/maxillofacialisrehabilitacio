@@ -220,30 +220,30 @@ export function BookingQueueModal({
         aria-modal="true"
         aria-labelledby="booking-queue-title"
       >
-        <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4">
+        <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-lg w-full mx-4">
           <div className="flex items-center justify-between p-4 border-b">
-            <h2 id="booking-queue-title" className="text-lg font-semibold text-gray-900">
+            <h2 id="booking-queue-title" className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               Kötegelt foglalás
             </h2>
-            <button onClick={handleClose} className="text-gray-500 hover:text-gray-700 p-1" aria-label="Bezárás">
+            <button onClick={handleClose} className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 p-1" aria-label="Bezárás">
               <X className="w-5 h-5" />
             </button>
           </div>
 
           <div className="p-4 space-y-4">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-600">
+              <span className="text-gray-600 dark:text-gray-400">
                 {doneCount}/{totalCount} kész
               </span>
               {(batchState === 'RUNNING' || batchState === 'PAUSED') && currentItem && (
-                <span className="font-medium text-gray-900">
+                <span className="font-medium text-gray-900 dark:text-gray-100">
                   Következő: {currentItem.patientName ?? `#${currentItem.patientId.slice(0, 8)}`} – {currentItem.nextStep}
                 </span>
               )}
             </div>
 
             {batchState === 'PAUSED' && pauseError && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
+              <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-md text-red-700 dark:text-red-300 text-sm">
                 {pauseError}
                 <div className="mt-2 flex gap-2">
                   <button onClick={handleRetry} className="btn-primary text-sm">
@@ -262,11 +262,11 @@ export function BookingQueueModal({
             )}
 
             {batchState === 'COMPLETED' && (
-              <p className="text-green-700 font-medium">Kész. {bookedKeys.length} foglalva, {skippedKeys.length} kihagyva.</p>
+              <p className="text-green-700 dark:text-green-300 font-medium">Kész. {bookedKeys.length} foglalva, {skippedKeys.length} kihagyva.</p>
             )}
 
             {batchState === 'ABORTED' && (
-              <p className="text-gray-600">Leállítva. {bookedKeys.length} foglalva, {skippedKeys.length} kihagyva.</p>
+              <p className="text-gray-600 dark:text-gray-400">Leállítva. {bookedKeys.length} foglalva, {skippedKeys.length} kihagyva.</p>
             )}
           </div>
 

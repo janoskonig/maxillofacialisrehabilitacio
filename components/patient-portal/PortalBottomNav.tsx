@@ -54,7 +54,7 @@ export function PortalBottomNav({ ohipPending = false }: PortalBottomNavProps) {
 
   return (
     <>
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 mobile-safe-bottom">
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 mobile-safe-bottom">
         <div className="flex items-center justify-around h-14">
           {tabs.map((tab) => {
             const isActive = tab.match(pathname);
@@ -73,7 +73,7 @@ export function PortalBottomNav({ ohipPending = false }: PortalBottomNavProps) {
                 className={`flex flex-col items-center justify-center flex-1 h-full gap-0.5 transition-colors ${
                   isActive
                     ? 'text-medical-primary'
-                    : 'text-gray-500 active:text-gray-700'
+                    : 'text-gray-500 dark:text-gray-400 active:text-gray-700'
                 }`}
               >
                 <Icon className="w-5 h-5" />
@@ -94,8 +94,8 @@ export function PortalBottomNav({ ohipPending = false }: PortalBottomNavProps) {
                 onClick={item.action}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors ${
                   item.isLogout
-                    ? 'text-red-700 hover:bg-red-50'
-                    : 'text-gray-700 hover:bg-gray-100'
+                    ? 'text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/40'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                 }`}
               >
                 <Icon className="w-5 h-5 flex-shrink-0" />

@@ -70,7 +70,7 @@ export function PatientEpisodeForm({
   };
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
+    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
       {!open ? (
         <button
           type="button"
@@ -82,14 +82,14 @@ export function PatientEpisodeForm({
         </button>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
-          <h4 className="font-semibold text-gray-900">Új ellátási epizód</h4>
+          <h4 className="font-semibold text-gray-900 dark:text-gray-100">Új ellátási epizód</h4>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Etiológia (kötelező)</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Etiológia (kötelező)</label>
             <select
               value={reason}
               onChange={(e) => setReason(e.target.value as ReasonType)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm"
               required
             >
               {REASON_VALUES.map((r) => (
@@ -99,23 +99,23 @@ export function PatientEpisodeForm({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Cím / ok (kötelező)</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cím / ok (kötelező)</label>
             <input
               type="text"
               value={chiefComplaint}
               onChange={(e) => setChiefComplaint(e.target.value)}
               placeholder="pl. Obturátor remake, Recidíva 2027"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Indító esemény (opcionális)</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Indító esemény (opcionális)</label>
             <select
               value={triggerType}
               onChange={(e) => setTriggerType((e.target.value || '') as TriggerType | '')}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm"
             >
               <option value="">—</option>
               {TRIGGER_TYPE_VALUES.map((t) => (
@@ -136,7 +136,7 @@ export function PatientEpisodeForm({
             <button
               type="button"
               onClick={() => { setOpen(false); setChiefComplaint(''); setTriggerType(''); }}
-              className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50"
+              className="px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50"
             >
               Mégse
             </button>

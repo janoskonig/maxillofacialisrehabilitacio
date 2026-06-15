@@ -102,10 +102,10 @@ export default function NewPatientPage() {
 
   if (!authorized) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-medical-primary mx-auto mb-4"></div>
-          <p className="text-gray-500">Betöltés...</p>
+          <p className="text-gray-500 dark:text-gray-400">Betöltés...</p>
         </div>
       </div>
     );
@@ -113,7 +113,7 @@ export default function NewPatientPage() {
 
   return (
     <AppShell title="Új beteg" backTo="/" maxWidth="lg">
-      <p className="text-xs text-gray-500 font-medium mb-4 line-clamp-2">
+      <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mb-4 line-clamp-2">
         Gyors rögzítés: alapadatok és személyes minimum — részletek a beteg lapon.
       </p>
       <PatientForm

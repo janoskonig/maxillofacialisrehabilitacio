@@ -135,13 +135,13 @@ export function DocumentCard({
 
   return (
     <div
-      className={`bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow ${
+      className={`bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden hover:shadow-md transition-shadow ${
         (isImage && !imageError) || isPdf ? 'cursor-pointer' : ''
       }`}
       onClick={handleThumbnailClick}
     >
       {/* Thumbnail */}
-      <div className="relative aspect-square bg-gray-100 group">
+      <div className="relative aspect-square bg-gray-100 dark:bg-gray-800 group">
         {isPdf && document.id ? (
           <DocumentListThumbnail
             documentId={document.id}
@@ -174,13 +174,13 @@ export function DocumentCard({
             />
           )
         ) : imageError ? (
-          <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 p-4">
-            <File className="w-12 h-12 text-gray-400 mb-2" />
-            <p className="text-xs text-gray-600 text-center mb-2">Nem sikerült betölteni</p>
+          <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-800/60 p-4">
+            <File className="w-12 h-12 text-gray-400 dark:text-gray-500 mb-2" />
+            <p className="text-xs text-gray-600 dark:text-gray-400 text-center mb-2">Nem sikerült betölteni</p>
           </div>
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <File className="w-12 h-12 text-gray-400" />
+            <File className="w-12 h-12 text-gray-400 dark:text-gray-500" />
           </div>
         )}
       </div>
@@ -189,16 +189,16 @@ export function DocumentCard({
       <div className="p-3 sm:p-4">
         <div className="flex items-start justify-between gap-2 mb-2">
           <div className="flex-1 min-w-0">
-            <p className="font-medium text-sm sm:text-base text-gray-900 truncate mb-1" title={document.filename}>
+            <p className="font-medium text-sm sm:text-base text-gray-900 dark:text-gray-100 truncate mb-1" title={document.filename}>
               {document.filename}
             </p>
             {document.description && (
-              <p className="text-xs sm:text-sm text-gray-600 line-clamp-2 mb-2">{document.description}</p>
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-2">{document.description}</p>
             )}
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-[10px] sm:text-xs text-gray-500 mb-2 flex-wrap">
+        <div className="flex items-center gap-2 text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mb-2 flex-wrap">
           <span>{formatFileSize(document.fileSize || 0)}</span>
           <span>•</span>
           {document.uploadedAt && (
@@ -219,7 +219,7 @@ export function DocumentCard({
             {document.tags.map((tag: string) => (
               <span
                 key={tag}
-                className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700"
+                className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"
               >
                 <Tag className="w-3 h-3 mr-1" />
                 {tag}
@@ -262,8 +262,8 @@ export function DocumentCard({
                           disabled={isSelected}
                           className={`px-2 py-0.5 rounded text-xs border ${
                             isSelected
-                              ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
+                              ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border-gray-200 dark:border-gray-800 cursor-not-allowed'
+                              : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700'
                           }`}
                         >
                           {tag}
@@ -292,7 +292,7 @@ export function DocumentCard({
                       e.stopPropagation();
                       addTag();
                     }}
-                    className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded"
+                    className="p-1 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
                     title="Címke hozzáadása"
                   >
                     <Plus className="w-3.5 h-3.5" />
@@ -301,7 +301,7 @@ export function DocumentCard({
                     type="button"
                     onClick={handleCancelEditTags}
                     disabled={savingTags}
-                    className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded disabled:opacity-50"
+                    className="p-1 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded disabled:opacity-50"
                     title="Mégse"
                   >
                     <X className="w-3.5 h-3.5" />
@@ -310,7 +310,7 @@ export function DocumentCard({
                     type="button"
                     onClick={handleSaveTags}
                     disabled={savingTags}
-                    className="p-1 text-green-700 hover:text-green-800 hover:bg-green-50 rounded disabled:opacity-50"
+                    className="p-1 text-green-700 dark:text-green-300 hover:text-green-800 hover:bg-green-50 dark:hover:bg-green-900/40 rounded disabled:opacity-50"
                     title="Mentés"
                   >
                     <Check className="w-3.5 h-3.5" />
@@ -337,7 +337,7 @@ export function DocumentCard({
         <div className="flex items-center gap-2 mt-3">
           <button
             onClick={handleDownload}
-            className="flex-1 flex items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2 rounded transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200"
+            className="flex-1 flex items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2 rounded transition-colors bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
             title="Letöltés"
           >
             <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -346,7 +346,7 @@ export function DocumentCard({
           {canDelete && (
             <button
               onClick={handleDelete}
-              className="p-1.5 sm:p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+              className="p-1.5 sm:p-2 text-gray-600 dark:text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 rounded transition-colors"
               title="Törlés"
             >
               <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />

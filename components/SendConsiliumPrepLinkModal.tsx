@@ -299,20 +299,20 @@ export function SendConsiliumPrepLinkModal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-xl max-w-lg w-full max-h-[90vh] flex flex-col shadow-soft-xl"
+        className="bg-white dark:bg-gray-900 rounded-xl max-w-lg w-full max-h-[90vh] flex flex-col shadow-soft-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="border-b px-5 py-3 flex items-center justify-between">
+        <div className="border-b dark:border-gray-800 px-5 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-cyan-700" />
-            <h2 className="text-base font-semibold text-gray-900">
+            <Users className="w-5 h-5 text-cyan-700 dark:text-cyan-300" />
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">
               Konzílium előkészítő küldése
             </h2>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100"
+            className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
             aria-label="Bezárás"
           >
             <X className="w-4 h-4" />
@@ -320,28 +320,28 @@ export function SendConsiliumPrepLinkModal({
         </div>
 
         <div className="p-5 space-y-4 overflow-y-auto">
-          <div className="rounded-md border border-cyan-100 bg-cyan-50/70 px-3 py-2">
-            <p className="text-xs text-cyan-900/70">Beteg</p>
-            <p className="text-sm font-medium text-cyan-950 truncate">
+          <div className="rounded-md border border-cyan-100 dark:border-cyan-800 bg-cyan-50/70 dark:bg-cyan-950/40 px-3 py-2">
+            <p className="text-xs text-cyan-900/70 dark:text-cyan-300">Beteg</p>
+            <p className="text-sm font-medium text-cyan-950 dark:text-cyan-200 truncate">
               {patientName || 'Ismeretlen beteg'}
             </p>
           </div>
 
           <div ref={rootRef} className="relative space-y-2">
-            <label className="text-xs font-medium text-gray-700">Címzett(ek)</label>
-            <div className="flex flex-wrap gap-1.5 items-center min-h-[42px] p-2 rounded-md border border-gray-200 bg-white focus-within:border-cyan-400 focus-within:ring-1 focus-within:ring-cyan-200">
+            <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Címzett(ek)</label>
+            <div className="flex flex-wrap gap-1.5 items-center min-h-[42px] p-2 rounded-md border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 focus-within:border-cyan-400 focus-within:ring-1 focus-within:ring-cyan-200">
               {selected.map((s, idx) => {
                 if (s.kind === 'user') {
                   return (
                     <span
                       key={`u-${s.id}`}
-                      className="inline-flex items-center gap-1 max-w-full rounded-full border border-cyan-200 bg-cyan-50 pl-2 pr-0.5 py-0.5 text-xs text-cyan-900"
+                      className="inline-flex items-center gap-1 max-w-full rounded-full border border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-950/40 pl-2 pr-0.5 py-0.5 text-xs text-cyan-900 dark:text-cyan-200"
                       title={s.email}
                     >
                       <span className="truncate max-w-[200px]">{s.displayName}</span>
                       <button
                         type="button"
-                        className="rounded-full px-1 leading-none text-cyan-700 hover:bg-cyan-100"
+                        className="rounded-full px-1 leading-none text-cyan-700 dark:text-cyan-300 hover:bg-cyan-100 dark:hover:bg-cyan-900/40"
                         onClick={() => removeSelected(idx)}
                         aria-label="Eltávolítás"
                       >
@@ -353,14 +353,14 @@ export function SendConsiliumPrepLinkModal({
                 return (
                   <span
                     key={`e-${s.email}`}
-                    className="inline-flex items-center gap-1 max-w-full rounded-full border border-amber-200 bg-amber-50 pl-2 pr-0.5 py-0.5 text-xs text-amber-900"
+                    className="inline-flex items-center gap-1 max-w-full rounded-full border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 pl-2 pr-0.5 py-0.5 text-xs text-amber-900 dark:text-amber-200"
                     title="Külső e-mail cím — csak e-mail értesítést kap"
                   >
                     <Mail className="w-3 h-3" />
                     <span className="truncate max-w-[200px]">{s.email}</span>
                     <button
                       type="button"
-                      className="rounded-full px-1 leading-none text-amber-700 hover:bg-amber-100"
+                      className="rounded-full px-1 leading-none text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40"
                       onClick={() => removeSelected(idx)}
                       aria-label="Eltávolítás"
                     >
@@ -371,7 +371,7 @@ export function SendConsiliumPrepLinkModal({
               })}
               <input
                 type="text"
-                className="flex-1 min-w-[8rem] border-0 bg-transparent p-1 text-sm outline-none focus:ring-0 placeholder:text-gray-400"
+                className="flex-1 min-w-[8rem] border-0 bg-transparent p-1 text-sm outline-none focus:ring-0 placeholder:text-gray-400 dark:placeholder:text-gray-500 dark:text-gray-100"
                 placeholder={
                   usersLoading
                     ? 'Felhasználók betöltése…'
@@ -387,16 +387,16 @@ export function SendConsiliumPrepLinkModal({
               />
             </div>
             {open && (
-              <ul className="absolute z-30 left-0 right-0 mt-0.5 max-w-lg rounded-md border border-gray-200 bg-white py-1 shadow-lg max-h-72 overflow-auto">
+              <ul className="absolute z-30 left-0 right-0 mt-0.5 max-w-lg rounded-md border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 py-1 shadow-lg max-h-72 overflow-auto">
                 {usersLoading ? (
-                  <li className="px-3 py-2 text-xs text-gray-500 inline-flex items-center gap-2">
+                  <li className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 inline-flex items-center gap-2">
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     Felhasználók betöltése…
                   </li>
                 ) : usersError ? (
-                  <li className="px-3 py-2 text-xs text-red-700 bg-red-50">{usersError}</li>
+                  <li className="px-3 py-2 text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40">{usersError}</li>
                 ) : filtered.length === 0 && !queryAsEmailCandidate ? (
-                  <li className="px-3 py-2 text-xs text-gray-500">
+                  <li className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
                     {q.trim()
                       ? 'Nincs egyező rendszer-felhasználó. Ha külső címzettnek küldenéd, írj be egy érvényes e-mail címet.'
                       : eligibleUsers.length === 0
@@ -411,16 +411,16 @@ export function SendConsiliumPrepLinkModal({
                         <li key={u.id}>
                           <button
                             type="button"
-                            className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 ${
-                              i === highlight ? 'bg-gray-50' : ''
+                            className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-800/50 ${
+                              i === highlight ? 'bg-gray-50 dark:bg-gray-800/60' : ''
                             }`}
                             onMouseEnter={() => setHighlight(i)}
                             onMouseDown={(e) => e.preventDefault()}
                             onClick={() => pickUser(u)}
                           >
-                            <span className="font-medium text-gray-900">{userDisplayName(u)}</span>
-                            {org ? <span className="text-gray-500"> · {org}</span> : null}
-                            <span className="block text-[11px] text-gray-500">{u.email}</span>
+                            <span className="font-medium text-gray-900 dark:text-gray-100">{userDisplayName(u)}</span>
+                            {org ? <span className="text-gray-500 dark:text-gray-400"> · {org}</span> : null}
+                            <span className="block text-[11px] text-gray-500 dark:text-gray-400">{u.email}</span>
                           </button>
                         </li>
                       );
@@ -429,15 +429,15 @@ export function SendConsiliumPrepLinkModal({
                       <li>
                         <button
                           type="button"
-                          className={`w-full px-3 py-2 text-left text-sm hover:bg-amber-50 border-t border-gray-100 inline-flex items-center gap-2 ${
-                            highlight === filtered.length ? 'bg-amber-50' : ''
+                          className={`w-full px-3 py-2 text-left text-sm hover:bg-amber-50 dark:hover:bg-amber-900/40 border-t border-gray-100 dark:border-gray-800 inline-flex items-center gap-2 ${
+                            highlight === filtered.length ? 'bg-amber-50 dark:bg-amber-950/40' : ''
                           }`}
                           onMouseEnter={() => setHighlight(filtered.length)}
                           onMouseDown={(e) => e.preventDefault()}
                           onClick={() => pickEmail(queryAsEmailCandidate)}
                         >
-                          <Mail className="w-3.5 h-3.5 text-amber-700" />
-                          <span className="font-medium text-amber-900">
+                          <Mail className="w-3.5 h-3.5 text-amber-700 dark:text-amber-300" />
+                          <span className="font-medium text-amber-900 dark:text-amber-200">
                             E-mail küldése külső címre: {queryAsEmailCandidate}
                           </span>
                         </button>
@@ -448,9 +448,9 @@ export function SendConsiliumPrepLinkModal({
               </ul>
             )}
             {usersError && (
-              <p className="text-[11px] text-red-700">{usersError}</p>
+              <p className="text-[11px] text-red-700 dark:text-red-300">{usersError}</p>
             )}
-            <p className="text-[11px] text-gray-500">
+            <p className="text-[11px] text-gray-500 dark:text-gray-400">
               Rendszerbe regisztrált kollégák a listából választhatók (üzenetet és e-mailt
               is kapnak). Külső címzettnek érvényes e-mail címet beírva küldhetsz —
               ők csak e-mailt kapnak.
@@ -458,7 +458,7 @@ export function SendConsiliumPrepLinkModal({
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-medium text-gray-700">Üzenet (opcionális)</label>
+            <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Üzenet (opcionális)</label>
             <textarea
               className="form-input w-full min-h-[80px] resize-y text-sm"
               placeholder="Pár szó a címzettnek (opcionális)…"
@@ -466,17 +466,17 @@ export function SendConsiliumPrepLinkModal({
               maxLength={NOTE_MAX}
               onChange={(e) => setNote(e.target.value)}
             />
-            <p className="text-[11px] text-gray-400 text-right">
+            <p className="text-[11px] text-gray-400 dark:text-gray-500 text-right">
               {note.length}/{NOTE_MAX}
             </p>
           </div>
         </div>
 
-        <div className="border-t bg-gray-50 px-5 py-3 flex items-center justify-end gap-2">
+        <div className="border-t bg-gray-50 dark:bg-gray-800/60 px-5 py-3 flex items-center justify-end gap-2">
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white hover:bg-gray-100 text-gray-700"
+            className="px-3 py-1.5 text-sm rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
             disabled={sending}
           >
             Mégse

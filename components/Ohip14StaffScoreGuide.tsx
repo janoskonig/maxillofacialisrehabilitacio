@@ -87,7 +87,7 @@ export function Ohip14StaffScoreGuide({ response, compact = false }: Ohip14Staff
             {dimensions.map((d) => (
               <div
                 key={d.key}
-                className="flex justify-between gap-2 text-[11px] px-2 py-1 rounded bg-white border border-slate-100"
+                className="flex justify-between gap-2 text-[11px] px-2 py-1 rounded bg-white dark:bg-gray-800 border border-slate-100"
               >
                 <span className="text-slate-700 truncate">{d.label}</span>
                 <span className="text-slate-900 font-medium shrink-0">

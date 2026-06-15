@@ -257,10 +257,10 @@ export function DocumentRequestModal({
       {(needsPatientSelection || (chatType === 'doctor-doctor' && requestedPatientId && !selectedPatientId)) && (
         <div>
           <label className="form-label block mb-2">
-            Beteg <span className="text-red-500">*</span>
+            Beteg <span className="text-red-500 dark:text-red-400">*</span>
           </label>
           {loadingPatients ? (
-            <div className="flex items-center gap-2 text-gray-500">
+            <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
               <Loader2 className="w-4 h-4 animate-spin" />
               <span>Betegek betöltése...</span>
             </div>
@@ -285,7 +285,7 @@ export function DocumentRequestModal({
       {/* Dokumentum típus választó */}
       <div>
         <label className="form-label block mb-3">
-          Dokumentum típusa <span className="text-red-500">*</span>
+          Dokumentum típusa <span className="text-red-500 dark:text-red-400">*</span>
         </label>
         <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-2'} gap-3`}>
           {typeChoices.map((type) => {
@@ -299,19 +299,19 @@ export function DocumentRequestModal({
                 disabled={uploading}
                 className={`p-4 border-2 rounded-lg text-left transition-colors mobile-touch-target ${
                   isSelected
-                    ? 'border-medical-primary bg-blue-50'
-                    : 'border-gray-200 hover:border-gray-300'
+                    ? 'border-medical-primary bg-blue-50 dark:bg-blue-950/40'
+                    : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700'
                 } ${uploading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
               >
                 <div className="flex items-start gap-3">
-                  <div className={`p-2 rounded-lg ${isSelected ? 'bg-medical-primary text-white' : 'bg-gray-100 text-gray-600'}`}>
+                  <div className={`p-2 rounded-lg ${isSelected ? 'bg-medical-primary text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'}`}>
                     <Icon className="w-5 h-5" />
                   </div>
                   <div className="flex-1">
-                    <div className={`font-medium ${isSelected ? 'text-medical-primary' : 'text-gray-900'}`}>
+                    <div className={`font-medium ${isSelected ? 'text-medical-primary' : 'text-gray-900 dark:text-gray-100'}`}>
                       {type.label}
                     </div>
-                    <div className="text-xs text-gray-500 mt-1">{type.description}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{type.description}</div>
                   </div>
                 </div>
               </button>
@@ -323,7 +323,7 @@ export function DocumentRequestModal({
       {/* Fájl választó */}
       <div>
         <label className="form-label block mb-2">
-          Fájl <span className="text-red-500">*</span>
+          Fájl <span className="text-red-500 dark:text-red-400">*</span>
         </label>
         <input
           ref={fileInputRef}
@@ -346,7 +346,7 @@ export function DocumentRequestModal({
           {selectedFile ? selectedFile.name : 'Fájl kiválasztása'}
         </button>
         {selectedFile && (
-          <div className="mt-2 text-sm text-gray-600">
+          <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
             Kiválasztva: <span className="font-medium">{selectedFile.name}</span>
             {' '}({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
           </div>
@@ -413,7 +413,7 @@ export function DocumentRequestModal({
         <div className="space-y-6 pb-4">
           {modalContent}
         </div>
-        <div className="flex items-center gap-3 pt-4 border-t bg-gray-50 -mx-4 -mb-4 px-4 pb-4 mobile-safe-bottom">
+        <div className="flex items-center gap-3 pt-4 border-t bg-gray-50 dark:bg-gray-800/60 -mx-4 -mb-4 px-4 pb-4 mobile-safe-bottom">
           {modalActions}
         </div>
       </MobileBottomSheet>
@@ -423,13 +423,13 @@ export function DocumentRequestModal({
   // Desktop: Modal
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-xl font-semibold text-gray-900">Dokumentum feltöltése</h2>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Dokumentum feltöltése</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
             disabled={uploading}
           >
             <X className="w-5 h-5" />
@@ -442,7 +442,7 @@ export function DocumentRequestModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 p-4 border-t bg-gray-50">
+        <div className="flex items-center justify-end gap-3 p-4 border-t bg-gray-50 dark:bg-gray-800/60">
           {modalActions}
         </div>
       </div>

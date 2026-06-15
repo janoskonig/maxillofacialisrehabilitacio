@@ -48,26 +48,26 @@ function TreatmentPlanBlock({
   if (rows.length === 0) return null;
   return (
     <div className="mt-4 first:mt-0">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">{title}</h3>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">{title}</h3>
       <ul className="space-y-2">
         {rows.map((row, idx) => (
           <li
             key={`${title}-${idx}`}
-            className="rounded-lg border border-gray-100 bg-gray-50/80 px-3 py-2.5 text-sm"
+            className="rounded-lg border border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-800/60 px-3 py-2.5 text-sm"
           >
             <div className="flex flex-wrap items-start justify-between gap-2">
-              <span className="font-medium text-gray-900">{row.label}</span>
+              <span className="font-medium text-gray-900 dark:text-gray-100">{row.label}</span>
               <span
                 className={`shrink-0 text-xs font-medium px-2 py-0.5 rounded-full ${
-                  row.elkeszult ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'
+                  row.elkeszult ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300' : 'bg-amber-100 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200'
                 }`}
               >
                 {row.elkeszult ? 'Elkészült' : 'Tervezett'}
               </span>
             </div>
-            {row.detail ? <p className="text-xs text-gray-600 mt-1">{row.detail}</p> : null}
+            {row.detail ? <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{row.detail}</p> : null}
             {formatPlanDate(row.tervezettAtadasDatuma) ? (
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Tervezett átadás: {formatPlanDate(row.tervezettAtadasDatuma)}
               </p>
             ) : null}
@@ -115,13 +115,13 @@ export default function PatientPortalTasksPage() {
   return (
     <PortalLayout>
       <div className="max-w-2xl mx-auto">
-        <h1 className="text-xl font-bold text-gray-900 mb-2">Feladataim</h1>
-        <p className="text-sm text-gray-600 mb-6">
+        <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">Feladataim</h1>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
           Dokumentumkérések, kezelési terv és egyéb teendők egy helyen.
         </p>
 
         {loading ? (
-          <div className="flex items-center gap-2 text-gray-500 py-8">
+          <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 py-8">
             <Loader2 className="w-6 h-6 animate-spin" />
             Betöltés...
           </div>
@@ -131,11 +131,11 @@ export default function PatientPortalTasksPage() {
               <div className="flex items-start gap-3">
                 <Stethoscope className="w-5 h-5 text-medical-primary flex-shrink-0 mt-0.5" aria-hidden />
                 <div className="min-w-0 flex-1">
-                  <h2 id="portal-treatment-plan-heading" className="text-base font-semibold text-gray-900">
+                  <h2 id="portal-treatment-plan-heading" className="text-base font-semibold text-gray-900 dark:text-gray-100">
                     Kezelési tervem
                   </h2>
                   {!treatmentPlanHasRows ? (
-                    <p className="text-sm text-gray-600 mt-2">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
                       A kezelőcsapat által rögzített kezelési terv tételei itt jelennek meg. Jelenleg nincs
                       megjeleníthető tétel.
                     </p>
@@ -151,8 +151,8 @@ export default function PatientPortalTasksPage() {
             </section>
 
             {items.length === 0 ? (
-              <div className="card p-8 text-center text-gray-600">
-                <ClipboardList className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+              <div className="card p-8 text-center text-gray-600 dark:text-gray-400">
+                <ClipboardList className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
                 Jelenleg nincs nyitott feladat.
               </div>
             ) : (
@@ -165,12 +165,12 @@ export default function PatientPortalTasksPage() {
                     >
                       <ClipboardList className="w-5 h-5 text-medical-primary flex-shrink-0" />
                       <div className="flex-1 min-w-0 text-left">
-                        <p className="font-medium text-gray-900">{item.title}</p>
+                        <p className="font-medium text-gray-900 dark:text-gray-100">{item.title}</p>
                         {item.description && (
-                          <p className="text-sm text-gray-600 mt-0.5 line-clamp-2">{item.description}</p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5 line-clamp-2">{item.description}</p>
                         )}
                       </div>
-                      <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                      <ChevronRight className="w-5 h-5 text-gray-400 dark:text-gray-500 flex-shrink-0" />
                     </Link>
                   </li>
                 ))}

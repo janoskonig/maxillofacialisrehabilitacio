@@ -92,33 +92,33 @@ export function PlanValidationPanel({ episodeId, patientId, signature, canEdit =
   const approved = Boolean(data.approvedAt);
 
   return (
-    <div className="mb-4 rounded-lg border border-gray-200 overflow-hidden text-sm">
-      <div className="flex items-center justify-between gap-3 px-3 py-2 bg-gray-50">
+    <div className="mb-4 rounded-lg border border-gray-200 dark:border-gray-800 overflow-hidden text-sm">
+      <div className="flex items-center justify-between gap-3 px-3 py-2 bg-gray-50 dark:bg-gray-800/60">
         <div className="flex items-center gap-2 min-w-0">
           {approved ? (
             <>
-              <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span className="font-medium text-emerald-700">Terv jóváhagyva</span>
-              <span className="text-gray-500 truncate">
+              <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-300 shrink-0" />
+              <span className="font-medium text-emerald-700 dark:text-emerald-300">Terv jóváhagyva</span>
+              <span className="text-gray-500 dark:text-gray-400 truncate">
                 {new Date(data.approvedAt as string).toLocaleString('hu-HU')}
               </span>
             </>
           ) : clean ? (
             <>
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span className="font-medium text-emerald-700">A terv rendben — foglalásra kész</span>
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-300 shrink-0" />
+              <span className="font-medium text-emerald-700 dark:text-emerald-300">A terv rendben — foglalásra kész</span>
             </>
           ) : errors.length > 0 ? (
             <>
-              <XCircle className="w-4 h-4 text-red-600 shrink-0" />
-              <span className="font-medium text-red-700">
+              <XCircle className="w-4 h-4 text-red-600 dark:text-red-300 shrink-0" />
+              <span className="font-medium text-red-700 dark:text-red-300">
                 {errors.length} hiba{warnings.length > 0 ? `, ${warnings.length} figyelmeztetés` : ''}
               </span>
             </>
           ) : (
             <>
-              <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-              <span className="font-medium text-amber-700">{warnings.length} figyelmeztetés</span>
+              <AlertTriangle className="w-4 h-4 text-amber-500 dark:text-amber-400 shrink-0" />
+              <span className="font-medium text-amber-700 dark:text-amber-300">{warnings.length} figyelmeztetés</span>
             </>
           )}
         </div>
@@ -129,7 +129,7 @@ export function PlanValidationPanel({ episodeId, patientId, signature, canEdit =
               <button
                 onClick={revoke}
                 disabled={acting}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs border border-gray-300 text-gray-600 hover:bg-white disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-800 disabled:opacity-50"
               >
                 {acting ? <Loader2 className="w-3 h-3 animate-spin" /> : <ShieldOff className="w-3 h-3" />}
                 Jóváhagyás visszavonása
@@ -150,41 +150,41 @@ export function PlanValidationPanel({ episodeId, patientId, signature, canEdit =
       </div>
 
       {data.issues.length > 0 && (
-        <ul className="divide-y divide-gray-100">
+        <ul className="divide-y divide-gray-100 dark:divide-gray-800">
           {[...errors, ...warnings].map((issue, idx) => (
             <li key={`${issue.code}-${issue.workPhaseCode ?? idx}`} className="flex items-start gap-2 px-3 py-1.5">
               {issue.level === 'error' ? (
-                <XCircle className="w-3.5 h-3.5 text-red-500 mt-0.5 shrink-0" />
+                <XCircle className="w-3.5 h-3.5 text-red-500 dark:text-red-400 mt-0.5 shrink-0" />
               ) : (
-                <AlertTriangle className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 mt-0.5 shrink-0" />
               )}
-              <span className="text-gray-700">{issue.message}</span>
+              <span className="text-gray-700 dark:text-gray-300">{issue.message}</span>
             </li>
           ))}
         </ul>
       )}
 
       {(data.sequenceViolations?.length ?? 0) > 0 && (
-        <div className="border-t border-amber-200 bg-amber-50">
+        <div className="border-t border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40">
           <div className="flex items-center justify-between gap-2 px-3 py-1.5">
-            <span className="flex items-center gap-1.5 text-amber-800 font-medium">
+            <span className="flex items-center gap-1.5 text-amber-800 dark:text-amber-300 font-medium">
               <CalendarClock className="w-3.5 h-3.5 shrink-0" />
               Sorrend-eltérés a lefoglalt időpontokban — újrafoglalás szükséges
             </span>
             {patientId && (
               <a
                 href={`/patients/${patientId}/view`}
-                className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-amber-800 underline hover:text-amber-900"
+                className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-amber-800 dark:text-amber-300 underline hover:text-amber-900 dark:hover:text-amber-200"
               >
                 Újrafoglalás a munkalistán →
               </a>
             )}
           </div>
-          <ul className="divide-y divide-amber-100">
+          <ul className="divide-y divide-amber-100 dark:divide-amber-900">
             {data.sequenceViolations!.map((v, idx) => (
               <li key={`${v.workPhaseCode}-${idx}`} className="flex items-start gap-2 px-3 py-1.5">
-                <CalendarClock className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
-                <span className="text-gray-700">{v.message}</span>
+                <CalendarClock className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 mt-0.5 shrink-0" />
+                <span className="text-gray-700 dark:text-gray-300">{v.message}</span>
               </li>
             ))}
           </ul>

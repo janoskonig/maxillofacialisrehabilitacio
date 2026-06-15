@@ -35,7 +35,7 @@ export function ToothCheckbox({ toothNumber, value, onChange, disabled, idPrefix
   
   if (isMissing) {
     borderColor = 'border-gray-400';
-    bgColor = 'bg-gray-200';
+    bgColor = 'bg-gray-200 dark:bg-gray-700';
     iconElement = (
       <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M4 4L12 12M12 4L4 12" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -44,7 +44,7 @@ export function ToothCheckbox({ toothNumber, value, onChange, disabled, idPrefix
   } else if (isPresent) {
     if (hasRemenytelen) {
       borderColor = 'border-red-500';
-      bgColor = 'bg-red-50';
+      bgColor = 'bg-red-50 dark:bg-red-950/40';
       iconElement = (
         <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M8 2V9M8 11V13" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -53,7 +53,7 @@ export function ToothCheckbox({ toothNumber, value, onChange, disabled, idPrefix
       );
     } else if (hasKerdeses) {
       borderColor = 'border-yellow-500';
-      bgColor = 'bg-yellow-50';
+      bgColor = 'bg-yellow-50 dark:bg-yellow-950/40';
       iconElement = (
         <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M6 6C6 4.5 7 3.5 8 3.5C9 3.5 10 4.5 10 6C10 7 9 8 8 8.5V10" stroke="#eab308" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
@@ -62,7 +62,7 @@ export function ToothCheckbox({ toothNumber, value, onChange, disabled, idPrefix
       );
     } else {
       borderColor = 'border-medical-primary';
-      bgColor = 'bg-green-50';
+      bgColor = 'bg-green-50 dark:bg-green-950/40';
       iconElement = (
         <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M3 8L6 11L13 4" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
@@ -70,7 +70,7 @@ export function ToothCheckbox({ toothNumber, value, onChange, disabled, idPrefix
       );
     }
   } else {
-    borderColor = 'border-gray-300';
+    borderColor = 'border-gray-300 dark:border-gray-700';
     bgColor = '';
   }
 
@@ -80,7 +80,7 @@ export function ToothCheckbox({ toothNumber, value, onChange, disabled, idPrefix
     <div className="flex flex-col items-center gap-1">
       <label 
         htmlFor={checkboxId}
-        className="text-xs sm:text-xs text-gray-600 font-medium cursor-pointer"
+        className="text-xs sm:text-xs text-gray-600 dark:text-gray-400 font-medium cursor-pointer"
       >
         {toothNumber}
       </label>

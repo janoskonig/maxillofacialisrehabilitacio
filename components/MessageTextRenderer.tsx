@@ -242,7 +242,7 @@ function MentionLink({ mentionFormat, displayText }: MentionLinkProps) {
   if (loading) {
     // Show mention as plain text while loading
     return (
-      <span className="inline-block px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded font-medium">
+      <span className="inline-block px-1.5 py-0.5 bg-blue-100 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300 rounded font-medium">
         {displayText}
       </span>
     );
@@ -252,7 +252,7 @@ function MentionLink({ mentionFormat, displayText }: MentionLinkProps) {
     // Patient not found - show as plain text (not clickable)
     return (
       <span 
-        className="inline-block px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded font-medium"
+        className="inline-block px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded font-medium"
         title="Beteg nem található"
       >
         {displayText}
@@ -264,7 +264,7 @@ function MentionLink({ mentionFormat, displayText }: MentionLinkProps) {
   return (
     <Link
       href={`/patients/${patientId}/view`}
-      className="inline-block px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded font-medium hover:bg-blue-200 transition-colors cursor-pointer"
+      className="inline-block px-1.5 py-0.5 bg-blue-100 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300 rounded font-medium hover:bg-blue-200 transition-colors cursor-pointer"
       title={patientName || displayText}
     >
       {patientName || displayText}

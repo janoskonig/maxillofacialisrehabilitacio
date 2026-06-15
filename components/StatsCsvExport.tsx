@@ -1327,14 +1327,14 @@ export function StatsCsvExport({
     >
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
-          <div className="mt-0.5 rounded-lg bg-emerald-100 p-2 text-emerald-700">
+          <div className="mt-0.5 rounded-lg bg-emerald-100 dark:bg-emerald-950/50 p-2 text-emerald-700 dark:text-emerald-300">
             <Database className="h-5 w-5" />
           </div>
           <div>
-            <h2 id="stats-export-heading" className="text-lg font-semibold text-gray-900">
+            <h2 id="stats-export-heading" className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               Adatexport (CSV)
             </h2>
-            <p className="mt-0.5 text-sm text-gray-500">
+            <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
               Aggregált dataframe-ek letöltése későbbi R / pandas elemzésre — UTF-8
               + BOM, vesszős, CRLF (RFC 4180).
               {researchExportEnabled
@@ -1348,7 +1348,7 @@ export function StatsCsvExport({
             type="button"
             onClick={triggerAll}
             disabled={bulkRunning || datasets.length === 0}
-            className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-800 shadow-soft transition-colors hover:bg-emerald-100 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 px-3 py-1.5 text-sm font-medium text-emerald-800 dark:text-emerald-300 shadow-soft transition-colors hover:bg-emerald-100 dark:hover:bg-emerald-900/40 disabled:opacity-50"
             title="Minden dataframe egyenkénti letöltése"
           >
             {bulkRunning ? (
@@ -1362,12 +1362,12 @@ export function StatsCsvExport({
       </div>
 
       {researchExportStatus ? (
-        <p className="mb-3 text-xs text-emerald-800" role="status">
+        <p className="mb-3 text-xs text-emerald-800 dark:text-emerald-300" role="status">
           {researchExportStatus}
         </p>
       ) : null}
 
-      <div className="mb-5 rounded-lg border border-emerald-100 bg-emerald-50/60 p-3 text-xs text-emerald-900">
+      <div className="mb-5 rounded-lg border border-emerald-100 bg-emerald-50/60 p-3 text-xs text-emerald-900 dark:text-emerald-200">
         <div className="flex items-start gap-2">
           <Info className="mt-0.5 h-4 w-4 shrink-0" />
           <div className="space-y-1">
@@ -1375,7 +1375,7 @@ export function StatsCsvExport({
               Az aktuális rendszer-statisztika oldal frissítésekor látott aggregátumok kerülnek
               exportálásra ({totalRows.toLocaleString('hu-HU')} sor összesen). R-ben:
             </p>
-            <pre className="overflow-x-auto rounded bg-white/80 px-2 py-1 font-mono text-[11px] text-emerald-900">
+            <pre className="overflow-x-auto rounded bg-white/80 dark:bg-gray-900/80 px-2 py-1 font-mono text-[11px] text-emerald-900 dark:text-emerald-200">
 {`# tidyverse:
 df <- readr::read_csv("betegek_havi_trend_${todayIso()}.csv")
 
@@ -1398,16 +1398,16 @@ df <- read.csv("betegek_havi_trend_${todayIso()}.csv",
           return (
             <div
               key={cat}
-              className="rounded-xl border border-gray-200/80 bg-gradient-to-br from-white to-gray-50/40 p-4"
+              className="rounded-xl border border-gray-200/80 dark:border-gray-800/80 bg-gradient-to-br from-white to-gray-50/40 p-4"
             >
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-900">{meta.title}</h3>
-                  <p className="mt-0.5 text-xs text-gray-500">{meta.subtitle}</p>
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{meta.title}</h3>
+                  <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{meta.subtitle}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   {loading ? (
-                    <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+                    <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
                       <RefreshCw className="h-3.5 w-3.5 animate-spin" />
                       Betöltés…
                     </span>
@@ -1416,7 +1416,7 @@ df <- read.csv("betegek_havi_trend_${todayIso()}.csv",
                     <button
                       type="button"
                       onClick={isMedical ? loadMedical : loadAttempts}
-                      className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
+                      className="inline-flex items-center gap-1 rounded-md border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-2 py-1 text-xs text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50"
                       title="Adat újratöltése"
                     >
                       <RefreshCw className="h-3 w-3" />
@@ -1427,12 +1427,12 @@ df <- read.csv("betegek_havi_trend_${todayIso()}.csv",
               </div>
 
               {errorMsg ? (
-                <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50/80 p-3 text-xs text-rose-800">
+                <div className="flex items-start gap-2 rounded-lg border border-rose-200 dark:border-rose-800 bg-rose-50/80 p-3 text-xs text-rose-800 dark:text-rose-300">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>{errorMsg}</span>
                 </div>
               ) : unavailable ? (
-                <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/80 p-3 text-xs text-amber-800">
+                <div className="flex items-start gap-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/80 p-3 text-xs text-amber-800 dark:text-amber-300">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>
                     A 029-es migráció még nem futott le ezen az adatbázison — a sikertelen
@@ -1440,23 +1440,23 @@ df <- read.csv("betegek_havi_trend_${todayIso()}.csv",
                   </span>
                 </div>
               ) : items.length === 0 && !loading ? (
-                <p className="text-xs text-gray-500">Nincs elérhető dataframe.</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Nincs elérhető dataframe.</p>
               ) : (
                 <ul className="grid grid-cols-1 gap-2 lg:grid-cols-2">
                   {items.map((ds) => (
                     <li
                       key={ds.id}
-                      className="flex items-start justify-between gap-3 rounded-lg border border-gray-200 bg-white p-3"
+                      className="flex items-start justify-between gap-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3"
                     >
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <FileSpreadsheet className="h-4 w-4 shrink-0 text-emerald-600" />
-                          <p className="truncate text-sm font-medium text-gray-900" title={ds.label}>
+                          <FileSpreadsheet className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
+                          <p className="truncate text-sm font-medium text-gray-900 dark:text-gray-100" title={ds.label}>
                             {ds.label}
                           </p>
                         </div>
-                        <p className="mt-1 text-xs text-gray-500">{ds.description}</p>
-                        <p className="mt-1 font-mono text-[11px] text-gray-400">
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{ds.description}</p>
+                        <p className="mt-1 font-mono text-[11px] text-gray-400 dark:text-gray-500">
                           {ds.stem}_{todayIso()}.csv
                           {ds.rowCount != null ? ` · ${ds.rowCount} sor` : ''}
                         </p>
@@ -1465,7 +1465,7 @@ df <- read.csv("betegek_havi_trend_${todayIso()}.csv",
                         type="button"
                         onClick={() => triggerOne(ds)}
                         disabled={ds.rowCount === 0}
-                        className="shrink-0 inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs font-medium text-gray-700 shadow-soft transition-colors hover:bg-gray-50 disabled:opacity-50"
+                        className="shrink-0 inline-flex items-center gap-1 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 shadow-soft transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50 disabled:opacity-50"
                         title="CSV letöltése"
                       >
                         <Download className="h-3.5 w-3.5" />

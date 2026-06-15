@@ -47,15 +47,15 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
           <Logo width={100} height={115} />
         </div>
-        <h2 className="mt-6 text-center text-3xl font-bold text-gray-900">
+        <h2 className="mt-6 text-center text-3xl font-bold text-gray-900 dark:text-gray-100">
           Maxillofaciális Rehabilitáció
         </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
+        <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
           BETEGREGISZTER ÉS IDŐPONTKEZELŐ
         </p>
       </div>
@@ -86,7 +86,7 @@ export default function Login() {
                     className="form-input pl-10"
                     placeholder="vezeteknev.keresztnev"
                   />
-                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-4 h-4" />
                 </div>
               </div>
 
@@ -106,10 +106,10 @@ export default function Login() {
                     className="form-input pl-10 pr-10"
                     placeholder="••••••••"
                   />
-                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-4 h-4" />
                   <button
                     type="button"
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                     onClick={() => setShowPassword(!showPassword)}
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -149,7 +149,7 @@ export default function Login() {
               </div>
 
               <div className="text-center mt-4">
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
                   Még nincs fiókja?{' '}
                   <Link href="/register" className="font-medium text-medical-primary hover:text-medical-primary-dark">
                     Regisztráció
@@ -179,15 +179,15 @@ export default function Login() {
       {/* Footer */}
       <div className="mt-8 text-center space-y-2">
         <div className="flex justify-center gap-4 text-xs">
-          <Link href="/privacy" className="text-gray-400 hover:text-gray-600 transition-colors">
+          <Link href="/privacy" className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
             Privacy Policy
           </Link>
-          <span className="text-gray-300">|</span>
-          <Link href="/terms" className="text-gray-400 hover:text-gray-600 transition-colors">
+          <span className="text-gray-300 dark:text-gray-700">|</span>
+          <Link href="/terms" className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
             Terms of Service
           </Link>
         </div>
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-gray-400 dark:text-gray-500">
           Készítette: König
         </p>
       </div>

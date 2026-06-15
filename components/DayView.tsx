@@ -61,29 +61,29 @@ export function DayView({
   });
 
   return (
-    <div className="bg-white rounded-lg border">
+    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
       {/* Virtual lane - top */}
       {includeVirtual && dayVirtualItems.length > 0 && (
         <VirtualLane items={dayVirtualItems} mode="day" dateKey={dateKey} />
       )}
 
       {/* Day header */}
-      <div className={`p-3 sm:p-4 border-b ${isCurrentDay ? 'bg-blue-50' : 'bg-gray-50'}`}>
-        <div className="text-base sm:text-lg font-bold text-gray-900">
+      <div className={`p-3 sm:p-4 border-b border-gray-200 dark:border-gray-800 ${isCurrentDay ? 'bg-blue-50 dark:bg-blue-950/40' : 'bg-gray-50 dark:bg-gray-800/60'}`}>
+        <div className="text-base sm:text-lg font-bold text-gray-900 dark:text-gray-100">
           {format(currentDate, 'EEEE, yyyy. MMMM d.', { locale: hu })}
         </div>
-        <div className="text-sm text-gray-600 mt-1">
+        <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
           {dayAppointments.length} időpont
         </div>
       </div>
 
       {/* Time slots */}
-      <div className="divide-y">
+      <div className="divide-y divide-gray-200 dark:divide-gray-800">
         {hours.map((hour) => {
           const hourAppointments = appointmentsByHour[hour] || [];
           return (
-            <div key={hour} className="grid grid-cols-12 gap-2 sm:gap-4 p-2 sm:p-3 hover:bg-gray-50">
-              <div className="col-span-3 sm:col-span-2 text-sm font-medium text-gray-600 text-right pr-2 sm:pr-4">
+            <div key={hour} className="grid grid-cols-12 gap-2 sm:gap-4 p-2 sm:p-3 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+              <div className="col-span-3 sm:col-span-2 text-sm font-medium text-gray-600 dark:text-gray-400 text-right pr-2 sm:pr-4">
                 {hour.toString().padStart(2, '0')}:00
               </div>
               <div className="col-span-9 sm:col-span-10">
@@ -98,7 +98,7 @@ export function DayView({
                     ))}
                   </div>
                 ) : (
-                  <div className="text-xs text-gray-400">Nincs időpont</div>
+                  <div className="text-xs text-gray-400 dark:text-gray-600">Nincs időpont</div>
                 )}
               </div>
             </div>
@@ -107,7 +107,7 @@ export function DayView({
       </div>
 
       {dayAppointments.length === 0 && (
-        <div className="p-8 text-center text-gray-500">
+        <div className="p-8 text-center text-gray-500 dark:text-gray-400">
           Nincs időpont erre a napra
         </div>
       )}

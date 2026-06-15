@@ -158,7 +158,7 @@ export function MobileDrawer({
         ref={contentRef}
         className={`
           fixed top-0 ${side === 'left' ? 'left-0' : 'right-0'}
-          h-full w-80 bg-white shadow-2xl
+          h-full w-80 bg-white dark:bg-gray-900 shadow-2xl
           transform transition-transform duration-300 ease-in-out
           ${open ? slideClass : initialSlideClass}
           flex flex-col
@@ -171,13 +171,13 @@ export function MobileDrawer({
       >
         {/* Header */}
         {title && (
-          <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-            <h2 id="drawer-title" className="text-lg font-semibold text-gray-900">
+          <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
+            <h2 id="drawer-title" className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               {title}
             </h2>
             <button
               onClick={() => onOpenChange(false)}
-              className="text-gray-400 hover:text-gray-600 transition-colors mobile-touch-target"
+              className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors mobile-touch-target"
               aria-label="Bezárás"
             >
               <X className="w-5 h-5" />

@@ -44,14 +44,14 @@ export default function AdminPage() {
   }, [editPathwayId]);
 
   if (loading) {
-    return (<div className="min-h-screen bg-gray-50 flex items-center justify-center"><p className="text-gray-600">Betöltés...</p></div>);
+    return (<div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center"><p className="text-gray-600 dark:text-gray-400">Betöltés...</p></div>);
   }
 
   if (!authorized) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
-        <div className="bg-white shadow rounded-lg p-6 max-w-md w-full text-center">
-          <p className="text-gray-700">Nincs jogosultsága az admin felülethez.</p>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-6">
+        <div className="bg-white dark:bg-gray-900 shadow rounded-lg p-6 max-w-md w-full text-center">
+          <p className="text-gray-700 dark:text-gray-300">Nincs jogosultsága az admin felülethez.</p>
           <button className="btn-secondary mt-4" onClick={() => router.push('/')}>Vissza a főoldalra</button>
         </div>
       </div>
@@ -64,18 +64,18 @@ export default function AdminPage() {
       backTo="/"
       maxWidth="full"
       actions={
-        <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+        <div className="flex rounded-lg border border-gray-200 dark:border-gray-800 overflow-hidden">
           {currentUser?.role === 'admin' && (
-            <button onClick={() => setAdminTab('felhasznalok')} className={`px-4 py-2 text-sm font-medium transition-colors ${effectiveTab === 'felhasznalok' ? 'bg-medical-primary text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>
+            <button onClick={() => setAdminTab('felhasznalok')} className={`px-4 py-2 text-sm font-medium transition-colors ${effectiveTab === 'felhasznalok' ? 'bg-medical-primary text-white' : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}>
               Felhasználók
             </button>
           )}
-          <button onClick={() => setAdminTab('folyamatok')} className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1 ${effectiveTab === 'folyamatok' ? 'bg-medical-primary text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>
+          <button onClick={() => setAdminTab('folyamatok')} className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1 ${effectiveTab === 'folyamatok' ? 'bg-medical-primary text-white' : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}>
             <Settings className="w-4 h-4" />
             Folyamatok
           </button>
           {currentUser?.role === 'admin' && (
-            <button onClick={() => setAdminTab('merge')} className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1 ${effectiveTab === 'merge' ? 'bg-medical-primary text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>
+            <button onClick={() => setAdminTab('merge')} className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1 ${effectiveTab === 'merge' ? 'bg-medical-primary text-white' : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}>
               <Users className="w-4 h-4" />
               Összevonás
             </button>
@@ -87,31 +87,31 @@ export default function AdminPage() {
           <div className="space-y-8">
             <section className="card" aria-labelledby="section-duplicates">
               <div className="mb-4">
-                <h2 id="section-duplicates" className="text-lg font-semibold text-gray-900">Duplikátum-figyelő</h2>
-                <p className="text-sm text-gray-500 mt-1">Automatikus felismerés: azonos TAJ, név, születési dátum, telefonszám vagy email alapján.</p>
+                <h2 id="section-duplicates" className="text-lg font-semibold text-gray-900 dark:text-gray-100">Duplikátum-figyelő</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Automatikus felismerés: azonos TAJ, név, születési dátum, telefonszám vagy email alapján.</p>
               </div>
               <DuplicateDetector />
             </section>
 
             <section className="card" aria-labelledby="section-merge">
               <div className="mb-4">
-                <h2 id="section-merge" className="text-lg font-semibold text-gray-900">Kézi összevonás</h2>
-                <p className="text-sm text-gray-500 mt-1">Ha a fenti figyelő nem találta meg — keresd meg és vond össze kézzel.</p>
+                <h2 id="section-merge" className="text-lg font-semibold text-gray-900 dark:text-gray-100">Kézi összevonás</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Ha a fenti figyelő nem találta meg — keresd meg és vond össze kézzel.</p>
               </div>
               <PatientMerge />
             </section>
           </div>
         ) : effectiveTab === 'folyamatok' ? (
           <div className="space-y-8">
-            <div className="card border-l-4 border-blue-500 bg-blue-50/40">
+            <div className="card border-l-4 border-blue-500 bg-blue-50/40 dark:bg-blue-950/40">
               <div className="flex items-start gap-3">
-                <ListOrdered className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                <ListOrdered className="w-5 h-5 text-blue-600 dark:text-blue-300 shrink-0 mt-0.5" />
                 <div>
-                  <h3 className="text-base font-semibold text-blue-900 mb-2">Mikor mit szerkesztesz</h3>
-                  <p className="text-sm text-blue-800 mb-2">
+                  <h3 className="text-base font-semibold text-blue-900 dark:text-blue-200 mb-2">Mikor mit szerkesztesz</h3>
+                  <p className="text-sm text-blue-800 dark:text-blue-300 mb-2">
                     A beteg űrlap <strong>Kezelési terv</strong> szekciójában a három kategória (Felső állcsont, Alsó állcsont, Arcot érintő rehabilitáció) <strong>fix, itt nem szerkeszthető</strong>.
                   </p>
-                  <ol className="text-sm text-blue-900 space-y-2 list-decimal list-inside">
+                  <ol className="text-sm text-blue-900 dark:text-blue-200 space-y-2 list-decimal list-inside">
                     <li><strong>Kezeléstípusok</strong> — A „Tervezett fogpótlás típusa" legördülő opciói.</li>
                     <li><strong>Kezelési utak</strong> — Lépéssor egy típus vagy indikációhoz.</li>
                     <li><strong>Részlépések</strong> — A lépések megjelenítési nevei.</li>
@@ -122,34 +122,34 @@ export default function AdminPage() {
               </div>
             </div>
 
-            <div className="card border-l-4 border-amber-400 bg-amber-50/30">
-              <h3 className="text-sm font-semibold text-amber-900 mb-1">Epizódok és stádiumok szerkesztése (betegnél)</h3>
-              <p className="text-sm text-amber-800 mb-2">A beteg profiljánál a „Stádiumok" oldalon állítható.</p>
+            <div className="card border-l-4 border-amber-400 bg-amber-50/30 dark:bg-amber-950/40">
+              <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-200 mb-1">Epizódok és stádiumok szerkesztése (betegnél)</h3>
+              <p className="text-sm text-amber-800 dark:text-amber-300 mb-2">A beteg profiljánál a „Stádiumok" oldalon állítható.</p>
               <Link href="/" className="text-sm text-medical-primary hover:underline font-medium">Beteglista megnyitása →</Link>
             </div>
 
             <section className="card" aria-labelledby="section-treatment-types">
-              <div className="mb-4"><h2 id="section-treatment-types" className="text-lg font-semibold text-gray-900">1. Kezeléstípusok</h2></div>
+              <div className="mb-4"><h2 id="section-treatment-types" className="text-lg font-semibold text-gray-900 dark:text-gray-100">1. Kezeléstípusok</h2></div>
               <TreatmentTypesEditor onEditPathway={(id) => setEditPathwayId(id)} />
             </section>
 
             <section ref={carePathwaysRef} className="card" aria-labelledby="section-care-pathways">
-              <div className="mb-4"><h2 id="section-care-pathways" className="text-lg font-semibold text-gray-900">2. Kezelési utak</h2></div>
+              <div className="mb-4"><h2 id="section-care-pathways" className="text-lg font-semibold text-gray-900 dark:text-gray-100">2. Kezelési utak</h2></div>
               <CarePathwaysEditor editPathwayId={editPathwayId} onEditPathwayIdClear={() => setEditPathwayId(null)} />
             </section>
 
             <section className="card" aria-labelledby="section-step-catalog">
-              <div className="mb-4"><h2 id="section-step-catalog" className="text-lg font-semibold text-gray-900">3. Részlépések</h2></div>
+              <div className="mb-4"><h2 id="section-step-catalog" className="text-lg font-semibold text-gray-900 dark:text-gray-100">3. Részlépések</h2></div>
               <StepCatalogEditor />
             </section>
 
             <section className="card" aria-labelledby="section-stage-catalog">
-              <div className="mb-4"><h2 id="section-stage-catalog" className="text-lg font-semibold text-gray-900">4. Stádiumok</h2></div>
+              <div className="mb-4"><h2 id="section-stage-catalog" className="text-lg font-semibold text-gray-900 dark:text-gray-100">4. Stádiumok</h2></div>
               <StageCatalogEditor />
             </section>
 
             <section className="card" aria-labelledby="section-tooth-treatment-catalog">
-              <div className="mb-4"><h2 id="section-tooth-treatment-catalog" className="text-lg font-semibold text-gray-900">5. Fog-szintű kezelési típusok</h2></div>
+              <div className="mb-4"><h2 id="section-tooth-treatment-catalog" className="text-lg font-semibold text-gray-900 dark:text-gray-100">5. Fog-szintű kezelési típusok</h2></div>
               <ToothTreatmentCatalogEditor />
             </section>
           </div>

@@ -16,18 +16,18 @@ interface EpisodeStageCardProps {
 }
 
 const STAGE_COLORS: Record<string, string> = {
-  STAGE_0: 'bg-blue-100 text-blue-800 border-blue-200',
-  STAGE_1: 'bg-purple-100 text-purple-800 border-purple-200',
-  STAGE_2: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  STAGE_3: 'bg-orange-100 text-orange-800 border-orange-200',
-  STAGE_4: 'bg-red-100 text-red-800 border-red-200',
-  STAGE_5: 'bg-indigo-100 text-indigo-800 border-indigo-200',
-  STAGE_6: 'bg-green-100 text-green-800 border-green-200',
-  STAGE_7: 'bg-gray-100 text-gray-800 border-gray-200',
+  STAGE_0: 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800',
+  STAGE_1: 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800',
+  STAGE_2: 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-950/50 dark:text-yellow-300 dark:border-yellow-800',
+  STAGE_3: 'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-950/50 dark:text-orange-300 dark:border-orange-800',
+  STAGE_4: 'bg-red-100 text-red-800 border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800',
+  STAGE_5: 'bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-300 dark:border-indigo-800',
+  STAGE_6: 'bg-green-100 text-green-800 border-green-200 dark:bg-green-950/50 dark:text-green-300 dark:border-green-800',
+  STAGE_7: 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700',
 };
 
 function getStageColor(code: string): string {
-  return STAGE_COLORS[code] || 'bg-gray-100 text-gray-800 border-gray-200';
+  return STAGE_COLORS[code] || 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700';
 }
 
 export function EpisodeStageCard({
@@ -125,10 +125,10 @@ export function EpisodeStageCard({
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+      <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 sm:p-6">
         <div className="animate-pulse">
-          <div className="h-6 bg-gray-200 rounded w-1/3 mb-3"></div>
-          <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+          <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/3 mb-3"></div>
+          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
         </div>
       </div>
     );
@@ -136,12 +136,12 @@ export function EpisodeStageCard({
 
   if (!activeEpisode) {
     return (
-      <div className="bg-amber-50 rounded-lg border border-amber-200 p-4 sm:p-6">
+      <div className="bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800/60 p-4 sm:p-6">
         <div className="flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
           <div className="flex-1">
-            <h3 className="font-semibold text-amber-900">Nincs aktív ellátási epizód</h3>
-            <p className="text-sm text-amber-700 mt-1">
+            <h3 className="font-semibold text-amber-900 dark:text-amber-200">Nincs aktív ellátási epizód</h3>
+            <p className="text-sm text-amber-700 dark:text-amber-300/90 mt-1">
               A betegnek nincs nyitott ellátási epizódja. Az ellátás strukturált követéséhez indítson egy újat.
             </p>
             <a
@@ -166,15 +166,15 @@ export function EpisodeStageCard({
 
   return (
     <>
-      <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+      <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 sm:p-6">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Activity className="w-5 h-5 text-medical-primary" />
-            <h3 className="text-lg font-semibold text-gray-900">Ellátási epizód</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Ellátási epizód</h3>
           </div>
           <button
             onClick={() => setExpanded(!expanded)}
-            className="text-gray-500 hover:text-gray-700 p-1"
+            className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 p-1"
           >
             {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
@@ -182,13 +182,13 @@ export function EpisodeStageCard({
 
         {/* Episode hero */}
         <div className="mb-4">
-          <p className="text-base font-medium text-gray-900">{activeEpisode.chiefComplaint}</p>
+          <p className="text-base font-medium text-gray-900 dark:text-gray-100">{activeEpisode.chiefComplaint}</p>
           <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
-            <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
+            <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
               {activeEpisode.reason}
             </span>
             {activeEpisode.treatmentTypeLabel && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
+              <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
                 {activeEpisode.treatmentTypeLabel}
               </span>
             )}
@@ -198,19 +198,19 @@ export function EpisodeStageCard({
         {/* Meta: opened + provider */}
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div className="flex items-center gap-2 min-w-0">
-            <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
+            <Calendar className="w-4 h-4 text-gray-400 dark:text-gray-500 shrink-0" />
             <div className="min-w-0">
-              <p className="text-[11px] text-gray-500 leading-none">Megnyitva</p>
-              <p className="text-sm text-gray-900 mt-0.5 truncate">
+              <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-none">Megnyitva</p>
+              <p className="text-sm text-gray-900 dark:text-gray-100 mt-0.5 truncate">
                 {format(new Date(activeEpisode.openedAt), 'yyyy. MMM d.', { locale: hu })}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2 min-w-0">
-            <UserRound className="w-4 h-4 text-gray-400 shrink-0" />
+            <UserRound className="w-4 h-4 text-gray-400 dark:text-gray-500 shrink-0" />
             <div className="min-w-0">
-              <p className="text-[11px] text-gray-500 leading-none">Kezelőorvos</p>
-              <p className="text-sm text-gray-900 mt-0.5 truncate">
+              <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-none">Kezelőorvos</p>
+              <p className="text-sm text-gray-900 dark:text-gray-100 mt-0.5 truncate">
                 {activeEpisode.assignedProviderName ?? '—'}
               </p>
             </div>
@@ -224,7 +224,7 @@ export function EpisodeStageCard({
               {stageLabel}
             </span>
             {orderedStages.length > 0 && currentIdx >= 0 && (
-              <span className="text-xs text-gray-500 shrink-0 tabular-nums">
+              <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0 tabular-nums">
                 {currentIdx + 1} / {orderedStages.length} stádium
               </span>
             )}
@@ -243,16 +243,16 @@ export function EpisodeStageCard({
                       <div className="flex items-center w-full h-4">
                         <div
                           className={`h-0.5 flex-1 ${
-                            i === 0 ? 'opacity-0' : isPast || isCurrent ? 'bg-medical-primary' : 'bg-gray-200'
+                            i === 0 ? 'opacity-0' : isPast || isCurrent ? 'bg-medical-primary' : 'bg-gray-200 dark:bg-gray-700'
                           }`}
                         />
                         <div
                           className={`w-3.5 h-3.5 rounded-full shrink-0 border-2 ${
                             isCurrent
-                              ? 'bg-white border-medical-primary ring-2 ring-medical-primary/30'
+                              ? 'bg-white dark:bg-gray-900 border-medical-primary ring-2 ring-medical-primary/30'
                               : isPast
                                 ? 'bg-medical-primary border-medical-primary'
-                                : 'bg-white border-gray-300'
+                                : 'bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600'
                           }`}
                           title={cat.labelHu}
                         />
@@ -263,17 +263,17 @@ export function EpisodeStageCard({
                             />
                           </div>
                         ) : (
-                          <div className={`h-0.5 flex-1 ${isPast ? 'bg-medical-primary' : 'bg-gray-200'}`} />
+                          <div className={`h-0.5 flex-1 ${isPast ? 'bg-medical-primary' : 'bg-gray-200 dark:bg-gray-700'}`} />
                         )}
                       </div>
                       <p
                         className={`mt-1.5 text-center text-[11px] leading-tight px-0.5 ${
-                          isCurrent ? 'font-semibold text-gray-900' : isPast ? 'text-gray-600' : 'text-gray-400'
+                          isCurrent ? 'font-semibold text-gray-900 dark:text-gray-100' : isPast ? 'text-gray-600 dark:text-gray-400' : 'text-gray-400 dark:text-gray-500'
                         }`}
                       >
                         {cat.labelHu}
                       </p>
-                      <p className="mt-0.5 text-center text-[10px] text-gray-400 h-3">
+                      <p className="mt-0.5 text-center text-[10px] text-gray-400 dark:text-gray-500 h-3">
                         {entered ? format(new Date(entered), 'MMM d.', { locale: hu }) : ''}
                       </p>
                     </div>
@@ -282,7 +282,7 @@ export function EpisodeStageCard({
               </div>
             </div>
           ) : (
-            <div className="flex justify-between text-[10px] text-gray-400 mt-1 px-0.5">
+            <div className="flex justify-between text-[10px] text-gray-400 dark:text-gray-500 mt-1 px-0.5">
               <span>Kezdet</span>
               <span>Gondozás</span>
             </div>
@@ -292,20 +292,20 @@ export function EpisodeStageCard({
         {/* Stage suggestion banner */}
         {suggestion && (
           <div
-            className="bg-blue-50 border border-blue-200 rounded-md p-3 cursor-pointer hover:bg-blue-100 transition-colors"
+            className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-md p-3 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
             onClick={() => setShowSuggestionModal(true)}
           >
             <div className="flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-blue-600 flex-shrink-0" />
+              <CheckCircle className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
               <div className="flex-1">
-                <span className="text-sm font-medium text-blue-900">
+                <span className="text-sm font-medium text-blue-900 dark:text-blue-200">
                   Javaslat: {getStageLabel(suggestion.suggestedStage)}
                 </span>
-                <span className="text-xs text-blue-600 ml-2">
+                <span className="text-xs text-blue-600 dark:text-blue-400 ml-2">
                   Kattintson a részletekért
                 </span>
               </div>
-              <ArrowRight className="w-4 h-4 text-blue-400" />
+              <ArrowRight className="w-4 h-4 text-blue-400 dark:text-blue-500" />
             </div>
           </div>
         )}
@@ -321,7 +321,7 @@ export function EpisodeStageCard({
 
         {/* Expanded details */}
         {expanded && (
-          <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
+          <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 space-y-3">
             {/* Timeline chips */}
             <div className="flex flex-wrap gap-2">
               {catalog.map((cat) => {
@@ -335,8 +335,8 @@ export function EpisodeStageCard({
                       isCurrent
                         ? getStageColor(cat.code) + ' font-semibold ring-2 ring-offset-1 ring-medical-primary'
                         : isPast
-                        ? 'bg-gray-50 text-gray-500 border-gray-200 line-through'
-                        : 'bg-white text-gray-400 border-gray-100'
+                        ? 'bg-gray-50 dark:bg-gray-800/60 text-gray-500 dark:text-gray-500 border-gray-200 dark:border-gray-700 line-through'
+                        : 'bg-white dark:bg-gray-900 text-gray-400 dark:text-gray-500 border-gray-100 dark:border-gray-800'
                     }`}
                   >
                     {cat.labelHu}

@@ -106,10 +106,10 @@ export function UserManagementTab() {
     const isActive = userSortField === field;
     const SortIcon = isActive ? (userSortDirection === 'asc' ? ArrowUp : ArrowDown) : null;
     return (
-      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none" onClick={() => handleUserSort(field)}>
+      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none" onClick={() => handleUserSort(field)}>
         <div className="flex items-center gap-1">
           <span>{label}</span>
-          {SortIcon && <SortIcon className="w-3 h-3 text-blue-600" />}
+          {SortIcon && <SortIcon className="w-3 h-3 text-blue-600 dark:text-blue-300" />}
         </div>
       </th>
     );
@@ -251,10 +251,10 @@ export function UserManagementTab() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'open': return 'bg-yellow-100 text-yellow-800';
-      case 'in_progress': return 'bg-blue-100 text-blue-800';
-      case 'resolved': return 'bg-green-100 text-green-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'open': return 'bg-yellow-100 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-300';
+      case 'in_progress': return 'bg-blue-100 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300';
+      case 'resolved': return 'bg-green-100 dark:bg-green-950/50 text-green-800 dark:text-green-300';
+      default: return 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200';
     }
   };
 
@@ -269,12 +269,12 @@ export function UserManagementTab() {
       {/* Impersonate user */}
       <div className="card mb-6 border-l-4 border-blue-500">
         <div className="flex items-center gap-2 mb-4">
-          <User className="w-5 h-5 text-blue-600" />
+          <User className="w-5 h-5 text-blue-600 dark:text-blue-300" />
           <h2 className="text-xl font-semibold">Belépés mint másik felhasználó</h2>
         </div>
         <div className="flex items-center gap-4">
           <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Válasszon felhasználót</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Válasszon felhasználót</label>
             <select value={selectedUserId} onChange={e => setSelectedUserId(e.target.value)} className="form-input w-full" disabled={impersonating}>
               <option value="">-- Válasszon felhasználót --</option>
               {users.filter(u => u.active).map(user => (<option key={user.id} value={user.id}>{user.email} ({user.role})</option>))}
@@ -291,28 +291,28 @@ export function UserManagementTab() {
       {/* Impersonate patient */}
       <div className="card mb-6 border-l-4 border-purple-500">
         <div className="flex items-center gap-2 mb-4">
-          <UserCircle className="w-5 h-5 text-purple-600" />
+          <UserCircle className="w-5 h-5 text-purple-600 dark:text-purple-300" />
           <h2 className="text-xl font-semibold">Belépés mint beteg</h2>
         </div>
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Beteg keresése (név, TAJ, email)</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Beteg keresése (név, TAJ, email)</label>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
               <input type="text" value={patientSearchQuery} onChange={e => setPatientSearchQuery(e.target.value)} placeholder="Kezdjen el gépelni..." className="form-input w-full pl-10" disabled={impersonatingPatient} />
             </div>
           </div>
-          {patientsLoading && <div className="text-sm text-gray-600">Keresés...</div>}
+          {patientsLoading && <div className="text-sm text-gray-600 dark:text-gray-400">Keresés...</div>}
           {!patientsLoading && patientSearchQuery.trim() && patients.length > 0 && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Válasszon beteget</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Válasszon beteget</label>
               <select value={selectedPatientId} onChange={e => setSelectedPatientId(e.target.value)} className="form-input w-full" disabled={impersonatingPatient}>
                 <option value="">-- Válasszon beteget --</option>
                 {patients.map(p => (<option key={p.id} value={p.id}>{p.nev} {p.taj ? `(TAJ: ${p.taj})` : ''} {p.email ? `[${p.email}]` : ''}</option>))}
               </select>
             </div>
           )}
-          {!patientsLoading && patientSearchQuery.trim() && patients.length === 0 && <div className="text-sm text-gray-600">Nincs találat</div>}
+          {!patientsLoading && patientSearchQuery.trim() && patients.length === 0 && <div className="text-sm text-gray-600 dark:text-gray-400">Nincs találat</div>}
           <div className="flex justify-end">
             <button onClick={handleImpersonatePatient} disabled={!selectedPatientId || impersonatingPatient} className="btn-primary flex items-center gap-2">
               {impersonatingPatient ? <><span className="animate-spin">⏳</span>Belépés...</> : <><UserCircle className="w-4 h-4" />Belépés betegként</>}
@@ -324,17 +324,17 @@ export function UserManagementTab() {
       {/* Pending users */}
       {users.filter(u => !u.active).length > 0 && (
         <div className="card mb-6 border-l-4 border-yellow-400">
-          <h2 className="text-xl font-semibold mb-4 text-yellow-800">Jóváhagyásra váró felhasználók ({users.filter(u => !u.active).length})</h2>
+          <h2 className="text-xl font-semibold mb-4 text-yellow-800 dark:text-yellow-300">Jóváhagyásra váró felhasználók ({users.filter(u => !u.active).length})</h2>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50"><tr><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Intézmény</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Indokolás</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Regisztráció</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Műveletek</th></tr></thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
+              <thead className="bg-gray-50 dark:bg-gray-800/60"><tr><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Email</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Intézmény</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Indokolás</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Regisztráció</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Műveletek</th></tr></thead>
+              <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
                 {users.filter(u => !u.active).map(user => (
-                  <tr key={user.id} className="bg-yellow-50">
-                    <td className="px-4 py-3 text-sm text-gray-900">{user.email}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700">{user.intezmeny || '-'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700 max-w-md"><div className="truncate" title={user.hozzaferes_indokolas || ''}>{user.hozzaferes_indokolas || '-'}</div></td>
-                    <td className="px-4 py-3 text-sm text-gray-700">{user.created_at ? new Date(user.created_at).toLocaleString('hu-HU') : '-'}</td>
+                  <tr key={user.id} className="bg-yellow-50 dark:bg-yellow-950/40">
+                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{user.email}</td>
+                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{user.intezmeny || '-'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 max-w-md"><div className="truncate" title={user.hozzaferes_indokolas || ''}>{user.hozzaferes_indokolas || '-'}</div></td>
+                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{user.created_at ? new Date(user.created_at).toLocaleString('hu-HU') : '-'}</td>
                     <td className="px-4 py-3"><div className="flex gap-2"><button onClick={() => approveUser(user.id)} className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700">Jóváhagyás</button><button onClick={() => rejectUser(user.id)} className="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700">Elutasítás</button></div></td>
                   </tr>
                 ))}
@@ -347,22 +347,22 @@ export function UserManagementTab() {
       {/* User table */}
       <div className="card">
         <h2 className="text-xl font-semibold mb-4">Felhasználók kezelése</h2>
-        {usersLoading ? (<p className="text-gray-600">Betöltés...</p>) : users.length === 0 ? (<p className="text-gray-600">Nincsenek felhasználók.</p>) : (
+        {usersLoading ? (<p className="text-gray-600 dark:text-gray-400">Betöltés...</p>) : users.length === 0 ? (<p className="text-gray-600 dark:text-gray-400">Nincsenek felhasználók.</p>) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50"><tr>{renderSortableHeader('Email', 'email')}{renderSortableHeader('Szerepkör', 'role')}<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Állapot</th>{renderSortableHeader('Utolsó aktivitás', 'last_activity')}</tr></thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
+              <thead className="bg-gray-50 dark:bg-gray-800/60"><tr>{renderSortableHeader('Email', 'email')}{renderSortableHeader('Szerepkör', 'role')}<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Állapot</th>{renderSortableHeader('Utolsó aktivitás', 'last_activity')}</tr></thead>
+              <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
                 {sortedUsers.map(user => (
                   <tr key={user.id}>
-                    <td className="px-4 py-3 text-sm text-gray-900">{user.email}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{user.email}</td>
                     <td className="px-4 py-3">
                       <select className="form-input" value={user.role} onChange={e => updateRole(user.id, e.target.value as UserRole)}>
                         <option value="admin">admin</option><option value="fogpótlástanász">fogpótlástanász</option><option value="technikus">technikus</option><option value="beutalo_orvos">beutaló orvos</option>
                       </select>
                     </td>
-                    <td className="px-4 py-3 text-sm">{user.active ? <span className="text-green-600">Aktív</span> : <span className="text-red-600">Inaktív</span>}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700">
-                      {user.last_activity ? (<div><div className="font-medium">{ACTIVITY_LABELS[user.last_activity_action || ''] || user.last_activity_action || 'Ismeretlen'}</div>{user.last_activity_detail && <div className="text-xs text-gray-500 mt-1">{user.last_activity_detail}</div>}<div className="text-xs text-gray-400 mt-1">{new Date(user.last_activity).toLocaleString('hu-HU')}</div></div>) : '-'}
+                    <td className="px-4 py-3 text-sm">{user.active ? <span className="text-green-600 dark:text-green-300">Aktív</span> : <span className="text-red-600 dark:text-red-300">Inaktív</span>}</td>
+                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                      {user.last_activity ? (<div><div className="font-medium">{ACTIVITY_LABELS[user.last_activity_action || ''] || user.last_activity_action || 'Ismeretlen'}</div>{user.last_activity_detail && <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{user.last_activity_detail}</div>}<div className="text-xs text-gray-400 dark:text-gray-500 mt-1">{new Date(user.last_activity).toLocaleString('hu-HU')}</div></div>) : '-'}
                     </td>
                   </tr>
                 ))}
@@ -376,26 +376,26 @@ export function UserManagementTab() {
       <div className="card mt-6">
         <div className="flex items-center gap-2 mb-4"><Mail className="w-5 h-5 text-medical-primary" /><h2 className="text-xl font-semibold">E-mail küldés felhasználóknak</h2></div>
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Szerepkörök (több választható)</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Szerepkörök (több választható)</label>
           <div className="flex flex-wrap gap-3">
             {['beutalo_orvos', 'fogpótlástanász', 'technikus', 'admin'].map(role => (
               <label key={role} className="flex items-center">
-                <input type="checkbox" checked={emailRoles.includes(role)} onChange={e => { if (e.target.checked) setEmailRoles([...emailRoles, role]); else setEmailRoles(emailRoles.filter(r => r !== role)); }} className="mr-2 h-4 w-4 text-medical-primary focus:ring-medical-primary border-gray-300 rounded" />
-                <span className="text-sm text-gray-700">{role === 'beutalo_orvos' ? 'Beutaló orvos' : role === 'fogpótlástanász' ? 'Fogpótlástanász' : role === 'technikus' ? 'Technikus' : 'Adminisztrátor'}</span>
+                <input type="checkbox" checked={emailRoles.includes(role)} onChange={e => { if (e.target.checked) setEmailRoles([...emailRoles, role]); else setEmailRoles(emailRoles.filter(r => r !== role)); }} className="mr-2 h-4 w-4 text-medical-primary focus:ring-medical-primary border-gray-300 dark:border-gray-700 rounded" />
+                <span className="text-sm text-gray-700 dark:text-gray-300">{role === 'beutalo_orvos' ? 'Beutaló orvos' : role === 'fogpótlástanász' ? 'Fogpótlástanász' : role === 'technikus' ? 'Technikus' : 'Adminisztrátor'}</span>
               </label>
             ))}
           </div>
         </div>
-        {emailPreviewLoading ? <div className="mb-4 text-sm text-gray-600">Előnézet betöltése...</div> : emailPreview.length > 0 ? (
+        {emailPreviewLoading ? <div className="mb-4 text-sm text-gray-600 dark:text-gray-400">Előnézet betöltése...</div> : emailPreview.length > 0 ? (
           <div className="mb-4 space-y-3">
-            <div className="p-3 bg-blue-50 rounded border border-blue-200"><p className="text-sm font-medium text-blue-900 mb-2">Címzettek ({emailPreview.length}):</p><div className="text-sm text-blue-800 space-y-1 max-h-32 overflow-y-auto">{emailPreview.map((u, i) => <div key={i} className="flex items-center gap-2"><span className="font-medium">{u.name}</span><span className="text-blue-600">({u.email})</span><span className="text-xs text-blue-500">- {u.role}</span></div>)}</div></div>
-            {emailPreviewData?.includeAdmins && emailPreviewData.adminCount > 0 && <div className="p-3 bg-green-50 rounded border border-green-200"><p className="text-sm font-medium text-green-900">Admin felhasználók automatikusan kapják másolatként ({emailPreviewData.adminCount})</p></div>}
+            <div className="p-3 bg-blue-50 dark:bg-blue-950/40 rounded border border-blue-200 dark:border-blue-800"><p className="text-sm font-medium text-blue-900 dark:text-blue-200 mb-2">Címzettek ({emailPreview.length}):</p><div className="text-sm text-blue-800 dark:text-blue-300 space-y-1 max-h-32 overflow-y-auto">{emailPreview.map((u, i) => <div key={i} className="flex items-center gap-2"><span className="font-medium">{u.name}</span><span className="text-blue-600 dark:text-blue-300">({u.email})</span><span className="text-xs text-blue-500 dark:text-blue-400">- {u.role}</span></div>)}</div></div>
+            {emailPreviewData?.includeAdmins && emailPreviewData.adminCount > 0 && <div className="p-3 bg-green-50 dark:bg-green-950/40 rounded border border-green-200 dark:border-green-800"><p className="text-sm font-medium text-green-900 dark:text-green-200">Admin felhasználók automatikusan kapják másolatként ({emailPreviewData.adminCount})</p></div>}
           </div>
-        ) : emailRoles.length > 0 ? <div className="mb-4 p-3 bg-yellow-50 rounded border border-yellow-200"><p className="text-sm text-yellow-800">Nem található aktív felhasználó.</p></div> : null}
-        <div className="mb-4"><label className="block text-sm font-medium text-gray-700 mb-2">E-mail tárgya</label><input type="text" value={emailSubject} onChange={e => setEmailSubject(e.target.value)} placeholder="Pl: Fontos értesítés" className="form-input w-full" /></div>
-        <div className="mb-4"><label className="block text-sm font-medium text-gray-700 mb-2">E-mail tartalma</label><textarea value={emailContent} onChange={e => setEmailContent(e.target.value)} placeholder="Írja be az e-mail tartalmát..." rows={8} className="form-input w-full" /><p className="text-xs text-gray-500 mt-1">A sortörések automatikusan bekerülnek.</p></div>
-        {emailError && <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded"><p className="text-sm text-red-800">{emailError}</p></div>}
-        {emailSuccess && <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded"><p className="text-sm text-green-800">{emailSuccess}</p></div>}
+        ) : emailRoles.length > 0 ? <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-950/40 rounded border border-yellow-200 dark:border-yellow-800"><p className="text-sm text-yellow-800 dark:text-yellow-300">Nem található aktív felhasználó.</p></div> : null}
+        <div className="mb-4"><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">E-mail tárgya</label><input type="text" value={emailSubject} onChange={e => setEmailSubject(e.target.value)} placeholder="Pl: Fontos értesítés" className="form-input w-full" /></div>
+        <div className="mb-4"><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">E-mail tartalma</label><textarea value={emailContent} onChange={e => setEmailContent(e.target.value)} placeholder="Írja be az e-mail tartalmát..." rows={8} className="form-input w-full" /><p className="text-xs text-gray-500 dark:text-gray-400 mt-1">A sortörések automatikusan bekerülnek.</p></div>
+        {emailError && <div className="mb-4 p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded"><p className="text-sm text-red-800 dark:text-red-300">{emailError}</p></div>}
+        {emailSuccess && <div className="mb-4 p-3 bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800 rounded"><p className="text-sm text-green-800 dark:text-green-300">{emailSuccess}</p></div>}
         <div className="flex justify-end gap-3">
           <button onClick={() => { setEmailSubject(''); setEmailContent(''); setEmailRoles([]); setEmailPreview([]); setEmailPreviewData(null); setEmailError(null); setEmailSuccess(null); }} className="btn-secondary" disabled={emailSending}>Törlés</button>
           <button onClick={sendEmailToUsers} disabled={emailSending || emailRoles.length === 0 || !emailSubject.trim() || !emailContent.trim()} className="btn-primary flex items-center gap-2">
@@ -407,11 +407,11 @@ export function UserManagementTab() {
       {/* Usage stats */}
       <div className="card mt-6">
         <h2 className="text-xl font-semibold mb-4">Használati statisztika</h2>
-        {usageLoading ? <p className="text-gray-600">Betöltés...</p> : usage.length === 0 ? <p className="text-gray-600">Még nincs adat.</p> : (
+        {usageLoading ? <p className="text-gray-600 dark:text-gray-400">Betöltés...</p> : usage.length === 0 ? <p className="text-gray-600 dark:text-gray-400">Még nincs adat.</p> : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50"><tr><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Felhasználó</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Utoljára</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">7 nap</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">30 nap</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">90 nap</th></tr></thead>
-              <tbody className="bg-white divide-y divide-gray-200">{usage.map(row => (<tr key={row.user_email}><td className="px-4 py-3 text-sm text-gray-900">{row.user_email}</td><td className="px-4 py-3 text-sm text-gray-700">{row.last_seen ? new Date(row.last_seen).toLocaleString() : '-'}</td><td className="px-4 py-3 text-sm text-gray-700">{row.last_7d}</td><td className="px-4 py-3 text-sm text-gray-700">{row.last_30d}</td><td className="px-4 py-3 text-sm text-gray-700">{row.last_90d}</td></tr>))}</tbody>
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
+              <thead className="bg-gray-50 dark:bg-gray-800/60"><tr><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Felhasználó</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Utoljára</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">7 nap</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">30 nap</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">90 nap</th></tr></thead>
+              <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">{usage.map(row => (<tr key={row.user_email}><td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{row.user_email}</td><td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{row.last_seen ? new Date(row.last_seen).toLocaleString() : '-'}</td><td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{row.last_7d}</td><td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{row.last_30d}</td><td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{row.last_90d}</td></tr>))}</tbody>
             </table>
           </div>
         )}
@@ -421,39 +421,39 @@ export function UserManagementTab() {
       <div className="card mt-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">Visszajelzések napló</h2>
-          <div className="flex items-center gap-2"><label className="text-sm text-gray-600">Szűrés:</label><select value={feedbackStatusFilter} onChange={e => setFeedbackStatusFilter(e.target.value)} className="form-input text-sm"><option value="">Összes</option><option value="open">Nyitott</option><option value="in_progress">Folyamatban</option><option value="resolved">Megoldva</option><option value="closed">Lezárva</option></select></div>
+          <div className="flex items-center gap-2"><label className="text-sm text-gray-600 dark:text-gray-400">Szűrés:</label><select value={feedbackStatusFilter} onChange={e => setFeedbackStatusFilter(e.target.value)} className="form-input text-sm"><option value="">Összes</option><option value="open">Nyitott</option><option value="in_progress">Folyamatban</option><option value="resolved">Megoldva</option><option value="closed">Lezárva</option></select></div>
         </div>
-        {feedbackLoading ? <p className="text-gray-600">Betöltés...</p> : feedback.length === 0 ? <p className="text-gray-600">Nincsenek visszajelzések.</p> : (
+        {feedbackLoading ? <p className="text-gray-600 dark:text-gray-400">Betöltés...</p> : feedback.length === 0 ? <p className="text-gray-600 dark:text-gray-400">Nincsenek visszajelzések.</p> : (
           <div className="space-y-3">
             {feedback.map(item => {
               const isExpanded = expandedFeedback.has(item.id);
               return (
-                <div key={item.id} className="border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="bg-gray-50 p-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => setExpandedFeedback(prev => { const s = new Set(prev); s.has(item.id) ? s.delete(item.id) : s.add(item.id); return s; })}>
+                <div key={item.id} className="border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden">
+                  <div className="bg-gray-50 dark:bg-gray-800/60 p-4 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" onClick={() => setExpandedFeedback(prev => { const s = new Set(prev); s.has(item.id) ? s.delete(item.id) : s.add(item.id); return s; })}>
                     <div className="flex items-start justify-between">
                       <div className="flex items-start gap-3 flex-1">
                         <div className="mt-1">{getTypeIcon(item.type)}</div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1"><span className="font-medium text-gray-900">{item.title || `${item.type} jelentés`}</span><span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(item.status)}`}>{item.status === 'open' ? 'Nyitott' : item.status === 'in_progress' ? 'Folyamatban' : item.status === 'resolved' ? 'Megoldva' : 'Lezárva'}</span></div>
-                          <p className="text-sm text-gray-600 line-clamp-2">{item.description}</p>
-                          <div className="flex items-center gap-4 mt-2 text-xs text-gray-500"><span>{item.user_email || 'Névtelen'}</span><span>•</span><span>{new Date(item.created_at).toLocaleString('hu-HU')}</span>{(item.type === 'error' || item.type === 'crash') && <><span>•</span><span className="text-red-600 font-medium">Hiba log elérhető</span></>}</div>
+                          <div className="flex items-center gap-2 mb-1"><span className="font-medium text-gray-900 dark:text-gray-100">{item.title || `${item.type} jelentés`}</span><span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(item.status)}`}>{item.status === 'open' ? 'Nyitott' : item.status === 'in_progress' ? 'Folyamatban' : item.status === 'resolved' ? 'Megoldva' : 'Lezárva'}</span></div>
+                          <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">{item.description}</p>
+                          <div className="flex items-center gap-4 mt-2 text-xs text-gray-500 dark:text-gray-400"><span>{item.user_email || 'Névtelen'}</span><span>•</span><span>{new Date(item.created_at).toLocaleString('hu-HU')}</span>{(item.type === 'error' || item.type === 'crash') && <><span>•</span><span className="text-red-600 dark:text-red-300 font-medium">Hiba log elérhető</span></>}</div>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 ml-4">
                         <select value={item.status} onChange={e => { e.stopPropagation(); updateFeedbackStatus(item.id, e.target.value); }} onClick={e => e.stopPropagation()} className="form-input text-xs"><option value="open">Nyitott</option><option value="in_progress">Folyamatban</option><option value="resolved">Megoldva</option><option value="closed">Lezárva</option></select>
-                        {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+                        {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400 dark:text-gray-500" /> : <ChevronDown className="w-5 h-5 text-gray-400 dark:text-gray-500" />}
                       </div>
                     </div>
                   </div>
                   {isExpanded && (
-                    <div className="p-4 bg-white border-t border-gray-200 space-y-4">
-                      <div><h4 className="text-sm font-medium text-gray-700 mb-1">Leírás</h4><p className="text-sm text-gray-900 whitespace-pre-wrap">{item.description}</p></div>
-                      {(item.error_log || item.error_stack) && <div><h4 className="text-sm font-medium text-gray-700 mb-1">Error log</h4><pre className="text-xs bg-gray-100 p-3 rounded overflow-auto max-h-64">{item.error_log || item.error_stack}</pre></div>}
+                    <div className="p-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 space-y-4">
+                      <div><h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Leírás</h4><p className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap">{item.description}</p></div>
+                      {(item.error_log || item.error_stack) && <div><h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Error log</h4><pre className="text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-auto max-h-64">{item.error_log || item.error_stack}</pre></div>}
                       <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div><span className="font-medium text-gray-700">URL:</span><span className="ml-2 text-gray-600">{item.url || 'N/A'}</span></div>
-                        <div><span className="font-medium text-gray-700">User Agent:</span><span className="ml-2 text-gray-600 text-xs">{item.user_agent || 'N/A'}</span></div>
-                        <div><span className="font-medium text-gray-700">Létrehozva:</span><span className="ml-2 text-gray-600">{new Date(item.created_at).toLocaleString('hu-HU')}</span></div>
-                        <div><span className="font-medium text-gray-700">Frissítve:</span><span className="ml-2 text-gray-600">{new Date(item.updated_at).toLocaleString('hu-HU')}</span></div>
+                        <div><span className="font-medium text-gray-700 dark:text-gray-300">URL:</span><span className="ml-2 text-gray-600 dark:text-gray-400">{item.url || 'N/A'}</span></div>
+                        <div><span className="font-medium text-gray-700 dark:text-gray-300">User Agent:</span><span className="ml-2 text-gray-600 dark:text-gray-400 text-xs">{item.user_agent || 'N/A'}</span></div>
+                        <div><span className="font-medium text-gray-700 dark:text-gray-300">Létrehozva:</span><span className="ml-2 text-gray-600 dark:text-gray-400">{new Date(item.created_at).toLocaleString('hu-HU')}</span></div>
+                        <div><span className="font-medium text-gray-700 dark:text-gray-300">Frissítve:</span><span className="ml-2 text-gray-600 dark:text-gray-400">{new Date(item.updated_at).toLocaleString('hu-HU')}</span></div>
                       </div>
                     </div>
                   )}

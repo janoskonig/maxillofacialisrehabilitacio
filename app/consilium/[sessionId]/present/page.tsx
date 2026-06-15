@@ -571,7 +571,7 @@ function PresentChecklistDelegatedTasks({
             task.status === 'done'
               ? 'bg-emerald-500/25 text-emerald-100 border-emerald-400/35'
               : task.status === 'cancelled'
-                ? 'bg-white/10 text-amber-100/55 border-white/15'
+                ? 'bg-white/10 dark:bg-gray-900/10 text-amber-100/55 border-white/15'
                 : 'bg-amber-500/20 text-amber-100 border-amber-400/35';
           return (
             <li key={task.id} className="rounded-md border border-amber-500/25 bg-black/35 px-2 py-1.5">
@@ -916,11 +916,11 @@ export default function ConsiliumPresentPage() {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <Link href={`/consilium`} className="text-xs px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/15 inline-flex items-center gap-2">
+            <Link href={`/consilium`} className="text-xs px-3 py-1.5 rounded-md bg-white/10 dark:bg-gray-900/10 hover:bg-white/15 inline-flex items-center gap-2">
               <ArrowLeft className="w-3.5 h-3.5" />
               Szerkesztés
             </Link>
-            <button type="button" className="text-xs px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/15" onClick={load}>
+            <button type="button" className="text-xs px-3 py-1.5 rounded-md bg-white/10 dark:bg-gray-900/10 hover:bg-white/15" onClick={load}>
               Frissítés
             </button>
           </div>
@@ -1331,7 +1331,7 @@ export default function ConsiliumPresentPage() {
         >
           <button
             type="button"
-            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white z-[110]"
+            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 dark:bg-gray-900/10 hover:bg-white/20 text-white z-[110]"
             aria-label="Bezárás"
             onClick={(e) => {
               e.stopPropagation();
@@ -1344,7 +1344,7 @@ export default function ConsiliumPresentPage() {
             <>
               <button
                 type="button"
-                className="absolute left-2 md:left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white z-[110] disabled:opacity-30"
+                className="absolute left-2 md:left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/10 dark:bg-gray-900/10 hover:bg-white/20 text-white z-[110] disabled:opacity-30"
                 aria-label="Előző kép"
                 disabled={photoLightbox.index <= 0}
                 onClick={(e) => {
@@ -1358,7 +1358,7 @@ export default function ConsiliumPresentPage() {
               </button>
               <button
                 type="button"
-                className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white z-[110] disabled:opacity-30"
+                className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/10 dark:bg-gray-900/10 hover:bg-white/20 text-white z-[110] disabled:opacity-30"
                 aria-label="Következő kép"
                 disabled={photoLightbox.index >= photoLightbox.previews.length - 1}
                 onClick={(e) => {

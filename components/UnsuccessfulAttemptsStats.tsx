@@ -190,19 +190,19 @@ export function UnsuccessfulAttemptsStats() {
   return (
     <section
       id="stats-unsuccessful-attempts"
-      className="card scroll-mt-28 border-orange-200/80 shadow-soft-md"
+      className="card scroll-mt-28 border-orange-200/80 dark:border-orange-800/80 shadow-soft-md"
       aria-labelledby="unsuccessful-attempts-heading"
     >
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
-          <div className="mt-0.5 rounded-lg bg-orange-100 p-2 text-orange-700">
+          <div className="mt-0.5 rounded-lg bg-orange-100 dark:bg-orange-950/50 p-2 text-orange-700 dark:text-orange-300">
             <AlertTriangle className="h-5 w-5" />
           </div>
           <div>
-            <h2 id="unsuccessful-attempts-heading" className="text-lg font-semibold text-gray-900">
+            <h2 id="unsuccessful-attempts-heading" className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               Sikertelen próbák
             </h2>
-            <p className="mt-0.5 text-sm text-gray-500">
+            <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
               Munkafázis-próbák, amelyek sikertelennek lettek jelölve (vizit megvolt, klinikai cél nem teljesült). Migration 029.
             </p>
           </div>
@@ -211,7 +211,7 @@ export function UnsuccessfulAttemptsStats() {
           <select
             value={days}
             onChange={(e) => setDays(Number(e.target.value))}
-            className="text-sm rounded border border-gray-300 bg-white px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-medical-primary/50"
+            className="text-sm rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-medical-primary/50"
             aria-label="Időszak"
           >
             {PERIOD_OPTIONS.map((p) => (
@@ -223,7 +223,7 @@ export function UnsuccessfulAttemptsStats() {
           <select
             value={doctor}
             onChange={(e) => setDoctor(e.target.value)}
-            className="text-sm rounded border border-gray-300 bg-white px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-medical-primary/50 max-w-[220px]"
+            className="text-sm rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-medical-primary/50 max-w-[220px]"
             aria-label="Orvos szűrő"
             disabled={!data?.availableDoctors?.length}
           >
@@ -238,7 +238,7 @@ export function UnsuccessfulAttemptsStats() {
             type="button"
             onClick={handleExportCsv}
             disabled={loading || !data || data.recent.length === 0}
-            className="text-sm inline-flex items-center gap-1 rounded border border-gray-300 px-2 py-1.5 hover:bg-gray-50 disabled:opacity-50"
+            className="text-sm inline-flex items-center gap-1 rounded border border-gray-300 dark:border-gray-700 px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800/50 disabled:opacity-50"
             title="A friss minta-tábla lementése CSV-ként"
           >
             <Download className="h-3.5 w-3.5" />
@@ -248,7 +248,7 @@ export function UnsuccessfulAttemptsStats() {
             type="button"
             onClick={load}
             disabled={loading}
-            className="text-sm inline-flex items-center gap-1 rounded border border-gray-300 px-2 py-1.5 hover:bg-gray-50 disabled:opacity-50"
+            className="text-sm inline-flex items-center gap-1 rounded border border-gray-300 dark:border-gray-700 px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800/50 disabled:opacity-50"
             aria-label="Frissítés"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -258,34 +258,34 @@ export function UnsuccessfulAttemptsStats() {
       </div>
 
       {error && (
-        <div className="mb-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+        <div className="mb-4 rounded border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 p-3 text-sm text-red-800 dark:text-red-300">
           {error}
         </div>
       )}
 
       {loading && !data && (
-        <div className="py-12 text-center text-sm text-gray-500">Betöltés…</div>
+        <div className="py-12 text-center text-sm text-gray-500 dark:text-gray-400">Betöltés…</div>
       )}
 
       {data && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="rounded-xl border border-orange-100 bg-orange-50/60 px-4 py-3">
-              <p className="text-xs font-medium text-orange-700">
+            <div className="rounded-xl border border-orange-100 dark:border-orange-800 bg-orange-50/60 dark:bg-orange-950/50 px-4 py-3">
+              <p className="text-xs font-medium text-orange-700 dark:text-orange-300">
                 {days > 0 ? `Sikertelen próbák — ${data.days} nap` : 'Sikertelen próbák — összes idejű'}
                 {doctor && (
-                  <span className="ml-1 text-orange-900">
+                  <span className="ml-1 text-orange-900 dark:text-orange-200">
                     · {doctor}
                   </span>
                 )}
               </p>
-              <p className="mt-0.5 text-2xl font-bold tabular-nums text-orange-900">
+              <p className="mt-0.5 text-2xl font-bold tabular-nums text-orange-900 dark:text-orange-200">
                 {data.summary.period}
               </p>
             </div>
-            <div className="rounded-xl border border-gray-100 bg-gray-50/80 px-4 py-3">
-              <p className="text-xs font-medium text-gray-500">Összes idejű (összes orvos)</p>
-              <p className="mt-0.5 text-2xl font-bold tabular-nums text-gray-900">
+            <div className="rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-800/60 px-4 py-3">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Összes idejű (összes orvos)</p>
+              <p className="mt-0.5 text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-100">
                 {data.summary.allTime}
               </p>
             </div>
@@ -293,8 +293,8 @@ export function UnsuccessfulAttemptsStats() {
 
           {data.weeklyTrend.length > 0 && (
             <div>
-              <h3 className="mb-2 text-sm font-semibold text-gray-700">Heti trend (utolsó 26 hét)</h3>
-              <div className="flex items-end gap-1 h-24 border-b border-gray-200 pb-1">
+              <h3 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">Heti trend (utolsó 26 hét)</h3>
+              <div className="flex items-end gap-1 h-24 border-b border-gray-200 dark:border-gray-800 pb-1">
                 {data.weeklyTrend.map((w) => {
                   const heightPct = maxWeekly > 0 ? (w.count / maxWeekly) * 100 : 0;
                   return (
@@ -311,7 +311,7 @@ export function UnsuccessfulAttemptsStats() {
                   );
                 })}
               </div>
-              <div className="mt-1 flex justify-between text-[10px] text-gray-500">
+              <div className="mt-1 flex justify-between text-[10px] text-gray-500 dark:text-gray-400">
                 <span>{formatWeekStart(data.weeklyTrend[0].weekStart)}</span>
                 <span>{formatWeekStart(data.weeklyTrend[data.weeklyTrend.length - 1].weekStart)}</span>
               </div>
@@ -320,10 +320,10 @@ export function UnsuccessfulAttemptsStats() {
 
           {data.reasonsByTemplate.length > 0 && (
             <div>
-              <h3 className="mb-2 text-sm font-semibold text-gray-700 flex items-center gap-1">
+              <h3 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1">
                 <MessageSquare className="w-4 h-4" /> Indokok kanonikus sablon szerint
               </h3>
-              <p className="text-xs text-gray-500 mb-2">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                 A modal chip-sablonjai exact match-cseppel csoportosítva. „Egyéb" = szabad szöveg.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
@@ -335,18 +335,18 @@ export function UnsuccessfulAttemptsStats() {
                       <div
                         key={b.template}
                         className={`rounded-lg border p-2 ${
-                          b.canonical ? 'border-orange-200 bg-orange-50/40' : 'border-gray-200 bg-gray-50/60'
+                          b.canonical ? 'border-orange-200 dark:border-orange-800 bg-orange-50/40 dark:bg-orange-950/40' : 'border-gray-200 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-800/60'
                         }`}
                       >
                         <div className="flex items-start justify-between gap-2">
-                          <div className="text-xs font-medium text-gray-800 leading-tight">
+                          <div className="text-xs font-medium text-gray-800 dark:text-gray-200 leading-tight">
                             {b.template}
                           </div>
-                          <div className="text-sm font-semibold tabular-nums text-gray-900 shrink-0">
+                          <div className="text-sm font-semibold tabular-nums text-gray-900 dark:text-gray-100 shrink-0">
                             {b.count}
                           </div>
                         </div>
-                        <div className="mt-1 h-1 bg-white rounded overflow-hidden">
+                        <div className="mt-1 h-1 bg-white dark:bg-gray-800 rounded overflow-hidden">
                           <div
                             className={`h-full ${b.canonical ? 'bg-orange-400/80' : 'bg-gray-400/80'}`}
                             style={{ width: `${Math.max(widthPct, 2)}%` }}
@@ -357,11 +357,11 @@ export function UnsuccessfulAttemptsStats() {
                             {b.examples.map((ex, i) => (
                               <div
                                 key={`${ex.text}-${i}`}
-                                className="text-[11px] text-gray-600 italic flex items-start justify-between gap-2"
+                                className="text-[11px] text-gray-600 dark:text-gray-400 italic flex items-start justify-between gap-2"
                                 title={ex.text}
                               >
                                 <span className="truncate">„{ex.text}"</span>
-                                <span className="shrink-0 tabular-nums text-gray-500">×{ex.count}</span>
+                                <span className="shrink-0 tabular-nums text-gray-500 dark:text-gray-400">×{ex.count}</span>
                               </div>
                             ))}
                           </div>
@@ -407,11 +407,11 @@ export function UnsuccessfulAttemptsStats() {
 
           {data.recent.length > 0 && (
             <div>
-              <h3 className="mb-2 text-sm font-semibold text-gray-700">Legfrissebb sikertelen próbák</h3>
+              <h3 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">Legfrissebb sikertelen próbák</h3>
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 text-sm">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800 text-sm">
                   <thead>
-                    <tr className="text-left text-xs text-gray-500">
+                    <tr className="text-left text-xs text-gray-500 dark:text-gray-400">
                       <th className="px-2 py-1.5">Mikor jelölve</th>
                       <th className="px-2 py-1.5">Beteg</th>
                       <th className="px-2 py-1.5">Munkafázis</th>
@@ -424,10 +424,10 @@ export function UnsuccessfulAttemptsStats() {
                   <tbody>
                     {data.recent.map((r) => (
                       <tr key={r.appointmentId} className="border-b">
-                        <td className="px-2 py-1.5 text-gray-700 whitespace-nowrap">
+                        <td className="px-2 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">
                           {formatDateTime(r.failedAt)}
                         </td>
-                        <td className="px-2 py-1.5 text-gray-700">
+                        <td className="px-2 py-1.5 text-gray-700 dark:text-gray-300">
                           {r.patientId && r.patientName ? (
                             <Link
                               href={`/patients/${r.patientId}/view`}
@@ -437,25 +437,25 @@ export function UnsuccessfulAttemptsStats() {
                               {r.patientName}
                             </Link>
                           ) : (
-                            r.patientName ?? <span className="text-gray-400">–</span>
+                            r.patientName ?? <span className="text-gray-400 dark:text-gray-500">–</span>
                           )}
                         </td>
-                        <td className="px-2 py-1.5 text-gray-700">
-                          {r.workPhaseLabel ?? r.workPhaseCode ?? <span className="text-gray-400">–</span>}
+                        <td className="px-2 py-1.5 text-gray-700 dark:text-gray-300">
+                          {r.workPhaseLabel ?? r.workPhaseCode ?? <span className="text-gray-400 dark:text-gray-500">–</span>}
                           {r.workPhaseLabel && r.workPhaseCode && (
-                            <span className="block text-xs text-gray-400">{r.workPhaseCode}</span>
+                            <span className="block text-xs text-gray-400 dark:text-gray-500">{r.workPhaseCode}</span>
                           )}
                         </td>
-                        <td className="px-2 py-1.5 text-gray-700 tabular-nums">{r.attemptNumber}.</td>
-                        <td className="px-2 py-1.5 text-gray-700 whitespace-nowrap">
+                        <td className="px-2 py-1.5 text-gray-700 dark:text-gray-300 tabular-nums">{r.attemptNumber}.</td>
+                        <td className="px-2 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">
                           {formatDateTime(r.appointmentStart)}
                         </td>
-                        <td className="px-2 py-1.5 text-gray-700 max-w-xs">
-                          <span className="italic text-orange-800" title={r.reason ?? ''}>
-                            {r.reason ?? <span className="text-gray-400">–</span>}
+                        <td className="px-2 py-1.5 text-gray-700 dark:text-gray-300 max-w-xs">
+                          <span className="italic text-orange-800 dark:text-orange-300" title={r.reason ?? ''}>
+                            {r.reason ?? <span className="text-gray-400 dark:text-gray-500">–</span>}
                           </span>
                         </td>
-                        <td className="px-2 py-1.5 text-gray-600 text-xs">{r.failedBy ?? '–'}</td>
+                        <td className="px-2 py-1.5 text-gray-600 dark:text-gray-400 text-xs">{r.failedBy ?? '–'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -465,7 +465,7 @@ export function UnsuccessfulAttemptsStats() {
           )}
 
           {data.summary.period === 0 && (
-            <div className="text-center py-6 text-sm text-gray-500">
+            <div className="text-center py-6 text-sm text-gray-500 dark:text-gray-400">
               {doctor
                 ? `Ebben az időszakban ${doctor} nem jelölt sikertelennek próbát.`
                 : 'Ebben az időszakban nem volt sikertelennek jelölt próba.'}
@@ -474,42 +474,42 @@ export function UnsuccessfulAttemptsStats() {
 
           {/* Attempt-number eloszlás (összes idejű, NEM csak unsuccessful) */}
           {data.attemptDistributionSummary.osszesStepInstance > 0 ? (
-            <div className="rounded-xl border border-orange-200/80 bg-gradient-to-br from-orange-50/40 to-white p-4">
+            <div className="rounded-xl border border-orange-200/80 dark:border-orange-800/80 bg-gradient-to-br from-orange-50/40 to-white p-4">
               <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-                <h3 className="text-sm font-semibold text-gray-900">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                   Hány próbát kívántak a step-instance-ek
                 </h3>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                   (episode_id, step_code) párok minden idejű attempt_number alapján
                 </p>
               </div>
               <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div>
-                  <p className="text-xs text-gray-500">Összes step-instance</p>
-                  <p className="text-xl font-bold tabular-nums text-gray-900">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Összes step-instance</p>
+                  <p className="text-xl font-bold tabular-nums text-gray-900 dark:text-gray-100">
                     {data.attemptDistributionSummary.osszesStepInstance}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">1 próba</p>
-                  <p className="text-xl font-bold tabular-nums text-emerald-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">1 próba</p>
+                  <p className="text-xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
                     {data.attemptDistributionSummary.egyProba}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">2 próba</p>
-                  <p className="text-xl font-bold tabular-nums text-amber-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">2 próba</p>
+                  <p className="text-xl font-bold tabular-nums text-amber-700 dark:text-amber-300">
                     {data.attemptDistributionSummary.ketProba}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">3+ próba</p>
-                  <p className="text-xl font-bold tabular-nums text-rose-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">3+ próba</p>
+                  <p className="text-xl font-bold tabular-nums text-rose-700 dark:text-rose-300">
                     {data.attemptDistributionSummary.haromVagyTobbProba}
                   </p>
                 </div>
               </div>
-              <p className="mb-3 text-xs text-gray-600">
+              <p className="mb-3 text-xs text-gray-600 dark:text-gray-400">
                 Többszörösen próbált step-instance-ek aránya:{' '}
                 <span className="font-semibold tabular-nums">
                   {data.attemptDistributionSummary.tobbszorPct}%
@@ -528,10 +528,10 @@ export function UnsuccessfulAttemptsStats() {
                   return (
                     <li key={b.maxAttempts}>
                       <div className="flex justify-between text-xs">
-                        <span className="text-gray-700">{b.maxAttempts}. próba</span>
-                        <span className="tabular-nums font-semibold text-gray-900">{b.parosSzam}</span>
+                        <span className="text-gray-700 dark:text-gray-300">{b.maxAttempts}. próba</span>
+                        <span className="tabular-nums font-semibold text-gray-900 dark:text-gray-100">{b.parosSzam}</span>
                       </div>
-                      <div className="mt-0.5 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                      <div className="mt-0.5 h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
                         <div
                           className={`h-full rounded-full transition-[width] duration-500 ${tone}`}
                           style={{ width: `${pct}%` }}
@@ -577,13 +577,13 @@ function BucketList({
         ? 'bg-blue-400/80'
         : 'bg-gray-400/80';
   return (
-    <div className="rounded-xl border border-gray-200 p-3">
-      <div className="flex items-center gap-2 mb-2 text-sm font-semibold text-gray-700">
+    <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-3">
+      <div className="flex items-center gap-2 mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
         {icon}
         {title}
       </div>
       {rows.length === 0 ? (
-        <p className="text-xs text-gray-500 py-3 text-center">{emptyHint}</p>
+        <p className="text-xs text-gray-500 dark:text-gray-400 py-3 text-center">{emptyHint}</p>
       ) : (
         <ul className="space-y-1.5">
           {rows.map((row, i) => {
@@ -591,17 +591,17 @@ function BucketList({
             return (
               <li key={`${row.label}-${i}`} className="text-xs">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-gray-800 truncate" title={row.label}>
+                  <span className="text-gray-800 dark:text-gray-200 truncate" title={row.label}>
                     {row.label}
                   </span>
-                  <span className="font-semibold tabular-nums text-gray-700">{row.count}</span>
+                  <span className="font-semibold tabular-nums text-gray-700 dark:text-gray-300">{row.count}</span>
                 </div>
                 {row.sublabel && (
-                  <div className="text-[10px] text-gray-400 truncate" title={row.sublabel}>
+                  <div className="text-[10px] text-gray-400 dark:text-gray-500 truncate" title={row.sublabel}>
                     {row.sublabel}
                   </div>
                 )}
-                <div className="mt-0.5 h-1 bg-gray-100 rounded overflow-hidden">
+                <div className="mt-0.5 h-1 bg-gray-100 dark:bg-gray-800 rounded overflow-hidden">
                   <div
                     className={`h-full ${barColor}`}
                     style={{ width: `${Math.max(widthPct, 2)}%` }}

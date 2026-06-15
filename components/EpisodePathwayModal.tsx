@@ -45,22 +45,22 @@ export function EpisodePathwayModal({
       aria-modal="true"
       aria-labelledby="episode-pathway-modal-title"
     >
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-3 border-b">
           <h2
             id="episode-pathway-modal-title"
-            className="text-base font-semibold text-gray-900"
+            className="text-base font-semibold text-gray-900 dark:text-gray-100"
           >
             Kezelési út hozzárendelése
             {patientName && (
-              <span className="block text-sm font-normal text-gray-600 mt-0.5">
+              <span className="block text-sm font-normal text-gray-600 dark:text-gray-400 mt-0.5">
                 {patientName}
               </span>
             )}
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 p-1"
+            className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 p-1"
             aria-label="Bezárás"
           >
             <X className="w-5 h-5" />

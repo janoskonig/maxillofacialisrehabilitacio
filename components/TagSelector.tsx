@@ -237,8 +237,8 @@ export function TagSelector({
                 disabled={isSelected}
                 className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                   isSelected
-                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                    : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
                 }`}
               >
                 {tag}
@@ -269,15 +269,15 @@ export function TagSelector({
             {showSuggestions && (filteredTags.length > 0 || createOption) && (
               <div
                 ref={suggestionsRef}
-                className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto"
+                className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg max-h-48 overflow-y-auto"
               >
                 {filteredTags.map((tag, index) => (
                   <button
                     key={tag}
                     type="button"
                     onClick={() => addTag(tag)}
-                    className={`w-full text-left px-4 py-2 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none ${
-                      index === selectedIndex ? 'bg-gray-100' : ''
+                    className={`w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700 focus:outline-none ${
+                      index === selectedIndex ? 'bg-gray-100 dark:bg-gray-800' : ''
                     }`}
                   >
                     {tag}
@@ -287,8 +287,8 @@ export function TagSelector({
                   <button
                     type="button"
                     onClick={() => addTag()}
-                    className={`w-full text-left px-4 py-2 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none text-medical-primary ${
-                      selectedIndex === filteredTags.length ? 'bg-gray-100' : ''
+                    className={`w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700 focus:outline-none text-medical-primary ${
+                      selectedIndex === filteredTags.length ? 'bg-gray-100 dark:bg-gray-800' : ''
                     }`}
                   >
                     <Plus className="w-3 h-3 inline mr-2" />

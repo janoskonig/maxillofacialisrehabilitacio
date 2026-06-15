@@ -65,22 +65,22 @@ export function MessageSearchModal() {
         if (e.target === e.currentTarget) closeSearch();
       }}
     >
-      <div className="w-full max-w-2xl bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[min(80vh,640px)]">
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200">
-          <Search className="w-5 h-5 text-gray-400 flex-shrink-0" />
+      <div className="w-full max-w-2xl bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden flex flex-col max-h-[min(80vh,640px)]">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-gray-800">
+          <Search className="w-5 h-5 text-gray-400 dark:text-gray-500 flex-shrink-0" />
           <input
             ref={inputRef}
             type="search"
             value={filters.q}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Keresés az üzenetekben…"
-            className="flex-1 text-base outline-none placeholder:text-gray-400"
+            className="flex-1 text-base outline-none placeholder:text-gray-400 dark:placeholder:text-gray-500"
             autoComplete="off"
           />
           <button
             type="button"
             onClick={() => setShowFilters((v) => !v)}
-            className={`p-2 rounded-lg transition-colors ${showFilters ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`}
+            className={`p-2 rounded-lg transition-colors ${showFilters ? 'bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
             title="Szűrők"
           >
             <SlidersHorizontal className="w-4 h-4" />
@@ -88,7 +88,7 @@ export function MessageSearchModal() {
           <button
             type="button"
             onClick={closeSearch}
-            className="p-2 rounded-lg text-gray-500 hover:bg-gray-100"
+            className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
             aria-label="Bezárás"
           >
             <X className="w-5 h-5" />
@@ -96,10 +96,10 @@ export function MessageSearchModal() {
         </div>
 
         {showFilters && (
-          <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 space-y-3 text-sm">
+          <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60 space-y-3 text-sm">
             {preferredChannel === 'patient' && !defaultScope?.patientId && (
               <label className="block">
-                <span className="text-gray-600 text-xs">Beteg ID (opcionális)</span>
+                <span className="text-gray-600 dark:text-gray-400 text-xs">Beteg ID (opcionális)</span>
                 <input
                   type="text"
                   value={filters.patientId ?? ''}
@@ -113,7 +113,7 @@ export function MessageSearchModal() {
             )}
             {preferredChannel === 'doctor' && !scopeLocked && (
               <label className="block">
-                <span className="text-gray-600 text-xs">Címzett orvos ID (1:1)</span>
+                <span className="text-gray-600 dark:text-gray-400 text-xs">Címzett orvos ID (1:1)</span>
                 <input
                   type="text"
                   value={filters.recipientId ?? ''}
@@ -127,7 +127,7 @@ export function MessageSearchModal() {
             )}
             <div className="grid grid-cols-2 gap-2">
               <label className="block">
-                <span className="text-gray-600 text-xs">Dátumtól</span>
+                <span className="text-gray-600 dark:text-gray-400 text-xs">Dátumtól</span>
                 <input
                   type="date"
                   value={filters.from?.slice(0, 10) ?? ''}
@@ -140,7 +140,7 @@ export function MessageSearchModal() {
                 />
               </label>
               <label className="block">
-                <span className="text-gray-600 text-xs">Dátumig</span>
+                <span className="text-gray-600 dark:text-gray-400 text-xs">Dátumig</span>
                 <input
                   type="date"
                   value={filters.to?.slice(0, 10) ?? ''}
@@ -154,7 +154,7 @@ export function MessageSearchModal() {
               </label>
             </div>
             <label className="block">
-              <span className="text-gray-600 text-xs">Küldő</span>
+              <span className="text-gray-600 dark:text-gray-400 text-xs">Küldő</span>
               <select
                 value={filters.sender ?? ''}
                 onChange={(e) =>
@@ -182,31 +182,31 @@ export function MessageSearchModal() {
                 onChange={(e) =>
                   patchFilters({ hasAttachment: e.target.checked || undefined })
                 }
-                className="rounded border-gray-300"
+                className="rounded border-gray-300 dark:border-gray-700"
               />
-              <Paperclip className="w-4 h-4 text-gray-500" />
-              <span className="text-gray-700">Csak dokumentum-linkkel</span>
+              <Paperclip className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+              <span className="text-gray-700 dark:text-gray-300">Csak dokumentum-linkkel</span>
             </label>
           </div>
         )}
 
         <div className="flex-1 overflow-y-auto min-h-[120px]">
           {filters.q.trim().length < 2 && (
-            <p className="p-6 text-center text-sm text-gray-500">
-              Írjon legalább 2 karaktert. Gyorsbillentyű: <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs">/</kbd>
+            <p className="p-6 text-center text-sm text-gray-500 dark:text-gray-400">
+              Írjon legalább 2 karaktert. Gyorsbillentyű: <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-xs">/</kbd>
             </p>
           )}
           {filters.q.trim().length >= 2 && loading && (
-            <div className="flex items-center justify-center py-12 text-gray-500 gap-2">
+            <div className="flex items-center justify-center py-12 text-gray-500 dark:text-gray-400 gap-2">
               <Loader2 className="w-5 h-5 animate-spin" />
               Keresés…
             </div>
           )}
           {error && (
-            <p className="p-4 text-sm text-red-600 text-center">{error}</p>
+            <p className="p-4 text-sm text-red-600 dark:text-red-300 text-center">{error}</p>
           )}
           {!loading && !error && filters.q.trim().length >= 2 && hits.length === 0 && (
-            <p className="p-6 text-center text-sm text-gray-500">Nincs találat</p>
+            <p className="p-6 text-center text-sm text-gray-500 dark:text-gray-400">Nincs találat</p>
           )}
           {!loading &&
             hits.map((hit) => (
@@ -215,7 +215,7 @@ export function MessageSearchModal() {
         </div>
 
         {total > 0 && (
-          <div className="px-4 py-2 border-t border-gray-100 text-xs text-gray-500 bg-gray-50">
+          <div className="px-4 py-2 border-t border-gray-100 dark:border-gray-800 text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/60">
             {hits.length} / {total} találat — kattintás: ugrás az üzenethez
           </div>
         )}

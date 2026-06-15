@@ -43,7 +43,7 @@ export function VirtualLane({
           <VirtualCalendarChip key={item.virtualKey} item={item} compact />
         ))}
         {dayItems.length > maxVisible && (
-          <div className="text-xs text-amber-600 px-1">
+          <div className="text-xs text-amber-600 dark:text-amber-400 px-1">
             +{dayItems.length - maxVisible} további
           </div>
         )}
@@ -53,8 +53,8 @@ export function VirtualLane({
 
   if (mode === 'week' && weekDates) {
     return (
-      <div className="grid grid-cols-8 border-b border-amber-100 bg-amber-50/50">
-        <div className="p-2 border-r border-amber-200 text-xs font-medium text-amber-800 flex items-center">
+      <div className="grid grid-cols-8 border-b border-amber-100 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20">
+        <div className="p-2 border-r border-amber-200 dark:border-amber-900/40 text-xs font-medium text-amber-800 dark:text-amber-300 flex items-center">
           {label}
         </div>
         {weekDates.map((day) => {
@@ -63,13 +63,13 @@ export function VirtualLane({
           return (
             <div
               key={dayKey}
-              className="p-1 border-r border-amber-100 min-h-[2rem] space-y-1"
+              className="p-1 border-r border-amber-100 dark:border-amber-900/40 min-h-[2rem] space-y-1"
             >
               {dayItems.slice(0, 3).map((item) => (
                 <VirtualCalendarChip key={item.virtualKey} item={item} compact />
               ))}
               {dayItems.length > 3 && (
-                <div className="text-[10px] text-amber-600">+{dayItems.length - 3}</div>
+                <div className="text-[10px] text-amber-600 dark:text-amber-400">+{dayItems.length - 3}</div>
               )}
             </div>
           );
@@ -86,14 +86,14 @@ export function VirtualLane({
   if (displayItems.length === 0) return null;
 
   return (
-    <div className="border-b border-amber-200 bg-amber-50/50 p-3">
-      <div className="text-xs font-medium text-amber-800 mb-2">{label}</div>
+    <div className="border-b border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 p-3">
+      <div className="text-xs font-medium text-amber-800 dark:text-amber-300 mb-2">{label}</div>
       <div className="space-y-2">
         {displayItems.slice(0, maxVisible).map((item) => (
           <VirtualCalendarChip key={item.virtualKey} item={item} />
         ))}
         {displayItems.length > maxVisible && (
-          <div className="text-xs text-amber-600">
+          <div className="text-xs text-amber-600 dark:text-amber-400">
             +{displayItems.length - maxVisible} további virtuális időpont
           </div>
         )}

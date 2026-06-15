@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { MobileBottomSheet } from './MobileBottomSheet';
 
 export interface Section {
@@ -16,26 +16,36 @@ interface PatientFormSectionNavigationProps {
   activeSectionId: string | null;
   onSectionChange: (sectionId: string) => void;
   sectionErrors?: Record<string, number>; // sectionId -> error count
+  /**
+   * Megjelenési mód:
+   * - 'bar'  (alapértelmezett): felső vízszintes „tartalomjegyzék” + mobilon lenyíló választó.
+   * - 'rail': függőleges oldalsáv (xl+ képernyőn a form mellett).
+   * A reszponzív megjelenítést a szülő `className`-je vezérli (pl. `hidden xl:block` / `xl:hidden`).
+   */
+  variant?: 'bar' | 'rail';
+  className?: string;
 }
 
 /**
- * PatientFormSectionNavigation - Section navigation for PatientForm
- * - Mobile: Sticky top selector (dropdown/sheet)
- * - Desktop: Stepper or tabs
- * - Shows progress indicator: "Szekció neve / X of Y"
- * - Shows error badges on sections with validation errors
+ * PatientFormSectionNavigation - a betegűrlap szakaszainak tartalomjegyzéke.
+ * Nem varázsló: nincs „kész” lépcső / X-ből-Y számláló — csak az aktuális szakasz
+ * van kiemelve (görgetés-követéssel), hibajelvénnyel, és egy kattintással bárhova ugorhat.
+ * - Mobil: sticky felső választó (lenyíló lap)
+ * - Tablet / kisebb desktop: vízszintes pill-sor
+ * - xl+: függőleges oldalsáv ('rail' variáns)
  */
 export function PatientFormSectionNavigation({
   sections,
   activeSectionId,
   onSectionChange,
   sectionErrors = {},
+  variant = 'bar',
+  className,
 }: PatientFormSectionNavigationProps) {
   const breakpoint = useBreakpoint();
   const isMobile = breakpoint === 'mobile';
   const [showMobileSelector, setShowMobileSelector] = useState(false);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const stepperScrollRef = useRef<HTMLDivElement | null>(null);
 
   const activeIndex = sections.findIndex(s => s.id === activeSectionId);
   const activeSection = activeIndex >= 0 ? sections[activeIndex] : null;
@@ -45,7 +55,7 @@ export function PatientFormSectionNavigation({
   // Scroll to section on change (edge case: element might not exist yet)
   const scrollToSection = (sectionId: string) => {
     if (typeof window === 'undefined') return;
-    
+
     const element = document.getElementById(`section-${sectionId}`);
     if (!element) {
       // Edge case: element not found, try again after a short delay
@@ -55,23 +65,17 @@ export function PatientFormSectionNavigation({
           const headerOffset = breakpoint === 'mobile' ? 80 : 100;
           const elementPosition = retryElement.getBoundingClientRect().top;
           const offsetPosition = elementPosition + (window.scrollY || window.pageYOffset) - headerOffset;
-          window.scrollTo({
-            top: offsetPosition,
-            behavior: 'smooth',
-          });
+          window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
         }
       }, 200);
       return;
     }
-    
+
     const headerOffset = breakpoint === 'mobile' ? 80 : 100; // Account for sticky header
     const elementPosition = element.getBoundingClientRect().top;
     const offsetPosition = elementPosition + (window.scrollY || window.pageYOffset) - headerOffset;
 
-    window.scrollTo({
-      top: offsetPosition,
-      behavior: 'smooth',
-    });
+    window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
   };
 
   // Cleanup scroll timeout on unmount
@@ -83,28 +87,18 @@ export function PatientFormSectionNavigation({
     };
   }, []);
 
-  // Asztali stepper: aktív lépés vízszintesen középre (a rejtett lépések elérhetők maradnak)
-  useEffect(() => {
-    if (isMobile || !activeSectionId || !stepperScrollRef.current) return;
-    const btn = stepperScrollRef.current.querySelector<HTMLElement>(
-      `[data-section-step="${activeSectionId}"]`
-    );
-    btn?.scrollIntoView({ inline: 'center', behavior: 'smooth', block: 'nearest' });
-  }, [activeSectionId, isMobile]);
-
   if (sections.length === 0) {
     return null;
   }
 
   const handleSectionSelect = (sectionId: string) => {
-    // Clear any pending scroll
     if (scrollTimeoutRef.current) {
       clearTimeout(scrollTimeoutRef.current);
     }
-    
+
     onSectionChange(sectionId);
     setShowMobileSelector(false);
-    
+
     // Scroll after a short delay to ensure DOM is updated
     scrollTimeoutRef.current = setTimeout(() => {
       scrollToSection(sectionId);
@@ -112,54 +106,107 @@ export function PatientFormSectionNavigation({
     }, 100);
   };
 
-  // Mobil: sticky választó + lap
+  // Kis piros hibaszámláló jelvény
+  const errorBadge = (count: number, onColored = false) =>
+    count > 0 ? (
+      <span
+        className={`flex-shrink-0 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[11px] font-semibold leading-none ${
+          onColored ? 'bg-white/25 text-white' : 'bg-red-500 text-white'
+        }`}
+      >
+        {count}
+      </span>
+    ) : null;
+
+  // ── xl+ : függőleges oldalsáv ──────────────────────────────────────────────
+  if (variant === 'rail') {
+    return (
+      <nav aria-label="Szakaszok" className={className}>
+        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-2">
+          <div className="px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+            Tartalom
+          </div>
+          <ul className="space-y-0.5">
+            {sections.map((section) => {
+              const isActive = section.id === activeSectionId;
+              const errorCount = sectionErrors[section.id] || 0;
+              return (
+                <li key={section.id}>
+                  <button
+                    type="button"
+                    onClick={() => handleSectionSelect(section.id)}
+                    aria-current={isActive ? 'true' : undefined}
+                    className={`group flex w-full items-stretch gap-2.5 rounded-lg py-2 pl-2 pr-2.5 text-left text-sm transition-colors ${
+                      isActive
+                        ? 'bg-medical-primary/10 text-medical-primary font-semibold'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/60 hover:text-gray-900 dark:hover:text-gray-200'
+                    }`}
+                  >
+                    <span
+                      className={`w-0.5 self-stretch rounded-full ${isActive ? 'bg-medical-primary' : 'bg-transparent'}`}
+                      aria-hidden
+                    />
+                    {section.icon && (
+                      <span
+                        className={`flex-shrink-0 ${
+                          isActive ? 'text-medical-primary' : 'text-gray-400 dark:text-gray-500'
+                        }`}
+                      >
+                        {section.icon}
+                      </span>
+                    )}
+                    <span className="flex-1 min-w-0 truncate">{section.label}</span>
+                    {errorBadge(errorCount)}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      </nav>
+    );
+  }
+
+  // ── Mobil: sticky választó + lenyíló lap ───────────────────────────────────
   if (isMobile) {
     return (
       <>
-        <div className="mobile-header sticky top-16 z-30 bg-white border-b sm:top-[4.5rem]">
+        <div className={`mobile-header sticky top-16 z-30 bg-white dark:bg-gray-900 border-b sm:top-[4.5rem] ${className ?? ''}`}>
           <div className="px-4 py-3">
-            {/* Progress indicator */}
             {activeSection && (
-              <div className="text-xs text-gray-600 mb-3 font-medium">
-                Szekció {currentSectionNumber}/{totalSections} — {activeSection.label}
+              <div className="text-xs text-gray-600 dark:text-gray-400 mb-3 font-medium">
+                {activeSection.label}
+                <span className="text-gray-400 dark:text-gray-500"> · {currentSectionNumber}/{totalSections}</span>
               </div>
             )}
-            
-            {/* Section selector button */}
+
             <button
               type="button"
               onClick={() => setShowMobileSelector(true)}
-              className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors mobile-touch-target"
+              className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors mobile-touch-target"
             >
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 {activeSection?.icon && (
-                  <div className="flex-shrink-0 text-medical-primary">
-                    {activeSection.icon}
-                  </div>
+                  <div className="flex-shrink-0 text-medical-primary">{activeSection.icon}</div>
                 )}
-                <span className="text-sm font-medium text-gray-900 truncate">
-                  {activeSection?.label || 'Válasszon szekciót'}
+                <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                  {activeSection?.label || 'Válasszon szakaszt'}
                 </span>
-                {activeSection && sectionErrors[activeSection.id] > 0 && (
-                  <span className="flex-shrink-0 px-2 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full">
-                    {sectionErrors[activeSection.id]}
-                  </span>
-                )}
+                {activeSection && errorBadge(sectionErrors[activeSection.id] || 0)}
               </div>
-              <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0 ml-2" />
+              <ChevronDown className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0 ml-2" />
             </button>
           </div>
         </div>
 
-        {/* Mobile section selector sheet */}
         <MobileBottomSheet
           open={showMobileSelector}
           onOpenChange={setShowMobileSelector}
-          title="Szekciók"
+          title="Szakaszok"
           type="action"
         >
           <div className="space-y-1">
-            {sections.map((section, index) => {
+            {sections.map((section) => {
               const errorCount = sectionErrors[section.id] || 0;
               return (
                 <button
@@ -169,29 +216,16 @@ export function PatientFormSectionNavigation({
                   className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors mobile-touch-target ${
                     section.id === activeSectionId
                       ? 'bg-medical-primary/10 text-medical-primary'
-                      : 'hover:bg-gray-50 text-gray-900'
+                      : 'hover:bg-gray-50 dark:hover:bg-gray-800/50 text-gray-900 dark:text-gray-100'
                   }`}
                 >
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     {section.icon && (
-                      <div className="flex-shrink-0 text-medical-primary">
-                        {section.icon}
-                      </div>
+                      <div className="flex-shrink-0 text-medical-primary">{section.icon}</div>
                     )}
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium truncate">
-                        {section.label}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {index + 1} / {totalSections}
-                      </div>
-                    </div>
+                    <span className="text-sm font-medium truncate">{section.label}</span>
                   </div>
-                  {errorCount > 0 && (
-                    <span className="flex-shrink-0 px-2 py-0.5 text-xs font-semibold text-white bg-red-500 rounded-full ml-2">
-                      {errorCount}
-                    </span>
-                  )}
+                  {errorBadge(errorCount)}
                 </button>
               );
             })}
@@ -201,78 +235,39 @@ export function PatientFormSectionNavigation({
     );
   }
 
-  // Desktop (≥1024): vízszintes stepper — külön scroll konténer, hogy ne vágódjon le a szélén
+  // ── Tablet / kisebb desktop: nyugodt vízszintes tartalomjegyzék ────────────
   return (
-    <div className="mb-8 sticky top-16 z-30 bg-white pt-3 pb-1.5 border-b border-gray-200 -mx-3 sm:-mx-6 px-3 sm:px-6 sm:top-[4.5rem] md:top-[4.75rem] md:pt-4 lg:top-20">
-      {activeSection && (
-        <div className="text-sm text-gray-600 mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-          <span>
-            Szekció <span className="font-semibold text-gray-800">{currentSectionNumber}</span> /{' '}
-            {totalSections}: {activeSection.label}
-          </span>
-          {sections.length > 6 && (
-            <span className="text-xs text-gray-500 flex items-center gap-0.5">
-              <ChevronRight className="w-3.5 h-3.5" aria-hidden />
-              Görgessen, ha nem lát minden lépést
-            </span>
-          )}
-        </div>
-      )}
-
+    <div
+      className={`mb-6 sticky top-16 z-30 bg-white/95 dark:bg-gray-900/95 backdrop-blur pt-3 pb-2 border-b border-gray-200 dark:border-gray-800 -mx-3 sm:-mx-6 px-3 sm:px-6 sm:top-[4.5rem] md:top-[4.75rem] lg:top-20 ${className ?? ''}`}
+    >
       <div
-        ref={stepperScrollRef}
-        className="w-full max-w-full min-w-0 overflow-x-auto overflow-y-visible overscroll-x-contain pb-1 scroll-smooth [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300"
+        className="flex items-center gap-1 overflow-x-auto overscroll-x-contain pb-1 scroll-smooth [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-thumb]:bg-gray-700"
+        aria-label="Szakaszok"
       >
-        <div className="flex w-max items-center gap-1 sm:gap-2 pr-2">
-          {sections.map((section, index) => {
-            const errorCount = sectionErrors[section.id] || 0;
-            const isActive = section.id === activeSectionId;
-            const isCompleted = activeIndex > index;
-
-            return (
-              <div key={section.id} className="flex items-center flex-shrink-0">
-                <button
-                  type="button"
-                  data-section-step={section.id}
-                  onClick={() => handleSectionSelect(section.id)}
-                  className={`flex items-center gap-2 px-3 py-2 sm:px-4 rounded-lg transition-colors ${
-                    isActive
-                      ? 'bg-medical-primary text-white shadow-sm'
-                      : isCompleted
-                        ? 'bg-green-100 text-green-800 hover:bg-green-200'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  {section.icon && (
-                    <div className="flex-shrink-0 [&_svg]:w-4 [&_svg]:h-4">
-                      {section.icon}
-                    </div>
-                  )}
-                  <span className="text-sm font-medium whitespace-nowrap">
-                    {section.label}
-                  </span>
-                  {errorCount > 0 && (
-                    <span
-                      className={`flex-shrink-0 px-2 py-0.5 text-xs font-semibold rounded-full ${
-                        isActive ? 'bg-white/20 text-white' : 'bg-red-500 text-white'
-                      }`}
-                    >
-                      {errorCount}
-                    </span>
-                  )}
-                </button>
-                {index < sections.length - 1 && (
-                  <div
-                    className={`w-6 sm:w-8 h-1 shrink-0 mx-0.5 sm:mx-1 rounded-full ${
-                      activeIndex > index ? 'bg-green-500' : 'bg-gray-200'
-                    }`}
-                    aria-hidden
-                  />
-                )}
-              </div>
-            );
-          })}
-        </div>
+        {sections.map((section) => {
+          const isActive = section.id === activeSectionId;
+          const errorCount = sectionErrors[section.id] || 0;
+          return (
+            <button
+              key={section.id}
+              type="button"
+              data-section-step={section.id}
+              onClick={() => handleSectionSelect(section.id)}
+              aria-current={isActive ? 'true' : undefined}
+              className={`flex items-center gap-1.5 flex-shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm transition-colors ${
+                isActive
+                  ? 'bg-medical-primary text-white font-semibold shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              {section.icon && (
+                <span className="flex-shrink-0 [&_svg]:w-3.5 [&_svg]:h-3.5">{section.icon}</span>
+              )}
+              {section.label}
+              {errorBadge(errorCount, isActive)}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
