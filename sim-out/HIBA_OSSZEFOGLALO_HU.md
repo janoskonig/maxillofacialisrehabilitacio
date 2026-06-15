@@ -72,6 +72,19 @@ szerint csoportosítom: mi romlott volna el a gyakorlatban, és mit old meg a ja
   - az ismétlés helyesen **2. próbaként** (`attempt_number = 2`) rögzül.
 - **Lefedve:** EC16 edge-case.
 
+### 9. Lemondott (cancelled) befoglalt fázis elavult státuszt hagyott (GAP A)
+- **Tünet:** ha egy *befoglalt* (de korábban nem „completed") fázist **lemondtak**,
+  a fázis (`episode_work_phases.status`) **`scheduled` maradt a halott foglaláshoz
+  láncolva** — a worklist nem feltétlenül mutatta újra-foglalandóként, és
+  `EWP_DANGLING_APPOINTMENT_LINK` integritás-sértés keletkezhetett. (A no-show bug
+  kisebb testvére; az újrafoglalás működött, de a státusz-mező drift-elt.)
+- **Hogyan jött elő:** a „működik-e abszolút helyesen?" kérdés nyomán végzett
+  célzott ellenőrzés (residual-risk próba).
+- **Javítás:** a státusz-route **minden** cancel/no_show átmenetnél visszanyitja a
+  fázist `pending`-re és leoldja a linket (a completed eset csak részhalmaz). A
+  cancelled slot felszabadul, a no_show slot elhasználva marad.
+- **Lefedve:** EC17 (valódi route-handler, end-to-end).
+
 ### (Kontextus) Sikertelen ülés (`unsuccessful`) ismétlése — működött, leteszteltük
 - A „vizit megvolt, de a klinikai cél nem teljesült" eset (`mark_unsuccessful`) már
   helyesen újranyitotta a fázist és engedte a 2. próbát. Ezt az **EC15** edge-case
@@ -109,11 +122,16 @@ szerint csoportosítom: mi romlott volna el a gyakorlatban, és mit old meg a ja
 - **Hosszú terv szimuláció:** 20- és 17-fázisos tervek → 112 fázis → 112 intent →
   **112 lefoglalt (100%)** ~26 hónapra; **0 dupla foglalás**; a sorrend-őr blokkolja a
   rossz sorrendet.
-- **Edge-case harness (`scripts/sim/edge-cases.ts`): 30/30 PASS** — konkurencia,
+- **Edge-case harness (`scripts/sim/edge-cases.ts`): 37/37 PASS** — konkurencia,
   sorrend-őr, múltbeli/üres slot, varchar(80), reaper, DST, no-pathway, ismétlés
-  (sikertelen + no-show).
-- **Unit: 540 teszt zöld**, typecheck tiszta.
+  (sikertelen + no-show), **és EC17: a VALÓDI `PATCH /status` route-handler
+  end-to-end** (mintázott JWT + `NextRequest`) — no_show és cancel is visszanyitja
+  a fázist, helyes slot-szemantikával.
+- **Migráció a valódi runnerrel:** a 059 lefutott a `npm run migrate` futtatóval is,
+  `node_migrations`-be rögzítve, idempotensen.
+- **Unit: 545 teszt zöld**, typecheck tiszta.
 
-> Megjegyzés: a B/4, B/5 és C/6 hibákat **maga az edge-case tesztelés tárta fel** —
-> ez mutatja a szélsőséges esetek végigjátszásának értékét: olyan rejtett, néma
-> védőháló-kieséseket találtunk, amelyek a normál „happy path" tesztekben nem látszanak.
+> Megjegyzés: a B/4, B/5, C/6 és C/9 hibákat **maga az edge-case / célzott
+> tesztelés tárta fel** — ez mutatja a szélsőséges esetek végigjátszásának értékét:
+> olyan rejtett, néma védőháló-kieséseket és státusz-drifteket találtunk, amelyek a
+> normál „happy path" tesztekben nem látszanak.
