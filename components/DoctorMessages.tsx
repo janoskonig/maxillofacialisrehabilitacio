@@ -13,6 +13,8 @@ import { useSocket } from '@/contexts/SocketContext';
 import { MessagesShell } from './mobile/MessagesShell';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useDoctorMessages } from '@/hooks/useDoctorMessages';
+import { usePresence } from '@/hooks/usePresence';
+import { useTypingIndicator } from '@/hooks/useTypingIndicator';
 import { aggregateGroupSenderDeliveryStatus } from '@/lib/messaging/group-delivery-status';
 import type { ChatBubbleMessage } from './messaging/ChatMessageBubble';
 import { Avatar } from './messaging/Avatar';
@@ -48,6 +50,25 @@ export function DoctorMessages() {
     createGroupConversation, renameGroup, deleteGroup,
     refreshConversations, refreshGroupParticipants,
   } = useDoctorMessages({ socket, isConnected });
+
+  // Jelenlét (staff) + gépel-indikátor.
+  const { isOnline } = usePresence(socket, isConnected);
+  const typingConversation = useMemo(
+    () =>
+      selectedGroupId
+        ? { groupId: selectedGroupId }
+        : selectedDoctorId
+          ? { recipientId: selectedDoctorId }
+          : null,
+    [selectedGroupId, selectedDoctorId],
+  );
+  const { typingLabel, notifyTyping } = useTypingIndicator({
+    socket,
+    isConnected,
+    conversation: typingConversation,
+    currentUserId,
+    peerName: selectedGroupId ? null : selectedDoctorName,
+  });
 
   // ── UI-only state ───────────────────────────────────────────────────
   const [newMessage, setNewMessage] = useState('');
@@ -426,7 +447,11 @@ export function DoctorMessages() {
       preview: conv.lastMessage?.message ?? null,
       timestamp: conv.lastMessage?.createdAt ?? null,
       unreadCount: conv.unreadCount,
-      avatar: { name: conv.doctorName, seed: conv.doctorId ?? conv.doctorName },
+      avatar: {
+        name: conv.doctorName,
+        seed: conv.doctorId ?? conv.doctorName,
+        presence: isOnline(conv.doctorId) ? ('online' as const) : undefined,
+      },
     };
   });
 
@@ -492,6 +517,7 @@ export function DoctorMessages() {
         name={selectedDoctorId ? selectedDoctorName : selectedGroupName}
         seed={selectedDoctorId ?? selectedGroupId ?? ''}
         group={!!selectedGroupId}
+        presence={selectedDoctorId && isOnline(selectedDoctorId) ? 'online' : undefined}
         sizeClass="h-9 w-9 hidden sm:flex"
       />
       <div className="flex-1 min-w-0">
@@ -540,6 +566,7 @@ export function DoctorMessages() {
         currentUserId={currentUserId}
         loading={loading}
         scrollAnchorKey={conversationKey}
+        typingLabel={typingLabel}
         showSenderName={!!selectedGroupId}
         canRemoveContextLinks
         onRemoveContextLink={handleRemoveContextLink}
@@ -589,6 +616,7 @@ export function DoctorMessages() {
         autoFocusKey={conversationKey}
         textareaRef={textareaRef}
         onCursorChange={setCursorPosition}
+        onTyping={notifyTyping}
         onEscape={replyState.isReplying ? replyState.clearReply : undefined}
         placeholder="Írja be üzenetét... (@ jellel beteget jelölhet)"
         replyBar={

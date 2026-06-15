@@ -9,6 +9,7 @@ import { MessageTextRenderer } from './MessageTextRenderer';
 import { useSocket } from '@/contexts/SocketContext';
 import { MessagesShell } from './mobile/MessagesShell';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { useTypingIndicator } from '@/hooks/useTypingIndicator';
 import { type ChatBubbleMessage } from './messaging/ChatMessageBubble';
 import { Avatar } from './messaging/Avatar';
 import { MessageThread } from './messaging/MessageThread';
@@ -162,6 +163,19 @@ export function PatientMessagesList() {
     for (const m of messages) map.set(m.id, m);
     return map;
   }, [messages]);
+
+  // Gépel-indikátor (a beteg szálban). Jelenlét nincs — a beteg nem staff.
+  const typingConversation = useMemo(
+    () => (selectedPatientId ? { patientId: selectedPatientId } : null),
+    [selectedPatientId],
+  );
+  const { typingLabel, notifyTyping } = useTypingIndicator({
+    socket,
+    isConnected,
+    conversation: typingConversation,
+    currentUserId,
+    peerName: selectedPatientName,
+  });
 
   // Csatorna-független buborék-shape. Orvos üzenetei JOBBRA (saját), beteg BALRA.
   const bubbleMessages = useMemo<ChatBubbleMessage[]>(
@@ -893,6 +907,7 @@ export function PatientMessagesList() {
         currentUserId={currentUserId}
         loading={loadingMessages}
         scrollAnchorKey={selectedPatientId}
+        typingLabel={typingLabel}
         showSenderName={false}
         canRemoveContextLinks
         onRemoveContextLink={handleRemoveContextLink}
@@ -941,6 +956,7 @@ export function PatientMessagesList() {
         sendOnEnter={!isMobile}
         autoFocusKey={selectedPatientId}
         textareaRef={textareaRef}
+        onTyping={notifyTyping}
         onEscape={replyState.isReplying ? replyState.clearReply : undefined}
         placeholder="Írja be üzenetét…"
         replyBar={

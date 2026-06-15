@@ -46,6 +46,8 @@ interface MessageComposerProps {
   textareaRef?: RefObject<HTMLTextAreaElement>;
   /** Kurzorpozíció-változás jelentése (pl. @mention kiváltásához). */
   onCursorChange?: (position: number) => void;
+  /** Gépelés jelzése (typing indicator) — minden beírásnál hívódik. */
+  onTyping?: () => void;
   /** Overlay a beviteli mező fölött (pl. `<PatientMention/>` dropdown). */
   overlay?: ReactNode;
 }
@@ -67,6 +69,7 @@ export function MessageComposer({
   autoFocusKey,
   textareaRef: externalRef,
   onCursorChange,
+  onTyping,
   overlay,
 }: MessageComposerProps) {
   const internalRef = useRef<HTMLTextAreaElement>(null);
@@ -122,6 +125,7 @@ export function MessageComposer({
               onChange={(e) => {
                 onChange(e.target.value);
                 onCursorChange?.(e.target.selectionStart);
+                if (e.target.value.trim()) onTyping?.();
               }}
               onKeyDown={handleKeyDown}
               onSelect={(e) => onCursorChange?.((e.target as HTMLTextAreaElement).selectionStart)}

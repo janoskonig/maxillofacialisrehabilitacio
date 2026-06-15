@@ -9,6 +9,7 @@ import { MessageTextRenderer } from '@/components/MessageTextRenderer';
 import { useSocket } from '@/contexts/SocketContext';
 import { MessagesShell } from '@/components/mobile/MessagesShell';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { useTypingIndicator } from '@/hooks/useTypingIndicator';
 import { type ChatBubbleMessage } from '@/components/messaging/ChatMessageBubble';
 import { Avatar } from '@/components/messaging/Avatar';
 import { MessageThread } from '@/components/messaging/MessageThread';
@@ -168,6 +169,20 @@ export function PatientMessages() {
     for (const m of messages) map.set(m.id, m);
     return map;
   }, [messages]);
+
+  // Gépel-indikátor a beteg-szálban. Jelenlét NINCS a portálon (nem mutatjuk az
+  // orvos online-állapotát — lásd terv: „munkaidőben válaszolunk”).
+  const typingConversation = useMemo(
+    () => (patientId && selectedDoctorId ? { patientId } : null),
+    [patientId, selectedDoctorId],
+  );
+  const { typingLabel, notifyTyping } = useTypingIndicator({
+    socket,
+    isConnected,
+    conversation: typingConversation,
+    currentUserId: patientId,
+    peerName: selectedDoctorName,
+  });
 
   // Csatorna-független buborék-shape. Beteg üzenetei JOBBRA (saját, zöld).
   const bubbleMessages = useMemo<ChatBubbleMessage[]>(
@@ -748,6 +763,7 @@ export function PatientMessages() {
         currentUserId={patientId}
         loading={messagesLoading}
         scrollAnchorKey={selectedDoctorId}
+        typingLabel={typingLabel}
         showSenderName={false}
         ownTone="green"
         emptyState={
@@ -797,6 +813,7 @@ export function PatientMessages() {
         sendOnEnter={!isMobile}
         autoFocusKey={selectedDoctorId}
         textareaRef={textareaRef}
+        onTyping={notifyTyping}
         onEscape={replyState.isReplying ? replyState.clearReply : undefined}
         placeholder="Írja meg üzenetét…"
         replyBar={
