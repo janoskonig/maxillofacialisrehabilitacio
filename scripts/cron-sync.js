@@ -224,6 +224,13 @@ async function callEndpoint(path, label) {
       await callEndpoint('/api/patients/completeness-snapshot/record', 'Completeness snapshot');
     }
 
+    // Nyitott visszajelzések (bug/error/crash/javaslat) napi háromszori push-összesítője —
+    // 09:00, 13:00 és 17:00 Budapest körül. A végpont 2h cooldownja (feedback_summary_state)
+    // garantálja, hogy az órán belüli percenkénti futások közül ablakonként csak egy szóljon.
+    if (hour === 9 || hour === 13 || hour === 17) {
+      await callEndpoint('/api/feedback/summary/cron', 'Feedback summary');
+    }
+
     // Admin összegyűjtő email: minden cron futáskor hívjuk; a szerver max. ADMIN_NOTIFICATION_BATCH_INTERVAL_HOURS (alap 3) szerint küld.
     await callEndpoint('/api/admin/daily-summary', 'Admin notification batch summary');
 
