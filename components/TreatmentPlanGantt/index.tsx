@@ -222,7 +222,7 @@ export function TreatmentPlanGantt() {
             <div className="flex shrink-0 border-b border-gray-200 bg-gray-50/90">
               <div
                 className="sticky left-0 z-20 flex-shrink-0 border-r border-gray-200 bg-gray-50/95"
-                style={{ width: leftCol, minHeight: 40 }}
+                style={{ width: leftCol, minHeight: 48 }}
               />
               <TimelineHeader
                 t0={axis.t0}
@@ -230,7 +230,7 @@ export function TreatmentPlanGantt() {
                 toPercent={axis.toPercent}
                 todayPercent={axis.todayPercent}
                 trackMinWidth={trackW}
-                height={40}
+                height={48}
               />
             </div>
 
