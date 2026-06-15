@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Bootstrap throwaway maxfac_sim schema. Fresh DB assumed.
 set -u
-export PGPASSWORD=REDACTED_LOCAL_DEV_PW
+# Require the local maxfac_sim DB password from the environment — never hardcode
+# a credential in source. Export it before running (see scripts/sim/README.md).
+export PGPASSWORD="${PGPASSWORD:?Set PGPASSWORD to your local maxfac_sim DB password (see scripts/sim/README.md)}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 L="$ROOT/database/legacy"
 run() { psql -h 127.0.0.1 -U maxfac -d maxfac_sim -v ON_ERROR_STOP=0 -q -f "$1" 2>&1; }

@@ -34,9 +34,17 @@ PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers node scripts/sim/screenshots.mjs
 
 ## Throwaway DB setup (one-time)
 
+Choose your own local password and export it (do **not** commit a credential):
+
+```bash
+export PGPASSWORD='<choose-a-local-password>'
+```
+
 ```sql
-CREATE ROLE maxfac WITH LOGIN PASSWORD 'REDACTED_LOCAL_DEV_PW' SUPERUSER;
+CREATE ROLE maxfac WITH LOGIN PASSWORD '<choose-a-local-password>' SUPERUSER;
 CREATE DATABASE maxfac_sim OWNER maxfac;
 ```
 
-`.env.local` (gitignored) points `DATABASE_URL` at `maxfac_sim`. Login: `admin@example.com` / `changeme`.
+`.env.local` (gitignored) points `DATABASE_URL` at `maxfac_sim` (include the same
+password there). Login defaults come from `NEXT_PUBLIC_ADMIN_EMAIL` /
+`NEXT_PUBLIC_ADMIN_PASSWORD`.
