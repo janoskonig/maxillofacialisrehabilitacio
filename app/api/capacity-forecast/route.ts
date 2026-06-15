@@ -13,6 +13,21 @@ interface WeekBucket {
 }
 
 /**
+ * Hét-kulcs nap-felbontásban (helyi naptári hétfő dátuma).
+ *
+ * A JS a heteket helyi éjfélre számolja (`…T22:00:00Z` nyáron), az SQL
+ * `date_trunc('week', …)` viszont UTC hétfő éjfélre vág (`…T00:00:00Z`).
+ * A teljes ISO-időbélyeg így SOHA nem egyezett → a `Map.get(key)` mindig
+ * 0-t adott vissza (üres Kapacitás-diagram, az adattól függetlenül). Mindkét
+ * oldal ugyanarra a naptári hétfőre esik, ezért nap-felbontású kulccsal
+ * indexelünk.
+ */
+function weekKey(d: Date | string): string {
+  const x = new Date(d);
+  return `${x.getFullYear()}-${x.getMonth() + 1}-${x.getDate()}`;
+}
+
+/**
  * GET /api/capacity-forecast
  * Query: pool (consult|work|control), weeks (default 12)
  */
@@ -69,27 +84,27 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
 
   const supplyByWeek = new Map<string, number>();
   for (const r of supplyResult.rows) {
-    supplyByWeek.set(new Date(r.week_start).toISOString(), r.cnt);
+    supplyByWeek.set(weekKey(r.week_start), r.cnt);
   }
   const hardByWeek = new Map<string, number>();
   for (const r of hardDemandResult.rows) {
-    hardByWeek.set(new Date(r.week_start).toISOString(), r.cnt);
+    hardByWeek.set(weekKey(r.week_start), r.cnt);
   }
   const softByWeek = new Map<string, number>();
   for (const r of softDemandResult.rows) {
-    softByWeek.set(new Date(r.week_start).toISOString(), r.cnt);
+    softByWeek.set(weekKey(r.week_start), r.cnt);
   }
 
   const weeks: WeekBucket[] = [];
   for (let i = 0; i < weeksAhead; i++) {
     const ws = new Date(startOfWeek);
     ws.setDate(ws.getDate() + i * 7);
-    const key = ws.toISOString();
+    const key = weekKey(ws);
     const weekEnd = new Date(ws);
     weekEnd.setDate(weekEnd.getDate() + 6);
 
     weeks.push({
-      weekStart: key,
+      weekStart: ws.toISOString(),
       weekLabel: `${ws.getMonth() + 1}.${ws.getDate()} – ${weekEnd.getMonth() + 1}.${weekEnd.getDate()}`,
       supply: supplyByWeek.get(key) ?? 0,
       hardDemand: hardByWeek.get(key) ?? 0,
