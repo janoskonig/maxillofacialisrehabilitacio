@@ -89,6 +89,88 @@ async function ensureUsers() {
   return providers;
 }
 
+// ── Step 1.5: synthetic LONG, complicated multi-step care pathways ─────────────
+// These exercise long chains (18–20 phases spanning ~2.5 years), control tails,
+// precommit steps, AND an intentionally long (>50-char) work_phase_code to prove
+// the varchar(80) widening (migration 058).
+type Phase = { pool: 'consult' | 'work' | 'control'; label: string; work_phase_code: string; duration_minutes: number; default_days_offset: number; requires_precommit?: boolean };
+
+const COMPLEX_PATHWAYS: { name: string; code: string; phases: Phase[] }[] = [
+  {
+    name: 'Komplex onkológiai rekonstrukció (szimuláció)',
+    code: 'sim_komplex_onko',
+    phases: [
+      { pool: 'consult', label: 'Első konzultáció', work_phase_code: 'consult_1', duration_minutes: 30, default_days_offset: 0 },
+      { pool: 'work', label: 'Diagnosztika és képalkotás', work_phase_code: 'diagnostic_imaging', duration_minutes: 60, default_days_offset: 14 },
+      { pool: 'work', label: 'Onkológiai team megbeszélés', work_phase_code: 'tumor_board_review', duration_minutes: 30, default_days_offset: 7 },
+      { pool: 'work', label: 'Sebészi tervezés', work_phase_code: 'surgical_planning', duration_minutes: 45, default_days_offset: 14 },
+      { pool: 'work', label: 'Műtét előtti lenyomat', work_phase_code: 'pre_surgical_impression', duration_minutes: 30, default_days_offset: 7 },
+      { pool: 'work', label: 'Sebészi fázis 1', work_phase_code: 'surgical_phase_1', duration_minutes: 90, default_days_offset: 21 },
+      { pool: 'control', label: 'Posztoperatív kontroll 1', work_phase_code: 'post_op_check_1', duration_minutes: 20, default_days_offset: 14 },
+      { pool: 'control', label: 'Posztoperatív kontroll 2', work_phase_code: 'post_op_check_2', duration_minutes: 20, default_days_offset: 21 },
+      { pool: 'work', label: 'Gyógyulás értékelése', work_phase_code: 'healing_assessment', duration_minutes: 30, default_days_offset: 30 },
+      // Intentionally long code (>50 chars) — must fit VARCHAR(80) after migration 058.
+      { pool: 'work', label: 'Funkcionális protetikai rekonstrukció — részletes próbafázis', work_phase_code: 'komplex_protetikai_rekonstrukcio_funkcionalis_reszletes_probafazis', duration_minutes: 60, default_days_offset: 14 },
+      { pool: 'work', label: 'Másodlagos lenyomat', work_phase_code: 'impression_secondary', duration_minutes: 30, default_days_offset: 7 },
+      { pool: 'work', label: 'Vázpróba', work_phase_code: 'framework_try_in', duration_minutes: 30, default_days_offset: 14 },
+      { pool: 'work', label: 'Harapásvétel', work_phase_code: 'bite_registration', duration_minutes: 30, default_days_offset: 7 },
+      { pool: 'work', label: 'Esztétikai próba 1', work_phase_code: 'aesthetic_try_in_1', duration_minutes: 30, default_days_offset: 10 },
+      { pool: 'work', label: 'Esztétikai próba 2', work_phase_code: 'aesthetic_try_in_2', duration_minutes: 30, default_days_offset: 7 },
+      { pool: 'work', label: 'Funkcionális próba', work_phase_code: 'functional_try_in', duration_minutes: 30, default_days_offset: 7 },
+      { pool: 'work', label: 'Átadás', work_phase_code: 'delivery', duration_minutes: 45, default_days_offset: 10, requires_precommit: true },
+      { pool: 'control', label: '1 hónapos kontroll', work_phase_code: 'control_1m', duration_minutes: 20, default_days_offset: 30 },
+      { pool: 'control', label: '6 hónapos kontroll', work_phase_code: 'control_6m', duration_minutes: 20, default_days_offset: 180 },
+      { pool: 'control', label: '12 hónapos kontroll', work_phase_code: 'control_12m', duration_minutes: 20, default_days_offset: 365 },
+    ],
+  },
+  {
+    name: 'Komplex full-arch implantációs rehabilitáció (szimuláció)',
+    code: 'sim_komplex_fullarch',
+    phases: [
+      { pool: 'consult', label: 'Első konzultáció', work_phase_code: 'consult_1', duration_minutes: 30, default_days_offset: 0 },
+      { pool: 'work', label: 'CBCT és diagnosztika', work_phase_code: 'cbct_diagnostic', duration_minutes: 45, default_days_offset: 10 },
+      { pool: 'work', label: 'Sebészi sablon tervezés', work_phase_code: 'surgical_guide_planning', duration_minutes: 45, default_days_offset: 14 },
+      { pool: 'work', label: 'Implantáció (felső)', work_phase_code: 'implant_placement_upper', duration_minutes: 90, default_days_offset: 14 },
+      { pool: 'work', label: 'Implantáció (alsó)', work_phase_code: 'implant_placement_lower', duration_minutes: 90, default_days_offset: 30 },
+      { pool: 'control', label: 'Sebkontroll', work_phase_code: 'suture_check', duration_minutes: 15, default_days_offset: 10 },
+      { pool: 'control', label: 'Oszteointegráció kontroll', work_phase_code: 'osseo_check', duration_minutes: 20, default_days_offset: 90 },
+      { pool: 'work', label: 'Felépítmény behelyezés', work_phase_code: 'abutment_placement', duration_minutes: 45, default_days_offset: 14 },
+      { pool: 'work', label: 'Lenyomat', work_phase_code: 'impression_implant', duration_minutes: 45, default_days_offset: 7 },
+      { pool: 'work', label: 'Vázpróba', work_phase_code: 'framework_try_in', duration_minutes: 30, default_days_offset: 14 },
+      { pool: 'work', label: 'Fogfelállítás próba', work_phase_code: 'tooth_setup_try_in', duration_minutes: 30, default_days_offset: 10 },
+      { pool: 'work', label: 'Végleges próba', work_phase_code: 'final_try_in', duration_minutes: 30, default_days_offset: 7 },
+      { pool: 'work', label: 'Átadás', work_phase_code: 'delivery', duration_minutes: 45, default_days_offset: 10, requires_precommit: true },
+      { pool: 'control', label: '1 hónapos kontroll', work_phase_code: 'control_1m', duration_minutes: 20, default_days_offset: 30 },
+      { pool: 'control', label: '3 hónapos kontroll', work_phase_code: 'control_3m', duration_minutes: 20, default_days_offset: 90 },
+      { pool: 'control', label: '6 hónapos kontroll', work_phase_code: 'control_6m', duration_minutes: 20, default_days_offset: 180 },
+      { pool: 'control', label: '12 hónapos kontroll', work_phase_code: 'control_12m', duration_minutes: 20, default_days_offset: 365 },
+    ],
+  },
+];
+
+async function ensureComplexPathways() {
+  // care_pathways has unique indexes on BOTH reason and treatment_type_id (XOR
+  // constraint: exactly one set). The 3 reasons are already taken by seeded
+  // pathways, so attach the synthetic pathways via a dedicated treatment_type.
+  for (const cp of COMPLEX_PATHWAYS) {
+    let tt = (await q<{ id: string }>(`SELECT id FROM treatment_types WHERE code = $1`, [cp.code]))[0];
+    if (!tt) {
+      tt = (await q<{ id: string }>(`INSERT INTO treatment_types (code, label_hu) VALUES ($1, $2) RETURNING id`, [cp.code, cp.name]))[0];
+    }
+    const json = JSON.stringify(cp.phases);
+    const existing = (await q<{ id: string }>(`SELECT id FROM care_pathways WHERE treatment_type_id = $1`, [tt.id]))[0];
+    if (existing) {
+      await q(`UPDATE care_pathways SET work_phases_json = $2::jsonb, steps_json = $2::jsonb, name = $3 WHERE id = $1`, [existing.id, json, cp.name]);
+    } else {
+      await q(
+        `INSERT INTO care_pathways (name, treatment_type_id, work_phases_json, steps_json, version, priority)
+         VALUES ($1, $2, $3::jsonb, $3::jsonb, 1, 100)`,
+        [cp.name, tt.id, json]
+      );
+    }
+  }
+}
+
 // ── Step 2: care pathways available to assign ──────────────────────────────────
 async function loadPathways() {
   return q<{ id: string; name: string; reason: string | null; wp: number; maxcode: number }>(
@@ -121,7 +203,7 @@ async function generateSlots(providers: { id: string }[]) {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
   start.setDate(start.getDate() + 1); // from tomorrow (first-bookable only returns future slots)
-  const DAYS = 620; // ~20 months forward — long enough for 12-month control phases
+  const DAYS = 1120; // ~3 years forward — long enough for 20-phase plans ending in 12-month controls
   const hours = [9, 10, 11, 13, 14, 15];
   const purposes = ['consult', 'work', 'work', 'control', 'work', 'flexible'];
   let count = 0;
@@ -138,7 +220,8 @@ async function generateSlots(providers: { id: string }[]) {
       for (let h = 0; h < hours.length; h++) {
         const slot = new Date(day);
         slot.setHours(hours[h], 0, 0, 0);
-        values.push(`($${pi++},$${pi++},$${pi++},'free',$${pi++},45,'manual')`);
+        // 90-min slots so even the long surgical/diagnostic phases (60–90 min) fit.
+        values.push(`($${pi++},$${pi++},$${pi++},'free',$${pi++},90,'manual')`);
         params.push(prov.id, slot.toISOString(), 'available', purposes[h]);
         count++;
       }
@@ -268,6 +351,50 @@ async function simulateEpisode(
   return { bookings, projected: proj.projected };
 }
 
+// ── Validate the step-ordering guard: booking a LATER work phase before its
+// prerequisites are handled must be rejected with STEP_PREREQUISITE_NOT_MET. ──
+async function verifyStepOrderingGuard(provider: { id: string; email: string }): Promise<{ blocked: boolean; code: string | null; error?: string }> {
+  const patient = await createPatient(999);
+  const episode = await createOpenEpisodeWithInitialStageZero(pool, {
+    patientId: patient.id,
+    reason: 'onkológiai kezelés utáni állapot',
+    chiefComplaint: 'Lépés-sorrend őr teszt',
+    caseTitle: 'Guard teszt',
+    parentEpisodeId: null,
+    triggerType: null,
+    treatmentTypeId: null,
+    createdBy: 'sim@local',
+  });
+  const cp = (await q<{ id: string }>(`SELECT id FROM care_pathways WHERE name = $1`, [COMPLEX_PATHWAYS[0].name]))[0];
+  await q(
+    `UPDATE patient_episodes SET care_pathway_id = $2, assigned_provider_id = $3, opened_at = now(), plan_start_date = now() WHERE id = $1`,
+    [episode.id, cp.id, provider.id]
+  );
+  await generateEpisodeWorkPhases(pool, episode.id);
+  const slot = (await q<{ id: string }>(
+    `SELECT id FROM available_time_slots WHERE user_id = $1 AND state = 'free' AND start_time > now() ORDER BY start_time LIMIT 1`,
+    [provider.id]
+  ))[0];
+  // Try to book a deep work phase ('framework_try_in') while consult/diagnostic/…
+  // are still pending. Admin, no override reason → must be blocked.
+  const outcome = await createAppointment(
+    pool,
+    {
+      patientId: patient.id,
+      timeSlotId: slot.id,
+      episodeId: episode.id,
+      appointmentType: 'munkafazis',
+      pool: 'work',
+      createdVia: 'worklist',
+      stepCode: 'framework_try_in',
+      requiresPrecommit: false,
+    },
+    { email: provider.email, userId: provider.id, role: 'admin' }
+  );
+  if (outcome.ok) return { blocked: false, code: null };
+  return { blocked: true, code: (outcome.validationError as { code?: string }).code ?? null, error: outcome.validationError.error };
+}
+
 async function main() {
   console.log('=== SIMULATION START ===');
   await resetData();
@@ -276,14 +403,20 @@ async function main() {
   const providerById = new Map(providers.map((p) => [p.id, p.name]));
   console.log(`Providers: ${providers.map((p) => p.name).join(', ')}`);
 
+  await ensureComplexPathways();
   const allPathways = await loadPathways();
-  // slot_intents.step_code is varchar(50); a couple legacy-seeded pathways have
-  // work_phase_codes longer than that, which breaks the projector. Exclude them
-  // from the rotation and surface them as a finding.
-  const pathways = allPathways.filter((p) => p.maxcode <= 50);
-  const excludedPathways = allPathways.filter((p) => p.maxcode > 50).map((p) => ({ name: p.name, maxcode: p.maxcode }));
-  console.log(`Care pathways available: ${allPathways.length} (usable: ${pathways.length}, excluded for >50-char codes: ${excludedPathways.length})`);
-  if (excludedPathways.length) console.log('  Excluded:', excludedPathways.map((e) => `${e.name} (${e.maxcode})`).join('; '));
+  // step_code columns are now varchar(80) (migration 058), so codes up to 80 chars
+  // (incl. the long legacy code and our synthetic 66-char code) are all usable.
+  const pathways = allPathways.filter((p) => p.maxcode <= 80);
+  const excludedPathways = allPathways.filter((p) => p.maxcode > 80).map((p) => ({ name: p.name, maxcode: p.maxcode }));
+  const complexNames = new Set(COMPLEX_PATHWAYS.map((c) => c.name));
+  // Prefer LONG/complicated plans: the synthetic complex pathways first, then the
+  // longest seeded ones (≥8 phases) — so every patient gets a multi-step plan.
+  const complex = pathways.filter((p) => complexNames.has(p.name));
+  const longSeeded = pathways.filter((p) => !complexNames.has(p.name) && p.wp >= 8);
+  const rotation = [...complex, ...longSeeded];
+  console.log(`Care pathways: ${allPathways.length} total, ${pathways.length} usable, ${complex.length} complex (${complex.map((c) => c.wp + 'p').join(',')}), rotation size ${rotation.length}`);
+  if (excludedPathways.length) console.log('  Excluded (>80-char codes):', excludedPathways.map((e) => `${e.name} (${e.maxcode})`).join('; '));
 
   const slots = await generateSlots(providers);
   console.log(`Generated ${slots} available time slots across ~20 months.`);
@@ -305,9 +438,8 @@ async function main() {
       createdBy: 'sim@local',
     });
 
-    // Rotate through ALL pathways (2–11 phases) for a varied, realistic mix of
-    // treatment-plan lengths across patients.
-    const match = pathways[i % pathways.length];
+    // Rotate through the LONG plans (complex first, then longest seeded).
+    const match = rotation[i % rotation.length];
     const provider = providers[i % providers.length];
 
     // Small stagger (0–3 weeks) so episodes don't all start the same day, but keep
@@ -354,6 +486,11 @@ async function main() {
     );
   }
 
+  // Validate the step-ordering guard (out-of-order booking must be blocked).
+  const guard = await verifyStepOrderingGuard(providers[0]);
+  console.log(`\nStep-ordering guard: out-of-order booking ${guard.blocked ? 'BLOCKED ✓' : 'NOT blocked ✗'}` +
+    (guard.code ? ` (${guard.code})` : '') + (guard.error ? ` — "${guard.error}"` : ''));
+
   // Write JSON report for the markdown summary step.
   const fs = await import('fs');
   const out = {
@@ -362,6 +499,7 @@ async function main() {
     slotsGenerated: slots,
     pathwaysTotal: allPathways.length,
     excludedPathways,
+    stepOrderingGuard: guard,
     episodes: report,
   };
   fs.writeFileSync('sim-out/simulation-report.json', JSON.stringify(out, null, 2));

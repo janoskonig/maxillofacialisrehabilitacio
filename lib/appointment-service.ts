@@ -5,7 +5,7 @@ import { createGoogleCalendarEvent, deleteGoogleCalendarEvent } from '@/lib/goog
 import { sendPushNotification } from '@/lib/push-notifications';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
-import { checkOneHardNext, getAppointmentRiskSettings } from '@/lib/scheduling-service';
+import { checkOneHardNext, checkStepPrerequisites, getAppointmentRiskSettings } from '@/lib/scheduling-service';
 import { getSchedulingFeatureFlag } from '@/lib/scheduling-feature-flags';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { logger } from '@/lib/logger';
@@ -266,6 +266,38 @@ export async function createAppointment(
               `INSERT INTO scheduling_override_audit (episode_id, user_id, override_reason) VALUES ($1, $2, $3)`,
               [episodeId, auth.userId, `precommit: ${typeof stepCode === 'string' ? stepCode : 'unknown'}`],
             );
+          }
+        }
+
+        // Step-ordering guard: don't schedule a work phase while an EARLIER
+        // mandatory phase is still pending & unbooked. Normal worklist flow books
+        // the earliest pending step, so this only catches out-of-order manual
+        // bookings. Overridable (with audit) by staff giving a ≥10-char reason.
+        if (typeof stepCode === 'string' && stepCode.length > 0) {
+          const prereq = await checkStepPrerequisites(client, episodeId, stepCode);
+          if (!prereq.allowed) {
+            const mayOverrideOrder =
+              (auth.role === 'admin' || auth.role === 'beutalo_orvos' || auth.role === 'fogpótlástanász') &&
+              typeof overrideReason === 'string' &&
+              overrideReason.trim().length >= 10;
+            if (mayOverrideOrder) {
+              await client.query(
+                `INSERT INTO scheduling_override_audit (episode_id, user_id, override_reason) VALUES ($1, $2, $3)`,
+                [episodeId, auth.userId, `step-order: ${stepCode} before ${prereq.blockingPhaseCode}; ${overrideReason!.trim()}`],
+              );
+            } else {
+              await client.query('ROLLBACK');
+              return {
+                ok: false,
+                validationError: {
+                  error: `Korábbi kezelési lépés (${prereq.blockingLabel}) még nincs lefoglalva vagy elvégezve — ezt a lépést előbb nem lehet ütemezni.`,
+                  code: 'STEP_PREREQUISITE_NOT_MET',
+                  overrideHint:
+                    'Foglald előbb a korábbi lépést a munkalistából, vagy adj override indoklást (min. 10 karakter, admin/beutaló orvos/fogpótlástanász).',
+                  status: 409,
+                },
+              };
+            }
           }
         }
       }

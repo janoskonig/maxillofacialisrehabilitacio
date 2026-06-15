@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-15T15:32:33.858Z",
+  "generatedAt": "2026-06-15T16:42:57.957Z",
   "providers": [
     {
       "name": "Dr. Kovács Anna",
@@ -14,115 +14,187 @@
       "email": "dr.szabo@sim.local"
     }
   ],
-  "slotsGenerated": 7992,
-  "pathwaysTotal": 14,
-  "excludedPathways": [
-    {
-      "name": "Kapocselhorgonyzású részleges fémlemezes fogpótlás",
-      "maxcode": 54
-    }
-  ],
+  "slotsGenerated": 14400,
+  "pathwaysTotal": 16,
+  "excludedPathways": [],
+  "stepOrderingGuard": {
+    "blocked": true,
+    "code": "STEP_PREREQUISITE_NOT_MET",
+    "error": "Korábbi kezelési lépés (consult_1) még nincs lefoglalva vagy elvégezve — ezt a lépést előbb nem lehet ütemezni."
+  },
   "episodes": [
     {
       "patient": "Tóth Anna",
       "reason": "traumás sérülés",
-      "pathway": "Kombinált fogpótlás rejtett elhorgonyzási eszközzel",
+      "pathway": "Komplex onkológiai rekonstrukció (szimuláció)",
       "provider": "Dr. Kovács Anna",
-      "plannedPhases": 11,
-      "workPhasesGenerated": 11,
-      "projectedSlotIntents": 11,
-      "booked": 11,
-      "completed": 10,
+      "plannedPhases": 20,
+      "workPhasesGenerated": 20,
+      "projectedSlotIntents": 20,
+      "booked": 20,
+      "completed": 19,
       "future": 1,
       "firstDate": "2026-06-16",
-      "lastDate": "2028-02-22",
+      "lastDate": "2028-03-28",
       "blocked": null,
       "bookings": [
         {
           "seq": 1,
-          "step": "Fogelőkészítés",
-          "pool": "work",
-          "date": "2026-06-16T10:00:00.000Z",
+          "step": "Első konzultáció",
+          "pool": "consult",
+          "date": "2026-06-16T09:00:00.000Z",
           "provider": "Dr. Kovács Anna",
           "completed": true
         },
         {
           "seq": 2,
-          "step": "Precíziós-szituációs lenyomat",
+          "step": "Diagnosztika és képalkotás",
           "pool": "work",
-          "date": "2026-06-16T11:00:00.000Z",
+          "date": "2026-06-23T10:00:00.000Z",
           "provider": "Dr. Kovács Anna",
           "completed": true
         },
         {
           "seq": 3,
-          "step": "Vázpróba",
+          "step": "Onkológiai team megbeszélés",
           "pool": "work",
-          "date": "2026-06-16T14:00:00.000Z",
+          "date": "2026-06-23T11:00:00.000Z",
           "provider": "Dr. Kovács Anna",
           "completed": true
         },
         {
           "seq": 4,
-          "step": "Mattpróba és gyűjtőlenyomat",
+          "step": "Sebészi tervezés",
           "pool": "work",
-          "date": "2026-06-16T15:00:00.000Z",
+          "date": "2026-06-30T11:00:00.000Z",
           "provider": "Dr. Kovács Anna",
           "completed": true
         },
         {
           "seq": 5,
-          "step": "Fémlemezpróba",
+          "step": "Műtét előtti lenyomat",
           "pool": "work",
-          "date": "2026-06-17T10:00:00.000Z",
+          "date": "2026-06-30T14:00:00.000Z",
           "provider": "Dr. Kovács Anna",
           "completed": true
         },
         {
           "seq": 6,
-          "step": "Harapásregisztráció",
+          "step": "Sebészi fázis 1",
           "pool": "work",
-          "date": "2026-06-17T11:00:00.000Z",
+          "date": "2026-07-14T14:00:00.000Z",
           "provider": "Dr. Kovács Anna",
           "completed": true
         },
         {
           "seq": 7,
-          "step": "Fogpróba",
-          "pool": "work",
-          "date": "2026-06-17T14:00:00.000Z",
+          "step": "Posztoperatív kontroll 1",
+          "pool": "control",
+          "date": "2026-07-21T15:00:00.000Z",
           "provider": "Dr. Kovács Anna",
           "completed": true
         },
         {
           "seq": 8,
-          "step": "Átadás",
-          "pool": "work",
-          "date": "2026-06-17T15:00:00.000Z",
+          "step": "Posztoperatív kontroll 2",
+          "pool": "control",
+          "date": "2026-08-04T15:00:00.000Z",
           "provider": "Dr. Kovács Anna",
           "completed": true
         },
         {
           "seq": 9,
-          "step": "Kontroll 1",
+          "step": "Gyógyulás értékelése",
           "pool": "work",
-          "date": "2026-09-08T15:00:00.000Z",
+          "date": "2026-08-27T15:00:00.000Z",
           "provider": "Dr. Kovács Anna",
           "completed": true
         },
         {
           "seq": 10,
-          "step": "Kontroll 2",
+          "step": "Funkcionális protetikai rekonstrukció — részletes próbafázis",
           "pool": "work",
-          "date": "2027-03-01T10:00:00.000Z",
+          "date": "2026-09-03T15:00:00.000Z",
           "provider": "Dr. Kovács Anna",
           "completed": true
         },
         {
           "seq": 11,
-          "step": "Kontroll 3",
+          "step": "Másodlagos lenyomat",
           "pool": "work",
-          "date": "2028-02-22T10:00:00.000Z",
+          "date": "2026-09-04T10:00:00.000Z",
+          "provider": "Dr. Kovács Anna",
+          "completed": true
+        },
+        {
+          "seq": 12,
+          "step": "Vázpróba",
+          "pool": "work",
+          "date": "2026-09-11T10:00:00.000Z",
+          "provider": "Dr. Kovács Anna",
+          "completed": true
+        },
+        {
+          "seq": 13,
+          "step": "Harapásvétel",
+          "pool": "work",
+          "date": "2026-09-11T11:00:00.000Z",
+          "provider": "Dr. Kovács Anna",
+          "completed": true
+        },
+        {
+          "seq": 14,
+          "step": "Esztétikai próba 1",
+          "pool": "work",
+          "date": "2026-09-14T11:00:00.000Z",
+          "provider": "Dr. Kovács Anna",
+          "completed": true
+        },
+        {
+          "seq": 15,
+          "step": "Esztétikai próba 2",
+          "pool": "work",
+          "date": "2026-09-14T14:00:00.000Z",
+          "provider": "Dr. Kovács Anna",
+          "completed": true
+        },
+        {
+          "seq": 16,
+          "step": "Funkcionális próba",
+          "pool": "work",
+          "date": "2026-09-14T15:00:00.000Z",
+          "provider": "Dr. Kovács Anna",
+          "completed": true
+        },
+        {
+          "seq": 17,
+          "step": "Átadás",
+          "pool": "work",
+          "date": "2026-09-17T15:00:00.000Z",
+          "provider": "Dr. Kovács Anna",
+          "completed": true
+        },
+        {
+          "seq": 18,
+          "step": "1 hónapos kontroll",
+          "pool": "control",
+          "date": "2026-10-12T13:00:00.000Z",
+          "provider": "Dr. Kovács Anna",
+          "completed": true
+        },
+        {
+          "seq": 19,
+          "step": "6 hónapos kontroll",
+          "pool": "control",
+          "date": "2027-04-05T13:00:00.000Z",
+          "provider": "Dr. Kovács Anna",
+          "completed": true
+        },
+        {
+          "seq": 20,
+          "step": "12 hónapos kontroll",
+          "pool": "control",
+          "date": "2028-03-28T13:00:00.000Z",
           "provider": "Dr. Kovács Anna",
           "completed": false
         }
@@ -131,113 +203,169 @@
     {
       "patient": "Horváth Ferenc",
       "reason": "veleszületett rendellenesség",
-      "pathway": "Kombinált fogpótlás kapocselhorgonyzással",
+      "pathway": "Komplex full-arch implantációs rehabilitáció (szimuláció)",
       "provider": "Dr. Nagy Béla",
-      "plannedPhases": 11,
-      "workPhasesGenerated": 11,
-      "projectedSlotIntents": 11,
-      "booked": 10,
-      "completed": 10,
-      "future": 0,
+      "plannedPhases": 17,
+      "workPhasesGenerated": 17,
+      "projectedSlotIntents": 17,
+      "booked": 17,
+      "completed": 16,
+      "future": 1,
       "firstDate": "2026-06-22",
-      "lastDate": "2027-03-08",
+      "lastDate": "2028-08-22",
       "blocked": null,
       "bookings": [
         {
           "seq": 1,
-          "step": "Fogelőkészítés",
-          "pool": "work",
-          "date": "2026-06-22T10:00:00.000Z",
+          "step": "Első konzultáció",
+          "pool": "consult",
+          "date": "2026-06-22T09:00:00.000Z",
           "provider": "Dr. Nagy Béla",
           "completed": true
         },
         {
           "seq": 2,
-          "step": "Precíziós-szituációs lenyomat",
+          "step": "CBCT és diagnosztika",
           "pool": "work",
-          "date": "2026-06-22T11:00:00.000Z",
+          "date": "2026-06-25T10:00:00.000Z",
           "provider": "Dr. Nagy Béla",
           "completed": true
         },
         {
           "seq": 3,
-          "step": "Vázpróba",
+          "step": "Sebészi sablon tervezés",
           "pool": "work",
-          "date": "2026-06-22T14:00:00.000Z",
+          "date": "2026-07-02T10:00:00.000Z",
           "provider": "Dr. Nagy Béla",
           "completed": true
         },
         {
           "seq": 4,
-          "step": "Mattpróba és gyűjtőlenyomat",
+          "step": "Implantáció (felső)",
           "pool": "work",
-          "date": "2026-06-22T15:00:00.000Z",
+          "date": "2026-07-09T10:00:00.000Z",
           "provider": "Dr. Nagy Béla",
           "completed": true
         },
         {
           "seq": 5,
-          "step": "Fémlemezpróba",
+          "step": "Implantáció (alsó)",
           "pool": "work",
-          "date": "2026-06-23T10:00:00.000Z",
+          "date": "2026-08-03T10:00:00.000Z",
           "provider": "Dr. Nagy Béla",
           "completed": true
         },
         {
           "seq": 6,
-          "step": "Harapásregisztráció",
-          "pool": "work",
-          "date": "2026-06-23T11:00:00.000Z",
+          "step": "Sebkontroll",
+          "pool": "control",
+          "date": "2026-08-06T13:00:00.000Z",
           "provider": "Dr. Nagy Béla",
           "completed": true
         },
         {
           "seq": 7,
-          "step": "Fogpróba",
-          "pool": "work",
-          "date": "2026-06-23T14:00:00.000Z",
+          "step": "Oszteointegráció kontroll",
+          "pool": "control",
+          "date": "2026-10-28T13:00:00.000Z",
           "provider": "Dr. Nagy Béla",
           "completed": true
         },
         {
           "seq": 8,
-          "step": "Átadás",
+          "step": "Felépítmény behelyezés",
           "pool": "work",
-          "date": "2026-06-23T15:00:00.000Z",
+          "date": "2026-11-04T14:00:00.000Z",
           "provider": "Dr. Nagy Béla",
           "completed": true
         },
         {
           "seq": 9,
-          "step": "Kontroll 1",
+          "step": "Lenyomat",
           "pool": "work",
-          "date": "2026-09-14T15:00:00.000Z",
+          "date": "2026-11-04T15:00:00.000Z",
           "provider": "Dr. Nagy Béla",
           "completed": true
         },
         {
           "seq": 10,
-          "step": "Kontroll 2",
+          "step": "Vázpróba",
           "pool": "work",
-          "date": "2027-03-08T10:00:00.000Z",
+          "date": "2026-11-11T15:00:00.000Z",
           "provider": "Dr. Nagy Béla",
           "completed": true
+        },
+        {
+          "seq": 11,
+          "step": "Fogfelállítás próba",
+          "pool": "work",
+          "date": "2026-11-16T10:00:00.000Z",
+          "provider": "Dr. Nagy Béla",
+          "completed": true
+        },
+        {
+          "seq": 12,
+          "step": "Végleges próba",
+          "pool": "work",
+          "date": "2026-11-16T11:00:00.000Z",
+          "provider": "Dr. Nagy Béla",
+          "completed": true
+        },
+        {
+          "seq": 13,
+          "step": "Átadás",
+          "pool": "work",
+          "date": "2026-11-19T11:00:00.000Z",
+          "provider": "Dr. Nagy Béla",
+          "completed": true
+        },
+        {
+          "seq": 14,
+          "step": "1 hónapos kontroll",
+          "pool": "control",
+          "date": "2026-12-14T13:00:00.000Z",
+          "provider": "Dr. Nagy Béla",
+          "completed": true
+        },
+        {
+          "seq": 15,
+          "step": "3 hónapos kontroll",
+          "pool": "control",
+          "date": "2027-03-08T13:00:00.000Z",
+          "provider": "Dr. Nagy Béla",
+          "completed": true
+        },
+        {
+          "seq": 16,
+          "step": "6 hónapos kontroll",
+          "pool": "control",
+          "date": "2027-08-30T13:00:00.000Z",
+          "provider": "Dr. Nagy Béla",
+          "completed": true
+        },
+        {
+          "seq": 17,
+          "step": "12 hónapos kontroll",
+          "pool": "control",
+          "date": "2028-08-22T13:00:00.000Z",
+          "provider": "Dr. Nagy Béla",
+          "completed": false
         }
       ]
     },
     {
       "patient": "Kiss Károly",
       "reason": "onkológiai kezelés utáni állapot",
-      "pathway": "Fedőlemezes fogpótlás",
+      "pathway": "Kombinált fogpótlás kapocselhorgonyzással",
       "provider": "Dr. Szabó Csaba",
-      "plannedPhases": 10,
-      "workPhasesGenerated": 10,
-      "projectedSlotIntents": 10,
-      "booked": 9,
-      "completed": 9,
-      "future": 0,
+      "plannedPhases": 11,
+      "workPhasesGenerated": 11,
+      "projectedSlotIntents": 11,
+      "booked": 11,
+      "completed": 10,
+      "future": 1,
       "firstDate": "2026-06-26",
-      "lastDate": "2027-03-15",
+      "lastDate": "2028-03-07",
       "blocked": null,
       "bookings": [
         {
@@ -258,7 +386,7 @@
         },
         {
           "seq": 3,
-          "step": "Harapásregisztráció",
+          "step": "Vázpróba",
           "pool": "work",
           "date": "2026-06-26T14:00:00.000Z",
           "provider": "Dr. Szabó Csaba",
@@ -266,7 +394,7 @@
         },
         {
           "seq": 4,
-          "step": "Primerpróba és gyűjtőlenyomat",
+          "step": "Mattpróba és gyűjtőlenyomat",
           "pool": "work",
           "date": "2026-06-26T15:00:00.000Z",
           "provider": "Dr. Szabó Csaba",
@@ -274,7 +402,7 @@
         },
         {
           "seq": 5,
-          "step": "Harapásregisztráció",
+          "step": "Fémlemezpróba",
           "pool": "work",
           "date": "2026-06-29T10:00:00.000Z",
           "provider": "Dr. Szabó Csaba",
@@ -282,7 +410,7 @@
         },
         {
           "seq": 6,
-          "step": "Fogpróba",
+          "step": "Harapásregisztráció",
           "pool": "work",
           "date": "2026-06-29T11:00:00.000Z",
           "provider": "Dr. Szabó Csaba",
@@ -290,7 +418,7 @@
         },
         {
           "seq": 7,
-          "step": "Átadás",
+          "step": "Fogpróba",
           "pool": "work",
           "date": "2026-06-29T14:00:00.000Z",
           "provider": "Dr. Szabó Csaba",
@@ -298,6 +426,14 @@
         },
         {
           "seq": 8,
+          "step": "Átadás",
+          "pool": "work",
+          "date": "2026-06-29T15:00:00.000Z",
+          "provider": "Dr. Szabó Csaba",
+          "completed": true
+        },
+        {
+          "seq": 9,
           "step": "Kontroll 1",
           "pool": "work",
           "date": "2026-09-21T10:00:00.000Z",
@@ -305,33 +441,41 @@
           "completed": true
         },
         {
-          "seq": 9,
+          "seq": 10,
           "step": "Kontroll 2",
           "pool": "work",
           "date": "2027-03-15T10:00:00.000Z",
           "provider": "Dr. Szabó Csaba",
           "completed": true
+        },
+        {
+          "seq": 11,
+          "step": "Kontroll 3",
+          "pool": "work",
+          "date": "2028-03-07T10:00:00.000Z",
+          "provider": "Dr. Szabó Csaba",
+          "completed": false
         }
       ]
     },
     {
       "patient": "Molnár Dénes",
       "reason": "traumás sérülés",
-      "pathway": "Csavarozott rögzítésű implantációs korona/híd",
+      "pathway": "Kombinált fogpótlás rejtett elhorgonyzási eszközzel",
       "provider": "Dr. Kovács Anna",
-      "plannedPhases": 9,
-      "workPhasesGenerated": 9,
-      "projectedSlotIntents": 9,
-      "booked": 8,
-      "completed": 8,
-      "future": 0,
+      "plannedPhases": 11,
+      "workPhasesGenerated": 11,
+      "projectedSlotIntents": 11,
+      "booked": 11,
+      "completed": 10,
+      "future": 1,
       "firstDate": "2026-07-01",
-      "lastDate": "2027-03-15",
+      "lastDate": "2028-03-07",
       "blocked": null,
       "bookings": [
         {
           "seq": 1,
-          "step": "Lenyomati fejek sínezése",
+          "step": "Fogelőkészítés",
           "pool": "work",
           "date": "2026-07-01T10:00:00.000Z",
           "provider": "Dr. Kovács Anna",
@@ -339,7 +483,7 @@
         },
         {
           "seq": 2,
-          "step": "Lenyomatvétel",
+          "step": "Precíziós-szituációs lenyomat",
           "pool": "work",
           "date": "2026-07-01T11:00:00.000Z",
           "provider": "Dr. Kovács Anna",
@@ -347,7 +491,7 @@
         },
         {
           "seq": 3,
-          "step": "Harapásregisztráció",
+          "step": "Vázpróba",
           "pool": "work",
           "date": "2026-07-01T14:00:00.000Z",
           "provider": "Dr. Kovács Anna",
@@ -355,7 +499,7 @@
         },
         {
           "seq": 4,
-          "step": "Vázpróba",
+          "step": "Mattpróba és gyűjtőlenyomat",
           "pool": "work",
           "date": "2026-07-01T15:00:00.000Z",
           "provider": "Dr. Kovács Anna",
@@ -363,7 +507,7 @@
         },
         {
           "seq": 5,
-          "step": "Mattpróba",
+          "step": "Fémlemezpróba",
           "pool": "work",
           "date": "2026-07-02T10:00:00.000Z",
           "provider": "Dr. Kovács Anna",
@@ -371,7 +515,7 @@
         },
         {
           "seq": 6,
-          "step": "Átadás",
+          "step": "Harapásregisztráció",
           "pool": "work",
           "date": "2026-07-02T11:00:00.000Z",
           "provider": "Dr. Kovács Anna",
@@ -379,32 +523,56 @@
         },
         {
           "seq": 7,
-          "step": "Kontroll 1",
+          "step": "Fogpróba",
           "pool": "work",
-          "date": "2026-09-23T11:00:00.000Z",
+          "date": "2026-07-02T14:00:00.000Z",
           "provider": "Dr. Kovács Anna",
           "completed": true
         },
         {
           "seq": 8,
-          "step": "Kontroll 2",
+          "step": "Átadás",
           "pool": "work",
-          "date": "2027-03-15T11:00:00.000Z",
+          "date": "2026-07-02T15:00:00.000Z",
           "provider": "Dr. Kovács Anna",
           "completed": true
+        },
+        {
+          "seq": 9,
+          "step": "Kontroll 1",
+          "pool": "work",
+          "date": "2026-09-23T15:00:00.000Z",
+          "provider": "Dr. Kovács Anna",
+          "completed": true
+        },
+        {
+          "seq": 10,
+          "step": "Kontroll 2",
+          "pool": "work",
+          "date": "2027-03-15T15:00:00.000Z",
+          "provider": "Dr. Kovács Anna",
+          "completed": true
+        },
+        {
+          "seq": 11,
+          "step": "Kontroll 3",
+          "pool": "work",
+          "date": "2028-03-07T15:00:00.000Z",
+          "provider": "Dr. Kovács Anna",
+          "completed": false
         }
       ]
     },
     {
       "patient": "Németh István",
       "reason": "veleszületett rendellenesség",
-      "pathway": "Cementezett rögzítésű implantációs korona/híd",
+      "pathway": "Fedőlemezes fogpótlás",
       "provider": "Dr. Nagy Béla",
-      "plannedPhases": 9,
-      "workPhasesGenerated": 9,
-      "projectedSlotIntents": 9,
-      "booked": 9,
-      "completed": 8,
+      "plannedPhases": 10,
+      "workPhasesGenerated": 10,
+      "projectedSlotIntents": 10,
+      "booked": 10,
+      "completed": 9,
       "future": 1,
       "firstDate": "2026-06-16",
       "lastDate": "2028-02-22",
@@ -412,7 +580,7 @@
       "bookings": [
         {
           "seq": 1,
-          "step": "Lenyomati fejek sínezése",
+          "step": "Fogelőkészítés",
           "pool": "work",
           "date": "2026-06-16T10:00:00.000Z",
           "provider": "Dr. Nagy Béla",
@@ -420,7 +588,7 @@
         },
         {
           "seq": 2,
-          "step": "Lenyomatvétel",
+          "step": "Precíziós-szituációs lenyomat",
           "pool": "work",
           "date": "2026-06-16T11:00:00.000Z",
           "provider": "Dr. Nagy Béla",
@@ -436,7 +604,7 @@
         },
         {
           "seq": 4,
-          "step": "Vázpróba",
+          "step": "Primerpróba és gyűjtőlenyomat",
           "pool": "work",
           "date": "2026-06-16T15:00:00.000Z",
           "provider": "Dr. Nagy Béla",
@@ -444,7 +612,7 @@
         },
         {
           "seq": 5,
-          "step": "Mattpróba",
+          "step": "Harapásregisztráció",
           "pool": "work",
           "date": "2026-06-17T10:00:00.000Z",
           "provider": "Dr. Nagy Béla",
@@ -452,7 +620,7 @@
         },
         {
           "seq": 6,
-          "step": "Átadás",
+          "step": "Fogpróba",
           "pool": "work",
           "date": "2026-06-17T11:00:00.000Z",
           "provider": "Dr. Nagy Béla",
@@ -460,14 +628,22 @@
         },
         {
           "seq": 7,
-          "step": "Kontroll 1",
+          "step": "Átadás",
           "pool": "work",
-          "date": "2026-09-08T11:00:00.000Z",
+          "date": "2026-06-17T14:00:00.000Z",
           "provider": "Dr. Nagy Béla",
           "completed": true
         },
         {
           "seq": 8,
+          "step": "Kontroll 1",
+          "pool": "work",
+          "date": "2026-09-08T14:00:00.000Z",
+          "provider": "Dr. Nagy Béla",
+          "completed": true
+        },
+        {
+          "seq": 9,
           "step": "Kontroll 2",
           "pool": "work",
           "date": "2027-03-01T10:00:00.000Z",
@@ -475,7 +651,7 @@
           "completed": true
         },
         {
-          "seq": 9,
+          "seq": 10,
           "step": "Kontroll 3",
           "pool": "work",
           "date": "2028-02-22T10:00:00.000Z",
@@ -492,11 +668,11 @@
       "plannedPhases": 9,
       "workPhasesGenerated": 9,
       "projectedSlotIntents": 9,
-      "booked": 8,
+      "booked": 9,
       "completed": 8,
-      "future": 0,
+      "future": 1,
       "firstDate": "2026-06-22",
-      "lastDate": "2027-03-08",
+      "lastDate": "2028-02-29",
       "blocked": null,
       "bookings": [
         {
@@ -562,27 +738,35 @@
           "date": "2027-03-08T10:00:00.000Z",
           "provider": "Dr. Szabó Csaba",
           "completed": true
+        },
+        {
+          "seq": 9,
+          "step": "Kontroll 3",
+          "pool": "work",
+          "date": "2028-02-29T10:00:00.000Z",
+          "provider": "Dr. Szabó Csaba",
+          "completed": false
         }
       ]
     },
     {
       "patient": "Balogh Gábor",
       "reason": "traumás sérülés",
-      "pathway": "Rögzített fogpótlás fogakon elhorgonyozva",
+      "pathway": "Cementezett rögzítésű implantációs korona/híd",
       "provider": "Dr. Kovács Anna",
-      "plannedPhases": 8,
-      "workPhasesGenerated": 8,
-      "projectedSlotIntents": 8,
-      "booked": 7,
-      "completed": 7,
-      "future": 0,
+      "plannedPhases": 9,
+      "workPhasesGenerated": 9,
+      "projectedSlotIntents": 9,
+      "booked": 9,
+      "completed": 8,
+      "future": 1,
       "firstDate": "2026-06-26",
-      "lastDate": "2027-03-15",
+      "lastDate": "2028-03-07",
       "blocked": null,
       "bookings": [
         {
           "seq": 1,
-          "step": "Fogelőkészítés",
+          "step": "Lenyomati fejek sínezése",
           "pool": "work",
           "date": "2026-06-26T10:00:00.000Z",
           "provider": "Dr. Kovács Anna",
@@ -590,7 +774,7 @@
         },
         {
           "seq": 2,
-          "step": "Precíziós-szituációs lenyomat",
+          "step": "Lenyomatvétel",
           "pool": "work",
           "date": "2026-06-26T11:00:00.000Z",
           "provider": "Dr. Kovács Anna",
@@ -598,7 +782,7 @@
         },
         {
           "seq": 3,
-          "step": "Vázpróba",
+          "step": "Harapásregisztráció",
           "pool": "work",
           "date": "2026-06-26T14:00:00.000Z",
           "provider": "Dr. Kovács Anna",
@@ -606,7 +790,7 @@
         },
         {
           "seq": 4,
-          "step": "Mattpróba",
+          "step": "Vázpróba",
           "pool": "work",
           "date": "2026-06-26T15:00:00.000Z",
           "provider": "Dr. Kovács Anna",
@@ -614,7 +798,7 @@
         },
         {
           "seq": 5,
-          "step": "Átadás",
+          "step": "Mattpróba",
           "pool": "work",
           "date": "2026-06-29T10:00:00.000Z",
           "provider": "Dr. Kovács Anna",
@@ -622,6 +806,14 @@
         },
         {
           "seq": 6,
+          "step": "Átadás",
+          "pool": "work",
+          "date": "2026-06-29T11:00:00.000Z",
+          "provider": "Dr. Kovács Anna",
+          "completed": true
+        },
+        {
+          "seq": 7,
           "step": "Kontroll 1",
           "pool": "work",
           "date": "2026-09-21T10:00:00.000Z",
@@ -629,67 +821,75 @@
           "completed": true
         },
         {
-          "seq": 7,
+          "seq": 8,
           "step": "Kontroll 2",
           "pool": "work",
           "date": "2027-03-15T10:00:00.000Z",
           "provider": "Dr. Kovács Anna",
           "completed": true
+        },
+        {
+          "seq": 9,
+          "step": "Kontroll 3",
+          "pool": "work",
+          "date": "2028-03-07T10:00:00.000Z",
+          "provider": "Dr. Kovács Anna",
+          "completed": false
         }
       ]
     },
     {
       "patient": "Papp László",
       "reason": "veleszületett rendellenesség",
-      "pathway": "Traumás sérülés rehabilitáció",
+      "pathway": "Csavarozott rögzítésű implantációs korona/híd",
       "provider": "Dr. Nagy Béla",
-      "plannedPhases": 8,
-      "workPhasesGenerated": 8,
-      "projectedSlotIntents": 8,
-      "booked": 8,
-      "completed": 7,
+      "plannedPhases": 9,
+      "workPhasesGenerated": 9,
+      "projectedSlotIntents": 9,
+      "booked": 9,
+      "completed": 8,
       "future": 1,
       "firstDate": "2026-07-01",
-      "lastDate": "2027-12-28",
+      "lastDate": "2028-03-07",
       "blocked": null,
       "bookings": [
         {
           "seq": 1,
-          "step": "Első konzultáció",
-          "pool": "consult",
-          "date": "2026-07-01T09:00:00.000Z",
+          "step": "Lenyomati fejek sínezése",
+          "pool": "work",
+          "date": "2026-07-01T10:00:00.000Z",
           "provider": "Dr. Nagy Béla",
           "completed": true
         },
         {
           "seq": 2,
-          "step": "Diagnosztika",
+          "step": "Lenyomatvétel",
           "pool": "work",
-          "date": "2026-07-08T10:00:00.000Z",
+          "date": "2026-07-01T11:00:00.000Z",
           "provider": "Dr. Nagy Béla",
           "completed": true
         },
         {
           "seq": 3,
-          "step": "Lenyomat 1",
+          "step": "Harapásregisztráció",
           "pool": "work",
-          "date": "2026-07-08T11:00:00.000Z",
+          "date": "2026-07-01T14:00:00.000Z",
           "provider": "Dr. Nagy Béla",
           "completed": true
         },
         {
           "seq": 4,
-          "step": "Próba 1",
+          "step": "Vázpróba",
           "pool": "work",
-          "date": "2026-07-13T10:00:00.000Z",
+          "date": "2026-07-01T15:00:00.000Z",
           "provider": "Dr. Nagy Béla",
           "completed": true
         },
         {
           "seq": 5,
-          "step": "Próba 2",
+          "step": "Mattpróba",
           "pool": "work",
-          "date": "2026-07-13T11:00:00.000Z",
+          "date": "2026-07-02T11:00:00.000Z",
           "provider": "Dr. Nagy Béla",
           "completed": true
         },
@@ -697,23 +897,31 @@
           "seq": 6,
           "step": "Átadás",
           "pool": "work",
-          "date": "2026-07-13T14:00:00.000Z",
+          "date": "2026-07-02T14:00:00.000Z",
           "provider": "Dr. Nagy Béla",
           "completed": true
         },
         {
           "seq": 7,
-          "step": "6 hónapos kontroll",
-          "pool": "control",
-          "date": "2027-01-04T13:00:00.000Z",
+          "step": "Kontroll 1",
+          "pool": "work",
+          "date": "2026-09-23T14:00:00.000Z",
           "provider": "Dr. Nagy Béla",
           "completed": true
         },
         {
           "seq": 8,
-          "step": "12 hónapos kontroll",
-          "pool": "control",
-          "date": "2027-12-28T13:00:00.000Z",
+          "step": "Kontroll 2",
+          "pool": "work",
+          "date": "2027-03-15T14:00:00.000Z",
+          "provider": "Dr. Nagy Béla",
+          "completed": true
+        },
+        {
+          "seq": 9,
+          "step": "Kontroll 3",
+          "pool": "work",
+          "date": "2028-03-07T14:00:00.000Z",
           "provider": "Dr. Nagy Béla",
           "completed": false
         }
@@ -722,7 +930,7 @@
     {
       "patient": "Takács Erzsébet",
       "reason": "onkológiai kezelés utáni állapot",
-      "pathway": "Veleszületett rendellenesség rehabilitáció",
+      "pathway": "Kapocselhorgonyzású részleges fémlemezes fogpótlás",
       "provider": "Dr. Szabó Csaba",
       "plannedPhases": 8,
       "workPhasesGenerated": 8,
@@ -731,70 +939,70 @@
       "completed": 7,
       "future": 1,
       "firstDate": "2026-06-16",
-      "lastDate": "2027-12-14",
+      "lastDate": "2028-02-22",
       "blocked": null,
       "bookings": [
         {
           "seq": 1,
-          "step": "Első konzultáció",
-          "pool": "consult",
-          "date": "2026-06-16T09:00:00.000Z",
+          "step": "Lenyomat gyári kanállal",
+          "pool": "work",
+          "date": "2026-06-16T10:00:00.000Z",
           "provider": "Dr. Szabó Csaba",
           "completed": true
         },
         {
           "seq": 2,
-          "step": "Diagnosztika",
+          "step": "Lenyomat egyéni kanállal",
           "pool": "work",
-          "date": "2026-06-23T14:00:00.000Z",
+          "date": "2026-06-16T11:00:00.000Z",
           "provider": "Dr. Szabó Csaba",
           "completed": true
         },
         {
           "seq": 3,
-          "step": "Lenyomat 1",
+          "step": "Fémlemezpróba",
           "pool": "work",
-          "date": "2026-06-23T15:00:00.000Z",
+          "date": "2026-06-16T14:00:00.000Z",
           "provider": "Dr. Szabó Csaba",
           "completed": true
         },
         {
           "seq": 4,
-          "step": "Próba 1",
+          "step": "Fogpróba",
           "pool": "work",
-          "date": "2026-06-29T15:00:00.000Z",
+          "date": "2026-06-16T15:00:00.000Z",
           "provider": "Dr. Szabó Csaba",
           "completed": true
         },
         {
           "seq": 5,
-          "step": "Próba 2",
+          "step": "Átadás",
           "pool": "work",
-          "date": "2026-06-30T10:00:00.000Z",
+          "date": "2026-06-17T10:00:00.000Z",
           "provider": "Dr. Szabó Csaba",
           "completed": true
         },
         {
           "seq": 6,
-          "step": "Átadás",
+          "step": "Kontroll 1",
           "pool": "work",
-          "date": "2026-06-30T11:00:00.000Z",
+          "date": "2026-09-08T10:00:00.000Z",
           "provider": "Dr. Szabó Csaba",
           "completed": true
         },
         {
           "seq": 7,
-          "step": "6 hónapos kontroll",
-          "pool": "control",
-          "date": "2026-12-21T13:00:00.000Z",
+          "step": "Kontroll 2",
+          "pool": "work",
+          "date": "2027-03-01T10:00:00.000Z",
           "provider": "Dr. Szabó Csaba",
           "completed": true
         },
         {
           "seq": 8,
-          "step": "12 hónapos kontroll",
-          "pool": "control",
-          "date": "2027-12-14T13:00:00.000Z",
+          "step": "Kontroll 3",
+          "pool": "work",
+          "date": "2028-02-22T10:00:00.000Z",
           "provider": "Dr. Szabó Csaba",
           "completed": false
         }
@@ -803,7 +1011,7 @@
     {
       "patient": "Juhász Júlia",
       "reason": "traumás sérülés",
-      "pathway": "Onkológiai kezelés utáni rehabilitáció",
+      "pathway": "Rögzített fogpótlás fogakon elhorgonyozva",
       "provider": "Dr. Kovács Anna",
       "plannedPhases": 8,
       "workPhasesGenerated": 8,
@@ -812,70 +1020,70 @@
       "completed": 7,
       "future": 1,
       "firstDate": "2026-06-22",
-      "lastDate": "2027-12-16",
+      "lastDate": "2028-02-29",
       "blocked": null,
       "bookings": [
         {
           "seq": 1,
-          "step": "Első konzultáció",
-          "pool": "consult",
-          "date": "2026-06-22T09:00:00.000Z",
+          "step": "Fogelőkészítés",
+          "pool": "work",
+          "date": "2026-06-22T10:00:00.000Z",
           "provider": "Dr. Kovács Anna",
           "completed": true
         },
         {
           "seq": 2,
-          "step": "Diagnosztika",
+          "step": "Precíziós-szituációs lenyomat",
           "pool": "work",
-          "date": "2026-06-29T11:00:00.000Z",
+          "date": "2026-06-22T11:00:00.000Z",
           "provider": "Dr. Kovács Anna",
           "completed": true
         },
         {
           "seq": 3,
-          "step": "Lenyomat 1",
+          "step": "Vázpróba",
           "pool": "work",
-          "date": "2026-06-29T14:00:00.000Z",
+          "date": "2026-06-22T14:00:00.000Z",
           "provider": "Dr. Kovács Anna",
           "completed": true
         },
         {
           "seq": 4,
-          "step": "Próba 1",
+          "step": "Mattpróba",
           "pool": "work",
-          "date": "2026-07-02T14:00:00.000Z",
+          "date": "2026-06-22T15:00:00.000Z",
           "provider": "Dr. Kovács Anna",
           "completed": true
         },
         {
           "seq": 5,
-          "step": "Próba 2",
+          "step": "Átadás",
           "pool": "work",
-          "date": "2026-07-02T15:00:00.000Z",
+          "date": "2026-06-23T14:00:00.000Z",
           "provider": "Dr. Kovács Anna",
           "completed": true
         },
         {
           "seq": 6,
-          "step": "Átadás",
+          "step": "Kontroll 1",
           "pool": "work",
-          "date": "2026-07-03T10:00:00.000Z",
+          "date": "2026-09-15T10:00:00.000Z",
           "provider": "Dr. Kovács Anna",
           "completed": true
         },
         {
           "seq": 7,
-          "step": "6 hónapos kontroll",
-          "pool": "control",
-          "date": "2026-12-23T13:00:00.000Z",
+          "step": "Kontroll 2",
+          "pool": "work",
+          "date": "2027-03-08T10:00:00.000Z",
           "provider": "Dr. Kovács Anna",
           "completed": true
         },
         {
           "seq": 8,
-          "step": "12 hónapos kontroll",
-          "pool": "control",
-          "date": "2027-12-16T13:00:00.000Z",
+          "step": "Kontroll 3",
+          "pool": "work",
+          "date": "2028-02-29T10:00:00.000Z",
           "provider": "Dr. Kovács Anna",
           "completed": false
         }

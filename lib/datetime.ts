@@ -17,6 +17,22 @@ export function toBudapestStartOfDayISO(date: Date): string {
 }
 
 /**
+ * Hour-of-day (0–23) of an instant in Europe/Budapest, DST-correct.
+ * Use this instead of Date.getHours() (which is server-local) wherever the
+ * clinic-local hour matters — e.g. no-show risk early-morning scoring.
+ */
+export function budapestHour(date: Date): number {
+  const hh = new Intl.DateTimeFormat('en-GB', {
+    timeZone: BUDAPEST_TZ,
+    hour: '2-digit',
+    hour12: false,
+  }).format(date);
+  // 'en-GB' renders midnight as '24'; normalise to 0.
+  const h = parseInt(hh, 10);
+  return h === 24 ? 0 : h;
+}
+
+/**
  * Abszolút formátum: YYYY-MM-DD HH:mm (Europe/Budapest display).
  */
 export function formatAbsDateTime(date: Date | string): string {
