@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractApiError, formatApiError, toUserMessage } from '@/lib/extract-api-error';
+import { extractApiError, formatApiError, formatApiErrorParts, toUserMessage } from '@/lib/extract-api-error';
 
 function jsonResponse(body: unknown, status = 400, headers: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
@@ -72,6 +72,28 @@ describe('formatApiError', () => {
   it('shows just the code when correlationId is missing', () => {
     const s = formatApiError({ message: 'M', code: 'ONLY_CODE', hint: null, correlationId: null, status: 400 });
     expect(s).toContain('[ONLY_CODE]');
+  });
+});
+
+describe('formatApiErrorParts', () => {
+  const headers = (cid?: string) => ({ get: (n: string) => (n === 'x-correlation-id' ? cid ?? null : null) });
+
+  it('builds a traceable string from an already-parsed body + response', () => {
+    const s = formatApiErrorParts(
+      { error: 'Ennek a munkafázisnak már van aktív foglalása.', code: 'WORK_PHASE_ALREADY_BOOKED' },
+      { status: 409, headers: headers('cid-9') },
+    );
+    expect(s).toContain('Ennek a munkafázisnak már van aktív foglalása.');
+    expect(s).toContain('[WORK_PHASE_ALREADY_BOOKED · cid-9]');
+  });
+
+  it('uses the fallback when the body has no usable message', () => {
+    expect(formatApiErrorParts(null, { status: 500, headers: headers() }, 'Tartalék')).toBe('Tartalék');
+  });
+
+  it('includes the code even without a correlation id', () => {
+    const s = formatApiErrorParts({ error: 'X', code: 'STEP_PREREQUISITE_NOT_MET' }, { status: 409, headers: headers() });
+    expect(s).toContain('[STEP_PREREQUISITE_NOT_MET]');
   });
 });
 

@@ -85,3 +85,22 @@ export function formatApiError(e: ExtractedApiError): string {
 export async function toUserMessage(response: Response, fallbackMessage = 'Hiba történt'): Promise<string> {
   return formatApiError(await extractApiError(response, fallbackMessage));
 }
+
+/**
+ * Mint a {@link toUserMessage}, de MÁR kiolvasott body-hoz: ha a hívó már
+ * `await res.json()`-ozott (mert pl. a `code`/`overrideHint` mezőkre is szüksége
+ * van), ez a már birtokolt objektumból + a Response fejlécéből épít
+ * nyomonkövethető üzenetet (valódi üzenet + [KÓD · correlationId]).
+ */
+export function formatApiErrorParts(
+  body: ErrorBodyShape | null | undefined,
+  response: Pick<Response, 'status'> & { headers?: { get?: (name: string) => string | null } },
+  fallbackMessage = 'Hiba történt',
+): string {
+  const rawMessage = typeof body?.error === 'string' ? body.error.trim() : '';
+  const message = rawMessage.length > 0 ? rawMessage : fallbackMessage;
+  const code = typeof body?.code === 'string' ? body.code : null;
+  const hint = typeof body?.hint === 'string' && body.hint.trim().length > 0 ? body.hint.trim() : null;
+  const correlationId = response.headers?.get?.('x-correlation-id') ?? null;
+  return formatApiError({ message, code, hint, correlationId, status: response.status });
+}
