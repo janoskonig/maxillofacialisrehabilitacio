@@ -35,6 +35,8 @@ type Feedback = {
   status: 'open' | 'in_progress' | 'resolved' | 'closed';
   admin_response: string | null;
   admin_note: string | null;
+  ai_draft_response: string | null;
+  ai_draft_at: string | null;
   responded_at: string | null;
   responded_by: string | null;
   created_at: string;
@@ -512,6 +514,23 @@ export function UserManagementTab() {
                         <div className="rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3">
                           <h4 className="text-sm font-medium text-amber-800 dark:text-amber-300 mb-1">Belső jegyzet</h4>
                           <p className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap">{item.admin_note}</p>
+                        </div>
+                      )}
+
+                      {item.ai_draft_response && (
+                        <div className="rounded-md bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 p-3">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <h4 className="text-sm font-medium text-violet-800 dark:text-violet-300">🤖 AI-javasolt válasz (piszkozat)</h4>
+                            <button
+                              type="button"
+                              onClick={() => setResponseDraft(prev => ({ ...prev, [item.id]: item.ai_draft_response || '' }))}
+                              className="text-xs font-medium text-violet-700 dark:text-violet-300 underline hover:no-underline"
+                            >
+                              Beillesztés a válaszba
+                            </button>
+                          </div>
+                          <p className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap">{item.ai_draft_response}</p>
+                          <p className="text-xs text-violet-700/70 dark:text-violet-400/70 mt-2">Nem ment ki automatikusan — ellenőrizd, szükség szerint szerkeszd, majd küldd el.{item.ai_draft_at ? ` • ${new Date(item.ai_draft_at).toLocaleString('hu-HU')}` : ''}</p>
                         </div>
                       )}
 
