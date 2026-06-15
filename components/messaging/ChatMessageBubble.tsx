@@ -79,6 +79,11 @@ interface Props {
   /** Show or hide the sender label above the bubble (non-own). Default: true. */
   showSenderLabel?: boolean;
   /**
+   * Saját buborék színárnyalata. `primary` (alap) = márka-kék; `green` = a
+   * beteg-portál barátságos zöld buborékja.
+   */
+  ownTone?: 'primary' | 'green';
+  /**
    * Üzenet-csoportosítás (lásd `lib/messaging/group-messages`). Ha `false`, az
    * üzenet egy egymást követő blokk közepén/végén van: a feladó-címke és az
    * avatar elrejtődik, a buborék sarkai teljesen kerekek (nincs „farok”).
@@ -113,6 +118,7 @@ export function ChatMessageBubble({
   onRetry,
   currentUserId,
   showSenderLabel = true,
+  ownTone = 'primary',
   isFirstInGroup = true,
   isLastInGroup = true,
   avatarSlot,
@@ -130,18 +136,31 @@ export function ChatMessageBubble({
   const createdAt =
     message.createdAt instanceof Date ? message.createdAt : new Date(message.createdAt);
 
+  const ownGreen = ownTone === 'green';
   const bubbleStyle = isFromMe
-    ? 'bg-medical-primary text-white'
+    ? ownGreen
+      ? 'bg-green-500 text-white'
+      : 'bg-medical-primary text-white'
     : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-800';
 
-  const timeStyle = isFromMe ? 'text-blue-100' : 'text-gray-500 dark:text-gray-400';
+  const timeStyle = isFromMe
+    ? ownGreen
+      ? 'text-green-100'
+      : 'text-blue-100'
+    : 'text-gray-500 dark:text-gray-400';
 
   // „Farok” (éles sarok) csak a blokk utolsó buborékján, a feladó oldala felé.
   const cornerStyle = `rounded-2xl ${
     isLastInGroup ? (isFromMe ? 'rounded-br-md' : 'rounded-bl-md') : ''
   }`;
 
-  const quoteVariant: 'bubble-own' | 'bubble-other' = isFromMe ? 'bubble-own' : 'bubble-other';
+  const quoteVariant: 'bubble-own' | 'bubble-own-green' | 'bubble-other' = isFromMe
+    ? ownGreen
+      ? 'bubble-own-green'
+      : 'bubble-own'
+    : 'bubble-other';
+  // A kontextus-link csík nem ismeri a zöld variánst — saját buboréknál mindig 'bubble-own'.
+  const stripVariant: 'bubble-own' | 'bubble-other' = isFromMe ? 'bubble-own' : 'bubble-other';
 
   // Idézett küldő = "Te", ha a quote a current usertől származik.
   const quoteSenderOverride =
@@ -188,7 +207,7 @@ export function ChatMessageBubble({
           {message.contextLinks && message.contextLinks.length > 0 && (
             <MessageContextLinksStrip
               links={message.contextLinks}
-              variant={quoteVariant}
+              variant={stripVariant}
               canRemove={canRemoveContextLinks}
               onRemoveLink={
                 onRemoveContextLink

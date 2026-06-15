@@ -44,6 +44,9 @@ interface MessageThreadProps {
   /** Feladó-név a buborék fölött (csak nem-saját). Csoportban hasznos; 1:1-ben kikapcsolható. */
   showSenderName?: boolean;
 
+  /** Saját buborék színárnyalata (`green` a beteg-portálhoz). */
+  ownTone?: 'primary' | 'green';
+
   /** Külső görgető-konténer ref (pl. keresés „ugorj az üzenethez” funkcióhoz). */
   containerRef?: RefObject<HTMLDivElement>;
 
@@ -85,6 +88,7 @@ export function MessageThread({
   canRemoveContextLinks = false,
   onRemoveContextLink,
   showSenderName = true,
+  ownTone = 'primary',
   containerRef,
   renderAvatar,
   renderBubbleFooter,
@@ -201,6 +205,7 @@ export function MessageThread({
             onReplyThreadToggle={onReplyThreadToggle}
             replyThreadCollapsed={isThreadCollapsed ? isThreadCollapsed(message.id) : false}
             showSenderLabel={showSenderName}
+            ownTone={ownTone}
             canRemoveContextLinks={
               canRemoveContextLinks && message.isFromMe && message.deliveryStatus !== 'pending'
             }
